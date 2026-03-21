@@ -9,6 +9,13 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+/** Resolve asset path — checks sibling (npm published) then parent (dev build) */
+function resolveAssetDir(name: string): string {
+  const sibling = join(__dirname, name);
+  if (existsSync(sibling)) return sibling;
+  return join(__dirname, '..', name);
+}
+
 /** Recursively copy a directory */
 function copyDirSync(src: string, dest: string): number {
   if (!existsSync(src)) return 0;
@@ -49,7 +56,8 @@ async function setup(): Promise<void> {
   const scriptsDir = getReaperScriptsPath();
   mkdirSync(scriptsDir, { recursive: true });
 
-  const luaSrc = join(__dirname, '..', 'reaper', 'mcp_bridge.lua');
+  const reaperDir = resolveAssetDir('reaper');
+  const luaSrc = join(reaperDir, 'mcp_bridge.lua');
   const luaDest = join(scriptsDir, 'mcp_bridge.lua');
   console.log('Installing Lua bridge...');
   installFile(luaSrc, luaDest, 'mcp_bridge.lua');
@@ -67,7 +75,7 @@ async function setup(): Promise<void> {
 
   console.log('\nInstalling JSFX analyzers...');
   for (const jsfx of jsfxFiles) {
-    const src = join(__dirname, '..', 'reaper', jsfx);
+    const src = join(reaperDir, jsfx);
     const dest = join(effectsDir, jsfx);
     installFile(src, dest, jsfx);
   }
@@ -87,7 +95,7 @@ async function installSkills(): Promise<void> {
   const targetDir = process.cwd();
 
   // Copy knowledge base
-  const knowledgeSrc = join(__dirname, '..', 'knowledge');
+  const knowledgeSrc = resolveAssetDir('knowledge');
   const knowledgeDest = join(targetDir, 'knowledge');
 
   if (existsSync(knowledgeSrc)) {
@@ -98,7 +106,7 @@ async function installSkills(): Promise<void> {
   }
 
   // Copy Claude rules
-  const rulesSrc = join(__dirname, '..', 'claude-rules');
+  const rulesSrc = resolveAssetDir('claude-rules');
   const rulesDir = join(targetDir, '.claude', 'rules');
 
   if (existsSync(rulesSrc)) {
@@ -109,7 +117,7 @@ async function installSkills(): Promise<void> {
   }
 
   // Copy Claude skills
-  const skillsSrc = join(__dirname, '..', 'claude-skills');
+  const skillsSrc = resolveAssetDir('claude-skills');
   const skillsDir = join(targetDir, '.claude', 'skills');
 
   if (existsSync(skillsSrc)) {
