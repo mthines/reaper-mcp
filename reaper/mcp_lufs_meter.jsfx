@@ -3,17 +3,19 @@ desc:MCP LUFS Meter
 // Measures integrated, short-term, and momentary LUFS with true peak detection.
 // Writes results to shared memory (gmem) so the Lua bridge can read them.
 //
-// gmem layout:
-//   gmem[0] = integrated LUFS (running average since last reset)
-//   gmem[1] = short-term LUFS (3-second sliding window)
-//   gmem[2] = momentary LUFS (400ms sliding window)
-//   gmem[3] = true peak L (dBTP, inter-sample peak via 4x oversampling)
-//   gmem[4] = true peak R (dBTP, inter-sample peak via 4x oversampling)
-//   gmem[5] = measurement duration (seconds since last reset)
+// gmem layout (per track slot, 8 slots each):
+//   base = track_slot * 8
+//   gmem[base+0] = integrated LUFS (running average since last reset)
+//   gmem[base+1] = short-term LUFS (3-second sliding window)
+//   gmem[base+2] = momentary LUFS (400ms sliding window)
+//   gmem[base+3] = true peak L (dBTP, inter-sample peak via 4x oversampling)
+//   gmem[base+4] = true peak R (dBTP, inter-sample peak via 4x oversampling)
+//   gmem[base+5] = measurement duration (seconds since last reset)
 
 options:gmem=MCPLufsMeter
 
 slider1:reset_btn=0<0,1,1{Idle,Reset}>Reset Measurement
+slider2:track_slot=0<0,127,1>Track Slot
 
 @init
   // K-weighting filter state (two biquad stages per channel)
@@ -91,6 +93,8 @@ slider1:reset_btn=0<0,1,1{Idle,Reset}>Reset Measurement
   );
 
   function reset_measurement() (
+    local(base);
+    base = floor(slider2 + 0.5) * 8;
     buf_pos = 0;
     momentary_sum_l = 0;
     momentary_sum_r = 0;
@@ -108,12 +112,12 @@ slider1:reset_btn=0<0,1,1{Idle,Reset}>Reset Measurement
     // Clear ring buffers
     memset(buf_l, 0, buf_size);
     memset(buf_r, 0, buf_size);
-    gmem[0] = -70;
-    gmem[1] = -70;
-    gmem[2] = -70;
-    gmem[3] = -150;
-    gmem[4] = -150;
-    gmem[5] = 0;
+    gmem[base+0] = -70;
+    gmem[base+1] = -70;
+    gmem[base+2] = -70;
+    gmem[base+3] = -150;
+    gmem[base+4] = -150;
+    gmem[base+5] = 0;
   );
 
 @slider
@@ -240,7 +244,9 @@ slider1:reset_btn=0<0,1,1{Idle,Reset}>Reset Measurement
   // --- Update gmem every 4096 samples (approx 10x/second at 44.1kHz) ---
   (sample_count % 4096) == 0 ? (
     local(shortterm_mean, momentary_mean, integrated_lufs, shortterm_lufs, momentary_lufs);
-    local(mom_samples);
+    local(mom_samples, base);
+
+    base = floor(slider2 + 0.5) * 8;
 
     mom_samples = floor(srate * 0.4);
     mom_samples < 1 ? mom_samples = 1;
@@ -279,23 +285,23 @@ slider1:reset_btn=0<0,1,1{Idle,Reset}>Reset Measurement
       integrated_lufs = -70;
     );
 
-    gmem[0] = integrated_lufs;
-    gmem[1] = shortterm_lufs;
-    gmem[2] = momentary_lufs;
+    gmem[base+0] = integrated_lufs;
+    gmem[base+1] = shortterm_lufs;
+    gmem[base+2] = momentary_lufs;
 
     true_peak_l > 0.000001 ? (
-      gmem[3] = 20 * log10(true_peak_l);
+      gmem[base+3] = 20 * log10(true_peak_l);
     ) : (
-      gmem[3] = -150;
+      gmem[base+3] = -150;
     );
 
     true_peak_r > 0.000001 ? (
-      gmem[4] = 20 * log10(true_peak_r);
+      gmem[base+4] = 20 * log10(true_peak_r);
     ) : (
-      gmem[4] = -150;
+      gmem[base+4] = -150;
     );
 
-    gmem[5] = sample_count / srate;
+    gmem[base+5] = sample_count / srate;
   );
 
   // Pass audio through unmodified

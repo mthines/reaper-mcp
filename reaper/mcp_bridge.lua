@@ -932,29 +932,30 @@ function handlers.read_track_lufs(params)
   local fx_idx, err = ensure_jsfx_on_track(track, MCP_LUFS_METER_FX_NAME)
   if not fx_idx then return nil, err end
 
-  -- Attach to the LUFS meter gmem namespace and read 6 values
+  -- Set the track_slot parameter (slider2, param index 1) so this instance
+  -- writes to a unique gmem offset and doesn't collide with other tracks
+  reaper.TrackFX_SetParam(track, fx_idx, 1, idx / 127)
+
+  -- Attach to the LUFS meter gmem namespace and read from track-specific offset
   reaper.gmem_attach("MCPLufsMeter")
 
-  local integrated = reaper.gmem_read(0)
-  local short_term = reaper.gmem_read(1)
-  local momentary  = reaper.gmem_read(2)
-  local true_peak_l = reaper.gmem_read(3)
-  local true_peak_r = reaper.gmem_read(4)
-  local duration    = reaper.gmem_read(5)
-
-  -- A duration of 0 means no audio has been processed yet
-  if duration <= 0 then
-    return nil, "LUFS meter not producing data yet. Ensure audio is playing."
-  end
+  local base = idx * 8
+  local integrated  = reaper.gmem_read(base + 0)
+  local short_term  = reaper.gmem_read(base + 1)
+  local momentary   = reaper.gmem_read(base + 2)
+  local true_peak_l = reaper.gmem_read(base + 3)
+  local true_peak_r = reaper.gmem_read(base + 4)
+  local duration    = reaper.gmem_read(base + 5)
 
   return {
-    trackIndex = idx,
-    integrated = integrated,
-    shortTerm  = short_term,
-    momentary  = momentary,
-    truePeakL  = true_peak_l,
-    truePeakR  = true_peak_r,
-    duration   = duration,
+    trackIndex  = idx,
+    integrated  = integrated,
+    shortTerm   = short_term,
+    momentary   = momentary,
+    truePeakL   = true_peak_l,
+    truePeakR   = true_peak_r,
+    duration    = duration,
+    measuring   = duration > 0,
   }
 end
 
