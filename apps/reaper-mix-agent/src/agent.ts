@@ -9,6 +9,7 @@ export interface AgentContext {
   systemPrompt: string;
   genre: string | null;
   availablePlugins: ResolvedPlugin[];
+  unresolvedFx: string[];
   knowledge: {
     plugins: KnowledgeFile[];
     genres: KnowledgeFile[];
@@ -79,6 +80,25 @@ function buildPluginContext(availablePlugins: ResolvedPlugin[]): string {
   return lines.join('\n');
 }
 
+function buildUnresolvedPluginContext(unresolvedFx: string[]): string {
+  if (unresolvedFx.length === 0) return '';
+
+  const list = unresolvedFx.map((name) => `- \`${name}\``).join('\n');
+  return `\n\n## Unknown Plugins (no knowledge file)
+
+The following installed plugins have no matching knowledge file. When you encounter one of these on a track and need to use it:
+
+1. **Read its parameters** — use \`get_fx_parameters\` to see all parameter names, current values, and ranges. Parameter names often reveal what the plugin does (e.g., "Threshold", "Ratio" → compressor; "Frequency", "Q", "Gain" → EQ).
+2. **Check presets** — use \`get_fx_preset_list\` to see factory presets. Preset names reveal intended use cases.
+3. **If still unclear, research the plugin** — do a web search for the plugin name to learn its category, character, and recommended settings.
+4. **Create a knowledge file** — once you understand the plugin, write a knowledge file to \`knowledge/plugins/{vendor-slug}/{plugin-slug}.md\` following the template format. This ensures future sessions can use the plugin effectively.
+
+Run the **Learn Plugin** workflow for a guided step-by-step process.
+
+${list}
+`;
+}
+
 function buildWorkflowContext(workflows: KnowledgeFile[]): string {
   if (workflows.length === 0) return '';
   const names = workflows
@@ -131,6 +151,9 @@ export async function createAgentContext(options: {
     }
   }
 
+  // Identify installed FX without knowledge files
+  const unresolvedFx = resolver.getUnresolved();
+
   // Load genre-specific context
   const genreFile = genre ? await loadGenre(knowledgeDir, genre) : null;
 
@@ -139,6 +162,7 @@ export async function createAgentContext(options: {
     buildBaseSystemPrompt(),
     buildGenreContext(genreFile),
     buildPluginContext(dedupedPlugins),
+    buildUnresolvedPluginContext(unresolvedFx),
     buildWorkflowContext(workflows),
   ].join('');
 
@@ -146,6 +170,7 @@ export async function createAgentContext(options: {
     systemPrompt,
     genre: genre ?? null,
     availablePlugins: dedupedPlugins,
+    unresolvedFx,
     knowledge: {
       plugins,
       genres,

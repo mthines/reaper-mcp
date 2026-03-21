@@ -97,6 +97,28 @@ export class PluginResolver {
     return resolved.sort((a, b) => b.preference - a.preference);
   }
 
+  /**
+   * Return installed FX names that don't match any plugin knowledge file.
+   * Filters out common REAPER utility FX (JSFX analyzers, routing, etc.)
+   * that don't need knowledge files.
+   */
+  getUnresolved(): string[] {
+    const utilityPatterns = [
+      /^js:\s*mcp_/i,
+      /^js:\s*routing/i,
+      /analyzer/i,
+      /meter/i,
+      /^video\s+processor/i,
+    ];
+
+    return this.installedFx.filter((name) => {
+      // Skip known utility FX
+      if (utilityPatterns.some((p) => p.test(name))) return false;
+      // Check if any knowledge file matches this installed FX
+      return this.getKnowledgeFor(name) === null;
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
