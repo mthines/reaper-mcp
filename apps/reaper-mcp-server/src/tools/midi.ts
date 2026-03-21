@@ -94,11 +94,17 @@ export function registerMidiTools(server: McpServer): void {
 
   server.tool(
     'insert_midi_notes',
-    'Batch insert multiple MIDI notes. Pass a JSON array of notes as a string. Each note: { "pitch": 60, "velocity": 100, "startPosition": 0.0, "duration": 1.0, "channel": 0 }. Positions/durations in beats from item start.',
+    'Batch insert multiple MIDI notes in a single call. Pass a native array of note objects. Each note: { pitch, velocity, startPosition, duration, channel? }. Positions/durations in beats from item start (1.0=quarter, 0.5=eighth).',
     {
       trackIndex: z.coerce.number().min(0).describe('0-based track index'),
       itemIndex: z.coerce.number().min(0).describe('0-based item index on the track'),
-      notes: z.string().describe('JSON array string of notes: [{"pitch":60,"velocity":100,"startPosition":0,"duration":1,"channel":0}, ...]'),
+      notes: z.array(z.object({
+        pitch: z.coerce.number().min(0).max(127).describe('MIDI note number (60=C4/Middle C)'),
+        velocity: z.coerce.number().min(1).max(127).describe('Note velocity (1-127)'),
+        startPosition: z.coerce.number().min(0).describe('Start position in beats from item start'),
+        duration: z.coerce.number().min(0).describe('Duration in beats (1.0=quarter note)'),
+        channel: z.coerce.number().min(0).max(15).optional().describe('MIDI channel 0-15 (default 0)'),
+      })).describe('Array of notes to insert'),
     },
     async ({ trackIndex, itemIndex, notes }) => {
       const res = await sendCommand('insert_midi_notes', { trackIndex, itemIndex, notes });
@@ -135,11 +141,18 @@ export function registerMidiTools(server: McpServer): void {
 
   server.tool(
     'edit_midi_notes',
-    'Batch edit multiple MIDI notes in a single call. Much more efficient than calling edit_midi_note repeatedly. Pass a JSON array of edits, each with noteIndex and any fields to change (pitch, velocity, startPosition, duration, channel). Only provided fields are changed.',
+    'Batch edit multiple MIDI notes in a single call. Much more efficient than calling edit_midi_note repeatedly. Pass a native array of edit objects, each with noteIndex and any fields to change (pitch, velocity, startPosition, duration, channel). Only provided fields are changed.',
     {
       trackIndex: z.coerce.number().min(0).describe('0-based track index'),
       itemIndex: z.coerce.number().min(0).describe('0-based item index on the track'),
-      edits: z.string().describe('JSON array string of edits: [{"noteIndex":0,"velocity":80}, {"noteIndex":1,"pitch":62,"velocity":100}, ...]'),
+      edits: z.array(z.object({
+        noteIndex: z.coerce.number().min(0).describe('0-based note index to edit'),
+        pitch: z.coerce.number().min(0).max(127).optional().describe('New pitch (0-127)'),
+        velocity: z.coerce.number().min(1).max(127).optional().describe('New velocity (1-127)'),
+        startPosition: z.coerce.number().min(0).optional().describe('New start position in beats from item start'),
+        duration: z.coerce.number().min(0).optional().describe('New duration in beats'),
+        channel: z.coerce.number().min(0).max(15).optional().describe('New MIDI channel (0-15)'),
+      })).describe('Array of note edits to apply'),
     },
     async ({ trackIndex, itemIndex, edits }) => {
       const res = await sendCommand('edit_midi_notes', { trackIndex, itemIndex, edits });

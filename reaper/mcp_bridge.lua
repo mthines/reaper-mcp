@@ -305,10 +305,6 @@ function handlers.list_tracks(params)
     end
     local color = reaper.GetMediaTrackInfo_Value(track, "I_CUSTOMCOLOR")
 
-    local rec_arm = reaper.GetMediaTrackInfo_Value(track, "I_RECARM")
-    local phase = reaper.GetMediaTrackInfo_Value(track, "B_PHASE")
-    local input_ch = reaper.GetMediaTrackInfo_Value(track, "I_RECINPUT")
-
     tracks[#tracks + 1] = {
       index = i,
       name = name,
@@ -317,9 +313,6 @@ function handlers.list_tracks(params)
       pan = pan,
       mute = mute ~= 0,
       solo = solo ~= 0,
-      recordArm = rec_arm ~= 0,
-      phase = phase ~= 0,
-      inputChannel = input_ch,
       fxCount = fx_count,
       receiveCount = reaper.GetTrackNumSends(track, -1),
       sendCount = reaper.GetTrackNumSends(track, 0),
@@ -357,20 +350,14 @@ function handlers.get_track_properties(params)
   for i = 0, fx_count - 1 do
     local _, fx_name = reaper.TrackFX_GetFXName(track, i)
     local enabled = reaper.TrackFX_GetEnabled(track, i)
-    local offline = reaper.TrackFX_GetOffline(track, i)
     local _, preset = reaper.TrackFX_GetPreset(track, i)
     fx_list[#fx_list + 1] = {
       index = i,
       name = fx_name,
       enabled = enabled,
-      offline = offline,
       preset = preset or "",
     }
   end
-
-  local rec_arm = reaper.GetMediaTrackInfo_Value(track, "I_RECARM")
-  local phase = reaper.GetMediaTrackInfo_Value(track, "B_PHASE")
-  local input_ch = reaper.GetMediaTrackInfo_Value(track, "I_RECINPUT")
 
   return {
     index = idx,
@@ -380,9 +367,6 @@ function handlers.get_track_properties(params)
     pan = pan,
     mute = mute ~= 0,
     solo = solo ~= 0,
-    recordArm = rec_arm ~= 0,
-    phase = phase ~= 0,
-    inputChannel = input_ch,
     fxCount = fx_count,
     receiveCount = reaper.GetTrackNumSends(track, -1),
     sendCount = reaper.GetTrackNumSends(track, 0),
@@ -412,12 +396,6 @@ function handlers.set_track_property(params)
     reaper.SetMediaTrackInfo_Value(track, "B_MUTE", value)
   elseif prop == "solo" then
     reaper.SetMediaTrackInfo_Value(track, "I_SOLO", value)
-  elseif prop == "recordArm" then
-    reaper.SetMediaTrackInfo_Value(track, "I_RECARM", value)
-  elseif prop == "phase" then
-    reaper.SetMediaTrackInfo_Value(track, "B_PHASE", value)
-  elseif prop == "input" then
-    reaper.SetMediaTrackInfo_Value(track, "I_RECINPUT", value)
   else
     return nil, "Unknown property: " .. tostring(prop)
   end
@@ -521,46 +499,6 @@ function handlers.set_fx_parameter(params)
   end
 
   return { success = true, trackIndex = idx, fxIndex = fx_idx, paramIndex = param_idx, value = value }
-end
-
-function handlers.set_fx_enabled(params)
-  local idx = params.trackIndex
-  local fx_idx = params.fxIndex
-  local enabled = params.enabled
-  if idx == nil or fx_idx == nil or enabled == nil then
-    return nil, "trackIndex, fxIndex, and enabled required"
-  end
-
-  local track = reaper.GetTrack(0, idx)
-  if not track then return nil, "Track " .. idx .. " not found" end
-
-  local fx_count = reaper.TrackFX_GetCount(track)
-  if fx_idx >= fx_count then
-    return nil, "FX " .. fx_idx .. " not found (track has " .. fx_count .. " FX)"
-  end
-
-  reaper.TrackFX_SetEnabled(track, fx_idx, enabled ~= 0)
-  return { success = true, trackIndex = idx, fxIndex = fx_idx, enabled = enabled ~= 0 }
-end
-
-function handlers.set_fx_offline(params)
-  local idx = params.trackIndex
-  local fx_idx = params.fxIndex
-  local offline = params.offline
-  if idx == nil or fx_idx == nil or offline == nil then
-    return nil, "trackIndex, fxIndex, and offline required"
-  end
-
-  local track = reaper.GetTrack(0, idx)
-  if not track then return nil, "Track " .. idx .. " not found" end
-
-  local fx_count = reaper.TrackFX_GetCount(track)
-  if fx_idx >= fx_count then
-    return nil, "FX " .. fx_idx .. " not found (track has " .. fx_count .. " FX)"
-  end
-
-  reaper.TrackFX_SetOffline(track, fx_idx, offline ~= 0)
-  return { success = true, trackIndex = idx, fxIndex = fx_idx, offline = offline ~= 0 }
 end
 
 function handlers.read_track_meters(params)
@@ -1494,13 +1432,13 @@ function handlers.insert_midi_notes(params)
   local track, item, take, err = get_midi_take(params)
   if err then return nil, err end
 
-  local notes_str = params.notes
-  if not notes_str or notes_str == "" then return nil, "notes JSON string required" end
+  local notes_input = params.notes
+  if not notes_input or notes_input == "" then return nil, "notes array required" end
 
-  -- Parse notes JSON array (uses dedicated array parser with fallback)
-  local notes_list = json_decode_array(notes_str)
+  -- Parse notes array (accepts native table from CF_Json_Parse or JSON string fallback)
+  local notes_list = json_decode_array(notes_input)
   if not notes_list or #notes_list == 0 then
-    return nil, "Failed to parse notes JSON array. Expected: [{\"pitch\":60,\"velocity\":100,\"startPosition\":0,\"duration\":1}, ...]"
+    return nil, "Failed to parse notes array. Expected array of {pitch, velocity, startPosition, duration} objects."
   end
 
   reaper.Undo_BeginBlock()
@@ -1585,11 +1523,11 @@ function handlers.edit_midi_notes(params)
   local track, item, take, err = get_midi_take(params)
   if err then return nil, err end
 
-  local edits_str = params.edits
-  if not edits_str then return nil, "edits (JSON array string) required" end
+  local edits_input = params.edits
+  if not edits_input then return nil, "edits array required" end
 
-  local edits = json_decode_array(edits_str)
-  if not edits then return nil, "Failed to parse edits JSON array" end
+  local edits = json_decode_array(edits_input)
+  if not edits then return nil, "Failed to parse edits array" end
 
   local _, note_cnt, _, _ = reaper.MIDI_CountEvts(take)
   local to_beats = ppq_to_beats(take, item)
@@ -1917,11 +1855,11 @@ function handlers.set_media_item_properties(params)
 end
 
 function handlers.set_media_items_properties(params)
-  local items_str = params.items
-  if not items_str then return nil, "items (JSON array string) required" end
+  local items_input = params.items
+  if not items_input then return nil, "items array required" end
 
-  local items = json_decode_array(items_str)
-  if not items then return nil, "Failed to parse items JSON array" end
+  local items = json_decode_array(items_input)
+  if not items then return nil, "Failed to parse items array" end
 
   local edited = 0
   local errors = {}
@@ -2181,322 +2119,6 @@ function handlers.delete_stretch_marker(params)
   reaper.UpdateArrange()
 
   return { success = true, totalMarkers = reaper.GetTakeNumStretchMarkers(take) }
-end
-
--- =============================================================================
--- Selection & navigation handlers
--- =============================================================================
-
-function handlers.get_selected_tracks(params)
-  local tracks = {}
-  local count = reaper.CountSelectedTracks(0)
-  for i = 0, count - 1 do
-    local track = reaper.GetSelectedTrack(0, i)
-    local _, name = reaper.GetTrackName(track)
-    local idx = reaper.GetMediaTrackInfo_Value(track, "IP_TRACKNUMBER") - 1
-    tracks[#tracks + 1] = {
-      index = idx,
-      name = name,
-    }
-  end
-  return { tracks = tracks, total = count }
-end
-
-function handlers.get_time_selection(params)
-  local start_time, end_time = reaper.GetSet_LoopTimeRange(false, false, 0, 0, false)
-  local length = end_time - start_time
-  return {
-    start = start_time,
-    ["end"] = end_time,
-    length = length,
-    empty = length == 0,
-  }
-end
-
-function handlers.set_time_selection(params)
-  local start_time = params.start
-  local end_time = params["end"]
-  if start_time == nil or end_time == nil then
-    return nil, "start and end required"
-  end
-  if end_time <= start_time then
-    return nil, "end must be greater than start"
-  end
-
-  reaper.GetSet_LoopTimeRange(true, false, start_time, end_time, false)
-  return { success = true, start = start_time, ["end"] = end_time }
-end
-
--- =============================================================================
--- Markers & regions handlers
--- =============================================================================
-
-function handlers.list_markers(params)
-  local markers = {}
-  local num_markers, num_regions = reaper.CountProjectMarkers(0)
-  local total = num_markers + num_regions
-  for i = 0, total - 1 do
-    local _, isrgn, pos, _, name, markrgnindex, color = reaper.EnumProjectMarkers3(0, i)
-    if not isrgn then
-      markers[#markers + 1] = {
-        index = markrgnindex,
-        name = name or "",
-        position = pos,
-        color = color,
-      }
-    end
-  end
-  return { markers = markers, total = #markers }
-end
-
-function handlers.list_regions(params)
-  local regions = {}
-  local num_markers, num_regions = reaper.CountProjectMarkers(0)
-  local total = num_markers + num_regions
-  for i = 0, total - 1 do
-    local _, isrgn, pos, rgnend, name, markrgnindex, color = reaper.EnumProjectMarkers3(0, i)
-    if isrgn then
-      regions[#regions + 1] = {
-        index = markrgnindex,
-        name = name or "",
-        start = pos,
-        ["end"] = rgnend,
-        color = color,
-      }
-    end
-  end
-  return { regions = regions, total = #regions }
-end
-
-function handlers.add_marker(params)
-  local pos = params.position
-  if pos == nil then return nil, "position required" end
-  local name = params.name or ""
-  local color = params.color or 0
-
-  local idx = reaper.AddProjectMarker2(0, false, pos, 0, name, -1, color)
-  if idx < 0 then return nil, "Failed to add marker" end
-
-  return { success = true, index = idx, position = pos, name = name }
-end
-
-function handlers.add_region(params)
-  local start_pos = params.start
-  local end_pos = params["end"]
-  if start_pos == nil or end_pos == nil then return nil, "start and end required" end
-  if end_pos <= start_pos then return nil, "end must be greater than start" end
-  local name = params.name or ""
-  local color = params.color or 0
-
-  local idx = reaper.AddProjectMarker2(0, true, start_pos, end_pos, name, -1, color)
-  if idx < 0 then return nil, "Failed to add region" end
-
-  return { success = true, index = idx, start = start_pos, ["end"] = end_pos, name = name }
-end
-
-function handlers.delete_marker(params)
-  local idx = params.markerIndex
-  if idx == nil then return nil, "markerIndex required" end
-
-  local ok = reaper.DeleteProjectMarker(0, idx, false)
-  if not ok then return nil, "Marker " .. idx .. " not found" end
-
-  return { success = true, markerIndex = idx }
-end
-
-function handlers.delete_region(params)
-  local idx = params.regionIndex
-  if idx == nil then return nil, "regionIndex required" end
-
-  local ok = reaper.DeleteProjectMarker(0, idx, true)
-  if not ok then return nil, "Region " .. idx .. " not found" end
-
-  return { success = true, regionIndex = idx }
-end
-
--- =============================================================================
--- Tempo map handlers
--- =============================================================================
-
-function handlers.get_tempo_map(params)
-  local points = {}
-  local count = reaper.CountTempoTimeSigMarkers(0)
-  for i = 0, count - 1 do
-    local _, timepos, measurepos, beatpos, bpm, timesig_num, timesig_denom, lineartempo = reaper.GetTempoTimeSigMarker(0, i)
-    points[#points + 1] = {
-      index = i,
-      position = timepos,
-      beatPosition = beatpos,
-      tempo = bpm,
-      timeSignatureNumerator = timesig_num,
-      timeSignatureDenominator = timesig_denom,
-      linearTempo = lineartempo,
-    }
-  end
-  return { points = points, total = count }
-end
-
--- =============================================================================
--- Envelope handlers
--- =============================================================================
-
-function handlers.get_track_envelopes(params)
-  local idx = params.trackIndex
-  if idx == nil then return nil, "trackIndex required" end
-
-  local track = reaper.GetTrack(0, idx)
-  if not track then return nil, "Track " .. idx .. " not found" end
-
-  local envelopes = {}
-  local count = reaper.CountTrackEnvelopes(track)
-  for i = 0, count - 1 do
-    local env = reaper.GetTrackEnvelope(track, i)
-    local _, name = reaper.GetEnvelopeName(env)
-    local point_count = reaper.CountEnvelopePoints(env)
-
-    -- Get envelope state from state chunk (ACT, VIS, ARM flags)
-    local active = true
-    local visible = true
-    local armed = false
-
-    local _, chunk = reaper.GetEnvelopeStateChunk(env, "", false)
-    if chunk then
-      local act_val = chunk:match("ACT (%d)")
-      if act_val then active = act_val ~= "0" end
-      local vis_val = chunk:match("VIS (%d)")
-      if vis_val then visible = vis_val ~= "0" end
-      local arm_val = chunk:match("ARM (%d)")
-      if arm_val then armed = arm_val ~= "0" end
-    end
-
-    envelopes[#envelopes + 1] = {
-      index = i,
-      name = name or "",
-      pointCount = point_count,
-      active = active,
-      visible = visible,
-      armed = armed,
-    }
-  end
-
-  return { trackIndex = idx, envelopes = envelopes, total = count }
-end
-
-function handlers.get_envelope_points(params)
-  local idx = params.trackIndex
-  local env_idx = params.envelopeIndex
-  if idx == nil then return nil, "trackIndex required" end
-  if env_idx == nil then return nil, "envelopeIndex required" end
-
-  local track = reaper.GetTrack(0, idx)
-  if not track then return nil, "Track " .. idx .. " not found" end
-
-  local env_count = reaper.CountTrackEnvelopes(track)
-  if env_idx >= env_count then
-    return nil, "Envelope " .. env_idx .. " not found (track has " .. env_count .. " envelopes)"
-  end
-
-  local env = reaper.GetTrackEnvelope(track, env_idx)
-  local _, env_name = reaper.GetEnvelopeName(env)
-  local point_count = reaper.CountEnvelopePoints(env)
-
-  local offset = params.offset or 0
-  local limit = params.limit
-  local start_idx = math.min(offset, point_count)
-  local end_idx = point_count - 1
-  if limit then
-    end_idx = math.min(start_idx + limit - 1, point_count - 1)
-  end
-
-  local points = {}
-  for i = start_idx, end_idx do
-    local _, time, value, shape, tension, selected = reaper.GetEnvelopePoint(env, i)
-    points[#points + 1] = {
-      pointIndex = i,
-      time = time,
-      value = value,
-      shape = shape,
-      tension = tension,
-      selected = selected,
-    }
-  end
-
-  return {
-    trackIndex = idx,
-    envelopeIndex = env_idx,
-    envelopeName = env_name or "",
-    points = points,
-    returned = #points,
-    total = point_count,
-    offset = start_idx,
-    hasMore = end_idx < point_count - 1,
-  }
-end
-
-function handlers.insert_envelope_point(params)
-  local idx = params.trackIndex
-  local env_idx = params.envelopeIndex
-  if idx == nil then return nil, "trackIndex required" end
-  if env_idx == nil then return nil, "envelopeIndex required" end
-  if params.time == nil then return nil, "time required" end
-  if params.value == nil then return nil, "value required" end
-
-  local track = reaper.GetTrack(0, idx)
-  if not track then return nil, "Track " .. idx .. " not found" end
-
-  local env_count = reaper.CountTrackEnvelopes(track)
-  if env_idx >= env_count then
-    return nil, "Envelope " .. env_idx .. " not found (track has " .. env_count .. " envelopes)"
-  end
-
-  local env = reaper.GetTrackEnvelope(track, env_idx)
-  local shape = params.shape or 0
-  local tension = params.tension or 0
-
-  reaper.Undo_BeginBlock()
-  local ok = reaper.InsertEnvelopePoint(env, params.time, params.value, shape, tension, false, true)
-  reaper.Envelope_SortPoints(env)
-  reaper.Undo_EndBlock("MCP: Insert envelope point", -1)
-
-  if not ok then return nil, "Failed to insert envelope point" end
-
-  return {
-    success = true,
-    trackIndex = idx,
-    envelopeIndex = env_idx,
-    time = params.time,
-    value = params.value,
-    totalPoints = reaper.CountEnvelopePoints(env),
-  }
-end
-
-function handlers.delete_envelope_point(params)
-  local idx = params.trackIndex
-  local env_idx = params.envelopeIndex
-  local pt_idx = params.pointIndex
-  if idx == nil then return nil, "trackIndex required" end
-  if env_idx == nil then return nil, "envelopeIndex required" end
-  if pt_idx == nil then return nil, "pointIndex required" end
-
-  local track = reaper.GetTrack(0, idx)
-  if not track then return nil, "Track " .. idx .. " not found" end
-
-  local env_count = reaper.CountTrackEnvelopes(track)
-  if env_idx >= env_count then
-    return nil, "Envelope " .. env_idx .. " not found (track has " .. env_count .. " envelopes)"
-  end
-
-  local env = reaper.GetTrackEnvelope(track, env_idx)
-  local point_count = reaper.CountEnvelopePoints(env)
-  if pt_idx >= point_count then
-    return nil, "Point " .. pt_idx .. " not found (envelope has " .. point_count .. " points)"
-  end
-
-  reaper.Undo_BeginBlock()
-  reaper.DeleteEnvelopePoint(env, pt_idx)
-  reaper.Undo_EndBlock("MCP: Delete envelope point", -1)
-
-  return { success = true, totalPoints = reaper.CountEnvelopePoints(env) }
 end
 
 -- =============================================================================

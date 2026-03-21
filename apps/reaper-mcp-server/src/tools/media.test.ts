@@ -166,23 +166,77 @@ describe('media tools', () => {
   });
 
   describe('set_media_items_properties (batch)', () => {
-    it('sends batch set command with items JSON', async () => {
+    it('sends batch set command with native array', async () => {
       const data = { success: true, edited: 2, total: 2 };
       mockedSendCommand.mockResolvedValue(successResponse(data));
 
-      const items = JSON.stringify([
+      const items = [
         { trackIndex: 0, itemIndex: 0, volume: -3 },
         { trackIndex: 1, itemIndex: 0, mute: 1, fadeInLength: 0.01 },
-      ]);
+      ];
       const result = await tools['set_media_items_properties'].handler({ items });
       expect(mockedSendCommand).toHaveBeenCalledWith('set_media_items_properties', { items });
       expectSuccess(result, data);
     });
 
     it('returns error on failure', async () => {
-      mockedSendCommand.mockResolvedValue(errorResponse('Failed to parse items JSON array'));
-      const result = await tools['set_media_items_properties'].handler({ items: 'bad' });
-      expectError(result, 'Failed to parse items JSON array');
+      mockedSendCommand.mockResolvedValue(errorResponse('Failed to parse items array'));
+      const result = await tools['set_media_items_properties'].handler({
+        items: [{ trackIndex: 0, itemIndex: 0, volume: -3 }],
+      });
+      expectError(result, 'Failed to parse items array');
+    });
+  });
+
+  describe('load/performance reference', () => {
+    it('dispatches set_media_items_properties with 100 items', async () => {
+      const items = Array.from({ length: 100 }, (_, i) => ({
+        trackIndex: i % 10,
+        itemIndex: Math.floor(i / 10),
+        volume: -6,
+      }));
+      const data = { success: true, edited: 100, total: 100 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const result = await tools['set_media_items_properties'].handler({ items });
+      expect(mockedSendCommand).toHaveBeenCalledWith('set_media_items_properties', { items });
+      const calledWith = mockedSendCommand.mock.calls[0][1] as { items: unknown[] };
+      expect(Array.isArray(calledWith.items)).toBe(true);
+      expect(calledWith.items).toHaveLength(100);
+      expectSuccess(result, data);
+    });
+
+    it('dispatches set_media_items_properties with 500 items', async () => {
+      const items = Array.from({ length: 500 }, (_, i) => ({
+        trackIndex: i % 20,
+        itemIndex: Math.floor(i / 20),
+        mute: i % 2,
+        volume: -3,
+        fadeInLength: 0.01,
+        fadeOutLength: 0.01,
+      }));
+      const data = { success: true, edited: 500, total: 500 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      await tools['set_media_items_properties'].handler({ items });
+      const calledWith = mockedSendCommand.mock.calls[0][1] as { items: unknown[] };
+      expect(Array.isArray(calledWith.items)).toBe(true);
+      expect(calledWith.items).toHaveLength(500);
+    });
+
+    it('passes each item object as a plain object (not a string)', async () => {
+      const items = Array.from({ length: 50 }, (_, i) => ({
+        trackIndex: 0,
+        itemIndex: i,
+        volume: -6,
+      }));
+      mockedSendCommand.mockResolvedValue(successResponse({ success: true, edited: 50, total: 50 }));
+
+      await tools['set_media_items_properties'].handler({ items });
+      const calledWith = mockedSendCommand.mock.calls[0][1] as { items: unknown[] };
+      // Verify elements are plain objects, not strings
+      expect(typeof calledWith.items[0]).toBe('object');
+      expect(typeof calledWith.items[0]).not.toBe('string');
     });
   });
 
