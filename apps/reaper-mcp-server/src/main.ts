@@ -6,6 +6,7 @@ import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, getReaperScriptsPa
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 import { resolveAssetDir, copyDirSync, installFile, createMcpJson, REAPER_ASSETS } from './cli.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -57,6 +58,7 @@ async function installSkills(): Promise<void> {
   console.log('REAPER MCP — Install AI Mix Engineer Skills\n');
 
   const targetDir = process.cwd();
+  const globalClaudeDir = join(homedir(), '.claude');
 
   const knowledgeSrc = resolveAssetDir(__dirname, 'knowledge');
   const knowledgeDest = join(targetDir, 'knowledge');
@@ -86,12 +88,21 @@ async function installSkills(): Promise<void> {
   }
 
   const agentsSrc = resolveAssetDir(__dirname, 'claude-agents');
+
+  // Install agents to project-local .claude/agents/
   const agentsDir = join(targetDir, '.claude', 'agents');
   if (existsSync(agentsSrc)) {
     const count = copyDirSync(agentsSrc, agentsDir);
     console.log(`Installed Claude agents: ${count} files → ${agentsDir}`);
   } else {
     console.log('Claude agents not found in package. Skipping.');
+  }
+
+  // Also install agents globally to ~/.claude/agents/ so they work from any directory
+  const globalAgentsDir = join(globalClaudeDir, 'agents');
+  if (existsSync(agentsSrc)) {
+    const count = copyDirSync(agentsSrc, globalAgentsDir);
+    console.log(`Installed Claude agents (global): ${count} files → ${globalAgentsDir}`);
   }
 
   const mcpJsonPath = join(targetDir, '.mcp.json');
