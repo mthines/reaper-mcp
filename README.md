@@ -272,15 +272,65 @@ Processing decisions adapt to the genre:
 | Orchestral | -23 to -16 | Preserve dynamics, hall reverb staging |
 | Metal | -11 to -8 | V-scoop guitars, tight drums, 4-guitar wall |
 
+## Autonomous Mode (Allow All Tools)
+
+By default Claude Code asks permission for each MCP tool call. To let the mix agents work autonomously, add the REAPER tools to your allow list.
+
+Add to your project's `.claude/settings.json` (or `~/.claude/settings.json` for global):
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__reaper__get_project_info",
+      "mcp__reaper__list_tracks",
+      "mcp__reaper__get_track_properties",
+      "mcp__reaper__set_track_property",
+      "mcp__reaper__add_fx",
+      "mcp__reaper__remove_fx",
+      "mcp__reaper__get_fx_parameters",
+      "mcp__reaper__set_fx_parameter",
+      "mcp__reaper__list_available_fx",
+      "mcp__reaper__search_fx",
+      "mcp__reaper__get_fx_preset_list",
+      "mcp__reaper__set_fx_preset",
+      "mcp__reaper__play",
+      "mcp__reaper__stop",
+      "mcp__reaper__record",
+      "mcp__reaper__get_transport_state",
+      "mcp__reaper__set_cursor_position",
+      "mcp__reaper__read_track_meters",
+      "mcp__reaper__read_track_spectrum",
+      "mcp__reaper__read_track_lufs",
+      "mcp__reaper__read_track_correlation",
+      "mcp__reaper__read_track_crest",
+      "mcp__reaper__snapshot_save",
+      "mcp__reaper__snapshot_restore",
+      "mcp__reaper__snapshot_list",
+      "mcp__reaper__get_track_routing"
+    ]
+  }
+}
+```
+
+The format is `mcp__reaper__{tool_name}`. Once added, Claude Code will run these tools without prompting.
+
 ## CLI Commands
 
 ```bash
-reaper-mcp                  # Start MCP server (default)
-reaper-mcp serve            # Start MCP server (stdio mode)
-reaper-mcp setup            # Install Lua bridge + JSFX into REAPER
-reaper-mcp install-skills   # Install AI knowledge into your project
-reaper-mcp doctor           # Verify everything is configured
-reaper-mcp status           # Check bridge connection
+npx @mthines/reaper-mcp                  # Start MCP server (default)
+npx @mthines/reaper-mcp serve            # Start MCP server (stdio mode)
+npx @mthines/reaper-mcp setup            # Install Lua bridge + JSFX into REAPER
+npx @mthines/reaper-mcp install-skills   # Install AI knowledge + agents into your project
+npx @mthines/reaper-mcp doctor           # Verify everything is configured
+npx @mthines/reaper-mcp status           # Check bridge connection
+```
+
+Or install globally for shorter commands:
+
+```bash
+npm install -g @mthines/reaper-mcp
+reaper-mcp setup
 ```
 
 ## Claude Code Integration
