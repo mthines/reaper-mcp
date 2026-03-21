@@ -161,6 +161,7 @@ describe('package integrity', () => {
     expect(pkg.files).toContain('main.js');
     expect(pkg.files).toContain('reaper/**');
     expect(pkg.files).toContain('knowledge/**');
+    expect(pkg.files).toContain('claude-agents/**');
     expect(pkg.files).toContain('README.md');
     expect(pkg.files).toContain('LICENSE');
   });
@@ -191,6 +192,14 @@ describe('package integrity', () => {
 
   it.skipIf(!distExists)('dist contains claude-skills', () => {
     expect(existsSync(join(distDir, 'claude-skills'))).toBe(true);
+  });
+
+  it.skipIf(!distExists)('dist contains claude-agents', () => {
+    expect(existsSync(join(distDir, 'claude-agents'))).toBe(true);
+  });
+
+  it.skipIf(!distExists)('dist contains mix-engineer agent', () => {
+    expect(existsSync(join(distDir, 'claude-agents', 'mix-engineer.md'))).toBe(true);
   });
 
   it.skipIf(!distExists)('main.js does not contain node_modules paths', () => {

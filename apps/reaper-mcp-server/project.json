@@ -40,6 +40,11 @@
             "output": "claude-skills"
           },
           {
+            "glob": "**/*",
+            "input": ".claude/agents",
+            "output": "claude-agents"
+          },
+          {
             "glob": "README.md",
             "input": ".",
             "output": "."

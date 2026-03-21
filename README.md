@@ -95,9 +95,10 @@ npx @mthines/reaper-mcp install-skills
 ```
 
 This creates in your project:
-- `knowledge/` — plugin knowledge, genre rules, workflows, reference data
+- `.claude/agents/` — mix engineer subagents (`@mix-engineer`, `@gain-stage`, `@mix-analyzer`, `@master`)
 - `.claude/rules/` — architecture and development rules
 - `.claude/skills/` — skills like `/learn-plugin`
+- `knowledge/` — plugin knowledge, genre rules, workflows, reference data
 - `.mcp.json` — MCP server configuration for Claude Code
 
 ### Step 4: Verify
@@ -159,6 +160,73 @@ Checks that the bridge is connected, knowledge is installed, and MCP config exis
 | Tool | Description |
 |------|-------------|
 | `get_track_routing` | Sends, receives, parent/folder info for a track |
+
+## Using the Mix Agents
+
+Once you've run `setup` and `install-skills`, open Claude Code in your project directory. Four specialized mix agents are available:
+
+### Available Agents
+
+| Agent | Invocation | What it does |
+|-------|-----------|-------------|
+| **Mix Engineer** | `@mix-engineer` | General-purpose mix agent — analyzes, suggests, and executes any mix task |
+| **Gain Stage** | `@gain-stage` | Sets all tracks to -18 dBFS average with proper headroom |
+| **Mix Analyzer** | `@mix-analyzer` | "Roast my mix" — analysis only, no changes, produces detailed report |
+| **Master** | `@master` | Mastering chain targeting specific LUFS/platform standards |
+
+### How to use them
+
+Just mention the agent by name in Claude Code:
+
+```
+@mix-engineer Please gain stage all my tracks
+@mix-engineer Build a vocal chain on track 3
+@mix-engineer The low end is muddy — can you fix it?
+@mix-analyzer Roast my mix — what could be improved?
+@master Master this for Spotify
+@gain-stage Set proper levels on everything
+```
+
+Or start a full session as the mix engineer:
+
+```bash
+claude --agent mix-engineer
+```
+
+### What happens under the hood
+
+Each agent has:
+- **Its own system prompt** — thinks like a mix engineer, not a general assistant
+- **Pre-approved REAPER tools** — no permission prompts for every MCP call
+- **Scoped MCP access** — only the `reaper` MCP server is loaded
+- **Embedded reference data** — frequency bands, LUFS targets, compression settings
+
+The workflow is always:
+1. **Save a snapshot** (so you can always A/B or undo)
+2. **Analyze** — read meters, spectrum, LUFS, correlation, crest factor
+3. **Reason** — apply genre rules, frequency knowledge, and plugin expertise
+4. **Act** — add FX, set parameters, adjust levels using the best available plugins
+5. **Verify** — re-read meters to confirm the change had the intended effect
+6. **Report** — explain what it did and why in audio engineering terms
+
+### A/B Comparison
+
+Every change is bracketed by snapshots:
+1. Agent saves a "Before" snapshot automatically
+2. Makes all changes
+3. Saves an "After" snapshot
+4. You can restore either with `snapshot_restore` to A/B compare
+
+### Genre Awareness
+
+Tell the agent the genre and it adjusts its approach:
+
+```
+@mix-engineer This is a hip-hop track — please gain stage and check the 808
+@mix-engineer Mix this rock song — make sure the guitars are wide and the drums punch
+```
+
+The agent reads `knowledge/genres/{genre}.md` for genre-specific conventions.
 
 ## AI Mix Engineer Knowledge
 
@@ -272,7 +340,7 @@ reaper-mcp/
 pnpm install
 pnpm nx run-many --target=build      # Build all
 pnpm nx run-many --target=lint       # Lint all
-pnpm nx run-many --target=test       # Test all (70+ tests)
+pnpm nx run-many --target=test       # Test all (130+ tests)
 pnpm nx run-many --target=build,lint,test  # Everything
 ```
 

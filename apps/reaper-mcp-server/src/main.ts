@@ -85,6 +85,15 @@ async function installSkills(): Promise<void> {
     console.log('Claude skills not found in package. Skipping.');
   }
 
+  const agentsSrc = resolveAssetDir(__dirname, 'claude-agents');
+  const agentsDir = join(targetDir, '.claude', 'agents');
+  if (existsSync(agentsSrc)) {
+    const count = copyDirSync(agentsSrc, agentsDir);
+    console.log(`Installed Claude agents: ${count} files → ${agentsDir}`);
+  } else {
+    console.log('Claude agents not found in package. Skipping.');
+  }
+
   const mcpJsonPath = join(targetDir, '.mcp.json');
   if (createMcpJson(mcpJsonPath)) {
     console.log(`\nCreated: ${mcpJsonPath}`);
@@ -92,8 +101,9 @@ async function installSkills(): Promise<void> {
     console.log(`\n.mcp.json already exists — add the reaper server config manually if needed.`);
   }
 
-  console.log('\nDone! Claude Code now has mix engineer knowledge and REAPER MCP tools.');
-  console.log('Try asking: "Please gain stage my tracks" or "Roast my mix"');
+  console.log('\nDone! Claude Code now has mix engineer agents, knowledge, and REAPER MCP tools.');
+  console.log('Try: @mix-engineer "Please gain stage my tracks"');
+  console.log('Or:  @mix-analyzer "Roast my mix"');
 }
 
 async function doctor(): Promise<void> {
@@ -103,6 +113,12 @@ async function doctor(): Promise<void> {
   console.log(`Lua bridge:    ${bridgeRunning ? '✓ Connected' : '✗ Not detected'}`);
   if (!bridgeRunning) {
     console.log('  → Run "reaper-mcp setup" then load mcp_bridge.lua in REAPER');
+  }
+
+  const agentsExist = existsSync(join(process.cwd(), '.claude', 'agents'));
+  console.log(`Mix agents:    ${agentsExist ? '✓ Found (.claude/agents/)' : '✗ Not installed'}`);
+  if (!agentsExist) {
+    console.log('  → Run "reaper-mcp install-skills" in your project directory');
   }
 
   const knowledgeExists = existsSync(join(process.cwd(), 'knowledge'));

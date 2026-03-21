@@ -39,6 +39,7 @@
     "knowledge/**",
     "claude-rules/**",
     "claude-skills/**",
+    "claude-agents/**",
     "README.md",
     "LICENSE"
   ],
