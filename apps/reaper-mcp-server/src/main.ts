@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
+import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
 import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, getReaperScriptsPath, getReaperEffectsPath } from './bridge.js';
-import { initTelemetry, shutdownTelemetry } from './telemetry.js';
+import { initTelemetry, shutdownTelemetry, getTracer } from './telemetry.js';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -180,27 +181,60 @@ async function serve(): Promise<void> {
   log('Starting REAPER MCP Server...');
   log(`Entry: ${fileURLToPath(import.meta.url)}`);
 
-  await ensureBridgeDir();
+  const tracer = getTracer();
 
-  const cleaned = await cleanupStaleFiles();
-  if (cleaned > 0) {
-    log(`Cleaned up ${cleaned} stale bridge files`);
-  }
+  // Root span wrapping the entire startup sequence — an early touchpoint for
+  // validating the OTel pipeline.  This is a headless process (no inbound HTTP)
+  // so we create the root span manually.
+  await tracer.startActiveSpan('mcp.server.startup', { kind: SpanKind.INTERNAL }, async (startupSpan) => {
+    try {
+      await ensureBridgeDir();
 
-  const bridgeRunning = await isBridgeRunning();
-  if (!bridgeRunning) {
-    log('WARNING: Lua bridge does not appear to be running in REAPER.');
-    log('Commands will timeout until the bridge script is started.');
-    log('Run "npx @mthines/reaper-mcp setup" for installation instructions.');
-  } else {
-    log('Lua bridge detected — connected to REAPER');
-  }
+      const cleaned = await cleanupStaleFiles();
+      if (cleaned > 0) {
+        startupSpan.setAttribute('mcp.bridge.stale_files_cleaned', cleaned);
+        log(`Cleaned up ${cleaned} stale bridge files`);
+      }
 
-  const server = createServer();
-  const transport = new StdioServerTransport();
+      // Check bridge connectivity in a child span
+      const bridgeRunning = await tracer.startActiveSpan('mcp.bridge.connect', { kind: SpanKind.INTERNAL }, async (bridgeSpan) => {
+        const running = await isBridgeRunning();
+        bridgeSpan.setAttribute('mcp.bridge.connected', running);
+        if (!running) {
+          bridgeSpan.setStatus({
+            code: SpanStatusCode.UNSET,
+            message: 'Lua bridge not detected — commands will timeout until started',
+          });
+          log('WARNING: Lua bridge does not appear to be running in REAPER.');
+          log('Commands will timeout until the bridge script is started.');
+          log('Run "npx @mthines/reaper-mcp setup" for installation instructions.');
+        } else {
+          bridgeSpan.setStatus({ code: SpanStatusCode.OK });
+          log('Lua bridge detected — connected to REAPER');
+        }
+        bridgeSpan.end();
+        return running;
+      });
 
-  await server.connect(transport);
-  log('MCP server connected via stdio');
+      startupSpan.setAttribute('mcp.bridge.connected', bridgeRunning);
+
+      const server = createServer();
+      const transport = new StdioServerTransport();
+
+      await server.connect(transport);
+      startupSpan.setStatus({ code: SpanStatusCode.OK });
+      log('MCP server connected via stdio');
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      startupSpan.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: `${err.name}: ${err.message}`,
+      });
+      throw error;
+    } finally {
+      startupSpan.end();
+    }
+  });
 }
 
 // --- CLI entry point ---
