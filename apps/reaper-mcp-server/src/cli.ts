@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** Resolve asset path — checks sibling (npm published) then parent (dev build) */
@@ -58,6 +58,95 @@ export const REAPER_ASSETS = [
   'mcp_correlation_meter.jsfx',
   'mcp_crest_factor.jsfx',
 ] as const;
+
+/** All MCP tool names registered by the server */
+export const MCP_TOOL_NAMES = [
+  // project
+  'get_project_info',
+  // tracks
+  'list_tracks',
+  'get_track_properties',
+  'set_track_property',
+  // fx
+  'add_fx',
+  'remove_fx',
+  'get_fx_parameters',
+  'set_fx_parameter',
+  // discovery
+  'list_available_fx',
+  'search_fx',
+  // presets
+  'get_fx_preset_list',
+  'set_fx_preset',
+  // transport
+  'play',
+  'stop',
+  'record',
+  'get_transport_state',
+  'set_cursor_position',
+  // meters
+  'read_track_meters',
+  'read_track_spectrum',
+  // analysis
+  'read_track_lufs',
+  'read_track_correlation',
+  'read_track_crest',
+  // snapshots
+  'snapshot_save',
+  'snapshot_restore',
+  'snapshot_list',
+  // routing
+  'get_track_routing',
+  // midi
+  'create_midi_item',
+  'list_midi_items',
+  'get_midi_notes',
+  'insert_midi_note',
+  'insert_midi_notes',
+  'edit_midi_note',
+  'delete_midi_note',
+  'get_midi_cc',
+  'insert_midi_cc',
+  'delete_midi_cc',
+  'get_midi_item_properties',
+  'set_midi_item_properties',
+  // media
+  'list_media_items',
+  'get_media_item_properties',
+  'set_media_item_properties',
+  'split_media_item',
+  'delete_media_item',
+  'move_media_item',
+  'trim_media_item',
+  'add_stretch_marker',
+  'get_stretch_markers',
+  'delete_stretch_marker',
+] as const;
+
+/** Create or update .claude/settings.json with reaper MCP tool permissions */
+export function ensureClaudeSettings(settingsPath: string): 'created' | 'updated' | 'unchanged' {
+  const allowList = MCP_TOOL_NAMES.map(t => `mcp__reaper__${t}`);
+
+  if (!existsSync(settingsPath)) {
+    mkdirSync(join(settingsPath, '..'), { recursive: true });
+    const config = { permissions: { allow: allowList } };
+    writeFileSync(settingsPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+    return 'created';
+  }
+
+  // Merge into existing settings, preserving other permissions
+  const existing = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+  const existingAllow: string[] = existing?.permissions?.allow ?? [];
+  const existingSet = new Set(existingAllow);
+  const newTools = allowList.filter(t => !existingSet.has(t));
+
+  if (newTools.length === 0) return 'unchanged';
+
+  if (!existing.permissions) existing.permissions = {};
+  existing.permissions.allow = [...existingAllow, ...newTools];
+  writeFileSync(settingsPath, JSON.stringify(existing, null, 2) + '\n', 'utf-8');
+  return 'updated';
+}
 
 /** Expected knowledge subdirectories */
 export const KNOWLEDGE_DIRS = ['genres', 'plugins', 'workflows', 'reference'] as const;

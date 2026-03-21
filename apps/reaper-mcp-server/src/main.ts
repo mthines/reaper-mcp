@@ -7,7 +7,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, REAPER_ASSETS } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS } from './cli.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -105,6 +105,25 @@ async function installSkills(): Promise<void> {
     console.log(`Installed Claude agents (global): ${count} files → ${globalAgentsDir}`);
   }
 
+  // Set up Claude settings with REAPER tool permissions (project-local and global)
+  const localSettingsPath = join(targetDir, '.claude', 'settings.json');
+  const localResult = ensureClaudeSettings(localSettingsPath);
+  if (localResult === 'created') {
+    console.log(`Created Claude settings: ${localSettingsPath}`);
+  } else if (localResult === 'updated') {
+    console.log(`Updated Claude settings with new REAPER tools: ${localSettingsPath}`);
+  } else {
+    console.log(`Claude settings already has all REAPER tools: ${localSettingsPath}`);
+  }
+
+  const globalSettingsPath = join(globalClaudeDir, 'settings.json');
+  const globalResult = ensureClaudeSettings(globalSettingsPath);
+  if (globalResult === 'created') {
+    console.log(`Created Claude settings (global): ${globalSettingsPath}`);
+  } else if (globalResult === 'updated') {
+    console.log(`Updated Claude settings (global) with new REAPER tools: ${globalSettingsPath}`);
+  }
+
   const mcpJsonPath = join(targetDir, '.mcp.json');
   if (createMcpJson(mcpJsonPath)) {
     console.log(`\nCreated: ${mcpJsonPath}`);
@@ -113,7 +132,8 @@ async function installSkills(): Promise<void> {
   }
 
   console.log('\nDone! Claude Code now has mix engineer agents, knowledge, and REAPER MCP tools.');
-  console.log('Try: @mix-engineer "Please gain stage my tracks"');
+  console.log('All 48 REAPER tools are pre-approved — agents work autonomously.');
+  console.log('\nTry: @mix-engineer "Please gain stage my tracks"');
   console.log('Or:  @mix-analyzer "Roast my mix"');
 }
 
