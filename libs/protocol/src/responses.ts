@@ -160,3 +160,66 @@ export interface CrestFactorData {
   peakLevel: number;    // dB (peak hold level)
   rmsLevel: number;     // dB (RMS level over window)
 }
+
+// --- MIDI editing response types ---
+
+export interface MidiItemInfo {
+  itemIndex: number;
+  position: number;      // seconds
+  length: number;        // seconds
+  noteCount: number;
+  ccCount: number;
+  muted: boolean;
+}
+
+export interface MidiNoteInfo {
+  noteIndex: number;
+  pitch: number;         // 0-127
+  velocity: number;      // 0-127
+  startPosition: number; // beats from item start
+  duration: number;      // beats
+  channel: number;       // 0-15
+  selected: boolean;
+  muted: boolean;
+}
+
+export interface MidiCCInfo {
+  ccIndex: number;
+  ccNumber: number;   // 0-127
+  value: number;       // 0-127
+  position: number;    // beats from item start
+  channel: number;     // 0-15
+}
+
+export interface MidiItemProperties {
+  trackIndex: number;
+  itemIndex: number;
+  position: number;
+  length: number;
+  noteCount: number;
+  ccCount: number;
+  muted: boolean;
+  loopSource: boolean;
+}
+
+// --- Media item editing response types ---
+
+export interface MediaItemInfo {
+  itemIndex: number;
+  position: number;      // seconds
+  length: number;        // seconds
+  name: string;
+  volume: number;        // dB
+  muted: boolean;
+  fadeInLength: number;  // seconds
+  fadeOutLength: number; // seconds
+  playRate: number;
+  isMidi: boolean;
+  takeName: string;
+}
+
+export interface StretchMarkerInfo {
+  index: number;
+  position: number;       // seconds within item
+  sourcePosition: number; // seconds in source
+}

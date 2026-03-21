@@ -37,7 +37,31 @@ export type CommandType =
   | 'get_track_routing'
   | 'read_track_lufs'
   | 'read_track_correlation'
-  | 'read_track_crest';
+  | 'read_track_crest'
+  // MIDI editing
+  | 'create_midi_item'
+  | 'list_midi_items'
+  | 'get_midi_notes'
+  | 'insert_midi_note'
+  | 'insert_midi_notes'
+  | 'edit_midi_note'
+  | 'delete_midi_note'
+  | 'get_midi_cc'
+  | 'insert_midi_cc'
+  | 'delete_midi_cc'
+  | 'set_midi_item_properties'
+  | 'get_midi_item_properties'
+  // Media item editing
+  | 'list_media_items'
+  | 'get_media_item_properties'
+  | 'set_media_item_properties'
+  | 'split_media_item'
+  | 'delete_media_item'
+  | 'move_media_item'
+  | 'trim_media_item'
+  | 'add_stretch_marker'
+  | 'get_stretch_markers'
+  | 'delete_stretch_marker';
 
 // --- Per-command param types ---
 
@@ -149,4 +173,155 @@ export interface ReadTrackCorrelationParams {
 
 export interface ReadTrackCrestParams {
   trackIndex: number;
+}
+
+// --- MIDI editing param types ---
+
+export interface CreateMidiItemParams {
+  trackIndex: number;
+  startPosition: number; // seconds from project start
+  endPosition: number;   // seconds from project start
+}
+
+export interface ListMidiItemsParams {
+  trackIndex: number;
+}
+
+export interface GetMidiNotesParams {
+  trackIndex: number;
+  itemIndex: number;
+}
+
+export interface InsertMidiNoteParams {
+  trackIndex: number;
+  itemIndex: number;
+  pitch: number;         // 0-127 (60 = C4/Middle C)
+  velocity: number;      // 1-127
+  startPosition: number; // beats from item start
+  duration: number;      // beats (1.0 = quarter note)
+  channel?: number;      // 0-15, default 0
+}
+
+export interface InsertMidiNotesParams {
+  trackIndex: number;
+  itemIndex: number;
+  notes: string; // JSON string array of { pitch, velocity, startPosition, duration, channel? }
+}
+
+export interface EditMidiNoteParams {
+  trackIndex: number;
+  itemIndex: number;
+  noteIndex: number;
+  pitch?: number;
+  velocity?: number;
+  startPosition?: number; // beats from item start
+  duration?: number;      // beats
+  channel?: number;
+}
+
+export interface DeleteMidiNoteParams {
+  trackIndex: number;
+  itemIndex: number;
+  noteIndex: number;
+}
+
+export interface GetMidiCCParams {
+  trackIndex: number;
+  itemIndex: number;
+  ccNumber?: number; // optional filter by CC number
+}
+
+export interface InsertMidiCCParams {
+  trackIndex: number;
+  itemIndex: number;
+  ccNumber: number;      // 0-127
+  value: number;         // 0-127
+  position: number;      // beats from item start
+  channel?: number;      // 0-15, default 0
+}
+
+export interface DeleteMidiCCParams {
+  trackIndex: number;
+  itemIndex: number;
+  ccIndex: number;
+}
+
+export interface SetMidiItemPropertiesParams {
+  trackIndex: number;
+  itemIndex: number;
+  position?: number; // seconds
+  length?: number;   // seconds
+  mute?: number;     // 0 or 1
+  loopSource?: number; // 0 or 1
+}
+
+export interface GetMidiItemPropertiesParams {
+  trackIndex: number;
+  itemIndex: number;
+}
+
+// --- Media item editing param types ---
+
+export interface ListMediaItemsParams {
+  trackIndex: number;
+}
+
+export interface GetMediaItemPropertiesParams {
+  trackIndex: number;
+  itemIndex: number;
+}
+
+export interface SetMediaItemPropertiesParams {
+  trackIndex: number;
+  itemIndex: number;
+  position?: number;  // seconds
+  length?: number;    // seconds
+  volume?: number;    // dB
+  mute?: number;      // 0 or 1
+  fadeInLength?: number;  // seconds
+  fadeOutLength?: number; // seconds
+  playRate?: number;      // 1.0 = normal
+}
+
+export interface SplitMediaItemParams {
+  trackIndex: number;
+  itemIndex: number;
+  position: number; // seconds (absolute project position)
+}
+
+export interface DeleteMediaItemParams {
+  trackIndex: number;
+  itemIndex: number;
+}
+
+export interface MoveMediaItemParams {
+  trackIndex: number;
+  itemIndex: number;
+  newPosition?: number;    // seconds
+  newTrackIndex?: number;  // move to different track
+}
+
+export interface TrimMediaItemParams {
+  trackIndex: number;
+  itemIndex: number;
+  trimStart?: number; // seconds to trim from start (positive = trim in, negative = extend)
+  trimEnd?: number;   // seconds to trim from end (positive = trim in, negative = extend)
+}
+
+export interface AddStretchMarkerParams {
+  trackIndex: number;
+  itemIndex: number;
+  position: number;       // seconds within item
+  sourcePosition?: number; // seconds in source audio
+}
+
+export interface GetStretchMarkersParams {
+  trackIndex: number;
+  itemIndex: number;
+}
+
+export interface DeleteStretchMarkerParams {
+  trackIndex: number;
+  itemIndex: number;
+  markerIndex: number;
 }

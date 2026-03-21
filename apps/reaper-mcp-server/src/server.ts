@@ -9,6 +9,8 @@ import { registerPresetTools } from './tools/presets.js';
 import { registerSnapshotTools } from './tools/snapshots.js';
 import { registerRoutingTools } from './tools/routing.js';
 import { registerAnalysisTools } from './tools/analysis.js';
+import { registerMidiTools } from './tools/midi.js';
+import { registerMediaTools } from './tools/media.js';
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -26,6 +28,8 @@ export function createServer(): McpServer {
   registerSnapshotTools(server);
   registerRoutingTools(server);
   registerAnalysisTools(server);
+  registerMidiTools(server);
+  registerMediaTools(server);
 
   return server;
 }

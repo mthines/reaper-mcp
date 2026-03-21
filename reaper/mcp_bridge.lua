@@ -1010,6 +1010,781 @@ function handlers.read_track_crest(params)
 end
 
 -- =============================================================================
+-- MIDI editing handlers
+-- =============================================================================
+
+-- Helper: get a MIDI take from track/item indices, with validation
+local function get_midi_take(params)
+  local track_idx = params.trackIndex
+  local item_idx = params.itemIndex
+  if track_idx == nil then return nil, nil, nil, "trackIndex required" end
+  if item_idx == nil then return nil, nil, nil, "itemIndex required" end
+
+  local track = reaper.GetTrack(0, track_idx)
+  if not track then return nil, nil, nil, "Track " .. track_idx .. " not found" end
+
+  local item_count = reaper.CountTrackMediaItems(track)
+  if item_idx >= item_count then
+    return nil, nil, nil, "Item " .. item_idx .. " not found (track has " .. item_count .. " items)"
+  end
+
+  local item = reaper.GetTrackMediaItem(track, item_idx)
+  if not item then return nil, nil, nil, "Item " .. item_idx .. " not found" end
+
+  local take = reaper.GetActiveTake(item)
+  if not take then return nil, nil, nil, "Item has no active take" end
+
+  if not reaper.TakeIsMIDI(take) then
+    return nil, nil, nil, "Item is not a MIDI item"
+  end
+
+  return track, item, take, nil
+end
+
+-- Helper: get a media item from track/item indices, with validation
+local function get_media_item(params)
+  local track_idx = params.trackIndex
+  local item_idx = params.itemIndex
+  if track_idx == nil then return nil, nil, "trackIndex required" end
+  if item_idx == nil then return nil, nil, "itemIndex required" end
+
+  local track = reaper.GetTrack(0, track_idx)
+  if not track then return nil, nil, "Track " .. track_idx .. " not found" end
+
+  local item_count = reaper.CountTrackMediaItems(track)
+  if item_idx >= item_count then
+    return nil, nil, "Item " .. item_idx .. " not found (track has " .. item_count .. " items)"
+  end
+
+  local item = reaper.GetTrackMediaItem(track, item_idx)
+  if not item then return nil, nil, "Item " .. item_idx .. " not found" end
+
+  return track, item, nil
+end
+
+-- Helper: convert beats from item start to PPQ ticks
+local function beats_to_ppq(take, item, beats)
+  local item_start = reaper.GetMediaItemInfo_Value(item, "D_POSITION")
+  -- Convert beats to project time (using project tempo), then to PPQ
+  local proj_time = item_start + reaper.TimeMap2_QNToTime(0, reaper.TimeMap2_timeToQN(0, item_start) + beats) - item_start
+  return reaper.MIDI_GetPPQPosFromProjTime(take, proj_time)
+end
+
+-- Helper: convert PPQ ticks to beats from item start
+local function ppq_to_beats(take, item)
+  local item_start = reaper.GetMediaItemInfo_Value(item, "D_POSITION")
+  local item_start_qn = reaper.TimeMap2_timeToQN(0, item_start)
+  return function(ppq)
+    local proj_time = reaper.MIDI_GetProjTimeFromPPQPos(take, ppq)
+    local proj_qn = reaper.TimeMap2_timeToQN(0, proj_time)
+    return proj_qn - item_start_qn
+  end
+end
+
+function handlers.create_midi_item(params)
+  local track_idx = params.trackIndex
+  local start_pos = params.startPosition
+  local end_pos = params.endPosition
+  if track_idx == nil then return nil, "trackIndex required" end
+  if not start_pos or not end_pos then return nil, "startPosition and endPosition required" end
+  if end_pos <= start_pos then return nil, "endPosition must be greater than startPosition" end
+
+  local track = reaper.GetTrack(0, track_idx)
+  if not track then return nil, "Track " .. track_idx .. " not found" end
+
+  reaper.Undo_BeginBlock()
+  local item = reaper.CreateNewMIDIItemInProj(track, start_pos, end_pos)
+  reaper.Undo_EndBlock("MCP: Create MIDI item", -1)
+
+  if not item then return nil, "Failed to create MIDI item" end
+
+  -- Find the index of the new item on the track
+  local item_count = reaper.CountTrackMediaItems(track)
+  local new_idx = -1
+  for i = 0, item_count - 1 do
+    if reaper.GetTrackMediaItem(track, i) == item then
+      new_idx = i
+      break
+    end
+  end
+
+  reaper.UpdateArrange()
+
+  return {
+    trackIndex = track_idx,
+    itemIndex = new_idx,
+    position = start_pos,
+    length = end_pos - start_pos,
+  }
+end
+
+function handlers.list_midi_items(params)
+  local track_idx = params.trackIndex
+  if track_idx == nil then return nil, "trackIndex required" end
+
+  local track = reaper.GetTrack(0, track_idx)
+  if not track then return nil, "Track " .. track_idx .. " not found" end
+
+  local items = {}
+  local item_count = reaper.CountTrackMediaItems(track)
+  for i = 0, item_count - 1 do
+    local item = reaper.GetTrackMediaItem(track, i)
+    local take = reaper.GetActiveTake(item)
+    if take and reaper.TakeIsMIDI(take) then
+      local _, note_cnt, cc_cnt, _ = reaper.MIDI_CountEvts(take)
+      items[#items + 1] = {
+        itemIndex = i,
+        position = reaper.GetMediaItemInfo_Value(item, "D_POSITION"),
+        length = reaper.GetMediaItemInfo_Value(item, "D_LENGTH"),
+        noteCount = note_cnt,
+        ccCount = cc_cnt,
+        muted = reaper.GetMediaItemInfo_Value(item, "B_MUTE") ~= 0,
+      }
+    end
+  end
+
+  return { trackIndex = track_idx, items = items, total = #items }
+end
+
+function handlers.get_midi_notes(params)
+  local track, item, take, err = get_midi_take(params)
+  if err then return nil, err end
+
+  local _, note_cnt, _, _ = reaper.MIDI_CountEvts(take)
+  local to_beats = ppq_to_beats(take, item)
+  local notes = {}
+
+  for i = 0, note_cnt - 1 do
+    local _, sel, muted, start_ppq, end_ppq, chan, pitch, vel = reaper.MIDI_GetNote(take, i)
+    local start_beats = to_beats(start_ppq)
+    local end_beats = to_beats(end_ppq)
+    notes[#notes + 1] = {
+      noteIndex = i,
+      pitch = pitch,
+      velocity = vel,
+      startPosition = start_beats,
+      duration = end_beats - start_beats,
+      channel = chan,
+      selected = sel,
+      muted = muted,
+    }
+  end
+
+  return { trackIndex = params.trackIndex, itemIndex = params.itemIndex, notes = notes, total = #notes }
+end
+
+function handlers.insert_midi_note(params)
+  local track, item, take, err = get_midi_take(params)
+  if err then return nil, err end
+
+  local pitch = params.pitch
+  local vel = params.velocity
+  local start_pos = params.startPosition
+  local dur = params.duration
+  local chan = params.channel or 0
+
+  if not pitch or not vel or not start_pos or not dur then
+    return nil, "pitch, velocity, startPosition, and duration required"
+  end
+
+  -- Clamp values
+  pitch = math.max(0, math.min(127, math.floor(pitch)))
+  vel = math.max(1, math.min(127, math.floor(vel)))
+  chan = math.max(0, math.min(15, math.floor(chan)))
+
+  local start_ppq = beats_to_ppq(take, item, start_pos)
+  local end_ppq = beats_to_ppq(take, item, start_pos + dur)
+
+  reaper.Undo_BeginBlock()
+  reaper.MIDI_InsertNote(take, false, false, start_ppq, end_ppq, chan, pitch, vel, false)
+  reaper.MIDI_Sort(take)
+  reaper.Undo_EndBlock("MCP: Insert MIDI note", -1)
+
+  reaper.UpdateArrange()
+
+  local _, note_cnt, _, _ = reaper.MIDI_CountEvts(take)
+  return { success = true, noteCount = note_cnt }
+end
+
+function handlers.insert_midi_notes(params)
+  local track, item, take, err = get_midi_take(params)
+  if err then return nil, err end
+
+  local notes_str = params.notes
+  if not notes_str or notes_str == "" then return nil, "notes JSON string required" end
+
+  -- Parse notes JSON array
+  local notes_data = json_decode(notes_str)
+  if not notes_data then return nil, "Failed to parse notes JSON" end
+
+  -- Handle both array-style and object-style parsed data
+  local notes_list = {}
+  if notes_data[1] then
+    notes_list = notes_data
+  else
+    -- Try to extract from numbered keys (fallback parser)
+    return nil, "Notes must be a JSON array. Ensure REAPER 7+ with CF_Json_Parse for array support."
+  end
+
+  reaper.Undo_BeginBlock()
+  local inserted = 0
+  for _, note in ipairs(notes_list) do
+    local pitch = note.pitch
+    local vel = note.velocity
+    local start_pos = note.startPosition
+    local dur = note.duration
+    local chan = note.channel or 0
+
+    if pitch and vel and start_pos and dur then
+      pitch = math.max(0, math.min(127, math.floor(pitch)))
+      vel = math.max(1, math.min(127, math.floor(vel)))
+      chan = math.max(0, math.min(15, math.floor(chan)))
+
+      local start_ppq = beats_to_ppq(take, item, start_pos)
+      local end_ppq = beats_to_ppq(take, item, start_pos + dur)
+
+      reaper.MIDI_InsertNote(take, false, false, start_ppq, end_ppq, chan, pitch, vel, true)
+      inserted = inserted + 1
+    end
+  end
+  reaper.MIDI_Sort(take)
+  reaper.Undo_EndBlock("MCP: Insert " .. inserted .. " MIDI notes", -1)
+
+  reaper.UpdateArrange()
+
+  local _, note_cnt, _, _ = reaper.MIDI_CountEvts(take)
+  return { success = true, inserted = inserted, noteCount = note_cnt }
+end
+
+function handlers.edit_midi_note(params)
+  local track, item, take, err = get_midi_take(params)
+  if err then return nil, err end
+
+  local note_idx = params.noteIndex
+  if note_idx == nil then return nil, "noteIndex required" end
+
+  local _, note_cnt, _, _ = reaper.MIDI_CountEvts(take)
+  if note_idx >= note_cnt then
+    return nil, "Note index " .. note_idx .. " out of range (item has " .. note_cnt .. " notes)"
+  end
+
+  -- Get current note values
+  local _, sel, muted, cur_start_ppq, cur_end_ppq, cur_chan, cur_pitch, cur_vel = reaper.MIDI_GetNote(take, note_idx)
+
+  -- Apply changes (nil means keep current)
+  local new_pitch = params.pitch and math.max(0, math.min(127, math.floor(params.pitch))) or nil
+  local new_vel = params.velocity and math.max(1, math.min(127, math.floor(params.velocity))) or nil
+  local new_chan = params.channel and math.max(0, math.min(15, math.floor(params.channel))) or nil
+
+  local new_start_ppq = nil
+  local new_end_ppq = nil
+  if params.startPosition ~= nil then
+    new_start_ppq = beats_to_ppq(take, item, params.startPosition)
+    if params.duration ~= nil then
+      new_end_ppq = beats_to_ppq(take, item, params.startPosition + params.duration)
+    else
+      -- Keep same duration
+      local dur_ppq = cur_end_ppq - cur_start_ppq
+      new_end_ppq = new_start_ppq + dur_ppq
+    end
+  elseif params.duration ~= nil then
+    -- Change duration only, keep start
+    local to_beats = ppq_to_beats(take, item)
+    local cur_start_beats = to_beats(cur_start_ppq)
+    new_end_ppq = beats_to_ppq(take, item, cur_start_beats + params.duration)
+  end
+
+  reaper.Undo_BeginBlock()
+  reaper.MIDI_SetNote(take, note_idx, sel, muted, new_start_ppq, new_end_ppq, new_chan, new_pitch, new_vel, false)
+  reaper.MIDI_Sort(take)
+  reaper.Undo_EndBlock("MCP: Edit MIDI note " .. note_idx, -1)
+
+  reaper.UpdateArrange()
+
+  return { success = true, noteIndex = note_idx }
+end
+
+function handlers.delete_midi_note(params)
+  local track, item, take, err = get_midi_take(params)
+  if err then return nil, err end
+
+  local note_idx = params.noteIndex
+  if note_idx == nil then return nil, "noteIndex required" end
+
+  local _, note_cnt, _, _ = reaper.MIDI_CountEvts(take)
+  if note_idx >= note_cnt then
+    return nil, "Note index " .. note_idx .. " out of range (item has " .. note_cnt .. " notes)"
+  end
+
+  reaper.Undo_BeginBlock()
+  reaper.MIDI_DeleteNote(take, note_idx)
+  reaper.MIDI_Sort(take)
+  reaper.Undo_EndBlock("MCP: Delete MIDI note " .. note_idx, -1)
+
+  reaper.UpdateArrange()
+
+  local _, new_cnt, _, _ = reaper.MIDI_CountEvts(take)
+  return { success = true, noteCount = new_cnt }
+end
+
+function handlers.get_midi_cc(params)
+  local track, item, take, err = get_midi_take(params)
+  if err then return nil, err end
+
+  local _, _, cc_cnt, _ = reaper.MIDI_CountEvts(take)
+  local to_beats = ppq_to_beats(take, item)
+  local cc_filter = params.ccNumber
+  local events = {}
+
+  for i = 0, cc_cnt - 1 do
+    local _, sel, muted, ppq, chanmsg, chan, msg2, msg3 = reaper.MIDI_GetCC(take, i)
+    -- msg2 = CC number, msg3 = CC value (for standard CC messages, chanmsg=176)
+    if chanmsg == 176 then -- standard CC
+      if cc_filter == nil or msg2 == cc_filter then
+        events[#events + 1] = {
+          ccIndex = i,
+          ccNumber = msg2,
+          value = msg3,
+          position = to_beats(ppq),
+          channel = chan,
+        }
+      end
+    end
+  end
+
+  return { trackIndex = params.trackIndex, itemIndex = params.itemIndex, events = events, total = #events }
+end
+
+function handlers.insert_midi_cc(params)
+  local track, item, take, err = get_midi_take(params)
+  if err then return nil, err end
+
+  local cc_num = params.ccNumber
+  local value = params.value
+  local pos = params.position
+  local chan = params.channel or 0
+
+  if not cc_num or not value or not pos then
+    return nil, "ccNumber, value, and position required"
+  end
+
+  cc_num = math.max(0, math.min(127, math.floor(cc_num)))
+  value = math.max(0, math.min(127, math.floor(value)))
+  chan = math.max(0, math.min(15, math.floor(chan)))
+
+  local ppq = beats_to_ppq(take, item, pos)
+
+  reaper.Undo_BeginBlock()
+  -- chanmsg 176 = 0xB0 = CC message
+  reaper.MIDI_InsertCC(take, false, false, ppq, 176, chan, cc_num, value)
+  reaper.MIDI_Sort(take)
+  reaper.Undo_EndBlock("MCP: Insert MIDI CC " .. cc_num, -1)
+
+  reaper.UpdateArrange()
+
+  local _, _, cc_cnt, _ = reaper.MIDI_CountEvts(take)
+  return { success = true, ccCount = cc_cnt }
+end
+
+function handlers.delete_midi_cc(params)
+  local track, item, take, err = get_midi_take(params)
+  if err then return nil, err end
+
+  local cc_idx = params.ccIndex
+  if cc_idx == nil then return nil, "ccIndex required" end
+
+  local _, _, cc_cnt, _ = reaper.MIDI_CountEvts(take)
+  if cc_idx >= cc_cnt then
+    return nil, "CC index " .. cc_idx .. " out of range (item has " .. cc_cnt .. " CC events)"
+  end
+
+  reaper.Undo_BeginBlock()
+  reaper.MIDI_DeleteCC(take, cc_idx)
+  reaper.MIDI_Sort(take)
+  reaper.Undo_EndBlock("MCP: Delete MIDI CC " .. cc_idx, -1)
+
+  reaper.UpdateArrange()
+
+  local _, _, new_cnt, _ = reaper.MIDI_CountEvts(take)
+  return { success = true, ccCount = new_cnt }
+end
+
+function handlers.get_midi_item_properties(params)
+  local track, item, take, err = get_midi_take(params)
+  if err then return nil, err end
+
+  local _, note_cnt, cc_cnt, _ = reaper.MIDI_CountEvts(take)
+
+  return {
+    trackIndex = params.trackIndex,
+    itemIndex = params.itemIndex,
+    position = reaper.GetMediaItemInfo_Value(item, "D_POSITION"),
+    length = reaper.GetMediaItemInfo_Value(item, "D_LENGTH"),
+    noteCount = note_cnt,
+    ccCount = cc_cnt,
+    muted = reaper.GetMediaItemInfo_Value(item, "B_MUTE") ~= 0,
+    loopSource = reaper.GetMediaItemInfo_Value(item, "B_LOOPSRC") ~= 0,
+  }
+end
+
+function handlers.set_midi_item_properties(params)
+  local track, item, take, err = get_midi_take(params)
+  if err then return nil, err end
+
+  reaper.Undo_BeginBlock()
+
+  if params.position ~= nil then
+    reaper.SetMediaItemInfo_Value(item, "D_POSITION", params.position)
+  end
+  if params.length ~= nil then
+    reaper.SetMediaItemInfo_Value(item, "D_LENGTH", params.length)
+  end
+  if params.mute ~= nil then
+    reaper.SetMediaItemInfo_Value(item, "B_MUTE", params.mute)
+  end
+  if params.loopSource ~= nil then
+    reaper.SetMediaItemInfo_Value(item, "B_LOOPSRC", params.loopSource)
+  end
+
+  reaper.Undo_EndBlock("MCP: Set MIDI item properties", -1)
+  reaper.UpdateArrange()
+
+  return { success = true, trackIndex = params.trackIndex, itemIndex = params.itemIndex }
+end
+
+-- =============================================================================
+-- Media item editing handlers
+-- =============================================================================
+
+function handlers.list_media_items(params)
+  local track_idx = params.trackIndex
+  if track_idx == nil then return nil, "trackIndex required" end
+
+  local track = reaper.GetTrack(0, track_idx)
+  if not track then return nil, "Track " .. track_idx .. " not found" end
+
+  local items = {}
+  local item_count = reaper.CountTrackMediaItems(track)
+  for i = 0, item_count - 1 do
+    local item = reaper.GetTrackMediaItem(track, i)
+    local take = reaper.GetActiveTake(item)
+    local take_name = ""
+    local is_midi = false
+    if take then
+      take_name = reaper.GetTakeName(take) or ""
+      is_midi = reaper.TakeIsMIDI(take)
+    end
+
+    local vol_raw = reaper.GetMediaItemInfo_Value(item, "D_VOL")
+    items[#items + 1] = {
+      itemIndex = i,
+      position = reaper.GetMediaItemInfo_Value(item, "D_POSITION"),
+      length = reaper.GetMediaItemInfo_Value(item, "D_LENGTH"),
+      name = take_name,
+      volume = to_db(vol_raw),
+      muted = reaper.GetMediaItemInfo_Value(item, "B_MUTE") ~= 0,
+      fadeInLength = reaper.GetMediaItemInfo_Value(item, "D_FADEINLEN"),
+      fadeOutLength = reaper.GetMediaItemInfo_Value(item, "D_FADEOUTLEN"),
+      playRate = take and reaper.GetMediaItemTakeInfo_Value(take, "D_PLAYRATE") or 1.0,
+      isMidi = is_midi,
+      takeName = take_name,
+    }
+  end
+
+  return { trackIndex = track_idx, items = items, total = #items }
+end
+
+function handlers.get_media_item_properties(params)
+  local track, item, err = get_media_item(params)
+  if err then return nil, err end
+
+  local take = reaper.GetActiveTake(item)
+  local take_name = ""
+  local is_midi = false
+  local play_rate = 1.0
+  local pitch = 0.0
+  local start_offset = 0.0
+  local source_file = ""
+
+  if take then
+    take_name = reaper.GetTakeName(take) or ""
+    is_midi = reaper.TakeIsMIDI(take)
+    play_rate = reaper.GetMediaItemTakeInfo_Value(take, "D_PLAYRATE")
+    pitch = reaper.GetMediaItemTakeInfo_Value(take, "D_PITCH")
+    start_offset = reaper.GetMediaItemTakeInfo_Value(take, "D_STARTOFFS")
+    local source = reaper.GetMediaItemTake_Source(take)
+    if source then
+      source_file = reaper.GetMediaSourceFileName(source) or ""
+    end
+  end
+
+  local vol_raw = reaper.GetMediaItemInfo_Value(item, "D_VOL")
+
+  return {
+    trackIndex = params.trackIndex,
+    itemIndex = params.itemIndex,
+    position = reaper.GetMediaItemInfo_Value(item, "D_POSITION"),
+    length = reaper.GetMediaItemInfo_Value(item, "D_LENGTH"),
+    name = take_name,
+    volume = to_db(vol_raw),
+    volumeRaw = vol_raw,
+    muted = reaper.GetMediaItemInfo_Value(item, "B_MUTE") ~= 0,
+    fadeInLength = reaper.GetMediaItemInfo_Value(item, "D_FADEINLEN"),
+    fadeOutLength = reaper.GetMediaItemInfo_Value(item, "D_FADEOUTLEN"),
+    fadeInShape = reaper.GetMediaItemInfo_Value(item, "C_FADEINSHAPE"),
+    fadeOutShape = reaper.GetMediaItemInfo_Value(item, "C_FADEOUTSHAPE"),
+    playRate = play_rate,
+    pitch = pitch,
+    startOffset = start_offset,
+    loopSource = reaper.GetMediaItemInfo_Value(item, "B_LOOPSRC") ~= 0,
+    isMidi = is_midi,
+    takeName = take_name,
+    sourceFile = source_file,
+    locked = reaper.GetMediaItemInfo_Value(item, "C_LOCK") ~= 0,
+  }
+end
+
+function handlers.set_media_item_properties(params)
+  local track, item, err = get_media_item(params)
+  if err then return nil, err end
+
+  reaper.Undo_BeginBlock()
+
+  if params.position ~= nil then
+    reaper.SetMediaItemInfo_Value(item, "D_POSITION", params.position)
+  end
+  if params.length ~= nil then
+    reaper.SetMediaItemInfo_Value(item, "D_LENGTH", params.length)
+  end
+  if params.volume ~= nil then
+    reaper.SetMediaItemInfo_Value(item, "D_VOL", from_db(params.volume))
+  end
+  if params.mute ~= nil then
+    reaper.SetMediaItemInfo_Value(item, "B_MUTE", params.mute)
+  end
+  if params.fadeInLength ~= nil then
+    reaper.SetMediaItemInfo_Value(item, "D_FADEINLEN", params.fadeInLength)
+  end
+  if params.fadeOutLength ~= nil then
+    reaper.SetMediaItemInfo_Value(item, "D_FADEOUTLEN", params.fadeOutLength)
+  end
+  if params.playRate ~= nil then
+    local take = reaper.GetActiveTake(item)
+    if take then
+      reaper.SetMediaItemTakeInfo_Value(take, "D_PLAYRATE", params.playRate)
+    end
+  end
+
+  reaper.Undo_EndBlock("MCP: Set media item properties", -1)
+  reaper.UpdateArrange()
+
+  return { success = true, trackIndex = params.trackIndex, itemIndex = params.itemIndex }
+end
+
+function handlers.split_media_item(params)
+  local track, item, err = get_media_item(params)
+  if err then return nil, err end
+
+  local position = params.position
+  if not position then return nil, "position required" end
+
+  local item_start = reaper.GetMediaItemInfo_Value(item, "D_POSITION")
+  local item_end = item_start + reaper.GetMediaItemInfo_Value(item, "D_LENGTH")
+  if position <= item_start or position >= item_end then
+    return nil, "Split position must be within item bounds (" .. item_start .. "s - " .. item_end .. "s)"
+  end
+
+  reaper.Undo_BeginBlock()
+  local right_item = reaper.SplitMediaItem(item, position)
+  reaper.Undo_EndBlock("MCP: Split media item", -1)
+
+  if not right_item then return nil, "Failed to split item at position " .. position end
+
+  reaper.UpdateArrange()
+
+  return {
+    success = true,
+    leftItem = {
+      position = reaper.GetMediaItemInfo_Value(item, "D_POSITION"),
+      length = reaper.GetMediaItemInfo_Value(item, "D_LENGTH"),
+    },
+    rightItem = {
+      position = reaper.GetMediaItemInfo_Value(right_item, "D_POSITION"),
+      length = reaper.GetMediaItemInfo_Value(right_item, "D_LENGTH"),
+    },
+  }
+end
+
+function handlers.delete_media_item(params)
+  local track, item, err = get_media_item(params)
+  if err then return nil, err end
+
+  reaper.Undo_BeginBlock()
+  local ok = reaper.DeleteTrackMediaItem(track, item)
+  reaper.Undo_EndBlock("MCP: Delete media item", -1)
+
+  if not ok then return nil, "Failed to delete item" end
+
+  reaper.UpdateArrange()
+
+  return { success = true, trackIndex = params.trackIndex, itemIndex = params.itemIndex }
+end
+
+function handlers.move_media_item(params)
+  local track, item, err = get_media_item(params)
+  if err then return nil, err end
+
+  reaper.Undo_BeginBlock()
+
+  if params.newPosition ~= nil then
+    reaper.SetMediaItemInfo_Value(item, "D_POSITION", params.newPosition)
+  end
+
+  if params.newTrackIndex ~= nil then
+    local dest_track = reaper.GetTrack(0, params.newTrackIndex)
+    if not dest_track then
+      reaper.Undo_EndBlock("MCP: Move media item (failed)", -1)
+      return nil, "Destination track " .. params.newTrackIndex .. " not found"
+    end
+    reaper.MoveMediaItemToTrack(item, dest_track)
+  end
+
+  reaper.Undo_EndBlock("MCP: Move media item", -1)
+  reaper.UpdateArrange()
+
+  return {
+    success = true,
+    position = reaper.GetMediaItemInfo_Value(item, "D_POSITION"),
+    trackIndex = params.newTrackIndex or params.trackIndex,
+  }
+end
+
+function handlers.trim_media_item(params)
+  local track, item, err = get_media_item(params)
+  if err then return nil, err end
+
+  reaper.Undo_BeginBlock()
+
+  local pos = reaper.GetMediaItemInfo_Value(item, "D_POSITION")
+  local len = reaper.GetMediaItemInfo_Value(item, "D_LENGTH")
+  local take = reaper.GetActiveTake(item)
+
+  if params.trimStart ~= nil and params.trimStart ~= 0 then
+    local new_pos = pos + params.trimStart
+    local new_len = len - params.trimStart
+    if new_len <= 0 then
+      reaper.Undo_EndBlock("MCP: Trim media item (failed)", -1)
+      return nil, "trimStart would result in zero or negative length"
+    end
+    reaper.SetMediaItemInfo_Value(item, "D_POSITION", new_pos)
+    reaper.SetMediaItemInfo_Value(item, "D_LENGTH", new_len)
+    -- Adjust take start offset
+    if take then
+      local offset = reaper.GetMediaItemTakeInfo_Value(take, "D_STARTOFFS")
+      reaper.SetMediaItemTakeInfo_Value(take, "D_STARTOFFS", offset + params.trimStart)
+    end
+    pos = new_pos
+    len = new_len
+  end
+
+  if params.trimEnd ~= nil and params.trimEnd ~= 0 then
+    local new_len = len - params.trimEnd
+    if new_len <= 0 then
+      reaper.Undo_EndBlock("MCP: Trim media item (failed)", -1)
+      return nil, "trimEnd would result in zero or negative length"
+    end
+    reaper.SetMediaItemInfo_Value(item, "D_LENGTH", new_len)
+    len = new_len
+  end
+
+  reaper.Undo_EndBlock("MCP: Trim media item", -1)
+  reaper.UpdateArrange()
+
+  return {
+    success = true,
+    position = pos,
+    length = len,
+  }
+end
+
+function handlers.add_stretch_marker(params)
+  local track, item, err = get_media_item(params)
+  if err then return nil, err end
+
+  local position = params.position
+  if not position then return nil, "position required" end
+
+  local take = reaper.GetActiveTake(item)
+  if not take then return nil, "Item has no active take" end
+
+  local src_pos = params.sourcePosition or position
+
+  reaper.Undo_BeginBlock()
+  local idx = reaper.SetTakeStretchMarker(take, -1, position, src_pos)
+  reaper.Undo_EndBlock("MCP: Add stretch marker", -1)
+
+  if idx < 0 then return nil, "Failed to add stretch marker" end
+
+  reaper.UpdateItemInProject(item)
+  reaper.UpdateArrange()
+
+  return {
+    success = true,
+    markerIndex = idx,
+    position = position,
+    sourcePosition = src_pos,
+    totalMarkers = reaper.GetTakeNumStretchMarkers(take),
+  }
+end
+
+function handlers.get_stretch_markers(params)
+  local track, item, err = get_media_item(params)
+  if err then return nil, err end
+
+  local take = reaper.GetActiveTake(item)
+  if not take then return nil, "Item has no active take" end
+
+  local count = reaper.GetTakeNumStretchMarkers(take)
+  local markers = {}
+
+  for i = 0, count - 1 do
+    local _, pos, src_pos = reaper.GetTakeStretchMarker(take, i)
+    markers[#markers + 1] = {
+      index = i,
+      position = pos,
+      sourcePosition = src_pos,
+    }
+  end
+
+  return { trackIndex = params.trackIndex, itemIndex = params.itemIndex, markers = markers, total = count }
+end
+
+function handlers.delete_stretch_marker(params)
+  local track, item, err = get_media_item(params)
+  if err then return nil, err end
+
+  local marker_idx = params.markerIndex
+  if marker_idx == nil then return nil, "markerIndex required" end
+
+  local take = reaper.GetActiveTake(item)
+  if not take then return nil, "Item has no active take" end
+
+  local count = reaper.GetTakeNumStretchMarkers(take)
+  if marker_idx >= count then
+    return nil, "Marker index " .. marker_idx .. " out of range (item has " .. count .. " markers)"
+  end
+
+  reaper.Undo_BeginBlock()
+  reaper.DeleteTakeStretchMarkers(take, marker_idx, 1)
+  reaper.Undo_EndBlock("MCP: Delete stretch marker", -1)
+
+  reaper.UpdateItemInProject(item)
+  reaper.UpdateArrange()
+
+  return { success = true, totalMarkers = reaper.GetTakeNumStretchMarkers(take) }
+end
+
+-- =============================================================================
 -- Command dispatcher
 -- =============================================================================
 
