@@ -143,6 +143,7 @@ async function serve(): Promise<void> {
   const log = (...args: unknown[]) => console.error('[reaper-mcp]', ...args);
 
   log('Starting REAPER MCP Server...');
+  log(`Entry: ${fileURLToPath(import.meta.url)}`);
 
   await ensureBridgeDir();
 
