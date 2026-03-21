@@ -1116,11 +1116,11 @@ function handlers.create_midi_item(params)
   local track = reaper.GetTrack(0, track_idx)
   if not track then return nil, "Track " .. track_idx .. " not found" end
 
-  local item = reaper.CreateNewMIDIItemInProj(track, start_pos, end_pos)
-  if not item then return nil, "Failed to create MIDI item" end
-
   reaper.Undo_BeginBlock()
+  local item = reaper.CreateNewMIDIItemInProj(track, start_pos, end_pos)
   reaper.Undo_EndBlock("MCP: Create MIDI item", -1)
+
+  if not item then return nil, "Failed to create MIDI item" end
 
   -- Find the index of the new item on the track
   local item_count = reaper.CountTrackMediaItems(track)

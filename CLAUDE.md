@@ -1,6 +1,6 @@
 # REAPER MCP Server
 
-An MCP (Model Context Protocol) server that enables AI agents (Claude Code, etc.) to control a live REAPER DAW session in real-time -- including track management, FX control, parameter adjustment, metering, and frequency analysis.
+An MCP (Model Context Protocol) server that enables AI agents (Claude Code, etc.) to control a live REAPER DAW session in real-time -- including track management, FX control, parameter adjustment, metering, frequency analysis, MIDI editing, and media item manipulation.
 
 ## Quick Start
 
@@ -50,6 +50,14 @@ reaper-mcp/
         tracks.ts             # list_tracks, get_track_properties, set_track_property
         fx.ts                 # add_fx, remove_fx, get_fx_parameters, set_fx_parameter
         meters.ts             # read_track_meters, read_track_spectrum
+        transport.ts          # play, stop, record, get_transport_state, set_cursor_position
+        discovery.ts          # list_available_fx, search_fx
+        presets.ts            # get_fx_preset_list, set_fx_preset
+        snapshots.ts          # snapshot_save, snapshot_restore, snapshot_list
+        routing.ts            # get_track_routing
+        analysis.ts           # read_track_lufs, read_track_correlation, read_track_crest
+        midi.ts               # 12 MIDI editing tools (notes, CC, items)
+        media.ts              # 10 media item editing tools (properties, split, move, trim, stretch)
 
   libs/protocol/              # Shared TypeScript types (compiled with tsc)
     src/
@@ -58,7 +66,7 @@ reaper-mcp/
       responses.ts            # BridgeResponse, ProjectInfo, TrackInfo, FxInfo, etc.
 
   reaper/                     # Files installed INTO REAPER (copied by setup command)
-    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, all 10 handlers)
+    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 37+ handlers)
     mcp_analyzer.jsfx         # Real-time FFT analyzer (JSFX, writes to gmem[])
     install.sh                # Manual install helper script
 ```
@@ -71,7 +79,9 @@ reaper-mcp/
 | `@mthines/reaper-mcp-server` | `apps/reaper-mcp-server` | `@nx/esbuild` (ESM bundle) | MCP server application |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## The 15 MCP Tools
+## MCP Tools (37 total)
+
+### Core Tools (15)
 
 | Tool | File | Description |
 |------|------|-------------|
@@ -90,6 +100,55 @@ reaper-mcp/
 | `record` | `tools/transport.ts` | Start recording (arms must be set on target tracks) |
 | `get_transport_state` | `tools/transport.ts` | Play/record/pause status, cursor positions, tempo, time sig |
 | `set_cursor_position` | `tools/transport.ts` | Move edit cursor to position in seconds |
+
+### MIDI Editing Tools (12)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `create_midi_item` | `tools/midi.ts` | Create an empty MIDI item on a track at a given time range (seconds) |
+| `list_midi_items` | `tools/midi.ts` | List all MIDI items on a track with position, length, note/CC counts |
+| `get_midi_notes` | `tools/midi.ts` | Get all MIDI notes in an item (pitch, velocity, position/duration in beats) |
+| `insert_midi_note` | `tools/midi.ts` | Insert a single note (pitch 0-127, velocity 1-127, position/duration in beats) |
+| `insert_midi_notes` | `tools/midi.ts` | Batch insert multiple notes via JSON array string |
+| `edit_midi_note` | `tools/midi.ts` | Edit an existing note by index (partial updates: only provided fields change) |
+| `delete_midi_note` | `tools/midi.ts` | Delete a note by index |
+| `get_midi_cc` | `tools/midi.ts` | Get CC events, optionally filtered by CC number |
+| `insert_midi_cc` | `tools/midi.ts` | Insert a CC event (cc 0-127, value 0-127, position in beats) |
+| `delete_midi_cc` | `tools/midi.ts` | Delete a CC event by index |
+| `get_midi_item_properties` | `tools/midi.ts` | Get MIDI item properties (position, length, note/CC count, mute, loop) |
+| `set_midi_item_properties` | `tools/midi.ts` | Set MIDI item properties (position, length, mute, loop source) |
+
+### Media Item Editing Tools (10)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `list_media_items` | `tools/media.ts` | List all items on a track (position, length, name, volume, MIDI/audio type) |
+| `get_media_item_properties` | `tools/media.ts` | Detailed item properties (fades, play rate, pitch, source file, lock state) |
+| `set_media_item_properties` | `tools/media.ts` | Set item properties (position, length, volume dB, mute, fades, play rate) |
+| `split_media_item` | `tools/media.ts` | Split an item at a position (seconds), returns left/right item info |
+| `delete_media_item` | `tools/media.ts` | Delete an item from a track |
+| `move_media_item` | `tools/media.ts` | Move an item to a new position and/or a different track |
+| `trim_media_item` | `tools/media.ts` | Trim item edges (positive=trim inward, negative=extend) |
+| `add_stretch_marker` | `tools/media.ts` | Add a stretch marker for time-stretching audio |
+| `get_stretch_markers` | `tools/media.ts` | List stretch markers with positions and source positions |
+| `delete_stretch_marker` | `tools/media.ts` | Delete a stretch marker by index |
+
+### MIDI Editing Concepts
+
+- **Positions and durations** are in **beats** (quarter notes) from item start: `1.0` = quarter note, `0.5` = eighth note, `0.25` = sixteenth note
+- **Pitch**: MIDI note number 0-127 where 60 = C4 (Middle C), 48 = C3, 72 = C5
+- **Velocity**: 1-127 (64 = medium, 100 = strong, 127 = maximum)
+- **Channel**: 0-15 (default 0; channel 9 = drums in General MIDI)
+- **Batch insert** (`insert_midi_notes`): Pass a JSON array string for efficient multi-note insertion
+- The Lua bridge includes a fallback JSON array parser for REAPER versions without `CF_Json_Parse`
+
+### Media Item Editing Concepts
+
+- **Positions and lengths** are in **seconds** (absolute project time)
+- **Volume** is in **dB** (0 = unity gain); internally converted to/from linear scale
+- **Trim**: `trimStart` moves the left edge (adjusts start offset), `trimEnd` moves the right edge
+- **Move**: Validates destination track upfront; moves to new track first, then adjusts position
+- **Stretch markers**: Define time-stretch points mapping item position to source audio position
 
 ## Build System
 
@@ -213,7 +272,10 @@ ESLint enforces dependency rules via `@nx/enforce-module-boundaries`:
 - **Framework**: Vitest with `globals: true`, `environment: 'node'`
 - **Server tests**: `apps/reaper-mcp-server/vitest.config.ts` (has `@reaper-mcp/protocol` alias)
 - **Protocol tests**: `libs/protocol/vitest.config.ts`
-- No test files exist yet -- tests should mock `sendCommand()` to test tools without REAPER running
+- **Test approach**: Mock `sendCommand()` to test tool registration, parameter passing, success/error handling without REAPER running
+- **Test files**: `tools/midi.test.ts` (MIDI tools), `tools/media.test.ts` (media tools), and others in `tools/`
+- All tests verify: tool registration, correct command dispatch, success response formatting, error propagation
+- The Lua bridge cannot be unit tested outside REAPER -- test manually with the MCP Inspector
 
 ## Running the MCP Server
 
