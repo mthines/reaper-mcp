@@ -1,20 +1,32 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "namedInputs": {
-    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "default": [
+      "{projectRoot}/**/*",
+      "sharedGlobals"
+    ],
     "production": [
       "default",
       "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)",
       "!{projectRoot}/tsconfig.spec.json",
       "!{projectRoot}/vitest.config.ts"
     ],
-    "sharedGlobals": [{ "runtime": "node --version" }]
+    "sharedGlobals": [
+      {
+        "runtime": "node --version"
+      }
+    ]
   },
   "targetDefaults": {
     "build": {
-      "dependsOn": ["^build"],
+      "dependsOn": [
+        "^build"
+      ],
       "cache": true,
-      "inputs": ["production", "^production"]
+      "inputs": [
+        "production",
+        "^production"
+      ]
     }
   },
   "plugins": [
@@ -35,5 +47,6 @@
   "useLegacyCache": false,
   "useInferencePlugins": true,
   "nxAI": false,
-  "defaultBase": "main"
+  "defaultBase": "main",
+  "nxCloudId": "69be6289d96c7f3e33736ddc"
 }
