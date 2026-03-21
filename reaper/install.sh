@@ -29,11 +29,15 @@ mkdir -p "$SCRIPTS_DIR"
 cp "$SCRIPT_DIR/mcp_bridge.lua" "$SCRIPTS_DIR/mcp_bridge.lua"
 echo "Installed: $SCRIPTS_DIR/mcp_bridge.lua"
 
-# Install JSFX analyzer
-EFFECTS_DIR="$REAPER_PATH/Effects"
+# Install JSFX analyzers
+EFFECTS_DIR="$REAPER_PATH/Effects/reaper-mcp"
 mkdir -p "$EFFECTS_DIR"
-cp "$SCRIPT_DIR/mcp_analyzer.jsfx" "$EFFECTS_DIR/mcp_analyzer.jsfx"
-echo "Installed: $EFFECTS_DIR/mcp_analyzer.jsfx"
+for jsfx in "$SCRIPT_DIR"/*.jsfx; do
+  [ -f "$jsfx" ] || continue
+  fname="$(basename "$jsfx")"
+  cp "$jsfx" "$EFFECTS_DIR/$fname"
+  echo "Installed: $EFFECTS_DIR/$fname"
+done
 
 # Create bridge data directory
 BRIDGE_DIR="$SCRIPTS_DIR/mcp_bridge_data"

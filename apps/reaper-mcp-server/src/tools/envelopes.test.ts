@@ -50,8 +50,12 @@ describe('envelope tools', () => {
     tools = captureTools();
   });
 
-  it('registers all 4 envelope tools', () => {
-    const expected = ['get_track_envelopes', 'get_envelope_points', 'insert_envelope_point', 'delete_envelope_point'];
+  it('registers all 9 envelope tools', () => {
+    const expected = [
+      'get_track_envelopes', 'get_envelope_points', 'insert_envelope_point', 'delete_envelope_point',
+      'create_track_envelope', 'set_envelope_properties', 'clear_envelope', 'remove_envelope_points',
+      'insert_envelope_points',
+    ];
     for (const name of expected) {
       expect(tools[name]).toBeDefined();
     }
@@ -190,6 +194,140 @@ describe('envelope tools', () => {
         trackIndex: 0, envelopeIndex: 0, pointIndex: 99,
       });
       expectError(result, 'Point 99 not found');
+    });
+  });
+
+  describe('create_track_envelope', () => {
+    it('creates a built-in envelope by name', async () => {
+      const data = { trackIndex: 0, envelopeIndex: 0, name: 'Volume', pointCount: 0 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const result = await tools['create_track_envelope'].handler({
+        trackIndex: 0, envelopeName: 'Volume',
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('create_track_envelope', {
+        trackIndex: 0, envelopeName: 'Volume', fxIndex: undefined, paramIndex: undefined,
+      });
+      expectSuccess(result, data);
+    });
+
+    it('creates an FX parameter envelope', async () => {
+      const data = { trackIndex: 0, envelopeIndex: 2, name: 'ReaEQ / Freq-Band 1', pointCount: 0 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const result = await tools['create_track_envelope'].handler({
+        trackIndex: 0, fxIndex: 0, paramIndex: 1,
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('create_track_envelope', {
+        trackIndex: 0, envelopeName: undefined, fxIndex: 0, paramIndex: 1,
+      });
+      expectSuccess(result, data);
+    });
+
+    it('returns error for missing params', async () => {
+      mockedSendCommand.mockResolvedValue(errorResponse('Must provide either envelopeName or fxIndex+paramIndex'));
+      const result = await tools['create_track_envelope'].handler({ trackIndex: 0 });
+      expectError(result, 'Must provide either envelopeName or fxIndex+paramIndex');
+    });
+
+    it('returns error for invalid track', async () => {
+      mockedSendCommand.mockResolvedValue(errorResponse('Track 99 not found'));
+      const result = await tools['create_track_envelope'].handler({ trackIndex: 99, envelopeName: 'Volume' });
+      expectError(result, 'Track 99 not found');
+    });
+  });
+
+  describe('set_envelope_properties', () => {
+    it('sets envelope properties', async () => {
+      const data = {
+        trackIndex: 0, envelopeIndex: 0, name: 'Volume',
+        active: true, visible: true, armed: true,
+      };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const result = await tools['set_envelope_properties'].handler({
+        trackIndex: 0, envelopeIndex: 0, armed: true,
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('set_envelope_properties', {
+        trackIndex: 0, envelopeIndex: 0, active: undefined, visible: undefined, armed: true,
+      });
+      expectSuccess(result, data);
+    });
+
+    it('returns error for invalid envelope', async () => {
+      mockedSendCommand.mockResolvedValue(errorResponse('Envelope index 5 out of range'));
+      const result = await tools['set_envelope_properties'].handler({
+        trackIndex: 0, envelopeIndex: 5, visible: false,
+      });
+      expectError(result, 'Envelope index 5 out of range');
+    });
+  });
+
+  describe('clear_envelope', () => {
+    it('clears all envelope points', async () => {
+      const data = { trackIndex: 0, envelopeIndex: 0, deletedPoints: 10, totalPoints: 0 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const result = await tools['clear_envelope'].handler({ trackIndex: 0, envelopeIndex: 0 });
+      expect(mockedSendCommand).toHaveBeenCalledWith('clear_envelope', { trackIndex: 0, envelopeIndex: 0 });
+      expectSuccess(result, data);
+    });
+
+    it('returns error for invalid envelope', async () => {
+      mockedSendCommand.mockResolvedValue(errorResponse('Envelope index 3 out of range'));
+      const result = await tools['clear_envelope'].handler({ trackIndex: 0, envelopeIndex: 3 });
+      expectError(result, 'Envelope index 3 out of range');
+    });
+  });
+
+  describe('remove_envelope_points', () => {
+    it('removes points in a time range', async () => {
+      const data = { trackIndex: 0, envelopeIndex: 0, timeStart: 5, timeEnd: 15, deletedPoints: 3, totalPoints: 7 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const result = await tools['remove_envelope_points'].handler({
+        trackIndex: 0, envelopeIndex: 0, timeStart: 5, timeEnd: 15,
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('remove_envelope_points', {
+        trackIndex: 0, envelopeIndex: 0, timeStart: 5, timeEnd: 15,
+      });
+      expectSuccess(result, data);
+    });
+
+    it('returns error for invalid envelope', async () => {
+      mockedSendCommand.mockResolvedValue(errorResponse('Envelope index 5 out of range'));
+      const result = await tools['remove_envelope_points'].handler({
+        trackIndex: 0, envelopeIndex: 5, timeStart: 0, timeEnd: 10,
+      });
+      expectError(result, 'Envelope index 5 out of range');
+    });
+  });
+
+  describe('insert_envelope_points', () => {
+    it('batch inserts multiple points', async () => {
+      const data = { trackIndex: 0, envelopeIndex: 0, insertedPoints: 3, totalPoints: 5 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const points = JSON.stringify([
+        { time: 0, value: 0.5 },
+        { time: 5, value: 1.0, shape: 1 },
+        { time: 10, value: 0.75, shape: 5, tension: 0.3 },
+      ]);
+      const result = await tools['insert_envelope_points'].handler({
+        trackIndex: 0, envelopeIndex: 0, points,
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('insert_envelope_points', {
+        trackIndex: 0, envelopeIndex: 0, points,
+      });
+      expectSuccess(result, data);
+    });
+
+    it('returns error for invalid envelope', async () => {
+      mockedSendCommand.mockResolvedValue(errorResponse('Envelope index 5 out of range'));
+      const result = await tools['insert_envelope_points'].handler({
+        trackIndex: 0, envelopeIndex: 5, points: '[]',
+      });
+      expectError(result, 'Envelope index 5 out of range');
     });
   });
 });

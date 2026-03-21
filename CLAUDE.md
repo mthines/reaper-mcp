@@ -119,7 +119,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (71 total)
+## MCP Tools (72 total)
 
 ### Project & Tracks (4)
 
@@ -211,7 +211,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 |------|------|-------------|
 | `get_tempo_map` | `tools/tempo.ts` | All tempo/time sig changes (position, BPM, time sig, linear flag) |
 
-### Envelope / Automation Tools (8)
+### Envelope / Automation Tools (9)
 
 | Tool | File | Description |
 |------|------|-------------|
@@ -222,6 +222,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `insert_envelope_points` | `tools/envelopes.ts` | Batch insert multiple automation points (JSON array) |
 | `delete_envelope_point` | `tools/envelopes.ts` | Delete an automation point by index |
 | `clear_envelope` | `tools/envelopes.ts` | Delete ALL points from an envelope |
+| `remove_envelope_points` | `tools/envelopes.ts` | Delete automation points in a time range |
 | `set_envelope_properties` | `tools/envelopes.ts` | Set envelope active/visible/armed state |
 
 ### FX Discovery & Presets (4)

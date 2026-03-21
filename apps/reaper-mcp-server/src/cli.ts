@@ -161,7 +161,12 @@ export const MCP_TOOL_NAMES = [
   'get_track_envelopes',
   'get_envelope_points',
   'insert_envelope_point',
+  'insert_envelope_points',
   'delete_envelope_point',
+  'create_track_envelope',
+  'set_envelope_properties',
+  'clear_envelope',
+  'remove_envelope_points',
 ] as const;
 
 /** Create or update .claude/settings.json with reaper MCP tool permissions */

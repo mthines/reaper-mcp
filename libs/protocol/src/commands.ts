@@ -57,7 +57,12 @@ export type CommandType =
   | 'get_track_envelopes'
   | 'get_envelope_points'
   | 'insert_envelope_point'
+  | 'insert_envelope_points'
   | 'delete_envelope_point'
+  | 'create_track_envelope'
+  | 'set_envelope_properties'
+  | 'clear_envelope'
+  | 'remove_envelope_points'
   // MIDI editing
   | 'create_midi_item'
   | 'list_midi_items'
@@ -393,4 +398,46 @@ export interface DeleteStretchMarkerParams {
   trackIndex: number;
   itemIndex: number;
   markerIndex: number;
+}
+
+// --- Envelope param types ---
+
+export interface CreateTrackEnvelopeParams {
+  trackIndex: number;
+  envelopeName?: string;    // Built-in: "Volume", "Pan", "Mute", "Width", "Trim Volume"
+  fxIndex?: number;         // For FX parameter envelopes
+  paramIndex?: number;      // For FX parameter envelopes (required if fxIndex provided)
+}
+
+export interface SetEnvelopePropertiesParams {
+  trackIndex: number;
+  envelopeIndex: number;
+  active?: boolean;
+  visible?: boolean;
+  armed?: boolean;
+}
+
+export interface ClearEnvelopeParams {
+  trackIndex: number;
+  envelopeIndex: number;
+}
+
+export interface RemoveEnvelopePointsParams {
+  trackIndex: number;
+  envelopeIndex: number;
+  timeStart: number;  // seconds (inclusive)
+  timeEnd: number;    // seconds (exclusive)
+}
+
+export interface InsertEnvelopePointItem {
+  time: number;       // seconds
+  value: number;
+  shape?: number;     // 0=linear, 1=square, 2=slow, 3=fast start, 4=fast end, 5=bezier
+  tension?: number;   // -1.0 to 1.0
+}
+
+export interface InsertEnvelopePointsParams {
+  trackIndex: number;
+  envelopeIndex: number;
+  points: InsertEnvelopePointItem[];
 }

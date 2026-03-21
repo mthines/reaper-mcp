@@ -11,7 +11,7 @@
 
 local POLL_INTERVAL = 0.030 -- 30ms between polls
 local HEARTBEAT_INTERVAL = 1.0 -- write heartbeat every 1s
-local MCP_ANALYZER_FX_NAME = "mcp_analyzer" -- JSFX analyzer name
+local MCP_ANALYZER_FX_NAME = "reaper-mcp/mcp_analyzer" -- JSFX analyzer name
 
 -- Determine bridge directory (REAPER resource path / Scripts / mcp_bridge_data)
 local bridge_dir = reaper.GetResourcePath() .. "/Scripts/mcp_bridge_data/"
@@ -1007,9 +1007,9 @@ end
 -- Phase 4: Custom JSFX analyzer handlers
 -- =============================================================================
 
-local MCP_LUFS_METER_FX_NAME        = "mcp_lufs_meter"
-local MCP_CORRELATION_METER_FX_NAME = "mcp_correlation_meter"
-local MCP_CREST_FACTOR_FX_NAME      = "mcp_crest_factor"
+local MCP_LUFS_METER_FX_NAME        = "reaper-mcp/mcp_lufs_meter"
+local MCP_CORRELATION_METER_FX_NAME = "reaper-mcp/mcp_correlation_meter"
+local MCP_CREST_FACTOR_FX_NAME      = "reaper-mcp/mcp_crest_factor"
 
 -- Helper: find or auto-insert a named JSFX on a track.
 -- Returns the FX index (0-based) on success, or nil + error message on failure.
@@ -2394,6 +2394,234 @@ function handlers.delete_envelope_point(params)
   end
   reaper.DeleteEnvelopePointRange(env, params.pointIndex, params.pointIndex + 1)
   return { success = true, totalPoints = reaper.CountEnvelopePoints(env) }
+end
+
+function handlers.create_track_envelope(params)
+  local track = reaper.GetTrack(0, params.trackIndex)
+  if not track then return nil, "Track " .. params.trackIndex .. " not found" end
+
+  local env = nil
+  local env_name = nil
+
+  if params.fxIndex ~= nil then
+    -- FX parameter envelope
+    if params.paramIndex == nil then
+      return nil, "paramIndex is required when fxIndex is provided"
+    end
+    local fx_count = reaper.TrackFX_GetNumParms(track)
+    if fx_count == 0 then
+      return nil, "Track " .. params.trackIndex .. " has no FX"
+    end
+    -- create=true to create the envelope if it doesn't exist
+    env = reaper.GetFXEnvelope(track, params.fxIndex, params.paramIndex, true)
+    if not env then
+      return nil, "Failed to create FX parameter envelope (fxIndex=" .. params.fxIndex .. ", paramIndex=" .. params.paramIndex .. ")"
+    end
+    local _, pname = reaper.TrackFX_GetParamName(track, params.fxIndex, params.paramIndex)
+    local _, fname = reaper.TrackFX_GetFXName(track, params.fxIndex)
+    env_name = fname .. " / " .. pname
+  elseif params.envelopeName then
+    -- Built-in envelope: use GetTrackEnvelopeByName + show via state chunk
+    env = reaper.GetTrackEnvelopeByName(track, params.envelopeName)
+    if not env then
+      -- Some envelopes need to be activated first via the track state chunk
+      -- Toggle the envelope visibility via action or chunk editing
+      local env_map = {
+        ["Volume"] = "VOLENV",
+        ["Pan"] = "PANENV",
+        ["Mute"] = "MUTEENV",
+        ["Width"] = "WIDTHENV",
+        ["Trim Volume"] = "VOLENV2",
+      }
+      local chunk_key = env_map[params.envelopeName]
+      if not chunk_key then
+        return nil, "Unknown envelope name: " .. params.envelopeName .. ". Use Volume, Pan, Mute, Width, or Trim Volume"
+      end
+      -- Get track chunk, insert envelope chunk if missing
+      local _, chunk = reaper.GetTrackStateChunk(track, "", false)
+      if not chunk:find(chunk_key) then
+        -- Insert a minimal envelope chunk before the closing >
+        local env_chunk = "\n<" .. chunk_key .. "\nACT 1 -1\nVIS 1 1 1\nLANEHEIGHT 0 0\nARM 0\nDEFSHAPE 0 -1 -1\n>\n"
+        chunk = chunk:gsub("\n>$", env_chunk .. ">")
+        reaper.SetTrackStateChunk(track, chunk, false)
+      else
+        -- Envelope exists in chunk but may be hidden; make it visible
+        chunk = chunk:gsub("(" .. chunk_key .. "[^\n]*\n)ACT 0", "%1ACT 1")
+        chunk = chunk:gsub("(" .. chunk_key .. "[^\n]*\n[^\n]*\n)VIS 0", "%1VIS 1")
+        reaper.SetTrackStateChunk(track, chunk, false)
+      end
+      env = reaper.GetTrackEnvelopeByName(track, params.envelopeName)
+      if not env then
+        return nil, "Failed to create envelope: " .. params.envelopeName
+      end
+    else
+      -- Envelope exists, ensure it's visible and active
+      local _, chunk = reaper.GetEnvelopeStateChunk(env, "", false)
+      chunk = chunk:gsub("ACT 0", "ACT 1")
+      chunk = chunk:gsub("VIS 0", "VIS 1")
+      reaper.SetEnvelopeStateChunk(env, chunk, false)
+    end
+    env_name = params.envelopeName
+  else
+    return nil, "Must provide either envelopeName or fxIndex+paramIndex"
+  end
+
+  -- Find the index of the newly created envelope
+  local env_count = reaper.CountTrackEnvelopes(track)
+  local env_index = -1
+  for i = 0, env_count - 1 do
+    if reaper.GetTrackEnvelope(track, i) == env then
+      env_index = i
+      break
+    end
+  end
+
+  reaper.TrackList_AdjustWindows(false)
+  reaper.UpdateArrange()
+
+  return {
+    trackIndex = params.trackIndex,
+    envelopeIndex = env_index,
+    name = env_name,
+    pointCount = reaper.CountEnvelopePoints(env),
+  }
+end
+
+function handlers.set_envelope_properties(params)
+  local track = reaper.GetTrack(0, params.trackIndex)
+  if not track then return nil, "Track " .. params.trackIndex .. " not found" end
+  local env_count = reaper.CountTrackEnvelopes(track)
+  if params.envelopeIndex >= env_count then
+    return nil, "Envelope index " .. params.envelopeIndex .. " out of range (track has " .. env_count .. " envelopes)"
+  end
+  local env = reaper.GetTrackEnvelope(track, params.envelopeIndex)
+
+  if reaper.BR_EnvAlloc then
+    -- SWS extension available: use BR_Env* functions
+    local br_env = reaper.BR_EnvAlloc(env, false)
+    local cur_active, cur_visible, cur_armed = reaper.BR_EnvGetProperties(br_env)
+    local new_active = params.active ~= nil and params.active or cur_active
+    local new_visible = params.visible ~= nil and params.visible or cur_visible
+    local new_armed = params.armed ~= nil and params.armed or cur_armed
+    reaper.BR_EnvSetProperties(br_env, new_active, new_visible, new_armed, false)
+    reaper.BR_EnvFree(br_env, true) -- commit=true
+  else
+    -- Fallback: modify envelope state chunk directly
+    local _, chunk = reaper.GetEnvelopeStateChunk(env, "", false)
+    if params.active ~= nil then
+      local val = params.active and "1" or "0"
+      chunk = chunk:gsub("ACT %d", "ACT " .. val)
+    end
+    if params.visible ~= nil then
+      local val = params.visible and "1" or "0"
+      chunk = chunk:gsub("VIS %d", "VIS " .. val)
+    end
+    if params.armed ~= nil then
+      local val = params.armed and "1" or "0"
+      chunk = chunk:gsub("ARM %d", "ARM " .. val)
+    end
+    reaper.SetEnvelopeStateChunk(env, chunk, false)
+  end
+
+  reaper.TrackList_AdjustWindows(false)
+  reaper.UpdateArrange()
+
+  local _, name = reaper.GetEnvelopeName(env)
+  -- Re-read properties
+  local active, visible, armed = true, true, false
+  if reaper.BR_EnvAlloc then
+    local br_env = reaper.BR_EnvAlloc(env, false)
+    active, visible, armed = reaper.BR_EnvGetProperties(br_env)
+    reaper.BR_EnvFree(br_env, false)
+  end
+  return {
+    trackIndex = params.trackIndex,
+    envelopeIndex = params.envelopeIndex,
+    name = name,
+    active = active,
+    visible = visible,
+    armed = armed,
+  }
+end
+
+function handlers.clear_envelope(params)
+  local track = reaper.GetTrack(0, params.trackIndex)
+  if not track then return nil, "Track " .. params.trackIndex .. " not found" end
+  local env_count = reaper.CountTrackEnvelopes(track)
+  if params.envelopeIndex >= env_count then
+    return nil, "Envelope index " .. params.envelopeIndex .. " out of range (track has " .. env_count .. " envelopes)"
+  end
+  local env = reaper.GetTrackEnvelope(track, params.envelopeIndex)
+  local prev_count = reaper.CountEnvelopePoints(env)
+  -- Delete all points by using a range from -infinity to +infinity
+  reaper.DeleteEnvelopePointRange(env, -math.huge, math.huge)
+  reaper.Envelope_SortPoints(env)
+  return {
+    trackIndex = params.trackIndex,
+    envelopeIndex = params.envelopeIndex,
+    deletedPoints = prev_count,
+    totalPoints = reaper.CountEnvelopePoints(env),
+  }
+end
+
+function handlers.remove_envelope_points(params)
+  local track = reaper.GetTrack(0, params.trackIndex)
+  if not track then return nil, "Track " .. params.trackIndex .. " not found" end
+  local env_count = reaper.CountTrackEnvelopes(track)
+  if params.envelopeIndex >= env_count then
+    return nil, "Envelope index " .. params.envelopeIndex .. " out of range (track has " .. env_count .. " envelopes)"
+  end
+  local env = reaper.GetTrackEnvelope(track, params.envelopeIndex)
+  local prev_count = reaper.CountEnvelopePoints(env)
+  reaper.DeleteEnvelopePointRange(env, params.timeStart, params.timeEnd)
+  reaper.Envelope_SortPoints(env)
+  local new_count = reaper.CountEnvelopePoints(env)
+  return {
+    trackIndex = params.trackIndex,
+    envelopeIndex = params.envelopeIndex,
+    timeStart = params.timeStart,
+    timeEnd = params.timeEnd,
+    deletedPoints = prev_count - new_count,
+    totalPoints = new_count,
+  }
+end
+
+function handlers.insert_envelope_points(params)
+  local track = reaper.GetTrack(0, params.trackIndex)
+  if not track then return nil, "Track " .. params.trackIndex .. " not found" end
+  local env_count = reaper.CountTrackEnvelopes(track)
+  if params.envelopeIndex >= env_count then
+    return nil, "Envelope index " .. params.envelopeIndex .. " out of range (track has " .. env_count .. " envelopes)"
+  end
+  local env = reaper.GetTrackEnvelope(track, params.envelopeIndex)
+
+  -- Parse the points JSON string
+  local points_str = params.points
+  local points = nil
+  if type(points_str) == "string" then
+    points = json_decode(points_str)
+  elseif type(points_str) == "table" then
+    points = points_str
+  end
+  if not points then return nil, "Failed to parse points JSON" end
+
+  local inserted = 0
+  for _, pt in ipairs(points) do
+    if pt.time and pt.value then
+      local shape = pt.shape or 0
+      local tension = pt.tension or 0
+      reaper.InsertEnvelopePoint(env, pt.time, pt.value, shape, tension, false, true)
+      inserted = inserted + 1
+    end
+  end
+
+  reaper.Envelope_SortPoints(env)
+  return {
+    trackIndex = params.trackIndex,
+    envelopeIndex = params.envelopeIndex,
+    insertedPoints = inserted,
+    totalPoints = reaper.CountEnvelopePoints(env),
+  }
 end
 
 -- =============================================================================

@@ -32,7 +32,7 @@ async function setup(): Promise<void> {
     console.log(`  Not found: ${luaSrc}`);
   }
 
-  const effectsDir = getReaperEffectsPath();
+  const effectsDir = join(getReaperEffectsPath(), 'reaper-mcp');
   mkdirSync(effectsDir, { recursive: true });
 
   console.log('\nInstalling JSFX analyzers...');
@@ -41,7 +41,7 @@ async function setup(): Promise<void> {
     const src = join(reaperDir, jsfx);
     const dest = join(effectsDir, jsfx);
     if (installFile(src, dest)) {
-      console.log(`  Installed: ${jsfx}`);
+      console.log(`  Installed: reaper-mcp/${jsfx}`);
     } else {
       console.log(`  Not found: ${src}`);
     }
@@ -56,81 +56,79 @@ async function setup(): Promise<void> {
   console.log('  5. Add reaper-mcp to your Claude Code config (see: npx @mthines/reaper-mcp doctor)');
 }
 
-async function installSkills(): Promise<void> {
-  console.log('REAPER MCP — Install AI Mix Engineer Skills\n');
+type InstallScope = 'project' | 'global';
 
-  const targetDir = process.cwd();
-  const globalClaudeDir = join(homedir(), '.claude');
+function parseInstallScope(args: string[]): InstallScope {
+  if (args.includes('--project')) return 'project';
+  return 'global';
+}
 
+async function installSkills(scope: InstallScope): Promise<void> {
+  console.log(`REAPER MCP — Install AI Mix Engineer Skills (scope: ${scope})\n`);
+
+  const isGlobal = scope === 'global';
+  const baseDir = isGlobal ? join(homedir(), '.claude') : process.cwd();
+  const claudeDir = isGlobal ? baseDir : join(baseDir, '.claude');
+
+  // --- Knowledge base ---
   const knowledgeSrc = resolveAssetDir(__dirname, 'knowledge');
-  const knowledgeDest = join(targetDir, 'knowledge');
   if (existsSync(knowledgeSrc)) {
-    const count = copyDirSync(knowledgeSrc, knowledgeDest);
-    console.log(`Installed knowledge base: ${count} files → ${knowledgeDest}`);
+    const dest = join(baseDir, 'knowledge');
+    const count = copyDirSync(knowledgeSrc, dest);
+    console.log(`Installed knowledge base: ${count} files → ${dest}`);
   } else {
     console.log('Knowledge base not found in package. Skipping.');
   }
 
+  // --- Claude rules ---
   const rulesSrc = resolveAssetDir(__dirname, 'claude-rules');
-  const rulesDir = join(targetDir, '.claude', 'rules');
   if (existsSync(rulesSrc)) {
-    const count = copyDirSync(rulesSrc, rulesDir);
-    console.log(`Installed Claude rules: ${count} files → ${rulesDir}`);
+    const dest = join(claudeDir, 'rules');
+    const count = copyDirSync(rulesSrc, dest);
+    console.log(`Installed Claude rules: ${count} files → ${dest}`);
   } else {
     console.log('Claude rules not found in package. Skipping.');
   }
 
+  // --- Claude skills ---
   const skillsSrc = resolveAssetDir(__dirname, 'claude-skills');
-  const skillsDir = join(targetDir, '.claude', 'skills');
   if (existsSync(skillsSrc)) {
-    const count = copyDirSync(skillsSrc, skillsDir);
-    console.log(`Installed Claude skills: ${count} files → ${skillsDir}`);
+    const dest = join(claudeDir, 'skills');
+    const count = copyDirSync(skillsSrc, dest);
+    console.log(`Installed Claude skills: ${count} files → ${dest}`);
   } else {
     console.log('Claude skills not found in package. Skipping.');
   }
 
+  // --- Claude agents ---
   const agentsSrc = resolveAssetDir(__dirname, 'claude-agents');
-
-  // Install agents to project-local .claude/agents/
-  const agentsDir = join(targetDir, '.claude', 'agents');
   if (existsSync(agentsSrc)) {
-    const count = copyDirSync(agentsSrc, agentsDir);
-    console.log(`Installed Claude agents: ${count} files → ${agentsDir}`);
+    const dest = join(claudeDir, 'agents');
+    const count = copyDirSync(agentsSrc, dest);
+    console.log(`Installed Claude agents: ${count} files → ${dest}`);
   } else {
     console.log('Claude agents not found in package. Skipping.');
   }
 
-  // Also install agents globally to ~/.claude/agents/ so they work from any directory
-  const globalAgentsDir = join(globalClaudeDir, 'agents');
-  if (existsSync(agentsSrc)) {
-    const count = copyDirSync(agentsSrc, globalAgentsDir);
-    console.log(`Installed Claude agents (global): ${count} files → ${globalAgentsDir}`);
-  }
-
-  // Set up Claude settings with REAPER tool permissions (project-local and global)
-  const localSettingsPath = join(targetDir, '.claude', 'settings.json');
-  const localResult = ensureClaudeSettings(localSettingsPath);
-  if (localResult === 'created') {
-    console.log(`Created Claude settings: ${localSettingsPath}`);
-  } else if (localResult === 'updated') {
-    console.log(`Updated Claude settings with new REAPER tools: ${localSettingsPath}`);
+  // --- Claude settings (REAPER tool permissions) ---
+  const settingsPath = join(claudeDir, 'settings.json');
+  const result = ensureClaudeSettings(settingsPath);
+  if (result === 'created') {
+    console.log(`Created Claude settings: ${settingsPath}`);
+  } else if (result === 'updated') {
+    console.log(`Updated Claude settings with new REAPER tools: ${settingsPath}`);
   } else {
-    console.log(`Claude settings already has all REAPER tools: ${localSettingsPath}`);
+    console.log(`Claude settings already has all REAPER tools: ${settingsPath}`);
   }
 
-  const globalSettingsPath = join(globalClaudeDir, 'settings.json');
-  const globalResult = ensureClaudeSettings(globalSettingsPath);
-  if (globalResult === 'created') {
-    console.log(`Created Claude settings (global): ${globalSettingsPath}`);
-  } else if (globalResult === 'updated') {
-    console.log(`Updated Claude settings (global) with new REAPER tools: ${globalSettingsPath}`);
-  }
-
-  const mcpJsonPath = join(targetDir, '.mcp.json');
-  if (createMcpJson(mcpJsonPath)) {
-    console.log(`\nCreated: ${mcpJsonPath}`);
-  } else {
-    console.log(`\n.mcp.json already exists — add the reaper server config manually if needed.`);
+  // --- .mcp.json (project-local only) ---
+  if (!isGlobal) {
+    const mcpJsonPath = join(baseDir, '.mcp.json');
+    if (createMcpJson(mcpJsonPath)) {
+      console.log(`\nCreated: ${mcpJsonPath}`);
+    } else {
+      console.log(`\n.mcp.json already exists — add the reaper server config manually if needed.`);
+    }
   }
 
   console.log('\nDone! Claude Code now has mix engineer agents, knowledge, and REAPER MCP tools.');
@@ -148,22 +146,29 @@ async function doctor(): Promise<void> {
     console.log('  → Run "npx @mthines/reaper-mcp setup" then load mcp_bridge.lua in REAPER');
   }
 
-  const agentsExist = existsSync(join(process.cwd(), '.claude', 'agents'));
-  console.log(`Mix agents:    ${agentsExist ? '✓ Found (.claude/agents/)' : '✗ Not installed'}`);
+  const globalClaudeDir = join(homedir(), '.claude');
+  const localAgents = existsSync(join(process.cwd(), '.claude', 'agents'));
+  const globalAgents = existsSync(join(globalClaudeDir, 'agents'));
+  const agentsExist = localAgents || globalAgents;
+  const agentsLocation = localAgents ? '.claude/agents/' : globalAgents ? '~/.claude/agents/' : '';
+  console.log(`Mix agents:    ${agentsExist ? `✓ Found (${agentsLocation})` : '✗ Not installed'}`);
   if (!agentsExist) {
-    console.log('  → Run "npx @mthines/reaper-mcp install-skills" in your project directory');
+    console.log('  → Run "npx @mthines/reaper-mcp install-skills"');
   }
 
-  const knowledgeExists = existsSync(join(process.cwd(), 'knowledge'));
-  console.log(`Knowledge base: ${knowledgeExists ? '✓ Found in project' : '✗ Not installed'}`);
+  const localKnowledge = existsSync(join(process.cwd(), 'knowledge'));
+  const globalKnowledge = existsSync(join(globalClaudeDir, 'knowledge'));
+  const knowledgeExists = localKnowledge || globalKnowledge;
+  const knowledgeLocation = localKnowledge ? 'project' : globalKnowledge ? '~/.claude/' : '';
+  console.log(`Knowledge base: ${knowledgeExists ? `✓ Found (${knowledgeLocation})` : '✗ Not installed'}`);
   if (!knowledgeExists) {
-    console.log('  → Run "npx @mthines/reaper-mcp install-skills" in your project directory');
+    console.log('  → Run "npx @mthines/reaper-mcp install-skills"');
   }
 
   const mcpJsonExists = existsSync(join(process.cwd(), '.mcp.json'));
   console.log(`MCP config:    ${mcpJsonExists ? '✓ .mcp.json found' : '✗ .mcp.json missing'}`);
   if (!mcpJsonExists) {
-    console.log('  → Run "npx @mthines/reaper-mcp install-skills" to create .mcp.json');
+    console.log('  → Run "npx @mthines/reaper-mcp install-skills --project" to create .mcp.json');
   }
 
   console.log('\nTo check SWS Extensions, start REAPER and use the "list_available_fx" tool.');
@@ -250,7 +255,7 @@ switch (command) {
     break;
 
   case 'install-skills':
-    installSkills().catch((err) => {
+    installSkills(parseInstallScope(process.argv.slice(3))).catch((err) => {
       console.error('Install failed:', err);
       process.exit(1);
     });
@@ -287,14 +292,16 @@ Usage:
   npx @mthines/reaper-mcp                  Start MCP server (stdio mode)
   npx @mthines/reaper-mcp serve            Start MCP server (stdio mode)
   npx @mthines/reaper-mcp setup            Install Lua bridge + JSFX analyzers into REAPER
-  npx @mthines/reaper-mcp install-skills   Install AI mix engineer knowledge + agents into your project
+  npx @mthines/reaper-mcp install-skills   Install AI knowledge + agents globally (default)
+  npx @mthines/reaper-mcp install-skills --project  Install into current project directory
+  npx @mthines/reaper-mcp install-skills --global   Install into ~/.claude/ (default)
   npx @mthines/reaper-mcp doctor           Check that everything is configured correctly
   npx @mthines/reaper-mcp status           Check if Lua bridge is running in REAPER
 
 Quick Start:
   1. npx @mthines/reaper-mcp setup            # install REAPER components
   2. Load mcp_bridge.lua in REAPER (Actions > Load ReaScript > Run)
-  3. npx @mthines/reaper-mcp install-skills   # install AI knowledge + agents
+  3. npx @mthines/reaper-mcp install-skills   # install AI knowledge + agents (globally)
   4. Open Claude Code — REAPER tools + mix engineer agents are ready
 
 Tip: install globally for shorter commands:

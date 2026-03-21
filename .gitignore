@@ -8,6 +8,9 @@ dist/
 
 .mcp.local.json
 
+# Claude Code local settings
+.claude/settings.local.json
+
 .gw
 
 tmp

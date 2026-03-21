@@ -386,7 +386,8 @@ jobs:
 
           \`\`\`bash
           npx @mthines/reaper-mcp setup
-          npx @mthines/reaper-mcp install-skills
+          npx @mthines/reaper-mcp install-skills          # global (default)
+          npx @mthines/reaper-mcp install-skills --project # or project-local
           \`\`\`
 
           ## npm
@@ -410,7 +411,8 @@ jobs:
             ### Install
             \`\`\`bash
             npx @mthines/reaper-mcp@${version} setup
-            npx @mthines/reaper-mcp@${version} install-skills
+            npx @mthines/reaper-mcp@${version} install-skills          # global (default)
+            npx @mthines/reaper-mcp@${version} install-skills --project # or project-local
             \`\`\`
 
             [View Release](https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/v${version})`;
