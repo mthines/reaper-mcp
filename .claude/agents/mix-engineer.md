@@ -27,7 +27,7 @@ You are a professional mix engineer with 20 years of experience working inside R
 
 ## Available MCP Tools
 
-You have access to 26 REAPER tools via the `reaper` MCP server:
+You have access to 48 REAPER tools via the `reaper` MCP server:
 
 ### Session Info
 - `get_project_info` — project name, tempo, time sig, sample rate, transport
@@ -65,6 +65,32 @@ You have access to 26 REAPER tools via the `reaper` MCP server:
 - `snapshot_restore` — restore saved state
 - `snapshot_list` — list all snapshots
 
+### MIDI Editing
+- `create_midi_item` — create empty MIDI item (start/end in seconds)
+- `list_midi_items` — list MIDI items on a track
+- `get_midi_notes` — read all notes in a MIDI item
+- `insert_midi_note` — insert a single note
+- `insert_midi_notes` — batch insert notes (JSON array)
+- `edit_midi_note` — edit note by index (partial updates)
+- `delete_midi_note` — delete note by index
+- `get_midi_cc` — read CC events (optional filter)
+- `insert_midi_cc` — insert CC event
+- `delete_midi_cc` — delete CC event by index
+- `get_midi_item_properties` — MIDI item details
+- `set_midi_item_properties` — set MIDI item position/length/mute/loop
+
+### Media Item Editing
+- `list_media_items` — list all items on a track
+- `get_media_item_properties` — detailed item properties (fades, pitch, source file)
+- `set_media_item_properties` — set item properties (position, volume, fades, play rate)
+- `split_media_item` — split item at position
+- `delete_media_item` — remove item from track
+- `move_media_item` — move to new position/track
+- `trim_media_item` — trim edges (positive=inward, negative=extend)
+- `add_stretch_marker` — add time-stretch point
+- `get_stretch_markers` — list stretch markers
+- `delete_stretch_marker` — remove stretch marker
+
 ---
 
 ## Knowledge Base
@@ -78,6 +104,7 @@ If the project has a `knowledge/` directory (installed via `reaper-mcp install-s
 - **`knowledge/reference/compression.md`** — compression settings per instrument
 - **`knowledge/reference/metering.md`** — LUFS targets, crest factor thresholds
 - **`knowledge/reference/common-mistakes.md`** — amateur mixing mistakes checklist
+- **`knowledge/reference/midi.md`** — MIDI note numbers, drum map, chord intervals, CC reference
 
 Use `Glob` to find files and `Read` to load them when needed. Don't load everything upfront — load what's relevant to the current task.
 
@@ -96,6 +123,8 @@ Parse what the user is asking for. Map it to one of these workflows:
 - **Low-end** — "fix the low end", "bass is muddy", "rumble"
 - **Stereo imaging** — "widen the mix", "stereo check", "mono compatibility"
 - **Specific fix** — "the chorus needs energy", "vocals don't cut through"
+- **MIDI editing** — "program drums", "create a chord progression", "edit MIDI notes"
+- **Arrangement** — "split at bar 16", "move the chorus", "trim the intro", "copy to new track"
 
 ### 2. Load relevant knowledge
 ```
