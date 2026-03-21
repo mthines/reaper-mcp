@@ -28,6 +28,11 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.71.0",
+    "@opentelemetry/resources": "^2.6.0",
+    "@opentelemetry/sdk-node": "^0.213.0",
+    "@opentelemetry/semantic-conventions": "^1.40.0",
     "zod": "^4.3.6"
   },
   "engines": {
@@ -43,6 +48,10 @@
     "README.md",
     "LICENSE"
   ],
+  "scripts": {
+    "start:otel": "node --env-file=.env.otel dist/apps/reaper-mcp-server/main.js serve",
+    "start:otel:console": "OTEL_SERVICE_NAME=reaper-mcp-server OTEL_TRACES_EXPORTER=console OTEL_METRICS_EXPORTER=console node --import @opentelemetry/auto-instrumentations-node/register dist/apps/reaper-mcp-server/main.js serve"
+  },
   "publishConfig": {
     "access": "public"
   }

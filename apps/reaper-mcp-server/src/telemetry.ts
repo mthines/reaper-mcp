@@ -1,0 +1,196 @@
+/**
+ * OpenTelemetry instrumentation setup for the REAPER MCP Server.
+ *
+ * Initializes the NodeSDK with resource attributes, then exposes helpers for
+ * acquiring tracers, meters, and trace-correlation context for structured logging.
+ *
+ * Usage:
+ *   import { initTelemetry, shutdownTelemetry } from './telemetry.js';
+ *   await initTelemetry();
+ *   // ...
+ *   await shutdownTelemetry();
+ */
+
+import { trace, metrics, type Tracer, type Meter } from '@opentelemetry/api';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import {
+  ATTR_SERVICE_NAME,
+  ATTR_SERVICE_NAMESPACE,
+  ATTR_SERVICE_VERSION,
+} from '@opentelemetry/semantic-conventions';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const SERVICE_NAME = process.env['OTEL_SERVICE_NAME'] ?? 'reaper-mcp-server';
+const SERVICE_NAMESPACE = 'reaper-mcp';
+const DEPLOYMENT_ENV = process.env['DEPLOYMENT_ENVIRONMENT'] ?? 'development';
+
+// Instrumentation scope name — used for all tracers/meters from this package.
+const SCOPE_NAME = 'reaper-mcp-server';
+
+// ---------------------------------------------------------------------------
+// Read service version from package.json
+// ---------------------------------------------------------------------------
+
+function readServiceVersion(): string {
+  try {
+    const require = createRequire(import.meta.url);
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    // Works from both source (src/) and built output (dist/apps/reaper-mcp-server/)
+    const pkgPaths = [
+      join(__dirname, '..', 'package.json'),
+      join(__dirname, 'package.json'),
+    ];
+    for (const p of pkgPaths) {
+      try {
+        const pkg = require(p) as { version?: string };
+        if (pkg.version) return pkg.version;
+      } catch {
+        // try next
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return 'unknown';
+}
+
+// ---------------------------------------------------------------------------
+// SDK lifecycle
+// ---------------------------------------------------------------------------
+
+let sdk: NodeSDK | null = null;
+
+/**
+ * Initialise the OpenTelemetry SDK.  Call this once, early in the process
+ * lifecycle (before any instrumented code runs).
+ *
+ * Configuration is driven primarily by OTEL_* environment variables, which
+ * makes it easy to swap exporters without code changes.
+ */
+export async function initTelemetry(): Promise<void> {
+  if (sdk) return; // already initialised
+
+  const serviceVersion = readServiceVersion();
+
+  const resource = resourceFromAttributes({
+    [ATTR_SERVICE_NAME]: SERVICE_NAME,
+    [ATTR_SERVICE_NAMESPACE]: SERVICE_NAMESPACE,
+    [ATTR_SERVICE_VERSION]: serviceVersion,
+    'deployment.environment.name': DEPLOYMENT_ENV,
+  });
+
+  // NodeSDK reads OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER, OTEL_LOGS_EXPORTER,
+  // OTEL_EXPORTER_OTLP_ENDPOINT, and OTEL_EXPORTER_OTLP_HEADERS automatically.
+  sdk = new NodeSDK({ resource });
+
+  sdk.start();
+}
+
+/**
+ * Flush all pending telemetry and shut down the SDK.  Call this on process
+ * exit (SIGINT, SIGTERM, uncaughtException, unhandledRejection).
+ */
+export async function shutdownTelemetry(): Promise<void> {
+  if (!sdk) return;
+  try {
+    await sdk.shutdown();
+  } catch (err) {
+    // Log to stderr — console.error is always safe here
+    console.error('[reaper-mcp] OTel shutdown error:', err);
+  } finally {
+    sdk = null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tracer / Meter accessors
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the named tracer for this instrumentation scope.
+ * Safe to call before `initTelemetry()` — the OTel API returns a no-op tracer
+ * when no SDK has been registered.
+ */
+export function getTracer(): Tracer {
+  return trace.getTracer(SCOPE_NAME);
+}
+
+/**
+ * Returns the named meter for this instrumentation scope.
+ * Safe to call before `initTelemetry()` — returns a no-op meter when not
+ * initialised.
+ */
+export function getMeter(): Meter {
+  return metrics.getMeter(SCOPE_NAME);
+}
+
+// ---------------------------------------------------------------------------
+// Trace-context helper for structured logging
+// ---------------------------------------------------------------------------
+
+export interface TraceContext {
+  traceId: string;
+  spanId: string;
+}
+
+/**
+ * Returns the current trace context (traceId + spanId) so it can be included
+ * in structured log records for correlation.
+ *
+ * Returns empty strings when there is no active span.
+ */
+export function getTraceContext(): TraceContext {
+  const span = trace.getActiveSpan();
+  if (!span) return { traceId: '', spanId: '' };
+  const ctx = span.spanContext();
+  return { traceId: ctx.traceId, spanId: ctx.spanId };
+}
+
+// ---------------------------------------------------------------------------
+// Pre-created metric instruments
+// ---------------------------------------------------------------------------
+
+/**
+ * Lazily-created metric instruments.  Instruments are created once per
+ * process — calling getMeter() multiple times for the same name is fine, but
+ * creating instruments inside hot paths should be avoided.
+ */
+
+let _commandDurationHistogram: ReturnType<Meter['createHistogram']> | null = null;
+let _commandCounter: ReturnType<Meter['createCounter']> | null = null;
+let _timeoutCounter: ReturnType<Meter['createCounter']> | null = null;
+
+export function getCommandDurationHistogram(): ReturnType<Meter['createHistogram']> {
+  if (!_commandDurationHistogram) {
+    _commandDurationHistogram = getMeter().createHistogram('mcp.bridge.command.duration', {
+      description: 'Duration of MCP bridge commands (file IPC round-trip)',
+      unit: 'ms',
+    });
+  }
+  return _commandDurationHistogram;
+}
+
+export function getCommandCounter(): ReturnType<Meter['createCounter']> {
+  if (!_commandCounter) {
+    _commandCounter = getMeter().createCounter('mcp.bridge.command.count', {
+      description: 'Number of MCP bridge commands sent, by type and success',
+    });
+  }
+  return _commandCounter;
+}
+
+export function getTimeoutCounter(): ReturnType<Meter['createCounter']> {
+  if (!_timeoutCounter) {
+    _timeoutCounter = getMeter().createCounter('mcp.bridge.timeout.count', {
+      description: 'Number of MCP bridge commands that timed out waiting for REAPER',
+    });
+  }
+  return _timeoutCounter;
+}

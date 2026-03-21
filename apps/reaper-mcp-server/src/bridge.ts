@@ -4,6 +4,14 @@ import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
 import type { BridgeCommand, CommandType } from '@reaper-mcp/protocol';
 import type { BridgeResponse } from '@reaper-mcp/protocol';
+import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
+import {
+  getTracer,
+  getTraceContext,
+  getCommandDurationHistogram,
+  getCommandCounter,
+  getTimeoutCounter,
+} from './telemetry.js';
 
 const POLL_INTERVAL_MS = 50;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -41,54 +49,137 @@ export async function ensureBridgeDir(): Promise<string> {
 
 /**
  * Sends a command to the Lua bridge and waits for a response.
+ *
+ * Instrumented with:
+ * - A CLIENT span named `mcp.bridge {type}` capturing the full file-IPC round-trip.
+ * - A duration histogram `mcp.bridge.command.duration`.
+ * - A command counter `mcp.bridge.command.count`.
+ * - A timeout counter `mcp.bridge.timeout.count` (incremented on timeout).
  */
 export async function sendCommand(
   type: CommandType,
   params: Record<string, unknown> = {},
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<BridgeResponse> {
-  const dir = await ensureBridgeDir();
-  const id = randomUUID();
+  const tracer = getTracer();
+  const startMs = Date.now();
 
-  const command: BridgeCommand = {
-    id,
-    type,
-    params,
-    timestamp: Date.now(),
-  };
+  return tracer.startActiveSpan(
+    `mcp.bridge ${type}`,
+    {
+      kind: SpanKind.CLIENT,
+      attributes: {
+        'mcp.command.type': type,
+        'mcp.bridge.timeout_ms': timeoutMs,
+      },
+    },
+    async (span) => {
+      const dir = await ensureBridgeDir();
+      const id = randomUUID();
 
-  // Write command file
-  const commandPath = join(dir, `command_${id}.json`);
-  await writeFile(commandPath, JSON.stringify(command, null, 2), 'utf-8');
+      // Record command ID after it's generated — keep span name low-cardinality
+      span.setAttribute('mcp.command.id', id);
 
-  // Poll for response
-  const responsePath = join(dir, `response_${id}.json`);
-  const deadline = Date.now() + timeoutMs;
+      const command: BridgeCommand = {
+        id,
+        type,
+        params,
+        timestamp: Date.now(),
+      };
 
-  while (Date.now() < deadline) {
-    try {
-      const data = await readFile(responsePath, 'utf-8');
-      const response: BridgeResponse = JSON.parse(data);
+      // Write command file
+      const commandPath = join(dir, `command_${id}.json`);
+      await writeFile(commandPath, JSON.stringify(command, null, 2), 'utf-8');
 
-      // Cleanup files
-      await Promise.allSettled([unlink(commandPath), unlink(responsePath)]);
+      const traceCtx = getTraceContext();
+      console.error(
+        JSON.stringify({
+          msg: 'bridge_command_sent',
+          commandType: type,
+          commandId: id,
+          ...traceCtx,
+        })
+      );
 
-      return response;
-    } catch {
-      // File doesn't exist yet — keep polling
-      await sleep(POLL_INTERVAL_MS);
+      // Poll for response
+      const responsePath = join(dir, `response_${id}.json`);
+      const deadline = Date.now() + timeoutMs;
+
+      while (Date.now() < deadline) {
+        try {
+          const data = await readFile(responsePath, 'utf-8');
+          const response: BridgeResponse = JSON.parse(data);
+
+          // Cleanup files
+          await Promise.allSettled([unlink(commandPath), unlink(responsePath)]);
+
+          const durationMs = Date.now() - startMs;
+          const succeeded = response.success;
+
+          span.setAttribute('mcp.response.success', succeeded);
+
+          if (!succeeded) {
+            span.setStatus({ code: SpanStatusCode.ERROR, message: response.error ?? 'Bridge error' });
+            span.setAttribute('mcp.response.error', response.error ?? 'unknown');
+            console.error(
+              JSON.stringify({
+                msg: 'bridge_command_error',
+                commandType: type,
+                commandId: id,
+                error: response.error,
+                durationMs,
+                ...traceCtx,
+              })
+            );
+          }
+
+          span.end();
+
+          // Record metrics
+          getCommandDurationHistogram().record(durationMs, { command_type: type });
+          getCommandCounter().add(1, { command_type: type, success: String(succeeded) });
+
+          return response;
+        } catch {
+          // File doesn't exist yet — keep polling
+          await sleep(POLL_INTERVAL_MS);
+        }
+      }
+
+      // Timeout — cleanup command file
+      await unlink(commandPath).catch(() => { /* cleanup best-effort */ });
+
+      const durationMs = Date.now() - startMs;
+      const timeoutMsg = `Timeout: no response from REAPER Lua bridge after ${timeoutMs}ms. Is the bridge script running in REAPER?`;
+
+      span.setAttribute('mcp.response.success', false);
+      span.setAttribute('mcp.response.error', 'timeout');
+      span.setStatus({ code: SpanStatusCode.ERROR, message: timeoutMsg });
+      span.end();
+
+      // Record metrics
+      getCommandDurationHistogram().record(durationMs, { command_type: type });
+      getCommandCounter().add(1, { command_type: type, success: 'false' });
+      getTimeoutCounter().add(1, { command_type: type });
+
+      console.error(
+        JSON.stringify({
+          msg: 'bridge_command_timeout',
+          commandType: type,
+          commandId: id,
+          timeoutMs,
+          ...traceCtx,
+        })
+      );
+
+      return {
+        id,
+        success: false,
+        error: timeoutMsg,
+        timestamp: Date.now(),
+      };
     }
-  }
-
-  // Timeout — cleanup command file
-  await unlink(commandPath).catch(() => { /* cleanup best-effort */ });
-
-  return {
-    id,
-    success: false,
-    error: `Timeout: no response from REAPER Lua bridge after ${timeoutMs}ms. Is the bridge script running in REAPER?`,
-    timestamp: Date.now(),
-  };
+  );
 }
 
 /**

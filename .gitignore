@@ -4,6 +4,7 @@ dist/
 *.tsbuildinfo
 .env
 .env.local
+.env.otel
 
 .mcp.local.json
 
