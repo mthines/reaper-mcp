@@ -210,12 +210,20 @@ export interface MediaItemInfo {
   length: number;        // seconds
   name: string;
   volume: number;        // dB
+  volumeRaw: number;     // linear 0.0–4.0 scale
   muted: boolean;
   fadeInLength: number;  // seconds
   fadeOutLength: number; // seconds
+  fadeInShape: number;   // 0=linear, 1-6=curve shapes
+  fadeOutShape: number;  // 0=linear, 1-6=curve shapes
   playRate: number;
+  pitch: number;         // semitones
+  startOffset: number;   // seconds into source
+  loopSource: boolean;
   isMidi: boolean;
   takeName: string;
+  sourceFile: string;
+  locked: boolean;
 }
 
 export interface StretchMarkerInfo {

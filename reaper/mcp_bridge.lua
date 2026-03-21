@@ -58,6 +58,30 @@ local function json_decode(str)
   return obj
 end
 
+-- Fallback JSON array-of-objects parser for when CF_Json_Parse is unavailable.
+-- Handles: [{"key":val,...}, {"key":val,...}, ...]
+local function json_decode_array(str)
+  if reaper.CF_Json_Parse then
+    local ok, val = reaper.CF_Json_Parse(str)
+    if ok then return val end
+  end
+
+  -- Fallback: extract each {...} from the array and parse individually
+  local arr = {}
+  for obj_str in str:gmatch("%b{}") do
+    local obj = {}
+    for k, v in obj_str:gmatch('"([^"]+)"%s*:%s*"([^"]*)"') do
+      obj[k] = v
+    end
+    for k, v in obj_str:gmatch('"([^"]+)"%s*:%s*(-?%d+%.?%d*)') do
+      if not obj[k] then obj[k] = tonumber(v) end
+    end
+    arr[#arr + 1] = obj
+  end
+  if #arr > 0 then return arr end
+  return nil
+end
+
 local function json_encode(obj)
   -- Simple JSON encoder for our response objects
   local parts = {}
@@ -1092,11 +1116,11 @@ function handlers.create_midi_item(params)
   local track = reaper.GetTrack(0, track_idx)
   if not track then return nil, "Track " .. track_idx .. " not found" end
 
-  reaper.Undo_BeginBlock()
   local item = reaper.CreateNewMIDIItemInProj(track, start_pos, end_pos)
-  reaper.Undo_EndBlock("MCP: Create MIDI item", -1)
-
   if not item then return nil, "Failed to create MIDI item" end
+
+  reaper.Undo_BeginBlock()
+  reaper.Undo_EndBlock("MCP: Create MIDI item", -1)
 
   -- Find the index of the new item on the track
   local item_count = reaper.CountTrackMediaItems(track)
@@ -1213,17 +1237,10 @@ function handlers.insert_midi_notes(params)
   local notes_str = params.notes
   if not notes_str or notes_str == "" then return nil, "notes JSON string required" end
 
-  -- Parse notes JSON array
-  local notes_data = json_decode(notes_str)
-  if not notes_data then return nil, "Failed to parse notes JSON" end
-
-  -- Handle both array-style and object-style parsed data
-  local notes_list = {}
-  if notes_data[1] then
-    notes_list = notes_data
-  else
-    -- Try to extract from numbered keys (fallback parser)
-    return nil, "Notes must be a JSON array. Ensure REAPER 7+ with CF_Json_Parse for array support."
+  -- Parse notes JSON array (uses dedicated array parser with fallback)
+  local notes_list = json_decode_array(notes_str)
+  if not notes_list or #notes_list == 0 then
+    return nil, "Failed to parse notes JSON array. Expected: [{\"pitch\":60,\"velocity\":100,\"startPosition\":0,\"duration\":1}, ...]"
   end
 
   reaper.Undo_BeginBlock()
@@ -1318,7 +1335,6 @@ function handlers.delete_midi_note(params)
 
   reaper.Undo_BeginBlock()
   reaper.MIDI_DeleteNote(take, note_idx)
-  reaper.MIDI_Sort(take)
   reaper.Undo_EndBlock("MCP: Delete MIDI note " .. note_idx, -1)
 
   reaper.UpdateArrange()
@@ -1400,7 +1416,6 @@ function handlers.delete_midi_cc(params)
 
   reaper.Undo_BeginBlock()
   reaper.MIDI_DeleteCC(take, cc_idx)
-  reaper.MIDI_Sort(take)
   reaper.Undo_EndBlock("MCP: Delete MIDI CC " .. cc_idx, -1)
 
   reaper.UpdateArrange()
@@ -1514,7 +1529,8 @@ function handlers.get_media_item_properties(params)
     start_offset = reaper.GetMediaItemTakeInfo_Value(take, "D_STARTOFFS")
     local source = reaper.GetMediaItemTake_Source(take)
     if source then
-      source_file = reaper.GetMediaSourceFileName(source) or ""
+      local _, src_fn = reaper.GetMediaSourceFileName(source, "")
+      source_file = src_fn or ""
     end
   end
 
@@ -1634,19 +1650,24 @@ function handlers.move_media_item(params)
   local track, item, err = get_media_item(params)
   if err then return nil, err end
 
-  reaper.Undo_BeginBlock()
-
-  if params.newPosition ~= nil then
-    reaper.SetMediaItemInfo_Value(item, "D_POSITION", params.newPosition)
-  end
-
+  -- Validate destination track before starting undo block
   if params.newTrackIndex ~= nil then
     local dest_track = reaper.GetTrack(0, params.newTrackIndex)
     if not dest_track then
-      reaper.Undo_EndBlock("MCP: Move media item (failed)", -1)
       return nil, "Destination track " .. params.newTrackIndex .. " not found"
     end
+  end
+
+  reaper.Undo_BeginBlock()
+
+  -- Move track first, then set position (MoveMediaItemToTrack preserves position)
+  if params.newTrackIndex ~= nil then
+    local dest_track = reaper.GetTrack(0, params.newTrackIndex)
     reaper.MoveMediaItemToTrack(item, dest_track)
+  end
+
+  if params.newPosition ~= nil then
+    reaper.SetMediaItemInfo_Value(item, "D_POSITION", params.newPosition)
   end
 
   reaper.Undo_EndBlock("MCP: Move media item", -1)
@@ -1663,39 +1684,33 @@ function handlers.trim_media_item(params)
   local track, item, err = get_media_item(params)
   if err then return nil, err end
 
-  reaper.Undo_BeginBlock()
-
   local pos = reaper.GetMediaItemInfo_Value(item, "D_POSITION")
   local len = reaper.GetMediaItemInfo_Value(item, "D_LENGTH")
+
+  -- Validate both trims upfront before applying either
+  local trim_start = (params.trimStart ~= nil and params.trimStart ~= 0) and params.trimStart or 0
+  local trim_end = (params.trimEnd ~= nil and params.trimEnd ~= 0) and params.trimEnd or 0
+  local new_len = len - trim_start - trim_end
+  if new_len <= 0 then
+    return nil, "Trim would result in zero or negative length (current: " .. len .. "s, trimStart: " .. trim_start .. "s, trimEnd: " .. trim_end .. "s)"
+  end
+
+  reaper.Undo_BeginBlock()
+
   local take = reaper.GetActiveTake(item)
 
-  if params.trimStart ~= nil and params.trimStart ~= 0 then
-    local new_pos = pos + params.trimStart
-    local new_len = len - params.trimStart
-    if new_len <= 0 then
-      reaper.Undo_EndBlock("MCP: Trim media item (failed)", -1)
-      return nil, "trimStart would result in zero or negative length"
-    end
-    reaper.SetMediaItemInfo_Value(item, "D_POSITION", new_pos)
-    reaper.SetMediaItemInfo_Value(item, "D_LENGTH", new_len)
+  if trim_start ~= 0 then
+    pos = pos + trim_start
+    reaper.SetMediaItemInfo_Value(item, "D_POSITION", pos)
     -- Adjust take start offset
     if take then
       local offset = reaper.GetMediaItemTakeInfo_Value(take, "D_STARTOFFS")
-      reaper.SetMediaItemTakeInfo_Value(take, "D_STARTOFFS", offset + params.trimStart)
+      reaper.SetMediaItemTakeInfo_Value(take, "D_STARTOFFS", offset + trim_start)
     end
-    pos = new_pos
-    len = new_len
   end
 
-  if params.trimEnd ~= nil and params.trimEnd ~= 0 then
-    local new_len = len - params.trimEnd
-    if new_len <= 0 then
-      reaper.Undo_EndBlock("MCP: Trim media item (failed)", -1)
-      return nil, "trimEnd would result in zero or negative length"
-    end
-    reaper.SetMediaItemInfo_Value(item, "D_LENGTH", new_len)
-    len = new_len
-  end
+  reaper.SetMediaItemInfo_Value(item, "D_LENGTH", new_len)
+  len = new_len
 
   reaper.Undo_EndBlock("MCP: Trim media item", -1)
   reaper.UpdateArrange()
