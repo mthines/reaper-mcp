@@ -1,0 +1,9 @@
+{
+  "name": "@mthines/reaper-mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "reaper-mcp": "./main.js"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "reaper": {
+      "command": "node",
+      "args": ["dist/apps/reaper-mcp-server/main.js", "serve"]
+    }
+  }
+}

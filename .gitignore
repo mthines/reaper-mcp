@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.nx/
+*.tsbuildinfo
+.env
+.env.local
+
+.mcp.local.json
+
+.gw
+
+tmp

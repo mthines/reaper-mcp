@@ -1,0 +1,27 @@
+{
+  "name": "protocol",
+  "sourceRoot": "libs/protocol/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "options": {
+        "outputPath": "dist/libs/protocol",
+        "main": "libs/protocol/src/index.ts",
+        "tsConfig": "libs/protocol/tsconfig.json"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint libs/protocol/src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --passWithNoTests --config libs/protocol/vitest.config.ts"
+      }
+    }
+  }
+}

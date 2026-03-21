@@ -1,0 +1,34 @@
+{
+  "name": "@mthines/reaper-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP server for controlling REAPER DAW — real-time mixing, FX control, and frequency analysis for AI agents",
+  "license": "MIT",
+  "scripts": {
+    "build": "nx build reaper-mcp-server",
+    "dev": "nx serve reaper-mcp-server",
+    "test": "nx run-many --target=test",
+    "lint": "nx run-many --target=lint",
+    "setup": "node dist/apps/reaper-mcp-server/main.js setup",
+    "serve": "node dist/apps/reaper-mcp-server/main.js serve"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@nx/esbuild": "^20.0.0",
+    "@nx/js": "^20.0.0",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.24.0",
+    "eslint": "^10.1.0",
+    "nx": "^20.0.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.57.1",
+    "vitest": "^2.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

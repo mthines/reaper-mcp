@@ -1,0 +1,167 @@
+desc:MCP Spectrum Analyzer
+// Real-time FFT spectrum analyzer for MCP bridge integration.
+// Writes frequency bin magnitudes (in dB) to shared memory (gmem)
+// so the Lua bridge can read them and pass to the MCP server.
+//
+// gmem layout:
+//   gmem[0] = bin count (fft_size / 2)
+//   gmem[1] = peak dB
+//   gmem[2] = RMS dB
+//   gmem[3 .. 3+bin_count-1] = magnitude in dB per frequency bin
+
+options:gmem=MCPAnalyzer
+
+slider1:fft_size_slider=4096<512,8192,1>FFT Size
+slider2:window_type=1<0,3,1{Rectangular,Hann,Hamming,Blackman-Harris}>Window Function
+slider3:smoothing=0.8<0,0.99,0.01>Smoothing
+
+@init
+  // Allocate memory blocks
+  fft_buf = 0;              // FFT input buffer
+  window_buf = 16384;       // Window function
+  mag_buf = 32768;          // Magnitude accumulator (smoothed)
+  work_buf = 49152;         // Working buffer for FFT
+
+  fft_size = 4096;
+  fft_pos = 0;
+  bin_count = fft_size / 2;
+
+  // Pre-compute window function
+  function compute_window(size, wtype) (
+    i = 0;
+    loop(size,
+      wtype == 0 ? ( // Rectangular
+        window_buf[i] = 1.0;
+      ) :
+      wtype == 1 ? ( // Hann
+        window_buf[i] = 0.5 * (1.0 - cos(2.0 * $pi * i / (size - 1)));
+      ) :
+      wtype == 2 ? ( // Hamming
+        window_buf[i] = 0.54 - 0.46 * cos(2.0 * $pi * i / (size - 1));
+      ) :
+      ( // Blackman-Harris
+        window_buf[i] = 0.35875
+          - 0.48829 * cos(2.0 * $pi * i / (size - 1))
+          + 0.14128 * cos(4.0 * $pi * i / (size - 1))
+          - 0.01168 * cos(6.0 * $pi * i / (size - 1));
+      );
+      i += 1;
+    );
+  );
+
+  compute_window(fft_size, window_type);
+
+  // Initialize smoothed magnitude buffer to -150 dB
+  i = 0;
+  loop(bin_count,
+    mag_buf[i] = -150.0;
+    i += 1;
+  );
+
+  peak_val = 0;
+  rms_sum = 0;
+  rms_count = 0;
+
+@slider
+  new_fft_size = slider1;
+  // Snap to valid FFT sizes
+  new_fft_size <= 512 ? new_fft_size = 512 :
+  new_fft_size <= 1024 ? new_fft_size = 1024 :
+  new_fft_size <= 2048 ? new_fft_size = 2048 :
+  new_fft_size <= 4096 ? new_fft_size = 4096 :
+  new_fft_size = 8192;
+
+  new_fft_size != fft_size ? (
+    fft_size = new_fft_size;
+    bin_count = fft_size / 2;
+    fft_pos = 0;
+    compute_window(fft_size, window_type);
+    // Reset smoothed magnitudes
+    i = 0;
+    loop(bin_count,
+      mag_buf[i] = -150.0;
+      i += 1;
+    );
+  );
+
+  compute_window(fft_size, window_type);
+
+@sample
+  // Mix to mono and accumulate into FFT buffer
+  mono = (spl0 + spl1) * 0.5;
+
+  // Track peak and RMS
+  abs_mono = abs(mono);
+  abs_mono > peak_val ? peak_val = abs_mono;
+  rms_sum += mono * mono;
+  rms_count += 1;
+
+  // Apply window and store in FFT buffer
+  fft_buf[fft_pos] = mono * window_buf[fft_pos];
+
+  fft_pos += 1;
+
+  // When buffer is full, perform FFT and write to gmem
+  fft_pos >= fft_size ? (
+    // Copy to work buffer for FFT (real FFT needs 2x size)
+    memcpy(work_buf, fft_buf, fft_size);
+
+    // Perform real FFT
+    fft_real(work_buf, fft_size);
+
+    // Calculate magnitudes and write to gmem with smoothing
+    smooth = smoothing;
+    inv_smooth = 1.0 - smooth;
+    scale = 2.0 / fft_size;
+
+    i = 0;
+    loop(bin_count,
+      // Real FFT output: DC at [0], Nyquist at [1], then pairs [2i, 2i+1]
+      i == 0 ? (
+        re = work_buf[0];
+        im = 0;
+      ) : i == bin_count ? (
+        re = work_buf[1];
+        im = 0;
+      ) : (
+        re = work_buf[i * 2];
+        im = work_buf[i * 2 + 1];
+      );
+
+      magnitude = sqrt(re * re + im * im) * scale;
+      magnitude < 0.000001 ? magnitude = 0.000001; // floor at -120 dB
+      mag_db = 20.0 * log10(magnitude);
+
+      // Apply smoothing
+      mag_buf[i] = smooth * mag_buf[i] + inv_smooth * mag_db;
+
+      // Write to gmem
+      gmem[3 + i] = mag_buf[i];
+
+      i += 1;
+    );
+
+    // Write metadata to gmem
+    gmem[0] = bin_count;
+
+    // Peak dB
+    peak_val < 0.000001 ? peak_val = 0.000001;
+    gmem[1] = 20.0 * log10(peak_val);
+
+    // RMS dB
+    rms_count > 0 ? (
+      rms_val = sqrt(rms_sum / rms_count);
+      rms_val < 0.000001 ? rms_val = 0.000001;
+      gmem[2] = 20.0 * log10(rms_val);
+    ) : (
+      gmem[2] = -150.0;
+    );
+
+    // Reset accumulators
+    peak_val = 0;
+    rms_sum = 0;
+    rms_count = 0;
+    fft_pos = 0;
+  );
+
+  // Pass audio through unmodified

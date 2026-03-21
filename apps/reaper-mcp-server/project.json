@@ -1,0 +1,49 @@
+{
+  "name": "reaper-mcp-server",
+  "sourceRoot": "apps/reaper-mcp-server/src",
+  "projectType": "application",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "options": {
+        "main": "apps/reaper-mcp-server/src/main.ts",
+        "outputPath": "dist/apps/reaper-mcp-server",
+        "outputFileName": "main.js",
+        "tsConfig": "apps/reaper-mcp-server/tsconfig.json",
+        "bundle": true,
+        "format": ["esm"],
+        "platform": "node",
+        "target": "node20",
+        "minify": false,
+        "sourcemap": true,
+        "external": [],
+        "assets": [
+          {
+            "glob": "**/*",
+            "input": "reaper",
+            "output": "reaper"
+          }
+        ]
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node dist/apps/reaper-mcp-server/main.js serve"
+      },
+      "dependsOn": ["build"]
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint apps/reaper-mcp-server/src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run --passWithNoTests --config apps/reaper-mcp-server/vitest.config.ts"
+      }
+    }
+  }
+}
