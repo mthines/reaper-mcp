@@ -522,6 +522,493 @@ function handlers.set_cursor_position(params)
 end
 
 -- =============================================================================
+-- Phase 1: Mix agent handlers
+-- =============================================================================
+
+-- Helper: detect FX type prefix from name
+local function fx_type_from_name(name)
+  if name:match("^VST3:") then return "VST3"
+  elseif name:match("^VST:") then return "VST"
+  elseif name:match("^JS:") then return "JS"
+  elseif name:match("^AU:") then return "AU"
+  elseif name:match("^CLAP:") then return "CLAP"
+  else return "JS" end  -- default for bare JSFX names
+end
+
+-- Enumerate all installed FX using SWS CF_EnumerateInstalledFX if available,
+-- otherwise fall back to scanning open projects via TrackFX_AddByName probe.
+-- The SWS approach is preferred and more complete.
+function handlers.list_available_fx(params)
+  local category_filter = params.category
+  local fx_list = {}
+
+  -- Try SWS CF_EnumerateInstalledFX (requires SWS extension)
+  if reaper.CF_EnumerateInstalledFX then
+    local i = 0
+    while true do
+      local ok, name, ident = reaper.CF_EnumerateInstalledFX(i)
+      if not ok then break end
+      local fx_type = fx_type_from_name(name)
+      if not category_filter or fx_type:lower() == category_filter:lower() then
+        fx_list[#fx_list + 1] = {
+          name = name,
+          type = fx_type,
+          path = ident or "",
+        }
+      end
+      i = i + 1
+    end
+    return { fxList = fx_list, total = #fx_list, source = "sws" }
+  end
+
+  -- Fallback: parse reaper-fxfolders.ini for plugin names
+  local resource_path = reaper.GetResourcePath()
+  local ini_path = resource_path .. "/reaper-fxfolders.ini"
+  local content = read_file(ini_path)
+  if content then
+    for line in content:gmatch("[^\r\n]+") do
+      local name = line:match("^Item%d+=(.+)$")
+      if name and name ~= "" then
+        local fx_type = fx_type_from_name(name)
+        if not category_filter or fx_type:lower() == category_filter:lower() then
+          fx_list[#fx_list + 1] = { name = name, type = fx_type }
+        end
+      end
+    end
+    return { fxList = fx_list, total = #fx_list, source = "fxfolders_ini" }
+  end
+
+  return { fxList = fx_list, total = 0, source = "none",
+           warning = "SWS not installed and reaper-fxfolders.ini not found. Install SWS Extensions for full FX enumeration." }
+end
+
+function handlers.search_fx(params)
+  local query = params.query
+  if not query or query == "" then
+    return nil, "query required"
+  end
+
+  -- Get full list first (reuse list_available_fx logic)
+  local all_result = handlers.list_available_fx({})
+  local matches = {}
+  local q_lower = query:lower()
+
+  for _, fx in ipairs(all_result.fxList) do
+    if fx.name:lower():find(q_lower, 1, true) then
+      matches[#matches + 1] = fx
+    end
+  end
+
+  return { query = query, matches = matches, total = #matches }
+end
+
+function handlers.get_fx_preset_list(params)
+  local track_idx = params.trackIndex
+  local fx_idx = params.fxIndex
+  if track_idx == nil or fx_idx == nil then
+    return nil, "trackIndex and fxIndex required"
+  end
+
+  local track = reaper.GetTrack(0, track_idx)
+  if not track then return nil, "Track " .. track_idx .. " not found" end
+
+  local preset_count = reaper.TrackFX_GetPresetIndex(track, fx_idx)
+  local presets = {}
+
+  -- TrackFX_GetPresetIndex returns current index and total count
+  -- We iterate by cycling through presets
+  local _, total = reaper.TrackFX_GetPresetIndex(track, fx_idx)
+  if total and total > 0 then
+    for i = 0, total - 1 do
+      reaper.TrackFX_SetPresetByIndex(track, fx_idx, i)
+      local _, preset_name = reaper.TrackFX_GetPreset(track, fx_idx)
+      presets[#presets + 1] = { index = i, name = preset_name or ("Preset " .. i) }
+    end
+    -- Restore original preset
+    reaper.TrackFX_SetPresetByIndex(track, fx_idx, preset_count)
+  else
+    -- Plugin doesn't report preset count; return current preset only
+    local _, current_preset = reaper.TrackFX_GetPreset(track, fx_idx)
+    if current_preset and current_preset ~= "" then
+      presets[#presets + 1] = { index = 0, name = current_preset }
+    end
+  end
+
+  return { trackIndex = track_idx, fxIndex = fx_idx, presets = presets, total = #presets }
+end
+
+function handlers.set_fx_preset(params)
+  local track_idx = params.trackIndex
+  local fx_idx = params.fxIndex
+  local preset_name = params.presetName
+  if track_idx == nil or fx_idx == nil or not preset_name then
+    return nil, "trackIndex, fxIndex, and presetName required"
+  end
+
+  local track = reaper.GetTrack(0, track_idx)
+  if not track then return nil, "Track " .. track_idx .. " not found" end
+
+  -- TrackFX_SetPreset returns true on success
+  local ok = reaper.TrackFX_SetPreset(track, fx_idx, preset_name)
+  if not ok then
+    return nil, "Preset not found: " .. preset_name
+  end
+
+  local _, applied = reaper.TrackFX_GetPreset(track, fx_idx)
+  return { success = true, trackIndex = track_idx, fxIndex = fx_idx, presetName = applied or preset_name }
+end
+
+-- =============================================================================
+-- Snapshot handlers
+-- =============================================================================
+
+local function get_snapshot_dir()
+  return bridge_dir .. "snapshots/"
+end
+
+local function ensure_snapshot_dir()
+  reaper.RecursiveCreateDirectory(get_snapshot_dir(), 0)
+end
+
+local function snapshot_path(name)
+  -- Sanitize name for filesystem
+  local safe = name:gsub("[^%w%-_%.%s]", "_"):gsub("%s+", "_")
+  return get_snapshot_dir() .. safe .. ".json"
+end
+
+local function capture_mixer_state()
+  local state = { tracks = {} }
+  local count = reaper.CountTracks(0)
+  for i = 0, count - 1 do
+    local track = reaper.GetTrack(0, i)
+    local _, name = reaper.GetTrackName(track)
+    local vol = reaper.GetMediaTrackInfo_Value(track, "D_VOL")
+    local pan = reaper.GetMediaTrackInfo_Value(track, "D_PAN")
+    local mute = reaper.GetMediaTrackInfo_Value(track, "B_MUTE")
+    local solo = reaper.GetMediaTrackInfo_Value(track, "I_SOLO")
+
+    -- Capture FX bypass states
+    local fx_count = reaper.TrackFX_GetCount(track)
+    local fx_states = {}
+    for j = 0, fx_count - 1 do
+      fx_states[#fx_states + 1] = reaper.TrackFX_GetEnabled(track, j)
+    end
+
+    state.tracks[#state.tracks + 1] = {
+      index = i,
+      name = name,
+      volume = vol,
+      pan = pan,
+      mute = mute ~= 0,
+      solo = solo ~= 0,
+      fxEnabled = fx_states,
+    }
+  end
+  return state
+end
+
+function handlers.snapshot_save(params)
+  local name = params.name
+  if not name or name == "" then
+    return nil, "name required"
+  end
+
+  ensure_snapshot_dir()
+
+  local timestamp = os.time() * 1000
+  local snapshot = {
+    name = name,
+    description = params.description or "",
+    timestamp = timestamp,
+    mixerState = capture_mixer_state(),
+  }
+
+  local path = snapshot_path(name)
+  local ok = write_file(path, json_encode(snapshot))
+  if not ok then
+    return nil, "Failed to write snapshot file: " .. path
+  end
+
+  return { success = true, name = name, timestamp = timestamp, path = path }
+end
+
+function handlers.snapshot_restore(params)
+  local name = params.name
+  if not name or name == "" then
+    return nil, "name required"
+  end
+
+  local path = snapshot_path(name)
+  local content = read_file(path)
+  if not content then
+    return nil, "Snapshot not found: " .. name
+  end
+
+  local snapshot = json_decode(content)
+  if not snapshot or not snapshot.mixerState then
+    return nil, "Invalid snapshot file for: " .. name
+  end
+
+  -- Restore each track state
+  local restored = 0
+  local state = snapshot.mixerState
+  if state.tracks then
+    for _, track_state in ipairs(state.tracks) do
+      local track = reaper.GetTrack(0, track_state.index)
+      if track then
+        reaper.SetMediaTrackInfo_Value(track, "D_VOL", track_state.volume)
+        reaper.SetMediaTrackInfo_Value(track, "D_PAN", track_state.pan)
+        reaper.SetMediaTrackInfo_Value(track, "B_MUTE", track_state.mute and 1 or 0)
+        reaper.SetMediaTrackInfo_Value(track, "I_SOLO", track_state.solo and 1 or 0)
+
+        -- Restore FX bypass states
+        if track_state.fxEnabled then
+          for j, enabled in ipairs(track_state.fxEnabled) do
+            local fx_idx = j - 1  -- convert to 0-based
+            if fx_idx < reaper.TrackFX_GetCount(track) then
+              reaper.TrackFX_SetEnabled(track, fx_idx, enabled)
+            end
+          end
+        end
+        restored = restored + 1
+      end
+    end
+  end
+
+  reaper.TrackList_AdjustWindows(false)
+  reaper.UpdateArrange()
+
+  return {
+    success = true,
+    name = name,
+    timestamp = snapshot.timestamp,
+    tracksRestored = restored,
+  }
+end
+
+function handlers.snapshot_list(params)
+  ensure_snapshot_dir()
+  local snap_dir = get_snapshot_dir()
+  local snapshots = {}
+
+  local i = 0
+  while true do
+    local fn = reaper.EnumerateFiles(snap_dir, i)
+    if not fn then break end
+    if fn:match("%.json$") then
+      local content = read_file(snap_dir .. fn)
+      if content then
+        local snap = json_decode(content)
+        if snap and snap.name then
+          snapshots[#snapshots + 1] = {
+            name = snap.name,
+            description = snap.description or "",
+            timestamp = snap.timestamp or 0,
+          }
+        end
+      end
+    end
+    i = i + 1
+  end
+
+  -- Sort by timestamp descending (newest first)
+  table.sort(snapshots, function(a, b) return a.timestamp > b.timestamp end)
+
+  return { snapshots = snapshots, total = #snapshots }
+end
+
+-- =============================================================================
+-- Routing handler
+-- =============================================================================
+
+function handlers.get_track_routing(params)
+  local track_idx = params.trackIndex
+  if track_idx == nil then
+    return nil, "trackIndex required"
+  end
+
+  local track = reaper.GetTrack(0, track_idx)
+  if not track then return nil, "Track " .. track_idx .. " not found" end
+
+  -- Sends (category 0)
+  local send_count = reaper.GetTrackNumSends(track, 0)
+  local sends = {}
+  for i = 0, send_count - 1 do
+    local dest_track = reaper.GetTrackSendInfo_Value(track, 0, i, "P_DESTTRACK")
+    local dest_idx = -1
+    local dest_name = ""
+    if dest_track then
+      dest_idx = reaper.GetMediaTrackInfo_Value(dest_track, "IP_TRACKNUMBER") - 1
+      local _, dname = reaper.GetTrackName(dest_track)
+      dest_name = dname or ""
+    end
+    local send_vol = reaper.GetTrackSendInfo_Value(track, 0, i, "D_VOL")
+    local send_pan = reaper.GetTrackSendInfo_Value(track, 0, i, "D_PAN")
+    local send_mute = reaper.GetTrackSendInfo_Value(track, 0, i, "B_MUTE")
+    sends[#sends + 1] = {
+      destTrackIndex = dest_idx,
+      destTrackName = dest_name,
+      volume = to_db(send_vol),
+      pan = send_pan,
+      muted = send_mute ~= 0,
+    }
+  end
+
+  -- Receives (category -1)
+  local recv_count = reaper.GetTrackNumSends(track, -1)
+  local receives = {}
+  for i = 0, recv_count - 1 do
+    local src_track = reaper.GetTrackSendInfo_Value(track, -1, i, "P_SRCTRACK")
+    local src_idx = -1
+    local src_name = ""
+    if src_track then
+      src_idx = reaper.GetMediaTrackInfo_Value(src_track, "IP_TRACKNUMBER") - 1
+      local _, sname = reaper.GetTrackName(src_track)
+      src_name = sname or ""
+    end
+    local recv_vol = reaper.GetTrackSendInfo_Value(track, -1, i, "D_VOL")
+    local recv_pan = reaper.GetTrackSendInfo_Value(track, -1, i, "D_PAN")
+    local recv_mute = reaper.GetTrackSendInfo_Value(track, -1, i, "B_MUTE")
+    receives[#receives + 1] = {
+      srcTrackIndex = src_idx,
+      srcTrackName = src_name,
+      volume = to_db(recv_vol),
+      pan = recv_pan,
+      muted = recv_mute ~= 0,
+    }
+  end
+
+  local parent = reaper.GetParentTrack(track)
+  local parent_idx = -1
+  if parent then
+    parent_idx = reaper.GetMediaTrackInfo_Value(parent, "IP_TRACKNUMBER") - 1
+  end
+
+  local folder_depth = reaper.GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH")
+
+  return {
+    trackIndex = track_idx,
+    sends = sends,
+    receives = receives,
+    parentTrackIndex = parent_idx,
+    isFolder = folder_depth > 0,
+    folderDepth = folder_depth,
+  }
+end
+
+-- =============================================================================
+-- Phase 4: Custom JSFX analyzer handlers
+-- =============================================================================
+
+local MCP_LUFS_METER_FX_NAME        = "mcp_lufs_meter"
+local MCP_CORRELATION_METER_FX_NAME = "mcp_correlation_meter"
+local MCP_CREST_FACTOR_FX_NAME      = "mcp_crest_factor"
+
+-- Helper: find or auto-insert a named JSFX on a track.
+-- Returns the FX index (0-based) on success, or nil + error message on failure.
+local function ensure_jsfx_on_track(track, fx_name)
+  local fx_count = reaper.TrackFX_GetCount(track)
+  for i = 0, fx_count - 1 do
+    local _, name = reaper.TrackFX_GetFXName(track, i)
+    if name and name:find(fx_name, 1, true) then
+      return i
+    end
+  end
+  -- Auto-insert
+  local idx = reaper.TrackFX_AddByName(track, fx_name, false, -1)
+  if idx < 0 then
+    return nil, fx_name .. " JSFX not found. Run 'reaper-mcp setup' to install it."
+  end
+  return idx
+end
+
+function handlers.read_track_lufs(params)
+  local idx = params.trackIndex
+  if idx == nil then return nil, "trackIndex required" end
+
+  local track = reaper.GetTrack(0, idx)
+  if not track then return nil, "Track " .. idx .. " not found" end
+
+  local fx_idx, err = ensure_jsfx_on_track(track, MCP_LUFS_METER_FX_NAME)
+  if not fx_idx then return nil, err end
+
+  -- Attach to the LUFS meter gmem namespace and read 6 values
+  reaper.gmem_attach("MCPLufsMeter")
+
+  local integrated = reaper.gmem_read(0)
+  local short_term = reaper.gmem_read(1)
+  local momentary  = reaper.gmem_read(2)
+  local true_peak_l = reaper.gmem_read(3)
+  local true_peak_r = reaper.gmem_read(4)
+  local duration    = reaper.gmem_read(5)
+
+  -- A duration of 0 means no audio has been processed yet
+  if duration <= 0 then
+    return nil, "LUFS meter not producing data yet. Ensure audio is playing."
+  end
+
+  return {
+    trackIndex = idx,
+    integrated = integrated,
+    shortTerm  = short_term,
+    momentary  = momentary,
+    truePeakL  = true_peak_l,
+    truePeakR  = true_peak_r,
+    duration   = duration,
+  }
+end
+
+function handlers.read_track_correlation(params)
+  local idx = params.trackIndex
+  if idx == nil then return nil, "trackIndex required" end
+
+  local track = reaper.GetTrack(0, idx)
+  if not track then return nil, "Track " .. idx .. " not found" end
+
+  local fx_idx, err = ensure_jsfx_on_track(track, MCP_CORRELATION_METER_FX_NAME)
+  if not fx_idx then return nil, err end
+
+  reaper.gmem_attach("MCPCorrelationMeter")
+
+  local correlation  = reaper.gmem_read(0)
+  local stereo_width = reaper.gmem_read(1)
+  local mid_level    = reaper.gmem_read(2)
+  local side_level   = reaper.gmem_read(3)
+
+  return {
+    trackIndex   = idx,
+    correlation  = correlation,
+    stereoWidth  = stereo_width,
+    midLevel     = mid_level,
+    sideLevel    = side_level,
+  }
+end
+
+function handlers.read_track_crest(params)
+  local idx = params.trackIndex
+  if idx == nil then return nil, "trackIndex required" end
+
+  local track = reaper.GetTrack(0, idx)
+  if not track then return nil, "Track " .. idx .. " not found" end
+
+  local fx_idx, err = ensure_jsfx_on_track(track, MCP_CREST_FACTOR_FX_NAME)
+  if not fx_idx then return nil, err end
+
+  reaper.gmem_attach("MCPCrestFactor")
+
+  local crest_factor = reaper.gmem_read(0)
+  local peak_level   = reaper.gmem_read(1)
+  local rms_level    = reaper.gmem_read(2)
+
+  return {
+    trackIndex   = idx,
+    crestFactor  = crest_factor,
+    peakLevel    = peak_level,
+    rmsLevel     = rms_level,
+  }
+end
+
+-- =============================================================================
 -- Command dispatcher
 -- =============================================================================
 

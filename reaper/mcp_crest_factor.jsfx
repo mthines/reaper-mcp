@@ -1,0 +1,108 @@
+desc:MCP Crest Factor Meter
+// Dynamic range meter via peak-to-RMS (crest factor) for MCP bridge integration.
+// Measures peak level, RMS level, and their difference (crest factor) in dB.
+// Higher crest factor = more dynamic (less compressed).
+// Writes results to shared memory (gmem) so the Lua bridge can read them.
+//
+// gmem layout:
+//   gmem[0] = crest factor (dB) = peak level - RMS level
+//   gmem[1] = peak level (dB)
+//   gmem[2] = RMS level (dB)
+
+options:gmem=MCPCrestFactor
+
+slider1:window_ms=1000<100,5000,100>Window (ms)
+slider2:peak_hold_ms=1000<100,10000,100>Peak Hold (ms)
+
+@init
+  // Ring buffer for squared samples (RMS window)
+  buf_sq   = 0;      // squared mono samples
+  buf_size = 0;      // set from sample rate at runtime
+  buf_pos  = 0;
+  sum_sq   = 0;
+
+  // Peak hold
+  peak_val     = 0;
+  peak_hold_samples = 0;
+  peak_hold_pos     = 0;
+
+  needs_init = 1;
+
+@slider
+  needs_init = 1;
+
+@sample
+  needs_init ? (
+    buf_size = ceil(srate * window_ms / 1000);
+    buf_size > 262144 ? buf_size = 262144;
+    buf_size < 1 ? buf_size = 1;
+    memset(buf_sq, 0, buf_size);
+    sum_sq = 0;
+    buf_pos = 0;
+    peak_val = 0;
+    peak_hold_samples = ceil(srate * peak_hold_ms / 1000);
+    peak_hold_pos = 0;
+    needs_init = 0;
+    gmem[0] = 0;
+    gmem[1] = -150;
+    gmem[2] = -150;
+  );
+
+  // Mono mix for metering
+  local(mono, sq, peak_abs);
+  mono = (spl0 + spl1) * 0.5;
+  sq   = mono * mono;
+  peak_abs = abs(mono);
+
+  // --- RMS ring buffer ---
+  sum_sq -= buf_sq[buf_pos];
+  buf_sq[buf_pos] = sq;
+  sum_sq += sq;
+  buf_pos += 1;
+  buf_pos >= buf_size ? buf_pos = 0;
+
+  // --- Peak hold ---
+  peak_abs > peak_val ? (
+    peak_val = peak_abs;
+    peak_hold_pos = 0;
+  ) : (
+    peak_hold_pos += 1;
+    peak_hold_pos >= peak_hold_samples ? (
+      // Peak hold expired, decay toward current level
+      peak_val *= 0.9999;
+      peak_hold_pos = 0;
+    );
+  );
+
+  // Update gmem every 512 samples
+  (buf_pos % 512) == 0 ? (
+    local(rms_val, rms_db, peak_db, crest_db);
+
+    rms_val = sqrt(sum_sq / buf_size);
+
+    rms_val > 0.000001 ? (
+      rms_db = 20 * log10(rms_val);
+    ) : (
+      rms_db = -150;
+    );
+
+    peak_val > 0.000001 ? (
+      peak_db = 20 * log10(peak_val);
+    ) : (
+      peak_db = -150;
+    );
+
+    // Crest factor = peak - RMS (both in dB)
+    (rms_db > -150 && peak_db > -150) ? (
+      crest_db = peak_db - rms_db;
+      crest_db < 0 ? crest_db = 0; // should not happen but clamp for safety
+    ) : (
+      crest_db = 0;
+    );
+
+    gmem[0] = crest_db;
+    gmem[1] = peak_db;
+    gmem[2] = rms_db;
+  );
+
+  // Pass audio through unmodified

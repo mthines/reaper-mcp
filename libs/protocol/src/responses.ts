@@ -93,3 +93,70 @@ export interface TransportState {
   timeSignatureNumerator: number;
   timeSignatureDenominator: number;
 }
+
+// --- Phase 1: Mix agent response types ---
+
+export interface AvailableFx {
+  name: string;   // full name as shown in REAPER
+  type: string;   // "VST", "VST3", "JS", "CLAP", "AU"
+  path?: string;  // file path if available
+}
+
+export interface FxPresetInfo {
+  index: number;
+  name: string;
+}
+
+export interface Snapshot {
+  name: string;
+  description?: string;
+  timestamp: number;
+}
+
+export interface TrackRouting {
+  trackIndex: number;
+  sends: Array<{
+    destTrackIndex: number;
+    destTrackName: string;
+    volume: number;
+    pan: number;
+    muted: boolean;
+  }>;
+  receives: Array<{
+    srcTrackIndex: number;
+    srcTrackName: string;
+    volume: number;
+    pan: number;
+    muted: boolean;
+  }>;
+  parentTrackIndex: number;
+  isFolder: boolean;
+  folderDepth: number;
+}
+
+// --- Phase 4: Custom JSFX analyzer response types ---
+
+export interface LufsData {
+  trackIndex: number;
+  integrated: number;   // LUFS (running average since measurement start)
+  shortTerm: number;    // LUFS (3-second sliding window)
+  momentary: number;    // LUFS (400ms sliding window)
+  truePeakL: number;    // dBTP (inter-sample peak, left channel)
+  truePeakR: number;    // dBTP (inter-sample peak, right channel)
+  duration: number;     // seconds since measurement start
+}
+
+export interface CorrelationData {
+  trackIndex: number;
+  correlation: number;  // -1.0 (out of phase) to +1.0 (mono), 0 = uncorrelated
+  stereoWidth: number;  // 0.0 (mono) to 2.0 (very wide), 1.0 = normal stereo
+  midLevel: number;     // dB (mid channel RMS)
+  sideLevel: number;    // dB (side channel RMS)
+}
+
+export interface CrestFactorData {
+  trackIndex: number;
+  crestFactor: number;  // dB (peak - RMS); higher = more dynamic
+  peakLevel: number;    // dB (peak hold level)
+  rmsLevel: number;     // dB (RMS level over window)
+}

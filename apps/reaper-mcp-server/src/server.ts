@@ -4,6 +4,11 @@ import { registerTrackTools } from './tools/tracks.js';
 import { registerFxTools } from './tools/fx.js';
 import { registerMeterTools } from './tools/meters.js';
 import { registerTransportTools } from './tools/transport.js';
+import { registerDiscoveryTools } from './tools/discovery.js';
+import { registerPresetTools } from './tools/presets.js';
+import { registerSnapshotTools } from './tools/snapshots.js';
+import { registerRoutingTools } from './tools/routing.js';
+import { registerAnalysisTools } from './tools/analysis.js';
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -16,6 +21,11 @@ export function createServer(): McpServer {
   registerFxTools(server);
   registerMeterTools(server);
   registerTransportTools(server);
+  registerDiscoveryTools(server);
+  registerPresetTools(server);
+  registerSnapshotTools(server);
+  registerRoutingTools(server);
+  registerAnalysisTools(server);
 
   return server;
 }

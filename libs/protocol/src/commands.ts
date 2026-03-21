@@ -26,7 +26,18 @@ export type CommandType =
   | 'stop'
   | 'record'
   | 'get_transport_state'
-  | 'set_cursor_position';
+  | 'set_cursor_position'
+  | 'list_available_fx'
+  | 'search_fx'
+  | 'get_fx_preset_list'
+  | 'set_fx_preset'
+  | 'snapshot_save'
+  | 'snapshot_restore'
+  | 'snapshot_list'
+  | 'get_track_routing'
+  | 'read_track_lufs'
+  | 'read_track_correlation'
+  | 'read_track_crest';
 
 // --- Per-command param types ---
 
@@ -88,4 +99,54 @@ export type GetTransportStateParams = Record<string, never>;
 
 export interface SetCursorPositionParams {
   position: number; // seconds from project start
+}
+
+// --- Phase 1: Mix agent tool param types ---
+
+export interface ListAvailableFxParams {
+  category?: string; // optional filter: "eq", "compressor", etc.
+}
+
+export interface SearchFxParams {
+  query: string; // fuzzy search term
+}
+
+export interface GetFxPresetListParams {
+  trackIndex: number;
+  fxIndex: number;
+}
+
+export interface SetFxPresetParams {
+  trackIndex: number;
+  fxIndex: number;
+  presetName: string;
+}
+
+export interface SnapshotSaveParams {
+  name: string;
+  description?: string;
+}
+
+export interface SnapshotRestoreParams {
+  name: string;
+}
+
+export type SnapshotListParams = Record<string, never>;
+
+export interface GetTrackRoutingParams {
+  trackIndex: number;
+}
+
+// --- Phase 4: Custom JSFX analyzer param types ---
+
+export interface ReadTrackLufsParams {
+  trackIndex: number;
+}
+
+export interface ReadTrackCorrelationParams {
+  trackIndex: number;
+}
+
+export interface ReadTrackCrestParams {
+  trackIndex: number;
 }

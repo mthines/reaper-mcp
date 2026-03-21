@@ -1,0 +1,24 @@
+{
+  "name": "reaper-mix-agent",
+  "sourceRoot": "apps/reaper-mix-agent/src",
+  "projectType": "application",
+  "tags": ["type:app"],
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "options": {
+        "main": "apps/reaper-mix-agent/src/agent.ts",
+        "outputPath": "dist/apps/reaper-mix-agent",
+        "outputFileName": "agent.js",
+        "tsConfig": "apps/reaper-mix-agent/tsconfig.json",
+        "bundle": true,
+        "format": ["esm"],
+        "platform": "node",
+        "target": "node20",
+        "minify": false,
+        "sourcemap": true,
+        "external": []
+      }
+    }
+  }
+}

@@ -1,0 +1,148 @@
+desc:MCP Correlation Meter
+// Stereo field correlation and M/S analysis for MCP bridge integration.
+// Measures L/R correlation coefficient and stereo width via M/S decomposition.
+// Writes results to shared memory (gmem) so the Lua bridge can read them.
+//
+// gmem layout:
+//   gmem[0] = correlation coefficient (-1.0 = out of phase, 0 = uncorrelated, +1.0 = mono)
+//   gmem[1] = stereo width (0.0 = mono, 1.0 = normal stereo, 2.0 = very wide)
+//   gmem[2] = mid level (dB)
+//   gmem[3] = side level (dB)
+
+options:gmem=MCPCorrelationMeter
+
+slider1:window_ms=300<50,2000,10>Window (ms)
+
+@init
+  // Ring buffer for L, R, L*R, L*L, R*R over sliding window
+  // Buffer starts at address 0 in JSFX local memory
+  buf_l   = 0;       // L samples squared (L*L)
+  buf_r   = 16384;   // R samples squared (R*R)
+  buf_lr  = 32768;   // L*R cross-correlation samples
+  buf_m   = 49152;   // Mid squared (M*M)
+  buf_s   = 65536;   // Side squared (S*S)
+  buf_size = 0;      // set from sample rate at runtime
+
+  buf_pos = 0;
+
+  // Running sums for window
+  sum_ll = 0;
+  sum_rr = 0;
+  sum_lr = 0;
+  sum_mm = 0;
+  sum_ss = 0;
+
+  needs_init = 1;
+
+@slider
+  needs_init = 1;
+
+@sample
+  needs_init ? (
+    buf_size = ceil(srate * window_ms / 1000);
+    buf_size > 16384 ? buf_size = 16384; // cap at ~370ms @ 44.1kHz
+    buf_size < 1 ? buf_size = 1;
+    // Clear buffers and sums
+    memset(buf_l,  0, buf_size);
+    memset(buf_r,  0, buf_size);
+    memset(buf_lr, 0, buf_size);
+    memset(buf_m,  0, buf_size);
+    memset(buf_s,  0, buf_size);
+    sum_ll = 0; sum_rr = 0; sum_lr = 0;
+    sum_mm = 0; sum_ss = 0;
+    buf_pos = 0;
+    needs_init = 0;
+    gmem[0] = 0;
+    gmem[1] = 1;
+    gmem[2] = -150;
+    gmem[3] = -150;
+  );
+
+  local(l, r, m, s);
+  l = spl0;
+  r = spl1;
+
+  // M/S decomposition (normalised by 0.5)
+  m = (l + r) * 0.5;
+  s = (l - r) * 0.5;
+
+  local(ll, rr, lr, mm, ss);
+  ll = l * l;
+  rr = r * r;
+  lr = l * r;
+  mm = m * m;
+  ss = s * s;
+
+  // Subtract outgoing samples from sums
+  sum_ll -= buf_l[buf_pos];
+  sum_rr -= buf_r[buf_pos];
+  sum_lr -= buf_lr[buf_pos];
+  sum_mm -= buf_m[buf_pos];
+  sum_ss -= buf_s[buf_pos];
+
+  // Write new samples
+  buf_l[buf_pos]  = ll;
+  buf_r[buf_pos]  = rr;
+  buf_lr[buf_pos] = lr;
+  buf_m[buf_pos]  = mm;
+  buf_s[buf_pos]  = ss;
+
+  // Add new samples to sums
+  sum_ll += ll;
+  sum_rr += rr;
+  sum_lr += lr;
+  sum_mm += mm;
+  sum_ss += ss;
+
+  buf_pos += 1;
+  buf_pos >= buf_size ? buf_pos = 0;
+
+  // Update gmem every 512 samples (~86 Hz at 44.1kHz)
+  (buf_pos % 512) == 0 ? (
+    local(denom, corr, mid_rms, side_rms, mid_db, side_db, width);
+
+    // Correlation: sum(L*R) / sqrt(sum(L*L) * sum(R*R))
+    denom = sqrt(sum_ll * sum_rr);
+    denom > 0.0000001 ? (
+      corr = sum_lr / denom;
+      // Clamp to [-1, 1] for numerical safety
+      corr > 1 ? corr = 1;
+      corr < -1 ? corr = -1;
+    ) : (
+      corr = 0;
+    );
+
+    // Mid and side RMS levels
+    mid_rms = sqrt(sum_mm / buf_size);
+    side_rms = sqrt(sum_ss / buf_size);
+
+    mid_rms > 0.000001 ? (
+      mid_db = 20 * log10(mid_rms);
+    ) : (
+      mid_db = -150;
+    );
+
+    side_rms > 0.000001 ? (
+      side_db = 20 * log10(side_rms);
+    ) : (
+      side_db = -150;
+    );
+
+    // Stereo width: ratio of side to mid energy
+    // width = 0 when fully mono (no side), 1 for balanced stereo, 2+ for very wide
+    sum_mm > 0.0000001 ? (
+      width = sqrt(sum_ss / sum_mm);
+      // Normalize: a "normal" stereo signal with M=S has width=1
+      width = min(width * 2, 2.0);
+    ) : (
+      // Silence or pure side signal
+      sum_ss > 0 ? width = 2.0 : width = 0;
+    );
+
+    gmem[0] = corr;
+    gmem[1] = width;
+    gmem[2] = mid_db;
+    gmem[3] = side_db;
+  );
+
+  // Pass audio through unmodified

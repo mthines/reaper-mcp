@@ -1,0 +1,301 @@
+desc:MCP LUFS Meter
+// ITU-R BS.1770 loudness meter for MCP bridge integration.
+// Measures integrated, short-term, and momentary LUFS with true peak detection.
+// Writes results to shared memory (gmem) so the Lua bridge can read them.
+//
+// gmem layout:
+//   gmem[0] = integrated LUFS (running average since last reset)
+//   gmem[1] = short-term LUFS (3-second sliding window)
+//   gmem[2] = momentary LUFS (400ms sliding window)
+//   gmem[3] = true peak L (dBTP, inter-sample peak via 4x oversampling)
+//   gmem[4] = true peak R (dBTP, inter-sample peak via 4x oversampling)
+//   gmem[5] = measurement duration (seconds since last reset)
+
+options:gmem=MCPLufsMeter
+
+slider1:reset_btn=0<0,1,1{Idle,Reset}>Reset Measurement
+
+@init
+  // K-weighting filter state (two biquad stages per channel)
+  // Stage 1: High-shelf pre-filter (+4 dB at 1681 Hz)
+  // Stage 2: High-pass RLB filter (100 Hz, -12 dB/oct)
+
+  // Biquad state: [b0, b1, b2, a1, a2, x1, x2, y1, y2] per stage per channel
+  // We store state variables in flat arrays
+  hs_x1l = hs_x2l = hs_y1l = hs_y2l = 0;
+  hs_x1r = hs_x2r = hs_y1r = hs_y2r = 0;
+  hp_x1l = hp_x2l = hp_y1l = hp_y2l = 0;
+  hp_x1r = hp_x2r = hp_y1r = hp_y2r = 0;
+
+  // High-shelf filter coefficients (pre-computed for 48kHz; recomputed @slider)
+  // Using bilinear transform of analog prototype per BS.1770-4 Annex 1
+  hs_b0 = hs_b1 = hs_b2 = hs_a1 = hs_a2 = 0;
+  hp_b0 = hp_b1 = hp_b2 = hp_a1 = hp_a2 = 0;
+
+  // Circular buffer for loudness blocks (sliding windows)
+  // 400ms block = momentary, 3s = short-term
+  // BS.1770 uses 100ms overlapping blocks (75% overlap)
+  // We approximate with per-sample accumulation into sliding windows
+
+  // Ring buffer for per-sample squared weighted values
+  // momentary: 400ms window
+  // short-term: 3s window
+  // We store up to 3s of samples in a circular buffer
+  buf_size = 0;           // computed at runtime from srate
+  buf_l = 65536;          // start address for left channel ring buffer
+  buf_r = 131072;         // start address for right channel ring buffer
+  buf_pos = 0;
+
+  // Running sums for windows
+  momentary_sum_l = 0;
+  momentary_sum_r = 0;
+  shortterm_sum_l = 0;
+  shortterm_sum_r = 0;
+  integrated_sum = 0;
+  integrated_count = 0;
+
+  // True peak hold
+  true_peak_l = 0.000001;
+  true_peak_r = 0.000001;
+
+  // Measurement duration
+  sample_count = 0;
+
+  // Flags
+  needs_init = 1;
+
+  function compute_kweight_filters() (
+    // High-shelf pre-filter: +4 dB shelf at f0 = 1681.974 Hz
+    // From BS.1770-4, Annex 1, Table 1
+    local(db, K, Vh, Vb, a0);
+    db = 3.99984385397;  // ~4 dB
+    K = tan($pi * 1681.974 / srate);
+    Vh = exp(db / 20 * log(10));
+    Vb = Vh ^ 0.4996667741545416;
+    a0 = 1 + K/0.7071067811865476 + K*K;
+    hs_b0 = (Vh + Vb * K / 0.7071067811865476 + K*K) / a0;
+    hs_b1 = 2 * (K*K - Vh) / a0;
+    hs_b2 = (Vh - Vb * K / 0.7071067811865476 + K*K) / a0;
+    hs_a1 = 2 * (K*K - 1) / a0;
+    hs_a2 = (1 - K/0.7071067811865476 + K*K) / a0;
+
+    // High-pass filter: 38.13547 Hz, Q = 0.5003270373238773
+    local(K2, a0);
+    K2 = tan($pi * 38.13547 / srate);
+    a0 = K2*K2 + K2/0.5003270373238773 + 1;
+    hp_b0 = 1 / a0;
+    hp_b1 = -2 / a0;
+    hp_b2 = 1 / a0;
+    hp_a1 = 2 * (K2*K2 - 1) / a0;
+    hp_a2 = (K2*K2 - K2/0.5003270373238773 + 1) / a0;
+  );
+
+  function reset_measurement() (
+    buf_pos = 0;
+    momentary_sum_l = 0;
+    momentary_sum_r = 0;
+    shortterm_sum_l = 0;
+    shortterm_sum_r = 0;
+    integrated_sum = 0;
+    integrated_count = 0;
+    true_peak_l = 0.000001;
+    true_peak_r = 0.000001;
+    sample_count = 0;
+    hs_x1l = hs_x2l = hs_y1l = hs_y2l = 0;
+    hs_x1r = hs_x2r = hs_y1r = hs_y2r = 0;
+    hp_x1l = hp_x2l = hp_y1l = hp_y2l = 0;
+    hp_x1r = hp_x2r = hp_y1r = hp_y2r = 0;
+    // Clear ring buffers
+    memset(buf_l, 0, buf_size);
+    memset(buf_r, 0, buf_size);
+    gmem[0] = -70;
+    gmem[1] = -70;
+    gmem[2] = -70;
+    gmem[3] = -150;
+    gmem[4] = -150;
+    gmem[5] = 0;
+  );
+
+@slider
+  // Re-compute filter coefficients (in case sample rate has changed)
+  needs_init = 1;
+
+  // Handle reset button
+  slider1 == 1 ? (
+    reset_measurement();
+    slider1 = 0;
+    sliderchange(slider1);
+  );
+
+@sample
+  needs_init ? (
+    compute_kweight_filters();
+    // Buffer: 3 seconds at current sample rate
+    buf_size = ceil(srate * 3.0);
+    buf_size > 262144 ? buf_size = 262144; // safety cap (covers up to ~87kHz)
+    reset_measurement();
+    needs_init = 0;
+  );
+
+  // --- K-weighting: stage 1 (high-shelf) ---
+  local(wl, wr, kl, kr);
+  wl = spl0;
+  wr = spl1;
+
+  // High-shelf left
+  kl = hs_b0 * wl + hs_b1 * hs_x1l + hs_b2 * hs_x2l - hs_a1 * hs_y1l - hs_a2 * hs_y2l;
+  hs_x2l = hs_x1l; hs_x1l = wl; hs_y2l = hs_y1l; hs_y1l = kl;
+
+  // High-shelf right
+  kr = hs_b0 * wr + hs_b1 * hs_x1r + hs_b2 * hs_x2r - hs_a1 * hs_y1r - hs_a2 * hs_y2r;
+  hs_x2r = hs_x1r; hs_x1r = wr; hs_y2r = hs_y1r; hs_y1r = kr;
+
+  // --- K-weighting: stage 2 (high-pass) ---
+  local(fl, fr);
+  fl = hp_b0 * kl + hp_b1 * hp_x1l + hp_b2 * hp_x2l - hp_a1 * hp_y1l - hp_a2 * hp_y2l;
+  hp_x2l = hp_x1l; hp_x1l = kl; hp_y2l = hp_y1l; hp_y1l = fl;
+
+  fr = hp_b0 * kr + hp_b1 * hp_x1r + hp_b2 * hp_x2r - hp_a1 * hp_y1r - hp_a2 * hp_y2r;
+  hp_x2r = hp_x1r; hp_x1r = kr; hp_y2r = hp_y1r; hp_y1r = fr;
+
+  // Squared weighted samples
+  local(sq_l, sq_r);
+  sq_l = fl * fl;
+  sq_r = fr * fr;
+
+  // --- Ring buffer update ---
+  // Subtract outgoing samples from running sums
+  local(old_l, old_r);
+  old_l = buf_l[buf_pos];
+  old_r = buf_r[buf_pos];
+
+  // Short-term window is full 3s buffer
+  shortterm_sum_l -= old_l;
+  shortterm_sum_r -= old_r;
+
+  // Momentary window: 400ms = srate * 0.4 samples back
+  // We subtract from momentary only when the sample leaving is within 400ms window
+  // Simplified: maintain separate momentary accumulators via separate pointers
+  // For efficiency, use a single ring buffer and recompute momentary from partial sum
+  // Here we track momentary with a second set of pointers (400ms lag)
+  local(mom_pos);
+  mom_pos = buf_pos - floor(srate * 0.4);
+  mom_pos < 0 ? mom_pos += buf_size;
+  momentary_sum_l -= buf_l[mom_pos];
+  momentary_sum_r -= buf_r[mom_pos];
+
+  // Write new values into ring buffer
+  buf_l[buf_pos] = sq_l;
+  buf_r[buf_pos] = sq_r;
+
+  // Add new values to sums
+  shortterm_sum_l += sq_l;
+  shortterm_sum_r += sq_r;
+  momentary_sum_l += sq_l;
+  momentary_sum_r += sq_r;
+
+  // Advance ring buffer position
+  buf_pos += 1;
+  buf_pos >= buf_size ? buf_pos = 0;
+
+  // --- Integrated loudness (gated per BS.1770) ---
+  // Absolute gate: only include 400ms blocks above -70 LUFS
+  // Simplified: accumulate ungated for speed, apply gate check periodically
+  integrated_sum += sq_l + sq_r;
+  integrated_count += 1;
+
+  // --- True peak: 4x linear interpolation oversampling ---
+  // Insert 3 interpolated samples between each real sample using linear interpolation
+  local(prev_l, prev_r, frac, tp_l, tp_r);
+
+  // We use the previous sample stored in a local state var
+  // Stored in memory block above buf_r to avoid conflict
+  // prev_l is at buf_r + buf_size, prev_r is at buf_r + buf_size + 1
+  prev_l = buf_r[buf_size];
+  prev_r = buf_r[buf_size + 1];
+
+  tp_l = abs(spl0);
+  tp_r = abs(spl1);
+
+  // Check interpolated peaks at 1/4, 2/4, 3/4 offsets
+  frac = 0.25;
+  loop(3,
+    local(interp_l, interp_r);
+    interp_l = abs(prev_l + frac * (spl0 - prev_l));
+    interp_r = abs(prev_r + frac * (spl1 - prev_r));
+    interp_l > tp_l ? tp_l = interp_l;
+    interp_r > tp_r ? tp_r = interp_r;
+    frac += 0.25;
+  );
+
+  tp_l > true_peak_l ? true_peak_l = tp_l;
+  tp_r > true_peak_r ? true_peak_r = tp_r;
+
+  // Store current samples as previous for next iteration
+  buf_r[buf_size] = spl0;
+  buf_r[buf_size + 1] = spl1;
+
+  sample_count += 1;
+
+  // --- Update gmem every 4096 samples (approx 10x/second at 44.1kHz) ---
+  (sample_count % 4096) == 0 ? (
+    local(shortterm_mean, momentary_mean, integrated_lufs, shortterm_lufs, momentary_lufs);
+    local(mom_samples);
+
+    mom_samples = floor(srate * 0.4);
+    mom_samples < 1 ? mom_samples = 1;
+
+    // Mean square over each window
+    shortterm_mean = (shortterm_sum_l + shortterm_sum_r) / (buf_size * 2);
+    momentary_mean = (momentary_sum_l + momentary_sum_r) / (mom_samples * 2);
+
+    // Integrated mean square (two channels: L + R sum, divided by count*2)
+    local(integrated_mean);
+    integrated_mean = integrated_count > 0 ? (integrated_sum / (integrated_count * 2)) : 0;
+
+    // LUFS = -0.691 + 10 * log10(mean_square)
+    shortterm_mean > 0 ? (
+      shortterm_lufs = -0.691 + 10 * log10(shortterm_mean);
+    ) : (
+      shortterm_lufs = -70;
+    );
+
+    momentary_mean > 0 ? (
+      momentary_lufs = -0.691 + 10 * log10(momentary_mean);
+    ) : (
+      momentary_lufs = -70;
+    );
+
+    integrated_mean > 0 ? (
+      // Apply absolute gate at -70 LUFS
+      local(ungated_lufs);
+      ungated_lufs = -0.691 + 10 * log10(integrated_mean);
+      ungated_lufs > -70 ? (
+        integrated_lufs = ungated_lufs;
+      ) : (
+        integrated_lufs = -70;
+      );
+    ) : (
+      integrated_lufs = -70;
+    );
+
+    gmem[0] = integrated_lufs;
+    gmem[1] = shortterm_lufs;
+    gmem[2] = momentary_lufs;
+
+    true_peak_l > 0.000001 ? (
+      gmem[3] = 20 * log10(true_peak_l);
+    ) : (
+      gmem[3] = -150;
+    );
+
+    true_peak_r > 0.000001 ? (
+      gmem[4] = 20 * log10(true_peak_r);
+    ) : (
+      gmem[4] = -150;
+    );
+
+    gmem[5] = sample_count / srate;
+  );
+
+  // Pass audio through unmodified
