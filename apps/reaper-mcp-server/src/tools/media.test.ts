@@ -188,6 +188,58 @@ describe('media tools', () => {
     });
   });
 
+  describe('load/performance reference', () => {
+    it('dispatches set_media_items_properties with 100 items', async () => {
+      const items = Array.from({ length: 100 }, (_, i) => ({
+        trackIndex: i % 10,
+        itemIndex: Math.floor(i / 10),
+        volume: -6,
+      }));
+      const data = { success: true, edited: 100, total: 100 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const result = await tools['set_media_items_properties'].handler({ items });
+      expect(mockedSendCommand).toHaveBeenCalledWith('set_media_items_properties', { items });
+      const calledWith = mockedSendCommand.mock.calls[0][1] as { items: unknown[] };
+      expect(Array.isArray(calledWith.items)).toBe(true);
+      expect(calledWith.items).toHaveLength(100);
+      expectSuccess(result, data);
+    });
+
+    it('dispatches set_media_items_properties with 500 items', async () => {
+      const items = Array.from({ length: 500 }, (_, i) => ({
+        trackIndex: i % 20,
+        itemIndex: Math.floor(i / 20),
+        mute: i % 2,
+        volume: -3,
+        fadeInLength: 0.01,
+        fadeOutLength: 0.01,
+      }));
+      const data = { success: true, edited: 500, total: 500 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      await tools['set_media_items_properties'].handler({ items });
+      const calledWith = mockedSendCommand.mock.calls[0][1] as { items: unknown[] };
+      expect(Array.isArray(calledWith.items)).toBe(true);
+      expect(calledWith.items).toHaveLength(500);
+    });
+
+    it('passes each item object as a plain object (not a string)', async () => {
+      const items = Array.from({ length: 50 }, (_, i) => ({
+        trackIndex: 0,
+        itemIndex: i,
+        volume: -6,
+      }));
+      mockedSendCommand.mockResolvedValue(successResponse({ success: true, edited: 50, total: 50 }));
+
+      await tools['set_media_items_properties'].handler({ items });
+      const calledWith = mockedSendCommand.mock.calls[0][1] as { items: unknown[] };
+      // Verify elements are plain objects, not strings
+      expect(typeof calledWith.items[0]).toBe('object');
+      expect(typeof calledWith.items[0]).not.toBe('string');
+    });
+  });
+
   describe('split_media_item', () => {
     it('sends split command', async () => {
       const data = {
