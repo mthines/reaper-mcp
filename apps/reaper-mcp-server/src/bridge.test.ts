@@ -3,6 +3,7 @@ import { sendCommand, isBridgeRunning, cleanupStaleFiles, ensureBridgeDir } from
 
 // Mock node:fs/promises
 vi.mock('node:fs/promises', () => ({
+  appendFile: vi.fn(),
   readFile: vi.fn(),
   writeFile: vi.fn(),
   readdir: vi.fn(),
@@ -16,8 +17,9 @@ vi.mock('node:crypto', () => ({
   randomUUID: vi.fn(() => 'test-uuid-1234'),
 }));
 
-import { readFile, writeFile, readdir, unlink, mkdir, stat } from 'node:fs/promises';
+import { appendFile, readFile, writeFile, readdir, unlink, mkdir, stat } from 'node:fs/promises';
 
+const mockedAppendFile = vi.mocked(appendFile);
 const mockedReadFile = vi.mocked(readFile);
 const mockedWriteFile = vi.mocked(writeFile);
 const mockedReaddir = vi.mocked(readdir);
@@ -30,6 +32,7 @@ describe('bridge', () => {
     vi.clearAllMocks();
     process.env['REAPER_RESOURCE_PATH'] = '/tmp/test-reaper';
     mockedMkdir.mockResolvedValue(undefined);
+    mockedAppendFile.mockResolvedValue(undefined);
   });
 
   afterEach(() => {

@@ -89,6 +89,35 @@ pnpm nx test reaper-mcp-server      # Server tests only
 pnpm nx test protocol               # Protocol library tests only
 ```
 
+### Stress / performance tests (requires REAPER)
+
+The bridge stress tests exercise the full round-trip through the live Lua bridge — file write, Lua defer loop pickup, ReaScript execution, response write, and client poll. They measure latency, throughput, concurrency, and degradation under sustained load.
+
+**Prerequisites:** REAPER must be running with `mcp_bridge.lua` active. The tests auto-skip when the bridge is not detected.
+
+```bash
+# Run stress tests (also runs as part of pnpm test when REAPER is available)
+pnpm test:stress
+
+# Run profiling tests (phase-level latency breakdown per command)
+pnpm test:profile
+```
+
+The stress test suite covers:
+
+| Test | What it measures | Threshold |
+|------|-----------------|-----------|
+| **Baseline** | Single command round-trip latency | < 150ms |
+| **Sequential 50** | Rapid-fire sequential throughput | p95 < 100ms |
+| **Concurrent 20/50** | Parallel command handling under burst load | < 500ms / < 2s |
+| **Mixed commands** | Latency consistency across different command types | p95 < 100ms |
+| **Sustained 100** | Degradation detection over 100 sequential commands | p95 < 100ms, no degradation |
+| **Large payload** | `list_tracks` response size handling | < 200ms |
+| **Interleaved** | File contention with concurrent mixed command types | < 500ms |
+| **Cleanup** | No orphaned command/response files after the run | 0 files |
+
+The profiling test (`test:profile`) breaks down each command into phases (span setup, dir ensure, file write, poll wait, read/parse, cleanup, metrics) to identify bottlenecks. Output includes per-phase averages and a raw file I/O baseline.
+
 ## Linting
 
 ```bash
@@ -160,25 +189,32 @@ OTEL_METRICS_EXPORTER=console \
   dist/apps/reaper-mcp-server/main.js serve
 ```
 
-### Sending to Dash0
+### Sending to Dash0 (or another OTLP backend)
 
-1. Copy the example file and paste in your auth token ([Settings > Auth Tokens](https://app.dash0.com/settings/auth-tokens)):
+Add the `OTEL_*` environment variables to your `.mcp.json` `env` block. Get your auth token at [Settings > Auth Tokens](https://app.dash0.com/settings/auth-tokens) (Ingesting permission):
 
-```bash
-cp .env.otel.example .env.otel
-# Edit .env.otel — replace <AUTH_TOKEN> with your Dash0 ingesting token
+```json
+{
+  "mcpServers": {
+    "reaper": {
+      "command": "node",
+      "args": ["dist/apps/reaper-mcp-server/main.js", "serve"],
+      "env": {
+        "OTEL_SERVICE_NAME": "reaper-mcp-server",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://ingress.eu1.dash0.com",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+        "OTEL_TRACES_EXPORTER": "otlp",
+        "OTEL_METRICS_EXPORTER": "otlp",
+        "OTEL_LOGS_EXPORTER": "otlp",
+        "OTEL_RESOURCE_ATTRIBUTES": "service.namespace=reaper-mcp,deployment.environment.name=development",
+        "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer <AUTH_TOKEN>"
+      }
+    }
+  }
+}
 ```
 
-2. Build and run:
-
-```bash
-pnpm build
-pnpm start:otel
-```
-
-Everything else (endpoint, exporters, resource attributes) is pre-configured in the example file.
-
-> **Note:** `.env.otel` is listed in `.gitignore` — do not commit it with real credentials.
+This works from any MCP client (Claude Code, Claude Desktop, Cursor, etc.) — the `env` block is passed to the spawned server process.
 
 ### Configuration reference
 

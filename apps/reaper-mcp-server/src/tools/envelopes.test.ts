@@ -235,6 +235,28 @@ describe('envelope tools', () => {
       const result = await tools['create_track_envelope'].handler({ trackIndex: 99, envelopeName: 'Volume' });
       expectError(result, 'Track 99 not found');
     });
+
+    it('dispatches correctly for all 5 built-in envelope types', async () => {
+      const envelopeNames = ['Volume', 'Pan', 'Mute', 'Width', 'Trim Volume'];
+      for (const name of envelopeNames) {
+        const data = { trackIndex: 0, envelopeIndex: 0, name, pointCount: 0 };
+        mockedSendCommand.mockResolvedValue(successResponse(data));
+
+        const result = await tools['create_track_envelope'].handler({
+          trackIndex: 0, envelopeName: name,
+        });
+        expect(mockedSendCommand).toHaveBeenCalledWith('create_track_envelope', {
+          trackIndex: 0, envelopeName: name, fxIndex: undefined, paramIndex: undefined,
+        });
+        expectSuccess(result, data);
+      }
+    });
+
+    it('returns error when bridge fails to create envelope', async () => {
+      mockedSendCommand.mockResolvedValue(errorResponse('Failed to create envelope: Volume'));
+      const result = await tools['create_track_envelope'].handler({ trackIndex: 34, envelopeName: 'Volume' });
+      expectError(result, 'Failed to create envelope: Volume');
+    });
   });
 
   describe('set_envelope_properties', () => {

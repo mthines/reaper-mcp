@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, writeFile, readdir, unlink, mkdir, stat } from 'node:fs/promises';
+import { appendFile, readFile, writeFile, readdir, unlink, mkdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
 import type { BridgeCommand, CommandType } from '@reaper-mcp/protocol';
@@ -13,8 +13,26 @@ import {
   getTimeoutCounter,
 } from './telemetry.js';
 
-const POLL_INTERVAL_MS = 50;
+const POLL_INTERVAL_MS = 10;
 const DEFAULT_TIMEOUT_MS = 10_000;
+const PROFILE_BRIDGE = process.env['BRIDGE_PROFILE'] === '1';
+
+/** Per-command phase timing, exported for profiling tests. */
+export interface BridgePhaseTimings {
+  spanSetupMs: number;
+  ensureDirMs: number;
+  writeMs: number;
+  logMs: number;
+  pollWaitMs: number;
+  pollAttempts: number;
+  readParseMs: number;
+  cleanupMs: number;
+  metricsMs: number;
+  totalMs: number;
+}
+
+/** Last command's phase timings — only populated when BRIDGE_PROFILE=1 */
+export let lastTimings: BridgePhaseTimings | null = null;
 
 /**
  * Resolves the REAPER resource path based on OS.
@@ -63,6 +81,10 @@ export async function sendCommand(
 ): Promise<BridgeResponse> {
   const tracer = getTracer();
   const startMs = Date.now();
+  const t: Record<string, number> = {};
+  const profiling = PROFILE_BRIDGE;
+  const now = profiling ? () => performance.now() : () => 0;
+  const t0 = now();
 
   return tracer.startActiveSpan(
     `mcp.bridge ${type}`,
@@ -74,7 +96,12 @@ export async function sendCommand(
       },
     },
     async (span) => {
+      if (profiling) t['spanSetup'] = now() - t0;
+
+      const tDir = now();
       const dir = await ensureBridgeDir();
+      if (profiling) t['ensureDir'] = now() - tDir;
+
       const id = randomUUID();
 
       // Record command ID after it's generated — keep span name low-cardinality
@@ -87,10 +114,18 @@ export async function sendCommand(
         timestamp: Date.now(),
       };
 
-      // Write command file
+      // Write command file, then notify file so Lua can find it without directory listing.
+      // macOS/APFS caches directory listings for ~300-400ms, so reaper.EnumerateFiles
+      // would not see the command file for many defer cycles. The notify file is read
+      // directly by io.open(), bypassing the directory cache entirely.
+      const tWrite = now();
       const commandPath = join(dir, `command_${id}.json`);
       await writeFile(commandPath, JSON.stringify(command, null, 2), 'utf-8');
+      const notifyPath = join(dir, '_notify');
+      await appendFile(notifyPath, id + '\n');
+      if (profiling) t['write'] = now() - tWrite;
 
+      const tLog = now();
       const traceCtx = getTraceContext();
       console.error(
         JSON.stringify({
@@ -100,18 +135,27 @@ export async function sendCommand(
           ...traceCtx,
         })
       );
+      if (profiling) t['log'] = now() - tLog;
 
       // Poll for response
       const responsePath = join(dir, `response_${id}.json`);
       const deadline = Date.now() + timeoutMs;
+      const tPoll = now();
+      let pollAttempts = 0;
 
       while (Date.now() < deadline) {
         try {
+          pollAttempts++;
+          const tRead = now();
           const data = await readFile(responsePath, 'utf-8');
           const response: BridgeResponse = JSON.parse(data);
+          if (profiling) t['readParse'] = now() - tRead;
+          if (profiling) t['pollWait'] = now() - tPoll - (t['readParse'] ?? 0);
 
           // Cleanup files
+          const tCleanup = now();
           await Promise.allSettled([unlink(commandPath), unlink(responsePath)]);
+          if (profiling) t['cleanup'] = now() - tCleanup;
 
           const durationMs = Date.now() - startMs;
           const succeeded = response.success;
@@ -136,8 +180,25 @@ export async function sendCommand(
           span.end();
 
           // Record metrics
+          const tMetrics = now();
           getCommandDurationHistogram().record(durationMs, { command_type: type });
           getCommandCounter().add(1, { command_type: type, success: String(succeeded) });
+          if (profiling) t['metrics'] = now() - tMetrics;
+
+          if (profiling) {
+            lastTimings = {
+              spanSetupMs: Math.round(t['spanSetup'] ?? 0),
+              ensureDirMs: Math.round(t['ensureDir'] ?? 0),
+              writeMs: Math.round(t['write'] ?? 0),
+              logMs: Math.round(t['log'] ?? 0),
+              pollWaitMs: Math.round(t['pollWait'] ?? 0),
+              pollAttempts,
+              readParseMs: Math.round(t['readParse'] ?? 0),
+              cleanupMs: Math.round(t['cleanup'] ?? 0),
+              metricsMs: Math.round(t['metrics'] ?? 0),
+              totalMs: Math.round(now() - t0),
+            };
+          }
 
           return response;
         } catch {

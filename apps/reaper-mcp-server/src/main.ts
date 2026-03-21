@@ -182,7 +182,7 @@ async function serve(): Promise<void> {
   const log = (...args: unknown[]) => console.error('[reaper-mcp]', ...args);
 
   // Initialise OpenTelemetry before any instrumented code runs.
-  // Configuration is driven by OTEL_* environment variables (see .env.otel).
+  // Configuration is driven by OTEL_* environment variables (pass via .mcp.json env block).
   await initTelemetry();
   log('Starting REAPER MCP Server...');
   log(`Entry: ${fileURLToPath(import.meta.url)}`);

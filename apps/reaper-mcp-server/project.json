@@ -71,20 +71,6 @@
         "cwd": "{workspaceRoot}"
       }
     },
-    "dev:otel": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "node --env-file=.env.otel --import tsx/esm --watch apps/reaper-mcp-server/src/main.ts serve",
-        "cwd": "{workspaceRoot}"
-      }
-    },
-    "dev:otel:debug": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "node --inspect --env-file=.env.otel --import tsx/esm --watch apps/reaper-mcp-server/src/main.ts serve",
-        "cwd": "{workspaceRoot}"
-      }
-    },
     "serve": {
       "executor": "nx:run-commands",
       "options": {

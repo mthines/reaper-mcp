@@ -9,7 +9,7 @@
 -- The script will keep running in the background via defer().
 -- =============================================================================
 
-local POLL_INTERVAL = 0.030 -- 30ms between polls
+local POLL_INTERVAL = 0 -- scan every defer cycle; the notify file makes this cheap
 local HEARTBEAT_INTERVAL = 1.0 -- write heartbeat every 1s
 local MCP_ANALYZER_FX_NAME = "reaper-mcp/mcp_analyzer" -- JSFX analyzer name
 
@@ -21,6 +21,14 @@ reaper.RecursiveCreateDirectory(bridge_dir, 0)
 
 local last_poll = 0
 local last_heartbeat = 0
+local defer_count = 0
+local defer_intervals = {}  -- circular buffer of last 100 defer intervals
+local defer_idx = 0
+local defer_buf_size = 100
+local last_defer_time = 0
+local scan_count = 0
+local scan_durations = {}  -- last 100 scan durations
+local scan_idx = 0
 
 -- =============================================================================
 -- JSON Parser (minimal, sufficient for our command format)
@@ -239,6 +247,23 @@ local function list_files(dir, prefix)
       files[#files + 1] = fn
     end
     i = i + 1
+  end
+  return files
+end
+
+-- Read pending command IDs from the notify file (avoids directory listing entirely).
+-- Returns a list of command filenames, or falls back to list_files if no notify file.
+local notify_path = bridge_dir .. "_notify"
+local function read_notify()
+  local f = io.open(notify_path, "r")
+  if not f then return nil end
+  local content = f:read("*a")
+  f:close()
+  os.remove(notify_path)
+  if not content or content == "" then return nil end
+  local files = {}
+  for id in content:gmatch("[^\n]+") do
+    files[#files + 1] = "command_" .. id .. ".json"
   end
   return files
 end
@@ -2442,7 +2467,12 @@ function handlers.create_track_envelope(params)
       if not chunk:find(chunk_key) then
         -- Insert a minimal envelope chunk before the closing >
         local env_chunk = "\n<" .. chunk_key .. "\nACT 1 -1\nVIS 1 1 1\nLANEHEIGHT 0 0\nARM 0\nDEFSHAPE 0 -1 -1\n>\n"
-        chunk = chunk:gsub("\n>$", env_chunk .. ">")
+        -- Use position capture to find the last ">" (closing the <TRACK block).
+        -- We cannot use "\n>$" because GetTrackStateChunk may include a trailing newline.
+        local last_gt = chunk:match(".*()>")
+        if last_gt then
+          chunk = chunk:sub(1, last_gt - 1) .. env_chunk .. chunk:sub(last_gt)
+        end
         reaper.SetTrackStateChunk(track, chunk, false)
       else
         -- Envelope exists in chunk but may be hidden; make it visible
@@ -2625,10 +2655,56 @@ function handlers.insert_envelope_points(params)
 end
 
 -- =============================================================================
+-- Bridge diagnostics handler
+-- =============================================================================
+
+handlers["_bridge_diagnostics"] = function(params)
+  -- Compute defer interval stats from circular buffer
+  local intervals = {}
+  for i = 1, math.min(defer_count, defer_buf_size) do
+    intervals[#intervals + 1] = defer_intervals[i]
+  end
+  table.sort(intervals)
+  local n = #intervals
+  local sum = 0
+  for _, v in ipairs(intervals) do sum = sum + v end
+
+  local scan_times = {}
+  for i = 1, math.min(scan_count, defer_buf_size) do
+    scan_times[#scan_times + 1] = scan_durations[i]
+  end
+  table.sort(scan_times)
+  local sn = #scan_times
+  local ssum = 0
+  for _, v in ipairs(scan_times) do ssum = ssum + v end
+
+  return {
+    pollInterval = POLL_INTERVAL * 1000,
+    deferCount = defer_count,
+    scanCount = scan_count,
+    deferIntervals = n > 0 and {
+      count = n,
+      avgMs = math.floor(sum / n * 1000 + 0.5) / 1000,
+      minMs = math.floor(intervals[1] * 1000 * 1000 + 0.5) / 1000,
+      maxMs = math.floor(intervals[n] * 1000 * 1000 + 0.5) / 1000,
+      p50Ms = math.floor(intervals[math.floor(n * 0.5) + 1] * 1000 * 1000 + 0.5) / 1000,
+      p95Ms = math.floor(intervals[math.floor(n * 0.95) + 1] * 1000 * 1000 + 0.5) / 1000,
+    } or nil,
+    scanDurations = sn > 0 and {
+      count = sn,
+      avgMs = math.floor(ssum / sn * 1000 + 0.5) / 1000,
+      minMs = math.floor(scan_times[1] * 1000 * 1000 + 0.5) / 1000,
+      maxMs = math.floor(scan_times[sn] * 1000 * 1000 + 0.5) / 1000,
+    } or nil,
+  }
+end
+
+-- =============================================================================
 -- Command dispatcher
 -- =============================================================================
 
 local function process_command(filename)
+  local pickup_time = reaper.time_precise()
   local path = bridge_dir .. filename
   local content = read_file(path)
   if not content then return end
@@ -2660,6 +2736,13 @@ local function process_command(filename)
     }
   end
 
+  -- Add pickup timing to response for profiling
+  if cmd.timestamp then
+    response._pickupMs = math.floor((pickup_time - (cmd.timestamp / 1000)) * 1000 + 0.5)
+    response._deferCycle = defer_count
+    response._scanCycle = scan_count
+  end
+
   -- Write response
   local response_path = bridge_dir .. "response_" .. cmd.id .. ".json"
   write_file(response_path, json_encode(response))
@@ -2688,13 +2771,26 @@ end
 local function main_loop()
   local now = reaper.time_precise()
 
-  -- Poll for commands at interval
+  -- Track defer cadence
+  if last_defer_time > 0 then
+    defer_count = defer_count + 1
+    defer_idx = (defer_idx % defer_buf_size) + 1
+    defer_intervals[defer_idx] = now - last_defer_time
+  end
+  last_defer_time = now
+
+  -- Poll for commands: prefer notify file (instant), fall back to dir listing
   if now - last_poll >= POLL_INTERVAL then
     last_poll = now
-    local files = list_files(bridge_dir, "command_")
+    local scan_start = reaper.time_precise()
+    local files = read_notify() or list_files(bridge_dir, "command_")
     for _, filename in ipairs(files) do
       process_command(filename)
     end
+    local scan_dur = reaper.time_precise() - scan_start
+    scan_count = scan_count + 1
+    scan_idx = (scan_idx % defer_buf_size) + 1
+    scan_durations[scan_idx] = scan_dur
   end
 
   -- Write heartbeat at interval
