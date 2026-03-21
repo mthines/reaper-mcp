@@ -31,11 +31,11 @@ export function registerTrackTools(server: McpServer): void {
 
   server.tool(
     'set_track_property',
-    'Set a track property: volume (dB), pan (-1.0 to 1.0), mute (0/1), or solo (0/1)',
+    'Set a track property: volume (dB), pan (-1.0 to 1.0), mute/solo/recordArm/phase (0/1), input (REAPER input index)',
     {
       trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
-      property: z.enum(['volume', 'pan', 'mute', 'solo']).describe('Property to set'),
-      value: z.coerce.number().describe('Value: volume in dB, pan -1.0–1.0, mute/solo 0 or 1'),
+      property: z.enum(['volume', 'pan', 'mute', 'solo', 'recordArm', 'phase', 'input']).describe('Property to set: volume (dB), pan (-1.0–1.0), mute/solo/recordArm/phase (0 or 1), input (REAPER input index, -1=no input)'),
+      value: z.coerce.number().describe('Value: volume in dB, pan -1.0–1.0, mute/solo/recordArm/phase 0 or 1, input = REAPER input index'),
     },
     async ({ trackIndex, property, value }) => {
       const res = await sendCommand('set_track_property', { trackIndex, property, value });

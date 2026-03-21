@@ -1,11 +1,28 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** Resolve asset path — checks sibling (npm published) then parent (dev build) */
+/** Resolve asset path — checks sibling, parent, and walks up to repo root for dev/source usage */
 export function resolveAssetDir(baseDir: string, name: string): string {
+  // Check sibling (npm published layout: dist/apps/reaper-mcp-server/reaper/)
   const sibling = join(baseDir, name);
   if (existsSync(sibling)) return sibling;
-  return join(baseDir, '..', name);
+
+  // Check parent (esbuild output: dist/apps/reaper-mcp-server/../reaper/)
+  const parent = join(baseDir, '..', name);
+  if (existsSync(parent)) return parent;
+
+  // Walk up from baseDir to find the asset directory (running from source: src/ -> app/ -> apps/ -> repo root)
+  let dir = baseDir;
+  for (let i = 0; i < 5; i++) {
+    const candidate = join(dir, name);
+    if (existsSync(candidate)) return candidate;
+    const up = join(dir, '..');
+    if (up === dir) break; // reached filesystem root
+    dir = up;
+  }
+
+  // Fallback to the original sibling path (will fail gracefully downstream)
+  return sibling;
 }
 
 /** Recursively copy a directory, returns file count */
@@ -101,9 +118,11 @@ export const MCP_TOOL_NAMES = [
   'create_midi_item',
   'list_midi_items',
   'get_midi_notes',
+  'analyze_midi',
   'insert_midi_note',
   'insert_midi_notes',
   'edit_midi_note',
+  'edit_midi_notes',
   'delete_midi_note',
   'get_midi_cc',
   'insert_midi_cc',
@@ -114,6 +133,7 @@ export const MCP_TOOL_NAMES = [
   'list_media_items',
   'get_media_item_properties',
   'set_media_item_properties',
+  'set_media_items_properties',
   'split_media_item',
   'delete_media_item',
   'move_media_item',
@@ -121,6 +141,27 @@ export const MCP_TOOL_NAMES = [
   'add_stretch_marker',
   'get_stretch_markers',
   'delete_stretch_marker',
+  // selection & navigation
+  'get_selected_tracks',
+  'get_time_selection',
+  'set_time_selection',
+  // markers & regions
+  'list_markers',
+  'list_regions',
+  'add_marker',
+  'add_region',
+  'delete_marker',
+  'delete_region',
+  // tempo map
+  'get_tempo_map',
+  // fx enable/offline
+  'set_fx_enabled',
+  'set_fx_offline',
+  // envelopes
+  'get_track_envelopes',
+  'get_envelope_points',
+  'insert_envelope_point',
+  'delete_envelope_point',
 ] as const;
 
 /** Create or update .claude/settings.json with reaper MCP tool permissions */

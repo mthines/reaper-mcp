@@ -35,6 +35,9 @@ export interface TrackInfo {
   pan: number;          // -1.0 to 1.0
   mute: boolean;
   solo: boolean;
+  recordArm: boolean;
+  phase: boolean;       // true = phase inverted
+  inputChannel: number; // REAPER input index (-1 = no input)
   fxCount: number;
   receiveCount: number;
   sendCount: number;
@@ -51,6 +54,7 @@ export interface FxInfo {
   index: number;
   name: string;
   enabled: boolean;
+  offline: boolean;
   preset: string;
 }
 
@@ -202,6 +206,31 @@ export interface MidiItemProperties {
   loopSource: boolean;
 }
 
+export interface MidiPitchStats {
+  pitch: number;        // 0-127
+  count: number;
+  minVelocity: number;
+  maxVelocity: number;
+  avgVelocity: number;
+  stdDev: number;
+  maxConsecutiveSameVelocity: number; // machine gun detection
+}
+
+export interface MidiAnalysis {
+  trackIndex: number;
+  itemIndex: number;
+  totalNotes: number;
+  totalCC: number;
+  durationBeats: number;
+  pitchStats: MidiPitchStats[];
+  velocityHistogram: number[]; // 13 buckets: 0-9, 10-19, ..., 120-127
+  machineGunWarnings: Array<{
+    pitch: number;
+    maxConsecutive: number;
+    sequences: number; // how many runs of 3+ identical velocities
+  }>;
+}
+
 // --- Media item editing response types ---
 
 export interface MediaItemInfo {
@@ -230,4 +259,67 @@ export interface StretchMarkerInfo {
   index: number;
   position: number;       // seconds within item
   sourcePosition: number; // seconds in source
+}
+
+// --- Selection & navigation response types ---
+
+export interface SelectedTrackInfo {
+  index: number;
+  name: string;
+}
+
+export interface TimeSelectionInfo {
+  start: number;   // seconds
+  end: number;     // seconds
+  length: number;  // seconds
+  empty: boolean;  // true if no time selection
+}
+
+// --- Markers & regions response types ---
+
+export interface MarkerInfo {
+  index: number;       // marker/region index number
+  name: string;
+  position: number;    // seconds
+  color: number;       // REAPER native color (0 = default)
+}
+
+export interface RegionInfo {
+  index: number;       // marker/region index number
+  name: string;
+  start: number;       // seconds
+  end: number;         // seconds
+  color: number;
+}
+
+// --- Tempo map response types ---
+
+export interface TempoMapPoint {
+  index: number;
+  position: number;                 // seconds
+  beatPosition: number;             // beats from project start
+  tempo: number;                    // BPM
+  timeSignatureNumerator: number;
+  timeSignatureDenominator: number;
+  linearTempo: boolean;             // true = linear tempo change to next point
+}
+
+// --- Envelope response types ---
+
+export interface TrackEnvelopeInfo {
+  index: number;
+  name: string;
+  pointCount: number;
+  active: boolean;
+  visible: boolean;
+  armed: boolean;
+}
+
+export interface EnvelopePointInfo {
+  pointIndex: number;
+  time: number;       // seconds
+  value: number;
+  shape: number;      // 0=linear, 1=square, 2=slow, 3=fast start, 4=fast end, 5=bezier
+  tension: number;    // -1.0 to 1.0
+  selected: boolean;
 }

@@ -27,7 +27,7 @@ tool: list_tracks
 ```
 Note: track count, tempo, sample rate, bus structure.
 
-### 2. Gain staging check
+### 2. Gain staging check (perceived-loudness-aware)
 Start playback of the chorus/loudest section:
 ```
 tool: play
@@ -36,22 +36,30 @@ Then read meters for ALL tracks:
 ```
 tool: read_track_meters (for each track)
 ```
-Flag:
+Flag standard issues:
 - Any track averaging below -24 dBFS or above -10 dBFS
 - Any track peaking at or above -3 dBFS
 - Mix bus peaking above -6 dBFS
 
-### 3. Frequency balance
+**Also check perceived loudness balance** (see `knowledge/reference/perceived-loudness.md`):
+- Bass instruments (kick, bass, 808) should read **higher** on meters than vocals/guitars (-16 to -14 dBFS) — if they're at the same level as presence-range instruments, they'll sound too quiet
+- Vocals/snare should read **lower** (-19 to -20 dBFS) — the 2-5 kHz content sounds louder than the meter shows
+- Hi-hats/cymbals at similar meter levels as bass = way too loud perceptually
+- Flag any mix where all tracks are at the same RMS level regardless of spectral content — this is a common amateur mistake
+
+### 3. Frequency balance (with perceived loudness context)
 Read spectrum on the mix bus:
 ```
 tool: read_track_spectrum (mix bus index)
 ```
 Check for:
-- **Sub buildup** (20–60 Hz): excessive rumble
-- **Low-mid mud** (200–400 Hz): cloudy, boxy sound
-- **Harshness** (2–5 kHz): fatiguing, piercing
-- **Missing air** (10–20 kHz): dull, lifeless
-- **Missing presence** (1–4 kHz): vocals buried
+- **Sub buildup** (20–60 Hz): excessive rumble — but remember sub energy sounds quieter than it meters; some buildup is needed for bass-heavy genres
+- **Low-mid mud** (200–400 Hz): cloudy, boxy sound — the ear is less sensitive here, so mud accumulates before it's noticed on meters
+- **Harshness** (2–5 kHz): fatiguing, piercing — the ear's peak sensitivity zone. Even modest energy here sounds loud and causes listening fatigue
+- **Missing air** (10–20 kHz): dull, lifeless — sensitivity drops off, but accumulated boosts across many tracks cause fatigue
+- **Missing presence** (1–4 kHz): vocals buried — often a masking issue (guitars/keys competing in the most sensitive range), not just a level issue
+
+**Perceived loudness note**: A "flat" spectrum on an analyzer does NOT mean a perceptually balanced mix. The ear naturally amplifies 2-5 kHz, so a truly flat spectrum will sound harsh/forward in the presence range.
 
 ### 4. Dynamics check
 ```
@@ -136,3 +144,4 @@ Structure your output as:
 - Don't just say "it's muddy" — say "200–400 Hz shows +4 dB above the average curve"
 - Always suggest a specific fix, not just identify the problem
 - Find something positive to mention — even in rough mixes
+- **Account for perceived loudness** — don't flag bass instruments as "too hot" just because they meter higher than vocals. Bass needs more dB to sound balanced. Conversely, flag presence-range instruments that meter the same as bass — they'll sound much louder than intended

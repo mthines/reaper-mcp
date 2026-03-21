@@ -35,7 +35,16 @@ describe('cli helpers', () => {
       mkdirSync(baseDir, { recursive: true });
       mkdirSync(join(tmp, 'dist', 'apps', 'reaper'), { recursive: true });
       const result = resolveAssetDir(baseDir, 'reaper');
-      expect(result).toBe(join(baseDir, '..', 'reaper'));
+      expect(result).toBe(join(tmp, 'dist', 'apps', 'reaper'));
+    });
+
+    it('walks up to find asset in ancestor directory (source layout)', () => {
+      // Simulates running from apps/reaper-mcp-server/src/ where reaper/ is at repo root
+      const baseDir = join(tmp, 'apps', 'server', 'src');
+      mkdirSync(baseDir, { recursive: true });
+      mkdirSync(join(tmp, 'reaper'), { recursive: true });
+      const result = resolveAssetDir(baseDir, 'reaper');
+      expect(result).toBe(join(tmp, 'reaper'));
     });
 
     it('prefers sibling over parent when both exist', () => {

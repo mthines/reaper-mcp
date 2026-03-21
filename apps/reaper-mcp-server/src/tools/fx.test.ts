@@ -137,4 +137,78 @@ describe('fx tools', () => {
       });
     });
   });
+
+  describe('set_fx_enabled', () => {
+    it('enables FX', async () => {
+      mockedSendCommand.mockResolvedValue({
+        id: 'test', success: true, data: { success: true, trackIndex: 0, fxIndex: 1, enabled: true }, timestamp: Date.now(),
+      });
+
+      const result = await tools['set_fx_enabled'].handler({ trackIndex: 0, fxIndex: 1, enabled: 1 });
+      expect(mockedSendCommand).toHaveBeenCalledWith('set_fx_enabled', { trackIndex: 0, fxIndex: 1, enabled: 1 });
+      expect(result).toEqual({
+        content: [{ type: 'text', text: 'FX 1 on track 0 enabled' }],
+      });
+    });
+
+    it('disables FX', async () => {
+      mockedSendCommand.mockResolvedValue({
+        id: 'test', success: true, data: { success: true, trackIndex: 0, fxIndex: 0, enabled: false }, timestamp: Date.now(),
+      });
+
+      const result = await tools['set_fx_enabled'].handler({ trackIndex: 0, fxIndex: 0, enabled: 0 });
+      expect(result).toEqual({
+        content: [{ type: 'text', text: 'FX 0 on track 0 disabled' }],
+      });
+    });
+
+    it('returns error for invalid FX', async () => {
+      mockedSendCommand.mockResolvedValue({
+        id: 'test', success: false, error: 'FX 5 not found (track has 2 FX)', timestamp: Date.now(),
+      });
+
+      const result = await tools['set_fx_enabled'].handler({ trackIndex: 0, fxIndex: 5, enabled: 1 });
+      expect(result).toEqual({
+        content: [{ type: 'text', text: 'Error: FX 5 not found (track has 2 FX)' }],
+        isError: true,
+      });
+    });
+  });
+
+  describe('set_fx_offline', () => {
+    it('sets FX offline', async () => {
+      mockedSendCommand.mockResolvedValue({
+        id: 'test', success: true, data: { success: true, trackIndex: 0, fxIndex: 0, offline: true }, timestamp: Date.now(),
+      });
+
+      const result = await tools['set_fx_offline'].handler({ trackIndex: 0, fxIndex: 0, offline: 1 });
+      expect(mockedSendCommand).toHaveBeenCalledWith('set_fx_offline', { trackIndex: 0, fxIndex: 0, offline: 1 });
+      expect(result).toEqual({
+        content: [{ type: 'text', text: 'FX 0 on track 0 set offline' }],
+      });
+    });
+
+    it('sets FX online', async () => {
+      mockedSendCommand.mockResolvedValue({
+        id: 'test', success: true, data: { success: true, trackIndex: 0, fxIndex: 0, offline: false }, timestamp: Date.now(),
+      });
+
+      const result = await tools['set_fx_offline'].handler({ trackIndex: 0, fxIndex: 0, offline: 0 });
+      expect(result).toEqual({
+        content: [{ type: 'text', text: 'FX 0 on track 0 set online' }],
+      });
+    });
+
+    it('returns error for invalid FX', async () => {
+      mockedSendCommand.mockResolvedValue({
+        id: 'test', success: false, error: 'Track 99 not found', timestamp: Date.now(),
+      });
+
+      const result = await tools['set_fx_offline'].handler({ trackIndex: 99, fxIndex: 0, offline: 1 });
+      expect(result).toEqual({
+        content: [{ type: 'text', text: 'Error: Track 99 not found' }],
+        isError: true,
+      });
+    });
+  });
 });

@@ -73,6 +73,8 @@ Apply to the mix bus. Typical mastering moves:
 | Presence | 2–4 kHz | +0.5 dB | Vocal clarity (only if needed) |
 | Air shelf | 10–12 kHz | +0.5 to +1 dB | Subtle sparkle |
 
+**Perceived loudness note**: The 2-5 kHz range is where the ear is most sensitive (10-15 dB more than bass). Even +0.5 dB here has outsized perceptual impact. Conversely, low-end cuts of -1 dB may barely be noticed. When assessing the spectrum, remember a "flat" analyzer response does NOT equal perceptually flat — the ear naturally amplifies presence frequencies.
+
 **Rule**: If you're EQing more than +-2 dB, there's a mix problem — go back and fix it.
 
 ### Step 5: Mastering compression (optional, for glue only)
@@ -124,3 +126,4 @@ params: { name: "master-v1", description: "Mastered — targeting {LUFS} for {pl
 - Linear phase EQ if available (avoids phase shift on the master)
 - Always A/B with `snapshot_restore` — mastering can be subtle enough to fool yourself
 - If the user asks for a specific LUFS target that's louder than genre convention, warn them but comply
+- **Perceived loudness awareness**: When evaluating the mix bus spectrum, account for equal-loudness contours. A mix that looks flat on the analyzer will sound presence-heavy. A well-balanced master typically shows a gentle downward slope from low to high frequencies on a spectrum analyzer, compensating for the ear's heightened sensitivity at 2-5 kHz

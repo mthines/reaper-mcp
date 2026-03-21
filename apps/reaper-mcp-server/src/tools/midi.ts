@@ -37,13 +37,31 @@ export function registerMidiTools(server: McpServer): void {
 
   server.tool(
     'get_midi_notes',
-    'Get all MIDI notes in a MIDI item. Returns pitch (0-127, 60=C4), velocity (0-127), position and duration in beats from item start.',
+    'Get MIDI notes in a MIDI item. Supports pagination with offset/limit for large items. For a high-level overview of a large MIDI item, use analyze_midi instead. Returns pitch (0-127, 60=C4), velocity (0-127), position and duration in beats from item start.',
+    {
+      trackIndex: z.coerce.number().min(0).describe('0-based track index'),
+      itemIndex: z.coerce.number().min(0).describe('0-based item index on the track'),
+      offset: z.coerce.number().min(0).optional().describe('Skip first N notes (default 0)'),
+      limit: z.coerce.number().min(1).optional().describe('Max notes to return (default all). Use with offset to paginate large items.'),
+    },
+    async ({ trackIndex, itemIndex, offset, limit }) => {
+      const res = await sendCommand('get_midi_notes', { trackIndex, itemIndex, offset, limit });
+      if (!res.success) {
+        return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    'analyze_midi',
+    'Analyze a MIDI item and return summary statistics computed in REAPER. Much more efficient than get_midi_notes for large items. Returns per-pitch stats (count, velocity min/max/avg/stddev), velocity histogram, and machine gun detection (consecutive identical velocities). Use this first to understand the MIDI data before reading individual notes.',
     {
       trackIndex: z.coerce.number().min(0).describe('0-based track index'),
       itemIndex: z.coerce.number().min(0).describe('0-based item index on the track'),
     },
     async ({ trackIndex, itemIndex }) => {
-      const res = await sendCommand('get_midi_notes', { trackIndex, itemIndex });
+      const res = await sendCommand('analyze_midi', { trackIndex, itemIndex });
       if (!res.success) {
         return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
       }
@@ -108,6 +126,23 @@ export function registerMidiTools(server: McpServer): void {
       const res = await sendCommand('edit_midi_note', {
         trackIndex, itemIndex, noteIndex, pitch, velocity, startPosition, duration, channel,
       });
+      if (!res.success) {
+        return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    'edit_midi_notes',
+    'Batch edit multiple MIDI notes in a single call. Much more efficient than calling edit_midi_note repeatedly. Pass a JSON array of edits, each with noteIndex and any fields to change (pitch, velocity, startPosition, duration, channel). Only provided fields are changed.',
+    {
+      trackIndex: z.coerce.number().min(0).describe('0-based track index'),
+      itemIndex: z.coerce.number().min(0).describe('0-based item index on the track'),
+      edits: z.string().describe('JSON array string of edits: [{"noteIndex":0,"velocity":80}, {"noteIndex":1,"pitch":62,"velocity":100}, ...]'),
+    },
+    async ({ trackIndex, itemIndex, edits }) => {
+      const res = await sendCommand('edit_midi_notes', { trackIndex, itemIndex, edits });
       if (!res.success) {
         return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
       }

@@ -60,6 +60,21 @@ export function registerMediaTools(server: McpServer): void {
   );
 
   server.tool(
+    'set_media_items_properties',
+    'Batch set properties on multiple media items in a single call. Much more efficient than calling set_media_item_properties repeatedly. Pass a JSON array of items, each with trackIndex, itemIndex, and any properties to change.',
+    {
+      items: z.string().describe('JSON array string of items: [{"trackIndex":0,"itemIndex":0,"volume":-3}, {"trackIndex":1,"itemIndex":0,"mute":1}, ...]'),
+    },
+    async ({ items }) => {
+      const res = await sendCommand('set_media_items_properties', { items });
+      if (!res.success) {
+        return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
+    },
+  );
+
+  server.tool(
     'split_media_item',
     'Split a media item at a given position (absolute project time in seconds). Returns info about both resulting items.',
     {

@@ -42,9 +42,11 @@ export type CommandType =
   | 'create_midi_item'
   | 'list_midi_items'
   | 'get_midi_notes'
+  | 'analyze_midi'
   | 'insert_midi_note'
   | 'insert_midi_notes'
   | 'edit_midi_note'
+  | 'edit_midi_notes'
   | 'delete_midi_note'
   | 'get_midi_cc'
   | 'insert_midi_cc'
@@ -55,13 +57,35 @@ export type CommandType =
   | 'list_media_items'
   | 'get_media_item_properties'
   | 'set_media_item_properties'
+  | 'set_media_items_properties'
   | 'split_media_item'
   | 'delete_media_item'
   | 'move_media_item'
   | 'trim_media_item'
   | 'add_stretch_marker'
   | 'get_stretch_markers'
-  | 'delete_stretch_marker';
+  | 'delete_stretch_marker'
+  // Selection & navigation
+  | 'get_selected_tracks'
+  | 'get_time_selection'
+  | 'set_time_selection'
+  // Markers & regions
+  | 'list_markers'
+  | 'list_regions'
+  | 'add_marker'
+  | 'add_region'
+  | 'delete_marker'
+  | 'delete_region'
+  // Tempo map
+  | 'get_tempo_map'
+  // FX enable/offline
+  | 'set_fx_enabled'
+  | 'set_fx_offline'
+  // Envelopes
+  | 'get_track_envelopes'
+  | 'get_envelope_points'
+  | 'insert_envelope_point'
+  | 'delete_envelope_point';
 
 // --- Per-command param types ---
 
@@ -75,7 +99,7 @@ export interface GetTrackPropertiesParams {
 
 export interface SetTrackPropertyParams {
   trackIndex: number;
-  property: 'volume' | 'pan' | 'mute' | 'solo';
+  property: 'volume' | 'pan' | 'mute' | 'solo' | 'recordArm' | 'phase' | 'input';
   value: number;
 }
 
@@ -190,6 +214,13 @@ export interface ListMidiItemsParams {
 export interface GetMidiNotesParams {
   trackIndex: number;
   itemIndex: number;
+  offset?: number; // skip first N notes (default 0)
+  limit?: number;  // max notes to return (default all)
+}
+
+export interface AnalyzeMidiParams {
+  trackIndex: number;
+  itemIndex: number;
 }
 
 export interface InsertMidiNoteParams {
@@ -217,6 +248,12 @@ export interface EditMidiNoteParams {
   startPosition?: number; // beats from item start
   duration?: number;      // beats
   channel?: number;
+}
+
+export interface EditMidiNotesParams {
+  trackIndex: number;
+  itemIndex: number;
+  edits: string; // JSON string array of { noteIndex, pitch?, velocity?, startPosition?, duration?, channel? }
 }
 
 export interface DeleteMidiNoteParams {
@@ -283,6 +320,10 @@ export interface SetMediaItemPropertiesParams {
   playRate?: number;      // 1.0 = normal
 }
 
+export interface SetMediaItemsPropertiesParams {
+  items: string; // JSON string array of { trackIndex, itemIndex, position?, length?, volume?, mute?, fadeInLength?, fadeOutLength?, playRate? }
+}
+
 export interface SplitMediaItemParams {
   trackIndex: number;
   itemIndex: number;
@@ -324,4 +365,88 @@ export interface DeleteStretchMarkerParams {
   trackIndex: number;
   itemIndex: number;
   markerIndex: number;
+}
+
+// --- FX enable/offline param types ---
+
+export interface SetFxEnabledParams {
+  trackIndex: number;
+  fxIndex: number;
+  enabled: number; // 0 = disabled (bypassed), 1 = enabled
+}
+
+export interface SetFxOfflineParams {
+  trackIndex: number;
+  fxIndex: number;
+  offline: number; // 0 = online, 1 = offline
+}
+
+// --- Selection & navigation param types ---
+
+export type GetSelectedTracksParams = Record<string, never>;
+
+export type GetTimeSelectionParams = Record<string, never>;
+
+export interface SetTimeSelectionParams {
+  start: number;  // seconds
+  end: number;    // seconds
+}
+
+// --- Markers & regions param types ---
+
+export type ListMarkersParams = Record<string, never>;
+
+export type ListRegionsParams = Record<string, never>;
+
+export interface AddMarkerParams {
+  position: number;   // seconds
+  name?: string;
+  color?: number;     // REAPER native color int (0 = default)
+}
+
+export interface AddRegionParams {
+  start: number;      // seconds
+  end: number;        // seconds
+  name?: string;
+  color?: number;
+}
+
+export interface DeleteMarkerParams {
+  markerIndex: number; // marker/region index number (not enumeration index)
+}
+
+export interface DeleteRegionParams {
+  regionIndex: number; // marker/region index number (not enumeration index)
+}
+
+// --- Tempo map param types ---
+
+export type GetTempoMapParams = Record<string, never>;
+
+// --- Envelope param types ---
+
+export interface GetTrackEnvelopesParams {
+  trackIndex: number;
+}
+
+export interface GetEnvelopePointsParams {
+  trackIndex: number;
+  envelopeIndex: number;
+  offset?: number;
+  limit?: number;
+}
+
+export interface InsertEnvelopePointParams {
+  trackIndex: number;
+  envelopeIndex: number;
+  time: number;       // seconds
+  value: number;      // envelope-dependent scale
+  shape?: number;     // 0=linear, 1=square, 2=slow start/end, 3=fast start, 4=fast end, 5=bezier
+  tension?: number;   // -1.0 to 1.0 (for bezier shape)
+}
+
+export interface DeleteEnvelopePointParams {
+  trackIndex: number;
+  envelopeIndex: number;
+  pointIndex: number;
 }

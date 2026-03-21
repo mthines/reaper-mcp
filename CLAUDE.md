@@ -48,7 +48,7 @@ reaper-mcp/
       tools/
         project.ts            # get_project_info
         tracks.ts             # list_tracks, get_track_properties, set_track_property
-        fx.ts                 # add_fx, remove_fx, get_fx_parameters, set_fx_parameter
+        fx.ts                 # add_fx, remove_fx, get/set_fx_parameter, set_fx_enabled, set_fx_offline
         meters.ts             # read_track_meters, read_track_spectrum
         transport.ts          # play, stop, record, get_transport_state, set_cursor_position
         discovery.ts          # list_available_fx, search_fx
@@ -56,8 +56,12 @@ reaper-mcp/
         snapshots.ts          # snapshot_save, snapshot_restore, snapshot_list
         routing.ts            # get_track_routing
         analysis.ts           # read_track_lufs, read_track_correlation, read_track_crest
-        midi.ts               # 12 MIDI editing tools (notes, CC, items)
-        media.ts              # 10 media item editing tools (properties, split, move, trim, stretch)
+        midi.ts               # 14 MIDI editing tools (notes, CC, items, analysis, batch edit)
+        media.ts              # 11 media item editing tools (properties, batch, split, move, trim, stretch)
+        selection.ts          # get_selected_tracks, get_time_selection, set_time_selection
+        markers.ts            # list_markers, list_regions, add_marker, add_region, delete_marker, delete_region
+        tempo.ts              # get_tempo_map
+        envelopes.ts          # get_track_envelopes, get_envelope_points, insert_envelope_point, delete_envelope_point
 
   libs/protocol/              # Shared TypeScript types (compiled with tsc)
     src/
@@ -65,11 +69,46 @@ reaper-mcp/
       commands.ts             # BridgeCommand, CommandType, per-command param interfaces
       responses.ts            # BridgeResponse, ProjectInfo, TrackInfo, FxInfo, etc.
 
+  apps/reaper-mix-agent/      # AI mix engineer agent (TypeScript, esbuild)
+    src/
+      agent.ts                # Agent context factory: loads knowledge, builds system prompt
+      knowledge-loader.ts     # Loads/parses knowledge/ markdown files (frontmatter + body)
+      plugin-resolver.ts      # Matches installed FX against plugin knowledge (fx_match patterns)
+      modes/                  # Workflow mode implementations
+        analyze.ts            # Analysis mode
+        gain-stage.ts         # Gain staging mode
+        mix.ts                # Full mix mode
+        master.ts             # Mastering mode
+        drum-bus.ts           # Drum bus processing
+        vocal-chain.ts        # Vocal chain processing
+        low-end.ts            # Low-end management
+        stereo-image.ts       # Stereo image mode
+
+  knowledge/                  # Shared audio engineering knowledge base (consumed by reaper-mix-agent)
+    plugins/                  # Plugin-specific knowledge (FX match patterns, parameter guides)
+      fabfilter/              # FabFilter Pro-Q 3, Pro-C 2, Pro-L 2
+      neural-dsp/             # Helix Native
+      stock-reaper/           # ReaEQ, ReaComp, ReaLimit, ReaVerb, ReaDelay, ReaGate, JS 1175
+    genres/                   # Genre mixing conventions (targets, frequency balance, dynamics)
+    workflows/                # Step-by-step mixing workflows (gain-staging, vocal-chain, etc.)
+    reference/                # Reference material (frequencies, metering, compression, perceived loudness, common mistakes)
+
   reaper/                     # Files installed INTO REAPER (copied by setup command)
-    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 37+ handlers)
+    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 67 handlers)
     mcp_analyzer.jsfx         # Real-time FFT analyzer (JSFX, writes to gmem[])
     install.sh                # Manual install helper script
 ```
+
+### knowledge/ ↔ reaper-mix-agent Relationship
+
+The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
+
+- **`knowledge/`** contains markdown files with YAML frontmatter that define audio engineering knowledge (plugin parameters, genre conventions, mixing workflows, reference material).
+- **`reaper-mix-agent`** loads and parses these files at runtime via `knowledge-loader.ts`, which categorizes them by directory path (`plugins/`, `genres/`, `workflows/`, `reference/`).
+- **`plugin-resolver.ts`** matches the `fx_match` frontmatter field in plugin knowledge files against the user's installed FX list to determine which plugins are available.
+- **Workflow modes** in `modes/` correspond to workflow knowledge files (e.g., `modes/gain-stage.ts` uses `workflows/gain-staging.md`).
+
+**When editing one, update the other:** Adding a new plugin knowledge file requires the `fx_match` patterns that `PluginResolver` uses. Adding a new workflow mode should have a corresponding `knowledge/workflows/` file. Adding new knowledge types requires updating `typeFromPath()` in `knowledge-loader.ts`.
 
 ## Workspace Packages
 
@@ -77,40 +116,53 @@ reaper-mcp/
 |---------|----------|-------|---------|
 | `@mthines/reaper-mcp` | `/` (root) | -- | Workspace root, scripts |
 | `@mthines/reaper-mcp-server` | `apps/reaper-mcp-server` | `@nx/esbuild` (ESM bundle) | MCP server application |
+| `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (37 total)
+## MCP Tools (67 total)
 
-### Core Tools (15)
+### Project & Tracks (4)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `get_project_info` | `tools/project.ts` | Project name, tempo, time sig, sample rate, transport state |
-| `list_tracks` | `tools/tracks.ts` | All tracks with volume, pan, mute/solo, FX count, routing |
+| `list_tracks` | `tools/tracks.ts` | All tracks with volume, pan, mute/solo, arm, phase, FX count, routing |
 | `get_track_properties` | `tools/tracks.ts` | Detailed single track info + full FX chain list |
-| `set_track_property` | `tools/tracks.ts` | Set volume (dB), pan, mute, solo |
+| `set_track_property` | `tools/tracks.ts` | Set volume (dB), pan, mute, solo, recordArm, phase, input |
+
+### FX Management (6)
+
+| Tool | File | Description |
+|------|------|-------------|
 | `add_fx` | `tools/fx.ts` | Add FX by name (partial match: "ReaEQ", "VST: Pro-Q 3") |
 | `remove_fx` | `tools/fx.ts` | Remove FX from chain by index |
 | `get_fx_parameters` | `tools/fx.ts` | List all FX params with current values and ranges |
 | `set_fx_parameter` | `tools/fx.ts` | Set FX parameter (normalized 0.0-1.0) |
-| `read_track_meters` | `tools/meters.ts` | Peak/RMS L/R in dB |
-| `read_track_spectrum` | `tools/meters.ts` | FFT frequency bins (auto-inserts JSFX analyzer) |
+| `set_fx_enabled` | `tools/fx.ts` | Enable or disable (bypass) an FX plugin |
+| `set_fx_offline` | `tools/fx.ts` | Set FX online/offline (offline = no CPU, preserves settings) |
+
+### Transport (5)
+
+| Tool | File | Description |
+|------|------|-------------|
 | `play` | `tools/transport.ts` | Start playback |
 | `stop` | `tools/transport.ts` | Stop playback/recording |
 | `record` | `tools/transport.ts` | Start recording (arms must be set on target tracks) |
 | `get_transport_state` | `tools/transport.ts` | Play/record/pause status, cursor positions, tempo, time sig |
 | `set_cursor_position` | `tools/transport.ts` | Move edit cursor to position in seconds |
 
-### MIDI Editing Tools (12)
+### MIDI Editing Tools (14)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `create_midi_item` | `tools/midi.ts` | Create an empty MIDI item on a track at a given time range (seconds) |
 | `list_midi_items` | `tools/midi.ts` | List all MIDI items on a track with position, length, note/CC counts |
-| `get_midi_notes` | `tools/midi.ts` | Get all MIDI notes in an item (pitch, velocity, position/duration in beats) |
+| `get_midi_notes` | `tools/midi.ts` | Get MIDI notes with pagination (offset/limit). Use analyze_midi first for large items. |
+| `analyze_midi` | `tools/midi.ts` | Analyze MIDI item: per-pitch velocity stats, histogram, machine gun detection. Efficient for large items. |
 | `insert_midi_note` | `tools/midi.ts` | Insert a single note (pitch 0-127, velocity 1-127, position/duration in beats) |
 | `insert_midi_notes` | `tools/midi.ts` | Batch insert multiple notes via JSON array string |
 | `edit_midi_note` | `tools/midi.ts` | Edit an existing note by index (partial updates: only provided fields change) |
+| `edit_midi_notes` | `tools/midi.ts` | Batch edit multiple notes via JSON array string. Much faster than repeated edit_midi_note calls. |
 | `delete_midi_note` | `tools/midi.ts` | Delete a note by index |
 | `get_midi_cc` | `tools/midi.ts` | Get CC events, optionally filtered by CC number |
 | `insert_midi_cc` | `tools/midi.ts` | Insert a CC event (cc 0-127, value 0-127, position in beats) |
@@ -118,13 +170,14 @@ reaper-mcp/
 | `get_midi_item_properties` | `tools/midi.ts` | Get MIDI item properties (position, length, note/CC count, mute, loop) |
 | `set_midi_item_properties` | `tools/midi.ts` | Set MIDI item properties (position, length, mute, loop source) |
 
-### Media Item Editing Tools (10)
+### Media Item Editing Tools (11)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `list_media_items` | `tools/media.ts` | List all items on a track (position, length, name, volume, MIDI/audio type) |
 | `get_media_item_properties` | `tools/media.ts` | Detailed item properties (fades, play rate, pitch, source file, lock state) |
 | `set_media_item_properties` | `tools/media.ts` | Set item properties (position, length, volume dB, mute, fades, play rate) |
+| `set_media_items_properties` | `tools/media.ts` | Batch set properties on multiple items via JSON array string. |
 | `split_media_item` | `tools/media.ts` | Split an item at a position (seconds), returns left/right item info |
 | `delete_media_item` | `tools/media.ts` | Delete an item from a track |
 | `move_media_item` | `tools/media.ts` | Move an item to a new position and/or a different track |
@@ -133,13 +186,80 @@ reaper-mcp/
 | `get_stretch_markers` | `tools/media.ts` | List stretch markers with positions and source positions |
 | `delete_stretch_marker` | `tools/media.ts` | Delete a stretch marker by index |
 
+### Selection & Navigation Tools (3)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `get_selected_tracks` | `tools/selection.ts` | Get currently selected tracks with indices and names |
+| `get_time_selection` | `tools/selection.ts` | Get time/loop selection start, end, length in seconds |
+| `set_time_selection` | `tools/selection.ts` | Set the time selection range (start/end in seconds) |
+
+### Markers & Regions Tools (6)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `list_markers` | `tools/markers.ts` | List all project markers (index, name, position, color) |
+| `list_regions` | `tools/markers.ts` | List all regions (index, name, start/end, color) |
+| `add_marker` | `tools/markers.ts` | Add a marker at position with optional name/color |
+| `add_region` | `tools/markers.ts` | Add a region with start/end, optional name/color |
+| `delete_marker` | `tools/markers.ts` | Delete a marker by index |
+| `delete_region` | `tools/markers.ts` | Delete a region by index |
+
+### Tempo Map Tools (1)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `get_tempo_map` | `tools/tempo.ts` | All tempo/time sig changes (position, BPM, time sig, linear flag) |
+
+### Envelope / Automation Tools (4)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `get_track_envelopes` | `tools/envelopes.ts` | List envelopes on a track (name, point count, active/visible/armed) |
+| `get_envelope_points` | `tools/envelopes.ts` | Get automation points with pagination (time, value, shape, tension) |
+| `insert_envelope_point` | `tools/envelopes.ts` | Insert an automation point with shape/tension |
+| `delete_envelope_point` | `tools/envelopes.ts` | Delete an automation point by index |
+
+### FX Discovery & Presets (4)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `list_available_fx` | `tools/discovery.ts` | Discover all installed plugins (VST, VST3, JS, CLAP, AU) |
+| `search_fx` | `tools/discovery.ts` | Fuzzy search installed plugins by name |
+| `get_fx_preset_list` | `tools/presets.ts` | List available presets for an FX |
+| `set_fx_preset` | `tools/presets.ts` | Load a preset by name |
+
+### Snapshots (3)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `snapshot_save` | `tools/snapshots.ts` | Save current mixer state (volumes, pans, FX, mutes) |
+| `snapshot_restore` | `tools/snapshots.ts` | Restore a saved snapshot |
+| `snapshot_list` | `tools/snapshots.ts` | List all saved snapshots |
+
+### Routing (1)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `get_track_routing` | `tools/routing.ts` | Sends, receives, parent/folder info for a track |
+
+### Metering & Analysis (5)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `read_track_meters` | `tools/meters.ts` | Peak/RMS L/R in dB |
+| `read_track_spectrum` | `tools/meters.ts` | FFT frequency bins (auto-inserts JSFX analyzer) |
+| `read_track_lufs` | `tools/analysis.ts` | Integrated/short-term/momentary LUFS + true peak |
+| `read_track_correlation` | `tools/analysis.ts` | Stereo correlation, width, mid/side levels |
+| `read_track_crest` | `tools/analysis.ts` | Crest factor (peak-to-RMS ratio) |
+
 ### MIDI Editing Concepts
 
 - **Positions and durations** are in **beats** (quarter notes) from item start: `1.0` = quarter note, `0.5` = eighth note, `0.25` = sixteenth note
 - **Pitch**: MIDI note number 0-127 where 60 = C4 (Middle C), 48 = C3, 72 = C5
 - **Velocity**: 1-127 (64 = medium, 100 = strong, 127 = maximum)
 - **Channel**: 0-15 (default 0; channel 9 = drums in General MIDI)
-- **Batch insert** (`insert_midi_notes`): Pass a JSON array string for efficient multi-note insertion
+- **Batch operations** (`insert_midi_notes`, `edit_midi_notes`): Pass a JSON array of note objects for efficient multi-note operations
 - The Lua bridge includes a fallback JSON array parser for REAPER versions without `CF_Json_Parse`
 
 ### Media Item Editing Concepts
@@ -149,6 +269,18 @@ reaper-mcp/
 - **Trim**: `trimStart` moves the left edge (adjusts start offset), `trimEnd` moves the right edge
 - **Move**: Validates destination track upfront; moves to new track first, then adjusts position
 - **Stretch markers**: Define time-stretch points mapping item position to source audio position
+
+## Large Response Handling
+
+MCP tool responses must stay within token limits. When a tool could return unbounded data (e.g., all notes in a large MIDI item), apply these patterns:
+
+1. **Provide an analysis/summary tool**: Compute aggregated stats server-side (in Lua) rather than dumping raw data for the AI to process. Example: `analyze_midi` returns per-pitch velocity stats, histograms, and machine gun detection — everything Claude would compute anyway — in ~2KB instead of 475KB of raw notes.
+
+2. **Support pagination**: Add `offset` and `limit` parameters so the client can request data in chunks. Example: `get_midi_notes` with `offset=0, limit=100` returns the first 100 notes and includes `hasMore: true` and `total: 2044`.
+
+3. **Prefer summary-first workflows**: Tool descriptions should guide the AI to use the summary tool first, then paginate raw data only when needed for targeted edits.
+
+When adding new tools that could return large datasets, always implement both a summary path and a paginated path. The summary tool should return everything the AI typically needs to make decisions in a single call.
 
 ## Build System
 
@@ -191,12 +323,13 @@ pnpm nx affected --target=build     # Build only affected by changes
 
 ## Adding New MCP Tools
 
-To add a new tool, touch these 4 places:
+To add a new tool, touch these 5 places:
 
 1. **`libs/protocol/src/commands.ts`** -- Add command type to `CommandType` union, add params interface
 2. **`libs/protocol/src/responses.ts`** -- Add response data interface if needed
 3. **`apps/reaper-mcp-server/src/tools/`** -- Create or extend a tool file, register with `server.tool()`
-4. **`reaper/mcp_bridge.lua`** -- Add handler function in the `handlers` table
+4. **`apps/reaper-mcp-server/src/cli.ts`** -- Add tool name to `MCP_TOOL_NAMES` array (used by `ensureClaudeSettings()` to auto-allow tools)
+5. **`reaper/mcp_bridge.lua`** -- Add handler function in the `handlers` table
 
 **Important:** Always use `z.coerce.number()` instead of `z.number()` for numeric parameters. MCP clients may pass numbers as strings (e.g. `"39"` instead of `39`), and `z.coerce` handles the conversion automatically.
 

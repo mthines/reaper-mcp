@@ -50,9 +50,10 @@ describe('media tools', () => {
     tools = captureTools();
   });
 
-  it('registers all 10 media tools', () => {
+  it('registers all 11 media tools', () => {
     const expectedTools = [
       'list_media_items', 'get_media_item_properties', 'set_media_item_properties',
+      'set_media_items_properties',
       'split_media_item', 'delete_media_item', 'move_media_item',
       'trim_media_item', 'add_stretch_marker', 'get_stretch_markers',
       'delete_stretch_marker',
@@ -161,6 +162,27 @@ describe('media tools', () => {
         trackIndex: 0, itemIndex: 0, volume: -6,
       });
       expectError(result, 'Track 0 not found');
+    });
+  });
+
+  describe('set_media_items_properties (batch)', () => {
+    it('sends batch set command with items JSON', async () => {
+      const data = { success: true, edited: 2, total: 2 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const items = JSON.stringify([
+        { trackIndex: 0, itemIndex: 0, volume: -3 },
+        { trackIndex: 1, itemIndex: 0, mute: 1, fadeInLength: 0.01 },
+      ]);
+      const result = await tools['set_media_items_properties'].handler({ items });
+      expect(mockedSendCommand).toHaveBeenCalledWith('set_media_items_properties', { items });
+      expectSuccess(result, data);
+    });
+
+    it('returns error on failure', async () => {
+      mockedSendCommand.mockResolvedValue(errorResponse('Failed to parse items JSON array'));
+      const result = await tools['set_media_items_properties'].handler({ items: 'bad' });
+      expectError(result, 'Failed to parse items JSON array');
     });
   });
 

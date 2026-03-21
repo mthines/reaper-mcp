@@ -2,21 +2,23 @@
 
 A cheat sheet for the agent: what lives where, what to cut, what to boost, and why. All values are starting points — trust measurements over tables.
 
+**Key principle**: The human ear does not hear all frequencies equally (see `perceived-loudness.md`). The ear is 10-15 dB more sensitive at 2-5 kHz than at 100 Hz. This means EQ moves in the presence range have outsized perceptual impact, while low-end moves require larger dB changes to be noticed.
+
 ## Frequency Band Definitions
 
-| Band | Range | Sensory Description | Common Issues |
-|------|-------|-------------------|---------------|
-| Ultra-sub | 20–40 Hz | Felt in chest; inaudible on most speakers | Rumble, mic handling noise — usually remove |
-| Sub | 40–60 Hz | Bass and kick fundamental; club system territory | Too much = boomy; too little = thin |
-| Bass | 60–120 Hz | Warmth, punch, weight | Mud if over-accumulated |
-| Upper bass | 120–250 Hz | Body of bass instruments; low-end of most other instruments | The "mud zone begins here" |
-| Low-mids | 250–500 Hz | MUD ZONE — where amateur mixes go wrong | Cut aggressively on non-bass instruments |
-| Mids | 500 Hz–1 kHz | Honk, nasality, the "telephone frequency" | Source of unpleasant boxiness |
-| Upper-mids | 1–2 kHz | Presence, forward bite | Nasal buildup on male vocals, guitars |
-| Presence | 2–5 kHz | The MOST SENSITIVE zone to human hearing | Harshness lives here — treat with care |
-| Upper presence | 5–8 kHz | Sibilance, consonant clarity, definition | Over-boosting causes fatigue |
-| Brilliance | 8–12 kHz | Crispness, snap, transient sparkle | Can sound harsh if overdone |
-| Air | 12–20 kHz | Shimmer, openness, studio sound | Subtle — ±1–2 dB is audible here |
+| Band | Range | Sensory Description | Perceived Loudness (ISO 226) | Common Issues |
+|------|-------|-------------------|----------------------------|---------------|
+| Ultra-sub | 20–40 Hz | Felt in chest; inaudible on most speakers | **Very low** — needs huge dB to hear | Rumble, mic handling noise — usually remove |
+| Sub | 40–60 Hz | Bass and kick fundamental; club system territory | **Low** — requires +10-15 dB over 3 kHz to sound equal | Too much = boomy; too little = thin |
+| Bass | 60–120 Hz | Warmth, punch, weight | **Low** — requires +8-12 dB over 3 kHz | Mud if over-accumulated |
+| Upper bass | 120–250 Hz | Body of bass instruments; low-end of most other instruments | **Below average** — +5-8 dB to match 3 kHz | The "mud zone begins here" |
+| Low-mids | 250–500 Hz | MUD ZONE — where amateur mixes go wrong | **Slightly below** — +3-5 dB to match 3 kHz | Cut aggressively on non-bass instruments |
+| Mids | 500 Hz–1 kHz | Honk, nasality, the "telephone frequency" | **Near peak sensitivity** | Source of unpleasant boxiness |
+| Upper-mids | 1–2 kHz | Presence, forward bite | **Very sensitive** | Nasal buildup on male vocals, guitars |
+| Presence | 2–5 kHz | The MOST SENSITIVE zone to human hearing | **PEAK SENSITIVITY** — ear is loudest here | Harshness lives here — even +1 dB is very audible |
+| Upper presence | 5–8 kHz | Sibilance, consonant clarity, definition | **High sensitivity** — still louder than bass range | Over-boosting causes fatigue |
+| Brilliance | 8–12 kHz | Crispness, snap, transient sparkle | **Moderate** — sensitivity dropping off | Can sound harsh if overdone |
+| Air | 12–20 kHz | Shimmer, openness, studio sound | **Low** — sensitivity falls off steeply | Subtle — ±1–2 dB is audible here; fatigue risk with accumulation |
 
 ## High-Pass Filter Reference (Where to HPF each instrument)
 

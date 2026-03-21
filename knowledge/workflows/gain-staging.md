@@ -71,8 +71,11 @@ params:
 
 Record: peak level (dBFS), RMS level (dBFS) for each track.
 
-Target levels:
-- **Average/RMS**: -18 dBFS (±3 dB acceptable)
+Target levels (perceived-loudness-aware):
+- **Sub/bass instruments**: -16 to -14 dBFS RMS (sounds quieter than metered)
+- **Full-range instruments**: -18 dBFS RMS (±3 dB acceptable)
+- **Presence-range instruments**: -19 to -20 dBFS RMS (sounds louder than metered)
+- **High-frequency instruments**: -20 to -22 dBFS RMS
 - **Peak**: -12 dBFS (not exceeding -6 dBFS)
 
 If a track reads:
@@ -80,15 +83,25 @@ If a track reads:
 - Average of -8 dBFS → needs gain reduction
 - Peak of -3 dBFS → dangerously hot, reduce gain
 
-### Step 5: Calculate gain adjustments
+### Step 5: Calculate gain adjustments (perceived-loudness-aware)
+
+Use instrument-appropriate targets rather than a flat -18 dBFS for all tracks. The human ear is 10-15 dB more sensitive at 2-5 kHz than at 100 Hz, so bass instruments need higher meter readings to sound perceptually balanced (see `knowledge/reference/perceived-loudness.md`):
+
+| Instrument Category | Target RMS | Rationale |
+|-------------------|-----------|-----------|
+| Sub/bass (kick sub, bass, 808) | -16 to -14 dBFS | Low frequencies sound quieter than metered |
+| Full-range (piano, guitar, strings) | -18 dBFS | Standard target; spans the perceptual range |
+| Presence-range (vocals, snare, lead guitar) | -19 to -20 dBFS | 2-5 kHz content sounds louder than metered |
+| High-frequency (cymbals, hi-hats, shakers) | -20 to -22 dBFS | Very sensitive frequency range |
 
 For each track:
 ```
-gain_adjustment_dB = -18 - current_average_dBFS
+gain_adjustment_dB = target_dBFS - current_average_dBFS
 ```
 
-Example: Track averages -24 dBFS → needs +6 dB
-Example: Track averages -10 dBFS → needs -8 dB
+Example: Bass averages -24 dBFS → target -15 → needs +9 dB
+Example: Vocal averages -10 dBFS → target -19 → needs -9 dB
+Example: Piano averages -24 dBFS → target -18 → needs +6 dB
 
 Round to nearest 0.5 dB for practical purposes.
 
@@ -163,3 +176,4 @@ After completing gain staging:
 - **Ignoring bus tracks**: A drum bus that's receiving 8 inputs at -18 dBFS each will be summing to a much higher level. The bus fader controls the drum bus output level — check and adjust it.
 - **Single-moment readings**: Read meters over a representative 10+ second passage, not a single snapshot that may catch silence or a single loud peak.
 - **Not checking after gain staging**: Always play the mix after staging to confirm balance feels correct. The numbers are targets, not rules — use ears to verify.
+- **Setting all tracks to the same level**: A flat -18 dBFS on every track ignores psychoacoustic loudness perception. Bass instruments need higher readings; presence-range instruments need lower readings. See `knowledge/reference/perceived-loudness.md`.

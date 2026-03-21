@@ -286,11 +286,39 @@ Each mistake is listed with:
 
 ---
 
+## Category 7: Perceived Loudness Mistakes
+
+### 22. Balancing all tracks to the same meter level
+
+**Symptom**: Bass feels thin/absent; cymbals/vocals feel too loud; mix sounds "papery" with no weight despite good metering. The mixer set every track to -18 dBFS without accounting for psychoacoustic loudness perception.
+
+**Detection**:
+- All tracks read approximately the same RMS on meters
+- Bass instruments and vocal/cymbal tracks within 2 dB of each other on meters
+- Bass sounds much quieter than its meter reading suggests; cymbals/vocals pierce through
+
+**Fix**: Account for equal-loudness contours (ISO 226). The ear is 10-15 dB more sensitive at 2-5 kHz than at 100 Hz. Bass instruments should read 3-6 dB hotter than presence-range instruments on meters to sound balanced. Target: bass at -16 to -14 dBFS, vocals at -19 to -20 dBFS, cymbals at -20 to -22 dBFS. See `perceived-loudness.md` for full reference.
+
+---
+
+### 23. Treating a flat spectrum analyzer as "balanced"
+
+**Symptom**: Mix sounds harsh and presence-heavy despite a "flat" spectrum reading; listening fatigue within minutes.
+
+**Detection**:
+- Spectrum analyzer shows relatively flat response
+- But the mix sounds harsh, forward, or fatiguing
+- 2-5 kHz range is at the same level as bass range on analyzer
+
+**Fix**: A perceptually balanced mix shows a gentle downward slope on a spectrum analyzer, because the ear naturally amplifies the 2-5 kHz range. A truly "flat" spectrum will sound presence-heavy. Don't mix to a flat line — mix to what sounds balanced, which will show lower presence energy on the analyzer than bass energy.
+
+---
+
 ## Summary Checklist (Quick Audit)
 
 The agent runs through this checklist when performing a mix analysis ("roast my mix"):
 
-- [ ] Gain staging: all tracks averaging -18 dBFS before processing
+- [ ] Gain staging: perceived-loudness-aware targets (bass at -16 to -14, presence instruments at -19 to -20 dBFS)
 - [ ] Mix bus headroom: peaks at -6 to -3 dBFS before limiting
 - [ ] HPF applied to all non-bass instruments
 - [ ] Mud zone (250–500 Hz) checked and managed

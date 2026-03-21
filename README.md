@@ -24,17 +24,23 @@ npx @mthines/reaper-mcp install-skills
 # 4. Open Claude Code — you're ready to mix
 ```
 
-That's it. Claude Code now has 26 REAPER tools and a professional mix engineer's knowledge base.
+That's it. Claude Code now has 67 REAPER tools and a professional mix engineer's knowledge base.
 
 ## What it does
 
 ```
 Claude Code
-  ├── MCP Tools (26) ──→ controls REAPER in real-time
-  │   ├── Track management (list, get/set properties)
-  │   ├── FX management (add/remove, get/set parameters, presets)
+  ├── MCP Tools (67) ──→ controls REAPER in real-time
+  │   ├── Track management (list, get/set properties, arm, phase, input)
+  │   ├── FX management (add/remove, get/set parameters, enable/offline, presets)
   │   ├── Transport (play, stop, record, cursor position)
   │   ├── Metering (peak/RMS, FFT spectrum, LUFS, correlation, crest factor)
+  │   ├── Selection (selected tracks, time selection)
+  │   ├── Markers & regions (list, add, delete)
+  │   ├── Tempo map (all tempo/time sig changes)
+  │   ├── Envelopes (list, read/write automation points)
+  │   ├── MIDI editing (14 tools: notes, CC, items, analysis, batch ops)
+  │   ├── Media items (11 tools: properties, split, move, trim, stretch)
   │   ├── Plugin discovery (list installed FX, search, presets)
   │   ├── Snapshots (save/restore mixer state for A/B comparison)
   │   └── Routing (sends, receives, bus structure)
@@ -43,7 +49,7 @@ Claude Code
       ├── Plugin knowledge (ReaEQ, Pro-Q 3, Helix Native, etc.)
       ├── Genre rules (rock, pop, hip-hop, electronic, orchestral, metal)
       ├── Workflows (gain staging, vocal chain, drum bus, mastering)
-      └── Reference (frequencies, compression, LUFS targets, common mistakes)
+      └── Reference (frequencies, compression, LUFS targets, perceived loudness, common mistakes)
 ```
 
 ## Architecture
@@ -72,6 +78,7 @@ npx @mthines/reaper-mcp setup
 ```
 
 This copies into your REAPER resource folder:
+
 - `mcp_bridge.lua` — persistent Lua bridge script
 - `mcp_analyzer.jsfx` — FFT spectrum analyzer
 - `mcp_lufs_meter.jsfx` — ITU-R BS.1770 LUFS meter
@@ -95,6 +102,7 @@ npx @mthines/reaper-mcp install-skills
 ```
 
 This creates in your project:
+
 - `.claude/agents/` — mix engineer subagents (`@mix-engineer`, `@gain-stage`, `@mix-analyzer`, `@master`)
 - `.claude/rules/` — architecture and development rules
 - `.claude/skills/` — skills like `/learn-plugin`
@@ -109,29 +117,34 @@ npx @mthines/reaper-mcp doctor
 
 Checks that the bridge is connected, knowledge is installed, and MCP config exists.
 
-## MCP Tools (26)
+## MCP Tools (67)
 
-### Track Management
+### Project & Tracks
+
 | Tool | Description |
 |------|-------------|
 | `get_project_info` | Project name, tempo, time sig, sample rate, transport state |
-| `list_tracks` | All tracks with volume, pan, mute/solo, FX count, routing |
+| `list_tracks` | All tracks with volume, pan, mute/solo, arm, phase, FX count, routing |
 | `get_track_properties` | Detailed track info + full FX chain list |
-| `set_track_property` | Set volume (dB), pan, mute, solo |
+| `set_track_property` | Set volume (dB), pan, mute, solo, recordArm, phase, input |
 
 ### FX Management
+
 | Tool | Description |
 |------|-------------|
 | `add_fx` | Add FX by name (partial match: "ReaEQ", "Pro-Q 3") |
 | `remove_fx` | Remove FX from chain by index |
 | `get_fx_parameters` | List all FX params with values and ranges |
 | `set_fx_parameter` | Set FX parameter (normalized 0.0-1.0) |
+| `set_fx_enabled` | Enable or disable (bypass) an FX plugin |
+| `set_fx_offline` | Set FX online/offline (offline = no CPU, preserves settings) |
 | `list_available_fx` | Discover all installed plugins (VST, VST3, JS, CLAP, AU) |
 | `search_fx` | Fuzzy search installed plugins by name |
 | `get_fx_preset_list` | List available presets for an FX |
 | `set_fx_preset` | Load a preset by name |
 
 ### Transport
+
 | Tool | Description |
 |------|-------------|
 | `play` | Start playback |
@@ -140,7 +153,42 @@ Checks that the bridge is connected, knowledge is installed, and MCP config exis
 | `get_transport_state` | Play/record/pause, cursor positions, tempo, time sig |
 | `set_cursor_position` | Move edit cursor to position (seconds) |
 
+### Selection & Navigation
+
+| Tool | Description |
+|------|-------------|
+| `get_selected_tracks` | Currently selected tracks with indices and names |
+| `get_time_selection` | Time/loop selection start, end, length |
+| `set_time_selection` | Set the time selection range |
+
+### Markers & Regions
+
+| Tool | Description |
+|------|-------------|
+| `list_markers` | All project markers (index, name, position, color) |
+| `list_regions` | All regions (index, name, start/end, color) |
+| `add_marker` | Add marker at position with optional name/color |
+| `add_region` | Add region with start/end, optional name/color |
+| `delete_marker` | Delete a marker by index |
+| `delete_region` | Delete a region by index |
+
+### Tempo Map
+
+| Tool | Description |
+|------|-------------|
+| `get_tempo_map` | All tempo/time sig changes (position, BPM, time sig, linear) |
+
+### Envelopes / Automation
+
+| Tool | Description |
+|------|-------------|
+| `get_track_envelopes` | List envelopes on a track (name, point count, active/visible/armed) |
+| `get_envelope_points` | Get automation points with pagination |
+| `insert_envelope_point` | Insert automation point (time, value, shape, tension) |
+| `delete_envelope_point` | Delete an automation point by index |
+
 ### Metering & Analysis
+
 | Tool | Description |
 |------|-------------|
 | `read_track_meters` | Peak/RMS L/R in dB |
@@ -149,7 +197,33 @@ Checks that the bridge is connected, knowledge is installed, and MCP config exis
 | `read_track_correlation` | Stereo correlation, width, mid/side levels |
 | `read_track_crest` | Crest factor (peak-to-RMS ratio) |
 
+### MIDI Editing (14 tools)
+
+| Tool | Description |
+|------|-------------|
+| `create_midi_item` | Create empty MIDI item on a track |
+| `list_midi_items` | List MIDI items with position, length, note/CC counts |
+| `get_midi_notes` | Get notes with pagination (offset/limit) |
+| `analyze_midi` | Per-pitch velocity stats, histogram, machine gun detection |
+| `insert_midi_note` / `insert_midi_notes` | Insert single or batch notes |
+| `edit_midi_note` / `edit_midi_notes` | Edit single or batch notes |
+| `delete_midi_note` | Delete a note by index |
+| `get_midi_cc` / `insert_midi_cc` / `delete_midi_cc` | CC event management |
+| `get_midi_item_properties` / `set_midi_item_properties` | MIDI item props |
+
+### Media Item Editing (11 tools)
+
+| Tool | Description |
+|------|-------------|
+| `list_media_items` | List items on a track (position, length, name, volume, type) |
+| `get_media_item_properties` | Detailed properties (fades, play rate, pitch, source) |
+| `set_media_item_properties` / `set_media_items_properties` | Set single or batch |
+| `split_media_item` | Split at position, returns left/right info |
+| `delete_media_item` / `move_media_item` / `trim_media_item` | Edit operations |
+| `add_stretch_marker` / `get_stretch_markers` / `delete_stretch_marker` | Time-stretching |
+
 ### Snapshots (A/B Testing)
+
 | Tool | Description |
 |------|-------------|
 | `snapshot_save` | Save current mixer state (volumes, pans, FX, mutes) |
@@ -157,6 +231,7 @@ Checks that the bridge is connected, knowledge is installed, and MCP config exis
 | `snapshot_list` | List all saved snapshots |
 
 ### Routing
+
 | Tool | Description |
 |------|-------------|
 | `get_track_routing` | Sends, receives, parent/folder info for a track |
@@ -167,12 +242,12 @@ Once you've run `setup` and `install-skills`, open Claude Code in your project d
 
 ### Available Agents
 
-| Agent | Invocation | What it does |
-|-------|-----------|-------------|
+| Agent            | Invocation      | What it does                                                              |
+| ---------------- | --------------- | ------------------------------------------------------------------------- |
 | **Mix Engineer** | `@mix-engineer` | General-purpose mix agent — analyzes, suggests, and executes any mix task |
-| **Gain Stage** | `@gain-stage` | Sets all tracks to -18 dBFS average with proper headroom |
-| **Mix Analyzer** | `@mix-analyzer` | "Roast my mix" — analysis only, no changes, produces detailed report |
-| **Master** | `@master` | Mastering chain targeting specific LUFS/platform standards |
+| **Gain Stage**   | `@gain-stage`   | Perceived-loudness-aware gain staging with proper headroom                |
+| **Mix Analyzer** | `@mix-analyzer` | "Roast my mix" — analysis only, no changes, produces detailed report      |
+| **Master**       | `@master`       | Mastering chain targeting specific LUFS/platform standards                |
 
 ### How to use them
 
@@ -196,12 +271,14 @@ claude --agent mix-engineer
 ### What happens under the hood
 
 Each agent has:
+
 - **Its own system prompt** — thinks like a mix engineer, not a general assistant
 - **Pre-approved REAPER tools** — no permission prompts for every MCP call
 - **Scoped MCP access** — only the `reaper` MCP server is loaded
 - **Embedded reference data** — frequency bands, LUFS targets, compression settings
 
 The workflow is always:
+
 1. **Save a snapshot** (so you can always A/B or undo)
 2. **Analyze** — read meters, spectrum, LUFS, correlation, crest factor
 3. **Reason** — apply genre rules, frequency knowledge, and plugin expertise
@@ -212,6 +289,7 @@ The workflow is always:
 ### A/B Comparison
 
 Every change is bracketed by snapshots:
+
 1. Agent saves a "Before" snapshot automatically
 2. Makes all changes
 3. Saves an "After" snapshot
@@ -236,12 +314,12 @@ The knowledge base is what makes this more than just a remote control — it's a
 
 Ships with knowledge for stock REAPER plugins and popular third-party suites:
 
-| Plugin | Category | Preference |
-|--------|----------|-----------|
-| ReaEQ, ReaComp, ReaDelay, ReaVerb, ReaGate, ReaLimit | Stock | 30-50 |
-| FabFilter Pro-Q 3, Pro-C 2, Pro-L 2 | Premium EQ/Comp/Limiter | 85-92 |
-| Line 6 Helix Native | Amp Sim | 82 |
-| JS: 1175 Compressor | Character Comp | 50 |
+| Plugin                                               | Category                | Preference |
+| ---------------------------------------------------- | ----------------------- | ---------- |
+| ReaEQ, ReaComp, ReaDelay, ReaVerb, ReaGate, ReaLimit | Stock                   | 30-50      |
+| FabFilter Pro-Q 3, Pro-C 2, Pro-L 2                  | Premium EQ/Comp/Limiter | 85-92      |
+| Line 6 Helix Native                                  | Amp Sim                 | 82         |
+| JS: 1175 Compressor                                  | Character Comp          | 50         |
 
 The agent automatically discovers your installed plugins and uses the best available option for each task. If you have Pro-Q 3, it uses that. If not, it falls back to ReaEQ.
 
@@ -263,14 +341,14 @@ Or manually add a markdown file to `knowledge/plugins/`. See `knowledge/plugins/
 
 Processing decisions adapt to the genre:
 
-| Genre | LUFS Target | Key Characteristics |
-|-------|------------|---------------------|
-| Rock | -11 to -9 | Parallel drum compression, hard-panned guitars |
-| Pop | -14 to -10 | Vocal-forward, two-stage compression, bus glue |
-| Hip-Hop | -10 to -7 | 808 saturation, aggressive vocal comp, mono sub |
-| Electronic | -10 to -6 | Sidechain pump, sub mono, stereo width |
-| Orchestral | -23 to -16 | Preserve dynamics, hall reverb staging |
-| Metal | -11 to -8 | V-scoop guitars, tight drums, 4-guitar wall |
+| Genre      | LUFS Target | Key Characteristics                             |
+| ---------- | ----------- | ----------------------------------------------- |
+| Rock       | -11 to -9   | Parallel drum compression, hard-panned guitars  |
+| Pop        | -14 to -10  | Vocal-forward, two-stage compression, bus glue  |
+| Hip-Hop    | -10 to -7   | 808 saturation, aggressive vocal comp, mono sub |
+| Electronic | -10 to -6   | Sidechain pump, sub mono, stereo width          |
+| Orchestral | -23 to -16  | Preserve dynamics, hall reverb staging          |
+| Metal      | -11 to -8   | V-scoop guitars, tight drums, 4-guitar wall     |
 
 ## Autonomous Mode (Allow All Tools)
 
@@ -307,7 +385,48 @@ Add to your project's `.claude/settings.json` (or `~/.claude/settings.json` for 
       "mcp__reaper__snapshot_save",
       "mcp__reaper__snapshot_restore",
       "mcp__reaper__snapshot_list",
-      "mcp__reaper__get_track_routing"
+      "mcp__reaper__get_track_routing",
+      "mcp__reaper__set_fx_enabled",
+      "mcp__reaper__set_fx_offline",
+      "mcp__reaper__get_selected_tracks",
+      "mcp__reaper__get_time_selection",
+      "mcp__reaper__set_time_selection",
+      "mcp__reaper__list_markers",
+      "mcp__reaper__list_regions",
+      "mcp__reaper__add_marker",
+      "mcp__reaper__add_region",
+      "mcp__reaper__delete_marker",
+      "mcp__reaper__delete_region",
+      "mcp__reaper__get_tempo_map",
+      "mcp__reaper__get_track_envelopes",
+      "mcp__reaper__get_envelope_points",
+      "mcp__reaper__insert_envelope_point",
+      "mcp__reaper__delete_envelope_point",
+      "mcp__reaper__create_midi_item",
+      "mcp__reaper__list_midi_items",
+      "mcp__reaper__get_midi_notes",
+      "mcp__reaper__analyze_midi",
+      "mcp__reaper__insert_midi_note",
+      "mcp__reaper__insert_midi_notes",
+      "mcp__reaper__edit_midi_note",
+      "mcp__reaper__edit_midi_notes",
+      "mcp__reaper__delete_midi_note",
+      "mcp__reaper__get_midi_cc",
+      "mcp__reaper__insert_midi_cc",
+      "mcp__reaper__delete_midi_cc",
+      "mcp__reaper__get_midi_item_properties",
+      "mcp__reaper__set_midi_item_properties",
+      "mcp__reaper__list_media_items",
+      "mcp__reaper__get_media_item_properties",
+      "mcp__reaper__set_media_item_properties",
+      "mcp__reaper__set_media_items_properties",
+      "mcp__reaper__split_media_item",
+      "mcp__reaper__delete_media_item",
+      "mcp__reaper__move_media_item",
+      "mcp__reaper__trim_media_item",
+      "mcp__reaper__add_stretch_marker",
+      "mcp__reaper__get_stretch_markers",
+      "mcp__reaper__delete_stretch_marker"
     ]
   }
 }
@@ -350,13 +469,31 @@ After `install-skills`, your project has a `.mcp.json`:
 
 Claude Code reads this automatically. Open Claude Code in your project and the REAPER tools are available.
 
+### Running from source (development)
+
+If you're developing reaper-mcp and want changes reflected immediately without rebuilding, point your `.mcp.json` at the TypeScript source using `npx tsx`:
+
+```json
+{
+  "mcpServers": {
+    "reaper": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/reaper-mcp/apps/reaper-mcp-server/src/main.ts", "serve"]
+    }
+  }
+}
+```
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the full dev workflow.
+
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
+| Variable               | Description                        | Default              |
+| ---------------------- | ---------------------------------- | -------------------- |
 | `REAPER_RESOURCE_PATH` | Override REAPER resource directory | Auto-detected per OS |
 
 Platform defaults:
+
 - **macOS**: `~/Library/Application Support/REAPER`
 - **Windows**: `%APPDATA%/REAPER`
 - **Linux**: `~/.config/REAPER`
@@ -366,14 +503,14 @@ Platform defaults:
 ```
 reaper-mcp/
 ├── apps/
-│   ├── reaper-mcp-server/        # MCP server (26 tools, esbuild bundle)
+│   ├── reaper-mcp-server/        # MCP server (67 tools, esbuild bundle)
 │   └── reaper-mix-agent/         # AI mix agent (knowledge loader, plugin resolver)
 ├── libs/protocol/                # Shared TypeScript types
 ├── knowledge/                    # AI mix engineer knowledge base
 │   ├── plugins/                  # Plugin-specific knowledge (extensible)
 │   ├── genres/                   # Genre mixing conventions
 │   ├── workflows/                # Step-by-step mixing workflows
-│   └── reference/                # Frequency, compression, metering cheat sheets
+│   └── reference/                # Frequency, compression, metering, perceived loudness cheat sheets
 ├── reaper/                       # Files installed into REAPER
 │   ├── mcp_bridge.lua            # Persistent Lua bridge
 │   ├── mcp_analyzer.jsfx         # FFT spectrum analyzer
@@ -384,15 +521,33 @@ reaper-mcp/
 └── nx.json                       # Nx workspace config
 ```
 
+## Updating the Lua Bridge
+
+The MCP server (TypeScript) and the Lua bridge (REAPER) are two separate components. After updating to a new version — or after adding new tools during development — you need to reinstall the bridge files and reload the script in REAPER:
+
+```bash
+# Reinstall bridge files into REAPER
+npx @mthines/reaper-mcp setup
+```
+
+Then in REAPER:
+
+1. **Stop** the running bridge: Actions > Running Scripts > stop `mcp_bridge.lua`
+2. **Reload** the updated script: Actions > Load ReaScript > select `mcp_bridge.lua` > Run
+
+If existing tools (like `get_project_info`) work but new tools fail or timeout, this is almost always because the Lua bridge needs to be updated and reloaded.
+
 ## Development
 
 ```bash
 pnpm install
 pnpm nx run-many --target=build      # Build all
 pnpm nx run-many --target=lint       # Lint all
-pnpm nx run-many --target=test       # Test all (130+ tests)
+pnpm nx run-many --target=test       # Test all (200+ tests)
 pnpm nx run-many --target=build,lint,test  # Everything
 ```
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the full dev workflow including running from source, MCP Inspector, and bridge update details.
 
 ## License
 

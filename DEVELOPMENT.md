@@ -24,14 +24,14 @@ pnpm nx dev reaper-mcp-server
 
 By default, `.mcp.json` points to the built output in `dist/`. During development, you want to run from source instead.
 
-Update your `.mcp.json` (or `~/.claude.json` for global config) to use `tsx`:
+Update your `.mcp.json` (or `~/.claude.json` for global config) to use `npx tsx`:
 
 ```json
 {
   "mcpServers": {
     "reaper": {
-      "command": "tsx",
-      "args": ["/absolute/path/to/apps/reaper-mcp-server/src/main.ts", "serve"]
+      "command": "npx",
+      "args": ["tsx", "/absolute/path/to/apps/reaper-mcp-server/src/main.ts", "serve"]
     }
   }
 }
@@ -43,14 +43,14 @@ Replace `/absolute/path/to` with the actual path to your repo checkout. For exam
 {
   "mcpServers": {
     "reaper": {
-      "command": "tsx",
-      "args": ["/Users/you/code/reaper-mcp/apps/reaper-mcp-server/src/main.ts", "serve"]
+      "command": "npx",
+      "args": ["tsx", "/Users/you/code/reaper-mcp/apps/reaper-mcp-server/src/main.ts", "serve"]
     }
   }
 }
 ```
 
-> **Note:** `tsx` must be in your PATH. If installed only as a devDependency, use `npx tsx` as the command instead, or install it globally with `npm i -g tsx`.
+> **Note:** Using `npx tsx` ensures tsx is resolved from local devDependencies without requiring a global install. If you prefer, you can install tsx globally (`npm i -g tsx`) and use `"command": "tsx"` directly instead.
 
 After changing `.mcp.json`, restart Claude Code (or the MCP client) to pick up the new config. Each restart of the MCP server (including watch-triggered restarts) will require the MCP client to reconnect — this is inherent to the stdio transport.
 
@@ -59,7 +59,7 @@ After changing `.mcp.json`, restart Claude Code (or the MCP client) to pick up t
 The [MCP Inspector](https://github.com/modelcontextprotocol/inspector) lets you test tools interactively without Claude Code:
 
 ```bash
-npx @modelcontextprotocol/inspector tsx apps/reaper-mcp-server/src/main.ts serve
+npx @modelcontextprotocol/inspector npx tsx apps/reaper-mcp-server/src/main.ts serve
 ```
 
 This opens a web UI where you can invoke any registered tool and see the JSON responses.
@@ -96,4 +96,22 @@ After making changes to files in `reaper/` (Lua bridge, JSFX analyzers), reinsta
 pnpm build && node dist/apps/reaper-mcp-server/main.js setup
 ```
 
-Then reload `mcp_bridge.lua` in REAPER (Actions > Run ReaScript).
+Or if running from source with tsx:
+
+```bash
+npx tsx apps/reaper-mcp-server/src/main.ts setup
+```
+
+Then reload the Lua bridge in REAPER:
+
+1. **Stop** the running bridge script: Actions > Running Scripts > stop `mcp_bridge.lua`
+2. **Reload** the updated script: Actions > Load ReaScript > select `mcp_bridge.lua` > Run
+
+### When is a bridge update needed?
+
+The MCP server (TypeScript) and the Lua bridge (REAPER) are **two separate components**. When you add new MCP tools:
+
+- **TypeScript changes** (new tool definitions in `apps/reaper-mcp-server/src/tools/`) are picked up automatically if running from source with tsx, or after rebuilding with `pnpm build`.
+- **Lua bridge changes** (new handlers in `reaper/mcp_bridge.lua`) require reinstalling and reloading the bridge in REAPER using the steps above.
+
+If the MCP server exposes a tool but the Lua bridge doesn't have a matching handler, commands will timeout. The MCP server connection itself will still work (e.g., `get_project_info` may succeed) but the new tools will fail. This is the most common cause of "tools not working after an update."

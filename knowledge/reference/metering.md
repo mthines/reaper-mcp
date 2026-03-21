@@ -153,6 +153,23 @@ For a healthy mix signal chain:
 | Limiter output | 1 dBTP headroom | -1.0 dBTP |
 | Final export | Compliant with platform | Per platform spec |
 
+## Perceived Loudness vs. Metered Loudness
+
+**Critical concept**: Meters measure electrical/digital signal level, not what the listener actually hears. The human ear is 10-15 dB more sensitive at 2-5 kHz (presence range) than at 100 Hz (bass range). This has direct implications for how you interpret meter readings. See `perceived-loudness.md` for full reference.
+
+### What This Means for Metering
+
+| Scenario | Meter Says | Listener Hears | Correct Action |
+|----------|-----------|---------------|----------------|
+| Bass and vocal at same RMS | "Equal volume" | Bass is much quieter | Bass should read 3-6 dB hotter on meters |
+| Hi-hat and kick at same peak | "Equal transients" | Hi-hat is much louder | Pull hi-hat fader down 3-5 dB |
+| "Flat" spectrum on analyzer | "Balanced mix" | Presence-heavy, harsh | A well-balanced mix has a gentle downward slope on the analyzer |
+| LUFS matches target | "Correct loudness" | Depends on spectral content | LUFS uses K-weighting which partially compensates, but per-track balance still needs perceptual awareness |
+
+### LUFS and K-Weighting
+
+LUFS measurements already incorporate some psychoacoustic compensation via K-weighting (a +4 dB shelf at ~1.7 kHz + a 100 Hz high-pass). This means LUFS is better than raw RMS for perceived loudness — but it's a broadband measure. It tells you the overall perceived loudness, NOT whether individual instruments within the mix are perceptually balanced against each other. Per-track balance decisions still require perceived loudness awareness.
+
 ## Common Metering Mistakes
 
 | Mistake | Correct Practice |
@@ -164,3 +181,5 @@ For a healthy mix signal chain:
 | Not accounting for intersample peaks | Always use a true peak limiter (ISP mode) |
 | Comparing short-term LUFS between songs | Compare integrated LUFS for an apples-to-apples comparison |
 | Ignoring crest factor | A mix with good integrated LUFS but low crest factor is over-compressed |
+| Setting all tracks to the same dBFS target | Account for perceived loudness — bass instruments need higher meter readings than presence-range instruments |
+| Treating a "flat" spectrum as balanced | The ear amplifies 2-5 kHz naturally; a flat spectrum sounds harsh. Expect a gentle downward slope from low to high |
