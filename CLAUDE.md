@@ -119,7 +119,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (67 total)
+## MCP Tools (71 total)
 
 ### Project & Tracks (4)
 
@@ -211,14 +211,18 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 |------|------|-------------|
 | `get_tempo_map` | `tools/tempo.ts` | All tempo/time sig changes (position, BPM, time sig, linear flag) |
 
-### Envelope / Automation Tools (4)
+### Envelope / Automation Tools (8)
 
 | Tool | File | Description |
 |------|------|-------------|
+| `create_track_envelope` | `tools/envelopes.ts` | Create/show an envelope on a track (Volume, Pan, Mute, Width, Trim Volume, or FX parameter) |
 | `get_track_envelopes` | `tools/envelopes.ts` | List envelopes on a track (name, point count, active/visible/armed) |
 | `get_envelope_points` | `tools/envelopes.ts` | Get automation points with pagination (time, value, shape, tension) |
 | `insert_envelope_point` | `tools/envelopes.ts` | Insert an automation point with shape/tension |
+| `insert_envelope_points` | `tools/envelopes.ts` | Batch insert multiple automation points (JSON array) |
 | `delete_envelope_point` | `tools/envelopes.ts` | Delete an automation point by index |
+| `clear_envelope` | `tools/envelopes.ts` | Delete ALL points from an envelope |
+| `set_envelope_properties` | `tools/envelopes.ts` | Set envelope active/visible/armed state |
 
 ### FX Discovery & Presets (4)
 
@@ -269,6 +273,15 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 - **Trim**: `trimStart` moves the left edge (adjusts start offset), `trimEnd` moves the right edge
 - **Move**: Validates destination track upfront; moves to new track first, then adjusts position
 - **Stretch markers**: Define time-stretch points mapping item position to source audio position
+
+### Envelope / Automation Concepts
+
+- **Creating envelopes**: Use `create_track_envelope` before adding points. Built-in envelopes use `envelopeName` ("Volume", "Pan", "Mute", "Width", "Trim Volume"). FX parameter envelopes use `fxIndex` + `paramIndex`.
+- **Envelope values**: Scale depends on envelope type. Volume envelopes use linear scale (1.0 = 0 dB), Pan uses -1.0 to 1.0, Mute uses 0 or 1.
+- **Point shapes**: 0=linear, 1=square, 2=slow start/end, 3=fast start, 4=fast end, 5=bezier
+- **Workflow**: `create_track_envelope` → `insert_envelope_point`/`insert_envelope_points` → optionally `set_envelope_properties` to arm for writing
+- **Batch operations** (`insert_envelope_points`): Pass a JSON array of point objects for efficient multi-point automation curves
+- **SWS extension**: `set_envelope_properties` works best with SWS installed; falls back to state chunk editing without it
 
 ## Large Response Handling
 
