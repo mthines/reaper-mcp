@@ -1,5 +1,5 @@
 ---
-name: master
+name: mastering
 description: Mastering engineer for REAPER DAW. Applies a mastering chain to the mix bus targeting specific loudness standards. Use for "master this", "prepare for Spotify", or "final master".
 tools: Read, Glob
 mcpServers:
