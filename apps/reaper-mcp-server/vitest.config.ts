@@ -5,6 +5,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    watch: false,
+    passWithNoTests: true,
   },
   resolve: {
     alias: {
