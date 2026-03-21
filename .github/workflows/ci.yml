@@ -1,0 +1,423 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: 'Force release even without changes'
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Dry run (no publishing)'
+        type: boolean
+        default: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  # =============================================================================
+  # Step 1: Detect changes and determine release type
+  # =============================================================================
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.detect.outputs.changed }}
+      is_beta: ${{ steps.detect.outputs.is_beta }}
+      pr_number: ${{ steps.detect.outputs.pr_number }}
+      base_ref: ${{ steps.detect.outputs.base_ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: git fetch --tags --force
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Detect changes
+        id: detect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_RELEASE: ${{ inputs.force_release }}
+        run: |
+          IS_BETA="false"
+          PR_NUMBER=""
+          BASE_REF="main"
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            LAST_STABLE_TAG=$(git tag -l "v*" --sort=-version:refname | grep -E "^v[0-9]" | grep -v "beta" | head -n 1 || echo "")
+            if [ -n "$LAST_STABLE_TAG" ]; then
+              BASE_REF="$LAST_STABLE_TAG"
+            else
+              BASE_REF="HEAD~1"
+            fi
+            echo "::notice::Push to main — comparing against $BASE_REF"
+
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF="origin/${{ github.base_ref }}"
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            if [ "${{ github.event.pull_request.draft }}" = "false" ]; then
+              IS_BETA="true"
+            fi
+            echo "::notice::PR #$PR_NUMBER — comparing against $BASE_REF"
+
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              LAST_STABLE_TAG=$(git tag -l "v*" --sort=-version:refname | grep -E "^v[0-9]" | grep -v "beta" | head -n 1 || echo "")
+              if [ -n "$LAST_STABLE_TAG" ]; then
+                BASE_REF="$LAST_STABLE_TAG"
+              else
+                BASE_REF="HEAD~1"
+              fi
+            else
+              PR_INFO=$(gh pr view --json number,baseRefName,state 2>/dev/null || echo "")
+              if [ -n "$PR_INFO" ]; then
+                PR_STATE=$(echo "$PR_INFO" | jq -r '.state')
+                if [ "$PR_STATE" = "OPEN" ]; then
+                  PR_NUMBER=$(echo "$PR_INFO" | jq -r '.number')
+                  BASE_REF="origin/$(echo "$PR_INFO" | jq -r '.baseRefName')"
+                  IS_BETA="true"
+                fi
+              fi
+              if [ -z "$PR_NUMBER" ]; then
+                BASE_REF="HEAD~1"
+              fi
+            fi
+            echo "::notice::Manual trigger — comparing against $BASE_REF"
+          fi
+
+          # Skip release commits (prevent loops)
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+          if [[ "$COMMIT_MSG" =~ ^chore\(release\): ]]; then
+            if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+              echo "::notice::Skipping — this is a release commit"
+              echo "changed=false" >> $GITHUB_OUTPUT
+              echo "is_beta=$IS_BETA" >> $GITHUB_OUTPUT
+              echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+              echo "base_ref=$BASE_REF" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+
+          # Detect changes using Nx
+          CHANGED="false"
+          if [ "$FORCE_RELEASE" = "true" ]; then
+            CHANGED="true"
+            echo "::notice::Force release enabled"
+          else
+            AFFECTED=$(npx nx show projects --affected --base="$BASE_REF" 2>/dev/null || echo "")
+            echo "Affected projects: $AFFECTED"
+            if echo "$AFFECTED" | grep -qw "reaper-mcp-server"; then
+              CHANGED="true"
+              echo "::notice::reaper-mcp-server: changes detected"
+            elif echo "$AFFECTED" | grep -qw "protocol"; then
+              CHANGED="true"
+              echo "::notice::protocol: changes detected (dependency of server)"
+            elif echo "$AFFECTED" | grep -qw "reaper-mix-agent"; then
+              CHANGED="true"
+              echo "::notice::reaper-mix-agent: changes detected"
+            else
+              echo "::notice::No publishable changes detected"
+            fi
+          fi
+
+          echo "changed=$CHANGED" >> $GITHUB_OUTPUT
+          echo "is_beta=$IS_BETA" >> $GITHUB_OUTPUT
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "base_ref=$BASE_REF" >> $GITHUB_OUTPUT
+
+  # =============================================================================
+  # Step 2: Build, lint, and test
+  # =============================================================================
+  test:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.changed == 'true' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build all projects
+        run: pnpm nx run-many --target=build
+
+      - name: Lint all projects
+        run: pnpm nx run-many --target=lint
+
+      - name: Test all projects
+        run: pnpm nx run-many --target=test
+
+  # =============================================================================
+  # Step 3: Calculate version and create tag
+  # =============================================================================
+  version:
+    needs: [detect-changes, test]
+    if: |
+      always() &&
+      (needs.test.result == 'success') &&
+      needs.detect-changes.outputs.changed == 'true' &&
+      !inputs.dry_run &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
+        (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || needs.detect-changes.outputs.pr_number != ''))
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      created: ${{ steps.tag.outputs.created }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Fetch all tags
+        run: git fetch --tags --force
+
+      - name: Calculate version
+        id: version
+        env:
+          IS_BETA: ${{ needs.detect-changes.outputs.is_beta }}
+          PR_NUMBER: ${{ needs.detect-changes.outputs.pr_number }}
+          BASE_REF: ${{ needs.detect-changes.outputs.base_ref }}
+        run: |
+          echo "::group::Commit analysis"
+
+          COMMITS=$(git log "${BASE_REF}"..HEAD --pretty=format:"%s" --no-merges 2>/dev/null || git log HEAD~10..HEAD --pretty=format:"%s" --no-merges)
+          echo "Commits since $BASE_REF:"
+          echo "$COMMITS"
+
+          # Determine bump type from conventional commits
+          BUMP_TYPE="patch"
+          if echo "$COMMITS" | grep -qE "^(BREAKING CHANGE:|.*!:)"; then
+            BUMP_TYPE="major"
+          elif echo "$COMMITS" | grep -q "^feat"; then
+            BUMP_TYPE="minor"
+          fi
+          echo "Bump type: $BUMP_TYPE"
+          echo "::endgroup::"
+
+          # Get current version from server package.json
+          CURRENT=$(cat apps/reaper-mcp-server/package.json | grep '"version"' | sed 's/.*"version": "\([^"]*\)".*/\1/')
+          BASE_CURRENT=$(echo "$CURRENT" | sed -E 's/-.*$//')
+          IFS='.' read -ra V <<< "$BASE_CURRENT"
+
+          case "$BUMP_TYPE" in
+            major) V[0]=$((V[0] + 1)); V[1]=0; V[2]=0 ;;
+            minor) V[1]=$((V[1] + 1)); V[2]=0 ;;
+            patch) V[2]=$((V[2] + 1)) ;;
+          esac
+
+          BASE_VERSION="${V[0]}.${V[1]}.${V[2]}"
+
+          if [ "$IS_BETA" = "true" ] && [ -n "$PR_NUMBER" ]; then
+            EXISTING=$(git tag -l "v${BASE_VERSION}-beta.${PR_NUMBER}.*" | wc -l | tr -d ' ')
+            BETA_NUM=$((EXISTING + 1))
+            NEW_VERSION="${BASE_VERSION}-beta.${PR_NUMBER}.${BETA_NUM}"
+            echo "::notice::Beta version: $NEW_VERSION"
+          else
+            NEW_VERSION="$BASE_VERSION"
+            echo "::notice::Stable version: $NEW_VERSION"
+          fi
+
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create tag
+        id: tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          IS_BETA="${{ needs.detect-changes.outputs.is_beta }}"
+
+          # Check if tag already exists
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::warning::Tag $TAG already exists — skipping"
+            echo "created=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [ "$IS_BETA" = "true" ]; then
+            git tag -a "$TAG" -m "Beta release $TAG"
+            git push origin "$TAG"
+            echo "::notice::Created beta tag $TAG"
+          else
+            # Update version in all package.json files
+            for PKG in apps/reaper-mcp-server/package.json apps/reaper-mix-agent/package.json libs/protocol/package.json; do
+              if [ -f "$PKG" ]; then
+                sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$PKG"
+              fi
+            done
+
+            git add apps/*/package.json libs/*/package.json
+            git commit -m "chore(release): v$VERSION"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin main
+            git push origin "$TAG"
+            echo "::notice::Created stable release $TAG"
+          fi
+
+          echo "created=true" >> $GITHUB_OUTPUT
+
+  # =============================================================================
+  # Step 4: Build and publish to npm + create GitHub release
+  # =============================================================================
+  release:
+    needs: [detect-changes, version]
+    if: |
+      always() &&
+      needs.version.outputs.created == 'true'
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: write
+      id-token: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.version.outputs.tag }}
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build all projects
+        run: pnpm nx run-many --target=build
+
+      - name: Prepare npm package
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          DIST="dist/apps/reaper-mcp-server"
+
+          # Update version in dist package.json (all other metadata is already in source)
+          sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$DIST/package.json"
+
+          # Verify package contents
+          echo "Package version: $VERSION"
+          echo "Package contents:"
+          ls -la "$DIST/"
+          echo "---"
+          echo "Files that will be published (per 'files' field):"
+          ls -la "$DIST/main.js" "$DIST/README.md" "$DIST/LICENSE" 2>/dev/null
+          ls -d "$DIST/reaper" "$DIST/knowledge" "$DIST/claude-rules" "$DIST/claude-skills" 2>/dev/null
+          echo "---"
+          cat "$DIST/package.json"
+
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Publish to npm
+        working-directory: dist/apps/reaper-mcp-server
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          echo "Publishing @mthines/reaper-mcp@$VERSION"
+
+          if [[ "$VERSION" == *"-"* ]]; then
+            NPM_TAG=$(echo "$VERSION" | sed -E 's/.*-([^.]+)\..*/\1/')
+            echo "Publishing with tag: $NPM_TAG"
+            npm publish --provenance --access public --tag "$NPM_TAG"
+          else
+            npm publish --provenance --access public
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          TAG="${{ needs.version.outputs.tag }}"
+          IS_BETA="${{ needs.detect-changes.outputs.is_beta }}"
+
+          PRERELEASE_FLAG=""
+          if [ "$IS_BETA" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          # Generate release notes from commits
+          NOTES=$(git log "$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo HEAD~10)"..HEAD --pretty=format:"- %s" --no-merges 2>/dev/null || echo "- Initial release")
+
+          gh release create "$TAG" \
+            --title "reaper-mcp $TAG" \
+            --notes "## What's Changed
+
+          $NOTES
+
+          ## Install
+
+          \`\`\`bash
+          npx @mthines/reaper-mcp setup
+          npx @mthines/reaper-mcp install-skills
+          \`\`\`
+
+          ## npm
+
+          \`\`\`bash
+          npm install -g @mthines/reaper-mcp@$VERSION
+          \`\`\`" \
+            $PRERELEASE_FLAG
+
+      - name: Comment on PR (beta releases)
+        if: contains(needs.version.outputs.version, '-beta.')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ needs.version.outputs.version }}';
+            const prNumber = '${{ needs.detect-changes.outputs.pr_number }}';
+            const body = `## Beta Release Published
+
+            **Version:** \`${version}\`
+
+            ### Install
+            \`\`\`bash
+            npx @mthines/reaper-mcp@${version} setup
+            npx @mthines/reaper-mcp@${version} install-skills
+            \`\`\`
+
+            [View Release](https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/v${version})`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parseInt(prNumber),
+              body: body.split('\n').map(line => line.trim()).join('\n')
+            });

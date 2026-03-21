@@ -38,6 +38,16 @@
             "glob": "**/*",
             "input": ".claude/skills",
             "output": "claude-skills"
+          },
+          {
+            "glob": "README.md",
+            "input": ".",
+            "output": "."
+          },
+          {
+            "glob": "LICENSE",
+            "input": ".",
+            "output": "."
           }
         ]
       }

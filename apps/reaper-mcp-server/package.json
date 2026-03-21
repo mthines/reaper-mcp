@@ -1,9 +1,44 @@
 {
-  "name": "@mthines/reaper-mcp-server",
+  "name": "@mthines/reaper-mcp",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
+  "description": "MCP server for controlling REAPER DAW — real-time mixing, FX control, and frequency analysis for AI agents",
+  "license": "MIT",
+  "author": "mthines",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mthines/reaper-mcp.git"
+  },
+  "homepage": "https://github.com/mthines/reaper-mcp",
+  "bugs": {
+    "url": "https://github.com/mthines/reaper-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "reaper",
+    "daw",
+    "audio",
+    "mixing",
+    "ai",
+    "model-context-protocol",
+    "reascript"
+  ],
   "bin": {
     "reaper-mcp": "./main.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "main.js",
+    "reaper/**",
+    "knowledge/**",
+    "claude-rules/**",
+    "claude-skills/**",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }
