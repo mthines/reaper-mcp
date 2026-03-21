@@ -31,6 +31,7 @@
     "@modelcontextprotocol/sdk": "^1.12.0",
     "zod": "^3.24.0"
   },
+  "packageManager": "pnpm@10.28.1",
   "engines": {
     "node": ">=20.0.0"
   }
