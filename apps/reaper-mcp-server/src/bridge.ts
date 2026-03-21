@@ -81,7 +81,7 @@ export async function sendCommand(
   }
 
   // Timeout — cleanup command file
-  await unlink(commandPath).catch(() => {});
+  await unlink(commandPath).catch(() => { /* cleanup best-effort */ });
 
   return {
     id,
@@ -109,7 +109,7 @@ export async function isBridgeRunning(): Promise<boolean> {
 /**
  * Clean up stale command/response files older than maxAge.
  */
-export async function cleanupStaleFiles(maxAgeMs: number = 30_000): Promise<number> {
+export async function cleanupStaleFiles(maxAgeMs = 30_000): Promise<number> {
   const dir = getBridgeDir();
   let cleaned = 0;
   try {
@@ -120,7 +120,7 @@ export async function cleanupStaleFiles(maxAgeMs: number = 30_000): Promise<numb
       const filePath = join(dir, file);
       const info = await stat(filePath);
       if (now - info.mtimeMs > maxAgeMs) {
-        await unlink(filePath).catch(() => {});
+        await unlink(filePath).catch(() => { /* cleanup best-effort */ });
         cleaned++;
       }
     }

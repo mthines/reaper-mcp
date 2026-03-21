@@ -2,6 +2,7 @@
   "name": "reaper-mcp-server",
   "sourceRoot": "apps/reaper-mcp-server/src",
   "projectType": "application",
+  "tags": ["type:app"],
   "targets": {
     "build": {
       "executor": "@nx/esbuild:esbuild",
@@ -32,18 +33,6 @@
         "command": "node dist/apps/reaper-mcp-server/main.js serve"
       },
       "dependsOn": ["build"]
-    },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "eslint apps/reaper-mcp-server/src"
-      }
-    },
-    "test": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "vitest run --passWithNoTests --config apps/reaper-mcp-server/vitest.config.ts"
-      }
     }
   }
 }

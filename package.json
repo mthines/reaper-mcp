@@ -13,12 +13,15 @@
     "serve": "node dist/apps/reaper-mcp-server/main.js serve"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@eslint/js": "^9.39.4",
     "@nx/esbuild": "^20.0.0",
+    "@nx/eslint": "^20.8.4",
+    "@nx/eslint-plugin": "^20.8.4",
     "@nx/js": "^20.0.0",
+    "@nx/vite": "^20.8.4",
     "@types/node": "^22.0.0",
     "esbuild": "^0.24.0",
-    "eslint": "^10.1.0",
+    "eslint": "^9.39.4",
     "nx": "^20.0.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.57.1",

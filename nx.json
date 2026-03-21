@@ -6,20 +6,34 @@
       "default",
       "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)",
       "!{projectRoot}/tsconfig.spec.json",
-      "!{projectRoot}/.eslintrc.json"
+      "!{projectRoot}/vitest.config.ts"
     ],
-    "sharedGlobals": []
+    "sharedGlobals": [{ "runtime": "node --version" }]
   },
   "targetDefaults": {
     "build": {
       "dependsOn": ["^build"],
       "cache": true,
       "inputs": ["production", "^production"]
-    },
-    "test": {
-      "cache": true,
-      "inputs": ["default", "^production"]
     }
   },
+  "plugins": [
+    {
+      "plugin": "@nx/eslint/plugin",
+      "options": {
+        "targetName": "lint"
+      }
+    },
+    {
+      "plugin": "@nx/vite/plugin",
+      "options": {
+        "testTargetName": "test"
+      }
+    }
+  ],
+  "nxCloudAccessToken": "",
+  "useLegacyCache": false,
+  "useInferencePlugins": true,
+  "nxAI": false,
   "defaultBase": "main"
 }
