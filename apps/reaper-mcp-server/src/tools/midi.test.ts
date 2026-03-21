@@ -50,10 +50,10 @@ describe('midi tools', () => {
     tools = captureTools();
   });
 
-  it('registers all 12 midi tools', () => {
+  it('registers all 14 midi tools', () => {
     const expectedTools = [
-      'create_midi_item', 'list_midi_items', 'get_midi_notes',
-      'insert_midi_note', 'insert_midi_notes', 'edit_midi_note',
+      'create_midi_item', 'list_midi_items', 'get_midi_notes', 'analyze_midi',
+      'insert_midi_note', 'insert_midi_notes', 'edit_midi_note', 'edit_midi_notes',
       'delete_midi_note', 'get_midi_cc', 'insert_midi_cc',
       'delete_midi_cc', 'get_midi_item_properties', 'set_midi_item_properties',
     ];
@@ -119,20 +119,34 @@ describe('midi tools', () => {
   });
 
   describe('get_midi_notes', () => {
-    it('sends get_midi_notes command', async () => {
-      const data = { trackIndex: 0, itemIndex: 0, notes: [], total: 0 };
+    it('sends get_midi_notes command without pagination', async () => {
+      const data = { trackIndex: 0, itemIndex: 0, notes: [], returned: 0, total: 0, offset: 0, hasMore: false };
       mockedSendCommand.mockResolvedValue(successResponse(data));
 
       const result = await tools['get_midi_notes'].handler({ trackIndex: 0, itemIndex: 0 });
       expect(mockedSendCommand).toHaveBeenCalledWith('get_midi_notes', {
-        trackIndex: 0, itemIndex: 0,
+        trackIndex: 0, itemIndex: 0, offset: undefined, limit: undefined,
+      });
+      expectSuccess(result, data);
+    });
+
+    it('passes offset and limit for pagination', async () => {
+      const data = {
+        trackIndex: 0, itemIndex: 0, returned: 50, total: 2044, offset: 100, hasMore: true,
+        notes: [{ noteIndex: 100, pitch: 60, velocity: 100, startPosition: 25, duration: 1, channel: 0, selected: false, muted: false }],
+      };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const result = await tools['get_midi_notes'].handler({ trackIndex: 0, itemIndex: 0, offset: 100, limit: 50 });
+      expect(mockedSendCommand).toHaveBeenCalledWith('get_midi_notes', {
+        trackIndex: 0, itemIndex: 0, offset: 100, limit: 50,
       });
       expectSuccess(result, data);
     });
 
     it('returns notes with full details', async () => {
       const data = {
-        trackIndex: 0, itemIndex: 0, total: 2,
+        trackIndex: 0, itemIndex: 0, returned: 2, total: 2, offset: 0, hasMore: false,
         notes: [
           { noteIndex: 0, pitch: 60, velocity: 100, startPosition: 0, duration: 1, channel: 0, selected: false, muted: false },
           { noteIndex: 1, pitch: 64, velocity: 80, startPosition: 1, duration: 0.5, channel: 9, selected: true, muted: false },
@@ -148,6 +162,33 @@ describe('midi tools', () => {
       mockedSendCommand.mockResolvedValue(errorResponse('Item 5 not found on track 0'));
       const result = await tools['get_midi_notes'].handler({ trackIndex: 0, itemIndex: 5 });
       expectError(result, 'Item 5 not found on track 0');
+    });
+  });
+
+  describe('analyze_midi', () => {
+    it('sends analyze_midi command', async () => {
+      const data = {
+        trackIndex: 0, itemIndex: 0, totalNotes: 100, totalCC: 5, durationBeats: 32,
+        pitchStats: [
+          { pitch: 36, count: 20, minVelocity: 50, maxVelocity: 120, avgVelocity: 85, stdDev: 15.2, maxConsecutiveSameVelocity: 2 },
+          { pitch: 38, count: 16, minVelocity: 60, maxVelocity: 127, avgVelocity: 95, stdDev: 8.1, maxConsecutiveSameVelocity: 5 },
+        ],
+        velocityHistogram: [0, 0, 0, 0, 0, 3, 8, 12, 25, 20, 18, 10, 4],
+        machineGunWarnings: [
+          { pitch: 38, maxConsecutive: 5, sequences: 2 },
+        ],
+      };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const result = await tools['analyze_midi'].handler({ trackIndex: 0, itemIndex: 0 });
+      expect(mockedSendCommand).toHaveBeenCalledWith('analyze_midi', { trackIndex: 0, itemIndex: 0 });
+      expectSuccess(result, data);
+    });
+
+    it('returns error on failure', async () => {
+      mockedSendCommand.mockResolvedValue(errorResponse('Item is not a MIDI item'));
+      const result = await tools['analyze_midi'].handler({ trackIndex: 0, itemIndex: 0 });
+      expectError(result, 'Item is not a MIDI item');
     });
   });
 
@@ -203,11 +244,11 @@ describe('midi tools', () => {
   });
 
   describe('insert_midi_notes', () => {
-    it('sends insert_midi_notes command with notes JSON', async () => {
-      const notes = JSON.stringify([
+    it('sends insert_midi_notes command with native array', async () => {
+      const notes = [
         { pitch: 60, velocity: 100, startPosition: 0, duration: 1, channel: 0 },
         { pitch: 64, velocity: 100, startPosition: 0, duration: 1, channel: 0 },
-      ]);
+      ];
       const data = { success: true, inserted: 2, noteCount: 2 };
       mockedSendCommand.mockResolvedValue(successResponse(data));
 
@@ -221,7 +262,7 @@ describe('midi tools', () => {
     });
 
     it('sends single-note array', async () => {
-      const notes = JSON.stringify([{ pitch: 60, velocity: 100, startPosition: 0, duration: 1 }]);
+      const notes = [{ pitch: 60, velocity: 100, startPosition: 0, duration: 1 }];
       const data = { success: true, inserted: 1, noteCount: 1 };
       mockedSendCommand.mockResolvedValue(successResponse(data));
 
@@ -232,11 +273,11 @@ describe('midi tools', () => {
     });
 
     it('returns error on failure', async () => {
-      mockedSendCommand.mockResolvedValue(errorResponse('Failed to parse notes JSON array'));
+      mockedSendCommand.mockResolvedValue(errorResponse('Failed to parse notes array'));
       const result = await tools['insert_midi_notes'].handler({
-        trackIndex: 0, itemIndex: 0, notes: 'invalid',
+        trackIndex: 0, itemIndex: 0, notes: [{ pitch: 60, velocity: 100, startPosition: 0, duration: 1 }],
       });
-      expectError(result, 'Failed to parse notes JSON array');
+      expectError(result, 'Failed to parse notes array');
     });
   });
 
@@ -288,6 +329,34 @@ describe('midi tools', () => {
         trackIndex: 0, itemIndex: 0, noteIndex: 99, pitch: 60,
       });
       expectError(result, 'Note index 99 out of range');
+    });
+  });
+
+  describe('edit_midi_notes (batch)', () => {
+    it('sends edit_midi_notes command with native array', async () => {
+      const data = { success: true, edited: 3, total: 3 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const edits = [
+        { noteIndex: 0, velocity: 80 },
+        { noteIndex: 5, velocity: 95 },
+        { noteIndex: 10, pitch: 62, velocity: 110 },
+      ];
+      const result = await tools['edit_midi_notes'].handler({
+        trackIndex: 0, itemIndex: 0, edits,
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('edit_midi_notes', {
+        trackIndex: 0, itemIndex: 0, edits,
+      });
+      expectSuccess(result, data);
+    });
+
+    it('returns error on failure', async () => {
+      mockedSendCommand.mockResolvedValue(errorResponse('Failed to parse edits array'));
+      const result = await tools['edit_midi_notes'].handler({
+        trackIndex: 0, itemIndex: 0, edits: [{ noteIndex: 0, velocity: 80 }],
+      });
+      expectError(result, 'Failed to parse edits array');
     });
   });
 

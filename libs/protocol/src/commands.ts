@@ -42,9 +42,11 @@ export type CommandType =
   | 'create_midi_item'
   | 'list_midi_items'
   | 'get_midi_notes'
+  | 'analyze_midi'
   | 'insert_midi_note'
   | 'insert_midi_notes'
   | 'edit_midi_note'
+  | 'edit_midi_notes'
   | 'delete_midi_note'
   | 'get_midi_cc'
   | 'insert_midi_cc'
@@ -55,6 +57,7 @@ export type CommandType =
   | 'list_media_items'
   | 'get_media_item_properties'
   | 'set_media_item_properties'
+  | 'set_media_items_properties'
   | 'split_media_item'
   | 'delete_media_item'
   | 'move_media_item'
@@ -190,6 +193,13 @@ export interface ListMidiItemsParams {
 export interface GetMidiNotesParams {
   trackIndex: number;
   itemIndex: number;
+  offset?: number; // skip first N notes (default 0)
+  limit?: number;  // max notes to return (default all)
+}
+
+export interface AnalyzeMidiParams {
+  trackIndex: number;
+  itemIndex: number;
 }
 
 export interface InsertMidiNoteParams {
@@ -202,10 +212,18 @@ export interface InsertMidiNoteParams {
   channel?: number;      // 0-15, default 0
 }
 
+export interface InsertMidiNoteItem {
+  pitch: number;         // 0-127
+  velocity: number;      // 1-127
+  startPosition: number; // beats from item start
+  duration: number;      // beats (1.0 = quarter note)
+  channel?: number;      // 0-15, default 0
+}
+
 export interface InsertMidiNotesParams {
   trackIndex: number;
   itemIndex: number;
-  notes: string; // JSON string array of { pitch, velocity, startPosition, duration, channel? }
+  notes: InsertMidiNoteItem[];
 }
 
 export interface EditMidiNoteParams {
@@ -217,6 +235,21 @@ export interface EditMidiNoteParams {
   startPosition?: number; // beats from item start
   duration?: number;      // beats
   channel?: number;
+}
+
+export interface EditMidiNoteItem {
+  noteIndex: number;
+  pitch?: number;
+  velocity?: number;
+  startPosition?: number; // beats from item start
+  duration?: number;      // beats
+  channel?: number;
+}
+
+export interface EditMidiNotesParams {
+  trackIndex: number;
+  itemIndex: number;
+  edits: EditMidiNoteItem[];
 }
 
 export interface DeleteMidiNoteParams {
@@ -281,6 +314,22 @@ export interface SetMediaItemPropertiesParams {
   fadeInLength?: number;  // seconds
   fadeOutLength?: number; // seconds
   playRate?: number;      // 1.0 = normal
+}
+
+export interface SetMediaItemsBatchItem {
+  trackIndex: number;
+  itemIndex: number;
+  position?: number;      // seconds
+  length?: number;        // seconds
+  volume?: number;        // dB
+  mute?: number;          // 0 or 1
+  fadeInLength?: number;  // seconds
+  fadeOutLength?: number; // seconds
+  playRate?: number;      // 1.0 = normal
+}
+
+export interface SetMediaItemsPropertiesParams {
+  items: SetMediaItemsBatchItem[];
 }
 
 export interface SplitMediaItemParams {

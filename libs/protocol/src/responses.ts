@@ -202,6 +202,31 @@ export interface MidiItemProperties {
   loopSource: boolean;
 }
 
+export interface MidiPitchStats {
+  pitch: number;        // 0-127
+  count: number;
+  minVelocity: number;
+  maxVelocity: number;
+  avgVelocity: number;
+  stdDev: number;
+  maxConsecutiveSameVelocity: number; // machine gun detection
+}
+
+export interface MidiAnalysis {
+  trackIndex: number;
+  itemIndex: number;
+  totalNotes: number;
+  totalCC: number;
+  durationBeats: number;
+  pitchStats: MidiPitchStats[];
+  velocityHistogram: number[]; // 13 buckets: 0-9, 10-19, ..., 120-127
+  machineGunWarnings: Array<{
+    pitch: number;
+    maxConsecutive: number;
+    sequences: number; // how many runs of 3+ identical velocities
+  }>;
+}
+
 // --- Media item editing response types ---
 
 export interface MediaItemInfo {

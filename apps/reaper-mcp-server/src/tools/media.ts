@@ -60,6 +60,31 @@ export function registerMediaTools(server: McpServer): void {
   );
 
   server.tool(
+    'set_media_items_properties',
+    'Batch set properties on multiple media items in a single call. Much more efficient than calling set_media_item_properties repeatedly. Pass a native array of item objects, each with trackIndex, itemIndex, and any properties to change.',
+    {
+      items: z.array(z.object({
+        trackIndex: z.coerce.number().min(0).describe('0-based track index'),
+        itemIndex: z.coerce.number().min(0).describe('0-based item index on the track'),
+        position: z.coerce.number().min(0).optional().describe('New position in seconds'),
+        length: z.coerce.number().min(0).optional().describe('New length in seconds'),
+        volume: z.coerce.number().optional().describe('New volume in dB (0 = unity gain)'),
+        mute: z.coerce.number().min(0).max(1).optional().describe('Mute state (0=unmuted, 1=muted)'),
+        fadeInLength: z.coerce.number().min(0).optional().describe('Fade-in length in seconds'),
+        fadeOutLength: z.coerce.number().min(0).optional().describe('Fade-out length in seconds'),
+        playRate: z.coerce.number().min(0.1).max(10).optional().describe('Playback rate (1.0=normal)'),
+      })).describe('Array of item property updates to apply'),
+    },
+    async ({ items }) => {
+      const res = await sendCommand('set_media_items_properties', { items });
+      if (!res.success) {
+        return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
+    },
+  );
+
+  server.tool(
     'split_media_item',
     'Split a media item at a given position (absolute project time in seconds). Returns info about both resulting items.',
     {

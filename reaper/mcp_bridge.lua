@@ -26,6 +26,111 @@ local last_heartbeat = 0
 -- JSON Parser (minimal, sufficient for our command format)
 -- =============================================================================
 
+-- Helper: extract a JSON string value starting at pos (after the opening quote).
+-- Handles escaped quotes (\") and other escape sequences.
+local function extract_json_string(str, pos)
+  local result = {}
+  local i = pos
+  while i <= #str do
+    local ch = str:sub(i, i)
+    if ch == '\\' then
+      local next_ch = str:sub(i + 1, i + 1)
+      if next_ch == '"' then
+        result[#result + 1] = '"'
+      elseif next_ch == '\\' then
+        result[#result + 1] = '\\'
+      elseif next_ch == 'n' then
+        result[#result + 1] = '\n'
+      elseif next_ch == 't' then
+        result[#result + 1] = '\t'
+      elseif next_ch == '/' then
+        result[#result + 1] = '/'
+      else
+        result[#result + 1] = next_ch
+      end
+      i = i + 2
+    elseif ch == '"' then
+      return table.concat(result), i + 1  -- return string and position after closing quote
+    else
+      result[#result + 1] = ch
+      i = i + 1
+    end
+  end
+  return nil, i  -- unterminated string
+end
+
+-- Parse a flat JSON object with string/number values in params.
+-- Handles escaped quotes in string values (e.g. JSON arrays passed as strings).
+local function parse_flat_object(str)
+  local obj = {}
+  local i = 1
+  while i <= #str do
+    -- Find a key
+    local key_start = str:find('"', i)
+    if not key_start then break end
+    local key_end = str:find('"', key_start + 1)
+    if not key_end then break end
+    local key = str:sub(key_start + 1, key_end - 1)
+
+    -- Find the colon
+    local colon = str:find(':', key_end + 1)
+    if not colon then break end
+
+    -- Skip whitespace after colon
+    local val_start = str:match('^%s*()', colon + 1)
+
+    local ch = str:sub(val_start, val_start)
+    if ch == '"' then
+      -- String value (handles escaped quotes)
+      local val, next_pos = extract_json_string(str, val_start + 1)
+      if val then
+        obj[key] = val
+        i = next_pos
+      else
+        i = val_start + 1
+      end
+    elseif ch == '{' then
+      -- Nested object — extract with balanced braces
+      local nested = str:match('%b{}', val_start)
+      if nested then
+        obj[key] = parse_flat_object(nested)
+        i = val_start + #nested
+      else
+        i = val_start + 1
+      end
+    elseif ch == '[' then
+      -- Array — extract with balanced brackets
+      local arr = str:match('%b[]', val_start)
+      if arr then
+        obj[key] = arr  -- keep as string for json_decode_array to parse later
+        i = val_start + #arr
+      else
+        i = val_start + 1
+      end
+    elseif ch:match('[%d%-]') then
+      -- Number
+      local num_str = str:match('-?%d+%.?%d*', val_start)
+      if num_str then
+        obj[key] = tonumber(num_str)
+        i = val_start + #num_str
+      else
+        i = val_start + 1
+      end
+    elseif str:sub(val_start, val_start + 3) == 'true' then
+      obj[key] = true
+      i = val_start + 4
+    elseif str:sub(val_start, val_start + 4) == 'false' then
+      obj[key] = false
+      i = val_start + 5
+    elseif str:sub(val_start, val_start + 3) == 'null' then
+      i = val_start + 4
+    else
+      i = val_start + 1
+    end
+  end
+  return obj
+end
+
 local function json_decode(str)
   -- Use REAPER 7+ built-in JSON if available, otherwise basic parser
   if reaper.CF_Json_Parse then
@@ -33,50 +138,28 @@ local function json_decode(str)
     if ok then return val end
   end
 
-  -- Fallback: use Lua pattern matching for our simple JSON format
-  -- This handles the flat command objects we receive
-  local obj = {}
-  -- Extract string values: "key": "value"
-  for k, v in str:gmatch('"([^"]+)"%s*:%s*"([^"]*)"') do
-    obj[k] = v
-  end
-  -- Extract number values: "key": 123.456
-  for k, v in str:gmatch('"([^"]+)"%s*:%s*(-?%d+%.?%d*)') do
-    if not obj[k] then obj[k] = tonumber(v) end
-  end
-  -- Extract nested params object
-  local params_str = str:match('"params"%s*:%s*(%b{})')
-  if params_str then
-    obj.params = {}
-    for k, v in params_str:gmatch('"([^"]+)"%s*:%s*"([^"]*)"') do
-      obj.params[k] = v
-    end
-    for k, v in params_str:gmatch('"([^"]+)"%s*:%s*(-?%d+%.?%d*)') do
-      if not obj.params[k] then obj.params[k] = tonumber(v) end
-    end
-  end
-  return obj
+  -- Fallback: parse the command JSON using our robust parser
+  -- that handles escaped quotes in string values (needed for batch commands)
+  return parse_flat_object(str)
 end
 
--- Fallback JSON array-of-objects parser for when CF_Json_Parse is unavailable.
--- Handles: [{"key":val,...}, {"key":val,...}, ...]
-local function json_decode_array(str)
+-- Parse a JSON array of objects. Accepts either a Lua table (already parsed by
+-- CF_Json_Parse) or a JSON string. Falls back to extracting each {...} and
+-- parsing with parse_flat_object.
+local function json_decode_array(input)
+  -- If already a table (e.g. CF_Json_Parse decoded it), return directly
+  if type(input) == "table" then return input end
+  if type(input) ~= "string" then return nil end
+
   if reaper.CF_Json_Parse then
-    local ok, val = reaper.CF_Json_Parse(str)
+    local ok, val = reaper.CF_Json_Parse(input)
     if ok then return val end
   end
 
   -- Fallback: extract each {...} from the array and parse individually
   local arr = {}
-  for obj_str in str:gmatch("%b{}") do
-    local obj = {}
-    for k, v in obj_str:gmatch('"([^"]+)"%s*:%s*"([^"]*)"') do
-      obj[k] = v
-    end
-    for k, v in obj_str:gmatch('"([^"]+)"%s*:%s*(-?%d+%.?%d*)') do
-      if not obj[k] then obj[k] = tonumber(v) end
-    end
-    arr[#arr + 1] = obj
+  for obj_str in input:gmatch("%b{}") do
+    arr[#arr + 1] = parse_flat_object(obj_str)
   end
   if #arr > 0 then return arr end
   return nil
@@ -1176,9 +1259,17 @@ function handlers.get_midi_notes(params)
 
   local _, note_cnt, _, _ = reaper.MIDI_CountEvts(take)
   local to_beats = ppq_to_beats(take, item)
-  local notes = {}
 
-  for i = 0, note_cnt - 1 do
+  local offset = params.offset or 0
+  local limit = params.limit
+  local start_idx = math.min(offset, note_cnt)
+  local end_idx = note_cnt - 1
+  if limit then
+    end_idx = math.min(start_idx + limit - 1, note_cnt - 1)
+  end
+
+  local notes = {}
+  for i = start_idx, end_idx do
     local _, sel, muted, start_ppq, end_ppq, chan, pitch, vel = reaper.MIDI_GetNote(take, i)
     local start_beats = to_beats(start_ppq)
     local end_beats = to_beats(end_ppq)
@@ -1194,7 +1285,114 @@ function handlers.get_midi_notes(params)
     }
   end
 
-  return { trackIndex = params.trackIndex, itemIndex = params.itemIndex, notes = notes, total = #notes }
+  return {
+    trackIndex = params.trackIndex,
+    itemIndex = params.itemIndex,
+    notes = notes,
+    returned = #notes,
+    total = note_cnt,
+    offset = start_idx,
+    hasMore = end_idx < note_cnt - 1,
+  }
+end
+
+function handlers.analyze_midi(params)
+  local track, item, take, err = get_midi_take(params)
+  if err then return nil, err end
+
+  local _, note_cnt, cc_cnt, _ = reaper.MIDI_CountEvts(take)
+  local to_beats = ppq_to_beats(take, item)
+
+  -- Per-pitch accumulators
+  local pitch_data = {}  -- pitch -> { count, sum_vel, sum_sq, min_vel, max_vel, last_vel, consec, max_consec, sequences }
+  -- Velocity histogram: 13 buckets (0-9, 10-19, ..., 120-127)
+  local vel_histogram = {}
+  for i = 1, 13 do vel_histogram[i] = 0 end
+
+  local max_end_beat = 0
+
+  for i = 0, note_cnt - 1 do
+    local _, _, _, start_ppq, end_ppq, _, pitch, vel = reaper.MIDI_GetNote(take, i)
+
+    -- Track duration
+    local end_beat = to_beats(end_ppq)
+    if end_beat > max_end_beat then max_end_beat = end_beat end
+
+    -- Velocity histogram bucket
+    local bucket = math.min(math.floor(vel / 10) + 1, 13)
+    vel_histogram[bucket] = vel_histogram[bucket] + 1
+
+    -- Per-pitch stats
+    if not pitch_data[pitch] then
+      pitch_data[pitch] = {
+        count = 0, sum_vel = 0, sum_sq = 0,
+        min_vel = 127, max_vel = 0,
+        last_vel = -1, consec = 1, max_consec = 1, sequences = 0,
+      }
+    end
+    local pd = pitch_data[pitch]
+    pd.count = pd.count + 1
+    pd.sum_vel = pd.sum_vel + vel
+    pd.sum_sq = pd.sum_sq + vel * vel
+    if vel < pd.min_vel then pd.min_vel = vel end
+    if vel > pd.max_vel then pd.max_vel = vel end
+
+    -- Machine gun detection: consecutive identical velocities
+    if vel == pd.last_vel then
+      pd.consec = pd.consec + 1
+      if pd.consec > pd.max_consec then pd.max_consec = pd.consec end
+    else
+      if pd.consec >= 3 then pd.sequences = pd.sequences + 1 end
+      pd.consec = 1
+    end
+    pd.last_vel = vel
+  end
+
+  -- Build pitch stats array
+  local pitch_stats = {}
+  local machine_gun = {}
+  local sorted_pitches = {}
+  for p, _ in pairs(pitch_data) do sorted_pitches[#sorted_pitches + 1] = p end
+  table.sort(sorted_pitches)
+
+  for _, pitch in ipairs(sorted_pitches) do
+    local pd = pitch_data[pitch]
+    -- Close final run
+    if pd.consec >= 3 then pd.sequences = pd.sequences + 1 end
+
+    local avg = pd.sum_vel / pd.count
+    local variance = (pd.sum_sq / pd.count) - (avg * avg)
+    local std_dev = math.sqrt(math.max(0, variance))
+
+    pitch_stats[#pitch_stats + 1] = {
+      pitch = pitch,
+      count = pd.count,
+      minVelocity = pd.min_vel,
+      maxVelocity = pd.max_vel,
+      avgVelocity = math.floor(avg * 10 + 0.5) / 10,  -- round to 1 decimal
+      stdDev = math.floor(std_dev * 10 + 0.5) / 10,
+      maxConsecutiveSameVelocity = pd.max_consec,
+    }
+
+    if pd.max_consec >= 3 then
+      machine_gun[#machine_gun + 1] = {
+        pitch = pitch,
+        maxConsecutive = pd.max_consec,
+        sequences = pd.sequences,
+      }
+    end
+  end
+
+  return {
+    trackIndex = params.trackIndex,
+    itemIndex = params.itemIndex,
+    totalNotes = note_cnt,
+    totalCC = cc_cnt,
+    durationBeats = math.floor(max_end_beat * 100 + 0.5) / 100,
+    pitchStats = pitch_stats,
+    velocityHistogram = vel_histogram,
+    machineGunWarnings = machine_gun,
+  }
 end
 
 function handlers.insert_midi_note(params)
@@ -1234,13 +1432,13 @@ function handlers.insert_midi_notes(params)
   local track, item, take, err = get_midi_take(params)
   if err then return nil, err end
 
-  local notes_str = params.notes
-  if not notes_str or notes_str == "" then return nil, "notes JSON string required" end
+  local notes_input = params.notes
+  if not notes_input or notes_input == "" then return nil, "notes array required" end
 
-  -- Parse notes JSON array (uses dedicated array parser with fallback)
-  local notes_list = json_decode_array(notes_str)
+  -- Parse notes array (accepts native table from CF_Json_Parse or JSON string fallback)
+  local notes_list = json_decode_array(notes_input)
   if not notes_list or #notes_list == 0 then
-    return nil, "Failed to parse notes JSON array. Expected: [{\"pitch\":60,\"velocity\":100,\"startPosition\":0,\"duration\":1}, ...]"
+    return nil, "Failed to parse notes array. Expected array of {pitch, velocity, startPosition, duration} objects."
   end
 
   reaper.Undo_BeginBlock()
@@ -1319,6 +1517,65 @@ function handlers.edit_midi_note(params)
   reaper.UpdateArrange()
 
   return { success = true, noteIndex = note_idx }
+end
+
+function handlers.edit_midi_notes(params)
+  local track, item, take, err = get_midi_take(params)
+  if err then return nil, err end
+
+  local edits_input = params.edits
+  if not edits_input then return nil, "edits array required" end
+
+  local edits = json_decode_array(edits_input)
+  if not edits then return nil, "Failed to parse edits array" end
+
+  local _, note_cnt, _, _ = reaper.MIDI_CountEvts(take)
+  local to_beats = ppq_to_beats(take, item)
+  local edited = 0
+  local errors = {}
+
+  reaper.Undo_BeginBlock()
+
+  for _, edit in ipairs(edits) do
+    local note_idx = edit.noteIndex
+    if note_idx == nil then
+      errors[#errors + 1] = "edit missing noteIndex"
+    elseif note_idx >= note_cnt then
+      errors[#errors + 1] = "noteIndex " .. note_idx .. " out of range"
+    else
+      local _, sel, muted, cur_start_ppq, cur_end_ppq, cur_chan, cur_pitch, cur_vel = reaper.MIDI_GetNote(take, note_idx)
+
+      local new_pitch = edit.pitch and math.max(0, math.min(127, math.floor(edit.pitch))) or nil
+      local new_vel = edit.velocity and math.max(1, math.min(127, math.floor(edit.velocity))) or nil
+      local new_chan = edit.channel and math.max(0, math.min(15, math.floor(edit.channel))) or nil
+
+      local new_start_ppq = nil
+      local new_end_ppq = nil
+      if edit.startPosition ~= nil then
+        new_start_ppq = beats_to_ppq(take, item, edit.startPosition)
+        if edit.duration ~= nil then
+          new_end_ppq = beats_to_ppq(take, item, edit.startPosition + edit.duration)
+        else
+          local dur_ppq = cur_end_ppq - cur_start_ppq
+          new_end_ppq = new_start_ppq + dur_ppq
+        end
+      elseif edit.duration ~= nil then
+        local cur_start_beats = to_beats(cur_start_ppq)
+        new_end_ppq = beats_to_ppq(take, item, cur_start_beats + edit.duration)
+      end
+
+      reaper.MIDI_SetNote(take, note_idx, sel, muted, new_start_ppq, new_end_ppq, new_chan, new_pitch, new_vel, false)
+      edited = edited + 1
+    end
+  end
+
+  reaper.MIDI_Sort(take)
+  reaper.Undo_EndBlock("MCP: Batch edit " .. edited .. " MIDI notes", -1)
+  reaper.UpdateArrange()
+
+  local result = { success = true, edited = edited, total = #edits }
+  if #errors > 0 then result.errors = errors end
+  return result
 end
 
 function handlers.delete_midi_note(params)
@@ -1595,6 +1852,71 @@ function handlers.set_media_item_properties(params)
   reaper.UpdateArrange()
 
   return { success = true, trackIndex = params.trackIndex, itemIndex = params.itemIndex }
+end
+
+function handlers.set_media_items_properties(params)
+  local items_input = params.items
+  if not items_input then return nil, "items array required" end
+
+  local items = json_decode_array(items_input)
+  if not items then return nil, "Failed to parse items array" end
+
+  local edited = 0
+  local errors = {}
+
+  reaper.Undo_BeginBlock()
+
+  for _, item_params in ipairs(items) do
+    local track_idx = item_params.trackIndex
+    local item_idx = item_params.itemIndex
+    if track_idx == nil or item_idx == nil then
+      errors[#errors + 1] = "item missing trackIndex or itemIndex"
+    else
+      local track = reaper.GetTrack(0, track_idx)
+      if not track then
+        errors[#errors + 1] = "Track " .. track_idx .. " not found"
+      else
+        local item_count = reaper.CountTrackMediaItems(track)
+        if item_idx >= item_count then
+          errors[#errors + 1] = "Item " .. item_idx .. " not found on track " .. track_idx
+        else
+          local item = reaper.GetTrackMediaItem(track, item_idx)
+          if item_params.position ~= nil then
+            reaper.SetMediaItemInfo_Value(item, "D_POSITION", item_params.position)
+          end
+          if item_params.length ~= nil then
+            reaper.SetMediaItemInfo_Value(item, "D_LENGTH", item_params.length)
+          end
+          if item_params.volume ~= nil then
+            reaper.SetMediaItemInfo_Value(item, "D_VOL", from_db(item_params.volume))
+          end
+          if item_params.mute ~= nil then
+            reaper.SetMediaItemInfo_Value(item, "B_MUTE", item_params.mute)
+          end
+          if item_params.fadeInLength ~= nil then
+            reaper.SetMediaItemInfo_Value(item, "D_FADEINLEN", item_params.fadeInLength)
+          end
+          if item_params.fadeOutLength ~= nil then
+            reaper.SetMediaItemInfo_Value(item, "D_FADEOUTLEN", item_params.fadeOutLength)
+          end
+          if item_params.playRate ~= nil then
+            local take = reaper.GetActiveTake(item)
+            if take then
+              reaper.SetMediaItemTakeInfo_Value(take, "D_PLAYRATE", item_params.playRate)
+            end
+          end
+          edited = edited + 1
+        end
+      end
+    end
+  end
+
+  reaper.Undo_EndBlock("MCP: Batch set " .. edited .. " media item properties", -1)
+  reaper.UpdateArrange()
+
+  local result = { success = true, edited = edited, total = #items }
+  if #errors > 0 then result.errors = errors end
+  return result
 end
 
 function handlers.split_media_item(params)
