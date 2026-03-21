@@ -3,6 +3,7 @@ import { registerProjectTools } from './tools/project.js';
 import { registerTrackTools } from './tools/tracks.js';
 import { registerFxTools } from './tools/fx.js';
 import { registerMeterTools } from './tools/meters.js';
+import { registerTransportTools } from './tools/transport.js';
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -14,6 +15,7 @@ export function createServer(): McpServer {
   registerTrackTools(server);
   registerFxTools(server);
   registerMeterTools(server);
+  registerTransportTools(server);
 
   return server;
 }

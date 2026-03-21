@@ -1,6 +1,6 @@
 ---
 description: Core architecture rules for the REAPER MCP Server project
-globs: ["**/*.ts", "**/*.lua", "**/*.jsfx"]
+paths: ["**/*.ts", "**/*.lua", "**/*.jsfx"]
 ---
 
 # Architecture Rules

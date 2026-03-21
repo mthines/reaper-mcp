@@ -21,7 +21,12 @@ export type CommandType =
   | 'get_fx_parameters'
   | 'set_fx_parameter'
   | 'read_track_meters'
-  | 'read_track_spectrum';
+  | 'read_track_spectrum'
+  | 'play'
+  | 'stop'
+  | 'record'
+  | 'get_transport_state'
+  | 'set_cursor_position';
 
 // --- Per-command param types ---
 
@@ -69,4 +74,18 @@ export interface ReadTrackMetersParams {
 export interface ReadTrackSpectrumParams {
   trackIndex: number;
   fftSize?: number; // default 4096
+}
+
+// --- Transport commands ---
+
+export type PlayParams = Record<string, never>;
+
+export type StopParams = Record<string, never>;
+
+export type RecordParams = Record<string, never>;
+
+export type GetTransportStateParams = Record<string, never>;
+
+export interface SetCursorPositionParams {
+  position: number; // seconds from project start
 }

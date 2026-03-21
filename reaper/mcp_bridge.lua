@@ -473,6 +473,55 @@ function handlers.read_track_spectrum(params)
 end
 
 -- =============================================================================
+-- Transport handlers
+-- =============================================================================
+
+function handlers.play(params)
+  -- Action 1007 = Transport: Play
+  reaper.Main_OnCommand(1007, 0)
+  return { success = true }
+end
+
+function handlers.stop(params)
+  -- Action 1016 = Transport: Stop
+  reaper.Main_OnCommand(1016, 0)
+  return { success = true }
+end
+
+function handlers.record(params)
+  -- Action 1013 = Transport: Record
+  reaper.Main_OnCommand(1013, 0)
+  return { success = true }
+end
+
+function handlers.get_transport_state(params)
+  local play_state = reaper.GetPlayState() -- 0=stopped, 1=playing, 2=paused, 4=recording, 5=recording+playing
+  local cursor_pos = reaper.GetCursorPosition()
+  local play_pos = reaper.GetPlayPosition()
+  local tempo = reaper.Master_GetTempo()
+  local _, ts_num, ts_den = reaper.TimeMap_GetTimeSigAtTime(0, 0)
+
+  return {
+    playing = (play_state & 1) ~= 0,
+    recording = (play_state & 4) ~= 0,
+    paused = (play_state & 2) ~= 0,
+    cursorPosition = cursor_pos,
+    playPosition = play_pos,
+    tempo = tempo,
+    timeSignatureNumerator = ts_num,
+    timeSignatureDenominator = ts_den,
+  }
+end
+
+function handlers.set_cursor_position(params)
+  local pos = params.position
+  if not pos then return nil, "position required" end
+  if pos < 0 then pos = 0 end
+  reaper.SetEditCurPos(pos, true, false) -- moveview=true, seekplay=false
+  return { success = true, position = pos }
+end
+
+-- =============================================================================
 -- Command dispatcher
 -- =============================================================================
 

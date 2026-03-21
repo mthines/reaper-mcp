@@ -1,6 +1,6 @@
 ---
 description: Rules for working with the Lua bridge and JSFX files in the reaper/ directory
-globs: ["reaper/**"]
+paths: ["reaper/**"]
 ---
 
 # Lua Bridge & JSFX Rules

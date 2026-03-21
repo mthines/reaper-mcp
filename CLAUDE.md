@@ -71,7 +71,7 @@ reaper-mcp/
 | `@mthines/reaper-mcp-server` | `apps/reaper-mcp-server` | `@nx/esbuild` (ESM bundle) | MCP server application |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## The 10 MCP Tools
+## The 15 MCP Tools
 
 | Tool | File | Description |
 |------|------|-------------|
@@ -85,6 +85,11 @@ reaper-mcp/
 | `set_fx_parameter` | `tools/fx.ts` | Set FX parameter (normalized 0.0-1.0) |
 | `read_track_meters` | `tools/meters.ts` | Peak/RMS L/R in dB |
 | `read_track_spectrum` | `tools/meters.ts` | FFT frequency bins (auto-inserts JSFX analyzer) |
+| `play` | `tools/transport.ts` | Start playback |
+| `stop` | `tools/transport.ts` | Stop playback/recording |
+| `record` | `tools/transport.ts` | Start recording (arms must be set on target tracks) |
+| `get_transport_state` | `tools/transport.ts` | Play/record/pause status, cursor positions, tempo, time sig |
+| `set_cursor_position` | `tools/transport.ts` | Move edit cursor to position in seconds |
 
 ## Build System
 

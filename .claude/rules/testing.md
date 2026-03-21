@@ -1,6 +1,6 @@
 ---
 description: Testing patterns and conventions
-globs: ["**/*.test.ts", "**/*.spec.ts", "**/vitest.config.ts"]
+paths: ["**/*.test.ts", "**/*.spec.ts", "**/vitest.config.ts"]
 ---
 
 # Testing Rules

@@ -82,3 +82,14 @@ export interface TrackSpectrum {
   /** Magnitude in dB for each frequency bin, from 0 Hz to Nyquist */
   bins: number[];
 }
+
+export interface TransportState {
+  playing: boolean;
+  recording: boolean;
+  paused: boolean;
+  cursorPosition: number;  // edit cursor, seconds
+  playPosition: number;    // play cursor, seconds (only meaningful while playing)
+  tempo: number;
+  timeSignatureNumerator: number;
+  timeSignatureDenominator: number;
+}

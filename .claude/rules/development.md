@@ -1,6 +1,6 @@
 ---
 description: Development workflow and coding standards
-globs: ["**/*.ts", "**/*.json"]
+paths: ["**/*.ts", "**/*.json"]
 ---
 
 # Development Rules
