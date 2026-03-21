@@ -1,5 +1,5 @@
 ---
-name: delivery
+name: preflight
 description: Delivery verification specialist — checks that final masters meet platform-specific technical specs (LUFS, true peak, crest, correlation, sample rate). Use for "check delivery specs", "verify for Spotify", or "QA the master".
 tools: Read, Glob
 mcpServers:
@@ -140,7 +140,7 @@ Confirm sample rate and format match delivery requirements.
 
 ## Rules
 
-- **Observe and report only** — do NOT modify the master. If issues are found, recommend fixes and suggest handing off to `@master` agent.
+- **Observe and report only** — do NOT modify the master. If issues are found, recommend fixes and suggest handing off to `@mastering` agent.
 - **Full playthrough for LUFS** — partial measurements are not valid for integrated LUFS.
 - **Check multiple platforms if requested** — generate a separate report section for each target.
 - **Be honest about compromises** — if the master is loud for club but won't work for Spotify, say so.

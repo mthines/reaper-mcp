@@ -1,5 +1,5 @@
 ---
-name: gain-stage
+name: levels
 description: Gain staging specialist — sets all tracks to proper levels before mixing. Use when asked to "gain stage", "set levels", or "prep for mixing".
 tools: Read, Glob
 mcpServers:

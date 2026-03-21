@@ -1,5 +1,5 @@
 ---
-name: mix-engineer
+name: mixer
 description: AI mix engineer for REAPER DAW. Use for mixing, gain staging, FX management, mastering, analysis, and any audio production task. Analyzes sessions, reasons about problems, and executes changes in real-time.
 tools: Read, Glob, Grep, Bash
 mcpServers:

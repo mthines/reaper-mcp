@@ -1,5 +1,5 @@
 ---
-name: stem-prep
+name: stems
 description: Stem preparation specialist — verifies bus structure, routing, naming, and technical specs for stem export. Use for "prepare stems", "check routing for export", or "stem prep".
 tools: Read, Glob
 mcpServers:

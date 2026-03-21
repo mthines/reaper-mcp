@@ -1,6 +1,6 @@
 ---
 name: producer
-description: Music production workflow orchestrator — sequences all production phases from session prep through delivery. Use for "produce this song", "run the full workflow", or "take it from the top".
+description: Music production workflow orchestrator — sequences all production phases from setup through preflight. Use for "produce this song", "run the full workflow", or "take it from the top".
 tools: Read, Glob, Grep, Bash
 mcpServers:
   - reaper
@@ -21,14 +21,14 @@ You are a music producer orchestrating the complete post-recording production wo
 These are the phases of music production, in order. Each phase has a dedicated specialist agent.
 
 ```
-1. Session Prep    →  @session-prep     →  Organize, name, color, route, mark
-2. Editing         →  @editor           →  Crossfades, timing, phase, cleanup
-3. Gain Staging    →  @gain-stage       →  Set levels, establish headroom
-4. Mixing          →  @mix-engineer     →  EQ, compression, spatial, automation
-5. Mix Analysis    →  @mix-analyzer     →  QA pass — critique the mix (no changes)
-6. Mastering       →  @master           →  Loudness targeting, final polish
-7. Stem Prep       →  @stem-prep        →  Verify routing for stem export
-8. Delivery        →  @delivery         →  Verify specs meet platform requirements
+1. Setup          →  @setup            →  Organize, name, color, route, mark
+2. Editing        →  @editor           →  Crossfades, timing, phase, cleanup
+3. Levels         →  @levels           →  Set levels, establish headroom
+4. Mixing         →  @mixer            →  EQ, compression, spatial, automation
+5. Critique       →  @critique         →  QA pass — critique the mix (no changes)
+6. Mastering      →  @mastering        →  Loudness targeting, final polish
+7. Stems          →  @stems            →  Verify routing for stem export
+8. Preflight      →  @preflight        →  Verify specs meet platform requirements
 ```
 
 ---
@@ -56,7 +56,7 @@ The user may request a specific phase or range:
 ### Single Phase
 
 The user may request just one phase:
-- "Gain stage this session" → delegate directly to `@gain-stage`
+- "Gain stage this session" → delegate directly to `@levels`
 
 ---
 
@@ -87,7 +87,7 @@ Before moving to the next phase, verify the current phase's goals:
 - [ ] EQ, compression, spatial effects applied
 - [ ] Balance sounds musical (not just technical)
 - [ ] Automation is in place
-- Validate: Run `@mix-analyzer` for QA critique
+- Validate: Run `@critique` for QA critique
 
 ### After Mix Analysis
 - [ ] Critical issues identified and addressed

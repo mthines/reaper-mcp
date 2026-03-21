@@ -1,5 +1,5 @@
 ---
-name: session-prep
+name: setup
 description: Session preparation specialist — organizes tracks, routing, naming, coloring, markers, and bus structure before mixing begins. Use for "prep this session", "organize tracks", or "set up routing".
 tools: Read, Glob
 mcpServers:
