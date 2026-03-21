@@ -9,7 +9,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS } from './cli.js';
+import { resolveAssetDir, resolveAssetDirWithFallback, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES } from './cli.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -81,7 +81,8 @@ async function installSkills(scope: InstallScope): Promise<void> {
   }
 
   // --- Claude rules ---
-  const rulesSrc = resolveAssetDir(__dirname, 'claude-rules');
+  // Build output uses 'claude-rules'; source tree uses '.claude/rules'
+  const rulesSrc = resolveAssetDirWithFallback(__dirname, 'claude-rules', join('.claude', 'rules'));
   if (existsSync(rulesSrc)) {
     const dest = join(claudeDir, 'rules');
     const count = copyDirSync(rulesSrc, dest);
@@ -91,7 +92,7 @@ async function installSkills(scope: InstallScope): Promise<void> {
   }
 
   // --- Claude skills ---
-  const skillsSrc = resolveAssetDir(__dirname, 'claude-skills');
+  const skillsSrc = resolveAssetDirWithFallback(__dirname, 'claude-skills', join('.claude', 'skills'));
   if (existsSync(skillsSrc)) {
     const dest = join(claudeDir, 'skills');
     const count = copyDirSync(skillsSrc, dest);
@@ -101,7 +102,7 @@ async function installSkills(scope: InstallScope): Promise<void> {
   }
 
   // --- Claude agents ---
-  const agentsSrc = resolveAssetDir(__dirname, 'claude-agents');
+  const agentsSrc = resolveAssetDirWithFallback(__dirname, 'claude-agents', join('.claude', 'agents'));
   if (existsSync(agentsSrc)) {
     const dest = join(claudeDir, 'agents');
     const count = copyDirSync(agentsSrc, dest);
@@ -132,7 +133,7 @@ async function installSkills(scope: InstallScope): Promise<void> {
   }
 
   console.log('\nDone! Claude Code now has mix engineer agents, knowledge, and REAPER MCP tools.');
-  console.log('All 48 REAPER tools are pre-approved — agents work autonomously.');
+  console.log(`All ${MCP_TOOL_NAMES.length} REAPER tools are pre-approved — agents work autonomously.`);
   console.log('\nTry: @mix-engineer "Please gain stage my tracks"');
   console.log('Or:  @mix-analyzer "Roast my mix"');
 }

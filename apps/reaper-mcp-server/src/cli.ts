@@ -194,5 +194,13 @@ export function ensureClaudeSettings(settingsPath: string): 'created' | 'updated
   return 'updated';
 }
 
+/** Resolve asset dir with a fallback name for dev (source tree) vs build layouts.
+ *  Build output uses flat names like 'claude-rules'; source tree uses '.claude/rules'. */
+export function resolveAssetDirWithFallback(baseDir: string, buildName: string, sourceName: string): string {
+  const resolved = resolveAssetDir(baseDir, buildName);
+  if (existsSync(resolved)) return resolved;
+  return resolveAssetDir(baseDir, sourceName);
+}
+
 /** Expected knowledge subdirectories */
 export const KNOWLEDGE_DIRS = ['genres', 'plugins', 'workflows', 'reference'] as const;

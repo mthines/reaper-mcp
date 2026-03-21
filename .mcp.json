@@ -2,7 +2,17 @@
   "mcpServers": {
     "reaper": {
       "command": "node",
-      "args": ["dist/apps/reaper-mcp-server/main.js", "serve"]
+      "args": ["dist/apps/reaper-mcp-server/main.js", "serve"],
+      "env": {
+        "OTEL_SERVICE_NAME": "reaper-mcp-server",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://ingress.eu1.dash0.com",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+        "OTEL_TRACES_EXPORTER": "otlp",
+        "OTEL_METRICS_EXPORTER": "otlp",
+        "OTEL_LOGS_EXPORTER": "otlp",
+        "OTEL_RESOURCE_ATTRIBUTES": "service.namespace=reaper-mcp,deployment.environment.name=development",
+        "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer <AUTH_TOKEN>"
+      }
     }
   }
 }
