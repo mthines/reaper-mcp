@@ -136,8 +136,8 @@ export function getMeter(): Meter {
 // ---------------------------------------------------------------------------
 
 export interface TraceContext {
-  traceId: string;
-  spanId: string;
+  trace_id: string;
+  span_id: string;
 }
 
 /**
@@ -148,9 +148,9 @@ export interface TraceContext {
  */
 export function getTraceContext(): TraceContext {
   const span = trace.getActiveSpan();
-  if (!span) return { traceId: '', spanId: '' };
+  if (!span) return { trace_id: '', span_id: '' };
   const ctx = span.spanContext();
-  return { traceId: ctx.traceId, spanId: ctx.spanId };
+  return { trace_id: ctx.traceId, span_id: ctx.spanId };
 }
 
 // ---------------------------------------------------------------------------

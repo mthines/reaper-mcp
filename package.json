@@ -10,7 +10,9 @@
     "test": "nx run-many --target=test",
     "lint": "nx run-many --target=lint",
     "setup": "node dist/apps/reaper-mcp-server/main.js setup",
-    "serve": "node dist/apps/reaper-mcp-server/main.js serve"
+    "serve": "node dist/apps/reaper-mcp-server/main.js serve",
+    "start:otel": "node --env-file=.env.otel dist/apps/reaper-mcp-server/main.js serve",
+    "start:otel:console": "OTEL_SERVICE_NAME=reaper-mcp-server OTEL_TRACES_EXPORTER=console OTEL_METRICS_EXPORTER=console node --import @opentelemetry/auto-instrumentations-node/register dist/apps/reaper-mcp-server/main.js serve"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

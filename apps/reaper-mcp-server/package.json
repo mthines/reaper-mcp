@@ -48,10 +48,6 @@
     "README.md",
     "LICENSE"
   ],
-  "scripts": {
-    "start:otel": "node --env-file=.env.otel dist/apps/reaper-mcp-server/main.js serve",
-    "start:otel:console": "OTEL_SERVICE_NAME=reaper-mcp-server OTEL_TRACES_EXPORTER=console OTEL_METRICS_EXPORTER=console node --import @opentelemetry/auto-instrumentations-node/register dist/apps/reaper-mcp-server/main.js serve"
-  },
   "publishConfig": {
     "access": "public"
   }

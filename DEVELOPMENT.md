@@ -119,7 +119,7 @@ node --import @opentelemetry/auto-instrumentations-node/register \
   dist/apps/reaper-mcp-server/main.js serve
 ```
 
-Or via the convenience script in `apps/reaper-mcp-server/package.json`:
+Or via the convenience script in `package.json`:
 
 ```bash
 # From repo root after building:
