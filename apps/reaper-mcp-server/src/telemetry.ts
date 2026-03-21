@@ -91,6 +91,35 @@ export async function initTelemetry(): Promise<void> {
   sdk = new NodeSDK({ resource });
 
   sdk.start();
+
+  // Log whether telemetry is actively being exported
+  const tracesExporter = process.env['OTEL_TRACES_EXPORTER'] ?? 'none';
+  const metricsExporter = process.env['OTEL_METRICS_EXPORTER'] ?? 'none';
+  const logsExporter = process.env['OTEL_LOGS_EXPORTER'] ?? 'none';
+  const endpoint = process.env['OTEL_EXPORTER_OTLP_ENDPOINT'];
+
+  const hasExporter = [tracesExporter, metricsExporter, logsExporter].some(
+    (e) => e !== 'none' && e !== '',
+  );
+
+  if (hasExporter) {
+    const signals = [
+      tracesExporter !== 'none' && `traces=${tracesExporter}`,
+      metricsExporter !== 'none' && `metrics=${metricsExporter}`,
+      logsExporter !== 'none' && `logs=${logsExporter}`,
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    console.error(`[reaper-mcp] OpenTelemetry enabled (${signals})`);
+    if (endpoint) {
+      console.error(`[reaper-mcp] OTLP endpoint: ${endpoint}`);
+    }
+  } else {
+    console.error(
+      '[reaper-mcp] OpenTelemetry initialized (no exporters configured — telemetry stays local)',
+    );
+  }
 }
 
 /**
@@ -163,16 +192,22 @@ export function getTraceContext(): TraceContext {
  * creating instruments inside hot paths should be avoided.
  */
 
-let _commandDurationHistogram: ReturnType<Meter['createHistogram']> | null = null;
+let _commandDurationHistogram: ReturnType<Meter['createHistogram']> | null =
+  null;
 let _commandCounter: ReturnType<Meter['createCounter']> | null = null;
 let _timeoutCounter: ReturnType<Meter['createCounter']> | null = null;
 
-export function getCommandDurationHistogram(): ReturnType<Meter['createHistogram']> {
+export function getCommandDurationHistogram(): ReturnType<
+  Meter['createHistogram']
+> {
   if (!_commandDurationHistogram) {
-    _commandDurationHistogram = getMeter().createHistogram('mcp.bridge.command.duration', {
-      description: 'Duration of MCP bridge commands (file IPC round-trip)',
-      unit: 'ms',
-    });
+    _commandDurationHistogram = getMeter().createHistogram(
+      'mcp.bridge.command.duration',
+      {
+        description: 'Duration of MCP bridge commands (file IPC round-trip)',
+        unit: 'ms',
+      },
+    );
   }
   return _commandDurationHistogram;
 }
@@ -189,7 +224,8 @@ export function getCommandCounter(): ReturnType<Meter['createCounter']> {
 export function getTimeoutCounter(): ReturnType<Meter['createCounter']> {
   if (!_timeoutCounter) {
     _timeoutCounter = getMeter().createCounter('mcp.bridge.timeout.count', {
-      description: 'Number of MCP bridge commands that timed out waiting for REAPER',
+      description:
+        'Number of MCP bridge commands that timed out waiting for REAPER',
     });
   }
   return _timeoutCounter;

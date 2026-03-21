@@ -160,21 +160,23 @@ OTEL_METRICS_EXPORTER=console \
   dist/apps/reaper-mcp-server/main.js serve
 ```
 
-### Sending to Dash0 (or another OTLP backend)
+### Sending to Dash0
 
-1. Copy `.env.otel` in the repo root and fill in your endpoint and auth token:
+1. Copy the example file and paste in your auth token ([Settings > Auth Tokens](https://app.dash0.com/settings/auth-tokens)):
 
-```env
-OTEL_EXPORTER_OTLP_ENDPOINT=https://ingress.us1.dash0.com
-OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <YOUR_AUTH_TOKEN>
+```bash
+cp .env.otel.example .env.otel
+# Edit .env.otel — replace <AUTH_TOKEN> with your Dash0 ingesting token
 ```
 
-2. Run with the env file:
+2. Build and run:
 
 ```bash
 pnpm build
-node --env-file=.env.otel dist/apps/reaper-mcp-server/main.js serve
+pnpm start:otel
 ```
+
+Everything else (endpoint, exporters, resource attributes) is pre-configured in the example file.
 
 > **Note:** `.env.otel` is listed in `.gitignore` — do not commit it with real credentials.
 

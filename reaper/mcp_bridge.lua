@@ -2122,6 +2122,281 @@ function handlers.delete_stretch_marker(params)
 end
 
 -- =============================================================================
+-- FX Enable / Offline
+-- =============================================================================
+
+function handlers.set_fx_enabled(params)
+  local track = reaper.GetTrack(0, params.trackIndex)
+  if not track then return nil, "Track " .. params.trackIndex .. " not found" end
+  local fx_count = reaper.TrackFX_GetCount(track)
+  if params.fxIndex >= fx_count then
+    return nil, "FX index " .. params.fxIndex .. " out of range (track has " .. fx_count .. " FX)"
+  end
+  reaper.TrackFX_SetEnabled(track, params.fxIndex, params.enabled == 1)
+  return { trackIndex = params.trackIndex, fxIndex = params.fxIndex, enabled = params.enabled == 1 }
+end
+
+function handlers.set_fx_offline(params)
+  local track = reaper.GetTrack(0, params.trackIndex)
+  if not track then return nil, "Track " .. params.trackIndex .. " not found" end
+  local fx_count = reaper.TrackFX_GetCount(track)
+  if params.fxIndex >= fx_count then
+    return nil, "FX index " .. params.fxIndex .. " out of range (track has " .. fx_count .. " FX)"
+  end
+  reaper.TrackFX_SetOffline(track, params.fxIndex, params.offline == 1)
+  return { trackIndex = params.trackIndex, fxIndex = params.fxIndex, offline = params.offline == 1 }
+end
+
+-- =============================================================================
+-- Selection & Navigation
+-- =============================================================================
+
+function handlers.get_selected_tracks(params)
+  local count = reaper.CountSelectedTracks(0)
+  local tracks = {}
+  for i = 0, count - 1 do
+    local track = reaper.GetSelectedTrack(0, i)
+    local idx = reaper.GetMediaTrackInfo_Value(track, "IP_TRACKNUMBER") - 1
+    local _, name = reaper.GetTrackName(track)
+    tracks[#tracks + 1] = { index = idx, name = name }
+  end
+  return { tracks = tracks, count = count }
+end
+
+function handlers.get_time_selection(params)
+  local start_pos, end_pos = reaper.GetSet_LoopTimeRange(false, false, 0, 0, false)
+  return {
+    start = start_pos,
+    ["end"] = end_pos,
+    length = end_pos - start_pos,
+    hasSelection = end_pos > start_pos,
+  }
+end
+
+function handlers.set_time_selection(params)
+  if params.start == nil then return nil, "start required" end
+  if params["end"] == nil then return nil, "end required" end
+  reaper.GetSet_LoopTimeRange(true, false, params.start, params["end"], false)
+  return { start = params.start, ["end"] = params["end"] }
+end
+
+-- =============================================================================
+-- Markers & Regions
+-- =============================================================================
+
+function handlers.list_markers(params)
+  local _, num_markers, num_regions = reaper.CountProjectMarkers(0)
+  local total = num_markers + num_regions
+  local markers = {}
+  for i = 0, total - 1 do
+    local _, isrgn, pos, rgnend, name, markrgnindexnumber, color = reaper.EnumProjectMarkers3(0, i)
+    if not isrgn then
+      markers[#markers + 1] = {
+        index = markrgnindexnumber,
+        name = name,
+        position = pos,
+        color = color,
+      }
+    end
+  end
+  return { markers = markers, count = #markers }
+end
+
+function handlers.list_regions(params)
+  local _, num_markers, num_regions = reaper.CountProjectMarkers(0)
+  local total = num_markers + num_regions
+  local regions = {}
+  for i = 0, total - 1 do
+    local _, isrgn, pos, rgnend, name, markrgnindexnumber, color = reaper.EnumProjectMarkers3(0, i)
+    if isrgn then
+      regions[#regions + 1] = {
+        index = markrgnindexnumber,
+        name = name,
+        start = pos,
+        ["end"] = rgnend,
+        length = rgnend - pos,
+        color = color,
+      }
+    end
+  end
+  return { regions = regions, count = #regions }
+end
+
+function handlers.add_marker(params)
+  if params.position == nil then return nil, "position required" end
+  local color = params.color or 0
+  local name = params.name or ""
+  local idx = reaper.AddProjectMarker2(0, false, params.position, 0, name, -1, color)
+  if idx < 0 then return nil, "Failed to add marker" end
+  return { index = idx, position = params.position, name = name }
+end
+
+function handlers.add_region(params)
+  if params.start == nil then return nil, "start required" end
+  if params["end"] == nil then return nil, "end required" end
+  local color = params.color or 0
+  local name = params.name or ""
+  local idx = reaper.AddProjectMarker2(0, true, params.start, params["end"], name, -1, color)
+  if idx < 0 then return nil, "Failed to add region" end
+  return { index = idx, start = params.start, ["end"] = params["end"], name = name }
+end
+
+function handlers.delete_marker(params)
+  if params.markerIndex == nil then return nil, "markerIndex required" end
+  -- DeleteProjectMarker takes (proj, isrgn, markrgnindexnumber)
+  local deleted = reaper.DeleteProjectMarker(0, false, params.markerIndex, false)
+  if not deleted then return nil, "Marker " .. params.markerIndex .. " not found" end
+  return { success = true }
+end
+
+function handlers.delete_region(params)
+  if params.regionIndex == nil then return nil, "regionIndex required" end
+  local deleted = reaper.DeleteProjectMarker(0, true, params.regionIndex, false)
+  if not deleted then return nil, "Region " .. params.regionIndex .. " not found" end
+  return { success = true }
+end
+
+-- =============================================================================
+-- Tempo Map
+-- =============================================================================
+
+function handlers.get_tempo_map(params)
+  local count = reaper.CountTempoTimeSigMarkers(0)
+  local markers = {}
+  for i = 0, count - 1 do
+    local _, timepos, measurepos, beatpos, bpm, timesig_num, timesig_denom, lineartempo = reaper.GetTempoTimeSigMarker(0, i)
+    markers[#markers + 1] = {
+      index = i,
+      position = timepos,
+      bpm = bpm,
+      timeSigNumerator = timesig_num,
+      timeSigDenominator = timesig_denom,
+      linearTempo = lineartempo,
+    }
+  end
+  -- If no markers, return the project tempo as the single entry
+  if count == 0 then
+    local bpm = reaper.Master_GetTempo()
+    local _, num, denom = reaper.TimeMap_GetTimeSigAtTime(0, 0)
+    markers[1] = {
+      index = 0,
+      position = 0,
+      bpm = bpm,
+      timeSigNumerator = num,
+      timeSigDenominator = denom,
+      linearTempo = false,
+    }
+  end
+  return { markers = markers, count = #markers }
+end
+
+-- =============================================================================
+-- Envelopes / Automation
+-- =============================================================================
+
+function handlers.get_track_envelopes(params)
+  local track = reaper.GetTrack(0, params.trackIndex)
+  if not track then return nil, "Track " .. params.trackIndex .. " not found" end
+  local count = reaper.CountTrackEnvelopes(track)
+  local envelopes = {}
+  for i = 0, count - 1 do
+    local env = reaper.GetTrackEnvelope(track, i)
+    local _, name = reaper.GetEnvelopeName(env)
+    local point_count = reaper.CountEnvelopePoints(env)
+    -- Get envelope state info (SWS extension provides BR_Env*, fallback if unavailable)
+    local active, visible, armed = true, true, false
+    if reaper.BR_EnvAlloc then
+      local br_env = reaper.BR_EnvAlloc(env, false)
+      active, visible, armed = reaper.BR_EnvGetProperties(br_env)
+      reaper.BR_EnvFree(br_env, false)
+    end
+    envelopes[#envelopes + 1] = {
+      index = i,
+      name = name,
+      pointCount = point_count,
+      active = active,
+      visible = visible,
+      armed = armed,
+    }
+  end
+  return { trackIndex = params.trackIndex, envelopes = envelopes, count = count }
+end
+
+function handlers.get_envelope_points(params)
+  local track = reaper.GetTrack(0, params.trackIndex)
+  if not track then return nil, "Track " .. params.trackIndex .. " not found" end
+  local env_count = reaper.CountTrackEnvelopes(track)
+  if params.envelopeIndex >= env_count then
+    return nil, "Envelope index " .. params.envelopeIndex .. " out of range (track has " .. env_count .. " envelopes)"
+  end
+  local env = reaper.GetTrackEnvelope(track, params.envelopeIndex)
+  local total = reaper.CountEnvelopePoints(env)
+  local offset = params.offset or 0
+  local limit = params.limit or total
+  local points = {}
+  local end_idx = math.min(offset + limit, total)
+  for i = offset, end_idx - 1 do
+    local _, time, value, shape, tension, selected = reaper.GetEnvelopePoint(env, i)
+    points[#points + 1] = {
+      index = i,
+      time = time,
+      value = value,
+      shape = shape,
+      tension = tension,
+      selected = selected,
+    }
+  end
+  return {
+    trackIndex = params.trackIndex,
+    envelopeIndex = params.envelopeIndex,
+    points = points,
+    total = total,
+    offset = offset,
+    hasMore = end_idx < total,
+  }
+end
+
+function handlers.insert_envelope_point(params)
+  local track = reaper.GetTrack(0, params.trackIndex)
+  if not track then return nil, "Track " .. params.trackIndex .. " not found" end
+  local env_count = reaper.CountTrackEnvelopes(track)
+  if params.envelopeIndex >= env_count then
+    return nil, "Envelope index " .. params.envelopeIndex .. " out of range (track has " .. env_count .. " envelopes)"
+  end
+  local env = reaper.GetTrackEnvelope(track, params.envelopeIndex)
+  local shape = params.shape or 0
+  local tension = params.tension or 0
+  reaper.InsertEnvelopePoint(env, params.time, params.value, shape, tension, false, true)
+  reaper.Envelope_SortPoints(env)
+  local total = reaper.CountEnvelopePoints(env)
+  return {
+    trackIndex = params.trackIndex,
+    envelopeIndex = params.envelopeIndex,
+    time = params.time,
+    value = params.value,
+    shape = shape,
+    tension = tension,
+    totalPoints = total,
+  }
+end
+
+function handlers.delete_envelope_point(params)
+  local track = reaper.GetTrack(0, params.trackIndex)
+  if not track then return nil, "Track " .. params.trackIndex .. " not found" end
+  local env_count = reaper.CountTrackEnvelopes(track)
+  if params.envelopeIndex >= env_count then
+    return nil, "Envelope index " .. params.envelopeIndex .. " out of range (track has " .. env_count .. " envelopes)"
+  end
+  local env = reaper.GetTrackEnvelope(track, params.envelopeIndex)
+  local total = reaper.CountEnvelopePoints(env)
+  if params.pointIndex >= total then
+    return nil, "Point index " .. params.pointIndex .. " out of range (envelope has " .. total .. " points)"
+  end
+  reaper.DeleteEnvelopePointRange(env, params.pointIndex, params.pointIndex + 1)
+  return { success = true, totalPoints = reaper.CountEnvelopePoints(env) }
+end
+
+-- =============================================================================
 -- Command dispatcher
 -- =============================================================================
 

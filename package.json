@@ -7,6 +7,9 @@
   "scripts": {
     "build": "nx build reaper-mcp-server",
     "dev": "nx dev reaper-mcp-server",
+    "dev:debug": "nx dev:debug reaper-mcp-server",
+    "dev:otel": "nx dev:otel reaper-mcp-server",
+    "dev:otel:debug": "nx dev:otel:debug reaper-mcp-server",
     "test": "nx run-many --target=test",
     "lint": "nx run-many --target=lint",
     "setup": "node dist/apps/reaper-mcp-server/main.js setup",

@@ -20,6 +20,8 @@ export type CommandType =
   | 'remove_fx'
   | 'get_fx_parameters'
   | 'set_fx_parameter'
+  | 'set_fx_enabled'
+  | 'set_fx_offline'
   | 'read_track_meters'
   | 'read_track_spectrum'
   | 'play'
@@ -38,6 +40,24 @@ export type CommandType =
   | 'read_track_lufs'
   | 'read_track_correlation'
   | 'read_track_crest'
+  // Selection & navigation
+  | 'get_selected_tracks'
+  | 'get_time_selection'
+  | 'set_time_selection'
+  // Markers & regions
+  | 'list_markers'
+  | 'list_regions'
+  | 'add_marker'
+  | 'add_region'
+  | 'delete_marker'
+  | 'delete_region'
+  // Tempo
+  | 'get_tempo_map'
+  // Envelopes
+  | 'get_track_envelopes'
+  | 'get_envelope_points'
+  | 'insert_envelope_point'
+  | 'delete_envelope_point'
   // MIDI editing
   | 'create_midi_item'
   | 'list_midi_items'
