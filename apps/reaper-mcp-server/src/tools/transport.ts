@@ -59,7 +59,7 @@ export function registerTransportTools(server: McpServer): void {
     'set_cursor_position',
     'Move the edit cursor to a specific position in seconds from project start',
     {
-      position: z.number().min(0).describe('Position in seconds from project start'),
+      position: z.coerce.number().min(0).describe('Position in seconds from project start'),
     },
     async ({ position }) => {
       const res = await sendCommand('set_cursor_position', { position });

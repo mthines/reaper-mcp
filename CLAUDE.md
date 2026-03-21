@@ -139,11 +139,13 @@ To add a new tool, touch these 4 places:
 3. **`apps/reaper-mcp-server/src/tools/`** -- Create or extend a tool file, register with `server.tool()`
 4. **`reaper/mcp_bridge.lua`** -- Add handler function in the `handlers` table
 
+**Important:** Always use `z.coerce.number()` instead of `z.number()` for numeric parameters. MCP clients may pass numbers as strings (e.g. `"39"` instead of `39`), and `z.coerce` handles the conversion automatically.
+
 ### Tool Registration Pattern
 
 ```typescript
 // In tools/example.ts
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sendCommand } from '../bridge.js';
 
@@ -151,7 +153,7 @@ export function registerExampleTools(server: McpServer): void {
   server.tool(
     'tool_name',
     'Description of what this tool does',
-    { paramName: z.number().describe('What this param means') },
+    { paramName: z.coerce.number().describe('What this param means') },
     async ({ paramName }) => {
       const response = await sendCommand('command_type', { paramName });
       if (!response.success) {

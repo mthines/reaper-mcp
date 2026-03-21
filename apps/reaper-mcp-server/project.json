@@ -57,6 +57,13 @@
         ]
       }
     },
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx --watch apps/reaper-mcp-server/src/main.ts serve",
+        "cwd": "{workspaceRoot}"
+      }
+    },
     "serve": {
       "executor": "nx:run-commands",
       "options": {
