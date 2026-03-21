@@ -23,6 +23,21 @@
             "glob": "**/*",
             "input": "reaper",
             "output": "reaper"
+          },
+          {
+            "glob": "**/*",
+            "input": "knowledge",
+            "output": "knowledge"
+          },
+          {
+            "glob": "**/*",
+            "input": ".claude/rules",
+            "output": "claude-rules"
+          },
+          {
+            "glob": "**/*",
+            "input": ".claude/skills",
+            "output": "claude-skills"
           }
         ]
       }

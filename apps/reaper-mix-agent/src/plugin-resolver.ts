@@ -63,10 +63,11 @@ export class PluginResolver {
       const styleMatches = all.filter(
         (r) => r.knowledge.frontmatter['style'] === style,
       );
-      if (styleMatches.length > 0) return styleMatches[0]!;
+      const best = styleMatches[0];
+      if (best !== undefined) return best;
     }
 
-    return all[0]!;
+    return all[0] ?? null;
   }
 
   /**
