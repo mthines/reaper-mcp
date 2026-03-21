@@ -51,7 +51,7 @@ async function setup(): Promise<void> {
   console.log('  2. Actions > Show action list > Load ReaScript');
   console.log(`  3. Select: ${luaDest}`);
   console.log('  4. Run the script (it will keep running in background via defer loop)');
-  console.log('  5. Add reaper-mcp to your Claude Code config (see: reaper-mcp doctor)');
+  console.log('  5. Add reaper-mcp to your Claude Code config (see: npx @mthines/reaper-mcp doctor)');
 }
 
 async function installSkills(): Promise<void> {
@@ -123,25 +123,25 @@ async function doctor(): Promise<void> {
   const bridgeRunning = await isBridgeRunning();
   console.log(`Lua bridge:    ${bridgeRunning ? '✓ Connected' : '✗ Not detected'}`);
   if (!bridgeRunning) {
-    console.log('  → Run "reaper-mcp setup" then load mcp_bridge.lua in REAPER');
+    console.log('  → Run "npx @mthines/reaper-mcp setup" then load mcp_bridge.lua in REAPER');
   }
 
   const agentsExist = existsSync(join(process.cwd(), '.claude', 'agents'));
   console.log(`Mix agents:    ${agentsExist ? '✓ Found (.claude/agents/)' : '✗ Not installed'}`);
   if (!agentsExist) {
-    console.log('  → Run "reaper-mcp install-skills" in your project directory');
+    console.log('  → Run "npx @mthines/reaper-mcp install-skills" in your project directory');
   }
 
   const knowledgeExists = existsSync(join(process.cwd(), 'knowledge'));
   console.log(`Knowledge base: ${knowledgeExists ? '✓ Found in project' : '✗ Not installed'}`);
   if (!knowledgeExists) {
-    console.log('  → Run "reaper-mcp install-skills" in your project directory');
+    console.log('  → Run "npx @mthines/reaper-mcp install-skills" in your project directory');
   }
 
   const mcpJsonExists = existsSync(join(process.cwd(), '.mcp.json'));
   console.log(`MCP config:    ${mcpJsonExists ? '✓ .mcp.json found' : '✗ .mcp.json missing'}`);
   if (!mcpJsonExists) {
-    console.log('  → Run "reaper-mcp install-skills" to create .mcp.json');
+    console.log('  → Run "npx @mthines/reaper-mcp install-skills" to create .mcp.json');
   }
 
   console.log('\nTo check SWS Extensions, start REAPER and use the "list_available_fx" tool.');
@@ -167,7 +167,7 @@ async function serve(): Promise<void> {
   if (!bridgeRunning) {
     log('WARNING: Lua bridge does not appear to be running in REAPER.');
     log('Commands will timeout until the bridge script is started.');
-    log('Run "reaper-mcp setup" for installation instructions.');
+    log('Run "npx @mthines/reaper-mcp setup" for installation instructions.');
   } else {
     log('Lua bridge detected — connected to REAPER');
   }
@@ -226,18 +226,22 @@ switch (command) {
     console.log(`reaper-mcp — AI-powered mixing for REAPER DAW
 
 Usage:
-  reaper-mcp                  Start MCP server (stdio mode)
-  reaper-mcp serve            Start MCP server (stdio mode)
-  reaper-mcp setup            Install Lua bridge + JSFX analyzers into REAPER
-  reaper-mcp install-skills   Install AI mix engineer knowledge into your project
-  reaper-mcp doctor           Check that everything is configured correctly
-  reaper-mcp status           Check if Lua bridge is running in REAPER
+  npx @mthines/reaper-mcp                  Start MCP server (stdio mode)
+  npx @mthines/reaper-mcp serve            Start MCP server (stdio mode)
+  npx @mthines/reaper-mcp setup            Install Lua bridge + JSFX analyzers into REAPER
+  npx @mthines/reaper-mcp install-skills   Install AI mix engineer knowledge + agents into your project
+  npx @mthines/reaper-mcp doctor           Check that everything is configured correctly
+  npx @mthines/reaper-mcp status           Check if Lua bridge is running in REAPER
 
 Quick Start:
-  1. reaper-mcp setup            # install REAPER components
+  1. npx @mthines/reaper-mcp setup            # install REAPER components
   2. Load mcp_bridge.lua in REAPER (Actions > Load ReaScript > Run)
-  3. reaper-mcp install-skills   # install AI knowledge in your project
-  4. Open Claude Code — REAPER tools + mix engineer brain are ready
+  3. npx @mthines/reaper-mcp install-skills   # install AI knowledge + agents
+  4. Open Claude Code — REAPER tools + mix engineer agents are ready
+
+Tip: install globally for shorter commands:
+  npm install -g @mthines/reaper-mcp
+  reaper-mcp setup
 `);
     break;
 }
