@@ -1,3 +1,8 @@
+---
+name: sync-agent-docs
+description: Audit all production workflow agents and their linked knowledge files to ensure naming, cross-references, and documentation are consistent
+---
+
 # Sync Agent Documentation
 
 Audit all production workflow agents and their linked knowledge files to ensure naming, cross-references, and documentation are consistent.
