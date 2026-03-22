@@ -238,9 +238,9 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 
 | Tool | File | Description |
 |------|------|-------------|
-| `snapshot_save` | `tools/snapshots.ts` | Save current mixer state (volumes, pans, FX, mutes) |
-| `snapshot_restore` | `tools/snapshots.ts` | Restore a saved snapshot |
-| `snapshot_list` | `tools/snapshots.ts` | List all saved snapshots |
+| `snapshot_save` | `tools/snapshots.ts` | Save mixer state to `.reaper-mcp/snapshots/` (v2: volumes, pans, FX params, sends) |
+| `snapshot_restore` | `tools/snapshots.ts` | Restore a saved snapshot (FX params only if plugin name matches) |
+| `snapshot_list` | `tools/snapshots.ts` | List project-scoped snapshots (falls back to global for unsaved projects) |
 
 ### Routing (1)
 
