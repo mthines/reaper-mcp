@@ -1106,8 +1106,13 @@ function handlers.read_track_lufs(params)
   if not fx_idx then return nil, err end
 
   -- Set the track_slot parameter (slider2, param index 1) so this instance
-  -- writes to a unique gmem offset and doesn't collide with other tracks
-  reaper.TrackFX_SetParam(track, fx_idx, 1, idx / 127)
+  -- writes to a unique gmem offset and doesn't collide with other tracks.
+  -- Only set if different from current to avoid triggering @slider → reset_measurement()
+  local desired_slot = idx / 127
+  local current_slot = reaper.TrackFX_GetParam(track, fx_idx, 1)
+  if math.abs(current_slot - desired_slot) > 0.001 then
+    reaper.TrackFX_SetParam(track, fx_idx, 1, desired_slot)
+  end
 
   -- Attach to the LUFS meter gmem namespace and read from track-specific offset
   reaper.gmem_attach("MCPLufsMeter")
