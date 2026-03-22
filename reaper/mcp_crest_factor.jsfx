@@ -49,7 +49,6 @@ slider2:peak_hold_ms=1000<100,10000,100>Peak Hold (ms)
   );
 
   // Mono mix for metering
-  local(mono, sq, peak_abs);
   mono = (spl0 + spl1) * 0.5;
   sq   = mono * mono;
   peak_abs = abs(mono);
@@ -76,8 +75,6 @@ slider2:peak_hold_ms=1000<100,10000,100>Peak Hold (ms)
 
   // Update gmem every 512 samples
   (buf_pos % 512) == 0 ? (
-    local(rms_val, rms_db, peak_db, crest_db);
-
     rms_val = sqrt(sum_sq / buf_size);
 
     rms_val > 0.000001 ? (
