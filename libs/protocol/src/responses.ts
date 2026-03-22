@@ -323,3 +323,20 @@ export interface EnvelopePointInfo {
   tension: number;    // -1.0 to 1.0
   selected: boolean;
 }
+
+// --- Combined measurement response types ---
+
+export interface TrackMeasurement {
+  trackIndex: number;
+  lufs?: LufsData;
+  crest?: CrestFactorData;
+  correlation?: CorrelationData;
+  spectrum?: TrackSpectrum;
+}
+
+export interface MeasureTracksResult {
+  tracks: TrackMeasurement[];
+  durationSeconds: number;
+  startPosition: number;
+  endPosition: number;
+}
