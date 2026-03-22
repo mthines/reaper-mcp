@@ -11,5 +11,6 @@ dist/
 .claude/settings.local.json
 
 .gw
+.gw/
 
 tmp
