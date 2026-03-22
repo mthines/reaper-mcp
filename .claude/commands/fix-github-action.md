@@ -1,3 +1,8 @@
+---
+name: fix-github-action
+description: Diagnose and fix a failed GitHub Action check, then iteratively verify it passes
+---
+
 # Fix Failed GitHub Action
 
 Diagnose and fix a failed GitHub Action check, then verify it passes. This command is generic and works with any repository.
