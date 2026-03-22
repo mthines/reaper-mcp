@@ -3,8 +3,8 @@
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
-import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, getReaperScriptsPath, getReaperEffectsPath } from './bridge.js';
-import { initTelemetry, shutdownTelemetry, getTracer } from './telemetry.js';
+import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, getReaperScriptsPath, getReaperEffectsPath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
+import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges } from './telemetry.js';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -184,6 +184,9 @@ async function serve(): Promise<void> {
   // Initialise OpenTelemetry before any instrumented code runs.
   // Configuration is driven by OTEL_* environment variables (pass via .mcp.json env block).
   await initTelemetry();
+  registerBridgeGauges();
+  startDiagnosticsPoller();
+  startEventsPoller();
   log('Starting REAPER MCP Server...');
   log(`Entry: ${fileURLToPath(import.meta.url)}`);
 
@@ -318,20 +321,24 @@ Tip: install globally for shorter commands:
 
 process.on('SIGINT', () => {
   console.error('[reaper-mcp] Interrupted');
+  stopPollers();
   shutdownTelemetry().finally(() => process.exit(0));
 });
 
 process.on('SIGTERM', () => {
   console.error('[reaper-mcp] Terminated');
+  stopPollers();
   shutdownTelemetry().finally(() => process.exit(0));
 });
 
 process.on('uncaughtException', (err) => {
   console.error('[reaper-mcp] Uncaught exception:', err);
+  stopPollers();
   shutdownTelemetry().finally(() => process.exit(1));
 });
 
 process.on('unhandledRejection', (reason) => {
   console.error('[reaper-mcp] Unhandled rejection:', reason);
+  stopPollers();
   shutdownTelemetry().finally(() => process.exit(1));
 });

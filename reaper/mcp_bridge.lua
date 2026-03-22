@@ -231,6 +231,22 @@ local function write_file(path, content)
   return true
 end
 
+-- =============================================================================
+-- Telemetry event logging
+-- =============================================================================
+
+local EVENTS_LOG = bridge_dir .. "bridge_events.jsonl"
+
+local function log_event(event_type, payload)
+  local f = io.open(EVENTS_LOG, "a")
+  if not f then return end
+  payload = payload or {}
+  payload.ts = os.time() * 1000
+  payload.type = event_type
+  f:write(json_encode(payload) .. "\n")
+  f:close()
+end
+
 local function file_exists(path)
   local f = io.open(path, "r")
   if f then f:close() return true end
@@ -2788,12 +2804,18 @@ local function process_command(filename)
   -- Dispatch to handler
   local handler = handlers[cmd.type]
   local response = {}
+  local handler_ms = 0
 
   if handler then
+    local handler_start = reaper.time_precise()
     local ok, data_or_err, err_msg = pcall(handler, cmd.params or {})
+    handler_ms = (reaper.time_precise() - handler_start) * 1000
+
     if not ok then
       -- pcall caught a Lua runtime error — handler crashed
-      response = { id = cmd.id, success = false, error = "Handler error: " .. tostring(data_or_err), timestamp = os.time() * 1000 }
+      local err_str = tostring(data_or_err)
+      log_event("handler_error", { commandType = cmd.type, commandId = cmd.id, error = err_str })
+      response = { id = cmd.id, success = false, error = "Handler error: " .. err_str, timestamp = os.time() * 1000 }
     elseif err_msg then
       -- Handler returned (nil, errorString)
       response = { id = cmd.id, success = false, error = err_msg, timestamp = os.time() * 1000 }
@@ -2802,6 +2824,7 @@ local function process_command(filename)
       response = { id = cmd.id, success = true, data = data_or_err, timestamp = os.time() * 1000 }
     end
   else
+    log_event("handler_unknown", { commandType = cmd.type, commandId = cmd.id })
     response = {
       id = cmd.id,
       success = false,
@@ -2809,6 +2832,9 @@ local function process_command(filename)
       timestamp = os.time() * 1000,
     }
   end
+
+  -- Add handler timing to response (rounded to microsecond precision)
+  response._handlerMs = math.floor(handler_ms * 1000 + 0.5) / 1000
 
   -- Add pickup timing to response for profiling
   if cmd.timestamp then
@@ -2886,6 +2912,12 @@ reaper.ShowConsoleMsg("MCP Bridge: Polling every " .. (POLL_INTERVAL * 1000) .. 
 
 -- Write initial heartbeat
 write_heartbeat()
+
+-- Log bridge start event for OTel consumption
+log_event("bridge_start", { reaperVersion = reaper.GetAppVersion(), bridgeDir = bridge_dir })
+
+-- Register shutdown handler
+reaper.atexit(function() log_event("bridge_stop", {}) end)
 
 -- Start the loop
 main_loop()
