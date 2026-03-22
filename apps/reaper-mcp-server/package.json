@@ -1,6 +1,6 @@
 {
   "name": "@mthines/reaper-mcp",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "type": "module",
   "description": "MCP server for controlling REAPER DAW — real-time mixing, FX control, and frequency analysis for AI agents",
   "license": "MIT",
