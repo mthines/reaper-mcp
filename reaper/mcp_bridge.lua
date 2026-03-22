@@ -831,7 +831,20 @@ end
 -- =============================================================================
 
 local function get_snapshot_dir()
+  local proj_path = reaper.GetProjectPath()
+  if proj_path and proj_path ~= "" then
+    return proj_path .. "/.reaper-mcp/snapshots/"
+  end
+  -- Fallback for unsaved projects
   return bridge_dir .. "snapshots/"
+end
+
+local function get_snapshot_storage_location()
+  local proj_path = reaper.GetProjectPath()
+  if proj_path and proj_path ~= "" then
+    return "project"
+  end
+  return "global"
 end
 
 local function ensure_snapshot_dir()
@@ -844,9 +857,13 @@ local function snapshot_path(name)
   return get_snapshot_dir() .. safe .. ".json"
 end
 
-local function capture_mixer_state()
-  local state = { tracks = {} }
+local function capture_mixer_state(params)
+  params = params or {}
+  local include_fx_params = params.includeFxParams ~= false  -- default true
+  local max_params = params.maxParamsPerFx or 500
+  local state = { version = 2, tracks = {} }
   local count = reaper.CountTracks(0)
+
   for i = 0, count - 1 do
     local track = reaper.GetTrack(0, i)
     local _, name = reaper.GetTrackName(track)
@@ -854,22 +871,75 @@ local function capture_mixer_state()
     local pan = reaper.GetMediaTrackInfo_Value(track, "D_PAN")
     local mute = reaper.GetMediaTrackInfo_Value(track, "B_MUTE")
     local solo = reaper.GetMediaTrackInfo_Value(track, "I_SOLO")
+    local color = reaper.GetMediaTrackInfo_Value(track, "I_CUSTOMCOLOR")
 
-    -- Capture FX bypass states
+    -- FX state with full parameter capture
     local fx_count = reaper.TrackFX_GetCount(track)
     local fx_states = {}
     for j = 0, fx_count - 1 do
-      fx_states[#fx_states + 1] = reaper.TrackFX_GetEnabled(track, j)
+      local enabled = reaper.TrackFX_GetEnabled(track, j)
+      local offline = reaper.TrackFX_GetOffline(track, j)
+      local _, preset = reaper.TrackFX_GetPreset(track, j)
+      local _, fx_name = reaper.TrackFX_GetFXName(track, j)
+
+      local params_data = {}
+      if include_fx_params then
+        local param_count = reaper.TrackFX_GetNumParams(track, j)
+        local limit = math.min(param_count, max_params)
+        for p = 0, limit - 1 do
+          local val = reaper.TrackFX_GetParam(track, j, p)
+          params_data[p + 1] = val
+        end
+      end
+
+      fx_states[j + 1] = {
+        name = fx_name,
+        enabled = enabled,
+        offline = offline,
+        preset = preset or "",
+        params = params_data,
+      }
     end
 
-    state.tracks[#state.tracks + 1] = {
+    -- Send levels (volume, pan, mute for existing sends)
+    local send_count = reaper.GetTrackNumSends(track, 0)
+    local sends = {}
+    for s = 0, send_count - 1 do
+      local dest_track = reaper.GetTrackSendInfo_Value(track, 0, s, "P_DESTTRACK")
+      local dest_idx = -1
+      local dest_name = ""
+      if dest_track then
+        dest_idx = reaper.GetMediaTrackInfo_Value(dest_track, "IP_TRACKNUMBER") - 1
+        local _, dname = reaper.GetTrackName(dest_track)
+        dest_name = dname or ""
+      end
+      sends[s + 1] = {
+        destTrackIndex = dest_idx,
+        destTrackName = dest_name,
+        volume = reaper.GetTrackSendInfo_Value(track, 0, s, "D_VOL"),
+        pan = reaper.GetTrackSendInfo_Value(track, 0, s, "D_PAN"),
+        muted = reaper.GetTrackSendInfo_Value(track, 0, s, "B_MUTE") ~= 0,
+      }
+    end
+
+    state.tracks[i + 1] = {
       index = i,
       name = name,
+      color = color,
       volume = vol,
       pan = pan,
       mute = mute ~= 0,
       solo = solo ~= 0,
-      fxEnabled = fx_states,
+      fx = fx_states,
+      sends = sends,
+      -- Legacy compat: flat fxEnabled array (derived from fx_states)
+      fxEnabled = (function()
+        local arr = {}
+        for j = 1, #fx_states do
+          arr[j] = fx_states[j].enabled
+        end
+        return arr
+      end)(),
     }
   end
   return state
@@ -888,7 +958,10 @@ function handlers.snapshot_save(params)
     name = name,
     description = params.description or "",
     timestamp = timestamp,
-    mixerState = capture_mixer_state(),
+    mixerState = capture_mixer_state({
+      includeFxParams = params.includeFxParams ~= false,
+      maxParamsPerFx = params.maxParamsPerFx or 500,
+    }),
   }
 
   local path = snapshot_path(name)
@@ -897,7 +970,7 @@ function handlers.snapshot_save(params)
     return nil, "Failed to write snapshot file: " .. path
   end
 
-  return { success = true, name = name, timestamp = timestamp, path = path }
+  return { success = true, name = name, timestamp = timestamp, path = path, storageLocation = get_snapshot_storage_location() }
 end
 
 function handlers.snapshot_restore(params)
@@ -917,30 +990,89 @@ function handlers.snapshot_restore(params)
     return nil, "Invalid snapshot file for: " .. name
   end
 
-  -- Restore each track state
-  local restored = 0
   local state = snapshot.mixerState
+  local version = state.version or 1
+  local restore_meta = params.restoreTrackMeta == true  -- default false
+  local restore_sends = params.restoreSendLevels ~= false  -- default true
+  local warnings = {}
 
   reaper.Undo_BeginBlock()
+
+  local restored = 0
 
   if state.tracks then
     for _, track_state in ipairs(state.tracks) do
       local track = reaper.GetTrack(0, track_state.index)
       if track then
+        -- Basic mixer state (all versions)
         reaper.SetMediaTrackInfo_Value(track, "D_VOL", track_state.volume)
         reaper.SetMediaTrackInfo_Value(track, "D_PAN", track_state.pan)
         reaper.SetMediaTrackInfo_Value(track, "B_MUTE", track_state.mute and 1 or 0)
         reaper.SetMediaTrackInfo_Value(track, "I_SOLO", track_state.solo and 1 or 0)
 
-        -- Restore FX bypass states
-        if track_state.fxEnabled then
+        -- Track metadata (v2, opt-in)
+        if restore_meta and version >= 2 then
+          if track_state.name then
+            reaper.GetSetMediaTrackInfo_String(track, "P_NAME", track_state.name, true)
+          end
+          if track_state.color and track_state.color ~= 0 then
+            reaper.SetMediaTrackInfo_Value(track, "I_CUSTOMCOLOR", track_state.color)
+          end
+        end
+
+        -- FX state (v2: full params; v1: bypass only)
+        if version >= 2 and track_state.fx then
+          for j, fx_state in ipairs(track_state.fx) do
+            local fx_idx = j - 1
+            if fx_idx < reaper.TrackFX_GetCount(track) then
+              -- Restore enabled/offline state
+              reaper.TrackFX_SetEnabled(track, fx_idx, fx_state.enabled)
+              if fx_state.offline ~= nil then
+                reaper.TrackFX_SetOffline(track, fx_idx, fx_state.offline)
+              end
+
+              -- Restore FX parameters only if plugin name matches
+              if fx_state.params and #fx_state.params > 0 then
+                local _, current_name = reaper.TrackFX_GetFXName(track, fx_idx)
+                if current_name == fx_state.name then
+                  for p, val in ipairs(fx_state.params) do
+                    reaper.TrackFX_SetParam(track, fx_idx, p - 1, val)
+                  end
+                else
+                  warnings[#warnings + 1] = "Track " .. track_state.index .. " FX " .. fx_idx .. ": name mismatch ('" .. (current_name or "?") .. "' vs '" .. (fx_state.name or "?") .. "'), skipped params"
+                end
+              end
+            end
+          end
+        elseif track_state.fxEnabled then
+          -- Legacy v1: bypass state only
           for j, enabled in ipairs(track_state.fxEnabled) do
-            local fx_idx = j - 1  -- convert to 0-based
+            local fx_idx = j - 1
             if fx_idx < reaper.TrackFX_GetCount(track) then
               reaper.TrackFX_SetEnabled(track, fx_idx, enabled)
             end
           end
         end
+
+        -- Send levels (v2, default on)
+        if version >= 2 and restore_sends and track_state.sends then
+          local send_count = reaper.GetTrackNumSends(track, 0)
+          for _, saved_send in ipairs(track_state.sends) do
+            for s = 0, send_count - 1 do
+              local dest = reaper.GetTrackSendInfo_Value(track, 0, s, "P_DESTTRACK")
+              if dest then
+                local dest_idx = reaper.GetMediaTrackInfo_Value(dest, "IP_TRACKNUMBER") - 1
+                if dest_idx == saved_send.destTrackIndex then
+                  reaper.SetTrackSendInfo_Value(track, 0, s, "D_VOL", saved_send.volume)
+                  reaper.SetTrackSendInfo_Value(track, 0, s, "D_PAN", saved_send.pan)
+                  reaper.SetTrackSendInfo_Value(track, 0, s, "B_MUTE", saved_send.muted and 1 or 0)
+                  break
+                end
+              end
+            end
+          end
+        end
+
         restored = restored + 1
       end
     end
@@ -951,12 +1083,15 @@ function handlers.snapshot_restore(params)
   reaper.TrackList_AdjustWindows(false)
   reaper.UpdateArrange()
 
-  return {
+  local result = {
     success = true,
     name = name,
     timestamp = snapshot.timestamp,
     tracksRestored = restored,
+    version = version,
   }
+  if #warnings > 0 then result.warnings = warnings end
+  return result
 end
 
 function handlers.snapshot_list(params)
@@ -987,7 +1122,7 @@ function handlers.snapshot_list(params)
   -- Sort by timestamp descending (newest first)
   table.sort(snapshots, function(a, b) return a.timestamp > b.timestamp end)
 
-  return { snapshots = snapshots, total = #snapshots }
+  return { snapshots = snapshots, total = #snapshots, storageLocation = get_snapshot_storage_location() }
 end
 
 -- =============================================================================
@@ -2220,6 +2355,196 @@ function handlers.set_fx_offline(params)
   reaper.TrackFX_SetOffline(track, params.fxIndex, params.offline == 1)
   reaper.Undo_EndBlock(params.offline == 1 and "MCP: Set FX offline" or "MCP: Set FX online", -1)
   return { trackIndex = params.trackIndex, fxIndex = params.fxIndex, offline = params.offline == 1 }
+end
+
+-- =============================================================================
+-- Composite batch tools
+-- =============================================================================
+
+function handlers.set_multiple_track_properties(params)
+  local tracks_input = params.tracks
+  if not tracks_input then return nil, "tracks array required" end
+
+  local tracks = nil
+  if type(tracks_input) == "string" then
+    tracks = json_decode(tracks_input)
+  elseif type(tracks_input) == "table" then
+    tracks = tracks_input
+  end
+  if not tracks then return nil, "Failed to parse tracks array" end
+
+  local updated = 0
+  local errors = {}
+
+  reaper.Undo_BeginBlock()
+
+  for _, t in ipairs(tracks) do
+    local track_idx = t.trackIndex
+    if track_idx == nil then
+      errors[#errors + 1] = "track entry missing trackIndex"
+    else
+      local track = reaper.GetTrack(0, track_idx)
+      if not track then
+        errors[#errors + 1] = "Track " .. track_idx .. " not found"
+      else
+        if t.volume ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "D_VOL", from_db(t.volume))
+        end
+        if t.pan ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "D_PAN", t.pan)
+        end
+        if t.mute ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "B_MUTE", t.mute)
+        end
+        if t.solo ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "I_SOLO", t.solo)
+        end
+        if t.recordArm ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "I_RECARM", t.recordArm)
+        end
+        if t.phase ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "B_PHASE", t.phase)
+        end
+        if t.input ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "I_RECINPUT", t.input)
+        end
+        updated = updated + 1
+      end
+    end
+  end
+
+  reaper.Undo_EndBlock("MCP: Batch set " .. updated .. " track properties", -1)
+
+  local result = { success = true, updated = updated, total = #tracks }
+  if #errors > 0 then result.errors = errors end
+  return result
+end
+
+function handlers.setup_fx_chain(params)
+  local track_idx = params.trackIndex
+  if track_idx == nil then return nil, "trackIndex required" end
+
+  local plugins_input = params.plugins
+  if not plugins_input then return nil, "plugins array required" end
+
+  local plugins = nil
+  if type(plugins_input) == "string" then
+    plugins = json_decode(plugins_input)
+  elseif type(plugins_input) == "table" then
+    plugins = plugins_input
+  end
+  if not plugins then return nil, "Failed to parse plugins array" end
+
+  local track = reaper.GetTrack(0, track_idx)
+  if not track then return nil, "Track " .. track_idx .. " not found" end
+
+  local added = 0
+  local errors = {}
+  local added_plugins = {}
+
+  reaper.Undo_BeginBlock()
+
+  for i, plugin in ipairs(plugins) do
+    local fx_name = plugin.fxName
+    if not fx_name or fx_name == "" then
+      errors[#errors + 1] = "plugin[" .. (i - 1) .. "] missing fxName"
+    else
+      local fx_idx = reaper.TrackFX_AddByName(track, fx_name, false, -1)
+      if fx_idx < 0 then
+        errors[#errors + 1] = "FX not found: " .. fx_name
+      else
+        -- Set enabled state if specified (default is enabled)
+        if plugin.enabled ~= nil then
+          reaper.TrackFX_SetEnabled(track, fx_idx, plugin.enabled == 1)
+        end
+
+        -- Set initial parameters if provided
+        local param_errors = {}
+        if plugin.parameters and type(plugin.parameters) == "table" then
+          for _, p in ipairs(plugin.parameters) do
+            if p.index ~= nil and p.value ~= nil then
+              local ok = reaper.TrackFX_SetParam(track, fx_idx, p.index, p.value)
+              if not ok then
+                param_errors[#param_errors + 1] = "Failed to set param " .. p.index
+              end
+            end
+          end
+        end
+
+        local _, actual_name = reaper.TrackFX_GetFXName(track, fx_idx)
+        added_plugins[#added_plugins + 1] = {
+          pluginIndex = i - 1,
+          fxName = actual_name or fx_name,
+          fxIndex = fx_idx,
+        }
+        if #param_errors > 0 then
+          for _, pe in ipairs(param_errors) do
+            errors[#errors + 1] = fx_name .. ": " .. pe
+          end
+        end
+        added = added + 1
+      end
+    end
+  end
+
+  reaper.Undo_EndBlock("MCP: Setup FX chain (" .. added .. " plugins) on track " .. track_idx, -1)
+
+  local result = {
+    success = true,
+    trackIndex = track_idx,
+    added = added,
+    total = #plugins,
+    plugins = added_plugins,
+  }
+  if #errors > 0 then result.errors = errors end
+  return result
+end
+
+function handlers.set_multiple_fx_parameters(params)
+  local updates_input = params.updates
+  if not updates_input then return nil, "updates array required" end
+
+  local updates = nil
+  if type(updates_input) == "string" then
+    updates = json_decode(updates_input)
+  elseif type(updates_input) == "table" then
+    updates = updates_input
+  end
+  if not updates then return nil, "Failed to parse updates array" end
+
+  local updated = 0
+  local errors = {}
+
+  reaper.Undo_BeginBlock()
+
+  for _, u in ipairs(updates) do
+    local track_idx = u.trackIndex
+    local fx_idx = u.fxIndex
+    local param_idx = u.paramIndex
+    local value = u.value
+
+    if track_idx == nil or fx_idx == nil or param_idx == nil or value == nil then
+      errors[#errors + 1] = "update entry missing trackIndex, fxIndex, paramIndex, or value"
+    else
+      local track = reaper.GetTrack(0, track_idx)
+      if not track then
+        errors[#errors + 1] = "Track " .. track_idx .. " not found"
+      else
+        local ok = reaper.TrackFX_SetParam(track, fx_idx, param_idx, value)
+        if not ok then
+          errors[#errors + 1] = "Failed to set track " .. track_idx .. " fx " .. fx_idx .. " param " .. param_idx
+        else
+          updated = updated + 1
+        end
+      end
+    end
+  end
+
+  reaper.Undo_EndBlock("MCP: Batch set " .. updated .. " FX parameters", -1)
+
+  local result = { success = true, updated = updated, total = #updates }
+  if #errors > 0 then result.errors = errors end
+  return result
 end
 
 -- =============================================================================

@@ -36,7 +36,8 @@ describe('snapshot tools', () => {
         success: true,
         name: 'before-compression',
         timestamp: now,
-        path: '/reaper/Scripts/mcp_bridge_data/snapshots/before-compression.json',
+        path: '/project/.reaper-mcp/snapshots/before-compression.json',
+        storageLocation: 'project',
       };
 
       mockedSendCommand.mockResolvedValue({
@@ -138,6 +139,7 @@ describe('snapshot tools', () => {
           { name: 'v1', description: '', timestamp: 1700000000000 },
         ],
         total: 3,
+        storageLocation: 'project',
       };
 
       mockedSendCommand.mockResolvedValue({
@@ -158,13 +160,13 @@ describe('snapshot tools', () => {
       mockedSendCommand.mockResolvedValue({
         id: 'test',
         success: true,
-        data: { snapshots: [], total: 0 },
+        data: { snapshots: [], total: 0, storageLocation: 'global' },
         timestamp: Date.now(),
       });
 
       const result = await tools['snapshot_list'].handler({});
       expect(result).toEqual({
-        content: [{ type: 'text', text: JSON.stringify({ snapshots: [], total: 0 }, null, 2) }],
+        content: [{ type: 'text', text: JSON.stringify({ snapshots: [], total: 0, storageLocation: 'global' }, null, 2) }],
       });
     });
 

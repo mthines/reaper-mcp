@@ -89,7 +89,11 @@ export type CommandType =
   | 'trim_media_item'
   | 'add_stretch_marker'
   | 'get_stretch_markers'
-  | 'delete_stretch_marker';
+  | 'delete_stretch_marker'
+  // Composite batch tools
+  | 'set_multiple_track_properties'
+  | 'setup_fx_chain'
+  | 'set_multiple_fx_parameters';
 
 // --- Per-command param types ---
 
@@ -177,10 +181,14 @@ export interface SetFxPresetParams {
 export interface SnapshotSaveParams {
   name: string;
   description?: string;
+  includeFxParams?: boolean;   // default true — capture all FX parameter values
+  maxParamsPerFx?: number;     // default 500 — safety cap per plugin
 }
 
 export interface SnapshotRestoreParams {
   name: string;
+  restoreTrackMeta?: boolean;  // default false — do not rename/recolor tracks
+  restoreSendLevels?: boolean; // default true — update existing send volumes
 }
 
 export type SnapshotListParams = Record<string, never>;
@@ -440,4 +448,48 @@ export interface InsertEnvelopePointsParams {
   trackIndex: number;
   envelopeIndex: number;
   points: InsertEnvelopePointItem[];
+}
+
+// --- Composite batch tool param types ---
+
+export interface SetMultipleTrackPropertiesItem {
+  trackIndex: number;
+  volume?: number;    // dB
+  pan?: number;       // -1.0 to 1.0
+  mute?: number;      // 0 or 1
+  solo?: number;      // 0 or 1
+  recordArm?: number; // 0 or 1
+  phase?: number;     // 0 or 1
+  input?: number;     // REAPER input index, -1 = no input
+}
+
+export interface SetMultipleTrackPropertiesParams {
+  tracks: SetMultipleTrackPropertiesItem[];
+}
+
+export interface SetupFxChainPluginParameter {
+  index: number;  // parameter index
+  value: number;  // normalized 0.0–1.0
+}
+
+export interface SetupFxChainPlugin {
+  fxName: string;
+  enabled?: number;   // 1 = enabled (default), 0 = disabled (bypassed)
+  parameters?: SetupFxChainPluginParameter[];
+}
+
+export interface SetupFxChainParams {
+  trackIndex: number;
+  plugins: SetupFxChainPlugin[];
+}
+
+export interface SetMultipleFxParametersItem {
+  trackIndex: number;
+  fxIndex: number;
+  paramIndex: number;
+  value: number;  // normalized 0.0–1.0
+}
+
+export interface SetMultipleFxParametersParams {
+  updates: SetMultipleFxParametersItem[];
 }
