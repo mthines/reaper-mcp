@@ -207,8 +207,8 @@ describe('package integrity', () => {
     expect(existsSync(join(distDir, 'claude-agents'))).toBe(true);
   });
 
-  it.skipIf(!distExists)('dist contains mix-engineer agent', () => {
-    expect(existsSync(join(distDir, 'claude-agents', 'mix-engineer.md'))).toBe(true);
+  it.skipIf(!distExists)('dist contains mixer agent', () => {
+    expect(existsSync(join(distDir, 'claude-agents', 'mixer.md'))).toBe(true);
   });
 
   it.skipIf(!distExists)('main.js does not contain node_modules paths', () => {
