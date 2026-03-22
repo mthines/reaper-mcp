@@ -131,7 +131,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `set_track_property` | `tools/tracks.ts` | Set volume (dB), pan, mute, solo, recordArm, phase, input |
 | `set_multiple_track_properties` | `tools/batch.ts` | **Batch** set properties on multiple tracks in one call |
 
-### FX Management (9)
+### FX Management (8)
 
 | Tool | File | Description |
 |------|------|-------------|
