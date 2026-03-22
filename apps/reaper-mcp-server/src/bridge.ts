@@ -341,7 +341,9 @@ export async function readBridgeEvents(): Promise<void> {
   }
 
   // Truncate to prevent re-processing
-  await writeFile(eventsPath, '', 'utf-8').catch(() => {});
+  await writeFile(eventsPath, '', 'utf-8').catch(() => {
+    // ignore — best-effort truncate
+  });
 
   const lines = content.split('\n').filter((l) => l.trim() !== '');
   for (const line of lines) {
@@ -393,9 +395,14 @@ export function startDiagnosticsPoller(intervalMs = 60_000): void {
 export function startEventsPoller(intervalMs = 30_000): void {
   if (_eventsTimer) return;
   // Read once at startup
-  readBridgeEvents().catch(() => {});
+  readBridgeEvents().catch(() => {
+    // ignore — best-effort read
+  });
   _eventsTimer = setInterval(
-    () => readBridgeEvents().catch(() => {}),
+    () =>
+      readBridgeEvents().catch(() => {
+        // ignore — best-effort read
+      }),
     intervalMs,
   );
 }
