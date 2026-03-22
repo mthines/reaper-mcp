@@ -162,7 +162,8 @@ export async function sendCommand(
           if (profiling) t['cleanup'] = now() - tCleanup;
 
           // Extract bridge-side timing from response (piggybacked by Lua)
-          const rawResponse = JSON.parse(data) as Record<string, unknown>;
+          // These fields are at the response root, not inside .data
+          const rawResponse = response as unknown as Record<string, unknown>;
           const handlerMs = rawResponse['_handlerMs'] as number | undefined;
           const pickupMs = rawResponse['_pickupMs'] as number | undefined;
           const deferCycle = rawResponse['_deferCycle'] as number | undefined;
