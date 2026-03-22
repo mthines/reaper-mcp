@@ -58,7 +58,6 @@ slider1:window_ms=300<50,2000,10>Window (ms)
     gmem[3] = -150;
   );
 
-  local(l, r, m, s);
   l = spl0;
   r = spl1;
 
@@ -66,7 +65,6 @@ slider1:window_ms=300<50,2000,10>Window (ms)
   m = (l + r) * 0.5;
   s = (l - r) * 0.5;
 
-  local(ll, rr, lr, mm, ss);
   ll = l * l;
   rr = r * r;
   lr = l * r;
@@ -99,8 +97,6 @@ slider1:window_ms=300<50,2000,10>Window (ms)
 
   // Update gmem every 512 samples (~86 Hz at 44.1kHz)
   (buf_pos % 512) == 0 ? (
-    local(denom, corr, mid_rms, side_rms, mid_db, side_db, width);
-
     // Correlation: sum(L*R) / sqrt(sum(L*L) * sum(R*R))
     denom = sqrt(sum_ll * sum_rr);
     denom > 0.0000001 ? (

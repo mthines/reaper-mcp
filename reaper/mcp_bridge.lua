@@ -1240,16 +1240,14 @@ function handlers.read_track_lufs(params)
   local fx_idx, err = ensure_jsfx_on_track(track, MCP_LUFS_METER_FX_NAME)
   if not fx_idx then return nil, err end
 
-  -- Set the track_slot parameter (slider2, param index 1) so this instance
-  -- writes to a unique gmem offset and doesn't collide with other tracks.
-  -- Only set if different from current to avoid triggering @slider → reset_measurement()
+  -- Set the track_slot parameter so this instance writes to a unique gmem offset
   local desired_slot = idx / 127
   local current_slot = reaper.TrackFX_GetParam(track, fx_idx, 1)
   if math.abs(current_slot - desired_slot) > 0.001 then
     reaper.TrackFX_SetParam(track, fx_idx, 1, desired_slot)
   end
 
-  -- Attach to the LUFS meter gmem namespace and read from track-specific offset
+  -- Read from gmem (JSFX writes here from @sample)
   reaper.gmem_attach("MCPLufsMeter")
 
   local base = idx * 8
@@ -1282,6 +1280,7 @@ function handlers.read_track_correlation(params)
   local fx_idx, err = ensure_jsfx_on_track(track, MCP_CORRELATION_METER_FX_NAME)
   if not fx_idx then return nil, err end
 
+  -- Read from gmem (JSFX writes here from @sample)
   reaper.gmem_attach("MCPCorrelationMeter")
 
   local correlation  = reaper.gmem_read(0)
@@ -1308,6 +1307,7 @@ function handlers.read_track_crest(params)
   local fx_idx, err = ensure_jsfx_on_track(track, MCP_CREST_FACTOR_FX_NAME)
   if not fx_idx then return nil, err end
 
+  -- Read from gmem (JSFX writes here from @sample)
   reaper.gmem_attach("MCPCrestFactor")
 
   local crest_factor = reaper.gmem_read(0)

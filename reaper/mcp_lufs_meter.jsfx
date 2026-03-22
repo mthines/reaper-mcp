@@ -21,29 +21,18 @@ slider2:track_slot=0<0,127,1>Track Slot
   // K-weighting filter state (two biquad stages per channel)
   // Stage 1: High-shelf pre-filter (+4 dB at 1681 Hz)
   // Stage 2: High-pass RLB filter (100 Hz, -12 dB/oct)
-
-  // Biquad state: [b0, b1, b2, a1, a2, x1, x2, y1, y2] per stage per channel
-  // We store state variables in flat arrays
   hs_x1l = hs_x2l = hs_y1l = hs_y2l = 0;
   hs_x1r = hs_x2r = hs_y1r = hs_y2r = 0;
   hp_x1l = hp_x2l = hp_y1l = hp_y2l = 0;
   hp_x1r = hp_x2r = hp_y1r = hp_y2r = 0;
 
-  // High-shelf filter coefficients (pre-computed for 48kHz; recomputed @slider)
-  // Using bilinear transform of analog prototype per BS.1770-4 Annex 1
+  // High-shelf filter coefficients (recomputed on init and sample rate change)
   hs_b0 = hs_b1 = hs_b2 = hs_a1 = hs_a2 = 0;
   hp_b0 = hp_b1 = hp_b2 = hp_a1 = hp_a2 = 0;
 
-  // Circular buffer for loudness blocks (sliding windows)
-  // 400ms block = momentary, 3s = short-term
-  // BS.1770 uses 100ms overlapping blocks (75% overlap)
-  // We approximate with per-sample accumulation into sliding windows
-
-  // Ring buffer for per-sample squared weighted values
-  // momentary: 400ms window
-  // short-term: 3s window
-  // We store up to 3s of samples in a circular buffer
-  buf_size = 0;           // computed at runtime from srate
+  // Ring buffer for per-sample squared weighted values (up to 3s)
+  // momentary: 400ms window, short-term: 3s window
+  buf_size = 0;
   buf_l = 65536;          // start address for left channel ring buffer
   buf_r = 131072;         // start address for right channel ring buffer
   buf_pos = 0;
@@ -63,13 +52,11 @@ slider2:track_slot=0<0,127,1>Track Slot
   // Measurement duration
   sample_count = 0;
 
-  // Flags
   needs_init = 1;
 
   function compute_kweight_filters() (
     // High-shelf pre-filter: +4 dB shelf at f0 = 1681.974 Hz
     // From BS.1770-4, Annex 1, Table 1
-    local(db, K, Vh, Vb, a0);
     db = 3.99984385397;  // ~4 dB
     K = tan($pi * 1681.974 / srate);
     Vh = exp(db / 20 * log(10));
@@ -82,7 +69,6 @@ slider2:track_slot=0<0,127,1>Track Slot
     hs_a2 = (1 - K/0.7071067811865476 + K*K) / a0;
 
     // High-pass filter: 38.13547 Hz, Q = 0.5003270373238773
-    local(K2, a0);
     K2 = tan($pi * 38.13547 / srate);
     a0 = K2*K2 + K2/0.5003270373238773 + 1;
     hp_b0 = 1 / a0;
@@ -93,7 +79,6 @@ slider2:track_slot=0<0,127,1>Track Slot
   );
 
   function reset_measurement() (
-    local(base);
     base = floor(slider2 + 0.5) * 8;
     buf_pos = 0;
     momentary_sum_l = 0;
@@ -121,7 +106,7 @@ slider2:track_slot=0<0,127,1>Track Slot
   );
 
 @slider
-  // Re-compute filter coefficients (in case sample rate has changed)
+  // Re-compute filter coefficients (handles sample rate changes)
   needs_init = 1;
 
   // Handle reset button
@@ -142,7 +127,6 @@ slider2:track_slot=0<0,127,1>Track Slot
   );
 
   // --- K-weighting: stage 1 (high-shelf) ---
-  local(wl, wr, kl, kr);
   wl = spl0;
   wr = spl1;
 
@@ -155,7 +139,6 @@ slider2:track_slot=0<0,127,1>Track Slot
   hs_x2r = hs_x1r; hs_x1r = wr; hs_y2r = hs_y1r; hs_y1r = kr;
 
   // --- K-weighting: stage 2 (high-pass) ---
-  local(fl, fr);
   fl = hp_b0 * kl + hp_b1 * hp_x1l + hp_b2 * hp_x2l - hp_a1 * hp_y1l - hp_a2 * hp_y2l;
   hp_x2l = hp_x1l; hp_x1l = kl; hp_y2l = hp_y1l; hp_y1l = fl;
 
@@ -163,13 +146,10 @@ slider2:track_slot=0<0,127,1>Track Slot
   hp_x2r = hp_x1r; hp_x1r = kr; hp_y2r = hp_y1r; hp_y1r = fr;
 
   // Squared weighted samples
-  local(sq_l, sq_r);
   sq_l = fl * fl;
   sq_r = fr * fr;
 
   // --- Ring buffer update ---
-  // Subtract outgoing samples from running sums
-  local(old_l, old_r);
   old_l = buf_l[buf_pos];
   old_r = buf_r[buf_pos];
 
@@ -177,12 +157,7 @@ slider2:track_slot=0<0,127,1>Track Slot
   shortterm_sum_l -= old_l;
   shortterm_sum_r -= old_r;
 
-  // Momentary window: 400ms = srate * 0.4 samples back
-  // We subtract from momentary only when the sample leaving is within 400ms window
-  // Simplified: maintain separate momentary accumulators via separate pointers
-  // For efficiency, use a single ring buffer and recompute momentary from partial sum
-  // Here we track momentary with a second set of pointers (400ms lag)
-  local(mom_pos);
+  // Momentary window: 400ms lag pointer
   mom_pos = buf_pos - floor(srate * 0.4);
   mom_pos < 0 ? mom_pos += buf_size;
   momentary_sum_l -= buf_l[mom_pos];
@@ -203,18 +178,12 @@ slider2:track_slot=0<0,127,1>Track Slot
   buf_pos >= buf_size ? buf_pos = 0;
 
   // --- Integrated loudness (gated per BS.1770) ---
-  // Absolute gate: only include 400ms blocks above -70 LUFS
-  // Simplified: accumulate ungated for speed, apply gate check periodically
+  // Simplified: accumulate ungated, apply gate check periodically
   integrated_sum += sq_l + sq_r;
   integrated_count += 1;
 
   // --- True peak: 4x linear interpolation oversampling ---
-  // Insert 3 interpolated samples between each real sample using linear interpolation
-  local(prev_l, prev_r, frac, tp_l, tp_r);
-
-  // We use the previous sample stored in a local state var
-  // Stored in memory block above buf_r to avoid conflict
-  // prev_l is at buf_r + buf_size, prev_r is at buf_r + buf_size + 1
+  // Previous sample stored above buf_r to avoid conflict
   prev_l = buf_r[buf_size];
   prev_r = buf_r[buf_size + 1];
 
@@ -224,7 +193,6 @@ slider2:track_slot=0<0,127,1>Track Slot
   // Check interpolated peaks at 1/4, 2/4, 3/4 offsets
   frac = 0.25;
   loop(3,
-    local(interp_l, interp_r);
     interp_l = abs(prev_l + frac * (spl0 - prev_l));
     interp_r = abs(prev_r + frac * (spl1 - prev_r));
     interp_l > tp_l ? tp_l = interp_l;
@@ -243,9 +211,6 @@ slider2:track_slot=0<0,127,1>Track Slot
 
   // --- Update gmem every 4096 samples (approx 10x/second at 44.1kHz) ---
   (sample_count % 4096) == 0 ? (
-    local(shortterm_mean, momentary_mean, integrated_lufs, shortterm_lufs, momentary_lufs);
-    local(mom_samples, base);
-
     base = floor(slider2 + 0.5) * 8;
 
     mom_samples = floor(srate * 0.4);
@@ -255,8 +220,7 @@ slider2:track_slot=0<0,127,1>Track Slot
     shortterm_mean = (shortterm_sum_l + shortterm_sum_r) / (buf_size * 2);
     momentary_mean = (momentary_sum_l + momentary_sum_r) / (mom_samples * 2);
 
-    // Integrated mean square (two channels: L + R sum, divided by count*2)
-    local(integrated_mean);
+    // Integrated mean square (two channels)
     integrated_mean = integrated_count > 0 ? (integrated_sum / (integrated_count * 2)) : 0;
 
     // LUFS = -0.691 + 10 * log10(mean_square)
@@ -274,7 +238,6 @@ slider2:track_slot=0<0,127,1>Track Slot
 
     integrated_mean > 0 ? (
       // Apply absolute gate at -70 LUFS
-      local(ungated_lufs);
       ungated_lufs = -0.691 + 10 * log10(integrated_mean);
       ungated_lufs > -70 ? (
         integrated_lufs = ungated_lufs;
