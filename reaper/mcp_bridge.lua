@@ -795,7 +795,20 @@ end
 -- =============================================================================
 
 local function get_snapshot_dir()
+  local proj_path = reaper.GetProjectPath()
+  if proj_path and proj_path ~= "" then
+    return proj_path .. "/.reaper-mcp/snapshots/"
+  end
+  -- Fallback for unsaved projects
   return bridge_dir .. "snapshots/"
+end
+
+local function get_snapshot_storage_location()
+  local proj_path = reaper.GetProjectPath()
+  if proj_path and proj_path ~= "" then
+    return "project"
+  end
+  return "global"
 end
 
 local function ensure_snapshot_dir()
@@ -921,7 +934,7 @@ function handlers.snapshot_save(params)
     return nil, "Failed to write snapshot file: " .. path
   end
 
-  return { success = true, name = name, timestamp = timestamp, path = path }
+  return { success = true, name = name, timestamp = timestamp, path = path, storageLocation = get_snapshot_storage_location() }
 end
 
 function handlers.snapshot_restore(params)
@@ -1072,7 +1085,7 @@ function handlers.snapshot_list(params)
   -- Sort by timestamp descending (newest first)
   table.sort(snapshots, function(a, b) return a.timestamp > b.timestamp end)
 
-  return { snapshots = snapshots, total = #snapshots }
+  return { snapshots = snapshots, total = #snapshots, storageLocation = get_snapshot_storage_location() }
 end
 
 -- =============================================================================
