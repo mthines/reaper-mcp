@@ -119,9 +119,9 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (72 total)
+## MCP Tools (78 total)
 
-### Project & Tracks (4)
+### Project & Tracks (5)
 
 | Tool | File | Description |
 |------|------|-------------|
@@ -129,8 +129,9 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `list_tracks` | `tools/tracks.ts` | All tracks with volume, pan, mute/solo, arm, phase, FX count, routing |
 | `get_track_properties` | `tools/tracks.ts` | Detailed single track info + full FX chain list |
 | `set_track_property` | `tools/tracks.ts` | Set volume (dB), pan, mute, solo, recordArm, phase, input |
+| `set_multiple_track_properties` | `tools/batch.ts` | **Batch** set properties on multiple tracks in one call |
 
-### FX Management (6)
+### FX Management (9)
 
 | Tool | File | Description |
 |------|------|-------------|
@@ -140,6 +141,8 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `set_fx_parameter` | `tools/fx.ts` | Set FX parameter (normalized 0.0-1.0) |
 | `set_fx_enabled` | `tools/fx.ts` | Enable or disable (bypass) an FX plugin |
 | `set_fx_offline` | `tools/fx.ts` | Set FX online/offline (offline = no CPU, preserves settings) |
+| `setup_fx_chain` | `tools/batch.ts` | **Batch** add multiple FX with initial parameters in one call |
+| `set_multiple_fx_parameters` | `tools/batch.ts` | **Batch** set params across multiple FX/tracks in one call |
 
 ### Transport (5)
 
@@ -257,6 +260,16 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `read_track_lufs` | `tools/analysis.ts` | Integrated/short-term/momentary LUFS + true peak |
 | `read_track_correlation` | `tools/analysis.ts` | Stereo correlation, width, mid/side levels |
 | `read_track_crest` | `tools/analysis.ts` | Crest factor (peak-to-RMS ratio) |
+
+### Progressive Discovery (3)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 78 schemas) |
+| `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
+| `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
+
+Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`
 
 ### MIDI Editing Concepts
 
