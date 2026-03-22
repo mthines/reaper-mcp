@@ -17,6 +17,8 @@ import { registerSelectionTools } from './tools/selection.js';
 import { registerMarkerTools } from './tools/markers.js';
 import { registerTempoTools } from './tools/tempo.js';
 import { registerEnvelopeTools } from './tools/envelopes.js';
+import { registerBatchTools } from './tools/batch.js';
+import { registerCategoryTools } from './tools/categories.js';
 
 /**
  * Wraps server.tool() so every tool callback runs inside a SERVER span.
@@ -91,6 +93,8 @@ export function createServer(): McpServer {
   registerMarkerTools(server);
   registerTempoTools(server);
   registerEnvelopeTools(server);
+  registerBatchTools(server);
+  registerCategoryTools(server);
 
   return server;
 }

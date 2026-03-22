@@ -340,3 +340,31 @@ export interface MeasureTracksResult {
   startPosition: number;
   endPosition: number;
 }
+
+// --- Composite batch tool response types ---
+
+export interface SetMultipleTrackPropertiesResult {
+  updated: number;
+  total: number;
+  errors?: string[];
+}
+
+export interface SetupFxChainAddedPlugin {
+  pluginIndex: number;  // index in the input plugins array
+  fxName: string;       // resolved FX name as shown in REAPER
+  fxIndex: number;      // FX chain index where it was added
+}
+
+export interface SetupFxChainResult {
+  trackIndex: number;
+  added: number;
+  total: number;
+  plugins: SetupFxChainAddedPlugin[];
+  errors?: string[];
+}
+
+export interface SetMultipleFxParametersResult {
+  updated: number;
+  total: number;
+  errors?: string[];
+}
