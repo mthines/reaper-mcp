@@ -230,3 +230,100 @@ export function getTimeoutCounter(): ReturnType<Meter['createCounter']> {
   }
   return _timeoutCounter;
 }
+
+// ---------------------------------------------------------------------------
+// Bridge-side metric instruments (handler timing, pickup latency)
+// ---------------------------------------------------------------------------
+
+let _handlerDurationHistogram: ReturnType<Meter['createHistogram']> | null =
+  null;
+let _pickupDurationHistogram: ReturnType<Meter['createHistogram']> | null =
+  null;
+
+export function getHandlerDurationHistogram(): ReturnType<
+  Meter['createHistogram']
+> {
+  if (!_handlerDurationHistogram) {
+    _handlerDurationHistogram = getMeter().createHistogram(
+      'mcp.bridge.handler.duration',
+      {
+        description:
+          'Time Lua spent executing the command handler inside REAPER',
+        unit: 'ms',
+        advice: {
+          explicitBucketBoundaries: [
+            0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500,
+          ],
+        },
+      },
+    );
+  }
+  return _handlerDurationHistogram;
+}
+
+export function getPickupDurationHistogram(): ReturnType<
+  Meter['createHistogram']
+> {
+  if (!_pickupDurationHistogram) {
+    _pickupDurationHistogram = getMeter().createHistogram(
+      'mcp.bridge.pickup.duration',
+      {
+        description:
+          'Time from Node writing the command file to Lua picking it up (defer cycle latency)',
+        unit: 'ms',
+        advice: {
+          explicitBucketBoundaries: [
+            1, 2, 5, 10, 16, 33, 50, 100, 200, 500, 1000,
+          ],
+        },
+      },
+    );
+  }
+  return _pickupDurationHistogram;
+}
+
+// ---------------------------------------------------------------------------
+// Bridge diagnostics gauge state
+// ---------------------------------------------------------------------------
+
+let _deferP50Ms = 0;
+let _deferP95Ms = 0;
+let _scanAvgMs = 0;
+let _scanMaxMs = 0;
+
+export function updateDeferStats(p50: number, p95: number): void {
+  _deferP50Ms = p50;
+  _deferP95Ms = p95;
+}
+
+export function updateScanStats(avg: number, max: number): void {
+  _scanAvgMs = avg;
+  _scanMaxMs = max;
+}
+
+/**
+ * Register ObservableGauge instruments for bridge diagnostics.
+ * Must be called after `initTelemetry()`.
+ */
+export function registerBridgeGauges(): void {
+  getMeter()
+    .createObservableGauge('mcp.bridge.defer.interval', {
+      description: 'REAPER defer loop interval (p50/p95 over last 100 cycles)',
+      unit: 'ms',
+    })
+    .addCallback((obs) => {
+      obs.observe(_deferP50Ms, { percentile: 'p50' });
+      obs.observe(_deferP95Ms, { percentile: 'p95' });
+    });
+
+  getMeter()
+    .createObservableGauge('mcp.bridge.scan.duration', {
+      description:
+        'Time Lua spends per main_loop scan cycle (avg/max over last 100 scans)',
+      unit: 'ms',
+    })
+    .addCallback((obs) => {
+      obs.observe(_scanAvgMs, { percentile: 'avg' });
+      obs.observe(_scanMaxMs, { percentile: 'max' });
+    });
+}
