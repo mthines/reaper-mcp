@@ -231,6 +231,22 @@ local function write_file(path, content)
   return true
 end
 
+-- =============================================================================
+-- Telemetry event logging
+-- =============================================================================
+
+local EVENTS_LOG = bridge_dir .. "bridge_events.jsonl"
+
+local function log_event(event_type, payload)
+  local f = io.open(EVENTS_LOG, "a")
+  if not f then return end
+  payload = payload or {}
+  payload.ts = os.time() * 1000
+  payload.type = event_type
+  f:write(json_encode(payload) .. "\n")
+  f:close()
+end
+
 local function file_exists(path)
   local f = io.open(path, "r")
   if f then f:close() return true end
@@ -413,6 +429,8 @@ function handlers.set_track_property(params)
   local track = reaper.GetTrack(0, idx)
   if not track then return nil, "Track " .. idx .. " not found" end
 
+  reaper.Undo_BeginBlock()
+
   if prop == "volume" then
     reaper.SetMediaTrackInfo_Value(track, "D_VOL", from_db(value))
   elseif prop == "pan" then
@@ -422,9 +440,11 @@ function handlers.set_track_property(params)
   elseif prop == "solo" then
     reaper.SetMediaTrackInfo_Value(track, "I_SOLO", value)
   else
+    reaper.Undo_EndBlock("MCP: Set track property", -1)
     return nil, "Unknown property: " .. tostring(prop)
   end
 
+  reaper.Undo_EndBlock("MCP: Set track " .. prop, -1)
   return { success = true, trackIndex = idx, property = prop, value = value }
 end
 
@@ -439,12 +459,16 @@ function handlers.add_fx(params)
   if not track then return nil, "Track " .. idx .. " not found" end
 
   local position = params.position or -1
+
+  reaper.Undo_BeginBlock()
   local fx_idx = reaper.TrackFX_AddByName(track, fx_name, false, position)
   if fx_idx < 0 then
+    reaper.Undo_EndBlock("MCP: Add FX (failed)", -1)
     return nil, "FX not found: " .. fx_name
   end
 
   local _, actual_name = reaper.TrackFX_GetFXName(track, fx_idx)
+  reaper.Undo_EndBlock("MCP: Add FX '" .. (actual_name or fx_name) .. "' to track " .. idx, -1)
   return {
     fxIndex = fx_idx,
     fxName = actual_name,
@@ -462,11 +486,14 @@ function handlers.remove_fx(params)
   local track = reaper.GetTrack(0, idx)
   if not track then return nil, "Track " .. idx .. " not found" end
 
+  reaper.Undo_BeginBlock()
   local ok = reaper.TrackFX_Delete(track, fx_idx)
   if not ok then
+    reaper.Undo_EndBlock("MCP: Remove FX (failed)", -1)
     return nil, "Failed to remove FX " .. fx_idx .. " from track " .. idx
   end
 
+  reaper.Undo_EndBlock("MCP: Remove FX " .. fx_idx .. " from track " .. idx, -1)
   return { success = true, trackIndex = idx, fxIndex = fx_idx }
 end
 
@@ -518,11 +545,14 @@ function handlers.set_fx_parameter(params)
   local track = reaper.GetTrack(0, idx)
   if not track then return nil, "Track " .. idx .. " not found" end
 
+  reaper.Undo_BeginBlock()
   local ok = reaper.TrackFX_SetParam(track, fx_idx, param_idx, value)
   if not ok then
+    reaper.Undo_EndBlock("MCP: Set FX parameter (failed)", -1)
     return nil, "Failed to set param " .. param_idx .. " on FX " .. fx_idx
   end
 
+  reaper.Undo_EndBlock("MCP: Set FX parameter", -1)
   return { success = true, trackIndex = idx, fxIndex = fx_idx, paramIndex = param_idx, value = value }
 end
 
@@ -749,8 +779,10 @@ function handlers.get_fx_preset_list(params)
 
   -- TrackFX_GetPresetIndex returns current index and total count
   -- We iterate by cycling through presets
+  -- Wrap in undo block to prevent intermediate preset changes from polluting undo history
   local _, total = reaper.TrackFX_GetPresetIndex(track, fx_idx)
   if total and total > 0 then
+    reaper.Undo_BeginBlock()
     for i = 0, total - 1 do
       reaper.TrackFX_SetPresetByIndex(track, fx_idx, i)
       local _, preset_name = reaper.TrackFX_GetPreset(track, fx_idx)
@@ -758,6 +790,7 @@ function handlers.get_fx_preset_list(params)
     end
     -- Restore original preset
     reaper.TrackFX_SetPresetByIndex(track, fx_idx, preset_count)
+    reaper.Undo_EndBlock("MCP: Get FX preset list", -1)
   else
     -- Plugin doesn't report preset count; return current preset only
     local _, current_preset = reaper.TrackFX_GetPreset(track, fx_idx)
@@ -781,12 +814,15 @@ function handlers.set_fx_preset(params)
   if not track then return nil, "Track " .. track_idx .. " not found" end
 
   -- TrackFX_SetPreset returns true on success
+  reaper.Undo_BeginBlock()
   local ok = reaper.TrackFX_SetPreset(track, fx_idx, preset_name)
   if not ok then
+    reaper.Undo_EndBlock("MCP: Set FX preset (failed)", -1)
     return nil, "Preset not found: " .. preset_name
   end
 
   local _, applied = reaper.TrackFX_GetPreset(track, fx_idx)
+  reaper.Undo_EndBlock("MCP: Set FX preset '" .. (applied or preset_name) .. "'", -1)
   return { success = true, trackIndex = track_idx, fxIndex = fx_idx, presetName = applied or preset_name }
 end
 
@@ -963,6 +999,7 @@ function handlers.snapshot_restore(params)
   reaper.Undo_BeginBlock()
 
   local restored = 0
+
   if state.tracks then
     for _, track_state in ipairs(state.tracks) do
       local track = reaper.GetTrack(0, track_state.index)
@@ -2296,7 +2333,9 @@ function handlers.set_fx_enabled(params)
   if params.fxIndex >= fx_count then
     return nil, "FX index " .. params.fxIndex .. " out of range (track has " .. fx_count .. " FX)"
   end
+  reaper.Undo_BeginBlock()
   reaper.TrackFX_SetEnabled(track, params.fxIndex, params.enabled == 1)
+  reaper.Undo_EndBlock(params.enabled == 1 and "MCP: Enable FX" or "MCP: Disable FX", -1)
   return { trackIndex = params.trackIndex, fxIndex = params.fxIndex, enabled = params.enabled == 1 }
 end
 
@@ -2307,7 +2346,9 @@ function handlers.set_fx_offline(params)
   if params.fxIndex >= fx_count then
     return nil, "FX index " .. params.fxIndex .. " out of range (track has " .. fx_count .. " FX)"
   end
+  reaper.Undo_BeginBlock()
   reaper.TrackFX_SetOffline(track, params.fxIndex, params.offline == 1)
+  reaper.Undo_EndBlock(params.offline == 1 and "MCP: Set FX offline" or "MCP: Set FX online", -1)
   return { trackIndex = params.trackIndex, fxIndex = params.fxIndex, offline = params.offline == 1 }
 end
 
@@ -2340,7 +2381,9 @@ end
 function handlers.set_time_selection(params)
   if params.start == nil then return nil, "start required" end
   if params["end"] == nil then return nil, "end required" end
+  reaper.Undo_BeginBlock()
   reaper.GetSet_LoopTimeRange(true, false, params.start, params["end"], false)
+  reaper.Undo_EndBlock("MCP: Set time selection", -1)
   return { start = params.start, ["end"] = params["end"] }
 end
 
@@ -2390,8 +2433,13 @@ function handlers.add_marker(params)
   if params.position == nil then return nil, "position required" end
   local color = params.color or 0
   local name = params.name or ""
+  reaper.Undo_BeginBlock()
   local idx = reaper.AddProjectMarker2(0, false, params.position, 0, name, -1, color)
-  if idx < 0 then return nil, "Failed to add marker" end
+  if idx < 0 then
+    reaper.Undo_EndBlock("MCP: Add marker (failed)", -1)
+    return nil, "Failed to add marker"
+  end
+  reaper.Undo_EndBlock("MCP: Add marker", -1)
   return { index = idx, position = params.position, name = name }
 end
 
@@ -2400,23 +2448,38 @@ function handlers.add_region(params)
   if params["end"] == nil then return nil, "end required" end
   local color = params.color or 0
   local name = params.name or ""
+  reaper.Undo_BeginBlock()
   local idx = reaper.AddProjectMarker2(0, true, params.start, params["end"], name, -1, color)
-  if idx < 0 then return nil, "Failed to add region" end
+  if idx < 0 then
+    reaper.Undo_EndBlock("MCP: Add region (failed)", -1)
+    return nil, "Failed to add region"
+  end
+  reaper.Undo_EndBlock("MCP: Add region", -1)
   return { index = idx, start = params.start, ["end"] = params["end"], name = name }
 end
 
 function handlers.delete_marker(params)
   if params.markerIndex == nil then return nil, "markerIndex required" end
+  reaper.Undo_BeginBlock()
   -- DeleteProjectMarker takes (proj, isrgn, markrgnindexnumber)
   local deleted = reaper.DeleteProjectMarker(0, false, params.markerIndex, false)
-  if not deleted then return nil, "Marker " .. params.markerIndex .. " not found" end
+  if not deleted then
+    reaper.Undo_EndBlock("MCP: Delete marker (failed)", -1)
+    return nil, "Marker " .. params.markerIndex .. " not found"
+  end
+  reaper.Undo_EndBlock("MCP: Delete marker", -1)
   return { success = true }
 end
 
 function handlers.delete_region(params)
   if params.regionIndex == nil then return nil, "regionIndex required" end
+  reaper.Undo_BeginBlock()
   local deleted = reaper.DeleteProjectMarker(0, true, params.regionIndex, false)
-  if not deleted then return nil, "Region " .. params.regionIndex .. " not found" end
+  if not deleted then
+    reaper.Undo_EndBlock("MCP: Delete region (failed)", -1)
+    return nil, "Region " .. params.regionIndex .. " not found"
+  end
+  reaper.Undo_EndBlock("MCP: Delete region", -1)
   return { success = true }
 end
 
@@ -2530,8 +2593,10 @@ function handlers.insert_envelope_point(params)
   local env = reaper.GetTrackEnvelope(track, params.envelopeIndex)
   local shape = params.shape or 0
   local tension = params.tension or 0
+  reaper.Undo_BeginBlock()
   reaper.InsertEnvelopePoint(env, params.time, params.value, shape, tension, false, true)
   reaper.Envelope_SortPoints(env)
+  reaper.Undo_EndBlock("MCP: Insert envelope point", -1)
   local total = reaper.CountEnvelopePoints(env)
   return {
     trackIndex = params.trackIndex,
@@ -2556,13 +2621,17 @@ function handlers.delete_envelope_point(params)
   if params.pointIndex >= total then
     return nil, "Point index " .. params.pointIndex .. " out of range (envelope has " .. total .. " points)"
   end
+  reaper.Undo_BeginBlock()
   reaper.DeleteEnvelopePointRange(env, params.pointIndex, params.pointIndex + 1)
+  reaper.Undo_EndBlock("MCP: Delete envelope point", -1)
   return { success = true, totalPoints = reaper.CountEnvelopePoints(env) }
 end
 
 function handlers.create_track_envelope(params)
   local track = reaper.GetTrack(0, params.trackIndex)
   if not track then return nil, "Track " .. params.trackIndex .. " not found" end
+
+  reaper.Undo_BeginBlock()
 
   local env = nil
   local env_name = nil
@@ -2645,6 +2714,8 @@ function handlers.create_track_envelope(params)
     end
   end
 
+  reaper.Undo_EndBlock("MCP: Create envelope '" .. (env_name or "") .. "'", -1)
+  reaper.MarkProjectDirty(0)
   reaper.TrackList_AdjustWindows(false)
   reaper.UpdateArrange()
 
@@ -2664,6 +2735,8 @@ function handlers.set_envelope_properties(params)
     return nil, "Envelope index " .. params.envelopeIndex .. " out of range (track has " .. env_count .. " envelopes)"
   end
   local env = reaper.GetTrackEnvelope(track, params.envelopeIndex)
+
+  reaper.Undo_BeginBlock()
 
   if reaper.BR_EnvAlloc then
     -- SWS extension available: use BR_Env* functions
@@ -2691,6 +2764,8 @@ function handlers.set_envelope_properties(params)
     end
     reaper.SetEnvelopeStateChunk(env, chunk, false)
   end
+
+  reaper.Undo_EndBlock("MCP: Set envelope properties", -1)
 
   reaper.TrackList_AdjustWindows(false)
   reaper.UpdateArrange()
@@ -2723,8 +2798,10 @@ function handlers.clear_envelope(params)
   local env = reaper.GetTrackEnvelope(track, params.envelopeIndex)
   local prev_count = reaper.CountEnvelopePoints(env)
   -- Delete all points by using a range from -infinity to +infinity
+  reaper.Undo_BeginBlock()
   reaper.DeleteEnvelopePointRange(env, -math.huge, math.huge)
   reaper.Envelope_SortPoints(env)
+  reaper.Undo_EndBlock("MCP: Clear envelope", -1)
   return {
     trackIndex = params.trackIndex,
     envelopeIndex = params.envelopeIndex,
@@ -2742,8 +2819,10 @@ function handlers.remove_envelope_points(params)
   end
   local env = reaper.GetTrackEnvelope(track, params.envelopeIndex)
   local prev_count = reaper.CountEnvelopePoints(env)
+  reaper.Undo_BeginBlock()
   reaper.DeleteEnvelopePointRange(env, params.timeStart, params.timeEnd)
   reaper.Envelope_SortPoints(env)
+  reaper.Undo_EndBlock("MCP: Remove envelope points", -1)
   local new_count = reaper.CountEnvelopePoints(env)
   return {
     trackIndex = params.trackIndex,
@@ -2775,6 +2854,7 @@ function handlers.insert_envelope_points(params)
   if not points then return nil, "Failed to parse points JSON" end
 
   local inserted = 0
+  reaper.Undo_BeginBlock()
   for _, pt in ipairs(points) do
     if pt.time and pt.value then
       local shape = pt.shape or 0
@@ -2785,6 +2865,7 @@ function handlers.insert_envelope_points(params)
   end
 
   reaper.Envelope_SortPoints(env)
+  reaper.Undo_EndBlock("MCP: Insert " .. inserted .. " envelope points", -1)
   return {
     trackIndex = params.trackIndex,
     envelopeIndex = params.envelopeIndex,
@@ -2858,15 +2939,27 @@ local function process_command(filename)
   -- Dispatch to handler
   local handler = handlers[cmd.type]
   local response = {}
+  local handler_ms = 0
 
   if handler then
-    local data, err = handler(cmd.params or {})
-    if err then
-      response = { id = cmd.id, success = false, error = err, timestamp = os.time() * 1000 }
+    local handler_start = reaper.time_precise()
+    local ok, data_or_err, err_msg = pcall(handler, cmd.params or {})
+    handler_ms = (reaper.time_precise() - handler_start) * 1000
+
+    if not ok then
+      -- pcall caught a Lua runtime error — handler crashed
+      local err_str = tostring(data_or_err)
+      log_event("handler_error", { commandType = cmd.type, commandId = cmd.id, error = err_str })
+      response = { id = cmd.id, success = false, error = "Handler error: " .. err_str, timestamp = os.time() * 1000 }
+    elseif err_msg then
+      -- Handler returned (nil, errorString)
+      response = { id = cmd.id, success = false, error = err_msg, timestamp = os.time() * 1000 }
     else
-      response = { id = cmd.id, success = true, data = data, timestamp = os.time() * 1000 }
+      -- Handler returned (data, nil) — success
+      response = { id = cmd.id, success = true, data = data_or_err, timestamp = os.time() * 1000 }
     end
   else
+    log_event("handler_unknown", { commandType = cmd.type, commandId = cmd.id })
     response = {
       id = cmd.id,
       success = false,
@@ -2874,6 +2967,9 @@ local function process_command(filename)
       timestamp = os.time() * 1000,
     }
   end
+
+  -- Add handler timing to response (rounded to microsecond precision)
+  response._handlerMs = math.floor(handler_ms * 1000 + 0.5) / 1000
 
   -- Add pickup timing to response for profiling
   if cmd.timestamp then
@@ -2951,6 +3047,12 @@ reaper.ShowConsoleMsg("MCP Bridge: Polling every " .. (POLL_INTERVAL * 1000) .. 
 
 -- Write initial heartbeat
 write_heartbeat()
+
+-- Log bridge start event for OTel consumption
+log_event("bridge_start", { reaperVersion = reaper.GetAppVersion(), bridgeDir = bridge_dir })
+
+-- Register shutdown handler
+reaper.atexit(function() log_event("bridge_stop", {}) end)
 
 -- Start the loop
 main_loop()

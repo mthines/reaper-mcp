@@ -11,6 +11,10 @@ import {
   getCommandDurationHistogram,
   getCommandCounter,
   getTimeoutCounter,
+  getHandlerDurationHistogram,
+  getPickupDurationHistogram,
+  updateDeferStats,
+  updateScanStats,
 } from './telemetry.js';
 
 const POLL_INTERVAL_MS = 10;
@@ -157,10 +161,35 @@ export async function sendCommand(
           await Promise.allSettled([unlink(commandPath), unlink(responsePath)]);
           if (profiling) t['cleanup'] = now() - tCleanup;
 
+          // Extract bridge-side timing from response (piggybacked by Lua)
+          // These fields are at the response root, not inside .data
+          const rawResponse = response as unknown as Record<string, unknown>;
+          const handlerMs = rawResponse['_handlerMs'] as number | undefined;
+          const pickupMs = rawResponse['_pickupMs'] as number | undefined;
+          const deferCycle = rawResponse['_deferCycle'] as number | undefined;
+
           const durationMs = Date.now() - startMs;
           const succeeded = response.success;
 
           span.setAttribute('mcp.response.success', succeeded);
+
+          // Add bridge-side timing as span attributes
+          if (handlerMs != null) {
+            span.setAttribute('mcp.bridge.handler_ms', handlerMs);
+            getHandlerDurationHistogram().record(handlerMs, {
+              command_type: type,
+              success: String(succeeded),
+            });
+          }
+          if (pickupMs != null) {
+            span.setAttribute('mcp.bridge.pickup_ms', pickupMs);
+            getPickupDurationHistogram().record(pickupMs, {
+              command_type: type,
+            });
+          }
+          if (deferCycle != null) {
+            span.setAttribute('mcp.bridge.defer_cycle', deferCycle);
+          }
 
           if (!succeeded) {
             span.setStatus({ code: SpanStatusCode.ERROR, message: response.error ?? 'Bridge error' });
@@ -292,4 +321,102 @@ export function getReaperEffectsPath(): string {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ---------------------------------------------------------------------------
+// Bridge telemetry pollers
+// ---------------------------------------------------------------------------
+
+/**
+ * Read and consume bridge events from the JSONL log file.
+ * Emits each event as a structured log to stderr.
+ */
+export async function readBridgeEvents(): Promise<void> {
+  const eventsPath = join(getBridgeDir(), 'bridge_events.jsonl');
+  let content: string;
+  try {
+    content = await readFile(eventsPath, 'utf-8');
+  } catch {
+    return; // File does not exist — normal on first run
+  }
+
+  // Truncate to prevent re-processing
+  await writeFile(eventsPath, '', 'utf-8').catch(() => {
+    // ignore — best-effort truncate
+  });
+
+  const lines = content.split('\n').filter((l) => l.trim() !== '');
+  for (const line of lines) {
+    try {
+      const evt = JSON.parse(line) as Record<string, unknown>;
+      console.error(JSON.stringify({ msg: 'bridge_event', ...evt }));
+    } catch {
+      // skip malformed lines
+    }
+  }
+}
+
+let _diagnosticsTimer: ReturnType<typeof setInterval> | null = null;
+let _eventsTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Periodically fetch bridge diagnostics and update OTel gauge state.
+ */
+export function startDiagnosticsPoller(intervalMs = 60_000): void {
+  if (_diagnosticsTimer) return;
+  _diagnosticsTimer = setInterval(async () => {
+    try {
+      const res = await sendCommand(
+        '_bridge_diagnostics' as Parameters<typeof sendCommand>[0],
+        {},
+        5_000,
+      );
+      if (res.success && res.data) {
+        const d = res.data as {
+          deferIntervals?: { p50Ms: number; p95Ms: number };
+          scanDurations?: { avgMs: number; maxMs: number };
+        };
+        if (d.deferIntervals) {
+          updateDeferStats(d.deferIntervals.p50Ms, d.deferIntervals.p95Ms);
+        }
+        if (d.scanDurations) {
+          updateScanStats(d.scanDurations.avgMs, d.scanDurations.maxMs);
+        }
+      }
+    } catch {
+      // Diagnostics failure is non-fatal
+    }
+  }, intervalMs);
+}
+
+/**
+ * Periodically read bridge event log for crash detection / lifecycle events.
+ */
+export function startEventsPoller(intervalMs = 30_000): void {
+  if (_eventsTimer) return;
+  // Read once at startup
+  readBridgeEvents().catch(() => {
+    // ignore — best-effort read
+  });
+  _eventsTimer = setInterval(
+    () =>
+      readBridgeEvents().catch(() => {
+        // ignore — best-effort read
+      }),
+    intervalMs,
+  );
+}
+
+/**
+ * Stop all bridge telemetry pollers.
+ */
+export function stopPollers(): void {
+  if (_diagnosticsTimer) {
+    clearInterval(_diagnosticsTimer);
+    _diagnosticsTimer = null;
+  }
+  if (_eventsTimer) {
+    clearInterval(_eventsTimer);
+    _eventsTimer = null;
+  }
 }
