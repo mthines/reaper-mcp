@@ -883,11 +883,11 @@ local function capture_mixer_state(params)
       solo = solo ~= 0,
       fx = fx_states,
       sends = sends,
-      -- Legacy compat: also include flat fxEnabled array
+      -- Legacy compat: flat fxEnabled array (derived from fx_states)
       fxEnabled = (function()
         local arr = {}
-        for j = 0, fx_count - 1 do
-          arr[j + 1] = reaper.TrackFX_GetEnabled(track, j)
+        for j = 1, #fx_states do
+          arr[j] = fx_states[j].enabled
         end
         return arr
       end)(),
