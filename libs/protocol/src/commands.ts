@@ -177,10 +177,14 @@ export interface SetFxPresetParams {
 export interface SnapshotSaveParams {
   name: string;
   description?: string;
+  includeFxParams?: boolean;   // default true — capture all FX parameter values
+  maxParamsPerFx?: number;     // default 500 — safety cap per plugin
 }
 
 export interface SnapshotRestoreParams {
   name: string;
+  restoreTrackMeta?: boolean;  // default false — do not rename/recolor tracks
+  restoreSendLevels?: boolean; // default true — update existing send volumes
 }
 
 export type SnapshotListParams = Record<string, never>;

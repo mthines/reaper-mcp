@@ -115,6 +115,8 @@ export interface Snapshot {
   name: string;
   description?: string;
   timestamp: number;
+  version?: number;     // 1 = legacy (bypass only), 2 = full (FX params, sends, meta)
+  trackCount?: number;
 }
 
 export interface TrackRouting {
