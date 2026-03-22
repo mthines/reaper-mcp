@@ -167,6 +167,14 @@ export const MCP_TOOL_NAMES = [
   'set_envelope_properties',
   'clear_envelope',
   'remove_envelope_points',
+  // composite batch tools
+  'set_multiple_track_properties',
+  'setup_fx_chain',
+  'set_multiple_fx_parameters',
+  // progressive discovery
+  'list_tool_categories',
+  'enable_tool_category',
+  'disable_tool_category',
 ] as const;
 
 /** Create or update .claude/settings.json with reaper MCP tool permissions */

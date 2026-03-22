@@ -2353,6 +2353,196 @@ function handlers.set_fx_offline(params)
 end
 
 -- =============================================================================
+-- Composite batch tools
+-- =============================================================================
+
+function handlers.set_multiple_track_properties(params)
+  local tracks_input = params.tracks
+  if not tracks_input then return nil, "tracks array required" end
+
+  local tracks = nil
+  if type(tracks_input) == "string" then
+    tracks = json_decode(tracks_input)
+  elseif type(tracks_input) == "table" then
+    tracks = tracks_input
+  end
+  if not tracks then return nil, "Failed to parse tracks array" end
+
+  local updated = 0
+  local errors = {}
+
+  reaper.Undo_BeginBlock()
+
+  for _, t in ipairs(tracks) do
+    local track_idx = t.trackIndex
+    if track_idx == nil then
+      errors[#errors + 1] = "track entry missing trackIndex"
+    else
+      local track = reaper.GetTrack(0, track_idx)
+      if not track then
+        errors[#errors + 1] = "Track " .. track_idx .. " not found"
+      else
+        if t.volume ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "D_VOL", from_db(t.volume))
+        end
+        if t.pan ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "D_PAN", t.pan)
+        end
+        if t.mute ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "B_MUTE", t.mute)
+        end
+        if t.solo ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "I_SOLO", t.solo)
+        end
+        if t.recordArm ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "I_RECARM", t.recordArm)
+        end
+        if t.phase ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "B_PHASE", t.phase)
+        end
+        if t.input ~= nil then
+          reaper.SetMediaTrackInfo_Value(track, "I_RECINPUT", t.input)
+        end
+        updated = updated + 1
+      end
+    end
+  end
+
+  reaper.Undo_EndBlock("MCP: Batch set " .. updated .. " track properties", -1)
+
+  local result = { success = true, updated = updated, total = #tracks }
+  if #errors > 0 then result.errors = errors end
+  return result
+end
+
+function handlers.setup_fx_chain(params)
+  local track_idx = params.trackIndex
+  if track_idx == nil then return nil, "trackIndex required" end
+
+  local plugins_input = params.plugins
+  if not plugins_input then return nil, "plugins array required" end
+
+  local plugins = nil
+  if type(plugins_input) == "string" then
+    plugins = json_decode(plugins_input)
+  elseif type(plugins_input) == "table" then
+    plugins = plugins_input
+  end
+  if not plugins then return nil, "Failed to parse plugins array" end
+
+  local track = reaper.GetTrack(0, track_idx)
+  if not track then return nil, "Track " .. track_idx .. " not found" end
+
+  local added = 0
+  local errors = {}
+  local added_plugins = {}
+
+  reaper.Undo_BeginBlock()
+
+  for i, plugin in ipairs(plugins) do
+    local fx_name = plugin.fxName
+    if not fx_name or fx_name == "" then
+      errors[#errors + 1] = "plugin[" .. (i - 1) .. "] missing fxName"
+    else
+      local fx_idx = reaper.TrackFX_AddByName(track, fx_name, false, -1)
+      if fx_idx < 0 then
+        errors[#errors + 1] = "FX not found: " .. fx_name
+      else
+        -- Set enabled state if specified (default is enabled)
+        if plugin.enabled ~= nil then
+          reaper.TrackFX_SetEnabled(track, fx_idx, plugin.enabled == 1)
+        end
+
+        -- Set initial parameters if provided
+        local param_errors = {}
+        if plugin.parameters and type(plugin.parameters) == "table" then
+          for _, p in ipairs(plugin.parameters) do
+            if p.index ~= nil and p.value ~= nil then
+              local ok = reaper.TrackFX_SetParam(track, fx_idx, p.index, p.value)
+              if not ok then
+                param_errors[#param_errors + 1] = "Failed to set param " .. p.index
+              end
+            end
+          end
+        end
+
+        local _, actual_name = reaper.TrackFX_GetFXName(track, fx_idx)
+        added_plugins[#added_plugins + 1] = {
+          pluginIndex = i - 1,
+          fxName = actual_name or fx_name,
+          fxIndex = fx_idx,
+        }
+        if #param_errors > 0 then
+          for _, pe in ipairs(param_errors) do
+            errors[#errors + 1] = fx_name .. ": " .. pe
+          end
+        end
+        added = added + 1
+      end
+    end
+  end
+
+  reaper.Undo_EndBlock("MCP: Setup FX chain (" .. added .. " plugins) on track " .. track_idx, -1)
+
+  local result = {
+    success = true,
+    trackIndex = track_idx,
+    added = added,
+    total = #plugins,
+    plugins = added_plugins,
+  }
+  if #errors > 0 then result.errors = errors end
+  return result
+end
+
+function handlers.set_multiple_fx_parameters(params)
+  local updates_input = params.updates
+  if not updates_input then return nil, "updates array required" end
+
+  local updates = nil
+  if type(updates_input) == "string" then
+    updates = json_decode(updates_input)
+  elseif type(updates_input) == "table" then
+    updates = updates_input
+  end
+  if not updates then return nil, "Failed to parse updates array" end
+
+  local updated = 0
+  local errors = {}
+
+  reaper.Undo_BeginBlock()
+
+  for _, u in ipairs(updates) do
+    local track_idx = u.trackIndex
+    local fx_idx = u.fxIndex
+    local param_idx = u.paramIndex
+    local value = u.value
+
+    if track_idx == nil or fx_idx == nil or param_idx == nil or value == nil then
+      errors[#errors + 1] = "update entry missing trackIndex, fxIndex, paramIndex, or value"
+    else
+      local track = reaper.GetTrack(0, track_idx)
+      if not track then
+        errors[#errors + 1] = "Track " .. track_idx .. " not found"
+      else
+        local ok = reaper.TrackFX_SetParam(track, fx_idx, param_idx, value)
+        if not ok then
+          errors[#errors + 1] = "Failed to set track " .. track_idx .. " fx " .. fx_idx .. " param " .. param_idx
+        else
+          updated = updated + 1
+        end
+      end
+    end
+  end
+
+  reaper.Undo_EndBlock("MCP: Batch set " .. updated .. " FX parameters", -1)
+
+  local result = { success = true, updated = updated, total = #updates }
+  if #errors > 0 then result.errors = errors end
+  return result
+end
+
+-- =============================================================================
 -- Selection & Navigation
 -- =============================================================================
 
