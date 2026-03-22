@@ -2284,8 +2284,11 @@ function handlers.add_marker(params)
   local name = params.name or ""
   reaper.Undo_BeginBlock()
   local idx = reaper.AddProjectMarker2(0, false, params.position, 0, name, -1, color)
+  if idx < 0 then
+    reaper.Undo_EndBlock("MCP: Add marker (failed)", -1)
+    return nil, "Failed to add marker"
+  end
   reaper.Undo_EndBlock("MCP: Add marker", -1)
-  if idx < 0 then return nil, "Failed to add marker" end
   return { index = idx, position = params.position, name = name }
 end
 
@@ -2296,8 +2299,11 @@ function handlers.add_region(params)
   local name = params.name or ""
   reaper.Undo_BeginBlock()
   local idx = reaper.AddProjectMarker2(0, true, params.start, params["end"], name, -1, color)
+  if idx < 0 then
+    reaper.Undo_EndBlock("MCP: Add region (failed)", -1)
+    return nil, "Failed to add region"
+  end
   reaper.Undo_EndBlock("MCP: Add region", -1)
-  if idx < 0 then return nil, "Failed to add region" end
   return { index = idx, start = params.start, ["end"] = params["end"], name = name }
 end
 
@@ -2306,8 +2312,11 @@ function handlers.delete_marker(params)
   reaper.Undo_BeginBlock()
   -- DeleteProjectMarker takes (proj, isrgn, markrgnindexnumber)
   local deleted = reaper.DeleteProjectMarker(0, false, params.markerIndex, false)
+  if not deleted then
+    reaper.Undo_EndBlock("MCP: Delete marker (failed)", -1)
+    return nil, "Marker " .. params.markerIndex .. " not found"
+  end
   reaper.Undo_EndBlock("MCP: Delete marker", -1)
-  if not deleted then return nil, "Marker " .. params.markerIndex .. " not found" end
   return { success = true }
 end
 
@@ -2315,8 +2324,11 @@ function handlers.delete_region(params)
   if params.regionIndex == nil then return nil, "regionIndex required" end
   reaper.Undo_BeginBlock()
   local deleted = reaper.DeleteProjectMarker(0, true, params.regionIndex, false)
+  if not deleted then
+    reaper.Undo_EndBlock("MCP: Delete region (failed)", -1)
+    return nil, "Region " .. params.regionIndex .. " not found"
+  end
   reaper.Undo_EndBlock("MCP: Delete region", -1)
-  if not deleted then return nil, "Region " .. params.regionIndex .. " not found" end
   return { success = true }
 end
 
