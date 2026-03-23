@@ -12,18 +12,20 @@ AI-powered mixing for REAPER DAW. An MCP server that gives AI agents (Claude Cod
 ## Quick Start
 
 ```bash
-# 1. Install REAPER components (Lua bridge + JSFX analyzers)
-npx @mthines/reaper-mcp setup
+# Interactive guided setup (recommended)
+npx @mthines/reaper-mcp init
 
-# 2. In REAPER: Actions > Load ReaScript > select mcp_bridge.lua > Run
-
-# 3. Install AI mix knowledge (globally by default, or --project for local)
-npx @mthines/reaper-mcp install-skills
-
-# 4. Open Claude Code — you're ready to mix
+# Or non-interactive — install everything with defaults
+npx @mthines/reaper-mcp init --yes
 ```
 
-That's it. Claude Code now has 67 REAPER tools and a professional mix engineer's knowledge base.
+The `init` wizard walks you through:
+1. Installing the REAPER bridge (Lua + JSFX analyzers)
+2. Installing AI mix knowledge and agents
+3. Configuring Claude Code settings (auto-allows all 78 REAPER tools)
+4. Optionally creating a project-local `.mcp.json`
+
+Then load `mcp_bridge.lua` in REAPER and open Claude Code — you're ready to mix.
 
 ## What it does
 
@@ -70,21 +72,56 @@ REAPER's scripting environment is sandboxed — no sockets, no HTTP. The Lua bri
 - [Node.js](https://nodejs.org/) 20+
 - [SWS Extensions](https://www.sws-extension.org/) (recommended — enables plugin discovery and enhanced features)
 
-### Step 1: Install REAPER components
+### Option A: Interactive Setup (recommended)
 
 ```bash
-npx @mthines/reaper-mcp setup
+npx @mthines/reaper-mcp init
 ```
 
-This copies into your REAPER resource folder:
+The wizard guides you through selecting which components to install:
+- **REAPER Bridge** — Lua bridge + JSFX analyzers (copied to your REAPER resource folder)
+- **AI Skills & Agents** — knowledge base, mix agents, rules, skills (global or project-local)
+- **Claude Code Settings** — auto-allows all 78 REAPER tools (no permission prompts)
+- **Project Config** — `.mcp.json` for the current directory (opt-in)
 
+For CI/automation, use `--yes` to skip prompts and install everything with defaults:
+
+```bash
+npx @mthines/reaper-mcp init --yes             # bridge + global skills + settings
+npx @mthines/reaper-mcp init --yes --project   # also creates .mcp.json in current directory
+```
+
+### Option B: Manual Steps
+
+If you prefer to run each step individually:
+
+```bash
+# 1. Install REAPER components (Lua bridge + JSFX analyzers)
+npx @mthines/reaper-mcp setup
+
+# 2. Install AI mix knowledge (globally by default, or --project for local)
+npx @mthines/reaper-mcp install-skills
+npx @mthines/reaper-mcp install-skills --project  # project-local alternative
+```
+
+**What gets installed:**
+
+The `setup` command copies into your REAPER resource folder:
 - `mcp_bridge.lua` — persistent Lua bridge script
 - `mcp_analyzer.jsfx` — FFT spectrum analyzer
 - `mcp_lufs_meter.jsfx` — ITU-R BS.1770 LUFS meter
 - `mcp_correlation_meter.jsfx` — stereo correlation analyzer
 - `mcp_crest_factor.jsfx` — dynamics/crest factor meter
 
-### Step 2: Start the Lua bridge in REAPER
+The `install-skills` command installs to `~/.claude/` (global, default) or `.claude/` (project):
+- `agents/` — mix engineer subagents (`@mix-engineer`, `@gain-stage`, `@mix-analyzer`, `@master`)
+- `rules/` — architecture and development rules
+- `skills/` — skills like `/learn-plugin`
+- `knowledge/` — plugin knowledge, genre rules, workflows, reference data
+
+### Start the Lua Bridge in REAPER
+
+After setup (either option), load the bridge in REAPER:
 
 1. Open REAPER
 2. **Actions > Show action list > Load ReaScript**
@@ -93,30 +130,7 @@ This copies into your REAPER resource folder:
 
 You should see in REAPER's console: `MCP Bridge: Started`
 
-### Step 3: Install AI mix knowledge
-
-```bash
-# Install globally (default) — available from any directory
-npx @mthines/reaper-mcp install-skills
-
-# Or install into a specific project
-cd your-music-project
-npx @mthines/reaper-mcp install-skills --project
-```
-
-**Global install** (`--global`, default) installs to `~/.claude/`:
-
-- `~/.claude/agents/` — mix engineer subagents (`@mix-engineer`, `@gain-stage`, `@mix-analyzer`, `@master`)
-- `~/.claude/rules/` — architecture and development rules
-- `~/.claude/skills/` — skills like `/learn-plugin`
-- `~/.claude/knowledge/` — plugin knowledge, genre rules, workflows, reference data
-
-**Project install** (`--project`) installs to your current directory:
-
-- `.claude/agents/`, `.claude/rules/`, `.claude/skills/`, `knowledge/` — same as above, scoped to the project
-- `.mcp.json` — MCP server configuration for Claude Code
-
-### Step 4: Verify
+### Verify
 
 ```bash
 npx @mthines/reaper-mcp doctor
@@ -245,7 +259,7 @@ Checks that the bridge is connected, knowledge is installed, and MCP config exis
 
 ## Using the Mix Agents
 
-Once you've run `setup` and `install-skills`, open Claude Code. Four specialized mix agents are available:
+Once you've run `init` (or `setup` + `install-skills`), open Claude Code. Four specialized mix agents are available:
 
 ### Available Agents
 
@@ -359,9 +373,7 @@ Processing decisions adapt to the genre:
 
 ## Autonomous Mode (Allow All Tools)
 
-By default Claude Code asks permission for each MCP tool call. To let the mix agents work autonomously, add the REAPER tools to your allow list.
-
-Add to your project's `.claude/settings.json` (or `~/.claude/settings.json` for global):
+By default Claude Code asks permission for each MCP tool call. The `init` command (and `install-skills`) automatically configures `settings.json` to allow all 78 REAPER tools. If you need to set this up manually, add to your project's `.claude/settings.json` (or `~/.claude/settings.json` for global):
 
 ```json
 {
@@ -443,21 +455,23 @@ The format is `mcp__reaper__{tool_name}`. Once added, Claude Code will run these
 
 ## CLI Commands
 
-```bash
-npx @mthines/reaper-mcp                  # Start MCP server (default)
-npx @mthines/reaper-mcp serve            # Start MCP server (stdio mode)
-npx @mthines/reaper-mcp setup            # Install Lua bridge + JSFX into REAPER
-npx @mthines/reaper-mcp install-skills   # Install AI knowledge + agents (globally by default)
-npx @mthines/reaper-mcp install-skills --project  # Install into current project directory
-npx @mthines/reaper-mcp doctor           # Verify everything is configured
-npx @mthines/reaper-mcp status           # Check bridge connection
-```
+| Command | Description |
+|---------|-------------|
+| `npx @mthines/reaper-mcp init` | Interactive guided setup (recommended for new users) |
+| `npx @mthines/reaper-mcp init --yes` | Non-interactive setup — install everything with defaults |
+| `npx @mthines/reaper-mcp init --yes --project` | Non-interactive setup + create `.mcp.json` in current directory |
+| `npx @mthines/reaper-mcp serve` | Start MCP server in stdio mode (default when no command given) |
+| `npx @mthines/reaper-mcp setup` | Install Lua bridge + JSFX into REAPER |
+| `npx @mthines/reaper-mcp install-skills` | Install AI knowledge + agents globally |
+| `npx @mthines/reaper-mcp install-skills --project` | Install into current project directory |
+| `npx @mthines/reaper-mcp doctor` | Verify everything is configured correctly |
+| `npx @mthines/reaper-mcp status` | Check bridge connection |
 
 Or install globally for shorter commands:
 
 ```bash
 npm install -g @mthines/reaper-mcp
-reaper-mcp setup
+reaper-mcp init
 ```
 
 ## Claude Code Integration

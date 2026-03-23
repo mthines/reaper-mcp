@@ -10,6 +10,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { resolveAssetDir, resolveAssetDirWithFallback, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES } from './cli.js';
+import { runInit } from './init.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -249,8 +250,21 @@ async function serve(): Promise<void> {
 // --- CLI entry point ---
 
 const command = process.argv[2];
+const cliArgs = process.argv.slice(3);
+const hasYesFlag = cliArgs.includes('--yes') || cliArgs.includes('-y');
+const hasProjectFlag = cliArgs.includes('--project');
 
 switch (command) {
+  case 'init':
+    runInit(
+      { yes: hasYesFlag, project: hasProjectFlag },
+      () => __dirname,
+    ).catch((err: unknown) => {
+      console.error('Init failed:', err);
+      process.exit(1);
+    });
+    break;
+
   case 'setup':
     setup().catch((err) => {
       console.error('Setup failed:', err);
@@ -295,6 +309,9 @@ switch (command) {
 Usage:
   npx @mthines/reaper-mcp                  Start MCP server (stdio mode)
   npx @mthines/reaper-mcp serve            Start MCP server (stdio mode)
+  npx @mthines/reaper-mcp init             Guided interactive setup (recommended for new users)
+  npx @mthines/reaper-mcp init --yes       Non-interactive setup (install everything with defaults)
+  npx @mthines/reaper-mcp init --project   Include .mcp.json in current directory
   npx @mthines/reaper-mcp setup            Install Lua bridge + JSFX analyzers into REAPER
   npx @mthines/reaper-mcp install-skills   Install AI knowledge + agents globally (default)
   npx @mthines/reaper-mcp install-skills --project  Install into current project directory
@@ -302,7 +319,10 @@ Usage:
   npx @mthines/reaper-mcp doctor           Check that everything is configured correctly
   npx @mthines/reaper-mcp status           Check if Lua bridge is running in REAPER
 
-Quick Start:
+Quick Start (interactive):
+  npx @mthines/reaper-mcp init             # guided setup — select components interactively
+
+Quick Start (manual steps):
   1. npx @mthines/reaper-mcp setup            # install REAPER components
   2. Load mcp_bridge.lua in REAPER (Actions > Load ReaScript > Run)
   3. npx @mthines/reaper-mcp install-skills   # install AI knowledge + agents (globally)
@@ -310,7 +330,7 @@ Quick Start:
 
 Tip: install globally for shorter commands:
   npm install -g @mthines/reaper-mcp
-  reaper-mcp setup
+  reaper-mcp init
 `);
     break;
 }
