@@ -42,7 +42,8 @@ This is an **Nx monorepo** with **pnpm workspaces**.
 reaper-mcp/
   apps/reaper-mcp-server/     # Main MCP server application (TypeScript, esbuild)
     src/
-      main.ts                 # CLI entry point: serve | setup | status
+      main.ts                 # CLI entry point: init | serve | setup | install-skills | doctor | status
+      init.ts                 # Interactive guided setup wizard (init command)
       server.ts               # McpServer creation, tool registration
       bridge.ts               # File-based IPC: sendCommand(), isBridgeRunning(), etc.
       tools/
@@ -444,18 +445,40 @@ ESLint enforces dependency rules via `@nx/enforce-module-boundaries`:
 # Build first
 pnpm nx build reaper-mcp-server
 
-# One-time setup (copies bridge files to REAPER)
-node dist/apps/reaper-mcp-server/main.js setup
+# Interactive guided setup (recommended for new users)
+node dist/apps/reaper-mcp-server/main.js init
+
+# Non-interactive setup (install everything with defaults)
+node dist/apps/reaper-mcp-server/main.js init --yes
+
+# Or run individual setup steps:
+node dist/apps/reaper-mcp-server/main.js setup            # Install Lua bridge + JSFX into REAPER
+node dist/apps/reaper-mcp-server/main.js install-skills    # Install AI knowledge + agents globally
+node dist/apps/reaper-mcp-server/main.js install-skills --project  # Install into current project
 
 # Start MCP server (stdio mode)
 node dist/apps/reaper-mcp-server/main.js serve
 
-# Check bridge status
-node dist/apps/reaper-mcp-server/main.js status
+# Diagnostics
+node dist/apps/reaper-mcp-server/main.js doctor    # Verify all components installed correctly
+node dist/apps/reaper-mcp-server/main.js status     # Quick bridge connectivity check
 
 # Test with MCP Inspector
 npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 ```
+
+### CLI Commands Reference
+
+| Command | Description |
+|---------|-------------|
+| `init` | Interactive guided setup — select components, scope, and install |
+| `init --yes` / `init -y` | Non-interactive setup — install everything with defaults |
+| `init --yes --project` | Non-interactive setup — also create `.mcp.json` in current directory |
+| `serve` (default) | Start MCP server in stdio mode for Claude Code |
+| `setup` | Install Lua bridge + JSFX analyzers into REAPER |
+| `install-skills [--global\|--project]` | Install AI knowledge, agents, skills, and rules |
+| `doctor` | Verify all components are configured correctly |
+| `status` | Check if Lua bridge is running in REAPER |
 
 ### Claude Code MCP Config
 
