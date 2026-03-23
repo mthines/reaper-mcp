@@ -1000,8 +1000,25 @@ function handlers.snapshot_restore(params)
 
   local restored = 0
 
-  if state.tracks then
-    for _, track_state in ipairs(state.tracks) do
+  -- Decode tracks array if the fallback JSON parser left it as a raw string
+  local tracks = state.tracks
+  if type(tracks) == "string" then
+    tracks = json_decode_array(tracks)
+  end
+
+  if tracks then
+    for _, track_state in ipairs(tracks) do
+      -- Decode nested arrays that may also be raw strings from fallback parser
+      if type(track_state.fx) == "string" then
+        track_state.fx = json_decode_array(track_state.fx)
+      end
+      if type(track_state.sends) == "string" then
+        track_state.sends = json_decode_array(track_state.sends)
+      end
+      if type(track_state.fxEnabled) == "string" then
+        track_state.fxEnabled = json_decode_array(track_state.fxEnabled)
+      end
+
       local track = reaper.GetTrack(0, track_state.index)
       if track then
         -- Basic mixer state (all versions)
@@ -2866,8 +2883,9 @@ function handlers.create_track_envelope(params)
         return nil, "Unknown envelope name: " .. params.envelopeName .. ". Use Volume, Pan, Mute, Width, or Trim Volume"
       end
       -- Get track chunk, insert envelope chunk if missing
+      -- Use anchored pattern "<VOLENV\n" to avoid matching VOLENV2 (Trim Volume)
       local _, chunk = reaper.GetTrackStateChunk(track, "", false)
-      if not chunk:find(chunk_key) then
+      if not chunk:find("<" .. chunk_key .. "\n") then
         -- Insert a minimal envelope chunk before the closing >
         local env_chunk = "\n<" .. chunk_key .. "\nACT 1 -1\nVIS 1 1 1\nLANEHEIGHT 0 0\nARM 0\nDEFSHAPE 0 -1 -1\n>\n"
         -- Use position capture to find the last ">" (closing the <TRACK block).
@@ -2879,8 +2897,8 @@ function handlers.create_track_envelope(params)
         reaper.SetTrackStateChunk(track, chunk, false)
       else
         -- Envelope exists in chunk but may be hidden; make it visible
-        chunk = chunk:gsub("(" .. chunk_key .. "[^\n]*\n)ACT 0", "%1ACT 1")
-        chunk = chunk:gsub("(" .. chunk_key .. "[^\n]*\n[^\n]*\n)VIS 0", "%1VIS 1")
+        chunk = chunk:gsub("(<" .. chunk_key .. "[^\n]*\n)ACT 0", "%1ACT 1")
+        chunk = chunk:gsub("(<" .. chunk_key .. "[^\n]*\n[^\n]*\n)VIS 0", "%1VIS 1")
         reaper.SetTrackStateChunk(track, chunk, false)
       end
       env = reaper.GetTrackEnvelopeByName(track, params.envelopeName)
