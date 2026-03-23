@@ -1244,7 +1244,7 @@ local function find_or_create_mcp_container(track)
   -- Search for existing container that holds MCP JSFX
   for i = 0, fx_count - 1 do
     local _, name = reaper.TrackFX_GetFXName(track, i)
-    if name and name:find("Container") then
+    if name and (name:find("Container") or name:find("MCP Meters")) then
       local ok, count_str = reaper.TrackFX_GetNamedConfigParm(track, i, "container_count")
       if ok then
         local count = tonumber(count_str) or 0
@@ -1271,6 +1271,9 @@ local function find_or_create_mcp_container(track)
     container_cache[tostring(track)] = { false, fx_count }
     return nil
   end
+
+  -- Name the container "MCP Meters" for easy identification
+  reaper.TrackFX_SetNamedConfigParm(track, idx, "renamed_name", "MCP Meters")
 
   -- Verify container API works (confirms REAPER 7.06+)
   local ok = reaper.TrackFX_GetNamedConfigParm(track, idx, "container_count")
