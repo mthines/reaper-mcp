@@ -436,6 +436,7 @@ ESLint enforces dependency rules via `@nx/enforce-module-boundaries`:
 - **Test files**: `tools/midi.test.ts` (MIDI tools), `tools/media.test.ts` (media tools), and others in `tools/`
 - All tests verify: tool registration, correct command dispatch, success response formatting, error propagation
 - The Lua bridge cannot be unit tested outside REAPER -- test manually with the MCP Inspector
+- **Validate changes with tests**: Always write small, simple, and effective tests to validate your changes. Prefer focused unit tests that test one thing well over large integration tests. If modifying existing code, add or update tests to cover the change before considering it complete.
 
 ## Running the MCP Server
 
