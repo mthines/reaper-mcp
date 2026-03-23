@@ -584,23 +584,10 @@ function handlers.read_track_spectrum(params)
   local track = reaper.GetTrack(0, idx)
   if not track then return nil, "Track " .. idx .. " not found" end
 
-  -- Check if MCP analyzer JSFX is already on the track
-  local analyzer_idx = -1
-  local fx_count = reaper.TrackFX_GetCount(track)
-  for i = 0, fx_count - 1 do
-    local _, name = reaper.TrackFX_GetFXName(track, i)
-    if name and name:find(MCP_ANALYZER_FX_NAME) then
-      analyzer_idx = i
-      break
-    end
-  end
-
-  -- Auto-insert if not present
-  if analyzer_idx < 0 then
-    analyzer_idx = reaper.TrackFX_AddByName(track, MCP_ANALYZER_FX_NAME, false, -1)
-    if analyzer_idx < 0 then
-      return nil, "MCP Spectrum Analyzer JSFX not found. Run 'reaper-mcp setup' to install it."
-    end
+  -- Find or auto-insert analyzer (uses MCP Meters container if available)
+  local analyzer_idx, err = ensure_jsfx_on_track(track, MCP_ANALYZER_FX_NAME)
+  if not analyzer_idx then
+    return nil, err or "MCP Spectrum Analyzer JSFX not found. Run 'reaper-mcp setup' to install it."
   end
 
   -- Read spectrum data from gmem
@@ -1228,10 +1215,116 @@ end
 local MCP_LUFS_METER_FX_NAME        = "reaper-mcp/mcp_lufs_meter"
 local MCP_CORRELATION_METER_FX_NAME = "reaper-mcp/mcp_correlation_meter"
 local MCP_CREST_FACTOR_FX_NAME      = "reaper-mcp/mcp_crest_factor"
+local MCP_FX_PREFIX                 = "reaper%-mcp/"  -- Lua pattern for matching MCP JSFX names
+
+-- Per-track cache of MCP container FX index to avoid rescanning on every read.
+-- Keyed by track pointer (userdata), value is container FX index or false (no container).
+-- Invalidated when the FX chain changes (checked via TrackFX_GetCount).
+local container_cache = {}
+
+-- Find or create the MCP Meters container on a track.
+-- Uses REAPER 7.06+ container_item.X API. Returns container FX index, or nil
+-- if containers are not supported (REAPER < 7.06).
+local function find_or_create_mcp_container(track)
+  -- Check cache first
+  local cache_entry = container_cache[tostring(track)]
+  if cache_entry then
+    local cached_idx, cached_fx_count = cache_entry[1], cache_entry[2]
+    local current_fx_count = reaper.TrackFX_GetCount(track)
+    if current_fx_count == cached_fx_count then
+      if cached_idx == false then return nil end  -- cached negative result
+      return cached_idx
+    end
+    -- FX count changed — invalidate cache
+    container_cache[tostring(track)] = nil
+  end
+
+  local fx_count = reaper.TrackFX_GetCount(track)
+
+  -- Search for existing container that holds MCP JSFX
+  for i = 0, fx_count - 1 do
+    local _, name = reaper.TrackFX_GetFXName(track, i)
+    if name and name:find("Container") then
+      local ok, count_str = reaper.TrackFX_GetNamedConfigParm(track, i, "container_count")
+      if ok then
+        local count = tonumber(count_str) or 0
+        for j = 0, count - 1 do
+          local _, addr_str = reaper.TrackFX_GetNamedConfigParm(track, i, "container_item." .. j)
+          local addr = tonumber(addr_str)
+          if addr then
+            local _, fx_name = reaper.TrackFX_GetFXName(track, addr)
+            if fx_name and fx_name:find(MCP_FX_PREFIX) then
+              -- Found our container — cache and return
+              container_cache[tostring(track)] = { i, fx_count }
+              return i
+            end
+          end
+        end
+      end
+    end
+  end
+
+  -- No existing MCP container — create one at end of chain
+  local idx = reaper.TrackFX_AddByName(track, "Container", false, -1)
+  if idx < 0 then
+    -- Container FX not available (REAPER < 7)
+    container_cache[tostring(track)] = { false, fx_count }
+    return nil
+  end
+
+  -- Verify container API works (confirms REAPER 7.06+)
+  local ok = reaper.TrackFX_GetNamedConfigParm(track, idx, "container_count")
+  if not ok then
+    -- API not available — remove the container and fall back
+    reaper.TrackFX_Delete(track, idx)
+    container_cache[tostring(track)] = { false, fx_count }
+    return nil
+  end
+
+  -- Cache the new container (fx_count + 1 because we just added the container)
+  container_cache[tostring(track)] = { idx, reaper.TrackFX_GetCount(track) }
+  return idx
+end
 
 -- Helper: find or auto-insert a named JSFX on a track.
--- Returns the FX index (0-based) on success, or nil + error message on failure.
+-- Tries to place inside an "MCP Meters" FX Container (REAPER 7.06+).
+-- Falls back to direct insertion on older REAPER versions.
+-- Returns the FX index (possibly container-addressed) on success, or nil + error.
 local function ensure_jsfx_on_track(track, fx_name)
+  -- Try container approach first (REAPER 7.06+)
+  local container_idx = find_or_create_mcp_container(track)
+  if container_idx then
+    local ok, count_str = reaper.TrackFX_GetNamedConfigParm(track, container_idx, "container_count")
+    local count = tonumber(count_str) or 0
+
+    -- Search inside container for existing JSFX
+    for i = 0, count - 1 do
+      local _, addr_str = reaper.TrackFX_GetNamedConfigParm(track, container_idx, "container_item." .. i)
+      local addr = tonumber(addr_str)
+      if addr then
+        local _, name = reaper.TrackFX_GetFXName(track, addr)
+        if name and name:find(fx_name, 1, true) then
+          return addr  -- Found inside container
+        end
+      end
+    end
+
+    -- Not found — insert inside container
+    -- Use legacy addressing: 0x2000000 + (1-based slot) * (top_chain_count + 1) + (1-based container pos)
+    local top_count = reaper.TrackFX_GetCount(track)
+    local slot = count + 1  -- 1-based, next empty slot
+    local container_pos = container_idx + 1  -- 1-based
+    local insert_addr = 0x2000000 + slot * (top_count + 1) + container_pos
+    local new_idx = reaper.TrackFX_AddByName(track, fx_name, false, insert_addr)
+    if new_idx >= 0 then
+      -- Invalidate cache since FX count changed
+      container_cache[tostring(track)] = nil
+      return new_idx
+    end
+    -- Container insertion failed — fall through to direct
+  end
+
+  -- Fallback: direct insertion (REAPER < 7.06 or container failed)
   local fx_count = reaper.TrackFX_GetCount(track)
   for i = 0, fx_count - 1 do
     local _, name = reaper.TrackFX_GetFXName(track, i)
@@ -1239,7 +1332,6 @@ local function ensure_jsfx_on_track(track, fx_name)
       return i
     end
   end
-  -- Auto-insert
   local idx = reaper.TrackFX_AddByName(track, fx_name, false, -1)
   if idx < 0 then
     return nil, fx_name .. " JSFX not found. Run 'reaper-mcp setup' to install it."
