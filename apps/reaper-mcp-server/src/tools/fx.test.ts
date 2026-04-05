@@ -79,11 +79,16 @@ describe('fx tools', () => {
   });
 
   describe('get_fx_parameters', () => {
-    it('returns parameter list', async () => {
+    it('returns parameter list without filters (backward compatible)', async () => {
       const paramData = {
         trackIndex: 0,
         fxIndex: 0,
+        fxName: 'VST: ReaEQ (Cockos)',
         parameterCount: 2,
+        matchedCount: 2,
+        returned: 2,
+        offset: 0,
+        hasMore: false,
         parameters: [
           { index: 0, name: 'Gain', value: 0.5, formattedValue: '0.0 dB', minValue: 0, maxValue: 1 },
           { index: 1, name: 'Frequency', value: 0.3, formattedValue: '1000 Hz', minValue: 0, maxValue: 1 },
@@ -98,9 +103,137 @@ describe('fx tools', () => {
       });
 
       const result = await tools['get_fx_parameters'].handler({ trackIndex: 0, fxIndex: 0 });
+      expect(mockedSendCommand).toHaveBeenCalledWith('get_fx_parameters', {
+        trackIndex: 0, fxIndex: 0,
+        namePattern: undefined, changedOnly: undefined, offset: undefined, limit: undefined,
+      });
       expect(result).toEqual({
         content: [{ type: 'text', text: JSON.stringify(paramData, null, 2) }],
       });
+    });
+
+    it('passes optional filter params to sendCommand', async () => {
+      mockedSendCommand.mockResolvedValue({
+        id: 'test',
+        success: true,
+        data: {
+          trackIndex: 0, fxIndex: 0, fxName: 'ReaEQ', parameterCount: 50,
+          matchedCount: 5, returned: 5, offset: 0, hasMore: false, parameters: [],
+        },
+        timestamp: Date.now(),
+      });
+
+      await tools['get_fx_parameters'].handler({
+        trackIndex: 0, fxIndex: 0, namePattern: 'Gain', changedOnly: true, offset: 0, limit: 10,
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('get_fx_parameters', {
+        trackIndex: 0, fxIndex: 0, namePattern: 'Gain', changedOnly: true, offset: 0, limit: 10,
+      });
+    });
+
+    it('handles pagination metadata in response', async () => {
+      const paramData = {
+        trackIndex: 0, fxIndex: 0, fxName: 'VST3: Pro-Q 4',
+        parameterCount: 500, matchedCount: 12, returned: 5, offset: 0, hasMore: true,
+        parameters: [
+          { index: 23, name: 'Band 1 Gain', value: 0.6, formattedValue: '+2.5 dB', minValue: 0, maxValue: 1 },
+        ],
+      };
+
+      mockedSendCommand.mockResolvedValue({
+        id: 'test', success: true, data: paramData, timestamp: Date.now(),
+      });
+
+      const result = await tools['get_fx_parameters'].handler({
+        trackIndex: 0, fxIndex: 0, changedOnly: true, limit: 5,
+      });
+      const parsed = JSON.parse((result as { content: Array<{ text: string }> }).content[0].text);
+      expect(parsed.hasMore).toBe(true);
+      expect(parsed.matchedCount).toBe(12);
+      expect(parsed.returned).toBe(5);
+    });
+  });
+
+  describe('analyze_fx', () => {
+    it('sends correct params', async () => {
+      mockedSendCommand.mockResolvedValue({
+        id: 'test',
+        success: true,
+        data: {
+          trackIndex: 0, fxIndex: 0, fxName: 'VST: ReaEQ (Cockos)',
+          presetName: '', parameterCount: 50, notableParamCount: 3,
+          pluginType: 'eq', eqBands: [], notableParams: [],
+        },
+        timestamp: Date.now(),
+      });
+
+      const result = await tools['analyze_fx'].handler({ trackIndex: 0, fxIndex: 0 });
+      expect(mockedSendCommand).toHaveBeenCalledWith('analyze_fx', { trackIndex: 0, fxIndex: 0 });
+      expect(result).toEqual({
+        content: [{ type: 'text', text: expect.stringContaining('ReaEQ') }],
+      });
+    });
+
+    it('returns error on failure', async () => {
+      mockedSendCommand.mockResolvedValue({
+        id: 'test', success: false, error: 'Track 99 not found', timestamp: Date.now(),
+      });
+
+      const result = await tools['analyze_fx'].handler({ trackIndex: 99, fxIndex: 0 });
+      expect(result).toEqual({
+        content: [{ type: 'text', text: 'Error: Track 99 not found' }],
+        isError: true,
+      });
+    });
+
+    it('returns EQ analysis for EQ plugins', async () => {
+      const analysisData = {
+        trackIndex: 0, fxIndex: 0, fxName: 'VST3: Pro-Q 4 (FabFilter)',
+        presetName: 'Custom', parameterCount: 552, notableParamCount: 1,
+        pluginType: 'eq',
+        eqBands: [
+          { bandIndex: 0, enabled: true, frequency: '100 Hz', gain: '-3.0 dB', q: '1.41', shape: 'Bell', paramIndices: [0, 1, 2, 3] },
+          { bandIndex: 2, enabled: true, frequency: '3.00 kHz', gain: '+2.5 dB', q: '2.00', shape: 'Bell', paramIndices: [46, 47, 48, 49] },
+        ],
+        notableParams: [{ index: 500, name: 'Output Gain', value: 0.55, formattedValue: '+1.0 dB' }],
+      };
+
+      mockedSendCommand.mockResolvedValue({
+        id: 'test', success: true, data: analysisData, timestamp: Date.now(),
+      });
+
+      const result = await tools['analyze_fx'].handler({ trackIndex: 0, fxIndex: 0 });
+      const parsed = JSON.parse((result as { content: Array<{ text: string }> }).content[0].text);
+      expect(parsed.pluginType).toBe('eq');
+      expect(parsed.eqBands).toHaveLength(2);
+      expect(parsed.eqBands[0].frequency).toBe('100 Hz');
+    });
+
+    it('returns compressor analysis for compressor plugins', async () => {
+      const analysisData = {
+        trackIndex: 1, fxIndex: 0, fxName: 'VST3: Pro-C 2 (FabFilter)',
+        presetName: '', parameterCount: 80, notableParamCount: 2,
+        pluginType: 'compressor',
+        compressorSettings: {
+          threshold: { index: 0, name: 'Threshold', value: 0.3, formattedValue: '-18.0 dB' },
+          ratio: { index: 1, name: 'Ratio', value: 0.4, formattedValue: '4.0:1' },
+          attack: { index: 2, name: 'Attack', value: 0.2, formattedValue: '5.0 ms' },
+          release: { index: 3, name: 'Release', value: 0.5, formattedValue: '100 ms' },
+        },
+        notableParams: [
+          { index: 10, name: 'Style', value: 0.3, formattedValue: 'Vocal' },
+        ],
+      };
+
+      mockedSendCommand.mockResolvedValue({
+        id: 'test', success: true, data: analysisData, timestamp: Date.now(),
+      });
+
+      const result = await tools['analyze_fx'].handler({ trackIndex: 1, fxIndex: 0 });
+      const parsed = JSON.parse((result as { content: Array<{ text: string }> }).content[0].text);
+      expect(parsed.pluginType).toBe('compressor');
+      expect(parsed.compressorSettings.threshold.formattedValue).toBe('-18.0 dB');
+      expect(parsed.compressorSettings.ratio.formattedValue).toBe('4.0:1');
     });
   });
 

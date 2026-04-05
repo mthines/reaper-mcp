@@ -88,6 +88,7 @@ export const MCP_TOOL_NAMES = [
   'add_fx',
   'remove_fx',
   'get_fx_parameters',
+  'analyze_fx',
   'set_fx_parameter',
   // discovery
   'list_available_fx',

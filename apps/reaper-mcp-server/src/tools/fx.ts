@@ -38,13 +38,35 @@ export function registerFxTools(server: McpServer): void {
 
   server.tool(
     'get_fx_parameters',
-    'List all parameters of an FX plugin with current values and ranges',
+    'List parameters of an FX plugin with current values and ranges. Supports filtering by name pattern, changed-only filter, and pagination. For a quick summary of active EQ bands or compressor settings, use analyze_fx instead.',
+    {
+      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      fxIndex: z.coerce.number().int().min(0).describe('Zero-based FX index in the chain'),
+      namePattern: z.string().optional().describe('Filter params by name (case-insensitive substring match, e.g. "Gain", "Band 1")'),
+      changedOnly: z.boolean().optional().describe('Only return params that appear non-default (value differs from minimum or formatted value suggests activity)'),
+      offset: z.coerce.number().int().min(0).optional().describe('Skip first N matching params (default 0)'),
+      limit: z.coerce.number().int().min(1).optional().describe('Max params to return (default all)'),
+    },
+    async ({ trackIndex, fxIndex, namePattern, changedOnly, offset, limit }) => {
+      const res = await sendCommand('get_fx_parameters', {
+        trackIndex, fxIndex, namePattern, changedOnly, offset, limit,
+      });
+      if (!res.success) {
+        return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
+    }
+  );
+
+  server.tool(
+    'analyze_fx',
+    'Analyze an FX plugin and return a compact summary: FX name, preset, and notable (non-default) parameters. For EQ plugins, detects active bands with frequency/gain/Q/shape. For compressors, extracts threshold/ratio/attack/release/makeup. Use this before get_fx_parameters to understand what a plugin is doing without reading 500+ parameters.',
     {
       trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
       fxIndex: z.coerce.number().int().min(0).describe('Zero-based FX index in the chain'),
     },
     async ({ trackIndex, fxIndex }) => {
-      const res = await sendCommand('get_fx_parameters', { trackIndex, fxIndex });
+      const res = await sendCommand('analyze_fx', { trackIndex, fxIndex });
       if (!res.success) {
         return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
       }

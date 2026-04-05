@@ -298,6 +298,155 @@ local function from_db(db)
 end
 
 -- =============================================================================
+-- FX analysis helpers
+-- =============================================================================
+
+-- Heuristic: detect if a parameter appears to be non-default.
+-- REAPER has no TrackFX_GetParamDefault API, so we use multiple signals.
+-- Intentionally permissive — better to include false positives than miss changes.
+local function is_param_non_default(val, min_val, max_val, formatted)
+  local range = max_val - min_val
+  if range == 0 then return false end
+
+  -- Check formatted value for common "off/default" indicators
+  local lower = formatted:lower()
+  if lower == "off" or lower == "none" or lower == "unused"
+     or lower == "0.0 db" or lower == "0.00 db"
+     or lower == "0 %" or lower == "0.0 %" or lower == "0.00 %" then
+    return false
+  end
+
+  -- Value at exact minimum is often default for "disabled" params
+  if val == min_val then return false end
+
+  return true
+end
+
+-- Detect EQ band structure by finding groups of Freq/Gain/Q params per band.
+-- Works for ReaEQ, FabFilter Pro-Q, and most parametric EQs.
+local function analyze_eq_bands(all_params, param_count)
+  local bands = {}
+
+  for p = 0, param_count - 1 do
+    local par = all_params[p]
+    local name = par.name
+    local name_lower = name:lower()
+
+    -- Extract band number from patterns like "Band 1 Frequency", "1 Frequency"
+    local band_num = name:match("[Bb]and%s*(%d+)") or name:match("^(%d+)%s")
+    if band_num then
+      band_num = tonumber(band_num)
+      if not bands[band_num] then
+        bands[band_num] = { bandIndex = band_num - 1, paramIndices = {} }
+      end
+      local b = bands[band_num]
+      b.paramIndices[#b.paramIndices + 1] = p
+
+      if name_lower:find("freq") and not name_lower:find("side") then
+        b.frequency = par.formattedValue
+        b.freq_val = par.value
+      elseif name_lower:find("gain") and not name_lower:find("side")
+             and not name_lower:find("dynamic") then
+        b.gain = par.formattedValue
+        b.gain_val = par.value
+        b.gain_min = par.minValue
+        b.gain_max = par.maxValue
+      elseif name_lower:match("^%d+ q$") or name_lower:match("band %d+ q$")
+             or name_lower:find("bandwidth") then
+        b.q = par.formattedValue
+      elseif name_lower:find("type") or name_lower:find("shape") then
+        b.shape = par.formattedValue
+      elseif name_lower:find("enabled") or name_lower:find("active")
+             or name_lower:find("used") then
+        b.enabled_val = par.value
+        b.enabled_fmt = par.formattedValue
+      end
+    end
+  end
+
+  -- Filter to active/used bands only
+  local active_bands = {}
+  local sorted_keys = {}
+  for k, _ in pairs(bands) do sorted_keys[#sorted_keys + 1] = k end
+  table.sort(sorted_keys)
+
+  for _, k in ipairs(sorted_keys) do
+    local b = bands[k]
+    local is_active = true
+
+    -- Check explicit enabled/used flag
+    if b.enabled_val ~= nil then
+      if b.enabled_fmt then
+        local lower = b.enabled_fmt:lower()
+        if lower == "unused" or lower == "off" or lower == "disabled" then
+          is_active = false
+        else
+          is_active = true
+        end
+      else
+        is_active = b.enabled_val > 0.5
+      end
+    elseif b.gain_val ~= nil and b.gain_min ~= nil then
+      -- No enabled flag: check if gain is at midpoint (likely zero/default)
+      local gain_range = b.gain_max - b.gain_min
+      if gain_range > 0 then
+        local gain_norm = (b.gain_val - b.gain_min) / gain_range
+        is_active = math.abs(gain_norm - 0.5) > 0.01
+      end
+    end
+
+    if is_active then
+      active_bands[#active_bands + 1] = {
+        bandIndex = b.bandIndex,
+        enabled = true,
+        frequency = b.frequency or "?",
+        gain = b.gain or "?",
+        q = b.q or "?",
+        shape = b.shape or "?",
+        paramIndices = b.paramIndices,
+      }
+    end
+  end
+
+  return active_bands
+end
+
+-- Extract key compressor parameters by name matching.
+local function analyze_compressor(all_params, param_count)
+  local settings = {}
+  local patterns = {
+    { key = "threshold", pats = { "threshold" } },
+    { key = "ratio", pats = { "ratio" } },
+    { key = "attack", pats = { "attack" } },
+    { key = "release", pats = { "release" } },
+    { key = "makeup", pats = { "makeup", "make%-up", "make up", "output gain" } },
+    { key = "knee", pats = { "knee" } },
+  }
+
+  for p = 0, param_count - 1 do
+    local par = all_params[p]
+    local name_lower = par.name:lower()
+    for _, pat in ipairs(patterns) do
+      if not settings[pat.key] then
+        for _, pattern in ipairs(pat.pats) do
+          if name_lower:find(pattern) then
+            settings[pat.key] = {
+              index = par.index,
+              name = par.name,
+              value = par.value,
+              formattedValue = par.formattedValue,
+            }
+            break
+          end
+        end
+      end
+    end
+  end
+
+  return settings
+end
+
+-- =============================================================================
 -- Command handlers
 -- =============================================================================
 
@@ -508,16 +657,108 @@ function handlers.get_fx_parameters(params)
   if not track then return nil, "Track " .. idx .. " not found" end
 
   local param_count = reaper.TrackFX_GetNumParams(track, fx_idx)
-  local parameters = {}
 
+  -- Get FX name for context
+  local _, fx_name = reaper.TrackFX_GetFXName(track, fx_idx)
+
+  -- Optional filters
+  local name_pattern = params.namePattern
+  if name_pattern then name_pattern = name_pattern:lower() end
+  local changed_only = params.changedOnly
+
+  -- Collect matching params
+  local matched = {}
   for p = 0, param_count - 1 do
     local _, pname = reaper.TrackFX_GetParamName(track, fx_idx, p)
     local val, min_val, max_val = reaper.TrackFX_GetParam(track, fx_idx, p)
     local _, formatted = reaper.TrackFX_GetFormattedParamValue(track, fx_idx, p)
 
-    parameters[#parameters + 1] = {
+    local include = true
+
+    -- Name filter: case-insensitive substring
+    if name_pattern and not pname:lower():find(name_pattern, 1, true) then
+      include = false
+    end
+
+    -- Changed-only filter
+    if include and changed_only then
+      include = is_param_non_default(val, min_val, max_val, formatted or "")
+    end
+
+    if include then
+      matched[#matched + 1] = {
+        index = p,
+        name = pname,
+        value = val,
+        formattedValue = formatted or "",
+        minValue = min_val,
+        maxValue = max_val,
+      }
+    end
+  end
+
+  -- Pagination (applied after filtering)
+  local req_offset = params.offset or 0
+  local total_matched = #matched
+  local start_idx = math.min(req_offset + 1, total_matched + 1)
+  local end_idx = total_matched
+  if params.limit then
+    end_idx = math.min(start_idx + params.limit - 1, total_matched)
+  end
+
+  local result_params = {}
+  for i = start_idx, end_idx do
+    result_params[#result_params + 1] = matched[i]
+  end
+
+  return {
+    trackIndex = idx,
+    fxIndex = fx_idx,
+    fxName = fx_name or "",
+    parameterCount = param_count,
+    matchedCount = total_matched,
+    returned = #result_params,
+    offset = req_offset,
+    hasMore = end_idx < total_matched,
+    parameters = result_params,
+  }
+end
+
+function handlers.analyze_fx(params)
+  local idx = params.trackIndex
+  local fx_idx = params.fxIndex
+  if not idx or not fx_idx then
+    return nil, "trackIndex and fxIndex required"
+  end
+
+  local track = reaper.GetTrack(0, idx)
+  if not track then return nil, "Track " .. idx .. " not found" end
+
+  local param_count = reaper.TrackFX_GetNumParams(track, fx_idx)
+  if param_count == 0 then return nil, "FX " .. fx_idx .. " not found or has no parameters" end
+
+  local _, fx_name = reaper.TrackFX_GetFXName(track, fx_idx)
+  local _, preset_name = reaper.TrackFX_GetPreset(track, fx_idx)
+
+  -- Detect plugin type from name
+  local fx_lower = (fx_name or ""):lower()
+  local plugin_type = "generic"
+  if fx_lower:find("eq") or fx_lower:find("pro%-q") or fx_lower:find("equaliz") then
+    plugin_type = "eq"
+  elseif fx_lower:find("comp") or fx_lower:find("pro%-c") or fx_lower:find("1176")
+         or fx_lower:find("la%-2a") or fx_lower:find("limiter") or fx_lower:find("pro%-l") then
+    plugin_type = "compressor"
+  end
+
+  -- Read all params once
+  local all_params = {}
+  for p = 0, param_count - 1 do
+    local _, pname = reaper.TrackFX_GetParamName(track, fx_idx, p)
+    local val, min_val, max_val = reaper.TrackFX_GetParam(track, fx_idx, p)
+    local _, formatted = reaper.TrackFX_GetFormattedParamValue(track, fx_idx, p)
+    all_params[p] = {
       index = p,
-      name = pname,
+      name = pname or "",
       value = val,
       formattedValue = formatted or "",
       minValue = min_val,
@@ -525,11 +766,67 @@ function handlers.get_fx_parameters(params)
     }
   end
 
+  local notable = {}
+  local eq_bands = nil
+  local comp_settings = nil
+
+  if plugin_type == "eq" then
+    eq_bands = analyze_eq_bands(all_params, param_count)
+    -- Notable params = non-band params that are non-default
+    for p = 0, param_count - 1 do
+      local par = all_params[p]
+      local name_lower = par.name:lower()
+      if not name_lower:find("band") and not name_lower:match("^%d+ ")
+         and is_param_non_default(par.value, par.minValue, par.maxValue, par.formattedValue) then
+        notable[#notable + 1] = {
+          index = par.index, name = par.name,
+          value = par.value, formattedValue = par.formattedValue,
+        }
+      end
+    end
+  elseif plugin_type == "compressor" then
+    comp_settings = analyze_compressor(all_params, param_count)
+    -- Notable = all non-default, non-core-compressor params
+    local core_names = {}
+    if comp_settings then
+      for _, v in pairs(comp_settings) do
+        if v and v.index then core_names[v.index] = true end
+      end
+    end
+    for p = 0, param_count - 1 do
+      local par = all_params[p]
+      if not core_names[p]
+         and is_param_non_default(par.value, par.minValue, par.maxValue, par.formattedValue) then
+        notable[#notable + 1] = {
+          index = par.index, name = par.name,
+          value = par.value, formattedValue = par.formattedValue,
+        }
+      end
+    end
+  else
+    -- Generic: return all non-default params
+    for p = 0, param_count - 1 do
+      local par = all_params[p]
+      if is_param_non_default(par.value, par.minValue, par.maxValue, par.formattedValue) then
+        notable[#notable + 1] = {
+          index = par.index, name = par.name,
+          value = par.value, formattedValue = par.formattedValue,
+        }
+      end
+    end
+  end
+
   return {
     trackIndex = idx,
     fxIndex = fx_idx,
+    fxName = fx_name or "",
+    presetName = preset_name or "",
     parameterCount = param_count,
-    parameters = parameters,
+    notableParamCount = #notable,
+    pluginType = plugin_type,
+    eqBands = eq_bands,
+    compressorSettings = comp_settings,
+    notableParams = notable,
   }
 end
 

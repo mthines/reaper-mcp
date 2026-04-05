@@ -33,7 +33,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   fx: {
     name: 'fx',
     description: 'FX chain management: add, remove, inspect, and set parameters. Includes batch setup of an entire FX chain and batch parameter updates across multiple plugins.',
-    tools: ['add_fx', 'remove_fx', 'get_fx_parameters', 'set_fx_parameter', 'set_fx_enabled', 'set_fx_offline', 'setup_fx_chain', 'set_multiple_fx_parameters'],
+    tools: ['add_fx', 'remove_fx', 'get_fx_parameters', 'analyze_fx', 'set_fx_parameter', 'set_fx_enabled', 'set_fx_offline', 'setup_fx_chain', 'set_multiple_fx_parameters'],
   },
   transport: {
     name: 'transport',

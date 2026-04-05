@@ -67,6 +67,57 @@ export interface FxParameterInfo {
   maxValue: number;
 }
 
+export interface FxParametersResult {
+  trackIndex: number;
+  fxIndex: number;
+  fxName: string;
+  parameterCount: number;
+  matchedCount: number;
+  returned: number;
+  offset: number;
+  hasMore: boolean;
+  parameters: FxParameterInfo[];
+}
+
+export interface FxAnalysisNotableParam {
+  index: number;
+  name: string;
+  value: number;
+  formattedValue: string;
+}
+
+export interface FxAnalysisEqBand {
+  bandIndex: number;
+  enabled: boolean;
+  frequency: string;
+  gain: string;
+  q: string;
+  shape: string;
+  paramIndices: number[];
+}
+
+export interface FxAnalysisCompressorSettings {
+  threshold?: FxAnalysisNotableParam;
+  ratio?: FxAnalysisNotableParam;
+  attack?: FxAnalysisNotableParam;
+  release?: FxAnalysisNotableParam;
+  makeup?: FxAnalysisNotableParam;
+  knee?: FxAnalysisNotableParam;
+}
+
+export interface FxAnalysis {
+  trackIndex: number;
+  fxIndex: number;
+  fxName: string;
+  presetName: string;
+  parameterCount: number;
+  notableParamCount: number;
+  pluginType: 'eq' | 'compressor' | 'generic';
+  eqBands?: FxAnalysisEqBand[];
+  compressorSettings?: FxAnalysisCompressorSettings;
+  notableParams: FxAnalysisNotableParam[];
+}
+
 export interface TrackMeters {
   trackIndex: number;
   peakL: number;  // dB

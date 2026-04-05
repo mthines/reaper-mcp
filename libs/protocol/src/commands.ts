@@ -19,6 +19,7 @@ export type CommandType =
   | 'add_fx'
   | 'remove_fx'
   | 'get_fx_parameters'
+  | 'analyze_fx'
   | 'set_fx_parameter'
   | 'set_fx_enabled'
   | 'set_fx_offline'
@@ -123,6 +124,15 @@ export interface RemoveFxParams {
 }
 
 export interface GetFxParametersParams {
+  trackIndex: number;
+  fxIndex: number;
+  namePattern?: string;
+  changedOnly?: boolean;
+  offset?: number;
+  limit?: number;
+}
+
+export interface AnalyzeFxParams {
   trackIndex: number;
   fxIndex: number;
 }
