@@ -238,7 +238,7 @@ local function count_tracks_in_snapshot(content)
   local count = 0
   local depth = 0
   local i = arr_start
-  while i <= #arr_start + 50000 and i <= #content do
+  while i <= math.min(#content, arr_start + 50000) do
     local ch = content:sub(i, i)
     if ch == '[' or ch == '{' then
       depth = depth + 1
@@ -929,11 +929,17 @@ local function draw()
   elseif char == 13 then -- Enter = restore
     if selected_idx > 0 and selected_idx <= #snapshots then
       local snap = snapshots[selected_idx]
-      local ok, err, count = do_restore_snapshot(snap)
-      if ok then
-        set_status("Restored '" .. snap.name .. "' (" .. (count or "?") .. " tracks)", "ok")
-      else
-        set_status("Restore failed: " .. (err or "unknown error"), "err")
+      local confirm = reaper.ShowMessageBox(
+        "Restore snapshot '" .. snap.name .. "'?\n\nThis will overwrite current mixer state.\nAn undo point will be created.",
+        "Restore Snapshot", 1
+      )
+      if confirm == 1 then
+        local ok, err, count = do_restore_snapshot(snap)
+        if ok then
+          set_status("Restored '" .. snap.name .. "' (" .. (count or "?") .. " tracks)", "ok")
+        else
+          set_status("Restore failed: " .. (err or "unknown error"), "err")
+        end
       end
     end
   elseif char == 6579564 then -- Delete key
@@ -960,7 +966,9 @@ local function draw()
   local wheel = gfx.mouse_wheel
   if wheel ~= 0 then
     local scroll_lines = wheel > 0 and -3 or 3
-    scroll_offset = math.max(0, math.min(scroll_offset + scroll_lines, math.max(0, #snapshots - get_visible_rows((select(4, get_list_rect())  )))))
+    local _, _, _, lh_scroll = get_list_rect()
+    local max_scroll_wheel = math.max(0, #snapshots - get_visible_rows(lh_scroll))
+    scroll_offset = math.max(0, math.min(scroll_offset + scroll_lines, max_scroll_wheel))
     gfx.mouse_wheel = 0
   end
 
