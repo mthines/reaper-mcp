@@ -12,12 +12,12 @@ local WIN_W = 820
 local WIN_H = 520
 local PADDING = 10
 local ROW_H = 26
-local HEADER_H = 34
+local COL_HEADER_H = 28
 local BUTTON_H = 32
 local BUTTON_W = 120
 local FOOTER_H = BUTTON_H + PADDING * 2
 local STATUS_H = 22
-local LIST_TOP = HEADER_H + PADDING
+local LIST_TOP = COL_HEADER_H + PADDING
 local LIST_BOTTOM_MARGIN = FOOTER_H + STATUS_H + PADDING
 local SCROLL_BAR_W = 14
 
@@ -623,37 +623,25 @@ local function draw()
   set_color(C_BG)
   fill_rect(0, 0, w, h)
 
-  -- Header bar
-  set_color(C_HEADER_BG)
-  fill_rect(0, 0, w, HEADER_H)
-  gfx.setfont(1, "Arial", 16, string.byte('b'))
-  draw_text(TITLE, PADDING, math.floor((HEADER_H - 16) / 2), C_TEXT_SEL)
-  gfx.setfont(1, "Arial", 12, 0)
-
-  -- Snapshot dir info
-  local snap_dir = get_snapshot_dir()
-  local dir_label = "Dir: " .. snap_dir
-  draw_text(dir_label, PADDING + 200, math.floor((HEADER_H - 12) / 2) + 2, C_TEXT_DIM, false, w - 220 - PADDING)
-
-  -- Column headers
+  -- Column headers (title is already in the window title bar)
   local lx, ly, lw, lh = get_list_rect()
-  local col_header_y = ly - ROW_H - 2
   set_color(C_HEADER_BG)
-  fill_rect(lx, col_header_y, lw - SCROLL_BAR_W, ROW_H)
+  fill_rect(0, 0, w, COL_HEADER_H)
   gfx.setfont(1, "Arial", 11, string.byte('b'))
-  local cx = lx + 4
-  draw_text("Name", cx, col_header_y + 7, C_TEXT_HEADER)
+  local col_text_y = math.floor((COL_HEADER_H - 11) / 2)
+  local cx = PADDING + 4
+  draw_text("Name", cx, col_text_y, C_TEXT_HEADER)
   cx = cx + COL_NAME_W
-  draw_text("Description", cx, col_header_y + 7, C_TEXT_HEADER)
+  draw_text("Description", cx, col_text_y, C_TEXT_HEADER)
   cx = cx + COL_DESC_W
-  draw_text("Saved", cx, col_header_y + 7, C_TEXT_HEADER)
+  draw_text("Saved", cx, col_text_y, C_TEXT_HEADER)
   cx = cx + COL_DATE_W
-  draw_text("Tracks", cx, col_header_y + 7, C_TEXT_HEADER)
+  draw_text("Tracks", cx, col_text_y, C_TEXT_HEADER)
   gfx.setfont(1, "Arial", 12, 0)
 
   -- Divider under col headers
   set_color(C_DIVIDER)
-  fill_rect(lx, col_header_y + ROW_H - 1, lw, 1)
+  fill_rect(0, COL_HEADER_H - 1, w, 1)
 
   -- Snapshot list
   local visible_rows = get_visible_rows(lh)
@@ -719,7 +707,7 @@ local function draw()
 
   -- Empty state message
   if total_rows == 0 then
-    local msg = "No snapshots found. Use 'Save New' to create one."
+    local msg = "No snapshots found. Click 'Save New' to capture your current mixer state."
     gfx.setfont(1, "Arial", 13, 0)
     local tw, _ = gfx.measurestr(msg)
     draw_text(msg, lx + math.floor((lw - tw) / 2), ly + math.floor(lh / 2) - 8, C_TEXT_DIM)
@@ -751,15 +739,18 @@ local function draw()
   set_color(C_BG)
   fill_rect(0, status_y, w, STATUS_H)
 
+  gfx.setfont(1, "Arial", 11, 0)
   if status_msg ~= "" and reaper.time_precise() < status_timer then
     local sc = C_STATUS_INFO
     if status_type == "ok" then sc = C_STATUS_OK
     elseif status_type == "err" then sc = C_STATUS_ERR
     end
-    gfx.setfont(1, "Arial", 11, 0)
     draw_text(status_msg, PADDING, status_y + 4, sc)
-    gfx.setfont(1, "Arial", 12, 0)
+  else
+    -- Default info: what snapshots contain
+    draw_text("Snapshots store: track volumes, pans, mute/solo, FX chains (params + presets), and send levels", PADDING, status_y + 4, C_TEXT_DIM)
   end
+  gfx.setfont(1, "Arial", 12, 0)
 
   -- Footer buttons
   set_color(C_BG)
@@ -816,11 +807,19 @@ local function draw()
       local has_sel = selected_idx > 0 and selected_idx <= #snapshots
 
       if hover_btn == "save" then
-        -- Show save dialog
+        -- Generate default name: "Snapshot N" where N is the next available index
+        local next_idx = #snapshots + 1
+        for _, s in ipairs(snapshots) do
+          local num = s.name:match("^Snapshot (%d+)$")
+          if num then next_idx = math.max(next_idx, tonumber(num) + 1) end
+        end
+        local default_name = "Snapshot " .. next_idx
+
+        -- Show save dialog with default name pre-filled
         local retval, inputs = reaper.GetUserInputs(
           "Save Snapshot", 2,
-          "Name:,Description:,extrawidth=200",
-          ","
+          "Name (leave default for auto-name):,Description (optional):,extrawidth=200",
+          default_name .. ","
         )
         if retval then
           local fields = {}
@@ -829,20 +828,17 @@ local function draw()
           end
           local sname = fields[1] and fields[1]:match("^%s*(.-)%s*$") or ""
           local sdesc = fields[2] and fields[2]:match("^%s*(.-)%s*$") or ""
-          if sname == "" then
-            set_status("Name cannot be empty.", "err")
-          else
-            local ok, err = do_save_snapshot(sname, sdesc)
-            if ok then
-              set_status("Saved snapshot: " .. sname, "ok")
-              snapshots = load_snapshots()
-              -- Select the newly saved snapshot
-              for j, s in ipairs(snapshots) do
-                if s.name == sname then selected_idx = j; break end
-              end
-            else
-              set_status("Save failed: " .. (err or "unknown error"), "err")
+          if sname == "" then sname = default_name end
+          local ok, err = do_save_snapshot(sname, sdesc)
+          if ok then
+            set_status("Saved snapshot: " .. sname, "ok")
+            snapshots = load_snapshots()
+            -- Select the newly saved snapshot
+            for j, s in ipairs(snapshots) do
+              if s.name == sname then selected_idx = j; break end
             end
+          else
+            set_status("Save failed: " .. (err or "unknown error"), "err")
           end
         end
 

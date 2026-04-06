@@ -246,12 +246,24 @@ Checks that the bridge is connected, knowledge is installed, and MCP config exis
 
 ### Snapshots (A/B Testing)
 
+Snapshots capture your full mixer state: track volumes, pans, mute/solo, FX chains (all parameter values, enabled/offline states, presets), and send levels. Use them to A/B compare mix decisions or revert to a known-good state.
+
 | Tool | Description |
 |------|-------------|
-| `snapshot_save` | Save current mixer state (volumes, pans, FX, mutes) |
-| `snapshot_restore` | Restore a saved snapshot |
-| `snapshot_list` | List all saved snapshots |
+| `snapshot_save` | Save current mixer state (volumes, pans, FX params, sends, mutes) |
+| `snapshot_restore` | Restore a saved snapshot (smart FX matching — only restores params if plugin names match) |
+| `snapshot_list` | List all saved snapshots with metadata |
 | `snapshot_delete` | Delete a saved snapshot by name |
+
+You can also manage snapshots directly in REAPER using the **Snapshot Manager** GUI (`mcp_snapshot_manager.lua`) — load it as a ReaScript action for a visual list with save/restore/delete buttons.
+
+For quick A/B testing, bind these action scripts to keyboard shortcuts in REAPER:
+
+| Script | Purpose | Suggested Key |
+|--------|---------|---------------|
+| `mcp_snapshot_quick_save.lua` | Save snapshot instantly (auto-named) | `Ctrl+Shift+S` |
+| `mcp_snapshot_next.lua` | Restore next snapshot (wraps around) | `Ctrl+Right` |
+| `mcp_snapshot_prev.lua` | Restore previous snapshot (wraps around) | `Ctrl+Left` |
 
 ### Routing
 
@@ -316,7 +328,7 @@ Every change is bracketed by snapshots:
 1. Agent saves a "Before" snapshot automatically
 2. Makes all changes
 3. Saves an "After" snapshot
-4. You can restore either with `snapshot_restore` to A/B compare
+4. You can restore either with `snapshot_restore` to A/B compare, or use the Snapshot Manager GUI in REAPER
 
 ### Genre Awareness
 
@@ -539,6 +551,7 @@ reaper-mcp/
 ├── reaper/                       # Files installed into REAPER
 │   ├── mcp_bridge.lua            # Persistent Lua bridge
 │   ├── mcp_snapshot_manager.lua  # Snapshot manager GUI (save/restore/delete)
+│   ├── mcp_snapshot_*.lua        # Snapshot action scripts (next/prev/quick-save + shared lib)
 │   ├── mcp_analyzer.jsfx         # FFT spectrum analyzer
 │   ├── mcp_lufs_meter.jsfx       # LUFS meter (BS.1770)
 │   ├── mcp_correlation_meter.jsfx # Stereo correlation meter

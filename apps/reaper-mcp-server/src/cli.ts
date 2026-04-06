@@ -75,6 +75,10 @@ export const REAPER_ASSETS = [
   'mcp_correlation_meter.jsfx',
   'mcp_crest_factor.jsfx',
   'mcp_snapshot_manager.lua',
+  'mcp_snapshot_lib.lua',
+  'mcp_snapshot_next.lua',
+  'mcp_snapshot_prev.lua',
+  'mcp_snapshot_quick_save.lua',
 ] as const;
 
 /** All MCP tool names registered by the server */

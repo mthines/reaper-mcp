@@ -97,6 +97,10 @@ reaper-mcp/
   reaper/                     # Files installed INTO REAPER (copied by setup command)
     mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 77 handlers)
     mcp_snapshot_manager.lua  # Standalone snapshot manager GUI (gfx-based, no extensions required)
+    mcp_snapshot_lib.lua      # Shared library for snapshot action scripts
+    mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
+    mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
+    mcp_snapshot_quick_save.lua # Action: quick save with auto-name
     mcp_analyzer.jsfx         # Real-time FFT analyzer (JSFX, writes to gmem[])
     install.sh                # Manual install helper script
 ```
