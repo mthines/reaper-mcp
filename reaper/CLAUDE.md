@@ -7,6 +7,7 @@ Files installed INTO the REAPER DAW by the `setup` command. These run inside REA
 | File | Language | Purpose |
 |------|----------|---------|
 | `mcp_bridge.lua` | Lua | Persistent bridge: polls for JSON commands, executes ReaScript API, writes responses |
+| `mcp_snapshot_manager.lua` | Lua | Standalone snapshot manager GUI (gfx-based, save/restore/delete snapshots) |
 | `mcp_analyzer.jsfx` | JSFX/EEL2 | Real-time FFT spectrum analyzer, writes to gmem[] |
 | `mcp_lufs_meter.jsfx` | JSFX/EEL2 | LUFS loudness metering |
 | `mcp_correlation_meter.jsfx` | JSFX/EEL2 | Stereo correlation and width analysis |

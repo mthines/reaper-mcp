@@ -22,7 +22,7 @@ npx @mthines/reaper-mcp init --yes
 The `init` wizard walks you through:
 1. Installing the REAPER bridge (Lua + JSFX analyzers)
 2. Installing AI mix knowledge and agents
-3. Configuring Claude Code settings (auto-allows all 78 REAPER tools)
+3. Configuring Claude Code settings (auto-allows all 80 REAPER tools)
 4. Optionally creating a project-local `.mcp.json`
 
 Then load `mcp_bridge.lua` in REAPER and open Claude Code — you're ready to mix.
@@ -31,7 +31,7 @@ Then load `mcp_bridge.lua` in REAPER and open Claude Code — you're ready to mi
 
 ```
 Claude Code
-  ├── MCP Tools (67) ──→ controls REAPER in real-time
+  ├── MCP Tools (80) ──→ controls REAPER in real-time
   │   ├── Track management (list, get/set properties, arm, phase, input)
   │   ├── FX management (add/remove, get/set parameters, enable/offline, presets)
   │   ├── Transport (play, stop, record, cursor position)
@@ -43,7 +43,7 @@ Claude Code
   │   ├── MIDI editing (14 tools: notes, CC, items, analysis, batch ops)
   │   ├── Media items (11 tools: properties, split, move, trim, stretch)
   │   ├── Plugin discovery (list installed FX, search, presets)
-  │   ├── Snapshots (save/restore mixer state for A/B comparison)
+  │   ├── Snapshots (save/restore/delete mixer state for A/B comparison)
   │   └── Routing (sends, receives, bus structure)
   │
   └── Mix Engineer Knowledge ──→ knows HOW to use those tools
@@ -81,7 +81,7 @@ npx @mthines/reaper-mcp init
 The wizard guides you through selecting which components to install:
 - **REAPER Bridge** — Lua bridge + JSFX analyzers (copied to your REAPER resource folder)
 - **AI Skills & Agents** — knowledge base, mix agents, rules, skills (global or project-local)
-- **Claude Code Settings** — auto-allows all 78 REAPER tools (no permission prompts)
+- **Claude Code Settings** — auto-allows all 80 REAPER tools (no permission prompts)
 - **Project Config** — `.mcp.json` for the current directory (opt-in)
 
 For CI/automation, use `--yes` to skip prompts and install everything with defaults:
@@ -108,6 +108,7 @@ npx @mthines/reaper-mcp install-skills --project  # project-local alternative
 
 The `setup` command copies into your REAPER resource folder:
 - `mcp_bridge.lua` — persistent Lua bridge script
+- `mcp_snapshot_manager.lua` — snapshot manager GUI (save/restore/delete from REAPER)
 - `mcp_analyzer.jsfx` — FFT spectrum analyzer
 - `mcp_lufs_meter.jsfx` — ITU-R BS.1770 LUFS meter
 - `mcp_correlation_meter.jsfx` — stereo correlation analyzer
@@ -138,7 +139,7 @@ npx @mthines/reaper-mcp doctor
 
 Checks that the bridge is connected, knowledge is installed, and MCP config exists.
 
-## MCP Tools (67)
+## MCP Tools (80)
 
 ### Project & Tracks
 
@@ -250,6 +251,7 @@ Checks that the bridge is connected, knowledge is installed, and MCP config exis
 | `snapshot_save` | Save current mixer state (volumes, pans, FX, mutes) |
 | `snapshot_restore` | Restore a saved snapshot |
 | `snapshot_list` | List all saved snapshots |
+| `snapshot_delete` | Delete a saved snapshot by name |
 
 ### Routing
 
@@ -373,7 +375,7 @@ Processing decisions adapt to the genre:
 
 ## Autonomous Mode (Allow All Tools)
 
-By default Claude Code asks permission for each MCP tool call. The `init` command (and `install-skills`) automatically configures `settings.json` to allow all 78 REAPER tools. If you need to set this up manually, add to your project's `.claude/settings.json` (or `~/.claude/settings.json` for global):
+By default Claude Code asks permission for each MCP tool call. The `init` command (and `install-skills`) automatically configures `settings.json` to allow all 80 REAPER tools. If you need to set this up manually, add to your project's `.claude/settings.json` (or `~/.claude/settings.json` for global):
 
 ```json
 {
@@ -404,6 +406,7 @@ By default Claude Code asks permission for each MCP tool call. The `init` comman
       "mcp__reaper__snapshot_save",
       "mcp__reaper__snapshot_restore",
       "mcp__reaper__snapshot_list",
+      "mcp__reaper__snapshot_delete",
       "mcp__reaper__get_track_routing",
       "mcp__reaper__set_fx_enabled",
       "mcp__reaper__set_fx_offline",
@@ -525,7 +528,7 @@ Platform defaults:
 ```
 reaper-mcp/
 ├── apps/
-│   ├── reaper-mcp-server/        # MCP server (67 tools, esbuild bundle)
+│   ├── reaper-mcp-server/        # MCP server (80 tools, esbuild bundle)
 │   └── reaper-mix-agent/         # AI mix agent (knowledge loader, plugin resolver)
 ├── libs/protocol/                # Shared TypeScript types
 ├── knowledge/                    # AI mix engineer knowledge base
@@ -535,6 +538,7 @@ reaper-mcp/
 │   └── reference/                # Frequency, compression, metering, perceived loudness cheat sheets
 ├── reaper/                       # Files installed into REAPER
 │   ├── mcp_bridge.lua            # Persistent Lua bridge
+│   ├── mcp_snapshot_manager.lua  # Snapshot manager GUI (save/restore/delete)
 │   ├── mcp_analyzer.jsfx         # FFT spectrum analyzer
 │   ├── mcp_lufs_meter.jsfx       # LUFS meter (BS.1770)
 │   ├── mcp_correlation_meter.jsfx # Stereo correlation meter

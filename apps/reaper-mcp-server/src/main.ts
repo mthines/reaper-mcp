@@ -24,25 +24,28 @@ async function setup(): Promise<void> {
   mkdirSync(scriptsDir, { recursive: true });
 
   const reaperDir = resolveAssetDir(__dirname, 'reaper');
-  const luaSrc = join(reaperDir, 'mcp_bridge.lua');
-  const luaDest = join(scriptsDir, 'mcp_bridge.lua');
-  console.log('Installing Lua bridge...');
-  if (installFile(luaSrc, luaDest)) {
-    console.log(`  Installed: mcp_bridge.lua`);
-  } else {
-    console.log(`  Not found: ${luaSrc}`);
+
+  console.log('Installing Lua scripts...');
+  for (const luaFile of ['mcp_bridge.lua', 'mcp_snapshot_manager.lua']) {
+    const src = join(reaperDir, luaFile);
+    const dest = join(scriptsDir, luaFile);
+    if (installFile(src, dest)) {
+      console.log(`  Installed: ${luaFile}`);
+    } else {
+      console.log(`  Not found: ${src}`);
+    }
   }
 
   const effectsDir = join(getReaperEffectsPath(), 'reaper-mcp');
   mkdirSync(effectsDir, { recursive: true });
 
   console.log('\nInstalling JSFX analyzers...');
-  for (const jsfx of REAPER_ASSETS) {
-    if (jsfx === 'mcp_bridge.lua') continue;
-    const src = join(reaperDir, jsfx);
-    const dest = join(effectsDir, jsfx);
+  for (const asset of REAPER_ASSETS) {
+    if (asset.endsWith('.lua')) continue;
+    const src = join(reaperDir, asset);
+    const dest = join(effectsDir, asset);
     if (installFile(src, dest)) {
-      console.log(`  Installed: reaper-mcp/${jsfx}`);
+      console.log(`  Installed: reaper-mcp/${asset}`);
     } else {
       console.log(`  Not found: ${src}`);
     }
@@ -52,7 +55,7 @@ async function setup(): Promise<void> {
   console.log('Next steps:');
   console.log('  1. Open REAPER');
   console.log('  2. Actions > Show action list > Load ReaScript');
-  console.log(`  3. Select: ${luaDest}`);
+  console.log(`  3. Select: ${join(scriptsDir, 'mcp_bridge.lua')}`);
   console.log('  4. Run the script (it will keep running in background via defer loop)');
   console.log('  5. Add reaper-mcp to your Claude Code config (see: npx @mthines/reaper-mcp doctor)');
 }

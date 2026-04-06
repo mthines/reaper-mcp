@@ -54,7 +54,7 @@ reaper-mcp/
         transport.ts          # play, stop, record, get_transport_state, set_cursor_position
         discovery.ts          # list_available_fx, search_fx
         presets.ts            # get_fx_preset_list, set_fx_preset
-        snapshots.ts          # snapshot_save, snapshot_restore, snapshot_list
+        snapshots.ts          # snapshot_save, snapshot_restore, snapshot_list, snapshot_delete
         routing.ts            # get_track_routing
         analysis.ts           # read_track_lufs, read_track_correlation, read_track_crest
         midi.ts               # 14 MIDI editing tools (notes, CC, items, analysis, batch edit)
@@ -95,7 +95,8 @@ reaper-mcp/
     reference/                # Reference material (frequencies, metering, compression, perceived loudness, common mistakes)
 
   reaper/                     # Files installed INTO REAPER (copied by setup command)
-    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 67 handlers)
+    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 77 handlers)
+    mcp_snapshot_manager.lua  # Standalone snapshot manager GUI (gfx-based, no extensions required)
     mcp_analyzer.jsfx         # Real-time FFT analyzer (JSFX, writes to gmem[])
     install.sh                # Manual install helper script
 ```
@@ -120,7 +121,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (78 total)
+## MCP Tools (80 total)
 
 ### Project & Tracks (5)
 
@@ -132,13 +133,14 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `set_track_property` | `tools/tracks.ts` | Set volume (dB), pan, mute, solo, recordArm, phase, input |
 | `set_multiple_track_properties` | `tools/batch.ts` | **Batch** set properties on multiple tracks in one call |
 
-### FX Management (8)
+### FX Management (9)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `add_fx` | `tools/fx.ts` | Add FX by name (partial match: "ReaEQ", "VST: Pro-Q 3") |
 | `remove_fx` | `tools/fx.ts` | Remove FX from chain by index |
 | `get_fx_parameters` | `tools/fx.ts` | List all FX params with current values and ranges |
+| `analyze_fx` | `tools/fx.ts` | Analyze FX parameters with filtering and pagination |
 | `set_fx_parameter` | `tools/fx.ts` | Set FX parameter (normalized 0.0-1.0) |
 | `set_fx_enabled` | `tools/fx.ts` | Enable or disable (bypass) an FX plugin |
 | `set_fx_offline` | `tools/fx.ts` | Set FX online/offline (offline = no CPU, preserves settings) |
@@ -238,13 +240,14 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `get_fx_preset_list` | `tools/presets.ts` | List available presets for an FX |
 | `set_fx_preset` | `tools/presets.ts` | Load a preset by name |
 
-### Snapshots (3)
+### Snapshots (4)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `snapshot_save` | `tools/snapshots.ts` | Save mixer state to `.reaper-mcp/snapshots/` (v2: volumes, pans, FX params, sends) |
 | `snapshot_restore` | `tools/snapshots.ts` | Restore a saved snapshot (FX params only if plugin name matches) |
 | `snapshot_list` | `tools/snapshots.ts` | List project-scoped snapshots (falls back to global for unsaved projects) |
+| `snapshot_delete` | `tools/snapshots.ts` | Delete a saved snapshot by name |
 
 ### Routing (1)
 
@@ -266,7 +269,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 78 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 80 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 

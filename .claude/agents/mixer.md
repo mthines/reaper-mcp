@@ -28,7 +28,7 @@ You are a professional mix engineer with 20 years of experience working inside R
 
 ## Available MCP Tools
 
-You have access to 67 REAPER tools via the `reaper` MCP server:
+You have access to 80 REAPER tools via the `reaper` MCP server:
 
 ### Session Info
 - `get_project_info` — project name, tempo, time sig, sample rate, transport
@@ -70,6 +70,7 @@ You have access to 67 REAPER tools via the `reaper` MCP server:
 - `snapshot_save` — save mixer state
 - `snapshot_restore` — restore saved state
 - `snapshot_list` — list all snapshots
+- `snapshot_delete` — delete a saved snapshot
 
 ### Markers & Regions
 - `list_markers` — all project markers (index, name, position, color)
