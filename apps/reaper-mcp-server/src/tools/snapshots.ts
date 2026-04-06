@@ -50,4 +50,19 @@ export function registerSnapshotTools(server: McpServer): void {
       return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
     }
   );
+
+  server.tool(
+    'snapshot_delete',
+    'Delete a named mixer snapshot. Removes the snapshot file from .reaper-mcp/snapshots/ alongside the project file (or global bridge dir for unsaved projects). This action is permanent and cannot be undone.',
+    {
+      name: z.string().min(1).describe('Name of the snapshot to delete'),
+    },
+    async ({ name }) => {
+      const res = await sendCommand('snapshot_delete', { name });
+      if (!res.success) {
+        return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
+    }
+  );
 }

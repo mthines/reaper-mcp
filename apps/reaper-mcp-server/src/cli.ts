@@ -74,6 +74,7 @@ export const REAPER_ASSETS = [
   'mcp_lufs_meter.jsfx',
   'mcp_correlation_meter.jsfx',
   'mcp_crest_factor.jsfx',
+  'mcp_snapshot_manager.lua',
 ] as const;
 
 /** All MCP tool names registered by the server */
@@ -113,6 +114,7 @@ export const MCP_TOOL_NAMES = [
   'snapshot_save',
   'snapshot_restore',
   'snapshot_list',
+  'snapshot_delete',
   // routing
   'get_track_routing',
   // midi
