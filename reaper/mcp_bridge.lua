@@ -1426,6 +1426,26 @@ function handlers.snapshot_list(params)
   return { snapshots = snapshots, total = #snapshots, storageLocation = get_snapshot_storage_location() }
 end
 
+function handlers.snapshot_delete(params)
+  local name = params.name
+  if not name or name == "" then
+    return nil, "name required"
+  end
+
+  local path = snapshot_path(name)
+  local content = read_file(path)
+  if not content then
+    return nil, "Snapshot not found: " .. name
+  end
+
+  local ok, err = os.remove(path)
+  if not ok then
+    return nil, "Failed to delete snapshot: " .. (err or "unknown error")
+  end
+
+  return { name = name, deleted = true }
+end
+
 -- =============================================================================
 -- Routing handler
 -- =============================================================================

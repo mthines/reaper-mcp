@@ -185,4 +185,65 @@ describe('snapshot tools', () => {
       });
     });
   });
+
+  describe('snapshot_delete', () => {
+    it('deletes snapshot and returns confirmation', async () => {
+      const deleteData = { name: 'before-compression', deleted: true };
+
+      mockedSendCommand.mockResolvedValue({
+        id: 'test',
+        success: true,
+        data: deleteData,
+        timestamp: Date.now(),
+      });
+
+      const result = await tools['snapshot_delete'].handler({ name: 'before-compression' });
+      expect(result).toEqual({
+        content: [{ type: 'text', text: JSON.stringify(deleteData, null, 2) }],
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('snapshot_delete', { name: 'before-compression' });
+    });
+
+    it('returns error when snapshot not found', async () => {
+      mockedSendCommand.mockResolvedValue({
+        id: 'test',
+        success: false,
+        error: 'Snapshot not found: nonexistent',
+        timestamp: Date.now(),
+      });
+
+      const result = await tools['snapshot_delete'].handler({ name: 'nonexistent' });
+      expect(result).toEqual({
+        content: [{ type: 'text', text: 'Error: Snapshot not found: nonexistent' }],
+        isError: true,
+      });
+    });
+
+    it('returns error when deletion fails', async () => {
+      mockedSendCommand.mockResolvedValue({
+        id: 'test',
+        success: false,
+        error: 'Failed to delete snapshot: permission denied',
+        timestamp: Date.now(),
+      });
+
+      const result = await tools['snapshot_delete'].handler({ name: 'locked-snapshot' });
+      expect(result).toEqual({
+        content: [{ type: 'text', text: 'Error: Failed to delete snapshot: permission denied' }],
+        isError: true,
+      });
+    });
+
+    it('dispatches correct command type and params', async () => {
+      mockedSendCommand.mockResolvedValue({
+        id: 'test',
+        success: true,
+        data: { name: 'v2-mix', deleted: true },
+        timestamp: Date.now(),
+      });
+
+      await tools['snapshot_delete'].handler({ name: 'v2-mix' });
+      expect(mockedSendCommand).toHaveBeenCalledWith('snapshot_delete', { name: 'v2-mix' });
+    });
+  });
 });

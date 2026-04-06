@@ -23,11 +23,13 @@ fi
 
 echo "REAPER resource path: $REAPER_PATH"
 
-# Install Lua bridge
+# Install Lua scripts
 SCRIPTS_DIR="$REAPER_PATH/Scripts"
 mkdir -p "$SCRIPTS_DIR"
 cp "$SCRIPT_DIR/mcp_bridge.lua" "$SCRIPTS_DIR/mcp_bridge.lua"
 echo "Installed: $SCRIPTS_DIR/mcp_bridge.lua"
+cp "$SCRIPT_DIR/mcp_snapshot_manager.lua" "$SCRIPTS_DIR/mcp_snapshot_manager.lua"
+echo "Installed: $SCRIPTS_DIR/mcp_snapshot_manager.lua"
 
 # Install JSFX analyzers
 EFFECTS_DIR="$REAPER_PATH/Effects/reaper-mcp"

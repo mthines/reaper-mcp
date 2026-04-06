@@ -125,7 +125,8 @@ describe('cli helpers', () => {
       expect(REAPER_ASSETS).toContain('mcp_lufs_meter.jsfx');
       expect(REAPER_ASSETS).toContain('mcp_correlation_meter.jsfx');
       expect(REAPER_ASSETS).toContain('mcp_crest_factor.jsfx');
-      expect(REAPER_ASSETS.length).toBe(5);
+      expect(REAPER_ASSETS).toContain('mcp_snapshot_manager.lua');
+      expect(REAPER_ASSETS.length).toBe(6);
     });
 
     it('KNOWLEDGE_DIRS includes all expected subdirectories', () => {
