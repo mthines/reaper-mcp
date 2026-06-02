@@ -11,12 +11,12 @@ import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
-
-const execAsync = promisifyUtil(execCb);
 import { resolveAssetDir, resolveAssetDirWithFallback, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES } from './cli.js';
 import { runInit } from './init.js';
 import { setupSidecar } from './setup-sidecar.js';
 import { getSidecarClient } from './sidecar.js';
+
+const execAsync = promisifyUtil(execCb);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -245,14 +245,21 @@ async function doctor(): Promise<void> {
   }
 
   const sidecarReady = venvExists && depsOk && weightsExist;
-  if (!sidecarReady) {
-    console.log('\n  Sidecar not installed. Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar');
+  // The sidecar is opt-in. If the user has not started installing it (no venv
+  // and no weights), don't penalize the exit code. But if they have opted in
+  // (any artifact present) we fail loud on a partial / broken install.
+  const sidecarOptedIn = venvExists || weightsExist;
+  const sidecarBroken = sidecarOptedIn && !sidecarReady;
+  if (!sidecarOptedIn) {
+    console.log('\n  Sidecar: not installed (opt-in). Run setup-sidecar to enable audio AI tools.');
+  } else if (sidecarBroken) {
+    console.log('\n  Sidecar: PARTIALLY INSTALLED — run setup-sidecar to repair.');
   } else {
     console.log('\n  Sidecar: fully installed and ready.');
   }
 
   console.log('');
-  process.exit(bridgeRunning && knowledgeExists && mcpJsonExists ? 0 : 1);
+  process.exit(bridgeRunning && knowledgeExists && mcpJsonExists && !sidecarBroken ? 0 : 1);
 }
 
 async function serve(): Promise<void> {

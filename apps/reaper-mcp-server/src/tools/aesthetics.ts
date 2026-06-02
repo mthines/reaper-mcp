@@ -93,7 +93,6 @@ export function registerAestheticsTools(server: McpServer): void {
           endTime: resolvedEnd,
           durationSeconds: resolvedEnd - resolvedStart,
           modelVersion: scores.modelVersion,
-          tempFilePath: wavPath, // debug only
         };
 
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };

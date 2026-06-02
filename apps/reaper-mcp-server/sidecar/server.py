@@ -153,6 +153,8 @@ def handle_analyze(request_id: Any, params: dict) -> str:
         return _err(request_id, -32000, f"Inference failed: {exc}")
 
 
+# JSON-RPC method names must stay in sync with the TypeScript client.
+# When adding a method here, also reference it from apps/reaper-mcp-server/src/sidecar.ts.
 METHODS = {
     "analyze": handle_analyze,
 }

@@ -12,11 +12,16 @@
  */
 
 import { exec as execImpl } from 'node:child_process';
-import { existsSync, mkdirSync, copyFileSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, platform } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { resolveAssetDir } from './cli.js';
+
+// Venv binary layout differs by OS: POSIX uses bin/, Windows uses Scripts\
+const VENV_BIN = platform() === 'win32' ? 'Scripts' : 'bin';
+const VENV_PYTHON_NAME = platform() === 'win32' ? 'python.exe' : 'python';
+const VENV_PIP_NAME = platform() === 'win32' ? 'pip.exe' : 'pip';
 
 /** Promisified exec — lazily resolves from node:child_process so mocks work correctly. */
 function exec(cmd: string): Promise<{ stdout: string; stderr: string }> {
@@ -92,10 +97,23 @@ export async function checkPython(pythonBin: string): Promise<string> {
   return `${major}.${minor}.${patch}`;
 }
 
-/** Create the isolated venv at SIDECAR_VENV_PATH. */
+/** Create the isolated venv at SIDECAR_VENV_PATH. Always uses --clear so a
+ * partial venv from a previous failed setup is rebuilt cleanly. */
 export async function createVenv(pythonBin: string): Promise<void> {
   mkdirSync(join(homedir(), '.reaper-mcp'), { recursive: true });
-  await exec(`"${pythonBin}" -m venv "${SIDECAR_VENV_PATH}"`);
+  await exec(`"${pythonBin}" -m venv --clear "${SIDECAR_VENV_PATH}"`);
+}
+
+/** Remove a broken venv after a failed install so the next setup-sidecar
+ * run starts from a clean slate. Best-effort — swallows errors. */
+export function cleanupBrokenVenv(): void {
+  try {
+    if (existsSync(SIDECAR_VENV_PATH)) {
+      rmSync(SIDECAR_VENV_PATH, { recursive: true, force: true });
+    }
+  } catch {
+    // Best-effort cleanup; do not mask the original error
+  }
 }
 
 /** Resolve the path to requirements.txt from either the build output or source tree. */
@@ -106,7 +124,7 @@ export function resolveRequirementsTxt(baseDir: string): string {
 
 /** Install Python deps from requirements.txt into the venv. */
 export async function installDeps(requirementsPath: string): Promise<void> {
-  const pip = join(SIDECAR_VENV_PATH, 'bin', 'pip');
+  const pip = join(SIDECAR_VENV_PATH, VENV_BIN, VENV_PIP_NAME);
   // Upgrade pip first to avoid warnings on older pip versions
   await exec(`"${pip}" install --upgrade pip`);
   const { stdout, stderr } = await exec(`"${pip}" install -r "${requirementsPath}"`);
@@ -117,7 +135,7 @@ export async function installDeps(requirementsPath: string): Promise<void> {
 
 /** Pre-download the Audiobox Aesthetics model weights. */
 export async function downloadModelWeights(): Promise<void> {
-  const python = join(SIDECAR_VENV_PATH, 'bin', 'python');
+  const python = join(SIDECAR_VENV_PATH, VENV_BIN, VENV_PYTHON_NAME);
   const script = [
     'from huggingface_hub import snapshot_download',
     `print("Downloading ${MODEL_ID} weights to ~/.cache/huggingface/hub/ ...")`,
@@ -188,6 +206,8 @@ export async function setupSidecar(): Promise<void> {
     console.log('  Dependencies installed.');
   } catch (err) {
     console.error(`\nFailed to install dependencies: ${err instanceof Error ? err.message : String(err)}`);
+    cleanupBrokenVenv();
+    console.error('Removed partial venv so the next setup-sidecar run starts clean.');
     process.exit(1);
   }
 

@@ -11,15 +11,23 @@
 import { spawn, ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, platform } from 'node:os';
 
 // ---------------------------------------------------------------------------
 // Paths (must match setup-sidecar.ts constants)
 // ---------------------------------------------------------------------------
 
+// Venv binary layout differs by OS: POSIX uses bin/, Windows uses Scripts\
+const VENV_BIN = platform() === 'win32' ? 'Scripts' : 'bin';
+const VENV_PYTHON_NAME = platform() === 'win32' ? 'python.exe' : 'python';
+
 const SIDECAR_VENV_PATH = join(homedir(), '.reaper-mcp', 'sidecar-venv');
 const SIDECAR_SCRIPT_PATH = join(homedir(), '.reaper-mcp', 'sidecar', 'server.py');
-const VENV_PYTHON = join(SIDECAR_VENV_PATH, 'bin', 'python');
+const VENV_PYTHON = join(SIDECAR_VENV_PATH, VENV_BIN, VENV_PYTHON_NAME);
+
+/** Per-request timeout for analyze() in milliseconds. Default 60s — generous for
+ * cold model load + inference, tight enough to fail fast on a hung process. */
+const ANALYZE_TIMEOUT_MS = Number(process.env['REAPER_MCP_SIDECAR_TIMEOUT_MS']) || 60_000;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -66,6 +74,8 @@ class SidecarClientImpl implements SidecarClient {
   private lineBuffer = '';
   private restarting = false;
   private restartAttempted = false;
+  /** Cached spawn promise — prevents double-spawn on concurrent cold-start calls. */
+  private spawnPromise: Promise<void> | null = null;
 
   isAvailable(): boolean {
     return existsSync(SIDECAR_SCRIPT_PATH) && existsSync(VENV_PYTHON);
@@ -83,6 +93,7 @@ class SidecarClientImpl implements SidecarClient {
 
     return new Promise<AestheticsRawResult>((resolve, reject) => {
       const id = this.nextId++;
+      // Method name 'analyze' must match a key in METHODS dict in sidecar/server.py.
       const request = {
         jsonrpc: '2.0',
         id,
@@ -90,7 +101,28 @@ class SidecarClientImpl implements SidecarClient {
         params: { path: wavPath, startTime, endTime },
       };
 
-      this.pending.set(id, { resolve, reject });
+      // Timeout watchdog: a hung Python inference (OOM, model corruption,
+      // deadlock) must not block the caller forever. On timeout, reject the
+      // request and kill the process so the next call gets a fresh sidecar.
+      const timer = setTimeout(() => {
+        if (this.pending.delete(id)) {
+          process.stderr.write(
+            `[reaper-mcp] Sidecar analyze() timed out after ${ANALYZE_TIMEOUT_MS}ms — killing process\n`
+          );
+          if (this.process) {
+            this.process.kill('SIGKILL');
+            this.process = null;
+          }
+          reject(new Error(
+            `Sidecar timeout after ${ANALYZE_TIMEOUT_MS}ms. Override with REAPER_MCP_SIDECAR_TIMEOUT_MS env var.`
+          ));
+        }
+      }, ANALYZE_TIMEOUT_MS);
+
+      this.pending.set(id, {
+        resolve: (r) => { clearTimeout(timer); resolve(r); },
+        reject: (e) => { clearTimeout(timer); reject(e); },
+      });
 
       const line = JSON.stringify(request) + '\n';
       try {
@@ -100,6 +132,7 @@ class SidecarClientImpl implements SidecarClient {
         }
         proc.stdin.write(line);
       } catch (err) {
+        clearTimeout(timer);
         this.pending.delete(id);
         reject(new Error(`Failed to write to sidecar stdin: ${err instanceof Error ? err.message : String(err)}`));
       }
@@ -124,7 +157,13 @@ class SidecarClientImpl implements SidecarClient {
 
   private async ensureRunning(): Promise<void> {
     if (this.process && !this.process.killed) return;
-    await this.spawn();
+    // Deduplicate concurrent spawn calls — only one Python process is ever started.
+    if (!this.spawnPromise) {
+      this.spawnPromise = this.spawn().finally(() => {
+        this.spawnPromise = null;
+      });
+    }
+    await this.spawnPromise;
   }
 
   private async spawn(): Promise<void> {
@@ -159,6 +198,9 @@ class SidecarClientImpl implements SidecarClient {
     this.process = child;
     this.lineBuffer = '';
     this.restarting = false;
+    // Reset the one-shot restart flag so a future crash (after successful calls)
+    // can also be retried once rather than failing immediately.
+    this.restartAttempted = false;
   }
 
   private onStdout(chunk: string): void {

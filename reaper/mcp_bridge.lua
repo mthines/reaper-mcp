@@ -3541,13 +3541,9 @@ function handlers.render_track_to_wav(params)
   local track_name = ({reaper.GetSetMediaTrackInfo_String(track, "P_NAME", "", false)})[2] or ""
   if track_name == "" then track_name = "Track " .. (track_index + 1) end
 
-  -- Get current project sample rate
-  local sample_rate = reaper.GetProjectLength(0) -- not what we want
-  -- Use reaper API for sample rate
-  sample_rate = reaper.SNM_GetProjectTimeSignature2 and
-    ({reaper.SNM_GetProjectTimeSignature2(0)})[3] or 44100
-  -- Simpler approach: just report 44100 (our render target)
-  sample_rate = 44100
+  -- Render target is always 44100 Hz (WAV for sidecar inference).
+  -- The actual project sample rate is irrelevant here; Audiobox resamples internally.
+  local sample_rate = 44100
 
   -- Build unique temp file path
   -- Use GetTempPath() if available (REAPER 6.29+), fall back to os.tmpname pattern
@@ -3574,10 +3570,13 @@ function handlers.render_track_to_wav(params)
   -- -------------------------------------------------------------------------
   local saved_file     = ({reaper.GetSetProjectInfo_String(0, "RENDER_FILE",       "", false)})[2] or ""
   local saved_pattern  = ({reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN",    "", false)})[2] or ""
+  local saved_format   = ({reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT",     "", false)})[2] or ""
   local saved_bounds   = reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", 0, false)
   local saved_settings = reaper.GetSetProjectInfo(0, "RENDER_SETTINGS",   0, false)
   local saved_start    = reaper.GetSetProjectInfo(0, "RENDER_STARTPOS",   0, false)
   local saved_end      = reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     0, false)
+  local saved_srate    = reaper.GetSetProjectInfo(0, "RENDER_SRATE",      0, false)
+  local saved_channels = reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   0, false)
 
   -- Save solo states for all tracks
   local track_count = reaper.CountTracks(0)
@@ -3603,6 +3602,13 @@ function handlers.render_track_to_wav(params)
     -- Set render mode: 2 = stems (selected tracks via master mix / solo)
     reaper.GetSetProjectInfo(0, "RENDER_SETTINGS", 2, true)
 
+    -- Force WAV at 44100 Hz stereo so the sidecar always gets a known format,
+    -- independent of whatever the user last rendered. Restored in finally.
+    -- "evaw" is the little-endian "wave" fourcc REAPER uses for WAV format.
+    reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT", "evaw", true)
+    reaper.GetSetProjectInfo(0, "RENDER_SRATE",    sample_rate, true)
+    reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", 2,           true)
+
     -- Unsolo all tracks, then solo only the target track
     for i = 0, track_count - 1 do
       local t = reaper.GetTrack(0, i)
@@ -3621,10 +3627,13 @@ function handlers.render_track_to_wav(params)
   local restore_ok, restore_err2 = pcall(function()
     reaper.GetSetProjectInfo_String(0, "RENDER_FILE",       saved_file,     true)
     reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN",    saved_pattern,  true)
+    reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT",     saved_format,   true)
     reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", saved_bounds,   true)
     reaper.GetSetProjectInfo(0, "RENDER_SETTINGS",   saved_settings, true)
     reaper.GetSetProjectInfo(0, "RENDER_STARTPOS",   saved_start,    true)
     reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     saved_end,      true)
+    reaper.GetSetProjectInfo(0, "RENDER_SRATE",      saved_srate,    true)
+    reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   saved_channels, true)
     for i = 0, track_count - 1 do
       local t = reaper.GetTrack(0, i)
       reaper.SetMediaTrackInfo_Value(t, "I_SOLO", saved_solo_states[i] or 0)
@@ -3640,16 +3649,12 @@ function handlers.render_track_to_wav(params)
     return nil, "Render failed: " .. tostring(restore_err)
   end
 
-  -- Verify the file was actually created
+  -- Verify the file was actually created.
+  -- RENDER_PATTERN was set without the .wav extension so REAPER appends it;
+  -- wav_path already has the full expected name including the extension.
   local f = io.open(wav_path, "r")
   if not f then
-    -- REAPER may have appended .wav automatically if we included the extension in the pattern
-    -- Try alternative path without double extension
-    local alt_path = temp_dir .. wav_filename
-    f = io.open(alt_path, "r")
-    if not f then
-      return nil, "Render produced no output file at: " .. wav_path
-    end
+    return nil, "Render produced no output file at: " .. wav_path
   end
   f:close()
 
