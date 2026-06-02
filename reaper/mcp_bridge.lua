@@ -1533,7 +1533,11 @@ local MCP_LUFS_METER_FX_NAME        = "reaper-mcp/mcp_lufs_meter"
 local MCP_CORRELATION_METER_FX_NAME = "reaper-mcp/mcp_correlation_meter"
 local MCP_CREST_FACTOR_FX_NAME      = "reaper-mcp/mcp_crest_factor"
 local MCP_MIDI_EMITTER_FX_NAME      = "reaper-mcp/mcp_midi_emitter"
-local MCP_FX_PREFIX                 = "reaper%-mcp/"  -- Lua pattern for matching MCP JSFX names
+-- Lua pattern matching the JSFX `desc:` line — that's what TrackFX_GetFXName
+-- returns, not the on-disk path. Every MCP JSFX starts its desc with "MCP ".
+-- (The outer container is renamed to "MCP Meters", but this prefix is only used
+-- to identify the JSFX *inside* a container, so collisions are not possible.)
+local MCP_FX_PREFIX                 = "MCP "
 
 -- Per-track cache of MCP container FX index to avoid rescanning on every read.
 -- Keyed by track pointer (userdata), value is container FX index or false (no container).
