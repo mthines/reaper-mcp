@@ -9,8 +9,14 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
+import { exec as execCb } from 'node:child_process';
+import { promisify as promisifyUtil } from 'node:util';
+
+const execAsync = promisifyUtil(execCb);
 import { resolveAssetDir, resolveAssetDirWithFallback, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES } from './cli.js';
 import { runInit } from './init.js';
+import { setupSidecar } from './setup-sidecar.js';
+import { getSidecarClient } from './sidecar.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -179,6 +185,73 @@ async function doctor(): Promise<void> {
   console.log('\nTo check SWS Extensions, start REAPER and use the "list_available_fx" tool.');
   console.log('SWS provides enhanced plugin discovery and snapshot support.\n');
 
+  // --- Sidecar checks (opt-in; all run independently to show partial state) ---
+  console.log('Python Sidecar (opt-in, for analyze_track_aesthetics):');
+
+  const sidecarVenvPath = join(homedir(), '.reaper-mcp', 'sidecar-venv');
+  const venvPython = join(sidecarVenvPath, 'bin', 'python');
+  const hfCachePath = join(homedir(), '.cache', 'huggingface', 'hub');
+
+  // Check (a): Python ≥ 3.10 available
+  let pythonOk = false;
+  let pythonDetail = 'not found';
+  try {
+    const pythonBin = process.env['PYTHON_BIN'] ?? 'python3';
+    const { stdout, stderr } = await execAsync(`"${pythonBin}" --version`);
+    const versionStr = (stdout + stderr).trim();
+    const match = versionStr.match(/Python\s+(\d+)\.(\d+)/i);
+    if (match) {
+      const major = parseInt(match[1], 10);
+      const minor = parseInt(match[2], 10);
+      pythonOk = major > 3 || (major === 3 && minor >= 10);
+      pythonDetail = versionStr;
+    }
+  } catch {
+    pythonDetail = 'not found';
+  }
+  console.log(`  Python ≥ 3.10:  ${pythonOk ? `✓ ${pythonDetail}` : `✗ ${pythonDetail}`}`);
+  if (!pythonOk) {
+    console.log('    → Install Python 3.10+ from https://python.org or set PYTHON_BIN');
+  }
+
+  // Check (b): venv exists
+  const venvExists = existsSync(sidecarVenvPath);
+  console.log(`  Venv:           ${venvExists ? `✓ ${sidecarVenvPath}` : '✗ Not installed'}`);
+  if (!venvExists) {
+    console.log('    → Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar');
+  }
+
+  // Check (c): audiobox-aesthetics importable in venv
+  let depsOk = false;
+  if (venvExists && existsSync(venvPython)) {
+    try {
+      await execAsync(`"${venvPython}" -c "import audiobox_aesthetics"`);
+      depsOk = true;
+    } catch {
+      depsOk = false;
+    }
+  }
+  console.log(`  Dependencies:   ${depsOk ? '✓ audiobox-aesthetics importable' : '✗ Not installed'}`);
+  if (!depsOk && venvExists) {
+    console.log('    → Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar');
+  }
+
+  // Check (d): model weights in HuggingFace cache
+  const weightsPath = join(hfCachePath, 'models--facebook--audiobox-aesthetics');
+  const weightsExist = existsSync(weightsPath);
+  console.log(`  Model weights:  ${weightsExist ? `✓ ${weightsPath}` : '✗ Not downloaded'}`);
+  if (!weightsExist) {
+    console.log('    → Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar');
+  }
+
+  const sidecarReady = venvExists && depsOk && weightsExist;
+  if (!sidecarReady) {
+    console.log('\n  Sidecar not installed. Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar');
+  } else {
+    console.log('\n  Sidecar: fully installed and ready.');
+  }
+
+  console.log('');
   process.exit(bridgeRunning && knowledgeExists && mcpJsonExists ? 0 : 1);
 }
 
@@ -289,6 +362,13 @@ switch (command) {
     });
     break;
 
+  case 'setup-sidecar':
+    setupSidecar().catch((err) => {
+      console.error('Sidecar setup failed:', err);
+      process.exit(1);
+    });
+    break;
+
   case 'status': {
     (async () => {
       const running = await isBridgeRunning();
@@ -316,6 +396,7 @@ Usage:
   npx @mthines/reaper-mcp init --yes       Non-interactive setup (install everything with defaults)
   npx @mthines/reaper-mcp init --project   Include .mcp.json in current directory
   npx @mthines/reaper-mcp setup            Install Lua bridge + JSFX analyzers into REAPER
+  npx @mthines/reaper-mcp setup-sidecar    Install Python sidecar for perceptual audio analysis (opt-in, ~831 MB)
   npx @mthines/reaper-mcp install-skills   Install AI knowledge + agents globally (default)
   npx @mthines/reaper-mcp install-skills --project  Install into current project directory
   npx @mthines/reaper-mcp install-skills --global   Install into ~/.claude/ (default)
@@ -342,26 +423,36 @@ Tip: install globally for shorter commands:
 // Graceful shutdown — flush telemetry before the process exits
 // ---------------------------------------------------------------------------
 
+function shutdownAll(): void {
+  stopPollers();
+  // Terminate the Python sidecar if it was ever spawned
+  try {
+    getSidecarClient().shutdown();
+  } catch {
+    // Best-effort — sidecar may not have been started
+  }
+}
+
 process.on('SIGINT', () => {
   console.error('[reaper-mcp] Interrupted');
-  stopPollers();
+  shutdownAll();
   shutdownTelemetry().finally(() => process.exit(0));
 });
 
 process.on('SIGTERM', () => {
   console.error('[reaper-mcp] Terminated');
-  stopPollers();
+  shutdownAll();
   shutdownTelemetry().finally(() => process.exit(0));
 });
 
 process.on('uncaughtException', (err) => {
   console.error('[reaper-mcp] Uncaught exception:', err);
-  stopPollers();
+  shutdownAll();
   shutdownTelemetry().finally(() => process.exit(1));
 });
 
 process.on('unhandledRejection', (reason) => {
   console.error('[reaper-mcp] Unhandled rejection:', reason);
-  stopPollers();
+  shutdownAll();
   shutdownTelemetry().finally(() => process.exit(1));
 });

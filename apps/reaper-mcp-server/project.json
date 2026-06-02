@@ -21,6 +21,11 @@
         "assets": [
           {
             "glob": "**/*",
+            "input": "apps/reaper-mcp-server/sidecar",
+            "output": "sidecar"
+          },
+          {
+            "glob": "**/*",
             "input": "reaper",
             "output": "reaper"
           },

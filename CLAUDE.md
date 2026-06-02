@@ -15,10 +15,11 @@ pnpm nx run-many --target=test  # Test everything
 
 ```
 Claude Code <--stdio--> MCP Server (TypeScript) <--JSON files--> Lua Bridge (REAPER) <--ReaScript API--> REAPER DAW
-                                                                       |
-                                                                 gmem[] shared memory
-                                                                       |
-                                                                 JSFX FFT Analyzer
+                                 |                                     |
+                    newline-delimited JSON-RPC              gmem[] shared memory
+                                 |                                     |
+                    Python Sidecar (long-lived)              JSFX FFT Analyzer
+                    Audiobox Aesthetics model
 ```
 
 ### Why File-Based IPC?
@@ -42,10 +43,12 @@ This is an **Nx monorepo** with **pnpm workspaces**.
 reaper-mcp/
   apps/reaper-mcp-server/     # Main MCP server application (TypeScript, esbuild)
     src/
-      main.ts                 # CLI entry point: init | serve | setup | install-skills | doctor | status
+      main.ts                 # CLI entry point: init | serve | setup | setup-sidecar | install-skills | doctor | status
       init.ts                 # Interactive guided setup wizard (init command)
       server.ts               # McpServer creation, tool registration
       bridge.ts               # File-based IPC: sendCommand(), isBridgeRunning(), etc.
+      sidecar.ts              # Python subprocess lifecycle + JSON-RPC client (getSidecarClient())
+      setup-sidecar.ts        # setup-sidecar CLI command: Python check, venv, deps, weights download
       tools/
         project.ts            # get_project_info
         tracks.ts             # list_tracks, get_track_properties, set_track_property
@@ -63,6 +66,12 @@ reaper-mcp/
         markers.ts            # list_markers, list_regions, add_marker, add_region, delete_marker, delete_region
         tempo.ts              # get_tempo_map
         envelopes.ts          # get_track_envelopes, get_envelope_points, insert_envelope_point, delete_envelope_point
+        aesthetics.ts         # analyze_track_aesthetics (requires Python sidecar)
+
+    sidecar/                  # Python sidecar for semantic audio analysis (opt-in)
+      server.py               # JSON-RPC server (Meta Audiobox Aesthetics, CC-BY 4.0)
+      requirements.txt        # Pinned Python deps
+      tests/test_server.py    # pytest unit tests for the sidecar
 
   libs/protocol/              # Shared TypeScript types (compiled with tsc)
     src/
@@ -125,7 +134,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (80 total)
+## MCP Tools (81 total)
 
 ### Project & Tracks (5)
 
@@ -269,6 +278,12 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `read_track_correlation` | `tools/analysis.ts` | Stereo correlation, width, mid/side levels |
 | `read_track_crest` | `tools/analysis.ts` | Crest factor (peak-to-RMS ratio) |
 
+### Perceptual Audio Analysis (1) — Requires Python Sidecar
+
+| Tool | File | Description |
+|------|------|-------------|
+| `analyze_track_aesthetics` | `tools/aesthetics.ts` | Perceptual quality scores via Meta Audiobox Aesthetics (CC-BY 4.0): Production Quality, Production Complexity, Content Enjoyment, Content Usefulness (all 0-10). Bounces track to temp WAV, calls Python sidecar. Requires `setup-sidecar`. |
+
 ### Progressive Discovery (3)
 
 | Tool | File | Description |
@@ -410,6 +425,53 @@ handlers["command_type"] = function(params)
 end
 ```
 
+## Python Sidecar (Semantic Audio Analysis)
+
+An optional long-lived Python subprocess for AI-powered perceptual audio analysis. Introduced in Phase 1 to enable `analyze_track_aesthetics`.
+
+### Sidecar Architecture
+
+```
+MCP Server (Node.js)
+    |
+    | newline-delimited JSON-RPC 2.0 over stdin/stdout
+    v
+Python sidecar (long-lived child process)
+    |
+    | loads model once at startup; inference per request
+    v
+Audiobox Aesthetics predictor (CC-BY 4.0)
+```
+
+### Key Design Points
+
+- **Opt-in**: The sidecar is installed separately via `setup-sidecar`. `pnpm install` and `pnpm nx build` never touch Python.
+- **Lazy spawn**: The sidecar process spawns on the first `analyze_track_aesthetics` call, not at server startup.
+- **Lifecycle**: Sidecar receives SIGTERM when the MCP server receives SIGINT/SIGTERM. Managed via `getSidecarClient().shutdown()` in `main.ts`.
+- **Auto-restart**: If the sidecar crashes, one restart is attempted automatically. If restart fails, the tool returns a clear error.
+- **Install location**: Venv at `~/.reaper-mcp/sidecar-venv/`, script at `~/.reaper-mcp/sidecar/server.py`.
+- **PYTHON_BIN env var**: Override the Python interpreter used by `setup-sidecar`.
+
+### Source Files
+
+| File | Purpose |
+|------|---------|
+| `apps/reaper-mcp-server/sidecar/server.py` | Python sidecar JSON-RPC server (source) |
+| `apps/reaper-mcp-server/sidecar/requirements.txt` | Pinned Python deps |
+| `apps/reaper-mcp-server/src/sidecar.ts` | Node.js subprocess lifecycle + JSON-RPC client |
+| `apps/reaper-mcp-server/src/setup-sidecar.ts` | `setup-sidecar` CLI command implementation |
+| `apps/reaper-mcp-server/src/tools/aesthetics.ts` | `analyze_track_aesthetics` tool registration |
+
+### Render Pipeline
+
+The `analyze_track_aesthetics` tool renders a track segment to a temp WAV via the `render_track_to_wav` Lua bridge handler, then passes the path to the sidecar. The TS layer owns temp file cleanup (always deleted in `try/finally`).
+
+The `render_track_to_wav` Lua handler uses `Main_OnCommand(42230)` which is **synchronous** — it blocks the defer loop for ~0.5-1s during render. This is expected behavior documented in the handler.
+
+### Future Phases
+
+The sidecar architecture admits new JSON-RPC methods easily — future phases (CLAP, MERT, Demucs, Parakeet, Essentia) just add new methods to `server.py` and new tools in TypeScript. The IPC channel and subprocess lifecycle are shared infrastructure.
+
 ## Spectrum Analysis (JSFX + gmem)
 
 The JSFX analyzer (`mcp_analyzer.jsfx`) runs in REAPER's audio thread:
@@ -483,8 +545,9 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 | `init --yes --project` | Non-interactive setup — also create `.mcp.json` in current directory |
 | `serve` (default) | Start MCP server in stdio mode for Claude Code |
 | `setup` | Install Lua bridge + JSFX analyzers into REAPER |
+| `setup-sidecar` | Install Python sidecar for perceptual audio analysis (opt-in, ~831 MB). Requires Python 3.10+. Installs venv at `~/.reaper-mcp/sidecar-venv/`, downloads Audiobox Aesthetics weights. |
 | `install-skills [--global\|--project]` | Install AI knowledge, agents, skills, and rules |
-| `doctor` | Verify all components are configured correctly |
+| `doctor` | Verify all components are configured correctly (includes 4 sidecar sub-checks) |
 | `status` | Check if Lua bridge is running in REAPER |
 
 ### Claude Code MCP Config

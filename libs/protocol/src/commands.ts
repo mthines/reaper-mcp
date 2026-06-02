@@ -95,7 +95,9 @@ export type CommandType =
   // Composite batch tools
   | 'set_multiple_track_properties'
   | 'setup_fx_chain'
-  | 'set_multiple_fx_parameters';
+  | 'set_multiple_fx_parameters'
+  // Semantic audio analysis (requires Python sidecar)
+  | 'render_track_to_wav';
 
 // --- Per-command param types ---
 
@@ -507,4 +509,13 @@ export interface SetMultipleFxParametersItem {
 
 export interface SetMultipleFxParametersParams {
   updates: SetMultipleFxParametersItem[];
+}
+
+// --- Semantic audio analysis param types ---
+
+export interface RenderTrackToWavParams {
+  trackIndex: number;
+  startTime: number;   // seconds from project start
+  endTime: number;     // seconds from project start
+  commandId: string;   // used to generate a unique temp filename
 }
