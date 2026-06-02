@@ -1,0 +1,44 @@
+desc:MCP MIDI Emitter
+// Real-time MIDI event emitter for MCP bridge integration.
+// Drains a 16-slot gmem ring buffer (written by the Lua bridge) and
+// emits each event via midisend() in @block.
+//
+// gmem layout (namespace MCPMidiEmitter):
+//   gmem[0]              = write_head  (Lua advances, 0..15 wrapping)
+//   gmem[1]              = read_head   (JSFX advances, 0..15 wrapping)
+//   gmem[2 + slot*3 + 0] = status byte (e.g. 0xB0 | channel for CC)
+//   gmem[2 + slot*3 + 1] = data1 byte  (CC number, note pitch, program number)
+//   gmem[2 + slot*3 + 2] = data2 byte  (CC value, velocity, 0 for PC)
+//
+// 16 slots total. Total gmem footprint: 2 + 16*3 = 50 cells.
+//
+// Ring overflow guard: not needed. Lua is single-threaded relative to JSFX
+// block boundaries. JSFX drains per block (~3ms at 256/48kHz). At realistic
+// AI-agent call rates, the ring never fills.
+//
+// No sliders needed. Passes audio through unmodified.
+
+options:gmem=MCPMidiEmitter
+
+@init
+  read_head = 0;
+  // Initialise read_head in gmem[1] so the first @block drain is consistent.
+  // write_head (gmem[0]) starts at 0 by JSFX spec (gmem cells default to 0).
+  gmem[1] = 0;
+
+@block
+  // Drain all pending MIDI events from the ring buffer.
+  // write_head is at gmem[0], read_head is at gmem[1].
+  write_head = gmem[0];
+  read_head  = gmem[1];
+  loop(
+    read_head != write_head,
+    status = gmem[2 + read_head*3 + 0];
+    d1     = gmem[2 + read_head*3 + 1];
+    d2     = gmem[2 + read_head*3 + 2];
+    midisend(0, status, d1, d2);
+    read_head = (read_head + 1) % 16;
+    gmem[1] = read_head;
+  );
+
+// No @sample section — passes audio through unmodified.
