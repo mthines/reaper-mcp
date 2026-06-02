@@ -273,4 +273,60 @@ export function registerMidiTools(server: McpServer): void {
       return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
     },
   );
+
+  server.tool(
+    'send_midi_cc',
+    'Send a MIDI CC (continuous controller) event in real-time to a track\'s MIDI output. Auto-inserts the MCP MIDI Emitter JSFX if not present. Common CC numbers: 1=modulation, 7=volume, 10=pan, 11=expression, 64=sustain, 74=filter cutoff.',
+    {
+      trackIndex: z.coerce.number().min(0).describe('0-based track index'),
+      cc: z.coerce.number().min(0).max(127).describe('CC number (0-127)'),
+      value: z.coerce.number().min(0).max(127).describe('CC value (0-127)'),
+      channel: z.coerce.number().min(0).max(15).optional().describe('MIDI channel 0-15 (default 0)'),
+    },
+    async ({ trackIndex, cc, value, channel }) => {
+      const res = await sendCommand('send_midi_cc', { trackIndex, cc, value, channel: channel ?? 0 });
+      if (!res.success) {
+        return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    'send_midi_pc',
+    'Send a MIDI program change in real-time, optionally preceded by bank select (CC0 MSB + CC32 LSB). Auto-inserts the MCP MIDI Emitter JSFX if not present.',
+    {
+      trackIndex: z.coerce.number().min(0).describe('0-based track index'),
+      program: z.coerce.number().min(0).max(127).describe('Program number (0-127)'),
+      channel: z.coerce.number().min(0).max(15).optional().describe('MIDI channel 0-15 (default 0)'),
+      bankMsb: z.coerce.number().min(0).max(127).optional().describe('Bank select MSB (CC0, 0-127) — omit if no bank select needed'),
+      bankLsb: z.coerce.number().min(0).max(127).optional().describe('Bank select LSB (CC32, 0-127) — omit if no bank select needed'),
+    },
+    async ({ trackIndex, program, channel, bankMsb, bankLsb }) => {
+      const res = await sendCommand('send_midi_pc', { trackIndex, program, channel: channel ?? 0, bankMsb, bankLsb });
+      if (!res.success) {
+        return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    'send_midi_note',
+    'Send a MIDI note-on in real-time to a track\'s MIDI output. If durationMs is provided, a note-off is automatically scheduled after that many milliseconds. Auto-inserts the MCP MIDI Emitter JSFX if not present.',
+    {
+      trackIndex: z.coerce.number().min(0).describe('0-based track index'),
+      pitch: z.coerce.number().min(0).max(127).describe('MIDI note number (0-127, 60=C4/Middle C)'),
+      velocity: z.coerce.number().min(1).max(127).describe('Note velocity (1-127)'),
+      channel: z.coerce.number().min(0).max(15).optional().describe('MIDI channel 0-15 (default 0)'),
+      durationMs: z.coerce.number().min(1).int().optional().describe('Note duration in milliseconds (≥1) — if provided, schedules an automatic note-off'),
+    },
+    async ({ trackIndex, pitch, velocity, channel, durationMs }) => {
+      const res = await sendCommand('send_midi_note', { trackIndex, pitch, velocity, channel: channel ?? 0, durationMs });
+      if (!res.success) {
+        return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
+    },
+  );
 }

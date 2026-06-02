@@ -74,6 +74,7 @@ export const REAPER_ASSETS = [
   'mcp_lufs_meter.jsfx',
   'mcp_correlation_meter.jsfx',
   'mcp_crest_factor.jsfx',
+  'mcp_midi_emitter.jsfx',
   'mcp_snapshot_manager.lua',
   'mcp_snapshot_lib.lua',
   'mcp_snapshot_next.lua',
@@ -136,6 +137,9 @@ export const MCP_TOOL_NAMES = [
   'delete_midi_cc',
   'get_midi_item_properties',
   'set_midi_item_properties',
+  'send_midi_cc',
+  'send_midi_pc',
+  'send_midi_note',
   // media
   'list_media_items',
   'get_media_item_properties',
