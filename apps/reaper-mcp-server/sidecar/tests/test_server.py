@@ -67,9 +67,12 @@ def test_analyze_success(tmp_path):
     wav.write_bytes(b"")  # file must exist; duration is mocked
 
     mock_pred = make_mock_predictor()
+    # Pre-populate the predictor cache so server._get_predictor() returns the
+    # mock without ever importing audiobox_aesthetics (avoids requiring the
+    # package to be installed for unit tests).
+    server._predictor = mock_pred
 
-    with patch("server._get_audio_duration", return_value=5.0), \
-         patch("audiobox_aesthetics.infer.initialize_predictor", return_value=mock_pred):
+    with patch("server._get_audio_duration", return_value=5.0):
 
         raw = server.dispatch(json.dumps({
             "jsonrpc": "2.0",
@@ -177,9 +180,9 @@ def test_start_end_time_passthrough(tmp_path):
     wav.write_bytes(b"")
 
     mock_pred = make_mock_predictor()
+    server._predictor = mock_pred  # bypass import; see test_analyze_success
 
-    with patch("server._get_audio_duration", return_value=30.0), \
-         patch("audiobox_aesthetics.infer.initialize_predictor", return_value=mock_pred):
+    with patch("server._get_audio_duration", return_value=30.0):
 
         raw = server.dispatch(json.dumps({
             "jsonrpc": "2.0",
@@ -195,7 +198,7 @@ def test_start_end_time_passthrough(tmp_path):
     call_args = mock_pred.forward.call_args[0][0]
     assert call_args[0]["start_time"] == 10.0
     assert call_args[0]["end_time"] == 15.0
-    assert result := resp["result"]
+    result = resp["result"]
     assert result["durationSeconds"] == 5.0  # 15.0 - 10.0
 
 
