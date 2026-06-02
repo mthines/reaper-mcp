@@ -1532,6 +1532,7 @@ end
 local MCP_LUFS_METER_FX_NAME        = "reaper-mcp/mcp_lufs_meter"
 local MCP_CORRELATION_METER_FX_NAME = "reaper-mcp/mcp_correlation_meter"
 local MCP_CREST_FACTOR_FX_NAME      = "reaper-mcp/mcp_crest_factor"
+local MCP_MIDI_EMITTER_FX_NAME      = "reaper-mcp/mcp_midi_emitter"
 local MCP_FX_PREFIX                 = "reaper%-mcp/"  -- Lua pattern for matching MCP JSFX names
 
 -- Per-track cache of MCP container FX index to avoid rescanning on every read.
@@ -3497,6 +3498,108 @@ function handlers.insert_envelope_points(params)
     insertedPoints = inserted,
     totalPoints = reaper.CountEnvelopePoints(env),
   }
+end
+
+-- =============================================================================
+-- Live MIDI output handlers
+-- =============================================================================
+
+-- Write a single 3-byte MIDI event to the MCPMidiEmitter gmem ring buffer.
+-- status: e.g. 0xB0|channel for CC, 0xC0|channel for PC, 0x90|channel for note-on
+-- d1, d2: data bytes
+-- Lua is single-threaded relative to JSFX block boundaries; no lock needed.
+local function write_midi_to_ring(status, d1, d2)
+  reaper.gmem_attach("MCPMidiEmitter")
+  local slot = math.floor(reaper.gmem_read(0)) % 16
+  reaper.gmem_write(2 + slot*3 + 0, status)
+  reaper.gmem_write(2 + slot*3 + 1, d1)
+  reaper.gmem_write(2 + slot*3 + 2, d2)
+  reaper.gmem_write(0, (slot + 1) % 16)
+end
+
+function handlers.send_midi_cc(params)
+  local idx = params.trackIndex
+  if idx == nil then return nil, "trackIndex required" end
+  if params.cc == nil then return nil, "cc required" end
+  if params.value == nil then return nil, "value required" end
+
+  local track = reaper.GetTrack(0, idx)
+  if not track then return nil, "Track " .. idx .. " not found" end
+
+  local channel = params.channel or 0
+  local fx_idx, err = ensure_jsfx_on_track(track, MCP_MIDI_EMITTER_FX_NAME)
+  if not fx_idx then return nil, err end
+
+  -- status byte: 0xB0 = CC, OR with channel (0-15)
+  write_midi_to_ring(0xB0 | channel, math.floor(params.cc), math.floor(params.value))
+
+  -- timestampMs uses REAPER's internal high-resolution clock (not wall-clock epoch).
+  -- Suitable for round-trip latency measurement within a session.
+  return { sent = true, timestampMs = math.floor(reaper.time_precise() * 1000) }
+end
+
+function handlers.send_midi_pc(params)
+  local idx = params.trackIndex
+  if idx == nil then return nil, "trackIndex required" end
+  if params.program == nil then return nil, "program required" end
+
+  local track = reaper.GetTrack(0, idx)
+  if not track then return nil, "Track " .. idx .. " not found" end
+
+  local channel = params.channel or 0
+  local fx_idx, err = ensure_jsfx_on_track(track, MCP_MIDI_EMITTER_FX_NAME)
+  if not fx_idx then return nil, err end
+
+  -- Bank select CC0 (MSB) — use ~= nil so that bank byte value 0 is not dropped
+  if params.bankMsb ~= nil then
+    write_midi_to_ring(0xB0 | channel, 0, math.floor(params.bankMsb))
+  end
+
+  -- Bank select CC32 (LSB) — same nil-check rationale
+  if params.bankLsb ~= nil then
+    write_midi_to_ring(0xB0 | channel, 32, math.floor(params.bankLsb))
+  end
+
+  -- Program change: data2 is always 0 per MIDI 1.0 spec
+  write_midi_to_ring(0xC0 | channel, math.floor(params.program), 0)
+
+  return { sent = true, timestampMs = math.floor(reaper.time_precise() * 1000) }
+end
+
+function handlers.send_midi_note(params)
+  local idx = params.trackIndex
+  if idx == nil then return nil, "trackIndex required" end
+  if params.pitch == nil then return nil, "pitch required" end
+  if params.velocity == nil then return nil, "velocity required" end
+
+  local track = reaper.GetTrack(0, idx)
+  if not track then return nil, "Track " .. idx .. " not found" end
+
+  local channel = params.channel or 0
+  local fx_idx, err = ensure_jsfx_on_track(track, MCP_MIDI_EMITTER_FX_NAME)
+  if not fx_idx then return nil, err end
+
+  local pitch    = math.floor(params.pitch)
+  local velocity = math.floor(params.velocity)
+
+  -- Write note-on event: status 0x90 = note-on, OR with channel
+  write_midi_to_ring(0x90 | channel, pitch, velocity)
+
+  -- Schedule deferred note-off if durationMs is provided
+  if params.durationMs ~= nil then
+    local deadline = reaper.time_precise() + (params.durationMs / 1000.0)
+    local function note_off_callback()
+      if reaper.time_precise() >= deadline then
+        -- Write note-off event: status 0x80 = note-off, velocity 0
+        write_midi_to_ring(0x80 | channel, pitch, 0)
+      else
+        reaper.defer(note_off_callback)
+      end
+    end
+    reaper.defer(note_off_callback)
+  end
+
+  return { sent = true, timestampMs = math.floor(reaper.time_precise() * 1000) }
 end
 
 -- =============================================================================
