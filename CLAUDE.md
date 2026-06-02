@@ -95,13 +95,14 @@ reaper-mcp/
     reference/                # Reference material (frequencies, metering, compression, perceived loudness, common mistakes)
 
   reaper/                     # Files installed INTO REAPER (copied by setup command)
-    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 77 handlers)
+    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 80 handlers)
     mcp_snapshot_manager.lua  # Standalone snapshot manager GUI (gfx-based, no extensions required)
     mcp_snapshot_lib.lua      # Shared library for snapshot action scripts
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
     mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
     mcp_snapshot_quick_save.lua # Action: quick save with auto-name
     mcp_analyzer.jsfx         # Real-time FFT analyzer (JSFX, writes to gmem[])
+    mcp_midi_emitter.jsfx     # Real-time MIDI emitter (JSFX, reads from gmem[] ring buffer)
     install.sh                # Manual install helper script
 ```
 
@@ -125,7 +126,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (80 total)
+## MCP Tools (83 total)
 
 ### Project & Tracks (5)
 
@@ -179,6 +180,14 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `delete_midi_cc` | `tools/midi.ts` | Delete a CC event by index |
 | `get_midi_item_properties` | `tools/midi.ts` | Get MIDI item properties (position, length, note/CC count, mute, loop) |
 | `set_midi_item_properties` | `tools/midi.ts` | Set MIDI item properties (position, length, mute, loop source) |
+
+### Live MIDI Output (3)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `send_midi_cc` | `tools/midi.ts` | Send a CC event in real-time to a track's MIDI output (auto-inserts `mcp_midi_emitter.jsfx`) |
+| `send_midi_pc` | `tools/midi.ts` | Send a program change (optionally preceded by bank select CC0 + CC32) |
+| `send_midi_note` | `tools/midi.ts` | Send a note-on; if `durationMs` provided, schedules note-off automatically |
 
 ### Media Item Editing Tools (11)
 
@@ -418,6 +427,15 @@ The JSFX analyzer (`mcp_analyzer.jsfx`) runs in REAPER's audio thread:
 - gmem layout: `[bin_count, peak_dB, rms_dB, bin[0], bin[1], ...]`
 - Lua bridge reads via `reaper.gmem_attach("MCPAnalyzer")` + `reaper.gmem_read()`
 - Auto-inserted by `read_track_spectrum` tool, passes audio through unmodified
+
+## Live MIDI Output (JSFX + gmem ring buffer)
+
+The MIDI emitter (`mcp_midi_emitter.jsfx`) uses a 16-slot ring buffer — the **reverse** direction of the analyzers:
+- Lua bridge **writes** 3-byte events; JSFX **reads** and emits via `midisend()` in `@block`
+- Namespace `MCPMidiEmitter`; gmem layout: `[write_head, read_head, slot0_status, slot0_d1, slot0_d2, ...]`
+- `write_midi_to_ring(status, d1, d2)` in `mcp_bridge.lua` is the single write path — use it for all MIDI event types
+- Deferred note-off (`send_midi_note` with `durationMs`) uses the same ring path; no separate code path
+- Auto-inserted by all three live MIDI tools via `ensure_jsfx_on_track(track, MCP_MIDI_EMITTER_FX_NAME)`
 
 ## Platform-Specific Paths
 
