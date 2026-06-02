@@ -8,7 +8,7 @@ import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges } fro
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { homedir } from 'node:os';
+import { homedir, platform } from 'node:os';
 import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
 import { resolveAssetDir, resolveAssetDirWithFallback, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES } from './cli.js';
@@ -189,7 +189,10 @@ async function doctor(): Promise<void> {
   console.log('Python Sidecar (opt-in, for analyze_track_aesthetics):');
 
   const sidecarVenvPath = join(homedir(), '.reaper-mcp', 'sidecar-venv');
-  const venvPython = join(sidecarVenvPath, 'bin', 'python');
+  // Venv binary layout differs by OS: POSIX uses bin/, Windows uses Scripts\
+  const venvBin = platform() === 'win32' ? 'Scripts' : 'bin';
+  const venvPythonName = platform() === 'win32' ? 'python.exe' : 'python';
+  const venvPython = join(sidecarVenvPath, venvBin, venvPythonName);
   const hfCachePath = join(homedir(), '.cache', 'huggingface', 'hub');
 
   // Check (a): Python ≥ 3.10 available
@@ -248,6 +251,10 @@ async function doctor(): Promise<void> {
   // The sidecar is opt-in. If the user has not started installing it (no venv
   // and no weights), don't penalize the exit code. But if they have opted in
   // (any artifact present) we fail loud on a partial / broken install.
+  // Note: weightsExist checks the shared HuggingFace cache (~/.cache/huggingface).
+  // A user who has the Audiobox weights from an unrelated project and no venv will
+  // see sidecarOptedIn=true and exit code 1. This is intentional: "you have model
+  // weights but no venv" is a broken state this tool cannot use — run setup-sidecar.
   const sidecarOptedIn = venvExists || weightsExist;
   const sidecarBroken = sidecarOptedIn && !sidecarReady;
   if (!sidecarOptedIn) {

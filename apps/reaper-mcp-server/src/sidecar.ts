@@ -26,8 +26,11 @@ const SIDECAR_SCRIPT_PATH = join(homedir(), '.reaper-mcp', 'sidecar', 'server.py
 const VENV_PYTHON = join(SIDECAR_VENV_PATH, VENV_BIN, VENV_PYTHON_NAME);
 
 /** Per-request timeout for analyze() in milliseconds. Default 60s — generous for
- * cold model load + inference, tight enough to fail fast on a hung process. */
-const ANALYZE_TIMEOUT_MS = Number(process.env['REAPER_MCP_SIDECAR_TIMEOUT_MS']) || 60_000;
+ * cold model load + inference, tight enough to fail fast on a hung process.
+ * Override with REAPER_MCP_SIDECAR_TIMEOUT_MS (must be a positive integer ≥ 1000).
+ * Values ≤ 0 or non-numeric are ignored and the default is used. */
+const _rawTimeout = Number(process.env['REAPER_MCP_SIDECAR_TIMEOUT_MS']);
+const ANALYZE_TIMEOUT_MS = Number.isFinite(_rawTimeout) && _rawTimeout > 0 ? _rawTimeout : 60_000;
 
 // ---------------------------------------------------------------------------
 // Types

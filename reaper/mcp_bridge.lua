@@ -3652,11 +3652,22 @@ function handlers.render_track_to_wav(params)
   -- Verify the file was actually created.
   -- RENDER_PATTERN was set without the .wav extension so REAPER appends it;
   -- wav_path already has the full expected name including the extension.
-  local f = io.open(wav_path, "r")
+  local f = io.open(wav_path, "rb")
   if not f then
     return nil, "Render produced no output file at: " .. wav_path
   end
+  -- Verify the rendered file is actually a WAV. RENDER_FORMAT was set to "evaw"
+  -- (REAPER's WAV fourcc) above; if REAPER silently ignored that value the file
+  -- could be any codec the user last rendered (MP3/FLAC/etc.). Check the RIFF
+  -- magic bytes so we fail loudly here rather than crashing in the Python sidecar
+  -- with a confusing "Cannot read audio file" error.
+  local magic = f:read(4)
   f:close()
+  if magic ~= "RIFF" then
+    os.remove(wav_path)
+    return nil, "Render produced a non-WAV file (RENDER_FORMAT may not have been applied). " ..
+                "First 4 bytes: " .. (magic and string.format("%q", magic) or "<empty>")
+  end
 
   local duration = end_time - start_time
   return {
