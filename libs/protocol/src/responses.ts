@@ -421,3 +421,10 @@ export interface SetMultipleFxParametersResult {
   total: number;
   errors?: string[];
 }
+
+// --- Live MIDI output response types ---
+
+export interface SendMidiResult {
+  sent: boolean;
+  timestampMs: number;
+}

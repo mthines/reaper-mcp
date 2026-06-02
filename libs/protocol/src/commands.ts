@@ -95,7 +95,11 @@ export type CommandType =
   // Composite batch tools
   | 'set_multiple_track_properties'
   | 'setup_fx_chain'
-  | 'set_multiple_fx_parameters';
+  | 'set_multiple_fx_parameters'
+  // Live MIDI output
+  | 'send_midi_cc'
+  | 'send_midi_pc'
+  | 'send_midi_note';
 
 // --- Per-command param types ---
 
@@ -507,4 +511,29 @@ export interface SetMultipleFxParametersItem {
 
 export interface SetMultipleFxParametersParams {
   updates: SetMultipleFxParametersItem[];
+}
+
+// --- Live MIDI output param types ---
+
+export interface SendMidiCCParams {
+  trackIndex: number;
+  cc: number;       // 0-127
+  value: number;    // 0-127
+  channel?: number; // 0-15, default 0
+}
+
+export interface SendMidiPCParams {
+  trackIndex: number;
+  program: number;    // 0-127
+  channel?: number;   // 0-15, default 0
+  bankMsb?: number;   // 0-127, optional (CC0 bank select MSB)
+  bankLsb?: number;   // 0-127, optional (CC32 bank select LSB)
+}
+
+export interface SendMidiNoteParams {
+  trackIndex: number;
+  pitch: number;       // 0-127
+  velocity: number;    // 1-127
+  channel?: number;    // 0-15, default 0
+  durationMs?: number; // integer ≥ 1, optional — if provided, schedules note-off
 }
