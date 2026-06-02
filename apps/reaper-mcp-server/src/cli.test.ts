@@ -125,12 +125,13 @@ describe('cli helpers', () => {
       expect(REAPER_ASSETS).toContain('mcp_lufs_meter.jsfx');
       expect(REAPER_ASSETS).toContain('mcp_correlation_meter.jsfx');
       expect(REAPER_ASSETS).toContain('mcp_crest_factor.jsfx');
+      expect(REAPER_ASSETS).toContain('mcp_midi_emitter.jsfx');
       expect(REAPER_ASSETS).toContain('mcp_snapshot_manager.lua');
       expect(REAPER_ASSETS).toContain('mcp_snapshot_lib.lua');
       expect(REAPER_ASSETS).toContain('mcp_snapshot_next.lua');
       expect(REAPER_ASSETS).toContain('mcp_snapshot_prev.lua');
       expect(REAPER_ASSETS).toContain('mcp_snapshot_quick_save.lua');
-      expect(REAPER_ASSETS.length).toBe(10);
+      expect(REAPER_ASSETS.length).toBe(11);
     });
 
     it('KNOWLEDGE_DIRS includes all expected subdirectories', () => {

@@ -50,12 +50,13 @@ describe('midi tools', () => {
     tools = captureTools();
   });
 
-  it('registers all 14 midi tools', () => {
+  it('registers all 17 midi tools', () => {
     const expectedTools = [
       'create_midi_item', 'list_midi_items', 'get_midi_notes', 'analyze_midi',
       'insert_midi_note', 'insert_midi_notes', 'edit_midi_note', 'edit_midi_notes',
       'delete_midi_note', 'get_midi_cc', 'insert_midi_cc',
       'delete_midi_cc', 'get_midi_item_properties', 'set_midi_item_properties',
+      'send_midi_cc', 'send_midi_pc', 'send_midi_note',
     ];
     for (const name of expectedTools) {
       expect(tools[name]).toBeDefined();
@@ -630,6 +631,135 @@ describe('midi tools', () => {
       mockedSendCommand.mockResolvedValue(errorResponse('Track 0 not found'));
       const result = await tools['set_midi_item_properties'].handler({
         trackIndex: 0, itemIndex: 0, mute: 1,
+      });
+      expectError(result, 'Track 0 not found');
+    });
+  });
+
+  describe('send_midi_cc', () => {
+    it('sends send_midi_cc command with explicit channel', async () => {
+      const data = { sent: true, timestampMs: 123456 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const result = await tools['send_midi_cc'].handler({
+        trackIndex: 0, cc: 74, value: 100, channel: 1,
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('send_midi_cc', {
+        trackIndex: 0, cc: 74, value: 100, channel: 1,
+      });
+      expectSuccess(result, data);
+    });
+
+    it('defaults channel to 0 when not provided', async () => {
+      const data = { sent: true, timestampMs: 123456 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      await tools['send_midi_cc'].handler({
+        trackIndex: 0, cc: 1, value: 64,
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('send_midi_cc', {
+        trackIndex: 0, cc: 1, value: 64, channel: 0,
+      });
+    });
+
+    it('returns error on bridge failure', async () => {
+      mockedSendCommand.mockResolvedValue(errorResponse('Track 0 not found'));
+      const result = await tools['send_midi_cc'].handler({
+        trackIndex: 0, cc: 1, value: 64,
+      });
+      expectError(result, 'Track 0 not found');
+    });
+  });
+
+  describe('send_midi_pc', () => {
+    it('sends send_midi_pc with program only — no bank bytes', async () => {
+      const data = { sent: true, timestampMs: 123456 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const result = await tools['send_midi_pc'].handler({
+        trackIndex: 0, program: 10,
+      });
+      const called = mockedSendCommand.mock.calls[0][1] as Record<string, unknown>;
+      expect(called.bankMsb).toBeUndefined();
+      expect(called.bankLsb).toBeUndefined();
+      expect(called.program).toBe(10);
+      expectSuccess(result, data);
+    });
+
+    it('sends send_midi_pc with bankMsb present', async () => {
+      const data = { sent: true, timestampMs: 123456 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      await tools['send_midi_pc'].handler({
+        trackIndex: 0, program: 5, bankMsb: 0,
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('send_midi_pc', expect.objectContaining({
+        bankMsb: 0,
+      }));
+    });
+
+    it('sends send_midi_pc with both bankMsb and bankLsb', async () => {
+      const data = { sent: true, timestampMs: 123456 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      await tools['send_midi_pc'].handler({
+        trackIndex: 0, program: 20, bankMsb: 1, bankLsb: 5,
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('send_midi_pc', expect.objectContaining({
+        bankMsb: 1, bankLsb: 5,
+      }));
+    });
+
+    it('returns error on bridge failure', async () => {
+      mockedSendCommand.mockResolvedValue(errorResponse('Track 99 not found'));
+      const result = await tools['send_midi_pc'].handler({
+        trackIndex: 99, program: 0,
+      });
+      expectError(result, 'Track 99 not found');
+    });
+  });
+
+  describe('send_midi_note', () => {
+    it('sends send_midi_note without durationMs — durationMs absent in params', async () => {
+      const data = { sent: true, timestampMs: 123456 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      await tools['send_midi_note'].handler({
+        trackIndex: 0, pitch: 60, velocity: 100,
+      });
+      const called = mockedSendCommand.mock.calls[0][1] as Record<string, unknown>;
+      expect(called.durationMs).toBeUndefined();
+    });
+
+    it('sends send_midi_note with durationMs — durationMs included in params', async () => {
+      const data = { sent: true, timestampMs: 123456 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      const result = await tools['send_midi_note'].handler({
+        trackIndex: 0, pitch: 60, velocity: 100, durationMs: 500,
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('send_midi_note', expect.objectContaining({
+        durationMs: 500,
+      }));
+      expectSuccess(result, data);
+    });
+
+    it('defaults channel to 0 when not provided', async () => {
+      const data = { sent: true, timestampMs: 123456 };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
+
+      await tools['send_midi_note'].handler({
+        trackIndex: 0, pitch: 60, velocity: 80,
+      });
+      expect(mockedSendCommand).toHaveBeenCalledWith('send_midi_note', expect.objectContaining({
+        channel: 0,
+      }));
+    });
+
+    it('returns error on bridge failure', async () => {
+      mockedSendCommand.mockResolvedValue(errorResponse('Track 0 not found'));
+      const result = await tools['send_midi_note'].handler({
+        trackIndex: 0, pitch: 60, velocity: 100,
       });
       expectError(result, 'Track 0 not found');
     });
