@@ -31,8 +31,8 @@ options:gmem=MCPMidiEmitter
   // write_head is at gmem[0], read_head is at gmem[1].
   write_head = gmem[0];
   read_head  = gmem[1];
-  loop(
-    read_head != write_head,
+  // EEL2 loop() takes a COUNT, not a condition — use while() for a drain loop.
+  while (read_head != write_head) (
     status = gmem[2 + read_head*3 + 0];
     d1     = gmem[2 + read_head*3 + 1];
     d2     = gmem[2 + read_head*3 + 2];

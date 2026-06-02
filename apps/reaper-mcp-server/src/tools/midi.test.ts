@@ -61,6 +61,8 @@ describe('midi tools', () => {
     for (const name of expectedTools) {
       expect(tools[name]).toBeDefined();
     }
+    // Exhaustive check: catches tools added without updating this list.
+    expect(Object.keys(tools).length).toBe(expectedTools.length);
   });
 
   describe('create_midi_item', () => {

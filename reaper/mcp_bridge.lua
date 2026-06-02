@@ -3505,11 +3505,15 @@ end
 -- =============================================================================
 
 -- Write a single 3-byte MIDI event to the MCPMidiEmitter gmem ring buffer.
--- status: e.g. 0xB0|channel for CC, 0xC0|channel for PC, 0x90|channel for note-on
+-- status: fully-formed status byte (caller is responsible for ORing channel)
 -- d1, d2: data bytes
+-- Caller must have called reaper.gmem_attach("MCPMidiEmitter") before the
+-- first write in a handler invocation — gmem_attach is not repeated here.
 -- Lua is single-threaded relative to JSFX block boundaries; no lock needed.
+-- IMPORTANT: slot bytes (2+slot*3) must be written BEFORE advancing write_head
+-- (gmem[0]). The JSFX reads write_head first; advancing it early exposes an
+-- incompletely-written slot to the audio thread.
 local function write_midi_to_ring(status, d1, d2)
-  reaper.gmem_attach("MCPMidiEmitter")
   local slot = math.floor(reaper.gmem_read(0)) % 16
   reaper.gmem_write(2 + slot*3 + 0, status)
   reaper.gmem_write(2 + slot*3 + 1, d1)
@@ -3526,10 +3530,11 @@ function handlers.send_midi_cc(params)
   local track = reaper.GetTrack(0, idx)
   if not track then return nil, "Track " .. idx .. " not found" end
 
-  local channel = params.channel or 0
-  local fx_idx, err = ensure_jsfx_on_track(track, MCP_MIDI_EMITTER_FX_NAME)
-  if not fx_idx then return nil, err end
+  local channel = math.max(0, math.min(15, math.floor(params.channel or 0)))
+  local ok, err = ensure_jsfx_on_track(track, MCP_MIDI_EMITTER_FX_NAME)
+  if not ok then return nil, err end
 
+  reaper.gmem_attach("MCPMidiEmitter")
   -- status byte: 0xB0 = CC, OR with channel (0-15)
   write_midi_to_ring(0xB0 | channel, math.floor(params.cc), math.floor(params.value))
 
@@ -3546,9 +3551,11 @@ function handlers.send_midi_pc(params)
   local track = reaper.GetTrack(0, idx)
   if not track then return nil, "Track " .. idx .. " not found" end
 
-  local channel = params.channel or 0
-  local fx_idx, err = ensure_jsfx_on_track(track, MCP_MIDI_EMITTER_FX_NAME)
-  if not fx_idx then return nil, err end
+  local channel = math.max(0, math.min(15, math.floor(params.channel or 0)))
+  local ok, err = ensure_jsfx_on_track(track, MCP_MIDI_EMITTER_FX_NAME)
+  if not ok then return nil, err end
+
+  reaper.gmem_attach("MCPMidiEmitter")
 
   -- Bank select CC0 (MSB) — use ~= nil so that bank byte value 0 is not dropped
   if params.bankMsb ~= nil then
@@ -3575,13 +3582,14 @@ function handlers.send_midi_note(params)
   local track = reaper.GetTrack(0, idx)
   if not track then return nil, "Track " .. idx .. " not found" end
 
-  local channel = params.channel or 0
-  local fx_idx, err = ensure_jsfx_on_track(track, MCP_MIDI_EMITTER_FX_NAME)
-  if not fx_idx then return nil, err end
+  local channel = math.max(0, math.min(15, math.floor(params.channel or 0)))
+  local ok, err = ensure_jsfx_on_track(track, MCP_MIDI_EMITTER_FX_NAME)
+  if not ok then return nil, err end
 
   local pitch    = math.floor(params.pitch)
   local velocity = math.floor(params.velocity)
 
+  reaper.gmem_attach("MCPMidiEmitter")
   -- Write note-on event: status 0x90 = note-on, OR with channel
   write_midi_to_ring(0x90 | channel, pitch, velocity)
 
@@ -3590,6 +3598,8 @@ function handlers.send_midi_note(params)
     local deadline = reaper.time_precise() + (params.durationMs / 1000.0)
     local function note_off_callback()
       if reaper.time_precise() >= deadline then
+        -- Re-attach gmem: deferred callbacks run outside the handler invocation.
+        reaper.gmem_attach("MCPMidiEmitter")
         -- Write note-off event: status 0x80 = note-off, velocity 0
         write_midi_to_ring(0x80 | channel, pitch, 0)
       else
