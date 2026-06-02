@@ -2,6 +2,7 @@ node_modules/
 dist/
 .nx/
 *.tsbuildinfo
+.agent/
 .env
 .env.local
 
