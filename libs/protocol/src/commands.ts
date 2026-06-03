@@ -99,7 +99,9 @@ export type CommandType =
   // Live MIDI output
   | 'send_midi_cc'
   | 'send_midi_pc'
-  | 'send_midi_note';
+  | 'send_midi_note'
+  // Semantic audio analysis (requires Python sidecar)
+  | 'render_track_to_wav';
 
 // --- Per-command param types ---
 
@@ -536,4 +538,13 @@ export interface SendMidiNoteParams {
   velocity: number;    // 1-127
   channel?: number;    // 0-15, default 0
   durationMs?: number; // integer ≥ 1, optional — if provided, schedules note-off
+}
+
+// --- Semantic audio analysis param types ---
+
+export interface RenderTrackToWavParams {
+  trackIndex: number;
+  startTime: number;   // seconds from project start
+  endTime: number;     // seconds from project start
+  commandId: string;   // used to generate a unique temp filename
 }

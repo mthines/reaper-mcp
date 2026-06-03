@@ -3617,6 +3617,187 @@ function handlers.send_midi_note(params)
 end
 
 -- =============================================================================
+-- render_track_to_wav handler
+--
+-- Renders a target track's output (post-FX, post-fader) to a temp WAV file.
+-- Saves and restores all render settings and solo states around the render.
+-- Blocks the defer loop during render (~0.5-1s) — this is by design.
+--
+-- Params:
+--   trackIndex  (number) — zero-based track index
+--   startTime   (number) — render start, seconds from project start
+--   endTime     (number) — render end, seconds from project start
+--   commandId   (string) — used to generate a unique temp filename
+--
+-- Returns:
+--   { trackIndex, trackName, wavPath, durationSeconds, sampleRate, channelCount }
+-- =============================================================================
+
+function handlers.render_track_to_wav(params)
+  local track_index = params.trackIndex
+  local start_time  = params.startTime
+  local end_time    = params.endTime
+  local command_id  = params.commandId or tostring(os.time())
+
+  -- Validate inputs
+  if track_index == nil then
+    return nil, "Missing required param: trackIndex"
+  end
+  if start_time == nil or end_time == nil then
+    return nil, "Missing required params: startTime, endTime"
+  end
+  if end_time <= start_time then
+    return nil, "endTime must be greater than startTime"
+  end
+
+  -- Get track
+  local track = reaper.GetTrack(0, track_index)
+  if not track then
+    return nil, "Track " .. tostring(track_index) .. " not found"
+  end
+  local track_name = ({reaper.GetSetMediaTrackInfo_String(track, "P_NAME", "", false)})[2] or ""
+  if track_name == "" then track_name = "Track " .. (track_index + 1) end
+
+  -- Render target is always 44100 Hz (WAV for sidecar inference).
+  -- The actual project sample rate is irrelevant here; Audiobox resamples internally.
+  local sample_rate = 44100
+
+  -- Build unique temp file path
+  -- Use GetTempPath() if available (REAPER 6.29+), fall back to os.tmpname pattern
+  local temp_dir
+  if reaper.GetTempPath then
+    temp_dir = reaper.GetTempPath()
+  else
+    -- Fallback: derive temp dir from os.tmpname()
+    local t = os.tmpname()
+    temp_dir = t:match("^(.+)[/\\][^/\\]+$") or "/tmp"
+    os.remove(t)
+  end
+
+  -- Ensure temp dir ends with separator
+  if temp_dir:sub(-1) ~= "/" and temp_dir:sub(-1) ~= "\\" then
+    temp_dir = temp_dir .. "/"
+  end
+
+  local wav_filename = "mcp_aes_" .. command_id:gsub("-", ""):sub(1, 16) .. ".wav"
+  local wav_path = temp_dir .. wav_filename
+
+  -- -------------------------------------------------------------------------
+  -- Save current render settings
+  -- -------------------------------------------------------------------------
+  local saved_file     = ({reaper.GetSetProjectInfo_String(0, "RENDER_FILE",       "", false)})[2] or ""
+  local saved_pattern  = ({reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN",    "", false)})[2] or ""
+  local saved_format   = ({reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT",     "", false)})[2] or ""
+  local saved_bounds   = reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", 0, false)
+  local saved_settings = reaper.GetSetProjectInfo(0, "RENDER_SETTINGS",   0, false)
+  local saved_start    = reaper.GetSetProjectInfo(0, "RENDER_STARTPOS",   0, false)
+  local saved_end      = reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     0, false)
+  local saved_srate    = reaper.GetSetProjectInfo(0, "RENDER_SRATE",      0, false)
+  local saved_channels = reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   0, false)
+
+  -- Save solo states for all tracks
+  local track_count = reaper.CountTracks(0)
+  local saved_solo_states = {}
+  for i = 0, track_count - 1 do
+    local t = reaper.GetTrack(0, i)
+    saved_solo_states[i] = reaper.GetMediaTrackInfo_Value(t, "I_SOLO")
+  end
+
+  -- -------------------------------------------------------------------------
+  -- Apply render settings
+  -- -------------------------------------------------------------------------
+  local ok, restore_err = pcall(function()
+    -- Set output: render to temp dir with unique filename (no extension in pattern)
+    reaper.GetSetProjectInfo_String(0, "RENDER_FILE",    temp_dir,     true)
+    reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN", wav_filename:match("^(.+)%.wav$") or wav_filename, true)
+
+    -- Set render bounds: 0 = custom time range
+    reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", 0, true)
+    reaper.GetSetProjectInfo(0, "RENDER_STARTPOS", start_time, true)
+    reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",   end_time,   true)
+
+    -- Set render mode: 2 = stems (selected tracks via master mix / solo)
+    reaper.GetSetProjectInfo(0, "RENDER_SETTINGS", 2, true)
+
+    -- Force WAV at 44100 Hz stereo so the sidecar always gets a known format,
+    -- independent of whatever the user last rendered. Restored in finally.
+    -- "evaw" is the little-endian "wave" fourcc REAPER uses for WAV format.
+    reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT", "evaw", true)
+    reaper.GetSetProjectInfo(0, "RENDER_SRATE",    sample_rate, true)
+    reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", 2,           true)
+
+    -- Unsolo all tracks, then solo only the target track
+    for i = 0, track_count - 1 do
+      local t = reaper.GetTrack(0, i)
+      reaper.SetMediaTrackInfo_Value(t, "I_SOLO", 0)
+    end
+    reaper.SetMediaTrackInfo_Value(track, "I_SOLO", 1)
+
+    -- Trigger render: action 42230 = "Render project, using the most recent render settings, auto-close render dialog"
+    -- This call is synchronous — it blocks the defer loop until rendering completes.
+    reaper.Main_OnCommand(42230, 0)
+  end)
+
+  -- -------------------------------------------------------------------------
+  -- Restore all settings and solo states (always, even on error)
+  -- -------------------------------------------------------------------------
+  local restore_ok, restore_err2 = pcall(function()
+    reaper.GetSetProjectInfo_String(0, "RENDER_FILE",       saved_file,     true)
+    reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN",    saved_pattern,  true)
+    reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT",     saved_format,   true)
+    reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", saved_bounds,   true)
+    reaper.GetSetProjectInfo(0, "RENDER_SETTINGS",   saved_settings, true)
+    reaper.GetSetProjectInfo(0, "RENDER_STARTPOS",   saved_start,    true)
+    reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     saved_end,      true)
+    reaper.GetSetProjectInfo(0, "RENDER_SRATE",      saved_srate,    true)
+    reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   saved_channels, true)
+    for i = 0, track_count - 1 do
+      local t = reaper.GetTrack(0, i)
+      reaper.SetMediaTrackInfo_Value(t, "I_SOLO", saved_solo_states[i] or 0)
+    end
+  end)
+
+  if not restore_ok then
+    -- Log but don't fail — the render may have succeeded
+    reaper.ShowConsoleMsg("[reaper-mcp] Warning: failed to restore render settings: " .. tostring(restore_err2) .. "\n")
+  end
+
+  if not ok then
+    return nil, "Render failed: " .. tostring(restore_err)
+  end
+
+  -- Verify the file was actually created.
+  -- RENDER_PATTERN was set without the .wav extension so REAPER appends it;
+  -- wav_path already has the full expected name including the extension.
+  local f = io.open(wav_path, "rb")
+  if not f then
+    return nil, "Render produced no output file at: " .. wav_path
+  end
+  -- Verify the rendered file is actually a WAV. RENDER_FORMAT was set to "evaw"
+  -- (REAPER's WAV fourcc) above; if REAPER silently ignored that value the file
+  -- could be any codec the user last rendered (MP3/FLAC/etc.). Check the RIFF
+  -- magic bytes so we fail loudly here rather than crashing in the Python sidecar
+  -- with a confusing "Cannot read audio file" error.
+  local magic = f:read(4)
+  f:close()
+  if magic ~= "RIFF" then
+    os.remove(wav_path)
+    return nil, "Render produced a non-WAV file (RENDER_FORMAT may not have been applied). " ..
+                "First 4 bytes: " .. (magic and string.format("%q", magic) or "<empty>")
+  end
+
+  local duration = end_time - start_time
+  return {
+    trackIndex     = track_index,
+    trackName      = track_name,
+    wavPath        = wav_path,
+    durationSeconds = duration,
+    sampleRate     = sample_rate,
+    channelCount   = 2,
+  }
+end
+
+-- =============================================================================
 -- Bridge diagnostics handler
 -- =============================================================================
 

@@ -1,0 +1,13 @@
+# Audiobox Aesthetics perceptual quality model (Meta, CC-BY 4.0)
+# https://huggingface.co/facebook/audiobox-aesthetics
+audiobox-aesthetics>=0.0.4
+
+# PyTorch (required by audiobox-aesthetics; CPU build is fine for inference)
+torch>=2.2.0
+torchaudio>=2.2.0
+
+# HuggingFace Hub for model weight management
+huggingface_hub>=0.23.0
+
+# soundfile for audio duration check (lightweight, no heavy deps)
+soundfile>=0.12.1

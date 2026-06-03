@@ -428,3 +428,28 @@ export interface SendMidiResult {
   sent: boolean;
   timestampMs: number;
 }
+
+// --- Semantic audio analysis response types ---
+
+export interface RenderTrackToWavResult {
+  trackIndex: number;
+  trackName: string;
+  wavPath: string;        // absolute path to temp WAV file
+  durationSeconds: number;
+  sampleRate: number;
+  channelCount: number;
+}
+
+export interface AestheticsResult {
+  trackIndex: number;
+  trackName: string;
+  productionQuality: number;       // PQ axis, 0-10
+  productionComplexity: number;    // PC axis, 0-10
+  contentEnjoyment: number;        // CE axis, 0-10
+  contentUsefulness: number;       // CU axis, 0-10
+  startTime: number;               // seconds
+  endTime: number;                 // seconds
+  durationSeconds: number;
+  modelVersion: string;            // "facebook/audiobox-aesthetics"
+  tempFilePath?: string;           // debug only — will be deleted after response
+}
