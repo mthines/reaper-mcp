@@ -111,10 +111,12 @@ async function doctor(): Promise<void> {
     console.log('  → Run "scripts/sync-symlinks.sh" from your clone');
   }
 
-  const globalKnowledge = existsSync(join(globalClaudeDir, 'knowledge'));
-  const knowledgeLinked = existsSync(join(process.cwd(), 'knowledge')) || globalKnowledge;
-  const knowledgeLocation = globalKnowledge ? '~/.claude/knowledge' : 'repo';
-  console.log(`Knowledge base: ${knowledgeLinked ? `✓ Found (${knowledgeLocation})` : '✗ Not linked'}`);
+  // The skills read ~/.claude/knowledge (the symlink sync-symlinks.sh creates), or
+  // a project-scoped .claude/knowledge — NOT a bare repo-root knowledge/ dir.
+  const knowledgeLinked =
+    existsSync(join(globalClaudeDir, 'knowledge')) ||
+    existsSync(join(process.cwd(), '.claude', 'knowledge'));
+  console.log(`Knowledge base: ${knowledgeLinked ? '✓ Linked (~/.claude/knowledge)' : '✗ Not linked'}`);
   if (!knowledgeLinked) {
     console.log('  → Run "scripts/sync-symlinks.sh" from your clone');
   }

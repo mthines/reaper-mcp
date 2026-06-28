@@ -55,7 +55,7 @@ The link points at `dist/apps/reaper-mcp-server`, so any later
 > Skills + knowledge are symlinked (not built) via `scripts/sync-symlinks.sh`, so
 > edits to `.claude/skills/` or `knowledge/` are live immediately.
 >
-> To unlink later: `pnpm uninstall -g @mthines/reaper-mcp`.
+> To unlink later: `cd dist/apps/reaper-mcp-server && pnpm unlink --global`.
 
 ## Pointing Claude Code to your local dev server
 

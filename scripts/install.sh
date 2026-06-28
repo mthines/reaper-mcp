@@ -14,7 +14,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
-CLI="node $REPO_ROOT/dist/apps/reaper-mcp-server/main.js"
+CLI=("node" "$REPO_ROOT/dist/apps/reaper-mcp-server/main.js")
 
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
@@ -28,13 +28,13 @@ step "Linking the reaper-mcp CLI to this clone"
 ( cd dist/apps/reaper-mcp-server && pnpm link --global )
 
 step "Installing the REAPER bridge (Lua + JSFX)"
-$CLI setup
+"${CLI[@]}" setup
 
 step "Symlinking the mix skills + knowledge into ~/.claude"
 "$REPO_ROOT/scripts/sync-symlinks.sh"
 
 step "Configuring Claude Code (tool allow-list + .mcp.json)"
-$CLI init
+"${CLI[@]}" init
 
 cat <<'EOF'
 
