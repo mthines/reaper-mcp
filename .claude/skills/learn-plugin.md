@@ -1,12 +1,22 @@
 ---
 name: learn-plugin
-description: Interview the user about a plugin and generate a knowledge file for the mix agent
+description: Interview the user about a plugin and write it to their personal plugin memory for the mixing skills
 ---
 
 # /learn-plugin
 
-This skill interviews the user about a plugin they want the mix agent to know about,
-then generates a properly formatted knowledge file and writes it to `knowledge/plugins/`.
+This skill interviews the user about a plugin they want the mixing skills to know
+about, then writes a properly formatted knowledge file to the **plugin knowledge
+base** at `~/.claude/knowledge/plugins/{vendor}/{plugin}.md`.
+
+This is the *manual interview* path. The mixing skills also learn plugins **while
+working** (capturing param maps, kept settings, and gotchas) per
+`knowledge/reference/memory-protocol.md` — this skill is for when the user wants
+to teach a plugin up front. To recall or maintain memory, use `/mix-memory`.
+
+> **It's versioned.** For a cloned + symlinked install, `~/.claude/knowledge` is
+> the repo, so the file lands in the working tree — remind the user to commit it to
+> their fork (`git add knowledge/plugins/...`) so it ships to anyone who clones.
 
 ## Trigger
 
@@ -90,6 +100,11 @@ replaces: []
 ## When to prefer this
 
 [Based on user's answer about when they reach for it]
+
+## Learned notes
+
+<!-- Contextualized observations captured while working with this plugin.
+     The mixing skills append here automatically per memory-protocol.md. -->
 ```
 
 ### Step 4: Determine the file path
@@ -98,21 +113,36 @@ replaces: []
 - Suggest a slug if the vendor is obvious.
 - Plugin slug: lowercase plugin name, spaces to hyphens, remove special characters.
 
-Example: FabFilter Pro-Q 3 → `knowledge/plugins/fabfilter/pro-q-3.md`
+Default target (personal layer):
+`~/.claude/knowledge/plugins/{vendor-slug}/{plugin-slug}.md`
+
+Example: FabFilter Pro-Q 3 → `~/.claude/knowledge/plugins/fabfilter/pro-q-3.md`
+
+(Contributor-only: a plugin meant to ship for all users goes to the repo's
+`knowledge/plugins/{vendor-slug}/{plugin-slug}.md` instead.)
 
 ### Step 5: Write the file
 
-Write the generated file to `knowledge/plugins/{vendor-slug}/{plugin-slug}.md`.
+Create the directory if needed, then write the generated file:
+
+```
+mkdir -p ~/.claude/knowledge/plugins/{vendor-slug}
+```
+
+Write to `~/.claude/knowledge/plugins/{vendor-slug}/{plugin-slug}.md`. If a
+personal file already exists, **merge** — don't clobber its `## Learned notes`.
 
 ### Step 6: Confirm
 
 Tell the user:
 
-> "Done! I've created `knowledge/plugins/{vendor}/{plugin}.md`.
+> "Done! I've written `~/.claude/knowledge/plugins/{vendor}/{plugin}.md`.
 >
-> The mix agent will now prefer **[Plugin Name]** for **[category]** tasks.
+> The mixing skills will now prefer **[Plugin Name]** for **[category]** tasks, and
+> will keep refining it in `## Learned notes` as they work with it.
 >
-> You can edit the file directly to refine the settings. To teach me about another plugin, run `/learn-plugin` again."
+> You can edit the file directly. To teach another plugin, run `/learn-plugin`
+> again; to recall or tidy memory, run `/mix-memory`."
 
 ## Notes
 
@@ -121,3 +151,5 @@ Tell the user:
 - The `preference` score determines which plugin wins when multiple options are available for the same category
 - Do not add gray-matter or YAML library imports — the knowledge-loader parses frontmatter with a simple regex
 - VST3 versions are preferred over VST2 when both exist (add both to fx_match)
+- Files under `~/.claude/knowledge/plugins/` are read by the mixing skills via Read/Glob at runtime; the same tree (the repo's `knowledge/`) is what the `reaper-mix-agent` knowledge-loader bundles. Keep the frontmatter shape consistent so both readers work.
+- If the user is unsure of parameters or good settings, research the web (`WebSearch`/`WebFetch`) to pre-fill, then confirm with them. The `/mixer` and `/mastering` skills do this automatically for unknown plugins (the bootstrap path in `memory-protocol.md`) — `/learn-plugin` is the human-in-the-loop version.

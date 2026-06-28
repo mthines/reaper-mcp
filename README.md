@@ -11,21 +11,26 @@ AI-powered mixing for REAPER DAW. An MCP server that gives AI agents (Claude Cod
 
 ## Quick Start
 
-```bash
-# Interactive guided setup (recommended)
-npx @mthines/reaper-mcp init
+reaper-mcp is **fork-and-clone**: fork it, clone your fork, run one command, and
+start mixing. The mix skills, plugin knowledge, and everything the agent learns
+live in your repo — versioned in git, and shipped to anyone who clones your fork.
 
-# Or non-interactive — install everything with defaults
-npx @mthines/reaper-mcp init --yes
+```bash
+# Fork on GitHub, then clone your fork
+git clone https://github.com/<you>/reaper-mcp.git && cd reaper-mcp
+
+# One command: build, link the CLI, install the REAPER bridge,
+# symlink the skills + knowledge into ~/.claude, and configure Claude Code
+./scripts/install.sh
 ```
 
-The `init` wizard walks you through:
-1. Installing the REAPER bridge (Lua + JSFX analyzers)
-2. Installing AI mix knowledge and agents
-3. Configuring Claude Code settings (auto-allows all 80 REAPER tools)
-4. Optionally creating a project-local `.mcp.json`
+Then load `mcp_bridge.lua` in REAPER (Actions > Show action list > Load ReaScript
+> Run) and open Claude Code — you're ready to mix. Everything the skills learn
+lands in your clone; commit it to your fork and it travels with you.
 
-Then load `mcp_bridge.lua` in REAPER and open Claude Code — you're ready to mix.
+```
+/mixer Please gain stage my tracks   ·   /critique Roast my mix
+```
 
 ## What it does
 
@@ -72,53 +77,49 @@ REAPER's scripting environment is sandboxed — no sockets, no HTTP. The Lua bri
 - [Node.js](https://nodejs.org/) 20+
 - [SWS Extensions](https://www.sws-extension.org/) (recommended — enables plugin discovery and enhanced features)
 
-### Option A: Interactive Setup (recommended)
+### One command
+
+Clone your fork and run the installer — the repo is the source of truth, and you
+own it:
 
 ```bash
-npx @mthines/reaper-mcp init
+git clone https://github.com/<you>/reaper-mcp.git && cd reaper-mcp
+./scripts/install.sh
 ```
 
-The wizard guides you through selecting which components to install:
-- **REAPER Bridge** — Lua bridge + JSFX analyzers (copied to your REAPER resource folder)
-- **AI Skills & Agents** — knowledge base, mix agents, rules, skills (global or project-local)
-- **Claude Code Settings** — auto-allows all 80 REAPER tools (no permission prompts)
-- **Project Config** — `.mcp.json` for the current directory (opt-in)
+`scripts/install.sh` runs these steps (each is also runnable on its own):
 
-For CI/automation, use `--yes` to skip prompts and install everything with defaults:
+1. `pnpm install && pnpm nx build reaper-mcp-server` — deps + build.
+2. `pnpm link --global` (from `dist/apps/reaper-mcp-server`) — puts the
+   `reaper-mcp` command on your PATH, pointing at this clone.
+3. `reaper-mcp setup` — installs the Lua bridge + JSFX into REAPER.
+4. `scripts/sync-symlinks.sh` — symlinks the skills + knowledge into `~/.claude`:
+   - `~/.claude/skills/<name>.md` → `<repo>/.claude/skills/<name>.md`
+   - `~/.claude/knowledge` → `<repo>/knowledge` (plugins, genres, workflows, reference, lessons)
+5. `reaper-mcp init` — writes the REAPER tool allow-list to `~/.claude/settings.json`
+   and a `.mcp.json` pointing at your local `reaper-mcp` (copy-free).
 
-```bash
-npx @mthines/reaper-mcp init --yes             # bridge + global skills + settings
-npx @mthines/reaper-mcp init --yes --project   # also creates .mcp.json in current directory
-```
+`sync-symlinks.sh` is idempotent and **refuses to overwrite a real file or
+directory** (run it with `--dry-run` to preview). Because `~/.claude/knowledge`
+*is* your repo, every plugin you teach and every lesson the skills learn lands in
+the working tree — commit it to your fork and it travels with you (and ships to
+whoever clones).
 
-### Option B: Manual Steps
+The repo's `.claude/rules/` (architecture, development, lua-bridge, testing) are
+**not** symlinked globally — they're for developing reaper-mcp, and load
+automatically when you work inside the repo.
 
-If you prefer to run each step individually:
+> If `reaper-mcp` isn't found in new shells, add pnpm's global bin dir to your
+> PATH (where `pnpm link --global` installs) — see
+> [pnpm docs](https://pnpm.io/installation).
 
-```bash
-# 1. Install REAPER components (Lua bridge + JSFX analyzers)
-npx @mthines/reaper-mcp setup
-
-# 2. Install AI mix knowledge (globally by default, or --project for local)
-npx @mthines/reaper-mcp install-skills
-npx @mthines/reaper-mcp install-skills --project  # project-local alternative
-```
-
-**What gets installed:**
-
-The `setup` command copies into your REAPER resource folder:
+**What `setup` installs** into your REAPER resource folder:
 - `mcp_bridge.lua` — persistent Lua bridge script
 - `mcp_snapshot_manager.lua` — snapshot manager GUI (save/restore/delete from REAPER)
 - `mcp_analyzer.jsfx` — FFT spectrum analyzer
 - `mcp_lufs_meter.jsfx` — ITU-R BS.1770 LUFS meter
 - `mcp_correlation_meter.jsfx` — stereo correlation analyzer
 - `mcp_crest_factor.jsfx` — dynamics/crest factor meter
-
-The `install-skills` command installs to `~/.claude/` (global, default) or `.claude/` (project):
-- `agents/` — mix engineer subagents (`@mix-engineer`, `@gain-stage`, `@mix-analyzer`, `@master`)
-- `rules/` — architecture and development rules
-- `skills/` — skills like `/learn-plugin`
-- `knowledge/` — plugin knowledge, genre rules, workflows, reference data
 
 ### Start the Lua Bridge in REAPER
 
@@ -134,7 +135,7 @@ You should see in REAPER's console: `MCP Bridge: Started`
 ### Verify
 
 ```bash
-npx @mthines/reaper-mcp doctor
+reaper-mcp doctor
 ```
 
 Checks that the bridge is connected, knowledge is installed, and MCP config exists.
@@ -271,75 +272,97 @@ For quick A/B testing, bind these action scripts to keyboard shortcuts in REAPER
 |------|-------------|
 | `get_track_routing` | Sends, receives, parent/folder info for a track |
 
-## Using the Mix Agents
+## Using the Mix Skills
 
-Once you've run `init` (or `setup` + `install-skills`), open Claude Code. Four specialized mix agents are available:
+Once you've run `./scripts/install.sh`, open Claude Code. Three
+focused mix **skills** are available. They run **in your live session** — the one
+already connected to REAPER — so they use the MCP tools directly (no separate
+agent context that can't reach the DAW).
 
-### Available Agents
+### Available skills
 
-| Agent            | Invocation      | What it does                                                              |
-| ---------------- | --------------- | ------------------------------------------------------------------------- |
-| **Mix Engineer** | `@mix-engineer` | General-purpose mix agent — analyzes, suggests, and executes any mix task |
-| **Gain Stage**   | `@gain-stage`   | Perceived-loudness-aware gain staging with proper headroom                |
-| **Mix Analyzer** | `@mix-analyzer` | "Roast my mix" — analysis only, no changes, produces detailed report      |
-| **Master**       | `@master`       | Mastering chain targeting specific LUFS/platform standards                |
+| Skill         | Invocation   | What it does                                                                      |
+| ------------- | ------------ | --------------------------------------------------------------------------------- |
+| **Mixer**     | `/mixer`     | Does the mixing — gain stages, builds chains, fixes problems. Follows the matching workflow (gain-staging, vocal-chain, low-end, drum-bus, stereo-image, …) on demand. |
+| **Critique**  | `/critique`  | "Roast my mix" — analysis only, no changes; produces a measured, actionable report. |
+| **Mastering** | `/mastering` | Mastering chain on the mix bus targeting a specific LUFS/platform standard.        |
+
+> The earlier per-task agents (gain-staging, stems, session-prep, editing,
+> delivery, producer) are now **workflows** the mixer follows from
+> `knowledge/workflows/*.md` — fewer, sharper skills instead of many overlapping
+> agents. They're skills (not subagents) because mixing is interactive and
+> stateful: the live session holds the REAPER connection, and a subagent's
+> restricted tool set can't write to the DAW.
 
 ### How to use them
 
-Just mention the agent by name in Claude Code:
+Say what you want — the skills auto-trigger on intent — or invoke by slash:
 
 ```
-@mix-engineer Please gain stage all my tracks
-@mix-engineer Build a vocal chain on track 3
-@mix-engineer The low end is muddy — can you fix it?
-@mix-analyzer Roast my mix — what could be improved?
-@master Master this for Spotify
-@gain-stage Set proper levels on everything
+/mixer Please gain stage all my tracks
+/mixer Build a vocal chain on track 3
+/mixer The low end is muddy — can you fix it?
+/critique Roast my mix — what could be improved?
+/mastering Master this for Spotify
 ```
 
-Or start a full session as the mix engineer:
+### Memory — the skills get better over time
 
-```bash
-claude --agent mix-engineer
-```
+The mix skills read and write a **versioned memory** in the knowledge base at
+`~/.claude/knowledge/` — which, for a cloned + symlinked install, *is* your repo.
+So everything they learn is tracked in git and ships with your fork:
+
+- **Plugin memory** (`knowledge/plugins/`) — as the skills work with a plugin
+  (JST Heat, Pro-Q 3, Helix Native, …) they record verified parameter maps,
+  settings that worked, and gotchas — *with context*. Asked to use a plugin they
+  don't know, they **research the web, inspect it live, and write its `plugin.md`
+  first**, then use it. Teach one up front with `/learn-plugin`.
+- **Process memory** (`knowledge/lessons/mixing/`) — when a change is reverted or
+  measures worse, the skill records a lesson. A lesson that recurs is promoted into
+  the mixer skill's hard rules, so recurring mistakes self-heal.
+
+Commit what they write (`git add knowledge/…`) and it travels with your fork.
+Recall or tidy memory anytime with `/mix-memory`. Full contract:
+`knowledge/reference/memory-protocol.md`.
 
 ### What happens under the hood
 
-Each agent has:
+Each skill:
 
-- **Its own system prompt** — thinks like a mix engineer, not a general assistant
-- **Pre-approved REAPER tools** — no permission prompts for every MCP call
-- **Scoped MCP access** — only the `reaper` MCP server is loaded
-- **Embedded reference data** — frequency bands, LUFS targets, compression settings
+- **Loads a mix-engineer system prompt** into your session when triggered
+- **Uses pre-approved REAPER tools** — `reaper-mcp init` allow-lists all of them, so
+  there are no permission prompts mid-mix
+- **Loads knowledge on demand** — pulls frequency, LUFS, compression, and plugin
+  data from the knowledge base (plus personal memory) only when a task needs it
 
 The workflow is always:
 
-1. **Save a snapshot** (so you can always A/B or undo)
+1. **Recall memory** + **save a snapshot** (so you can always A/B or undo)
 2. **Analyze** — read meters, spectrum, LUFS, correlation, crest factor
 3. **Reason** — apply genre rules, frequency knowledge, and plugin expertise
 4. **Act** — add FX, set parameters, adjust levels using the best available plugins
 5. **Verify** — re-read meters to confirm the change had the intended effect
-6. **Report** — explain what it did and why in audio engineering terms
+6. **Capture & report** — record durable learnings; explain what changed and why
 
 ### A/B Comparison
 
 Every change is bracketed by snapshots:
 
-1. Agent saves a "Before" snapshot automatically
+1. The skill saves a "Before" snapshot automatically
 2. Makes all changes
 3. Saves an "After" snapshot
 4. You can restore either with `snapshot_restore` to A/B compare, or use the Snapshot Manager GUI in REAPER
 
 ### Genre Awareness
 
-Tell the agent the genre and it adjusts its approach:
+Tell the skill the genre and it adjusts its approach:
 
 ```
-@mix-engineer This is a hip-hop track — please gain stage and check the 808
-@mix-engineer Mix this rock song — make sure the guitars are wide and the drums punch
+/mixer This is a hip-hop track — please gain stage and check the 808
+/mixer Mix this rock song — make sure the guitars are wide and the drums punch
 ```
 
-The agent reads `knowledge/genres/{genre}.md` for genre-specific conventions.
+The skill reads `knowledge/genres/{genre}.md` for genre-specific conventions.
 
 ## AI Mix Engineer Knowledge
 
@@ -356,7 +379,7 @@ Ships with knowledge for stock REAPER plugins and popular third-party suites:
 | Line 6 Helix Native                                  | Amp Sim                 | 82         |
 | JS: 1175 Compressor                                  | Character Comp          | 50         |
 
-The agent automatically discovers your installed plugins and uses the best available option for each task. If you have Pro-Q 3, it uses that. If not, it falls back to ReaEQ.
+The skills automatically discover your installed plugins and use the best available option for each task. If you have Pro-Q 3, they use that. If not, they fall back to ReaEQ.
 
 ### Adding Your Own Plugins
 
@@ -387,7 +410,7 @@ Processing decisions adapt to the genre:
 
 ## Autonomous Mode (Allow All Tools)
 
-By default Claude Code asks permission for each MCP tool call. The `init` command (and `install-skills`) automatically configures `settings.json` to allow all 80 REAPER tools. If you need to set this up manually, add to your project's `.claude/settings.json` (or `~/.claude/settings.json` for global):
+By default Claude Code asks permission for each MCP tool call. `reaper-mcp init` (run by `scripts/install.sh`) configures `~/.claude/settings.json` to allow all REAPER tools. If you need to set this up manually, add to your project's `.claude/settings.json` (or `~/.claude/settings.json` for global):
 
 ```json
 {
@@ -470,35 +493,29 @@ The format is `mcp__reaper__{tool_name}`. Once added, Claude Code will run these
 
 ## CLI Commands
 
+`scripts/install.sh` runs the full setup; these are the underlying commands (the
+`reaper-mcp` CLI is put on your PATH by `pnpm link --global` during install):
+
 | Command | Description |
 |---------|-------------|
-| `npx @mthines/reaper-mcp init` | Interactive guided setup (recommended for new users) |
-| `npx @mthines/reaper-mcp init --yes` | Non-interactive setup — install everything with defaults |
-| `npx @mthines/reaper-mcp init --yes --project` | Non-interactive setup + create `.mcp.json` in current directory |
-| `npx @mthines/reaper-mcp serve` | Start MCP server in stdio mode (default when no command given) |
-| `npx @mthines/reaper-mcp setup` | Install Lua bridge + JSFX into REAPER |
-| `npx @mthines/reaper-mcp install-skills` | Install AI knowledge + agents globally |
-| `npx @mthines/reaper-mcp install-skills --project` | Install into current project directory |
-| `npx @mthines/reaper-mcp doctor` | Verify everything is configured correctly |
-| `npx @mthines/reaper-mcp status` | Check bridge connection |
-
-Or install globally for shorter commands:
-
-```bash
-npm install -g @mthines/reaper-mcp
-reaper-mcp init
-```
+| `reaper-mcp` / `reaper-mcp serve` | Start the MCP server in stdio mode (what Claude Code runs) |
+| `reaper-mcp setup` | Install the Lua bridge + JSFX into REAPER |
+| `reaper-mcp setup-sidecar` | Install the optional Python sidecar (perceptual analysis) |
+| `reaper-mcp init` | Configure Claude Code — tool allow-list + `.mcp.json` (copy-free) |
+| `reaper-mcp doctor` | Verify everything is configured correctly |
+| `reaper-mcp status` | Check bridge connection |
+| `scripts/sync-symlinks.sh` | Symlink the mix skills + knowledge into `~/.claude` |
 
 ## Claude Code Integration
 
-After `install-skills --project`, your project has a `.mcp.json`:
+`reaper-mcp init` writes a `.mcp.json` pointing at your local CLI:
 
 ```json
 {
   "mcpServers": {
     "reaper": {
-      "command": "npx",
-      "args": ["@mthines/reaper-mcp", "serve"]
+      "command": "reaper-mcp",
+      "args": ["serve"]
     }
   }
 }
@@ -508,7 +525,8 @@ Claude Code reads this automatically. Open Claude Code in your project and the R
 
 ### Running from source (development)
 
-If you're developing reaper-mcp and want changes reflected immediately without rebuilding, point your `.mcp.json` at the TypeScript source using `npx tsx`:
+For an edit-reload loop without rebuilding, run the server from the TypeScript
+source with tsx and point `.mcp.json` at it:
 
 ```json
 {
@@ -543,11 +561,14 @@ reaper-mcp/
 │   ├── reaper-mcp-server/        # MCP server (80 tools, esbuild bundle)
 │   └── reaper-mix-agent/         # AI mix agent (knowledge loader, plugin resolver)
 ├── libs/protocol/                # Shared TypeScript types
-├── knowledge/                    # AI mix engineer knowledge base
-│   ├── plugins/                  # Plugin-specific knowledge (extensible)
+├── .claude/skills/               # Mix skills (/mixer, /critique, /mastering, /learn-plugin, /mix-memory)
+├── knowledge/                    # AI mix engineer knowledge base (symlinked into ~/.claude/knowledge)
+│   ├── plugins/                  # Plugin-specific knowledge (read + written by the skills)
 │   ├── genres/                   # Genre mixing conventions
 │   ├── workflows/                # Step-by-step mixing workflows
-│   └── reference/                # Frequency, compression, metering, perceived loudness cheat sheets
+│   ├── reference/                # Frequency, compression, metering, memory-protocol, … cheat sheets
+│   └── lessons/mixing/           # Process lessons the skills accumulate (versioned)
+├── scripts/sync-symlinks.sh      # Symlink skills + knowledge into ~/.claude (primary install)
 ├── reaper/                       # Files installed into REAPER
 │   ├── mcp_bridge.lua            # Persistent Lua bridge
 │   ├── mcp_snapshot_manager.lua  # Snapshot manager GUI (save/restore/delete)
@@ -566,7 +587,7 @@ The MCP server (TypeScript) and the Lua bridge (REAPER) are two separate compone
 
 ```bash
 # Reinstall bridge files into REAPER
-npx @mthines/reaper-mcp setup
+reaper-mcp setup
 ```
 
 Then in REAPER:
