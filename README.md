@@ -94,7 +94,7 @@ git clone https://github.com/<you>/reaper-mcp.git && cd reaper-mcp
    `reaper-mcp` command on your PATH, pointing at this clone.
 3. `reaper-mcp setup` — installs the Lua bridge + JSFX into REAPER.
 4. `scripts/sync-symlinks.sh` — symlinks the skills + knowledge into `~/.claude`:
-   - `~/.claude/skills/<name>.md` → `<repo>/.claude/skills/<name>.md`
+   - `~/.claude/skills/<name>` → `<repo>/.claude/skills/<name>` (skill dir with `SKILL.md`)
    - `~/.claude/knowledge` → `<repo>/knowledge` (plugins, genres, workflows, reference, lessons)
 5. `reaper-mcp init` — writes the REAPER tool allow-list to `~/.claude/settings.json`
    and a `.mcp.json` pointing at your local `reaper-mcp` (copy-free).

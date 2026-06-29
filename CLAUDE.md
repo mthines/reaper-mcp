@@ -93,12 +93,12 @@ reaper-mcp/
         low-end.ts            # Low-end management
         stereo-image.ts       # Stereo image mode
 
-  .claude/skills/             # Mix skills, symlinked into ~/.claude/skills by scripts/sync-symlinks.sh
-    mixer.md                  # /mixer — executes mixes (live session, reads/writes memory)
-    critique.md               # /critique — read-only analysis ("roast my mix")
-    mastering.md              # /mastering — mix-bus mastering to a LUFS target
-    learn-plugin.md           # /learn-plugin — interview to author a plugin knowledge file
-    mix-memory.md             # /mix-memory — recall / consolidate / promote memory
+  .claude/skills/             # Mix skills (one dir per skill, each with SKILL.md), symlinked into ~/.claude/skills by scripts/sync-symlinks.sh
+    mixer/SKILL.md            # /mixer — executes mixes (live session, reads/writes memory)
+    critique/SKILL.md         # /critique — read-only analysis ("roast my mix")
+    mastering/SKILL.md        # /mastering — mix-bus mastering to a LUFS target
+    learn-plugin/SKILL.md     # /learn-plugin — interview to author a plugin knowledge file
+    mix-memory/SKILL.md       # /mix-memory — recall / consolidate / promote memory
 
   knowledge/                  # Knowledge base + memory; symlinked into ~/.claude/knowledge (primary install)
     plugins/                  # Plugin knowledge — read AND written by the skills (FX match, params, learned notes)
@@ -111,7 +111,7 @@ reaper-mcp/
     lessons/mixing/           # Process lessons the skills accumulate (versioned; ignored by the TS knowledge-loader)
 
   scripts/
-    sync-symlinks.sh          # Symlink .claude/skills/* + knowledge/ into ~/.claude (primary install model)
+    sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs) + knowledge/ into ~/.claude (primary install model)
 
   reaper/                     # Files installed INTO REAPER (copied by setup command)
     mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 80 handlers)

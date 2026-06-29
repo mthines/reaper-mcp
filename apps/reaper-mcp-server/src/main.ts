@@ -102,8 +102,8 @@ async function doctor(): Promise<void> {
   }
 
   const globalClaudeDir = join(homedir(), '.claude');
-  const localSkills = existsSync(join(process.cwd(), '.claude', 'skills', 'mixer.md'));
-  const globalSkills = existsSync(join(globalClaudeDir, 'skills', 'mixer.md'));
+  const localSkills = existsSync(join(process.cwd(), '.claude', 'skills', 'mixer', 'SKILL.md'));
+  const globalSkills = existsSync(join(globalClaudeDir, 'skills', 'mixer', 'SKILL.md'));
   const skillsExist = localSkills || globalSkills;
   const skillsLocation = localSkills ? '.claude/skills/' : globalSkills ? '~/.claude/skills/' : '';
   console.log(`Mix skills:    ${skillsExist ? `✓ Found (${skillsLocation})` : '✗ Not linked'}`);

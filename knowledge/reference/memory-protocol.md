@@ -127,7 +127,7 @@ When a lesson reaches **`seen_count >= 3`** (or `status: structural`), surface i
 > in the mixer skill?"
 
 On approval, add a one-line hard rule to the **mixer skill**'s `## Hard Rules`
-(`~/.claude/skills/mixer.md`; the `mastering` skill if mastering-specific) and mark
+(`~/.claude/skills/mixer/SKILL.md`; the `mastering` skill if mastering-specific) and mark
 the lesson `status: retired`. The recurring mistake becomes a guaranteed rule, no
 longer dependent on recall.
 

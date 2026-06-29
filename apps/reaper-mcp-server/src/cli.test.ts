@@ -185,7 +185,7 @@ describe('package integrity', () => {
   });
 
   it('mixer skill + memory protocol resolve from the repo source tree', () => {
-    expect(existsSync(join(workspaceRoot, '.claude', 'skills', 'mixer.md'))).toBe(true);
+    expect(existsSync(join(workspaceRoot, '.claude', 'skills', 'mixer', 'SKILL.md'))).toBe(true);
     expect(existsSync(join(workspaceRoot, 'knowledge', 'reference', 'memory-protocol.md'))).toBe(true);
   });
 

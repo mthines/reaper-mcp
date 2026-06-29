@@ -5,16 +5,16 @@ description: Audit the mix skills and their linked knowledge files to ensure nam
 
 # Sync Skill Documentation
 
-Audit the mix skills (`.claude/skills/*.md`) and their linked knowledge files to
+Audit the mix skills (`.claude/skills/*/SKILL.md`) and their linked knowledge files to
 ensure naming, cross-references, and documentation are consistent.
 
 ## What to check
 
 ### 1. Skill inventory
 
-Read all files in `.claude/skills/*.md`. Build a table of `name` (frontmatter) and
+Read all `.claude/skills/*/SKILL.md` files. Build a table of `name` (frontmatter) and
 the `/skill` references found in other skills. Verify every `name` matches its
-filename (without `.md`). The expected mix set is: `mixer`, `critique`,
+containing directory name. The expected mix set is: `mixer`, `critique`,
 `mastering`, `learn-plugin`, `mix-memory`.
 
 ### 2. Cross-reference consistency

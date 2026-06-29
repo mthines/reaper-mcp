@@ -59,8 +59,8 @@ Show a preview of merges/prunes and get confirmation before writing.
 The self-heal step. For a lesson at `seen_count >= 3` or `status: structural`:
 1. Show the lesson and the one-line hard rule it would become.
 2. On approval, append that rule to the mixer skill's `## Hard Rules`
-   (`.claude/skills/mixer.md`, or `~/.claude/skills/mixer.md` if installed globally;
-   the `mastering` skill if mastering-specific).
+   (`.claude/skills/mixer/SKILL.md`, or `~/.claude/skills/mixer/SKILL.md` if installed
+   globally; the `mastering` skill if mastering-specific).
 3. Mark the lesson `status: retired` (keep it as an audit trail; the rule now
    guarantees the behavior).
 

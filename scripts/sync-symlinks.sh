@@ -6,8 +6,14 @@
 #
 # Links created (single hop, repo is the source of truth):
 #
-#   ~/.claude/skills/<name>.md  →  <repo>/.claude/skills/<name>.md   (one per skill)
+#   ~/.claude/skills/<name>     →  <repo>/.claude/skills/<name>      (skill dir w/ SKILL.md)
 #   ~/.claude/knowledge         →  <repo>/knowledge                  (whole tree)
+#
+# Each skill is a directory containing SKILL.md — the layout Claude Code
+# discovers. Skills are found recursively (any dir holding a SKILL.md), so a
+# flat layout (.claude/skills/<name>/SKILL.md) and a nested category layout
+# (.claude/skills/<category>/<name>/SKILL.md) both work; the link is flattened
+# to the skill's own basename under ~/.claude/skills.
 #
 # The mix skills read AND write under ~/.claude/knowledge, so for a symlinked
 # clone every learned plugin and process lesson lands in the repo working tree
@@ -73,11 +79,12 @@ link() {
 
 ensure_dir "$CLAUDE_SKILLS_DIR"
 
-# 1. Each skill file → ~/.claude/skills/<name>.md
-for skill in "$REPO_ROOT"/.claude/skills/*.md; do
-  [[ -f "$skill" ]] || continue
-  link "$CLAUDE_SKILLS_DIR/$(basename "$skill")" "$skill"
-done
+# 1. Each skill dir (any dir holding a SKILL.md) → ~/.claude/skills/<name>
+#    Flattened to the skill's own basename, so nested category layouts work too.
+while IFS= read -r -d '' skill_md; do
+  skill_dir="$(dirname "$skill_md")"
+  link "$CLAUDE_SKILLS_DIR/$(basename "$skill_dir")" "$skill_dir"
+done < <(find "$REPO_ROOT/.claude/skills" -mindepth 1 -maxdepth 5 -type f -name SKILL.md -print0)
 
 # 2. Whole knowledge tree → ~/.claude/knowledge
 link "$CLAUDE_DIR/knowledge" "$REPO_ROOT/knowledge"
