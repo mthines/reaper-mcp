@@ -28,36 +28,6 @@
             "glob": "**/*",
             "input": "reaper",
             "output": "reaper"
-          },
-          {
-            "glob": "**/*",
-            "input": "knowledge",
-            "output": "knowledge"
-          },
-          {
-            "glob": "**/*",
-            "input": ".claude/rules",
-            "output": "claude-rules"
-          },
-          {
-            "glob": "**/*",
-            "input": ".claude/skills",
-            "output": "claude-skills"
-          },
-          {
-            "glob": "**/*",
-            "input": ".claude/agents",
-            "output": "claude-agents"
-          },
-          {
-            "glob": "README.md",
-            "input": ".",
-            "output": "."
-          },
-          {
-            "glob": "LICENSE",
-            "input": ".",
-            "output": "."
           }
         ]
       }

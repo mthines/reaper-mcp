@@ -43,8 +43,7 @@ This is an **Nx monorepo** with **pnpm workspaces**.
 reaper-mcp/
   apps/reaper-mcp-server/     # Main MCP server application (TypeScript, esbuild)
     src/
-      main.ts                 # CLI entry point: init | serve | setup | setup-sidecar | install-skills | doctor | status
-      init.ts                 # Interactive guided setup wizard (init command)
+      main.ts                 # CLI entry point: serve | setup | setup-sidecar | init | doctor | status
       server.ts               # McpServer creation, tool registration
       bridge.ts               # File-based IPC: sendCommand(), isBridgeRunning(), etc.
       sidecar.ts              # Python subprocess lifecycle + JSON-RPC client (getSidecarClient())
@@ -94,14 +93,25 @@ reaper-mcp/
         low-end.ts            # Low-end management
         stereo-image.ts       # Stereo image mode
 
-  knowledge/                  # Shared audio engineering knowledge base (consumed by reaper-mix-agent)
-    plugins/                  # Plugin-specific knowledge (FX match patterns, parameter guides)
+  .claude/skills/             # Mix skills, symlinked into ~/.claude/skills by scripts/sync-symlinks.sh
+    mixer.md                  # /mixer — executes mixes (live session, reads/writes memory)
+    critique.md               # /critique — read-only analysis ("roast my mix")
+    mastering.md              # /mastering — mix-bus mastering to a LUFS target
+    learn-plugin.md           # /learn-plugin — interview to author a plugin knowledge file
+    mix-memory.md             # /mix-memory — recall / consolidate / promote memory
+
+  knowledge/                  # Knowledge base + memory; symlinked into ~/.claude/knowledge (primary install)
+    plugins/                  # Plugin knowledge — read AND written by the skills (FX match, params, learned notes)
       fabfilter/              # FabFilter Pro-Q 3, Pro-C 2, Pro-L 2
       neural-dsp/             # Helix Native
       stock-reaper/           # ReaEQ, ReaComp, ReaLimit, ReaVerb, ReaDelay, ReaGate, JS 1175
     genres/                   # Genre mixing conventions (targets, frequency balance, dynamics)
     workflows/                # Step-by-step mixing workflows (gain-staging, vocal-chain, etc.)
-    reference/                # Reference material (frequencies, metering, compression, perceived loudness, common mistakes)
+    reference/                # Reference material (frequencies, metering, compression, perceived loudness, memory-protocol)
+    lessons/mixing/           # Process lessons the skills accumulate (versioned; ignored by the TS knowledge-loader)
+
+  scripts/
+    sync-symlinks.sh          # Symlink .claude/skills/* + knowledge/ into ~/.claude (primary install model)
 
   reaper/                     # Files installed INTO REAPER (copied by setup command)
     mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 80 handlers)
@@ -528,27 +538,25 @@ ESLint enforces dependency rules via `@nx/enforce-module-boundaries`:
 
 ## Running the MCP Server
 
+Clone-only model: clone the fork, run the one-command installer, done.
+
 ```bash
-# Build first
-pnpm nx build reaper-mcp-server
+# Full setup from a fresh clone (deps, build, link CLI, bridge, symlinks, config)
+./scripts/install.sh
 
-# Interactive guided setup (recommended for new users)
-node dist/apps/reaper-mcp-server/main.js init
+# The installer runs these underlying steps (each runnable on its own):
+pnpm nx build reaper-mcp-server                              # build
+( cd dist/apps/reaper-mcp-server && pnpm link --global )    # put `reaper-mcp` on PATH
+reaper-mcp setup                                            # Lua bridge + JSFX into REAPER
+scripts/sync-symlinks.sh                                    # skills + knowledge → ~/.claude
+reaper-mcp init                                             # tool allow-list + .mcp.json (copy-free)
 
-# Non-interactive setup (install everything with defaults)
-node dist/apps/reaper-mcp-server/main.js init --yes
-
-# Or run individual setup steps:
-node dist/apps/reaper-mcp-server/main.js setup            # Install Lua bridge + JSFX into REAPER
-node dist/apps/reaper-mcp-server/main.js install-skills    # Install AI knowledge + agents globally
-node dist/apps/reaper-mcp-server/main.js install-skills --project  # Install into current project
-
-# Start MCP server (stdio mode)
-node dist/apps/reaper-mcp-server/main.js serve
+# Start MCP server (stdio mode — what Claude Code runs)
+reaper-mcp serve
 
 # Diagnostics
-node dist/apps/reaper-mcp-server/main.js doctor    # Verify all components installed correctly
-node dist/apps/reaper-mcp-server/main.js status     # Quick bridge connectivity check
+reaper-mcp doctor    # Verify all components configured correctly
+reaper-mcp status    # Quick bridge connectivity check
 
 # Test with MCP Inspector
 npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
@@ -558,15 +566,15 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 
 | Command | Description |
 |---------|-------------|
-| `init` | Interactive guided setup — select components, scope, and install |
-| `init --yes` / `init -y` | Non-interactive setup — install everything with defaults |
-| `init --yes --project` | Non-interactive setup — also create `.mcp.json` in current directory |
 | `serve` (default) | Start MCP server in stdio mode for Claude Code |
 | `setup` | Install Lua bridge + JSFX analyzers into REAPER |
 | `setup-sidecar` | Install Python sidecar for perceptual audio analysis (opt-in, ~831 MB). Requires Python 3.10+. Installs venv at `~/.reaper-mcp/sidecar-venv/`, downloads Audiobox Aesthetics weights. |
-| `install-skills [--global\|--project]` | Install AI knowledge, agents, skills, and rules |
+| `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` pointing at the local CLI (copy-free) |
 | `doctor` | Verify all components are configured correctly (includes 4 sidecar sub-checks) |
 | `status` | Check if Lua bridge is running in REAPER |
+
+> Skills + knowledge are wired by `scripts/sync-symlinks.sh` (symlinks into
+> `~/.claude`), not by a CLI command — the repo is the source of truth.
 
 ### Claude Code MCP Config
 
@@ -574,9 +582,13 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 {
   "mcpServers": {
     "reaper": {
-      "command": "node",
-      "args": ["/path/to/dist/apps/reaper-mcp-server/main.js"]
+      "command": "reaper-mcp",
+      "args": ["serve"]
     }
   }
 }
 ```
+
+Generated by `reaper-mcp init` (points at the globally linked CLI from your clone).
+For manual setup without the `reaper-mcp` command on PATH, use:
+`"command": "node", "args": ["/path/to/dist/apps/reaper-mcp-server/main.js"]`

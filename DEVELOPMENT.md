@@ -6,6 +6,19 @@
 - pnpm (`corepack enable && corepack prepare`)
 - REAPER with the Lua bridge running (see `reaper-mcp setup`)
 
+## First-time setup
+
+From a fresh clone, run the one-command installer (deps, build, link the
+`reaper-mcp` CLI, install the bridge, symlink skills + knowledge, configure
+Claude Code):
+
+```bash
+./scripts/install.sh
+```
+
+It's idempotent — re-run it after pulling. The rest of this doc covers the
+edit-reload dev loop and the moving parts the installer wires up.
+
 ## Running the dev server
 
 ```bash
@@ -19,6 +32,30 @@ You can also run it via Nx directly:
 ```bash
 pnpm nx dev reaper-mcp-server
 ```
+
+## Using the `reaper-mcp` CLI from your local checkout
+
+`scripts/install.sh` links the CLI for you (`pnpm link --global` from
+`dist/apps/reaper-mcp-server`). To (re)link manually:
+
+```bash
+pnpm nx build reaper-mcp-server
+cd dist/apps/reaper-mcp-server && pnpm link --global && cd -
+reaper-mcp status
+```
+
+The link points at `dist/apps/reaper-mcp-server`, so any later
+`pnpm nx build reaper-mcp-server` overwrites `main.js` in place and the
+`reaper-mcp` command picks up your changes automatically — you only link once.
+
+> The CLI is a bundled build, so changes to the one-shot commands (`setup`,
+> `init`, `doctor`, `status`) require a rebuild. For the long-running MCP
+> **server**, prefer `pnpm dev` (tsx watch) below, which needs no rebuild.
+>
+> Skills + knowledge are symlinked (not built) via `scripts/sync-symlinks.sh`, so
+> edits to `.claude/skills/` or `knowledge/` are live immediately.
+>
+> To unlink later: `cd dist/apps/reaper-mcp-server && pnpm unlink --global`.
 
 ## Pointing Claude Code to your local dev server
 

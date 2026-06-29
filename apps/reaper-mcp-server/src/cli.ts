@@ -58,8 +58,8 @@ export function createMcpJson(targetPath: string): boolean {
   const config = JSON.stringify({
     mcpServers: {
       reaper: {
-        command: 'npx',
-        args: ['@mthines/reaper-mcp', 'serve'],
+        command: 'reaper-mcp',
+        args: ['serve'],
       },
     },
   }, null, 2);

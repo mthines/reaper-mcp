@@ -11,8 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
 import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
-import { resolveAssetDir, resolveAssetDirWithFallback, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES } from './cli.js';
-import { runInit } from './init.js';
+import { resolveAssetDir, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES } from './cli.js';
 import { setupSidecar } from './setup-sidecar.js';
 import { getSidecarClient } from './sidecar.js';
 
@@ -63,89 +62,34 @@ async function setup(): Promise<void> {
   console.log('  2. Actions > Show action list > Load ReaScript');
   console.log(`  3. Select: ${join(scriptsDir, 'mcp_bridge.lua')}`);
   console.log('  4. Run the script (it will keep running in background via defer loop)');
-  console.log('  5. Add reaper-mcp to your Claude Code config (see: npx @mthines/reaper-mcp doctor)');
+  console.log('  5. Add reaper-mcp to your Claude Code config (see: reaper-mcp doctor)');
 }
 
-type InstallScope = 'project' | 'global';
+// Configure Claude Code for this clone: pre-approve the REAPER tools globally and
+// drop a .mcp.json pointing at the local reaper-mcp CLI. Copy-free — the skills
+// and knowledge come from the symlinks created by scripts/sync-symlinks.sh.
+async function init(): Promise<void> {
+  console.log('REAPER MCP — Configure Claude Code\n');
 
-function parseInstallScope(args: string[]): InstallScope {
-  if (args.includes('--project')) return 'project';
-  return 'global';
-}
-
-async function installSkills(scope: InstallScope): Promise<void> {
-  console.log(`REAPER MCP — Install AI Mix Engineer Skills (scope: ${scope})\n`);
-
-  const isGlobal = scope === 'global';
-  const baseDir = isGlobal ? join(homedir(), '.claude') : process.cwd();
-  const claudeDir = isGlobal ? baseDir : join(baseDir, '.claude');
-
-  // --- Knowledge base ---
-  const knowledgeSrc = resolveAssetDir(__dirname, 'knowledge');
-  if (existsSync(knowledgeSrc)) {
-    const dest = join(baseDir, 'knowledge');
-    const count = copyDirSync(knowledgeSrc, dest);
-    console.log(`Installed knowledge base: ${count} files → ${dest}`);
-  } else {
-    console.log('Knowledge base not found in package. Skipping.');
-  }
-
-  // --- Claude rules ---
-  // Build output uses 'claude-rules'; source tree uses '.claude/rules'
-  const rulesSrc = resolveAssetDirWithFallback(__dirname, 'claude-rules', join('.claude', 'rules'));
-  if (existsSync(rulesSrc)) {
-    const dest = join(claudeDir, 'rules');
-    const count = copyDirSync(rulesSrc, dest);
-    console.log(`Installed Claude rules: ${count} files → ${dest}`);
-  } else {
-    console.log('Claude rules not found in package. Skipping.');
-  }
-
-  // --- Claude skills ---
-  const skillsSrc = resolveAssetDirWithFallback(__dirname, 'claude-skills', join('.claude', 'skills'));
-  if (existsSync(skillsSrc)) {
-    const dest = join(claudeDir, 'skills');
-    const count = copyDirSync(skillsSrc, dest);
-    console.log(`Installed Claude skills: ${count} files → ${dest}`);
-  } else {
-    console.log('Claude skills not found in package. Skipping.');
-  }
-
-  // --- Claude agents ---
-  const agentsSrc = resolveAssetDirWithFallback(__dirname, 'claude-agents', join('.claude', 'agents'));
-  if (existsSync(agentsSrc)) {
-    const dest = join(claudeDir, 'agents');
-    const count = copyDirSync(agentsSrc, dest);
-    console.log(`Installed Claude agents: ${count} files → ${dest}`);
-  } else {
-    console.log('Claude agents not found in package. Skipping.');
-  }
-
-  // --- Claude settings (REAPER tool permissions) ---
-  const settingsPath = join(claudeDir, 'settings.json');
+  // Tool allow-list, written globally so the REAPER tools are pre-approved everywhere.
+  const settingsPath = join(homedir(), '.claude', 'settings.json');
+  mkdirSync(dirname(settingsPath), { recursive: true });
   const result = ensureClaudeSettings(settingsPath);
-  if (result === 'created') {
-    console.log(`Created Claude settings: ${settingsPath}`);
-  } else if (result === 'updated') {
-    console.log(`Updated Claude settings with new REAPER tools: ${settingsPath}`);
+  console.log(`Claude settings (${MCP_TOOL_NAMES.length} REAPER tools allow-listed): ${result} → ${settingsPath}`);
+
+  // .mcp.json in the current directory, pointing at the local reaper-mcp CLI.
+  const mcpJsonPath = join(process.cwd(), '.mcp.json');
+  if (createMcpJson(mcpJsonPath)) {
+    console.log(`Created: ${mcpJsonPath}`);
   } else {
-    console.log(`Claude settings already has all REAPER tools: ${settingsPath}`);
+    console.log(`.mcp.json already exists — leaving it untouched.`);
   }
 
-  // --- .mcp.json (project-local only) ---
-  if (!isGlobal) {
-    const mcpJsonPath = join(baseDir, '.mcp.json');
-    if (createMcpJson(mcpJsonPath)) {
-      console.log(`\nCreated: ${mcpJsonPath}`);
-    } else {
-      console.log(`\n.mcp.json already exists — add the reaper server config manually if needed.`);
-    }
-  }
-
-  console.log('\nDone! Claude Code now has mix engineer agents, knowledge, and REAPER MCP tools.');
-  console.log(`All ${MCP_TOOL_NAMES.length} REAPER tools are pre-approved — agents work autonomously.`);
-  console.log('\nTry: @mix-engineer "Please gain stage my tracks"');
-  console.log('Or:  @mix-analyzer "Roast my mix"');
+  console.log('\nIf you haven\'t yet, symlink the skills + knowledge and install the bridge:');
+  console.log('  scripts/sync-symlinks.sh   # mix skills + knowledge → ~/.claude');
+  console.log('  reaper-mcp setup           # Lua bridge + JSFX → REAPER');
+  console.log('then load mcp_bridge.lua in REAPER.');
+  console.log('\nTry: /mixer "Please gain stage my tracks"  ·  /critique "Roast my mix"');
 }
 
 async function doctor(): Promise<void> {
@@ -154,32 +98,33 @@ async function doctor(): Promise<void> {
   const bridgeRunning = await isBridgeRunning();
   console.log(`Lua bridge:    ${bridgeRunning ? '✓ Connected' : '✗ Not detected'}`);
   if (!bridgeRunning) {
-    console.log('  → Run "npx @mthines/reaper-mcp setup" then load mcp_bridge.lua in REAPER');
+    console.log('  → Run "reaper-mcp setup" then load mcp_bridge.lua in REAPER');
   }
 
   const globalClaudeDir = join(homedir(), '.claude');
-  const localAgents = existsSync(join(process.cwd(), '.claude', 'agents'));
-  const globalAgents = existsSync(join(globalClaudeDir, 'agents'));
-  const agentsExist = localAgents || globalAgents;
-  const agentsLocation = localAgents ? '.claude/agents/' : globalAgents ? '~/.claude/agents/' : '';
-  console.log(`Mix agents:    ${agentsExist ? `✓ Found (${agentsLocation})` : '✗ Not installed'}`);
-  if (!agentsExist) {
-    console.log('  → Run "npx @mthines/reaper-mcp install-skills"');
+  const localSkills = existsSync(join(process.cwd(), '.claude', 'skills', 'mixer.md'));
+  const globalSkills = existsSync(join(globalClaudeDir, 'skills', 'mixer.md'));
+  const skillsExist = localSkills || globalSkills;
+  const skillsLocation = localSkills ? '.claude/skills/' : globalSkills ? '~/.claude/skills/' : '';
+  console.log(`Mix skills:    ${skillsExist ? `✓ Found (${skillsLocation})` : '✗ Not linked'}`);
+  if (!skillsExist) {
+    console.log('  → Run "scripts/sync-symlinks.sh" from your clone');
   }
 
-  const localKnowledge = existsSync(join(process.cwd(), 'knowledge'));
-  const globalKnowledge = existsSync(join(globalClaudeDir, 'knowledge'));
-  const knowledgeExists = localKnowledge || globalKnowledge;
-  const knowledgeLocation = localKnowledge ? 'project' : globalKnowledge ? '~/.claude/' : '';
-  console.log(`Knowledge base: ${knowledgeExists ? `✓ Found (${knowledgeLocation})` : '✗ Not installed'}`);
-  if (!knowledgeExists) {
-    console.log('  → Run "npx @mthines/reaper-mcp install-skills"');
+  // The skills read ~/.claude/knowledge (the symlink sync-symlinks.sh creates), or
+  // a project-scoped .claude/knowledge — NOT a bare repo-root knowledge/ dir.
+  const knowledgeLinked =
+    existsSync(join(globalClaudeDir, 'knowledge')) ||
+    existsSync(join(process.cwd(), '.claude', 'knowledge'));
+  console.log(`Knowledge base: ${knowledgeLinked ? '✓ Linked (~/.claude/knowledge)' : '✗ Not linked'}`);
+  if (!knowledgeLinked) {
+    console.log('  → Run "scripts/sync-symlinks.sh" from your clone');
   }
 
   const mcpJsonExists = existsSync(join(process.cwd(), '.mcp.json'));
   console.log(`MCP config:    ${mcpJsonExists ? '✓ .mcp.json found' : '✗ .mcp.json missing'}`);
   if (!mcpJsonExists) {
-    console.log('  → Run "npx @mthines/reaper-mcp install-skills --project" to create .mcp.json');
+    console.log('  → Run "reaper-mcp init" to create .mcp.json');
   }
 
   console.log('\nTo check SWS Extensions, start REAPER and use the "list_available_fx" tool.');
@@ -266,7 +211,7 @@ async function doctor(): Promise<void> {
   }
 
   console.log('');
-  process.exit(bridgeRunning && knowledgeExists && mcpJsonExists && !sidecarBroken ? 0 : 1);
+  process.exit(bridgeRunning && knowledgeLinked && mcpJsonExists && !sidecarBroken ? 0 : 1);
 }
 
 async function serve(): Promise<void> {
@@ -307,7 +252,7 @@ async function serve(): Promise<void> {
           });
           log('WARNING: Lua bridge does not appear to be running in REAPER.');
           log('Commands will timeout until the bridge script is started.');
-          log('Run "npx @mthines/reaper-mcp setup" for installation instructions.');
+          log('Run "reaper-mcp setup" for installation instructions.');
         } else {
           bridgeSpan.setStatus({ code: SpanStatusCode.OK });
           log('Lua bridge detected — connected to REAPER');
@@ -340,16 +285,10 @@ async function serve(): Promise<void> {
 // --- CLI entry point ---
 
 const command = process.argv[2];
-const cliArgs = process.argv.slice(3);
-const hasYesFlag = cliArgs.includes('--yes') || cliArgs.includes('-y');
-const hasProjectFlag = cliArgs.includes('--project');
 
 switch (command) {
   case 'init':
-    runInit(
-      { yes: hasYesFlag, project: hasProjectFlag },
-      () => __dirname,
-    ).catch((err: unknown) => {
+    init().catch((err: unknown) => {
       console.error('Init failed:', err);
       process.exit(1);
     });
@@ -358,13 +297,6 @@ switch (command) {
   case 'setup':
     setup().catch((err) => {
       console.error('Setup failed:', err);
-      process.exit(1);
-    });
-    break;
-
-  case 'install-skills':
-    installSkills(parseInstallScope(process.argv.slice(3))).catch((err) => {
-      console.error('Install failed:', err);
       process.exit(1);
     });
     break;
@@ -403,32 +335,23 @@ switch (command) {
   default:
     console.log(`reaper-mcp — AI-powered mixing for REAPER DAW
 
+reaper-mcp is fork-and-clone: clone your fork and run one command.
+
 Usage:
-  npx @mthines/reaper-mcp                  Start MCP server (stdio mode)
-  npx @mthines/reaper-mcp serve            Start MCP server (stdio mode)
-  npx @mthines/reaper-mcp init             Guided interactive setup (recommended for new users)
-  npx @mthines/reaper-mcp init --yes       Non-interactive setup (install everything with defaults)
-  npx @mthines/reaper-mcp init --project   Include .mcp.json in current directory
-  npx @mthines/reaper-mcp setup            Install Lua bridge + JSFX analyzers into REAPER
-  npx @mthines/reaper-mcp setup-sidecar    Install Python sidecar for perceptual audio analysis (opt-in, ~831 MB)
-  npx @mthines/reaper-mcp install-skills   Install AI knowledge + agents globally (default)
-  npx @mthines/reaper-mcp install-skills --project  Install into current project directory
-  npx @mthines/reaper-mcp install-skills --global   Install into ~/.claude/ (default)
-  npx @mthines/reaper-mcp doctor           Check that everything is configured correctly
-  npx @mthines/reaper-mcp status           Check if Lua bridge is running in REAPER
+  reaper-mcp                  Start MCP server (stdio mode)
+  reaper-mcp serve            Start MCP server (stdio mode)
+  reaper-mcp setup            Install Lua bridge + JSFX analyzers into REAPER
+  reaper-mcp setup-sidecar    Install Python sidecar for perceptual audio analysis (opt-in, ~831 MB)
+  reaper-mcp init             Configure Claude Code: tool allow-list + .mcp.json (copy-free)
+  reaper-mcp doctor           Check that everything is configured correctly
+  reaper-mcp status           Check if Lua bridge is running in REAPER
 
-Quick Start (interactive):
-  npx @mthines/reaper-mcp init             # guided setup — select components interactively
+Quick Start (from your clone):
+  ./scripts/install.sh        # build, link CLI, bridge, symlink skills + knowledge, configure
+  # then load mcp_bridge.lua in REAPER (Actions > Load ReaScript > Run)
 
-Quick Start (manual steps):
-  1. npx @mthines/reaper-mcp setup            # install REAPER components
-  2. Load mcp_bridge.lua in REAPER (Actions > Load ReaScript > Run)
-  3. npx @mthines/reaper-mcp install-skills   # install AI knowledge + agents (globally)
-  4. Open Claude Code — REAPER tools + mix engineer agents are ready
-
-Tip: install globally for shorter commands:
-  npm install -g @mthines/reaper-mcp
-  reaper-mcp init
+Then in Claude Code:
+  /mixer "Please gain stage my tracks"   ·   /critique "Roast my mix"
 `);
     break;
 }

@@ -106,8 +106,8 @@ describe('cli helpers', () => {
       expect(createMcpJson(path)).toBe(true);
 
       const content = JSON.parse(readFileSync(path, 'utf-8'));
-      expect(content.mcpServers.reaper.command).toBe('npx');
-      expect(content.mcpServers.reaper.args).toEqual(['@mthines/reaper-mcp', 'serve']);
+      expect(content.mcpServers.reaper.command).toBe('reaper-mcp');
+      expect(content.mcpServers.reaper.args).toEqual(['serve']);
     });
 
     it('returns false when file already exists', () => {
@@ -170,51 +170,23 @@ describe('package integrity', () => {
     expect(pkg.dependencies['zod']).toBeDefined();
   });
 
-  it.skipIf(!distExists)('dist contains package.json with files whitelist', () => {
-    const pkg = JSON.parse(readFileSync(join(distDir, 'package.json'), 'utf-8'));
-    expect(pkg.files).toBeDefined();
-    expect(pkg.files).toContain('main.js');
-    expect(pkg.files).toContain('reaper/**');
-    expect(pkg.files).toContain('knowledge/**');
-    expect(pkg.files).toContain('claude-agents/**');
-    expect(pkg.files).toContain('README.md');
-    expect(pkg.files).toContain('LICENSE');
-  });
-
+  // Clone-only model: the CLI resolves skills/knowledge from the repo source tree
+  // (resolveAssetDir walks up), so dist only carries the bridge + sidecar assets.
   it.skipIf(!distExists)('dist contains all REAPER assets', () => {
     for (const asset of REAPER_ASSETS) {
       expect(existsSync(join(distDir, 'reaper', asset)), `missing reaper/${asset}`).toBe(true);
     }
   });
 
-  it.skipIf(!distExists)('dist contains knowledge directories', () => {
-    for (const dir of KNOWLEDGE_DIRS) {
-      expect(existsSync(join(distDir, 'knowledge', dir)), `missing knowledge/${dir}`).toBe(true);
-    }
+  it.skipIf(!distExists)('dist does NOT bundle the copy-path assets (clone-only)', () => {
+    expect(existsSync(join(distDir, 'knowledge'))).toBe(false);
+    expect(existsSync(join(distDir, 'claude-skills'))).toBe(false);
+    expect(existsSync(join(distDir, 'claude-rules'))).toBe(false);
   });
 
-  it.skipIf(!distExists)('dist contains README.md', () => {
-    expect(existsSync(join(distDir, 'README.md'))).toBe(true);
-  });
-
-  it.skipIf(!distExists)('dist contains LICENSE', () => {
-    expect(existsSync(join(distDir, 'LICENSE'))).toBe(true);
-  });
-
-  it.skipIf(!distExists)('dist contains claude-rules', () => {
-    expect(existsSync(join(distDir, 'claude-rules'))).toBe(true);
-  });
-
-  it.skipIf(!distExists)('dist contains claude-skills', () => {
-    expect(existsSync(join(distDir, 'claude-skills'))).toBe(true);
-  });
-
-  it.skipIf(!distExists)('dist contains claude-agents', () => {
-    expect(existsSync(join(distDir, 'claude-agents'))).toBe(true);
-  });
-
-  it.skipIf(!distExists)('dist contains mixer agent', () => {
-    expect(existsSync(join(distDir, 'claude-agents', 'mixer.md'))).toBe(true);
+  it('mixer skill + memory protocol resolve from the repo source tree', () => {
+    expect(existsSync(join(workspaceRoot, '.claude', 'skills', 'mixer.md'))).toBe(true);
+    expect(existsSync(join(workspaceRoot, 'knowledge', 'reference', 'memory-protocol.md'))).toBe(true);
   });
 
   it.skipIf(!distExists)('main.js does not contain node_modules paths', () => {
