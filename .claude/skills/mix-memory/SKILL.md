@@ -37,8 +37,8 @@ State the detected mode + resolved store paths in one line before acting.
 3. If no argument, summarise: how many lessons, which plugins have notes, anything
    flagged `status: structural` (promotion-eligible).
 
-This is what the mixer/mastering skills do automatically at the start of work —
-use this mode to inspect or prime memory manually.
+This is what the mixer/mastering/critique skills do automatically at the start of
+work — use this mode to inspect or prime memory manually.
 
 ---
 
@@ -58,9 +58,11 @@ Show a preview of merges/prunes and get confirmation before writing.
 
 The self-heal step. For a lesson at `seen_count >= 3` or `status: structural`:
 1. Show the lesson and the one-line hard rule it would become.
-2. On approval, append that rule to the mixer skill's `## Hard Rules`
-   (`.claude/skills/mixer/SKILL.md`, or `~/.claude/skills/mixer/SKILL.md` if installed
-   globally; the `mastering` skill if mastering-specific).
+2. On approval, append that rule to the **`## Hard Rules` (or `## Rules`) of the
+   skill that owns the behavior** — `mixer` for mix moves, `mastering` for
+   master-bus moves, `critique` for analysis/flagging lessons
+   (`.claude/skills/{skill}/SKILL.md`, or `~/.claude/skills/{skill}/SKILL.md` if
+   installed globally).
 3. Mark the lesson `status: retired` (keep it as an audit trail; the rule now
    guarantees the behavior).
 

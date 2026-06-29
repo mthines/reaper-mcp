@@ -146,6 +146,12 @@ Tell the user:
 
 ## Notes
 
+- **Self-improvement loop (per `memory-protocol.md`).** Your main output *is*
+  memory — the plugin file. Beyond that, if the interview itself surfaces a
+  recurring process lesson (e.g. users rarely know the exact FX-browser string, so
+  ask for it first; a category that's repeatedly mis-picked), write/UPDATE a
+  lesson to `~/.claude/knowledge/lessons/mixing/` and mention it. End by asking
+  whether anything about the interview should change next time.
 - Always use the **exact** FX name from REAPER's FX browser — this is critical for pattern matching
 - If the user doesn't know the exact FX name, suggest they open REAPER, go to FX Browser, find the plugin, and copy the name
 - The `preference` score determines which plugin wins when multiple options are available for the same category

@@ -64,12 +64,23 @@ fork). Governed by `reference/memory-protocol.md` (read it before any write):
 - **On a durable plugin learning** (a verified param-index map, a setting the user
   kept, a gotcha): append a **contextualized** note to that plugin's
   `## Learned notes` — never an absolute rule.
-- **At a correction point** (the user reverted your change, or a re-measure showed
-  it got worse): write a process lesson to `~/.claude/knowledge/lessons/mixing/`.
+- **At a correction point — write the lesson immediately, before your next action.**
+  A correction point is: the user reverted/rejected a change or said "no, that's
+  wrong"; a re-measure (meters/LUFS/correlation/crest) showed your change made it
+  worse; or you fell into a recurring trap. This is non-negotiable (see Hard
+  Rules) — do not defer it to the end, and **state in chat that you captured it**
+  (file + one-line takeaway). The dominant failure of this loop is *no capture at
+  all* — treat a silent skip as a bug.
+- **End-of-session retrospective (always, even on a clean run).** Before your
+  final report, stop and ask: did the user correct or override me, did a
+  measurement surprise me, did I guess at something that paid off or nearly
+  didn't, should a lesson I already had have fired earlier? If anything surfaced,
+  write or UPDATE a lesson (a recurrence bumps `seen_count`, never duplicates).
+  Write nothing only when the retrospective is genuinely empty — and say which.
 - **When a lesson recurs (`seen_count >= 3`):** offer to promote it into the
   Hard Rules below — the self-heal. Follow the protocol's entrenchment guards;
   never let a lesson relax a hard rule.
-- After writing, note the changed file so the user can commit it to their fork.
+- After any write, name the changed file so the user can commit it to their fork.
 
 ## Knowledge base (load on demand — don't preload)
 
@@ -99,14 +110,21 @@ loudness/limiting, defer to `/mastering`.
 6. **Execute** — make changes, explaining each in audio terms.
 7. **Verify** — re-read meters/spectrum; compare against targets; revert if worse.
 8. **Capture** — write any durable plugin learnings / process lessons (Memory).
-9. **Report** — `snapshot_save { name: "after-{task}" }`; summarize before/after
-   measurements and suggested next steps.
+   Correction points are written *when they happen* (step 7), not saved for here.
+9. **Report** — first run the **end-of-session retrospective** (Memory) and write
+   any lesson it surfaces; then `snapshot_save { name: "after-{task}" }` and
+   summarize before/after measurements, **what you captured to memory (or that
+   nothing was)**, and suggested next steps.
 
 ## Hard Rules
 
 <!-- Promotion target: recurring process lessons graduate here via /mix-memory promote. -->
 
 - **Never skip the before-snapshot** — even for small changes. (Invariant.)
+- **Capture the lesson at the correction point.** If the user reverts/rejects a
+  change or a re-measure is worse, write the process lesson *before your next
+  action* and say you did. Never end a session that had a correction without a
+  written lesson. (Invariant — the loop's whole value depends on it.)
 - **Don't guess plugin names** — `search_fx` for the exact name.
 - **Read `get_fx_parameters` before setting a parameter** — values are normalized
   0.0–1.0 and the mapping varies per plugin.

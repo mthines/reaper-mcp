@@ -33,6 +33,40 @@ paths containing personal data.
 
 ---
 
+## The self-improvement loop (every skill)
+
+This loop is **general to all the mix skills** — `/mixer`, `/mastering`,
+`/critique`, `/learn-plugin` — not just one. It is what makes them get better
+over time instead of repeating mistakes. The design below is sound; the **only**
+thing that breaks it is failing to capture — so capture is **mandatory and
+reported**, never deferred to "later".
+
+1. **Recall (start of every task).** Read `lessons/mixing/INDEX.md` and any
+   relevant plugin notes before acting; treat matching lessons as soft
+   constraints. A skill that changes nothing (e.g. `/critique`) still recalls —
+   lessons sharpen what it looks for.
+2. **Capture at the correction point — immediately, before your next action.**
+   The moment the user reverts / rejects / overrides you, or a re-measure shows
+   you made it worse, write the lesson; then **say you did** (file + one-line
+   takeaway). Deferring it is how it gets lost. *No capture at all is the
+   dominant failure of this loop — treat a silent skip as a bug.*
+3. **End-of-session retrospective — always, even on a clean run.** Before the
+   final report, ask: did the user correct or override me; did a measurement
+   surprise me; did I guess at something that nearly didn't pay off; should a
+   lesson I already had have fired earlier? Write or UPDATE a lesson for anything
+   that surfaces (a recurrence bumps `seen_count`, never duplicates). Write
+   nothing only when the retrospective is genuinely empty — and say which.
+4. **Report what you captured.** The final message names the lesson(s) written
+   (or states that none were), so a skipped capture is visible to the user.
+
+"Read-only" skills (`/critique`) still write **process lessons about their own
+analysis** — a flag the user corrected, a real problem they had to point out.
+Read-only means they don't change the *mix*, not that they don't learn. The
+promotion gate (`seen_count >= 3`) and the entrenchment guards below apply to
+every skill.
+
+---
+
 ## Plugin memory
 
 ### Read (before working with a plugin)
@@ -92,11 +126,15 @@ about the user's mix. Advisory input, never an automatic action.
 tags match the task as **soft constraints**. If the INDEX nears 200 lines, suggest
 `/mix-memory consolidate`.
 
-### Write — at a correction point
-Write a lesson when the process went wrong and you corrected course:
-- the user **reverted** a snapshot you made, or said "no, that's wrong"
-- a **re-measure** (meters/LUFS/correlation) showed your change made it worse
+### Write — at a correction point (immediately) or in the end-of-session retrospective
+Write a lesson the moment the process goes wrong, **before your next action** —
+not batched for the end — and tell the user you captured it. Triggers:
+- the user **reverted** a snapshot you made, said "no, that's wrong", or
+  **overrode** a target/decision you proposed
+- a **re-measure** (meters/LUFS/correlation/crest) showed your change made it worse
 - you hit a **recurring trap** (over-compressed, widened before checking mono, clipped the bus)
+- the **end-of-session retrospective** surfaced friction even though nothing was
+  formally reverted (a surprise, a near-miss, a lesson that should have fired)
 
 One file per lesson, `lessons/mixing/entries/<yyyy-mm-dd>-<slug>.md`:
 

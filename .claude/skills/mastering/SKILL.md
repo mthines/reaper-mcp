@@ -45,10 +45,19 @@ a symlink to the repo for cloned installs, so writes are committable):
   user preferred and known gotchas.
 - **Unknown plugin?** Bootstrap it first (see protocol): research the web +
   `get_fx_parameters`, write its `plugin.md`, then use it.
-- **After:** capture durable learnings — a verified limiter param map, a ceiling
-  the user kept, or a process lesson at a correction point (e.g. the user found
-  your master too loud and you backed off). A lesson seen `>= 3×` is promotable to
-  a Hard Rule via `/mix-memory promote`.
+- **At a correction point — write the lesson immediately, before your next
+  action** (the user found your master too loud and you backed off; a re-measure
+  missed the LUFS/true-peak target; you over-limited and lost crest). Non-
+  negotiable (see Hard Rules); **say in chat that you captured it** (file +
+  takeaway). A silent skip is a bug.
+- **End-of-session retrospective (always, even on a clean master).** Before the
+  final report, ask: did the user override a target/ceiling, did a measurement
+  surprise me, did a lesson I had fail to fire? If anything surfaced, write or
+  UPDATE a lesson (recurrence bumps `seen_count`). A lesson seen `>= 3×` is
+  promotable to a Hard Rule via `/mix-memory promote`.
+- **Durable facts:** also capture a verified limiter param map or a ceiling the
+  user kept as a plugin `## Learned notes` entry. Name any changed file so the
+  user can commit it.
 
 ## Workflow
 
@@ -70,14 +79,19 @@ a symlink to the repo for cloned installs, so writes are committable):
    input until integrated LUFS hits target; keep limiter GR under ~3 dB.
 7. **Verify** — `read_track_lufs` (within 0.5 of target), true peak below ceiling,
    crest genre-appropriate, correlation healthy (>0.3).
-8. **Report** — `snapshot_save { name: "master-v1" }`; report target vs achieved
-   LUFS, true peak, crest, the chain + settings, and any compromises. Capture
-   learnings (Memory).
+8. **Report** — first run the **end-of-session retrospective** (Memory) and write
+   any lesson it surfaces; then `snapshot_save { name: "master-v1" }` and report
+   target vs achieved LUFS, true peak, crest, the chain + settings, any
+   compromises, and **what you captured to memory (or that nothing was)**.
 
 ## Hard Rules
 
 <!-- Promotion target: recurring mastering lessons graduate here via /mix-memory promote. -->
 
+- **Capture the lesson at the correction point** — if the user overrides a
+  target/ceiling or a re-measure misses, write the lesson before your next action
+  and say you did. Never end a session that had a correction without a written
+  lesson. (Invariant.)
 - **Mastering is the final stage** — the mix should already be finished.
 - **If the bus clips before you start, reduce it first** — don't just add a limiter.
 - **Linear-phase EQ if available** — avoids phase shift on the master.

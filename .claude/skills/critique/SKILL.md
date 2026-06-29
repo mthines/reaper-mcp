@@ -32,15 +32,26 @@ changes.** After the report, ask which problems to fix first and hand off to
 Back every claim with a measurement — never "it's muddy", always "200–400 Hz
 sits +4 dB above the average curve".
 
-## Recall memory first
+## Memory — recall first, and learn from your analysis
 
-Per `reference/memory-protocol.md`, before analyzing read:
+Per `reference/memory-protocol.md` (the self-improvement loop is general to every
+mix skill — `/critique` included).
+
+**Recall (before analyzing):**
 - `~/.claude/knowledge/lessons/mixing/INDEX.md` — past process lessons help you
   weight what to flag.
 - plugin notes in `~/.claude/knowledge/plugins/` — the user's tools and taste.
 
-You are read-only; you do **not** write memory. If you spot a recurring process
-trap worth recording, mention it so `/mixer` can capture it.
+**Capture (process lessons about your *analysis*).** Read-only means you don't
+change the *mix* — it does **not** mean you don't learn:
+- **At a correction point — immediately:** the user says a flag was wrong or
+  intentional, or points out a real problem you missed. Write/UPDATE a lesson to
+  `~/.claude/knowledge/lessons/mixing/` and say you did (file + takeaway).
+- **End-of-session retrospective (always):** before the report, ask whether your
+  read of the mix was off anywhere; capture anything that surfaced.
+- A lesson at `seen_count >= 3` is promotable via `/mix-memory promote`.
+
+(You still make no *mix* changes — a captured lesson is the only thing you write.)
 
 ## Analysis checklist (run all; back each with a reading)
 
@@ -97,3 +108,6 @@ Hand off to /mixer to execute, then /mastering for final loudness.
 - Find at least one genuine positive.
 - **Account for perceived loudness** — don't flag bass as "too hot" for metering
   higher than vocals; do flag presence-range tracks metering as hot as the bass.
+- **Run the end-of-session retrospective before reporting** (Memory) and capture
+  any analysis lesson it surfaces; if the user corrects a flag mid-session, write
+  that lesson immediately. Say what you captured (or that nothing surfaced).
