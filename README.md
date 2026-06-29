@@ -11,13 +11,12 @@ AI-powered mixing for REAPER DAW. An MCP server that gives AI agents (Claude Cod
 
 ## Quick Start
 
-reaper-mcp is **fork-and-clone**: fork it, clone your fork, run one command, and
-start mixing. The mix skills, plugin knowledge, and everything the agent learns
-live in your repo — versioned in git, and shipped to anyone who clones your fork.
+Clone the repo, run one command, and start mixing. The mix skills, plugin
+knowledge, and everything the agent learns live in your clone — versioned in git.
 
 ```bash
-# Fork on GitHub, then clone your fork
-git clone https://github.com/<you>/reaper-mcp.git && cd reaper-mcp
+# Clone and enter the repo
+git clone https://github.com/mthines/reaper-mcp.git && cd reaper-mcp
 
 # One command: build, link the CLI, install the REAPER bridge,
 # symlink the skills + knowledge into ~/.claude, and configure Claude Code
@@ -26,11 +25,16 @@ git clone https://github.com/<you>/reaper-mcp.git && cd reaper-mcp
 
 Then load `mcp_bridge.lua` in REAPER (Actions > Show action list > Load ReaScript
 > Run) and open Claude Code — you're ready to mix. Everything the skills learn
-lands in your clone; commit it to your fork and it travels with you.
+lands in your clone.
 
 ```
 /mixer Please gain stage my tracks   ·   /critique Roast my mix
 ```
+
+> **Want to keep what the agent learns?** Fork the repo first, clone your fork
+> instead, and commit the plugin knowledge and lessons the skills accumulate —
+> they'll travel with you and ship to anyone who clones your fork. Everything
+> below works the same either way; just swap in your fork's URL.
 
 ## What it does
 
@@ -79,13 +83,15 @@ REAPER's scripting environment is sandboxed — no sockets, no HTTP. The Lua bri
 
 ### One command
 
-Clone your fork and run the installer — the repo is the source of truth, and you
-own it:
+Clone the repo and run the installer — the repo is the source of truth:
 
 ```bash
-git clone https://github.com/<you>/reaper-mcp.git && cd reaper-mcp
+git clone https://github.com/mthines/reaper-mcp.git && cd reaper-mcp
 ./scripts/install.sh
 ```
+
+> Prefer to keep the knowledge the skills learn? Fork first and clone your fork
+> instead — see the note in [Quick Start](#quick-start).
 
 `scripts/install.sh` runs these steps (each is also runnable on its own):
 
@@ -102,8 +108,8 @@ git clone https://github.com/<you>/reaper-mcp.git && cd reaper-mcp
 `sync-symlinks.sh` is idempotent and **refuses to overwrite a real file or
 directory** (run it with `--dry-run` to preview). Because `~/.claude/knowledge`
 *is* your repo, every plugin you teach and every lesson the skills learn lands in
-the working tree — commit it to your fork and it travels with you (and ships to
-whoever clones).
+the working tree — commit it (and, if you forked, it travels with you and ships
+to whoever clones your fork).
 
 The repo's `.claude/rules/` (architecture, development, lua-bridge, testing) are
 **not** symlinked globally — they're for developing reaper-mcp, and load
@@ -310,7 +316,8 @@ Say what you want — the skills auto-trigger on intent — or invoke by slash:
 
 The mix skills read and write a **versioned memory** in the knowledge base at
 `~/.claude/knowledge/` — which, for a cloned + symlinked install, *is* your repo.
-So everything they learn is tracked in git and ships with your fork:
+So everything they learn is tracked in git (and, if you forked, ships with your
+fork):
 
 - **Plugin memory** (`knowledge/plugins/`) — as the skills work with a plugin
   (JST Heat, Pro-Q 3, Helix Native, …) they record verified parameter maps,
@@ -321,8 +328,8 @@ So everything they learn is tracked in git and ships with your fork:
   measures worse, the skill records a lesson. A lesson that recurs is promoted into
   the mixer skill's hard rules, so recurring mistakes self-heal.
 
-Commit what they write (`git add knowledge/…`) and it travels with your fork.
-Recall or tidy memory anytime with `/mix-memory`. Full contract:
+Commit what they write (`git add knowledge/…`) — and if you forked, it travels
+with you. Recall or tidy memory anytime with `/mix-memory`. Full contract:
 `knowledge/reference/memory-protocol.md`.
 
 ### What happens under the hood
