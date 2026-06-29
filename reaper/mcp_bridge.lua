@@ -874,6 +874,10 @@ function handlers.read_track_meters(params)
   }
 end
 
+-- Forward declaration: defined further below (line ~1618). Declared here so the
+-- earlier handlers.read_track_spectrum can capture it as an upvalue.
+local ensure_jsfx_on_track
+
 function handlers.read_track_spectrum(params)
   local idx = params.trackIndex
   if not idx then return nil, "trackIndex required" end
@@ -1615,7 +1619,7 @@ end
 -- Tries to place inside an "MCP Meters" FX Container (REAPER 7.06+).
 -- Falls back to direct insertion on older REAPER versions.
 -- Returns the FX index (possibly container-addressed) on success, or nil + error.
-local function ensure_jsfx_on_track(track, fx_name)
+function ensure_jsfx_on_track(track, fx_name)
   -- Try container approach first (REAPER 7.06+)
   local container_idx = find_or_create_mcp_container(track)
   if container_idx then
