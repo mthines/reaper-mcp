@@ -3,6 +3,7 @@
  * against an in-memory fake of the ReaScript API (__fixtures__/fake_reaper.lua).
  * Assertions live in the Lua snippets: a failed `assert` rejects the promise.
  */
+import { describe, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { LuaFactory } from 'wasmoon';
