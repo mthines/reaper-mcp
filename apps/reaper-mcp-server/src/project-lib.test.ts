@@ -99,6 +99,9 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
         assert(project.set_render(api, { format = f }).format == f:lower(), "round-trips " .. f)
       end
       project.set_render(api, { format = "flac" })
+      assert(project.get_render(api).secondaryFormat == "none", "no secondary format by default")
+      assert(project.set_render(api, { secondaryFormat = "mp3" }).secondaryFormat == "mp3", "secondary format set")
+      assert(project.set_render(api, { secondaryFormat = "none" }).secondaryFormat == "none", "secondary format cleared")
 
       local out = assert(project.render(api, {}, fs))
       assert(out.files[1] == "/tmp/out/mix.flac" and fs.exists("/tmp/out/mix.flac"), "render wrote the target")
@@ -113,6 +116,10 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
       project.set_render(api, { bounds = "time_selection" })
       local _, nosel = project.render(api, { overwrite = true }, fs)
       assert(nosel and nosel:find("no time selection"), tostring(nosel))
+      local video = new_fake{ fs = fs, project = { strings = { RENDER_FILE = "/tmp/out", RENDER_PATTERN = "v",
+        RENDER_FORMAT2 = b64encode(" FMW\0\0\0\0") } } }
+      local _, vid = project.render(video, {}, fs)
+      assert(vid and vid:find("other:") and #video.commands == 0, "unknown encoder refused: " .. tostring(vid))
       local rel = new_fake{ fs = fs }
       local _, relerr = project.render(rel, {}, fs)
       assert(relerr and relerr:find("not an absolute path"), tostring(relerr))
@@ -162,6 +169,19 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
       local d = assert(project.delete_tempo_marker(api, { index = 1 }))
       assert(d.count == 1 and d.markers[1].bpm == 90, "deleted")
       assert(api.undo[#api.undo] == "MCP: Delete tempo marker")
+
+      local rep = assert(project.add_tempo_marker(api, { position = 0, bpm = 101 }))
+      assert(rep.replacedExisting == true and rep.count == 1 and rep.markers[1].bpm == 101, "same position replaces")
+
+      local late = new_fake{ project = { tempo_markers = { { time = 4, bpm = 140 } } } }
+      local l = assert(project.set_tempo(late, { bpm = 99 }))
+      assert(l.count == 2 and l.markers[1].position == 0 and l.markers[1].bpm == 99 and l.markers[2].bpm == 140,
+        "first marker later than 0: a start marker is added, the later one kept")
+
+      local sticky = new_fake{ project = { sticky_start = true, tempo_markers = { { time = 0, bpm = 120, num = 4, den = 4 }, { time = 4, bpm = 140 } } } }
+      local _, kept = project.delete_tempo_marker(sticky, { index = 0 })
+      assert(kept and kept:find("did not delete"), "a delete REAPER ignores is reported: " .. tostring(kept))
+      assert(project.tempo_map(sticky).tempoMarkerCount == 2)
     `);
   });
 
@@ -220,6 +240,7 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
       local before = project.get_render(api)
       refused("unsupported render format 'wma'", project.set_render(api, { format = "wma", outputDirectory = "/tmp/out", channels = 1 }))
       refused("unknown bounds", project.set_render(api, { bounds = "everything" }))
+      refused("unsupported secondary render format", project.set_render(api, { secondaryFormat = "wmv", format = "wav" }))
       refused("sampleRate", project.set_render(api, { sampleRate = 12 }))
       refused("channels", project.set_render(api, { channels = 0 }))
       refused("endTime must be after", project.set_render(api, { startTime = 5, endTime = 1 }))

@@ -55,7 +55,7 @@ function registerProjectOpsTools(server: McpServer): void {
 
   server.tool(
     'get_render_settings',
-    'Get the project render settings: output directory, file name pattern, format, bounds (custom/project/time_selection/…), custom start/end, sample rate (0 = project rate), channels, and the target files a render would write.',
+    'Get the project render settings: output directory, file name pattern, format, secondary format, bounds (custom/project/time_selection/…), custom start/end, sample rate (0 = project rate), channels, and the target files a render would write.',
     {},
     async () => reply(await sendCommand('get_render_settings')),
   );
@@ -67,6 +67,7 @@ function registerProjectOpsTools(server: McpServer): void {
       outputDirectory: z.string().optional().describe('Absolute output directory'),
       filePattern: z.string().optional().describe('File name pattern without extension; REAPER wildcards like $project allowed'),
       format: z.enum(['wav', 'aiff', 'flac', 'mp3', 'ogg', 'opus']).optional().describe('Output format'),
+      secondaryFormat: z.enum(['none', 'wav', 'aiff', 'flac', 'mp3', 'ogg', 'opus']).optional().describe('Second file written by the same render; none disables it'),
       bounds: z.enum(['custom', 'project', 'time_selection', 'all_regions', 'selected_items', 'selected_regions']).optional().describe('What to render'),
       startTime: z.coerce.number().min(0).optional().describe('Custom bounds start (seconds)'),
       endTime: z.coerce.number().min(0).optional().describe('Custom bounds end (seconds)'),
@@ -78,7 +79,7 @@ function registerProjectOpsTools(server: McpServer): void {
 
   server.tool(
     'render_project',
-    'Render the project with its current render settings (set them with set_render_settings) and return the files written. Synchronous: REAPER is busy until the render finishes, so keep renders short. Refused when a target file already exists (REAPER would ask) unless overwrite is true, and when bounds is time_selection with no time selection.',
+    'Render the project with its current render settings (set them with set_render_settings) and return the files written. Synchronous: REAPER is busy until the render finishes, so keep renders short. Refused when a target file already exists (REAPER would ask) unless overwrite is true, when bounds is time_selection with no time selection, and when the format or secondary format is an encoder outside wav/aiff/flac/mp3/ogg/opus (they can open a dialog).',
     {
       overwrite: z.boolean().optional().describe('Delete existing target files before rendering'),
     },

@@ -576,6 +576,8 @@ export interface RenderSettings {
   filePattern: string;
   /** "other:<fourcc>" for a sink outside the supported list. */
   format: string | null;
+  /** 'none' when no secondary file is rendered. */
+  secondaryFormat: string;
   bounds: string;
   startTime: number;
   endTime: number;

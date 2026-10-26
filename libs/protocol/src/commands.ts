@@ -788,6 +788,8 @@ export interface SetRenderSettingsParams {
   outputDirectory?: string;
   filePattern?: string;
   format?: RenderFormat;
+  /** Second file written by the same render; 'none' disables it. */
+  secondaryFormat?: RenderFormat | 'none';
   bounds?: RenderBounds;
   /** Seconds; used when bounds is "custom". */
   startTime?: number;

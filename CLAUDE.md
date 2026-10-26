@@ -358,7 +358,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI and `analyze_track
 | `redo_project` | `tools/project.ts` | Redo the last undone point; reports its label |
 | `save_project` | `tools/project.ts` | Save in place, or to an absolute `.rpp` `path`. Never opens a dialog: a never-saved project without `path` is refused |
 | `get_render_settings` | `tools/project.ts` | Output dir, file pattern, format, bounds, start/end, sample rate, channels, and the resolved target files |
-| `set_render_settings` | `tools/project.ts` | Set any render setting (format: wav/aiff/flac/mp3/ogg/opus); all validated before any write |
+| `set_render_settings` | `tools/project.ts` | Set any render setting (format and secondaryFormat: wav/aiff/flac/mp3/ogg/opus, secondary also none); all validated before any write |
 | `render_project` | `tools/project.ts` | Render with the current settings (synchronous action 42230); refuses to overwrite existing targets unless `overwrite` |
 | `get_project_settings` | `tools/project.ts` | Sample rate (+ forced flag), title, author, notes, repeat, metronome |
 | `set_project_settings` | `tools/project.ts` | Set any of those; metronome is a global REAPER option (not undoable, not stored in the project) |
@@ -412,10 +412,11 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 ### Project Operations Concepts
 
 - **No dialogs**: `save_project` without `path` on a never-saved project is refused (REAPER would open Save As) — the same rule `run_action` applies to `File: Save…`. `render_project` refuses when a target file exists (REAPER would ask to overwrite) unless `overwrite: true`, which deletes those files first, and when `bounds` is `time_selection` with no time selection.
+- **Render formats**: `format` and `secondaryFormat` (a second file from the same render; `none` disables it) take wav/aiff/flac/mp3/ogg/opus with REAPER's default options. `render_project` refuses when either is another encoder (seen live: a template's video secondary format left a modal dialog open) — set `secondaryFormat: "none"`.
 - **Render is synchronous**: action 42230 blocks REAPER (and the bridge) until the render finishes. Keep renders short (a time selection or custom bounds). `targets` in `get_render_settings` are the files REAPER will write (`RENDER_TARGETS`).
 - **Undo**: every edit by these tools is one undo point labelled `MCP: …`, so `undo_project` reverts exactly that edit. Repeat and metronome changes are not undoable in REAPER.
 - **Validation first**: invalid input (unknown marker/region/tempo index, BPM <= 0, unsupported format, end <= start) is refused before anything is written.
-- **Tempo indexes** are `get_tempo_map` indexes; a map with `tempoMarkerCount: 0` holds only the project tempo, set it with `set_project_tempo`.
+- **Tempo indexes** are `get_tempo_map` indexes; a map with `tempoMarkerCount: 0` holds only the project tempo, set it with `set_project_tempo`. Adding a marker where one already is replaces it (`replacedExisting: true`). REAPER can silently keep the start marker on delete; `delete_tempo_marker` then returns an error instead of a false success. `set_project_tempo` never uses `SetCurrentBPM` with markers present (it inserts a marker at the edit cursor).
 
 ### Envelope / Automation Concepts
 

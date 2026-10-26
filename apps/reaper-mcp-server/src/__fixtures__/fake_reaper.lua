@@ -353,7 +353,7 @@ function install_project_fake(api, spec, write)
     info = { PROJECT_SRATE = 44100, PROJECT_SRATE_USE = 0, RENDER_BOUNDSFLAG = 1, RENDER_STARTPOS = 0,
       RENDER_ENDPOS = 0, RENDER_SRATE = 0, RENDER_CHANNELS = 2, RENDER_SETTINGS = 0 },
     strings = { RENDER_FILE = "", RENDER_PATTERN = "untitled", RENDER_FORMAT = b64encode("evaw\0\0\0\0"),
-      PROJECT_TITLE = "", PROJECT_AUTHOR = "" },
+      RENDER_FORMAT2 = "", PROJECT_TITLE = "", PROJECT_AUTHOR = "" },
     notes = "", ["repeat"] = 0, loop = { 0, 0 },
   }
   for k, v in pairs(sp.info or {}) do proj.info[k] = v end
@@ -434,6 +434,7 @@ function install_project_fake(api, spec, write)
   end
   api.GetSetProjectInfo_String = function(_, key, val, set)
     if key == "RENDER_TARGETS" then return true, targets() end
+    if set and key == "RENDER_FORMAT2" and #val == 4 then val = b64encode(val .. "\0\0\0\0") end
     if set then
       if key == "RENDER_FORMAT" and #val == 4 then val = b64encode(val .. "\0\0\0\0") end
       P().strings[key] = val
@@ -480,7 +481,10 @@ function install_project_fake(api, spec, write)
   api.SetTempoTimeSigMarker = function(_, idx, time, _, _, bpm, num, den, linear)
     local list = P().tempo_markers
     local m = { time = time, bpm = bpm, num = num, den = den, linear = linear }
-    if idx == -1 then list[#list + 1] = m
+    local same
+    for k, x in ipairs(list) do if math.abs(x.time - time) < 1e-9 and k ~= idx + 1 then same = k end end
+    if idx == -1 and same then list[same] = m -- REAPER replaces a marker at the same position
+    elseif idx == -1 then list[#list + 1] = m
     elseif list[idx + 1] then list[idx + 1] = m
     else return false end
     table.sort(list, function(a, b) return a.time < b.time end)
@@ -489,6 +493,10 @@ function install_project_fake(api, spec, write)
   end
   api.DeleteTempoTimeSigMarker = function(_, idx)
     if not P().tempo_markers[idx + 1] then return false end
+    -- spec.project.sticky_start: like REAPER 7.40, the start marker that carries
+    -- the time signature reports success but stays.
+    local m = P().tempo_markers[idx + 1]
+    if sp.sticky_start and m.time == 0 and m.num > 0 then return true end
     table.remove(P().tempo_markers, idx + 1)
     write("delete_tempo_marker")
     return true

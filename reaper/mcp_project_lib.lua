@@ -157,10 +157,12 @@ function M.get_render(api)
   local _, dir = api.GetSetProjectInfo_String(0, "RENDER_FILE", "", false)
   local _, pattern = api.GetSetProjectInfo_String(0, "RENDER_PATTERN", "", false)
   local _, fmt = api.GetSetProjectInfo_String(0, "RENDER_FORMAT", "", false)
+  local _, fmt2 = api.GetSetProjectInfo_String(0, "RENDER_FORMAT2", "", false)
   return {
     outputDirectory = dir or "",
     filePattern = pattern or "",
     format = format_name(fmt),
+    secondaryFormat = format_name(fmt2) or "none",
     bounds = bounds_name(math.floor(api.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", 0, false))),
     startTime = api.GetSetProjectInfo(0, "RENDER_STARTPOS", 0, false),
     endTime = api.GetSetProjectInfo(0, "RENDER_ENDPOS", 0, false),
@@ -183,6 +185,14 @@ function M.set_render(api, p)
       for k in pairs(M.FORMATS) do names[#names + 1] = k end
       table.sort(names)
       return nil, "unsupported render format '" .. tostring(p.format) .. "' (use " .. table.concat(names, ", ") .. ") — nothing changed"
+    end
+  end
+  local fourcc2
+  if p.secondaryFormat ~= nil then
+    local f2 = tostring(p.secondaryFormat):lower()
+    fourcc2 = (f2 == "none") and "" or M.FORMATS[f2]
+    if not fourcc2 then
+      return nil, "unsupported secondary render format '" .. tostring(p.secondaryFormat) .. "' (use none or a format) — nothing changed"
     end
   end
   if p.bounds ~= nil and M.BOUNDS[p.bounds] == nil then
@@ -211,6 +221,7 @@ function M.set_render(api, p)
     if p.outputDirectory ~= nil then api.GetSetProjectInfo_String(0, "RENDER_FILE", p.outputDirectory, true) end
     if p.filePattern ~= nil then api.GetSetProjectInfo_String(0, "RENDER_PATTERN", p.filePattern, true) end
     if fourcc then api.GetSetProjectInfo_String(0, "RENDER_FORMAT", fourcc, true) end
+    if fourcc2 then api.GetSetProjectInfo_String(0, "RENDER_FORMAT2", fourcc2, true) end
     if p.bounds ~= nil then api.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", M.BOUNDS[p.bounds], true) end
     if p.startTime ~= nil then api.GetSetProjectInfo(0, "RENDER_STARTPOS", p.startTime, true) end
     if p.endTime ~= nil then api.GetSetProjectInfo(0, "RENDER_ENDPOS", p.endTime, true) end
@@ -233,6 +244,13 @@ function M.render(api, p, fs)
   for _, t in ipairs(targets) do
     if not (t:sub(1, 1) == "/" or t:match("^%a:[/\\]")) then
       return nil, "refused: render target '" .. t .. "' is not an absolute path (unsaved project?) — set outputDirectory to an absolute directory"
+    end
+  end
+  -- Seen live: a render whose secondary format was a sink outside this list
+  -- (a project template's video sink) left a modal dialog open.
+  for _, f in ipairs({ settings.format or "unset", settings.secondaryFormat }) do
+    if f == "unset" or f:sub(1, 6) == "other:" then
+      return nil, "refused: render format '" .. f .. "' is not one of wav, aiff, flac, mp3, ogg, opus (other encoders can open a dialog) — set format / secondaryFormat with set_render_settings"
     end
   end
   if settings.bounds == "time_selection" then
@@ -381,11 +399,15 @@ function M.add_tempo_marker(api, p)
   if p.position == nil or p.bpm == nil then return nil, "position and bpm required" end
   local err = check_tempo_fields(p)
   if err then return nil, err end
+  local before = tempo_count(api)
   edit(api, "Add tempo marker", function()
     api.SetTempoTimeSigMarker(0, -1, p.position, -1, -1, p.bpm,
       p.timeSigNumerator or 0, p.timeSigDenominator or 0, p.linear == true)
   end)
-  return done_tempo(api)
+  local out = done_tempo(api)
+  -- REAPER replaces a marker already at that position instead of adding one.
+  if out.tempoMarkerCount == before then out.replacedExisting = true end
+  return out
 end
 
 --- edit_tempo_marker: { index, position?, bpm?, timeSigNumerator?, timeSigDenominator?, linear? }
@@ -406,13 +428,20 @@ end
 function M.delete_tempo_marker(api, p)
   local err = check_tempo_index(api, p.index)
   if err then return nil, err end
+  local before = tempo_count(api)
   edit(api, "Delete tempo marker", function() api.DeleteTempoTimeSigMarker(0, p.index) end)
+  if tempo_count(api) == before then
+    -- Seen live (REAPER 7.40): the start marker carrying the time signature
+    -- reports success but stays. Say so rather than claim a deletion.
+    return nil, "REAPER did not delete tempo marker " .. p.index .. " (the marker at the project start cannot be removed this way) — nothing changed; use edit_tempo_marker or set_project_tempo to change it"
+  end
   return done_tempo(api)
 end
 
---- set_project_tempo: { bpm }. With no tempo markers this is the project
---- tempo; with markers it is the first marker's tempo (REAPER's project
---- tempo is the tempo at the start).
+--- set_project_tempo: { bpm }. Sets the tempo at the project start: with no
+--- tempo markers the project BPM; with a marker at 0 that marker's BPM;
+--- otherwise a marker is added at 0 (REAPER's SetCurrentBPM would add one at
+--- the edit cursor instead, so it is only used with no markers).
 function M.set_tempo(api, p)
   if p.bpm == nil then return nil, "bpm required" end
   local err = check_tempo_fields({ bpm = p.bpm })
@@ -422,7 +451,11 @@ function M.set_tempo(api, p)
   else
     local _, timepos, _, _, _, num, den, linear = api.GetTempoTimeSigMarker(0, 0)
     edit(api, "Set project tempo", function()
-      api.SetTempoTimeSigMarker(0, 0, timepos, -1, -1, p.bpm, num > 0 and num or 0, den > 0 and den or 0, linear)
+      if timepos <= 1e-9 then
+        api.SetTempoTimeSigMarker(0, 0, timepos, -1, -1, p.bpm, num > 0 and num or 0, den > 0 and den or 0, linear)
+      else
+        api.SetTempoTimeSigMarker(0, -1, 0, -1, -1, p.bpm, 0, 0, false)
+      end
     end)
   end
   return done_tempo(api)
