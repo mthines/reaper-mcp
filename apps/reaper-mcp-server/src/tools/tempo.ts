@@ -69,7 +69,7 @@ function registerTempoEditTools(server: McpServer): void {
 
   server.tool(
     'set_project_tempo',
-    'Set the project tempo. With no tempo markers this sets the project BPM; with markers it sets the first marker\'s BPM. Returns the updated tempo map.',
+    'Set the tempo at the project start. With no tempo markers this sets the project BPM; with a marker at 0 it edits that marker; when the first marker is later, it adds a marker at 0 (later markers keep their BPM and their indexes shift by one). Returns the updated tempo map.',
     { bpm },
     async ({ bpm: value }) => reply(await sendCommand('set_project_tempo', { bpm: value })),
   );

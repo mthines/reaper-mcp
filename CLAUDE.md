@@ -275,7 +275,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI and `analyze_track
 | `add_tempo_marker` | `tools/tempo.ts` | Add a tempo/time sig marker at a position (seconds); returns the updated map |
 | `edit_tempo_marker` | `tools/tempo.ts` | Edit a tempo marker by index (position, BPM, time sig, linear); unspecified fields kept |
 | `delete_tempo_marker` | `tools/tempo.ts` | Delete a tempo marker by index |
-| `set_project_tempo` | `tools/tempo.ts` | Set the project BPM (the first marker's BPM when markers exist) |
+| `set_project_tempo` | `tools/tempo.ts` | Set the tempo at the project start: project BPM with no markers, else the marker at 0 (added when the first marker is later) |
 
 ### Envelope / Automation Tools (9)
 
@@ -356,7 +356,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI and `analyze_track
 |------|------|-------------|
 | `undo_project` | `tools/project.ts` | Undo the last undo point; reports its label and the next undo/redo labels |
 | `redo_project` | `tools/project.ts` | Redo the last undone point; reports its label |
-| `save_project` | `tools/project.ts` | Save in place, or to an absolute `.rpp` `path`. Never opens a dialog: a never-saved project without `path` is refused |
+| `save_project` | `tools/project.ts` | Save in place, or write a copy to an absolute `.rpp` `path` (the open project keeps its path; `savedAsCopy`). Never opens a dialog: a never-saved project without `path` is refused |
 | `get_render_settings` | `tools/project.ts` | Output dir, file pattern, format, bounds, start/end, sample rate, channels, and the resolved target files |
 | `set_render_settings` | `tools/project.ts` | Set any render setting (format and secondaryFormat: wav/aiff/flac/mp3/ogg/opus, secondary also none); all validated before any write |
 | `render_project` | `tools/project.ts` | Render with the current settings (synchronous action 42230); refuses to overwrite existing targets unless `overwrite` |

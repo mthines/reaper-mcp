@@ -114,7 +114,7 @@ function registerMarkerEditTools(server: McpServer): void {
       markerIndex: z.coerce.number().int().min(0).describe('Marker index number (list_markers index)'),
       name: z.string().optional().describe('New name ("" clears it)'),
       position: z.coerce.number().min(0).optional().describe('New position in seconds'),
-      color: z.coerce.number().int().min(0).optional().describe('Native color int (e.g. ColorToNative(r,g,b))'),
+      color: z.coerce.number().int().min(0).optional().describe('Native color int (e.g. ColorToNative(r,g,b)); 0 keeps the current color'),
     },
     async (params) => reply(await sendCommand('edit_marker', params)),
   );
@@ -127,7 +127,7 @@ function registerMarkerEditTools(server: McpServer): void {
       name: z.string().optional().describe('New name ("" clears it)'),
       start: z.coerce.number().min(0).optional().describe('New start in seconds'),
       end: z.coerce.number().min(0).optional().describe('New end in seconds'),
-      color: z.coerce.number().int().min(0).optional().describe('Native color int'),
+      color: z.coerce.number().int().min(0).optional().describe('Native color int; 0 keeps the current color'),
     },
     async (params) => reply(await sendCommand('edit_region', params)),
   );
