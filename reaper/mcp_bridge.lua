@@ -173,13 +173,25 @@ local function json_decode_array(input)
   return nil
 end
 
+-- JSON forbids raw control characters in strings. One tab in a track or FX
+-- name would otherwise make every response that carries it unparseable.
+local JSON_ESCAPES = {
+  ['"'] = '\\"', ['\\'] = '\\\\', ['\b'] = '\\b', ['\f'] = '\\f',
+  ['\n'] = '\\n', ['\r'] = '\\r', ['\t'] = '\\t',
+}
+
+local function json_quote(s)
+  return '"' .. s:gsub('[%c"\\]', function(c)
+    return JSON_ESCAPES[c] or string.format('\\u%04x', c:byte())
+  end) .. '"'
+end
+
 local function json_encode(obj)
   -- Simple JSON encoder for our response objects
-  local parts = {}
   local function encode_value(v)
     local t = type(v)
     if t == "string" then
-      return '"' .. v:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n') .. '"'
+      return json_quote(v)
     elseif t == "number" then
       if v ~= v then return "null" end -- NaN
       if v == math.huge or v == -math.huge then return "null" end
@@ -199,7 +211,7 @@ local function json_encode(obj)
         -- Object
         local items = {}
         for k, val in pairs(v) do
-          items[#items + 1] = '"' .. tostring(k) .. '":' .. encode_value(val)
+          items[#items + 1] = json_quote(tostring(k)) .. ':' .. encode_value(val)
         end
         return "{" .. table.concat(items, ",") .. "}"
       end
