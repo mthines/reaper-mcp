@@ -306,6 +306,8 @@ end
 
 local function selected_tracks(api)
   local out = {}
+  local master = api.GetMasterTrack(0)
+  if api.IsTrackSelected(master) then out[1] = { index = -1, name = "MASTER" } end
   for i = 0, api.CountTracks(0) - 1 do
     local tr = api.GetTrack(0, i)
     if api.IsTrackSelected(tr) then
@@ -320,6 +322,7 @@ end
 --- mode "replace" (default) clears the selection first, "add" keeps it.
 function M.select_tracks(api, tracks, mode)
   if mode ~= "add" then
+    api.SetTrackSelected(api.GetMasterTrack(0), false)
     for i = 0, api.CountTracks(0) - 1 do api.SetTrackSelected(api.GetTrack(0, i), false) end
   end
   for _, tr in ipairs(tracks) do api.SetTrackSelected(tr, true) end
