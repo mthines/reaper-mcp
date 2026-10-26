@@ -297,6 +297,219 @@ function new_fake(spec)
   api.GetParentTrack = function() return nil end
 
   install_project_fake(api, spec, write)
+
+  -- Items, takes, take FX, FX housekeeping, files (mcp_items_lib.lua).
+  -- spec.audio = { [path] = seconds } are readable audio files; spec.files =
+  -- { [path] = text } seed the in-memory file system (api.fs, api.fake_fs());
+  -- spec.takes = { [track] = { [item] = { "A", "B" } } } names extra takes;
+  -- spec.chunk_fx = true keeps track chunks and tr.fx / tr.items in sync.
+  local fs = { files = {}, dirs = {} }
+  api.fs = fs
+  for path, sec in pairs(spec.audio or {}) do fs.files[path] = "RIFF" .. sec end
+  for path, text in pairs(spec.files or {}) do fs.files[path] = text end
+  api.GetResourcePath = function() return spec.resource or "/res" end
+  api.file_exists = function(path) return fs.files[path] ~= nil end
+  api.RecursiveCreateDirectory = function(dir) fs.dirs[dir] = true; return 1 end
+  api.fake_fs = function()
+    return {
+      exists = function(path) return fs.files[path] ~= nil end,
+      read = function(path) return fs.files[path] end,
+      write = function(path, text) fs.files[path] = text; return true end,
+      mkdir = function(dir) fs.dirs[dir] = true end,
+      list = function(dir)
+        local files, dirs, seen = {}, {}, {}
+        for path in pairs(fs.files) do
+          local rest = path:sub(1, #dir + 1) == dir .. "/" and path:sub(#dir + 2) or nil
+          if rest then
+            local d = rest:match("^([^/]+)/")
+            if d then
+              if not seen[d] then seen[d] = true; dirs[#dirs + 1] = d end
+            else
+              files[#files + 1] = rest
+            end
+          end
+        end
+        table.sort(files); table.sort(dirs)
+        return files, dirs
+      end,
+    }
+  end
+  api.GetCursorPosition = function() return spec.cursor or 0 end
+
+  local function new_take(item, name)
+    return { name = name or "", fx = {}, item = item }
+  end
+  local function init_item(tr, it)
+    it.track = tr
+    it.vals = it.vals or { D_POSITION = 0, D_LENGTH = 1 }
+    it.takes = it.takes or {}
+    it.active = it.active or 1
+    return it
+  end
+  for k, t in ipairs(spec.tracks or {}) do
+    for j, it in ipairs(tracks[k].items) do
+      init_item(tracks[k], it)
+      local names = ((spec.takes or {})[k] or {})[j] or { "Take " .. j }
+      for _, n in ipairs(names) do it.takes[#it.takes + 1] = new_take(it, n) end
+    end
+  end
+
+  api.AddMediaItemToTrack = function(tr)
+    tr.items = tr.items or {}
+    local it = init_item(tr, { selected = false })
+    tr.items[#tr.items + 1] = it
+    write("add_item")
+    return it
+  end
+  api.AddTakeToMediaItem = function(it)
+    local tk = new_take(it)
+    it.takes[#it.takes + 1] = tk
+    write("add_take")
+    return tk
+  end
+  api.PCM_Source_CreateFromFile = function(path)
+    local sec = (spec.audio or {})[path]
+    return { path = path, length = sec or 0 }
+  end
+  api.PCM_Source_Destroy = function(src) src.destroyed = true end
+  api.GetMediaSourceLength = function(src) return src.length, false end
+  api.SetMediaItemTake_Source = function(tk, src) tk.src = src; write("take_source") end
+  api.GetMediaItemTake_Source = function(tk) return tk.src end
+  api.GetMediaSourceFileName = function(src) return src.path end
+  api.GetMediaItemInfo_Value = function(it, k) return it.vals[k] or 0 end
+  api.SetMediaItemInfo_Value = function(it, k, v) it.vals[k] = v; write("item " .. k); return true end
+  api.UpdateItemInProject = function() end
+  api.CountTakes = function(it) return #it.takes end
+  api.GetTake = function(it, i) return it.takes[i + 1] end
+  api.GetActiveTake = function(it) return it.takes[it.active] end
+  api.SetActiveTake = function(tk)
+    for i, t in ipairs(tk.item.takes) do if t == tk then tk.item.active = i end end
+    write("active_take")
+  end
+  api.GetTakeName = function(tk) return tk.name end
+  api.TakeIsMIDI = function() return false end
+  api.GetSetMediaItemTakeInfo_String = function(tk, _, v, set)
+    if set then tk.name = v; write("take_name") end
+    return true, tk.name
+  end
+
+  local FAKE_PARAMS = 4
+  api.TakeFX_GetCount = function(tk) return #tk.fx end
+  api.TakeFX_AddByName = function(tk, name)
+    if name == spec.missing_fx then return -1 end
+    tk.fx[#tk.fx + 1] = { name = name, params = {}, enabled = true }
+    write("take_fx_add " .. name)
+    return #tk.fx - 1
+  end
+  api.TakeFX_Delete = function(tk, fx)
+    if not tk.fx[fx + 1] then return false end
+    table.remove(tk.fx, fx + 1)
+    write("take_fx_delete")
+    return true
+  end
+  api.TakeFX_GetFXName = function(tk, fx) return true, tk.fx[fx + 1].name end
+  api.TakeFX_GetEnabled = function(tk, fx) return tk.fx[fx + 1].enabled end
+  api.TakeFX_GetNumParams = function() return FAKE_PARAMS end
+  api.TakeFX_GetParam = function(tk, fx, p) return tk.fx[fx + 1].params[p] or 0, 0, 1 end
+  api.TakeFX_SetParam = function(tk, fx, p, v)
+    if not tk.fx[fx + 1] or p >= FAKE_PARAMS then return false end
+    tk.fx[fx + 1].params[p] = v
+    write("take_fx_param")
+    return true
+  end
+  api.TakeFX_GetParamName = function(_, _, p) return true, "Param " .. p end
+  api.TakeFX_GetFormattedParamValue = function(tk, fx, p)
+    return true, string.format("%.2f", tk.fx[fx + 1].params[p] or 0)
+  end
+
+  -- Native color on the fake is 0x00BBGGRR (Windows order).
+  api.ColorToNative = function(r, g, b) return r | (g << 8) | (b << 16) end
+  api.ColorFromNative = function(c) return c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF end
+
+  api.TrackFX_GetFXName = function(tr, fx)
+    local f = tr.fx[fx + 1]
+    return true, (f.renamed and f.renamed ~= "") and f.renamed or f.name
+  end
+  api.TrackFX_Delete = function(tr, fx)
+    if not tr.fx[fx + 1] then return false end
+    table.remove(tr.fx, fx + 1)
+    write("fx_delete")
+    return true
+  end
+  api.TrackFX_CopyToTrack = function(src, sfx, dst, dfx, move)
+    local f = src.fx[sfx + 1]
+    local copy = move and f or { name = f.name, renamed = f.renamed, guid = guid(), params = {} }
+    if move then table.remove(src.fx, sfx + 1) end
+    table.insert(dst.fx, dfx + 1, copy)
+    write(move and "fx_move" or "fx_copy")
+  end
+  api.TrackFX_SetNamedConfigParm = function(tr, fx, key, v)
+    if key ~= "renamed_name" or not tr.fx[fx + 1] then return false end
+    tr.fx[fx + 1].renamed = v
+    write("fx_rename")
+    return true
+  end
+  api.TrackFX_GetNamedConfigParm = function(tr, fx, key)
+    if key ~= "renamed_name" or not tr.fx[fx + 1] then return false, "" end
+    return true, tr.fx[fx + 1].renamed or ""
+  end
+
+  if spec.chunk_fx then
+    -- The chunk is generated from tr.fx / tr.items and parsed back on set.
+    api.GetTrackStateChunk = function(tr)
+      local l = { "<TRACK", 'NAME "' .. tr.name .. '"', "TRACKID " .. tr.guid, "ISBUS " .. (tr.isbus or "0 0") }
+      for _, r in ipairs(tr.recv or {}) do l[#l + 1] = "AUXRECV " .. r .. " 0 1 0 0 0 0 0 0 -1:U 0 -1 ''" end
+      if #tr.fx > 0 then
+        l[#l + 1] = "<FXCHAIN"; l[#l + 1] = "WNDRECT 0 0 0 0"; l[#l + 1] = "SHOW 0"
+        l[#l + 1] = "LASTSEL 0"; l[#l + 1] = "DOCKED 0"
+        for _, f in ipairs(tr.fx) do
+          l[#l + 1] = "BYPASS 0 0 0"
+          l[#l + 1] = '<VST "' .. f.name .. '" fake.vst 0 "" 0<00> ""'
+          l[#l + 1] = "  ZmFrZQ=="
+          l[#l + 1] = ">"
+          l[#l + 1] = "FXID " .. f.guid
+          l[#l + 1] = "WAK 0 0"
+        end
+        l[#l + 1] = ">"
+      end
+      for _, it in ipairs(tr.items or {}) do
+        l[#l + 1] = "<ITEM"; l[#l + 1] = "POSITION " .. (it.vals.D_POSITION or 0)
+        l[#l + 1] = "IGUID " .. guid(); l[#l + 1] = ">"
+      end
+      l[#l + 1] = ">"
+      return true, table.concat(l, "\n") .. "\n"
+    end
+    api.SetTrackStateChunk = function(tr, c)
+      if not c:match("^<TRACK") then return false end
+      local fx, items, depth, in_chain, pending = {}, {}, 0, false, nil
+      for line in c:gmatch("[^\n]+") do
+        local t = line:match("^%s*(.-)%s*$")
+        if t:sub(1, 1) == "<" then
+          depth = depth + 1
+          if depth == 2 and t == "<FXCHAIN" then in_chain = true
+          elseif depth == 2 and t:sub(1, 5) == "<ITEM" then items[#items + 1] = init_item(tr, { selected = false })
+          elseif depth == 3 and in_chain then
+            pending = { name = t:match('^<%S+%s+"([^"]*)"') or "", params = {} }
+            fx[#fx + 1] = pending
+          end
+        elseif t == ">" then
+          if depth == 2 then in_chain = false end
+          depth = depth - 1
+        elseif depth == 1 and t:match("^NAME ") then
+          tr.name = t:match('^NAME "(.*)"$') or t:sub(6)
+        elseif depth == 1 and t:match("^TRACKID ") then
+          tr.guid = t:sub(9)
+        elseif depth == 1 and t:match("^ISBUS ") then
+          tr.isbus = t:sub(7)
+        elseif depth == 2 and in_chain and t:match("^FXID ") and pending then
+          pending.guid = t:sub(6)
+        end
+      end
+      tr.fx, tr.items, tr.chunk = fx, items, c
+      write("set_chunk")
+      return true
+    end
+  end
   return api
 end
 
