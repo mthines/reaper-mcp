@@ -39,11 +39,13 @@ describe('mcp_tracks_lib.lua (wasmoon)', () => {
   it('tracks: master ref resolves to the master track', async () => {
     await runLua(`
       local api = mixer()
-      for _, ref in ipairs({ "master", "MASTER", "Master", -1 }) do
+      for _, ref in ipairs({ "master", "MASTER", "Master", -1, "-1" }) do
         local r = plan.resolve_track(api, ref, {})
         assert(r and r.track == api.master, "ref " .. tostring(ref))
       end
       assert(plan.resolve_track(api, "Kick", {}).track == api.tracks[1], "names still resolve")
+      local _, conflicts = plan.validate(api, { { op = "add_send", from = "Kick", to = "master" } }, {})
+      assert(#conflicts == 1 and conflicts[1].error:find("masterSend"), "run_plan refuses a send into the master")
       local d = tracks.describe_track(api, api.master)
       assert(d.index == -1 and d.name == "MASTER", "master describes as index -1")
     `);
@@ -136,6 +138,10 @@ describe('mcp_tracks_lib.lua (wasmoon)', () => {
       assert(m.index == 1 and m.outputChannel == 5 and m.mono)
       local e = tracks.set_send(api, snare, { category = "hardware", index = 0, outputChannel = 7 })
       assert(e.hardware.outputChannel == 7)
+      local keep = tracks.set_send(api, snare, { category = "hardware", index = 1, outputChannel = 9 }).hardware
+      assert(keep.outputChannel == 9 and keep.mono, "a channel edit keeps mono")
+      local st = tracks.set_send(api, snare, { category = "hardware", index = 1, mono = false }).hardware
+      assert(st.outputChannel == 9 and not st.mono, "mono alone switches to stereo, same channel")
       assert(#tracks.routing(api, snare).hardwareOutputs == 2 and #tracks.routing(api, snare).sends == 0)
 
       assert(tracks.routing(api, snare).masterSend == true, "master send defaults on")
