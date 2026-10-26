@@ -177,6 +177,7 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       assert(#api.tracks == 3 and t.name == "Bass" and names(ins.inserted[1].fx) == "EQ,Comp", "new track with the same name and FX")
       assert(api.tracks[3].name == "Keys", "inserted at index 1")
       assert(t.guid ~= api.tracks[1].guid and t.fx[1].guid ~= api.tracks[1].fx[1].guid, "fresh GUIDs")
+      assert(t.chunk:find("TRACKID {", 1, true) and not t.chunk:find(api.tracks[1].guid, 1, true), "TRACKID regenerated")
       assert(#t.items == 0)
       assert(api.undo[#api.undo] == "MCP: Insert track template Bass DI")
 
@@ -185,6 +186,13 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       assert(full.inserted[1].index == 3 and #api.tracks[4].items == 2, "includeItems keeps items; default index is the end")
       local l = items.list_track_templates(api, {}, ctx(api))
       assert(l.total == 2 and l.names[1] == "Bass DI" and l.names[2] == "Bass full")
+
+      -- envelope GUIDs are regenerated too
+      api.fs.files["/res/TrackTemplates/Env.RTrackTemplate"] = '<TRACK\\nNAME "E"\\nTRACKID {11111111-0000-0000-0000-000000000000}\\n<VOLENV2\\nEGUID {22222222-0000-0000-0000-000000000000}\\n>\\n>\\n'
+      local env = items.insert_track_template(api, { name = "Env" }, ctx(api))
+      local ec = api.tracks[env.inserted[1].index + 1].chunk
+      assert(ec:find("EGUID {", 1, true) and not ec:find("22222222", 1, true) and not ec:find("11111111", 1, true), "EGUID/TRACKID regenerated: " .. ec)
+      table.remove(api.tracks, env.inserted[1].index + 1)
 
       -- REAPER rejecting a template chunk takes back the tracks the call inserted
       api.fs.files["/res/TrackTemplates/Two.RTrackTemplate"] = '<TRACK\\nNAME "X"\\n>\\n<TRACK\\nNAME "Y"\\n>\\n'
@@ -231,6 +239,7 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       -- write paths outside the resource dir
       refused("absolute write", "outside REAPER's FXChains folder", items.save_fx_chain(api, { trackIndex = 0, name = "/tmp/x" }, c))
       refused("dotdot write", "outside REAPER's FXChains folder", items.save_fx_chain(api, { trackIndex = 0, name = "../../evil" }, c))
+      refused("dotdot-space write", "outside REAPER's FXChains folder", items.save_fx_chain(api, { trackIndex = 0, name = "a/.. /.. /evil" }, c))
       refused("windows write", "outside REAPER's TrackTemplates folder", items.save_track_template(api, { trackIndex = 0, name = "C:\\\\evil" }, c))
       refused("backslash dotdot", "outside REAPER's TrackTemplates folder", items.save_track_template(api, { trackIndex = 0, name = "a\\\\..\\\\..\\\\evil" }, c))
       refused("no FX to save", "no FX", items.save_fx_chain(api, { trackIndex = 1, name = "x" }, c))

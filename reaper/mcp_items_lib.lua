@@ -500,7 +500,9 @@ local function resource_path(api, sub, name, ext)
   end
   local parts = {}
   for part in name:gsub("\\", "/"):gmatch("[^/]+") do
-    if part == ".." or part == "." then
+    -- Windows drops trailing dots and spaces from a path segment, so ". ." and
+    -- ".. " climb out too: refuse any segment made only of dots and spaces.
+    if part:match("^[%.%s]+$") then
       return nil, "'" .. name .. "' is outside REAPER's " .. sub .. " folder — '..' is not allowed"
     end
     parts[#parts + 1] = part
@@ -715,7 +717,7 @@ local function template_tracks(text)
 end
 
 -- Fresh GUIDs so the inserted track never shares an identity with its source.
-local GUID_KEYS = { TRACKID = true, FXID = true, IGUID = true, GUID = true }
+local GUID_KEYS = { TRACKID = true, FXID = true, IGUID = true, GUID = true, EGUID = true }
 local function regenerate_guids(chunk, gen_guid)
   local lines = split_lines(chunk)
   for i, line in ipairs(lines) do
