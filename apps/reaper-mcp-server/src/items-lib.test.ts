@@ -21,13 +21,13 @@ function ctx(api) return { plan = plan, fs = api.fake_fs() } end
 function names(list) return table.concat(list, ",") end
 function snapshot(api)
   local s = { writes = api.writes, files = {} }
-  for k, v in pairs(api.fs.files) do s.files[k] = v end
+  for k, v in pairs(api.items_fs.files) do s.files[k] = v end
   return s
 end
 function unchanged(api, s)
   if api.writes ~= s.writes then return false end
-  for k, v in pairs(api.fs.files) do if s.files[k] ~= v then return false end end
-  for k in pairs(s.files) do if api.fs.files[k] == nil then return false end end
+  for k, v in pairs(api.items_fs.files) do if s.files[k] ~= v then return false end end
+  for k in pairs(s.files) do if api.items_fs.files[k] == nil then return false end end
   return true
 end
 `;
@@ -140,7 +140,7 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       local s, err = items.save_fx_chain(api, { trackIndex = 0, name = "Vocals/Lead" }, ctx(api))
       assert(s, tostring(err))
       assert(s.path == "/res/FXChains/Vocals/Lead.RfxChain" and s.fxCount == 2 and s.name == "Vocals/Lead")
-      local text = api.fs.files[s.path]
+      local text = api.items_fs.files[s.path]
       assert(text:sub(1, 12) == "BYPASS 0 0 0", "file starts at the first FX, no window header")
       assert(not text:find("<FXCHAIN") and not text:find("SHOW 0"))
 
@@ -148,12 +148,12 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       assert(a, tostring(e2))
       assert(a.loaded == 2 and names(a.fx) == "Gate,EQ,Comp", "appended in order: " .. names(a.fx))
       assert(api.tracks[2].fx[2].guid ~= api.tracks[1].fx[1].guid, "fresh FXIDs")
-      api.fs.files["/res/FXChains/Env.RfxChain"] = 'BYPASS 0 0 0\\n<VST "Env" x\\n>\\nFXID {33333333-0000-0000-0000-000000000000}\\n<PARMENV 1 0 1 0\\nEGUID {44444444-0000-0000-0000-000000000000}\\n>\\n'
+      api.items_fs.files["/res/FXChains/Env.RfxChain"] = 'BYPASS 0 0 0\\n<VST "Env" x\\n>\\nFXID {33333333-0000-0000-0000-000000000000}\\n<PARMENV 1 0 1 0\\nEGUID {44444444-0000-0000-0000-000000000000}\\n>\\n'
       items.load_fx_chain(api, { trackIndex = 0, name = "Env" }, ctx(api))
       local ch = api.tracks[1].chunk
       assert(ch:find("EGUID {", 1, true) and not ch:find("44444444", 1, true) and not ch:find("33333333", 1, true), "FXID and EGUID regenerated: " .. ch)
       api.tracks[1].fx[#api.tracks[1].fx] = nil
-      api.fs.files["/res/FXChains/Env.RfxChain"] = nil
+      api.items_fs.files["/res/FXChains/Env.RfxChain"] = nil
       local r = items.load_fx_chain(api, { trackIndex = 1, name = "Vocals/Lead", mode = "replace" }, ctx(api))
       assert(names(r.fx) == "EQ,Comp", "replace keeps only the chain: " .. names(r.fx))
       local e = items.load_fx_chain(api, { trackIndex = 2, name = s.path }, ctx(api))
@@ -174,7 +174,7 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       api.tracks[1].recv = { 1 }
       local s, err = items.save_track_template(api, { trackIndex = 0, name = "Bass DI" }, ctx(api))
       assert(s, tostring(err))
-      local text = api.fs.files["/res/TrackTemplates/Bass DI.RTrackTemplate"]
+      local text = api.items_fs.files["/res/TrackTemplates/Bass DI.RTrackTemplate"]
       assert(text and not text:find("<ITEM") and not text:find("AUXRECV"), "no items or receives by default")
       assert(text:find("ISBUS 0 0"), "not a folder start")
       assert(s.trackName == "Bass" and names(s.fx) == "EQ,Comp")
@@ -196,14 +196,14 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       assert(l.total == 2 and l.names[1] == "Bass DI" and l.names[2] == "Bass full")
 
       -- envelope GUIDs are regenerated too
-      api.fs.files["/res/TrackTemplates/Env.RTrackTemplate"] = '<TRACK\\nNAME "E"\\nTRACKID {11111111-0000-0000-0000-000000000000}\\n<VOLENV2\\nEGUID {22222222-0000-0000-0000-000000000000}\\n>\\n>\\n'
+      api.items_fs.files["/res/TrackTemplates/Env.RTrackTemplate"] = '<TRACK\\nNAME "E"\\nTRACKID {11111111-0000-0000-0000-000000000000}\\n<VOLENV2\\nEGUID {22222222-0000-0000-0000-000000000000}\\n>\\n>\\n'
       local env = items.insert_track_template(api, { name = "Env" }, ctx(api))
       local ec = api.tracks[env.inserted[1].index + 1].chunk
       assert(ec:find("EGUID {", 1, true) and not ec:find("22222222", 1, true) and not ec:find("11111111", 1, true), "EGUID/TRACKID regenerated: " .. ec)
       table.remove(api.tracks, env.inserted[1].index + 1)
 
       -- REAPER rejecting a template chunk takes back the tracks the call inserted
-      api.fs.files["/res/TrackTemplates/Two.RTrackTemplate"] = '<TRACK\\nNAME "X"\\n>\\n<TRACK\\nNAME "Y"\\n>\\n'
+      api.items_fs.files["/res/TrackTemplates/Two.RTrackTemplate"] = '<TRACK\\nNAME "X"\\n>\\n<TRACK\\nNAME "Y"\\n>\\n'
       local n, set = #api.tracks, api.SetTrackStateChunk
       local calls = 0
       api.SetTrackStateChunk = function(tr, c, u) calls = calls + 1; if calls == 2 then return false end; return set(tr, c, u) end

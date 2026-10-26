@@ -305,11 +305,11 @@ function new_fake(spec)
 
   -- Items, takes, take FX, FX housekeeping, files (mcp_items_lib.lua).
   -- spec.audio = { [path] = seconds } are readable audio files; spec.files =
-  -- { [path] = text } seed the in-memory file system (api.fs, api.fake_fs());
+  -- { [path] = text } seed the in-memory file system (api.items_fs, api.fake_fs());
   -- spec.takes = { [track] = { [item] = { "A", "B" } } } names extra takes;
   -- spec.chunk_fx = true keeps track chunks and tr.fx / tr.items in sync.
   local fs = { files = {}, dirs = {} }
-  api.fs = fs
+  api.items_fs = fs  -- not api.fs: the project fake owns that (new_fs)
   for path, sec in pairs(spec.audio or {}) do fs.files[path] = "RIFF" .. sec end
   for path, text in pairs(spec.files or {}) do fs.files[path] = text end
   api.GetResourcePath = function() return spec.resource or "/res" end
