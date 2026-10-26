@@ -229,6 +229,14 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       refused("empty chain", "holds no FX", items.load_fx_chain(api, { trackIndex = 1, name = "Empty" }, c))
       refused("wrong extension", "not a .RfxChain file", items.load_fx_chain(api, { trackIndex = 1, name = "/s/notes.txt" }, c))
       refused("missing template", "file not found", items.insert_track_template(api, { name = "Nope" }, c))
+      -- an empty take slot (REAPER's GetTake returns nil) is an error, not a nil success
+      local it = api.tracks[1].items[1]
+      it.takes[2] = false
+      refused("empty take slot", "empty take slot", items.set_active_take(api, { trackIndex = 0, itemIndex = 0, takeIndex = 1 }))
+      refused("empty take slot FX", "empty take slot", items.get_take_fx(api, { trackIndex = 0, itemIndex = 0, takeIndex = 1 }))
+      local lt = items.list_takes(api, { trackIndex = 0, itemIndex = 0 })
+      assert(#lt.takes == 2 and lt.takes[2].empty == true, "list_takes marks the empty slot")
+      it.takes[2] = nil
       assert(#api.tracks == 2 and #api.tracks[1].items == 1 and #api.tracks[1].fx == 1)
     `);
   });

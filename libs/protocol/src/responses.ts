@@ -635,13 +635,15 @@ export interface InsertAudioFileResult {
   sourceFile: string;
 }
 
+/** An empty take slot is listed as { takeIndex, empty: true } only. */
 export interface TakeInfo {
   takeIndex: number;
-  name: string;
-  active: boolean;
-  isMidi: boolean;
-  sourceFile: string;
-  fxCount: number;
+  empty?: true;
+  name?: string;
+  active?: boolean;
+  isMidi?: boolean;
+  sourceFile?: string;
+  fxCount?: number;
 }
 
 export interface TakesResult {

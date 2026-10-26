@@ -59,7 +59,9 @@ local function get_take(api, item, take_index)
   if not i or i < 0 or i >= n then
     return nil, "Take " .. tostring(take_index) .. " not found (item has " .. n .. " takes)"
   end
-  return api.GetTake(item, i)
+  local take = api.GetTake(item, i)
+  if not take then return nil, "Take " .. i .. " is an empty take slot" end
+  return take
 end
 
 local function take_index_of(api, item, take)
@@ -186,14 +188,18 @@ function M.list_takes(api, p)
   local takes = {}
   for i = 0, api.CountTakes(item) - 1 do
     local take = api.GetTake(item, i)
-    takes[#takes + 1] = {
-      takeIndex = i,
-      name = api.GetTakeName(take) or "",
-      active = take == active,
-      isMidi = api.TakeIsMIDI(take) == true,
-      sourceFile = source_file(api, take),
-      fxCount = take_fx_count(api, take),
-    }
+    if take then
+      takes[#takes + 1] = {
+        takeIndex = i,
+        name = api.GetTakeName(take) or "",
+        active = take == active,
+        isMidi = api.TakeIsMIDI(take) == true,
+        sourceFile = source_file(api, take),
+        fxCount = take_fx_count(api, take),
+      }
+    else
+      takes[#takes + 1] = { takeIndex = i, empty = true }
+    end
   end
   return {
     trackIndex = int(p.trackIndex),
