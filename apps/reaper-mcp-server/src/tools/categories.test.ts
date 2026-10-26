@@ -31,7 +31,7 @@ describe('category tools', () => {
       const expectedCategories = [
         'project', 'tracks', 'fx', 'transport', 'midi', 'media',
         'selection', 'markers', 'tempo', 'envelopes', 'analysis',
-        'discovery', 'snapshots', 'routing',
+        'discovery', 'snapshots', 'routing', 'plan',
       ];
       for (const cat of expectedCategories) {
         expect(TOOL_CATEGORIES[cat]).toBeDefined();

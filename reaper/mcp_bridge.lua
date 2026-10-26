@@ -19,6 +19,11 @@ local bridge_dir = reaper.GetResourcePath() .. "/Scripts/mcp_bridge_data/"
 -- Ensure bridge directory exists
 reaper.RecursiveCreateDirectory(bridge_dir, 0)
 
+-- Plan executor library (run_plan), installed next to this script by `reaper-mcp setup`.
+-- Loaded under pcall so an older install without the file keeps every other tool working.
+local script_dir = debug.getinfo(1, "S").source:match("@?(.*[\\/])") or ""
+local plan_lib_ok, plan_lib = pcall(dofile, script_dir .. "mcp_plan_lib.lua")
+
 local last_poll = 0
 local last_heartbeat = 0
 local defer_count = 0
@@ -3007,6 +3012,20 @@ function handlers.set_multiple_fx_parameters(params)
   local result = { success = true, updated = updated, total = #updates }
   if #errors > 0 then result.errors = errors end
   return result
+end
+
+-- =============================================================================
+-- Plan executor — one bridge call, one undo block, all-or-nothing
+-- =============================================================================
+
+local plan_ctx = { applied = {} }  -- idempotency keys of recently applied plans
+
+function handlers.run_plan(params)
+  if not plan_lib_ok then
+    return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(plan_lib) .. ")"
+  end
+  plan_ctx.snapshot_save = function(name) return handlers.snapshot_save({ name = name }) end
+  return plan_lib.run_plan(reaper, params, plan_ctx)
 end
 
 -- =============================================================================

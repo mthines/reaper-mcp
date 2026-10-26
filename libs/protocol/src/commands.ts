@@ -96,6 +96,8 @@ export type CommandType =
   | 'set_multiple_track_properties'
   | 'setup_fx_chain'
   | 'set_multiple_fx_parameters'
+  // Plan executor
+  | 'run_plan'
   // Live MIDI output
   | 'send_midi_cc'
   | 'send_midi_pc'
@@ -547,4 +549,59 @@ export interface RenderTrackToWavParams {
   startTime: number;   // seconds from project start
   endTime: number;     // seconds from project start
   commandId: string;   // used to generate a unique temp filename
+}
+
+// =============================================================================
+// Plan executor (run_plan)
+// =============================================================================
+
+/**
+ * A track target: 0-based index, exact track name, "{GUID}", or a "$ref"
+ * bound by an earlier add_track op. A digit string matches a name first,
+ * then falls back to the index.
+ */
+export type PlanTrackRef = number | string;
+
+/** An FX target: index on the op's track, unique name substring, or a "$ref" bound by add_fx. */
+export type PlanFxRef = number | string;
+
+export interface PlanParamValue {
+  index: number;
+  value: number;
+}
+
+export type PlanOp =
+  | { op: 'add_track'; name?: string; index?: number; as?: string }
+  | {
+      op: 'set_track';
+      track: PlanTrackRef;
+      volume?: number;   // dB
+      pan?: number;
+      mute?: number;
+      solo?: number;
+      recordArm?: number;
+      phase?: number;
+      input?: number;
+      name?: string;
+    }
+  | {
+      op: 'add_fx';
+      track: PlanTrackRef;
+      fxName: string;
+      position?: number;
+      enabled?: number;
+      params?: PlanParamValue[];
+      as?: string;
+    }
+  | { op: 'set_fx_params'; track?: PlanTrackRef; fx: PlanFxRef; params: PlanParamValue[] }
+  | { op: 'add_send'; from: PlanTrackRef; to: PlanTrackRef; volume?: number; pan?: number; mute?: number }
+  | { op: 'graft_fxchain'; track: PlanTrackRef; from?: PlanTrackRef; fromChunk?: string };
+
+export interface RunPlanParams {
+  /** JSON-encoded PlanOp[] — sent as a string so the bridge can parse nested JSON with CF_Json_Parse. */
+  ops: string;
+  dryRun?: boolean;
+  idempotencyKey?: string;
+  snapshotBefore?: string;
+  label?: string;
 }

@@ -104,6 +104,11 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
     description: 'Track routing: inspect sends, receives, parent/folder relationships for a track',
     tools: ['get_track_routing'],
   },
+  plan: {
+    name: 'plan',
+    description: 'Multi-step edits in one call: run_plan applies an ordered list of ops (add/set tracks, add FX, set FX params, add sends, copy FX chains) in one undo block, all-or-nothing, with $refs, dry-run and idempotency',
+    tools: ['run_plan'],
+  },
 };
 
 export function registerCategoryTools(server: McpServer): void {
