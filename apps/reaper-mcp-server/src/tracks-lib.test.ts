@@ -123,6 +123,14 @@ describe('mcp_tracks_lib.lua (wasmoon)', () => {
       assert(r.send.destChannel == 3 and tracks.routing(api, bass).channels == 4, "bass now has 4 channels")
       tracks.set_send(api, kick, { index = 0, destChannel = 5 })
       assert(tracks.routing(api, bass).channels == 6 and tracks.routing(api, kick).sends[1].destChannel == 5)
+      -- A mono-mixed send moves to 3/4 and stays mono; the destination gets 4 channels, not 1028.
+      local mono = tracks.add_send(api, api.tracks[2], api.tracks[4], {}).send
+      api.SetTrackSendInfo_Value(api.tracks[2], 0, mono.index, "I_DSTCHAN", 1024)
+      api.SetTrackSendInfo_Value(api.tracks[2], 0, mono.index, "I_SRCCHAN", 1024) -- mono source
+      tracks.set_send(api, api.tracks[2], { index = mono.index, destChannel = 3, srcChannel = 2 })
+      assert(api.GetTrackSendInfo_Value(api.tracks[2], 0, mono.index, "I_DSTCHAN") == 2 | 1024, "mono bit kept")
+      assert(api.GetTrackSendInfo_Value(api.tracks[2], 0, mono.index, "I_SRCCHAN") == 1 | 1024, "source width kept")
+      assert(tracks.routing(api, api.tracks[4]).channels == 4, "bus widened to 4: " .. tracks.routing(api, api.tracks[4]).channels)
       local _, err = tracks.add_send(api, kick, bass, { destChannel = 0 })
       assert(err and err:find("destChannel"), tostring(err))
     `);
