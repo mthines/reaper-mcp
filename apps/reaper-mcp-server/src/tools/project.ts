@@ -22,20 +22,17 @@ export function registerProjectTools(server: McpServer): void {
 // --- Project ops: undo/redo, save, render, settings (logic in reaper/mcp_project_lib.lua) ---
 
 /**
- * Free text the bridge can carry. Its command parser cuts the params object at
- * the first unbalanced brace inside a string (silently dropping params), and its
- * JSON encoder does not escape tab/CR (the response then never parses). Refuse
- * those characters up front instead of reporting a success that changed nothing.
+ * Free text the bridge can carry. Its flat command parser cuts the params object
+ * at the first unbalanced brace inside a string (silently dropping params), so
+ * refuse braces up front instead of reporting a success that changed nothing.
  */
-// eslint-disable-next-line no-control-regex
-const UNSAFE_TEXT = /[{}\u0000-\u0009\u000b-\u001f]/;
 export const bridgeText = z
   .string()
-  .refine((s) => !UNSAFE_TEXT.test(s), {
-    message: 'must not contain { } or control characters other than newline (the REAPER bridge cannot carry them yet)',
+  .refine((s) => !/[{}]/.test(s), {
+    message: 'must not contain { or } (the REAPER bridge cannot carry them yet)',
   });
 
-function reply(res: { success: boolean; data?: unknown; error?: string }) {
+export function reply(res: { success: boolean; data?: unknown; error?: string }) {
   if (!res.success) {
     return { content: [{ type: 'text' as const, text: `Error: ${res.error}` }], isError: true };
   }

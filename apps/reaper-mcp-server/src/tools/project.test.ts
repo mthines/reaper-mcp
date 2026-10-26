@@ -110,10 +110,11 @@ describe('project ops tools', () => {
 });
 
 describe('bridgeText', () => {
-  it('accepts plain text with newlines and refuses braces, tab and CR', () => {
-    expect(bridgeText.safeParse('Verse 1\nline 2 — ok').success).toBe(true);
-    expect(bridgeText.safeParse('').success).toBe(true);
-    for (const bad of ['Bridge }', '{x', 'a\tb', 'a\r\nb']) {
+  it('accepts plain text with control characters and refuses braces', () => {
+    for (const ok of ['Verse 1\nline 2 — ok', '', 'a\tb', 'a\r\nb']) {
+      expect(bridgeText.safeParse(ok).success).toBe(true);
+    }
+    for (const bad of ['Bridge }', '{x']) {
       expect(bridgeText.safeParse(bad).success).toBe(false);
     }
   });
