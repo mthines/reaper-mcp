@@ -231,7 +231,7 @@ function M.get(api, params, kb_text)
     for k, s in ipairs(macro.steps) do
       local sid = tonumber(s) or api.NamedCommandLookup(s:sub(1, 1) == "_" and s or "_" .. s)
       local sname = sid and sid > 0 and api.kbd_getTextFromCmd(sid, handle(api, sec)) or nil
-      out.steps[k] = { action = s, id = sid ~= 0 and sid or nil, name = (sname ~= "" and sname) or "(unknown action)" }
+      out.steps[k] = { action = s, id = sid ~= 0 and sid or nil, name = (sname ~= "" and sname) or "(no such action in this REAPER — the macro step does nothing)" }
     end
   elseif out.namedId and scripts[out.namedId] then
     out.kind = "script"

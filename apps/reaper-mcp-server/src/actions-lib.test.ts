@@ -88,7 +88,7 @@ describe('mcp_actions_lib.lua (wasmoon)', () => {
       assert(g.kind == "custom" and #g.steps == 3, "3 steps")
       assert(g.steps[1].id == 40001 and g.steps[1].name == "Track: Insert new track")
       assert(g.steps[2].id == 54000 and g.steps[2].name == "SWS: Unselect all tracks", "named step resolved")
-      assert(g.steps[3].name == "(unknown action)", "unknown step kept, not dropped")
+      assert(g.steps[3].name:find("no such action"), "unknown step kept, not dropped")
       assert(actions.get(api, { action = 40001 }, KB).kind == "native")
       assert(actions.get(api, { action = "_SWS_UNSELALL" }, KB).kind == "extension")
     `);
