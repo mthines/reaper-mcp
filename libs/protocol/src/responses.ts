@@ -170,16 +170,35 @@ export interface Snapshot {
   trackCount?: number;
 }
 
+/** Fields the routing setters added; 1-based first channel of a pair, srcChannel -1 = none. */
+interface RouteDetail {
+  index?: number;
+  mode?: 'post-fader' | 'pre-fx' | 'post-fx';
+  srcChannel?: number;
+  destChannel?: number;
+}
+
+export interface HardwareOutput {
+  index: number;
+  volume: number;
+  pan: number;
+  muted: boolean;
+  mode: 'post-fader' | 'pre-fx' | 'post-fx';
+  srcChannel: number;
+  outputChannel: number;
+  mono: boolean;
+}
+
 export interface TrackRouting {
   trackIndex: number;
-  sends: Array<{
+  sends: Array<RouteDetail & {
     destTrackIndex: number;
     destTrackName: string;
     volume: number;
     pan: number;
     muted: boolean;
   }>;
-  receives: Array<{
+  receives: Array<RouteDetail & {
     srcTrackIndex: number;
     srcTrackName: string;
     volume: number;
@@ -189,6 +208,10 @@ export interface TrackRouting {
   parentTrackIndex: number;
   isFolder: boolean;
   folderDepth: number;
+  hardwareOutputs?: HardwareOutput[];
+  /** Absent on the master track. */
+  masterSend?: boolean;
+  channels?: number;
 }
 
 // --- Phase 4: Custom JSFX analyzer response types ---

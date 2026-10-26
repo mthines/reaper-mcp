@@ -58,6 +58,7 @@ reaper-mcp/
         presets.ts            # get_fx_preset_list, set_fx_preset
         snapshots.ts          # snapshot_save, snapshot_restore, snapshot_list, snapshot_delete
         routing.ts            # get_track_routing
+        structure.ts          # add/delete/move track, folders, name/color, groups; send/hardware-output setters
         analysis.ts           # read_track_lufs, read_track_correlation, read_track_crest, measure_tracks
         midi.ts               # 14 MIDI editing tools (notes, CC, items, analysis, batch edit)
         media.ts              # 11 media item editing tools (properties, batch, split, move, trim, stretch)
@@ -116,7 +117,8 @@ reaper-mcp/
     sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs) + knowledge/ into ~/.claude (primary install model)
 
   reaper/                     # Files installed INTO REAPER (copied by setup command)
-    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 86 handlers)
+    mcp_tracks_lib.lua        # Pure track-structure + routing logic (wasmoon-tested), loaded by the bridge
+    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 98 handlers)
     mcp_snapshot_manager.lua  # Standalone snapshot manager GUI (gfx-based, no extensions required)
     mcp_snapshot_lib.lua      # Shared library for snapshot action scripts
     mcp_plan_lib.lua          # run_plan executor (pure Lua, takes the API as an argument; unit-tested via wasmoon)
@@ -149,7 +151,9 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (91 total)
+## MCP Tools (101 total)
+
+Every tool that takes a `trackIndex` (except media item, MIDI and `analyze_track_aesthetics`) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
 ### Project & Tracks (5)
 
@@ -160,6 +164,17 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `get_track_properties` | `tools/tracks.ts` | Detailed single track info + full FX chain list |
 | `set_track_property` | `tools/tracks.ts` | Set volume (dB), pan, mute, solo, recordArm, phase, input |
 | `set_multiple_track_properties` | `tools/batch.ts` | **Batch** set properties on multiple tracks in one call |
+
+### Track Structure (6)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `add_track` | `tools/structure.ts` | Insert a track (optional name, position) |
+| `delete_track` | `tools/structure.ts` | Delete a track (never the master) |
+| `move_track` | `tools/structure.ts` | Move a track to a new position; keeps the user's selection |
+| `set_track_folder` | `tools/structure.ts` | Folder parent / last-in-folder / normal; collapse state |
+| `set_track_info` | `tools/structure.ts` | Name, color (`#RRGGBB`/`none`), channel count, master/parent send |
+| `set_track_group` | `tools/structure.ts` | Group (1-64) membership roles, incl. VCA lead/follow |
 
 ### FX Management (9)
 
@@ -287,11 +302,15 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `snapshot_list` | `tools/snapshots.ts` | List project-scoped snapshots (falls back to global for unsaved projects) |
 | `snapshot_delete` | `tools/snapshots.ts` | Delete a saved snapshot by name |
 
-### Routing (1)
+### Routing (5)
 
 | Tool | File | Description |
 |------|------|-------------|
-| `get_track_routing` | `tools/routing.ts` | Sends, receives, parent/folder info for a track |
+| `get_track_routing` | `tools/routing.ts` | Sends, receives (index, mode, channels), hardware outputs, master send, parent/folder info |
+| `add_send` | `tools/structure.ts` | Track → track send: level, pan, mute, mode, channels (sidechain into 3/4 widens the destination) |
+| `set_send` | `tools/structure.ts` | Edit a send, receive or hardware output by index |
+| `remove_send` | `tools/structure.ts` | Remove a send, receive or hardware output by index |
+| `add_hardware_output` | `tools/structure.ts` | Route a track to an audio interface output (stereo or mono) |
 
 ### Metering & Analysis (6)
 

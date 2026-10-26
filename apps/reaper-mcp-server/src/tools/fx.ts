@@ -7,7 +7,7 @@ export function registerFxTools(server: McpServer): void {
     'add_fx',
     'Add an FX plugin to a track by name (e.g. "ReaEQ", "JS: Schwa\'s Spectral Analyzer", "VST: Pro-Q 3")',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       fxName: z.string().describe('FX plugin name (partial match supported)'),
       position: z.coerce.number().int().optional().describe('Position in FX chain (-1 or omit for end)'),
     },
@@ -24,7 +24,7 @@ export function registerFxTools(server: McpServer): void {
     'remove_fx',
     'Remove an FX plugin from a track by its index in the FX chain',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       fxIndex: z.coerce.number().int().min(0).describe('Zero-based FX index in the chain'),
     },
     async ({ trackIndex, fxIndex }) => {
@@ -40,7 +40,7 @@ export function registerFxTools(server: McpServer): void {
     'get_fx_parameters',
     'List parameters of an FX plugin with current values and ranges. Supports filtering by name pattern, changed-only filter, and pagination. For a quick summary of active EQ bands or compressor settings, use analyze_fx instead.',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       fxIndex: z.coerce.number().int().min(0).describe('Zero-based FX index in the chain'),
       namePattern: z.string().optional().describe('Filter params by name (case-insensitive substring match, e.g. "Gain", "Band 1")'),
       changedOnly: z.boolean().optional().describe('Only return params that appear non-default (value differs from minimum or formatted value suggests activity)'),
@@ -62,7 +62,7 @@ export function registerFxTools(server: McpServer): void {
     'analyze_fx',
     'Analyze an FX plugin and return a compact summary: FX name, preset, and notable (non-default) parameters. For EQ plugins, detects active bands with frequency/gain/Q/shape. For compressors, extracts threshold/ratio/attack/release/makeup. Use this before get_fx_parameters to understand what a plugin is doing without reading 500+ parameters.',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       fxIndex: z.coerce.number().int().min(0).describe('Zero-based FX index in the chain'),
     },
     async ({ trackIndex, fxIndex }) => {
@@ -78,7 +78,7 @@ export function registerFxTools(server: McpServer): void {
     'set_fx_parameter',
     'Set a specific FX parameter value (normalized 0.0–1.0)',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       fxIndex: z.coerce.number().int().min(0).describe('Zero-based FX index in the chain'),
       paramIndex: z.coerce.number().int().min(0).describe('Zero-based parameter index'),
       value: z.coerce.number().min(0).max(1).describe('Normalized parameter value 0.0–1.0'),
@@ -96,7 +96,7 @@ export function registerFxTools(server: McpServer): void {
     'set_fx_enabled',
     'Enable or disable (bypass) an FX plugin on a track',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       fxIndex: z.coerce.number().int().min(0).describe('Zero-based FX index in the chain'),
       enabled: z.coerce.number().int().min(0).max(1).describe('1 = enabled, 0 = disabled (bypassed)'),
     },
@@ -113,7 +113,7 @@ export function registerFxTools(server: McpServer): void {
     'set_fx_offline',
     'Set an FX plugin online or offline. Offline FX uses no CPU but preserves settings.',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       fxIndex: z.coerce.number().int().min(0).describe('Zero-based FX index in the chain'),
       offline: z.coerce.number().int().min(0).max(1).describe('1 = offline, 0 = online'),
     },

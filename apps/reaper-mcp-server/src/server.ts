@@ -10,6 +10,7 @@ import { registerDiscoveryTools } from './tools/discovery.js';
 import { registerPresetTools } from './tools/presets.js';
 import { registerSnapshotTools } from './tools/snapshots.js';
 import { registerRoutingTools } from './tools/routing.js';
+import { registerStructureTools, registerRoutingSetters } from './tools/structure.js';
 import { registerAnalysisTools } from './tools/analysis.js';
 import { registerMidiTools } from './tools/midi.js';
 import { registerMediaTools } from './tools/media.js';
@@ -89,6 +90,8 @@ export function createServer(): McpServer {
   registerPresetTools(server);
   registerSnapshotTools(server);
   registerRoutingTools(server);
+  registerRoutingSetters(server);
+  registerStructureTools(server);
   registerAnalysisTools(server);
   registerMidiTools(server);
   registerMediaTools(server);

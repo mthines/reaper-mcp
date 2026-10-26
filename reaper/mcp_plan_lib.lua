@@ -280,6 +280,9 @@ end
 --- Resolve a track reference to { track = MediaTrack } or { ref = name }
 --- (a track the plan creates). Returns nil, err when unresolvable/ambiguous.
 local function resolve_track(api, ref, refs)
+  if ref == -1 or ref == "-1" or (type(ref) == "string" and ref:lower() == "master") then
+    return { track = api.GetMasterTrack(0) }
+  end
   if type(ref) == "number" then
     local tr = api.GetTrack(0, math.floor(ref))
     if not tr then return nil, "track " .. track_label(ref) .. " not found" end
@@ -466,6 +469,11 @@ function M.validate(api, ops, ctx)
       elseif t == "add_send" then
         r.from = need_track("from")
         r.to = need_track("to")
+        -- REAPER creates nothing for a send into or out of the master.
+        local master = api.GetMasterTrack(0)
+        if (r.from and r.from.track == master) or (r.to and r.to.track == master) then
+          conflict(i, op, "a send cannot involve the master track: use set_track_info masterSend")
+        end
       elseif t == "graft_fxchain" then
         local grafted
         if op.fromChunk then

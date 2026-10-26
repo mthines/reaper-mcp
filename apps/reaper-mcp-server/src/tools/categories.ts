@@ -27,8 +27,8 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   tracks: {
     name: 'tracks',
-    description: 'Track management: list, inspect, and set properties (volume, pan, mute, solo, record arm, phase, input). Includes batch set for multiple tracks at once.',
-    tools: ['list_tracks', 'get_track_properties', 'set_track_property', 'set_multiple_track_properties'],
+    description: 'Track management: list, inspect, and set properties (volume, pan, mute, solo, record arm, phase, input), including batch set. Structure: add, delete, move, folders, name/color/channels, groups and VCAs. trackIndex -1 (or "master") is the master track.',
+    tools: ['list_tracks', 'get_track_properties', 'set_track_property', 'set_multiple_track_properties', 'add_track', 'delete_track', 'move_track', 'set_track_folder', 'set_track_info', 'set_track_group'],
   },
   fx: {
     name: 'fx',
@@ -101,8 +101,8 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   routing: {
     name: 'routing',
-    description: 'Track routing: inspect sends, receives, parent/folder relationships for a track',
-    tools: ['get_track_routing'],
+    description: 'Track routing: inspect and edit sends, receives, hardware outputs, sidechain channels, master send, parent/folder relationships',
+    tools: ['get_track_routing', 'add_send', 'set_send', 'remove_send', 'add_hardware_output'],
   },
   plan: {
     name: 'plan',

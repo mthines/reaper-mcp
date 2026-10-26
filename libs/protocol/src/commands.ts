@@ -104,6 +104,17 @@ export type CommandType =
   | 'run_action'
   | 'set_selected_tracks'
   | 'set_selected_items'
+  // Track structure + routing setters
+  | 'add_track'
+  | 'delete_track'
+  | 'move_track'
+  | 'set_track_folder'
+  | 'set_track_info'
+  | 'set_track_group'
+  | 'add_send'
+  | 'set_send'
+  | 'remove_send'
+  | 'add_hardware_output'
   // Live MIDI output
   | 'send_midi_cc'
   | 'send_midi_pc'
@@ -654,4 +665,93 @@ export interface SetSelectedItemsParams {
   /** JSON-encoded { trackIndex, itemIndex }[]. */
   items: string;
   mode?: SelectionMode;
+}
+
+// Track structure + routing setters. Track refs: index (-1 = master), exact name, "{GUID}" or "master".
+
+export interface AddTrackParams {
+  name?: string;
+  index?: number;
+}
+
+export interface DeleteTrackParams {
+  track: PlanTrackRef;
+}
+
+export interface MoveTrackParams {
+  track: PlanTrackRef;
+  toIndex: number;
+}
+
+export interface SetTrackFolderParams {
+  track: PlanTrackRef;
+  mode?: 'folder' | 'normal' | 'last';
+  depth?: number;
+  /** 0 = open, 1 = small, 2 = collapsed */
+  collapsed?: number;
+}
+
+export interface SetTrackInfoParams {
+  track: PlanTrackRef;
+  name?: string;
+  /** "#RRGGBB" or "none" */
+  color?: string;
+  channels?: number;
+  masterSend?: boolean;
+}
+
+export type TrackGroupRole =
+  | 'volume_lead' | 'volume_follow' | 'vca_lead' | 'vca_follow'
+  | 'pan_lead' | 'pan_follow' | 'mute_lead' | 'mute_follow'
+  | 'solo_lead' | 'solo_follow' | 'recarm_lead' | 'recarm_follow'
+  | 'polarity_lead' | 'polarity_follow' | 'automode_lead' | 'automode_follow';
+
+export interface SetTrackGroupParams {
+  track: PlanTrackRef;
+  /** 1-64 */
+  group: number;
+  /** JSON-encoded TrackGroupRole[]. */
+  roles: string;
+  enable?: boolean;
+}
+
+export type SendMode = 'post-fader' | 'pre-fx' | 'post-fx';
+export type SendCategory = 'send' | 'receive' | 'hardware';
+
+interface SendLevel {
+  /** dB */
+  volume?: number;
+  pan?: number;
+  mute?: boolean;
+  mode?: SendMode;
+}
+
+export interface AddSendParams extends SendLevel {
+  from: PlanTrackRef;
+  to: PlanTrackRef;
+  /** First channel of a stereo pair, 1-based (3 = 3/4). */
+  srcChannel?: number;
+  destChannel?: number;
+}
+
+export interface AddHardwareOutputParams extends SendLevel {
+  track: PlanTrackRef;
+  outputChannel?: number;
+  mono?: boolean;
+}
+
+export interface SetSendParams extends SendLevel {
+  track: PlanTrackRef;
+  category?: SendCategory;
+  index: number;
+  srcChannel?: number;
+  destChannel?: number;
+  outputChannel?: number;
+  mono?: boolean;
+}
+
+export interface RemoveSendParams {
+  track: PlanTrackRef;
+  category?: SendCategory;
+  index: number;
 }

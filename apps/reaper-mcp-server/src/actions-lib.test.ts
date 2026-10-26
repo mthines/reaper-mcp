@@ -174,6 +174,10 @@ describe('mcp_actions_lib.lua (wasmoon)', () => {
       assert(#r.selected == 2 and r.selected[1].name == "Snare" and r.selected[2].name == "Bass", "replace")
       r = actions.set_selected_tracks(api, { "Kick" }, "add", plan.resolve_track)
       assert(#r.selected == 3, "add keeps existing")
+      r = actions.set_selected_tracks(api, { "master", "Kick" }, "replace", plan.resolve_track)
+      assert(#r.selected == 2 and r.selected[1].index == -1 and r.selected[2].name == "Kick", "master is selected and listed")
+      r = actions.set_selected_tracks(api, { "Bass" }, "replace", plan.resolve_track)
+      assert(#r.selected == 1 and r.selected[1].name == "Bass" and not api.GetMasterTrack(0).selected, "replace deselects the master")
 
       local before = api.writes
       local _, err = actions.set_selected_tracks(api, { "Snare", "Nope" }, "replace", plan.resolve_track)
