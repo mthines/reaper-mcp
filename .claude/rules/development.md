@@ -22,12 +22,14 @@ paths: ["**/*.ts", "**/*.json"]
 
 ## Adding MCP Tools
 
-Every new tool requires changes in 4 places (always update all 4):
+Every new tool requires changes in 6 places (always update all 6):
 
 1. `libs/protocol/src/commands.ts` -- Add to `CommandType` union + params interface
 2. `libs/protocol/src/responses.ts` -- Add response data interface if needed
 3. `apps/reaper-mcp-server/src/tools/<file>.ts` -- Implement tool with `server.tool()` + zod schema
-4. `reaper/mcp_bridge.lua` -- Add handler to the `handlers` table
+4. `apps/reaper-mcp-server/src/cli.ts` -- Add tool name to `MCP_TOOL_NAMES`
+5. `apps/reaper-mcp-server/src/tools/categories.ts` -- Add tool name to a category in `TOOL_CATEGORIES`
+6. `reaper/mcp_bridge.lua` -- Add handler to the `handlers` table
 
 If you miss any of these, the tool will either not compile, not be registered, or silently fail at runtime.
 

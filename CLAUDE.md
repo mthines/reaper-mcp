@@ -393,13 +393,14 @@ pnpm nx affected --target=build     # Build only affected by changes
 
 ## Adding New MCP Tools
 
-To add a new tool, touch these 5 places:
+To add a new tool, touch these 6 places:
 
 1. **`libs/protocol/src/commands.ts`** -- Add command type to `CommandType` union, add params interface
 2. **`libs/protocol/src/responses.ts`** -- Add response data interface if needed
 3. **`apps/reaper-mcp-server/src/tools/`** -- Create or extend a tool file, register with `server.tool()`
 4. **`apps/reaper-mcp-server/src/cli.ts`** -- Add tool name to `MCP_TOOL_NAMES` array (used by `ensureClaudeSettings()` to auto-allow tools)
-5. **`reaper/mcp_bridge.lua`** -- Add handler function in the `handlers` table
+5. **`apps/reaper-mcp-server/src/tools/categories.ts`** -- Add tool name to a category in `TOOL_CATEGORIES` (the bridge-coverage test fails on an uncategorized tool)
+6. **`reaper/mcp_bridge.lua`** -- Add handler function in the `handlers` table
 
 **Important:** Always use `z.coerce.number()` instead of `z.number()` for numeric parameters. MCP clients may pass numbers as strings (e.g. `"39"` instead of `39`), and `z.coerce` handles the conversion automatically.
 
