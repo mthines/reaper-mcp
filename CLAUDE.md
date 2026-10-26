@@ -64,6 +64,8 @@ reaper-mcp/
         media.ts              # 11 media item editing tools (properties, batch, split, move, trim, stretch)
         selection.ts          # get/set_selected_tracks, set_selected_items, get/set_time_selection
         actions.ts            # search_actions, get_action, run_action (logic in reaper/mcp_actions_lib.lua)
+        items.ts              # insert_audio_file, takes, take FX, item color/fades (logic in reaper/mcp_items_lib.lua)
+        fx-housekeeping.ts    # move/copy/rename_fx, .RfxChain save/load, track templates (logic in reaper/mcp_items_lib.lua)
         markers.ts            # list_markers, list_regions, add_marker, add_region, delete_marker, delete_region, edit_marker, edit_region
         tempo.ts              # get_tempo_map, add/edit/delete_tempo_marker, set_project_tempo
         envelopes.ts          # get_track_envelopes, get_envelope_points, insert_envelope_point, delete_envelope_point
@@ -124,6 +126,7 @@ reaper-mcp/
     mcp_plan_lib.lua          # run_plan executor (pure Lua, takes the API as an argument; unit-tested via wasmoon)
     mcp_actions_lib.lua       # Action proxy + selection setters (pure Lua, unit-tested via wasmoon)
     mcp_project_lib.lua       # Project ops, tempo map + marker editing (pure Lua, unit-tested via wasmoon)
+    mcp_items_lib.lua         # Items, takes, take FX, FX move/copy/rename, FX chains, track templates (pure Lua, unit-tested via wasmoon)
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
     mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
     mcp_snapshot_quick_save.lua # Action: quick save with auto-name
@@ -152,7 +155,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (115 total)
+## MCP Tools (134 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI and `analyze_track_aesthetics`) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -363,6 +366,35 @@ Every tool that takes a `trackIndex` (except media item, MIDI and `analyze_track
 | `get_project_settings` | `tools/project.ts` | Sample rate (+ forced flag), title, author, notes, repeat, metronome |
 | `set_project_settings` | `tools/project.ts` | Set any of those; metronome is a global REAPER option (not undoable, not stored in the project) |
 
+### Items & Takes (10)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `insert_audio_file` | `tools/items.ts` | Insert an audio file onto a track as a new item at a position (default: edit cursor); the item is the file's length |
+| `list_takes` | `tools/items.ts` | An item's takes: name, active, MIDI/audio, source file, take FX count |
+| `set_active_take` | `tools/items.ts` | Make one take the active (playing) take |
+| `get_take_fx` | `tools/items.ts` | List a take's FX (default: active take); with `fxIndex`, that FX's parameters |
+| `add_take_fx` | `tools/items.ts` | Add an FX to a take's FX chain by name |
+| `remove_take_fx` | `tools/items.ts` | Remove one FX from a take's FX chain |
+| `set_take_fx_parameter` | `tools/items.ts` | Set one take FX parameter and return the value REAPER reads back |
+| `get_item_appearance` | `tools/items.ts` | Item color (`"#RRGGBB"` or `"none"`) and fade lengths, shapes (0-6) and curves |
+| `set_item_color` | `tools/items.ts` | Set an item's color, or `"none"` for the track default |
+| `set_item_fades` | `tools/items.ts` | Set fade-in/out lengths, shapes and curves (only the fields given change) |
+
+### FX Housekeeping (9)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `move_fx` | `tools/fx-housekeeping.ts` | Move one FX within its chain or to another track |
+| `copy_fx` | `tools/fx-housekeeping.ts` | Copy one FX (with settings) within its chain or onto another track |
+| `rename_fx` | `tools/fx-housekeeping.ts` | Rename an FX instance (REAPER 6.37+); `""` restores the plugin name |
+| `save_fx_chain` | `tools/fx-housekeeping.ts` | Save a track's FX chain as `<resource>/FXChains/<name>.RfxChain` |
+| `load_fx_chain` | `tools/fx-housekeeping.ts` | Load an `.RfxChain` onto a track (`append` or `replace`), fresh FXIDs |
+| `list_fx_chains` | `tools/fx-housekeeping.ts` | List saved `.RfxChain` names (FXChains folder and subfolders) |
+| `save_track_template` | `tools/fx-housekeeping.ts` | Save a track as `<resource>/TrackTemplates/<name>.RTrackTemplate` (items only with `includeItems`) |
+| `insert_track_template` | `tools/fx-housekeeping.ts` | Insert the track(s) of a template at a position, fresh GUIDs |
+| `list_track_templates` | `tools/fx-housekeeping.ts` | List saved `.RTrackTemplate` names |
+
 ### Progressive Discovery (3)
 
 | Tool | File | Description |
@@ -371,7 +403,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI and `analyze_track
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
-Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`
+Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`, `takes`, `fx_files`
 
 ### MIDI Editing Concepts
 
@@ -418,6 +450,15 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 - **Bridge-safe text**: free-text fields of these tools (notes, title, author, names, paths, file pattern) refuse `{` and `}` — the bridge's flat command parser cuts params at an unbalanced brace inside a string. A pre-existing bridge limit; the refusal avoids a silent no-op.
 - **Validation first**: invalid input (unknown marker/region/tempo index, BPM <= 0, unsupported format, end <= start) is refused before anything is written.
 - **Tempo indexes** are `get_tempo_map` indexes; a map with `tempoMarkerCount: 0` holds only the project tempo, set it with `set_project_tempo`. Adding a marker where one already is replaces it (`replacedExisting: true`). REAPER can silently keep the start marker on delete; `delete_tempo_marker` then returns an error instead of a false success. `set_project_tempo` never uses `SetCurrentBPM` with markers present (it inserts a marker at the edit cursor).
+
+### Items, Takes & FX Files Concepts
+
+- **Logic lives in `reaper/mcp_items_lib.lua`** (pure Lua over an injected API and file system, unit-tested via wasmoon in `items-lib.test.ts`); the bridge handlers only pass `reaper`, `mcp_plan_lib.lua` and a small `io`-based file system in.
+- **Validate, then write**: every input (track/item/take/FX index, file, color, shape, path) is checked before the first write; a refused call changes nothing and says why. Each write is one undo point.
+- **Takes**: `takeIndex` is optional on take FX tools and defaults to the active take. Take FX are separate from track FX.
+- **Fade shapes**: 0 linear, 1 fast start, 2 fast end, 3 fast start (steep), 4 fast end (steep), 5 slow start/end, 6 slow start/end (steep); curves are -1..1.
+- **Files stay inside REAPER's resource folder**: `save_fx_chain` / `save_track_template` take a name (subfolders allowed) under `FXChains/` or `TrackTemplates/`; absolute paths, drive letters and `..` are refused, and an existing file is only replaced with `overwrite: true`. Loads also accept an absolute path with the right extension.
+- **Chunks, like `graft_fxchain`**: loading a chain or inserting a template edits track state chunks with `mcp_plan_lib.lua`'s helpers, regenerating FXIDs (and TRACKID/item GUIDs for templates). A saved template drops receives (`AUXRECV`) and folder state (`ISBUS`), which depend on the surrounding tracks.
 
 ### Envelope / Automation Concepts
 
