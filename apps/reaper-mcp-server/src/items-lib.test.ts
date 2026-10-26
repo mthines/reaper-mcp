@@ -185,6 +185,15 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       assert(full.inserted[1].index == 3 and #api.tracks[4].items == 2, "includeItems keeps items; default index is the end")
       local l = items.list_track_templates(api, {}, ctx(api))
       assert(l.total == 2 and l.names[1] == "Bass DI" and l.names[2] == "Bass full")
+
+      -- REAPER rejecting a template chunk takes back the tracks the call inserted
+      api.fs.files["/res/TrackTemplates/Two.RTrackTemplate"] = '<TRACK\\nNAME "X"\\n>\\n<TRACK\\nNAME "Y"\\n>\\n'
+      local n, set = #api.tracks, api.SetTrackStateChunk
+      local calls = 0
+      api.SetTrackStateChunk = function(tr, c, u) calls = calls + 1; if calls == 2 then return false end; return set(tr, c, u) end
+      local bad, e3 = items.insert_track_template(api, { name = "Two", index = 0 }, ctx(api))
+      assert(bad == nil and e3:find("rejected track 2", 1, true), tostring(e3))
+      assert(#api.tracks == n and api.tracks[1].name == "Bass", "no track left behind: " .. #api.tracks)
     `);
   });
 

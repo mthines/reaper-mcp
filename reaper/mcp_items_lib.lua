@@ -743,6 +743,8 @@ function M.insert_track_template(api, p, ctx)
       api.InsertTrackAtIndex(i, true)
       local tr = api.GetTrack(0, i)
       if not api.SetTrackStateChunk(tr, regenerate_guids(c, api.genGuid), false) then
+        -- Take back every track this call inserted, so a refusal leaves no blank track.
+        for j = i, at, -1 do api.DeleteTrack(api.GetTrack(0, j)) end
         return nil, "REAPER rejected track " .. k .. " of the template"
       end
       local _, name = api.GetTrackName(tr)

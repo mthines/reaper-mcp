@@ -50,6 +50,11 @@ function new_fake(spec)
     table.insert(tracks, math.min(i, #tracks) + 1, new_track("")) -- REAPER clamps past the end
     write("insert_track")
   end
+  api.DeleteTrack = function(tr)
+    for k, t in ipairs(tracks) do
+      if t == tr then table.remove(tracks, k); write("delete_track"); return end
+    end
+  end
   api.GetSetMediaTrackInfo_String = function(tr, _, v, set)
     if set then tr.name = v; write("set_name") end
     return true, tr.name
