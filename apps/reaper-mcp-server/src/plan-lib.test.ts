@@ -249,12 +249,20 @@ describe('mcp_plan_lib.lua (wasmoon)', () => {
     `);
   });
 
-  it('lua plan: string plan without CF_Json_Parse errors without writes', async () => {
+  it('lua plan: string plan without CF_Json_Parse is decoded and applied', async () => {
     await runLua(`
       local api = new_fake{ tracks = { { name = "Kick" } } }
-      local res, err = plan.run_plan(api, { ops = '[{"op":"set_track","track":"Kick","volume":-3}]' }, {})
-      assert(res == nil and err:find("CF_Json_Parse"), tostring(err))
-      assert(api.writes == 0)
+      local ops = '[{"op":"add_track","name":"Bus \\\\"A\\\\"","as":"$bus"},'
+        .. '{"op":"add_fx","track":"$bus","fxName":"ReaComp","params":[{"index":0,"value":0.5e0}],"enabled":1},'
+        .. '{"op":"set_track","track":"Kick","volume":-3.5,"pan":-0.25}]'
+      local res, err = plan.run_plan(api, { ops = ops }, {})
+      assert(err == nil, err)
+      assert(res.applied == 3, "applied " .. tostring(res.applied))
+      assert(api.tracks[2].name == 'Bus "A"', "escaped name: " .. tostring(api.tracks[2].name))
+
+      local d = plan.json_decode('{"a":[1,-2.5,true,false,null,"\\\\u00e9\\\\n"],"b":{}}')
+      assert(d.a[1] == 1 and d.a[2] == -2.5 and d.a[3] == true and d.a[4] == false)
+      assert(d.a[6] == "\\u{e9}\\n" and next(d.b) == nil)
 
       local json_text = '[{"op":"set_track","track":"Kick","volume":-3}]'
       local api2 = new_fake{ tracks = { { name = "Kick" } }, json = function(s)
@@ -264,6 +272,17 @@ describe('mcp_plan_lib.lua (wasmoon)', () => {
       local res2, err2 = plan.run_plan(api2, { ops = json_text }, {})
       assert(err2 == nil, err2)
       assert(res2.applied == 1)
+    `);
+  });
+
+  it('lua plan: malformed JSON plan is rejected without writes', async () => {
+    await runLua(`
+      for _, bad in ipairs({ '[{"op":"set_track"', '[{"op":"set_track",}]', '[1] x', '{"op":tru}' }) do
+        local api = new_fake{ tracks = { { name = "Kick" } } }
+        local res, err = plan.run_plan(api, { ops = bad }, {})
+        assert(res == nil and err:find("not a valid JSON array"), bad .. " -> " .. tostring(err))
+        assert(api.writes == 0 and api.begins == 0, "no writes for " .. bad)
+      end
     `);
   });
 

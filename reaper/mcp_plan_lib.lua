@@ -54,6 +54,115 @@ function M.base64_decode(data)
   end))
 end
 
+--- Minimal JSON decoder. REAPER and SWS ship no JSON parser (there is no
+--- CF_Json_Parse in SWS 2.14), so the plan's nested ops are decoded here.
+--- Returns value, or nil + error. JSON null decodes to nil.
+function M.json_decode(str)
+  local pos = 1
+  local decode_value
+
+  local function fail(msg) error({ json = msg .. " at position " .. pos }, 0) end
+  local function skip_ws() pos = str:find("[^ \t\r\n]", pos) or (#str + 1) end
+
+  local function utf8_char(cp)
+    if cp < 0x80 then return string.char(cp) end
+    if cp < 0x800 then return string.char(0xC0 | (cp >> 6), 0x80 | (cp & 0x3F)) end
+    return string.char(0xE0 | (cp >> 12), 0x80 | ((cp >> 6) & 0x3F), 0x80 | (cp & 0x3F))
+  end
+
+  local ESC = { ['"'] = '"', ["\\"] = "\\", ["/"] = "/", b = "\b", f = "\f", n = "\n", r = "\r", t = "\t" }
+
+  local function decode_string()
+    local out = {}
+    pos = pos + 1 -- opening quote
+    while true do
+      local c = str:sub(pos, pos)
+      if c == "" then fail("unterminated string") end
+      if c == '"' then pos = pos + 1; return table.concat(out) end
+      if c == "\\" then
+        local e = str:sub(pos + 1, pos + 1)
+        if e == "u" then
+          local hex = str:sub(pos + 2, pos + 5)
+          if not hex:match("^%x%x%x%x$") then fail("bad \\u escape") end
+          out[#out + 1] = utf8_char(tonumber(hex, 16))
+          pos = pos + 6
+        elseif ESC[e] then
+          out[#out + 1] = ESC[e]
+          pos = pos + 2
+        else
+          fail("bad escape")
+        end
+      else
+        local s, e = str:find('^[^"\\]+', pos)
+        out[#out + 1] = str:sub(s, e)
+        pos = e + 1
+      end
+    end
+  end
+
+  function decode_value()
+    skip_ws()
+    local c = str:sub(pos, pos)
+    if c == "{" then
+      local obj = {}
+      pos = pos + 1
+      skip_ws()
+      if str:sub(pos, pos) == "}" then pos = pos + 1; return obj end
+      while true do
+        skip_ws()
+        if str:sub(pos, pos) ~= '"' then fail("expected object key") end
+        local k = decode_string()
+        skip_ws()
+        if str:sub(pos, pos) ~= ":" then fail("expected ':'") end
+        pos = pos + 1
+        obj[k] = decode_value()
+        skip_ws()
+        local d = str:sub(pos, pos)
+        pos = pos + 1
+        if d == "}" then return obj end
+        if d ~= "," then fail("expected ',' or '}'") end
+      end
+    elseif c == "[" then
+      local arr, n = {}, 0
+      pos = pos + 1
+      skip_ws()
+      if str:sub(pos, pos) == "]" then pos = pos + 1; return arr end
+      while true do
+        n = n + 1
+        arr[n] = decode_value()
+        skip_ws()
+        local d = str:sub(pos, pos)
+        pos = pos + 1
+        if d == "]" then return arr end
+        if d ~= "," then fail("expected ',' or ']'") end
+      end
+    elseif c == '"' then
+      return decode_string()
+    elseif str:sub(pos, pos + 3) == "true" then
+      pos = pos + 4; return true
+    elseif str:sub(pos, pos + 4) == "false" then
+      pos = pos + 5; return false
+    elseif str:sub(pos, pos + 3) == "null" then
+      pos = pos + 4; return nil
+    else
+      local num = str:match("^-?%d+%.?%d*[eE]?[-+]?%d*", pos)
+      if not num or num == "" or num == "-" then fail("unexpected character '" .. c .. "'") end
+      pos = pos + #num
+      return tonumber(num) or fail("bad number")
+    end
+  end
+
+  local ok, res = pcall(function()
+    local v = decode_value()
+    skip_ws()
+    if pos <= #str then fail("trailing characters") end
+    return v
+  end)
+  if ok then return res end
+  if type(res) == "table" and res.json then return nil, res.json end
+  return nil, tostring(res)
+end
+
 local function split_lines(chunk)
   local lines = {}
   for line in (chunk .. "\n"):gmatch("(.-)\r?\n") do
@@ -437,11 +546,17 @@ function M.run_plan(api, params, ctx)
   ctx = ctx or {}
   local ops = params.ops
   if type(ops) == "string" then
-    if not api.CF_Json_Parse then
-      return nil, "run_plan needs the SWS extension (CF_Json_Parse) to read the plan; install SWS and restart REAPER"
+    local val, err
+    if api.CF_Json_Parse then
+      local ok
+      ok, val = api.CF_Json_Parse(ops)
+      if not ok then val = nil end
+    else
+      val, err = M.json_decode(ops)
     end
-    local ok, val = api.CF_Json_Parse(ops)
-    if not ok or type(val) ~= "table" then return nil, "ops is not a valid JSON array" end
+    if type(val) ~= "table" then
+      return nil, "ops is not a valid JSON array" .. (err and (" (" .. err .. ")") or "") .. " — nothing was changed"
+    end
     ops = val
   end
   if type(ops) ~= "table" or #ops == 0 then return nil, "ops array required" end

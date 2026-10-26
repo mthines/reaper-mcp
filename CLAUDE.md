@@ -348,7 +348,7 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 - **`dryRun: true`** returns the resolved op list, `conflicts`, and `warnings` (e.g. an FX name not found in the installed-FX list) without writing.
 - **`idempotencyKey`**: the bridge remembers the last 100 applied keys; re-sending one returns `{ alreadyApplied: true, result }`. The TS tool also uses a 120 s timeout so a slow apply is not reported as failed and retried.
 - **`graft_fxchain`** copies a source `<FXCHAIN` block (from a track via `from`, or a base64 track chunk via `fromChunk`) onto the target, replacing the target's FX chain while keeping its items, envelopes, and sends. FXIDs are regenerated. It does not copy sends: sends live as `AUXRECV` lines on the receiving track and are outside the FX chain. Input FX (`<FXCHAIN_REC`) are not copied either.
-- **Requires SWS** (`CF_Json_Parse`): the ops travel as a JSON string the bridge decodes; without SWS the tool returns a clear error and writes nothing.
+- **No SWS needed**: the ops travel as a JSON string that `mcp_plan_lib.lua` decodes with its own small JSON decoder (SWS has no `CF_Json_Parse`; it is used only if present). Malformed JSON rejects the plan and writes nothing.
 
 ### Envelope / Automation Concepts
 
