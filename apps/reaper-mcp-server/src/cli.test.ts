@@ -135,7 +135,8 @@ describe('cli helpers', () => {
       expect(REAPER_ASSETS).toContain('mcp_actions_lib.lua');
       expect(REAPER_ASSETS).toContain('mcp_tracks_lib.lua');
       expect(REAPER_ASSETS).toContain('mcp_project_lib.lua');
-      expect(REAPER_ASSETS.length).toBe(15);
+      expect(REAPER_ASSETS).toContain('mcp_items_lib.lua');
+      expect(REAPER_ASSETS.length).toBe(16);
     });
 
     it('KNOWLEDGE_DIRS includes all expected subdirectories', () => {

@@ -32,6 +32,7 @@ describe('category tools', () => {
         'project', 'tracks', 'fx', 'transport', 'midi', 'media',
         'selection', 'markers', 'tempo', 'envelopes', 'analysis',
         'discovery', 'snapshots', 'routing', 'plan', 'actions',
+        'takes', 'fx_files',
       ];
       for (const cat of expectedCategories) {
         expect(TOOL_CATEGORIES[cat]).toBeDefined();
