@@ -223,6 +223,28 @@ describe('mcp_plan_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('lua plan: set_fx_params after graft_fxchain validates against the grafted chain', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = {
+        { name = "Source", chunk = [[${SOURCE_CHUNK}]] },
+        { name = "Target", fx = { "VST: ReaEQ (Cockos)" } },
+      } }
+      local function dry(fx)
+        local res = plan.run_plan(api, { dryRun = true, ops = {
+          { op = "graft_fxchain", track = "Target", from = "Source" },
+          { op = "set_fx_params", track = "Target", fx = fx, params = { { index = 0, value = 0.5 } } },
+        } }, {})
+        return res.valid, res.conflicts[1] and res.conflicts[1].error
+      end
+      assert(dry("Pro-C 2"), "a grafted FX by name")
+      assert(dry(1), "a grafted FX by index")
+      local ok, err = dry(2)
+      assert(not ok and err:find("out of range"), tostring(err))
+      ok, err = dry("ReaEQ")
+      assert(not ok and err:find("not found"), "the replaced FX is gone: " .. tostring(err))
+    `);
+  });
+
   it('lua plan: graft_fxchain splices FXCHAIN, keeps items, regenerates FXIDs', async () => {
     await runLua(`
       local target_chunk = [[${TRACK_WITH_ITEMS}]]
