@@ -49,7 +49,7 @@ reaper-mcp/
       sidecar.ts              # Python subprocess lifecycle + JSON-RPC client (getSidecarClient())
       setup-sidecar.ts        # setup-sidecar CLI command: Python check, venv, deps, weights download
       tools/
-        project.ts            # get_project_info
+        project.ts            # get_project_info; undo/redo, save, render settings + render, project settings (logic in reaper/mcp_project_lib.lua)
         tracks.ts             # list_tracks, get_track_properties, set_track_property
         fx.ts                 # add_fx, remove_fx, get/set_fx_parameter, set_fx_enabled, set_fx_offline
         meters.ts             # read_track_meters, read_track_spectrum
@@ -64,8 +64,8 @@ reaper-mcp/
         media.ts              # 11 media item editing tools (properties, batch, split, move, trim, stretch)
         selection.ts          # get/set_selected_tracks, set_selected_items, get/set_time_selection
         actions.ts            # search_actions, get_action, run_action (logic in reaper/mcp_actions_lib.lua)
-        markers.ts            # list_markers, list_regions, add_marker, add_region, delete_marker, delete_region
-        tempo.ts              # get_tempo_map
+        markers.ts            # list_markers, list_regions, add_marker, add_region, delete_marker, delete_region, edit_marker, edit_region
+        tempo.ts              # get_tempo_map, add/edit/delete_tempo_marker, set_project_tempo
         envelopes.ts          # get_track_envelopes, get_envelope_points, insert_envelope_point, delete_envelope_point
         aesthetics.ts         # analyze_track_aesthetics (requires Python sidecar)
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
@@ -118,11 +118,12 @@ reaper-mcp/
 
   reaper/                     # Files installed INTO REAPER (copied by setup command)
     mcp_tracks_lib.lua        # Pure track-structure + routing logic (wasmoon-tested), loaded by the bridge
-    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 98 handlers)
+    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 112 handlers)
     mcp_snapshot_manager.lua  # Standalone snapshot manager GUI (gfx-based, no extensions required)
     mcp_snapshot_lib.lua      # Shared library for snapshot action scripts
     mcp_plan_lib.lua          # run_plan executor (pure Lua, takes the API as an argument; unit-tested via wasmoon)
     mcp_actions_lib.lua       # Action proxy + selection setters (pure Lua, unit-tested via wasmoon)
+    mcp_project_lib.lua       # Project ops, tempo map + marker editing (pure Lua, unit-tested via wasmoon)
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
     mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
     mcp_snapshot_quick_save.lua # Action: quick save with auto-name
@@ -151,7 +152,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (101 total)
+## MCP Tools (115 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI and `analyze_track_aesthetics`) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -253,7 +254,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI and `analyze_track
 | `get_time_selection` | `tools/selection.ts` | Get time/loop selection start, end, length in seconds |
 | `set_time_selection` | `tools/selection.ts` | Set the time selection range (start/end in seconds) |
 
-### Markers & Regions Tools (6)
+### Markers & Regions Tools (8)
 
 | Tool | File | Description |
 |------|------|-------------|
@@ -263,12 +264,18 @@ Every tool that takes a `trackIndex` (except media item, MIDI and `analyze_track
 | `add_region` | `tools/markers.ts` | Add a region with start/end, optional name/color |
 | `delete_marker` | `tools/markers.ts` | Delete a marker by index |
 | `delete_region` | `tools/markers.ts` | Delete a region by index |
+| `edit_marker` | `tools/markers.ts` | Rename, move or recolor a marker by index; unknown index changes nothing |
+| `edit_region` | `tools/markers.ts` | Rename, move/resize or recolor a region by index; end must stay after start |
 
-### Tempo Map Tools (1)
+### Tempo Map Tools (5)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `get_tempo_map` | `tools/tempo.ts` | All tempo/time sig changes (position, BPM, time sig, linear flag) |
+| `add_tempo_marker` | `tools/tempo.ts` | Add a tempo/time sig marker at a position (seconds); returns the updated map |
+| `edit_tempo_marker` | `tools/tempo.ts` | Edit a tempo marker by index (position, BPM, time sig, linear); unspecified fields kept |
+| `delete_tempo_marker` | `tools/tempo.ts` | Delete a tempo marker by index |
+| `set_project_tempo` | `tools/tempo.ts` | Set the tempo at the project start: project BPM with no markers, else the marker at 0 (added when the first marker is later) |
 
 ### Envelope / Automation Tools (9)
 
@@ -343,6 +350,19 @@ Every tool that takes a `trackIndex` (except media item, MIDI and `analyze_track
 | `get_action` | `tools/actions.ts` | One action's details; a `Custom:` macro's steps by name, or a script's path (from `reaper-kb.ini`) |
 | `run_action` | `tools/actions.ts` | Run an action by id, named id or exact name in an undo block; returns the toggle state after. Dialog actions need `allowDialog`; quit/close/open project are always refused |
 
+### Project Operations (8)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `undo_project` | `tools/project.ts` | Undo the last undo point; reports its label and the next undo/redo labels |
+| `redo_project` | `tools/project.ts` | Redo the last undone point; reports its label |
+| `save_project` | `tools/project.ts` | Save in place, or write a copy to an absolute `.rpp` `path` (the open project keeps its path; `savedAsCopy`). Never opens a dialog: a never-saved project without `path` is refused |
+| `get_render_settings` | `tools/project.ts` | Output dir, file pattern, format, bounds, start/end, sample rate, channels, and the resolved target files |
+| `set_render_settings` | `tools/project.ts` | Set any render setting (format and secondaryFormat: wav/aiff/flac/mp3/ogg/opus, secondary also none); all validated before any write |
+| `render_project` | `tools/project.ts` | Render with the current settings (synchronous action 42230); refuses to overwrite existing targets unless `overwrite` |
+| `get_project_settings` | `tools/project.ts` | Sample rate (+ forced flag), title, author, notes, repeat, metronome |
+| `set_project_settings` | `tools/project.ts` | Set any of those; metronome is a global REAPER option (not undoable, not stored in the project) |
+
 ### Progressive Discovery (3)
 
 | Tool | File | Description |
@@ -388,6 +408,16 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 - **Selection first**: most actions act on the selected tracks/items. Use `set_selected_tracks` / `set_selected_items`, or in one undo step `run_plan` with `select_tracks` then `run_action`.
 - **Safety**: an action whose name ends in `...` opens a modal dialog that blocks REAPER's main thread (and with it the bridge) until a person closes it, so it is refused unless `allowDialog: true`. Any `File: Save…` action on a never-saved project counts as a dialog (REAPER asks for a path). Quit, close/open/new project, new or closed project tabs, switching tabs (native and SWS) and opening another project (SWS Resources slots, associated item projects) are always refused (REAPER names some with a `File:` prefix and some without, e.g. "Close current project tab"; both are matched). A Custom: macro is judged by every step it runs, nested macros included (steps are read from `reaper-kb.ini`). `search_actions`, `get_action` and `run_plan`'s dry run flag all of this (`opensDialog`, `denied`). A ReaScript can still open its own prompt — the gate only sees action names.
 - **Search runs in Lua**: enumerating all ~6k main-section actions takes a few ms in REAPER; only matches (up to `limit`, max 100) cross the bridge, with the `total` count.
+
+### Project Operations Concepts
+
+- **No dialogs**: `save_project` without `path` on a never-saved project is refused (REAPER would open Save As) — the same rule `run_action` applies to `File: Save…`. `render_project` refuses when a target file exists (REAPER would ask to overwrite) unless `overwrite: true`, which deletes those files first, and when `bounds` is `time_selection` with no time selection.
+- **Render formats**: `format` and `secondaryFormat` (a second file from the same render; `none` disables it) take wav/aiff/flac/mp3/ogg/opus with REAPER's default options. `render_project` refuses when either is another encoder (seen live: a template's video secondary format left a modal dialog open) — set `secondaryFormat: "none"`.
+- **Render is synchronous**: action 42230 blocks REAPER (and the bridge) until the render finishes. Keep renders short (a time selection or custom bounds). `targets` in `get_render_settings` are the files REAPER will write (`RENDER_TARGETS`).
+- **Undo**: every edit by these tools is one undo point labelled `MCP: …`, so `undo_project` reverts exactly that edit. Repeat and metronome changes are not undoable in REAPER.
+- **Bridge-safe text**: free-text fields of these tools (notes, title, author, names, paths, file pattern) refuse `{` and `}` — the bridge's flat command parser cuts params at an unbalanced brace inside a string. A pre-existing bridge limit; the refusal avoids a silent no-op.
+- **Validation first**: invalid input (unknown marker/region/tempo index, BPM <= 0, unsupported format, end <= start) is refused before anything is written.
+- **Tempo indexes** are `get_tempo_map` indexes; a map with `tempoMarkerCount: 0` holds only the project tempo, set it with `set_project_tempo`. Adding a marker where one already is replaces it (`replacedExisting: true`). REAPER can silently keep the start marker on delete; `delete_tempo_marker` then returns an error instead of a false success. `set_project_tempo` never uses `SetCurrentBPM` with markers present (it inserts a marker at the edit cursor).
 
 ### Envelope / Automation Concepts
 

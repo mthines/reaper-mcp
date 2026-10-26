@@ -200,12 +200,26 @@ Checks that the bridge is connected, knowledge is installed, and MCP config exis
 | `add_region` | Add region with start/end, optional name/color |
 | `delete_marker` | Delete a marker by index |
 | `delete_region` | Delete a region by index |
+| `edit_marker` | Rename, move or recolor a marker |
+| `edit_region` | Rename, move/resize or recolor a region |
 
 ### Tempo Map
 
 | Tool | Description |
 |------|-------------|
 | `get_tempo_map` | All tempo/time sig changes (position, BPM, time sig, linear) |
+| `add_tempo_marker` / `edit_tempo_marker` / `delete_tempo_marker` | Edit the tempo map |
+| `set_project_tempo` | Set the project BPM |
+
+### Project Operations
+
+| Tool | Description |
+|------|-------------|
+| `undo_project` / `redo_project` | Undo / redo, reporting the undo label |
+| `save_project` | Save in place, or write a copy to a `.rpp` path — never opens a dialog |
+| `get_render_settings` / `set_render_settings` | Output dir, pattern, format, bounds, sample rate, channels |
+| `render_project` | Render with the current settings (refuses to overwrite unless asked) |
+| `get_project_settings` / `set_project_settings` | Sample rate, title, author, notes, repeat, metronome |
 
 ### Envelopes / Automation
 

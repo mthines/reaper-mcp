@@ -554,3 +554,71 @@ export interface SelectedItemsResult {
   selected: { trackIndex: number; itemIndex: number }[];
 }
 
+// =============================================================================
+// Project ops, tempo map and marker editing
+// =============================================================================
+
+export interface UndoRedoResult {
+  undone?: string;
+  redone?: string;
+  nextUndo?: string;
+  nextRedo?: string;
+}
+
+export interface SaveProjectResult {
+  saved: true;
+  path: string;
+  projectPath?: string;
+  /** True when `path` was written as a copy and the open project kept its own path. */
+  savedAsCopy?: boolean;
+}
+
+export interface RenderSettings {
+  outputDirectory: string;
+  filePattern: string;
+  /** "other:<fourcc>" for a sink outside the supported list. */
+  format: string | null;
+  /** 'none' when no secondary file is rendered. */
+  secondaryFormat: string;
+  bounds: string;
+  startTime: number;
+  endTime: number;
+  sampleRate: number;
+  channels: number;
+  /** Files a render would write, as REAPER resolves them. */
+  targets: string[];
+}
+
+export interface RenderProjectResult {
+  rendered: true;
+  files: string[];
+  missing: string[];
+  bounds: string;
+  format: string | null;
+}
+
+export interface ProjectSettings {
+  path: string;
+  sampleRate: number;
+  useProjectSampleRate: boolean;
+  title: string;
+  author: string;
+  notes: string;
+  repeat: boolean;
+  metronome: boolean;
+}
+
+export interface TempoMapResult {
+  markers: {
+    index: number;
+    position: number;
+    bpm: number;
+    timeSigNumerator: number;
+    timeSigDenominator: number;
+    linearTempo: boolean;
+  }[];
+  count: number;
+  /** Real tempo markers; 0 means `markers` holds the project tempo only. */
+  tempoMarkerCount: number;
+}
+

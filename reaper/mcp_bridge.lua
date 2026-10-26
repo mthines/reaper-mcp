@@ -37,6 +37,8 @@ do
     return get_track(proj, idx)
   end
 end
+-- Project ops, tempo map and marker editing (undo/redo, save, render, settings), same install rules.
+local project_lib_ok, project_lib = pcall(dofile, script_dir .. "mcp_project_lib.lua")
 
 local last_poll = 0
 local last_heartbeat = 0
@@ -3258,6 +3260,88 @@ do
     res.channels = extra.channels
     return res
   end
+end
+
+-- =============================================================================
+-- Project ops, tempo map and marker editing (logic in mcp_project_lib.lua)
+-- =============================================================================
+
+local function with_project_lib(fn)
+  if not project_lib_ok then
+    return nil, "mcp_project_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(project_lib) .. ")"
+  end
+  local ok, res, err = pcall(fn)
+  if not ok then return nil, tostring(res) end
+  return res, err
+end
+
+-- Real file system for save/render checks.
+local project_fs = {
+  exists = function(path)
+    local f = io.open(path, "rb")
+    if f then f:close() return true end
+    return false
+  end,
+  dir_exists = function(path)
+    return os.rename(path, path) == true
+  end,
+  remove = function(path) os.remove(path) end,
+}
+
+function handlers.undo_project(params)
+  return with_project_lib(function() return project_lib.undo(reaper) end)
+end
+
+function handlers.redo_project(params)
+  return with_project_lib(function() return project_lib.redo(reaper) end)
+end
+
+function handlers.save_project(params)
+  return with_project_lib(function() return project_lib.save(reaper, params, project_fs) end)
+end
+
+function handlers.get_render_settings(params)
+  return with_project_lib(function() return project_lib.get_render(reaper) end)
+end
+
+function handlers.set_render_settings(params)
+  return with_project_lib(function() return project_lib.set_render(reaper, params) end)
+end
+
+function handlers.render_project(params)
+  return with_project_lib(function() return project_lib.render(reaper, params, project_fs) end)
+end
+
+function handlers.get_project_settings(params)
+  return with_project_lib(function() return project_lib.get_settings(reaper) end)
+end
+
+function handlers.set_project_settings(params)
+  return with_project_lib(function() return project_lib.set_settings(reaper, params) end)
+end
+
+function handlers.add_tempo_marker(params)
+  return with_project_lib(function() return project_lib.add_tempo_marker(reaper, params) end)
+end
+
+function handlers.edit_tempo_marker(params)
+  return with_project_lib(function() return project_lib.edit_tempo_marker(reaper, params) end)
+end
+
+function handlers.delete_tempo_marker(params)
+  return with_project_lib(function() return project_lib.delete_tempo_marker(reaper, params) end)
+end
+
+function handlers.set_project_tempo(params)
+  return with_project_lib(function() return project_lib.set_tempo(reaper, params) end)
+end
+
+function handlers.edit_marker(params)
+  return with_project_lib(function() return project_lib.edit_marker(reaper, params) end)
+end
+
+function handlers.edit_region(params)
+  return with_project_lib(function() return project_lib.edit_region(reaper, params) end)
 end
 
 -- =============================================================================
