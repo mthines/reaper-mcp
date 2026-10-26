@@ -242,6 +242,34 @@ describe('mcp_plan_lib.lua (wasmoon)', () => {
       assert(not ok and err:find("out of range"), tostring(err))
       ok, err = dry("ReaEQ")
       assert(not ok and err:find("not found"), "the replaced FX is gone: " .. tostring(err))
+      ok, err = dry("proc2.vst3")
+      assert(not ok, "only FX names match, not plugin file names")
+
+      -- A source the plan creates or changes: the target gets what the source will hold.
+      local function plan_dry(ops)
+        local res = plan.run_plan(api, { dryRun = true, ops = ops }, {})
+        return res.valid, res.conflicts[1] and res.conflicts[1].error
+      end
+      ok, err = plan_dry({
+        { op = "add_track", name = "Src", as = "$src" },
+        { op = "add_fx", track = "$src", fxName = "ReaComp" },
+        { op = "graft_fxchain", track = "Target", from = "$src" },
+        { op = "set_fx_params", track = "Target", fx = "ReaComp", params = { { index = 0, value = 0.5 } } },
+      })
+      assert(ok, "graft from a plan-created track: " .. tostring(err))
+      ok, err = plan_dry({
+        { op = "add_track", name = "Src", as = "$src" },
+        { op = "add_fx", track = "$src", fxName = "ReaComp" },
+        { op = "graft_fxchain", track = "Target", from = "$src" },
+        { op = "set_fx_params", track = "Target", fx = "ReaEQ", params = { { index = 0, value = 0.5 } } },
+      })
+      assert(not ok and err:find("not found"), "the graft replaced ReaEQ: " .. tostring(err))
+      ok, err = plan_dry({
+        { op = "add_fx", track = "Source", fxName = "ReaDelay" },
+        { op = "graft_fxchain", track = "Target", from = "Source" },
+        { op = "set_fx_params", track = "Target", fx = "ReaDelay", params = { { index = 0, value = 0.5 } } },
+      })
+      assert(ok, "graft after add_fx on the source: " .. tostring(err))
     `);
   });
 

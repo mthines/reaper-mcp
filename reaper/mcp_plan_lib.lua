@@ -203,14 +203,16 @@ function M.find_block(lines, tag)
   return nil
 end
 
---- The FX header lines of an FXCHAIN block (`<VST "VST: ReaComp (Cockos)" ...`),
---- lowercased: what a validator can match fx names against before the graft runs.
+--- The FX names in an FXCHAIN block, lowercased: the first quoted field of
+--- each FX header (`<VST "VST: ReaComp (Cockos)" ...`), or its first word
+--- (`<JS utility/volume ""`).
 function M.fxchain_names(fxchain)
   local names = {}
   for _, line in ipairs(split_lines(fxchain or "")) do
     local tag, rest = line:match("^%s*<(%u[%u_%d]*)%s+(.*)$")
     if tag and tag ~= "FXCHAIN" and tag ~= "PROGRAMENV" and tag ~= "PARMENV" and tag ~= "JS_SER" then
-      names[#names + 1] = (tag .. " " .. rest):lower()
+      local name = rest:match('^"([^"]*)"') or rest:match("^(%S+)")
+      names[#names + 1] = (name or ""):lower()
     end
   end
   return names
@@ -342,28 +344,20 @@ local function find_fx(api, track, ref)
   return nil, "fx '" .. ref .. "' not found"
 end
 
---- Validate-time version of find_fx: also counts the FX that earlier ops in
---- the plan add to this track (`pending`, the requested fxNames, lowercased),
---- since those only exist at apply. Returns an error string or nil.
-local function check_fx_target(api, track, ref, pending, replaced)
-  -- After a graft the track's own chain is gone: only `pending` counts.
-  local existing = replaced and 0 or api.TrackFX_GetCount(track)
-  local count = existing + #pending
+--- Validate-time version of find_fx, against `chain`: the lowercased FX
+--- names the track will hold when this op runs (its own FX, plus what earlier
+--- ops add or graft). Returns an error string or nil.
+local function check_fx_target(chain, ref)
   if type(ref) == "number" then
-    if ref >= count then return "fx index " .. ref .. " out of range" end
+    if ref >= #chain then return "fx index " .. ref .. " out of range" end
     return nil
   end
   local want = ref:lower()
   local digits = ref:match("^%d+$") ~= nil
   local hits = 0
-  for j = 0, existing - 1 do
-    local _, name = api.TrackFX_GetFXName(track, j)
-    name = (name or ""):lower()
-    if (digits and name == want) or (not digits and name:find(want, 1, true)) then hits = hits + 1 end
-  end
   -- A requested fxName ("ReaComp") is usually shorter than the name REAPER
   -- gives the instance ("VST: ReaComp (Cockos)"), so match either way round.
-  for _, name in ipairs(pending) do
+  for _, name in ipairs(chain) do
     if (digits and name == want)
       or (not digits and (name:find(want, 1, true) or want:find(name, 1, true))) then
       hits = hits + 1
@@ -371,7 +365,7 @@ local function check_fx_target(api, track, ref, pending, replaced)
   end
   if hits > 1 then return "fx name '" .. ref .. "' matches more than one FX" end
   if hits == 1 then return nil end
-  if digits and tonumber(ref) < count then return nil end
+  if digits and tonumber(ref) < #chain then return nil end
   return "fx '" .. ref .. "' not found"
 end
 
@@ -390,8 +384,24 @@ function M.validate(api, ops)
   local resolved = {}
   local conflicts = {}
   local warnings = {}
-  local added_fx = {}   -- existing track -> lowercased fxNames added earlier in the plan
-  local replaced = {}   -- existing track -> true once a graft replaced its chain
+  -- Track (or "$ref") -> the lowercased FX names it will hold at this point
+  -- of the plan: its own chain, then whatever earlier add_fx / graft ops change.
+  local chains = {}
+  local function chain_of(res)
+    local key = res and (res.track or res.ref)
+    if not key then return nil end
+    if not chains[key] then
+      local names = {}
+      if res.track then
+        for j = 0, api.TrackFX_GetCount(res.track) - 1 do
+          local _, name = api.TrackFX_GetFXName(res.track, j)
+          names[#names + 1] = (name or ""):lower()
+        end
+      end
+      chains[key] = names
+    end
+    return chains[key]
+  end
 
   local function conflict(i, op, msg)
     conflicts[#conflicts + 1] = { op = i - 1, type = op.op, error = msg }
@@ -416,11 +426,8 @@ function M.validate(api, ops)
       end
 
       if t == "add_fx" then
-        if r.track and r.track.track and type(op.fxName) == "string" then
-          local list = added_fx[r.track.track] or {}
-          list[#list + 1] = op.fxName:lower()
-          added_fx[r.track.track] = list
-        end
+        local chain = chain_of(r.track)
+        if chain and type(op.fxName) == "string" then chain[#chain + 1] = op.fxName:lower() end
         if type(op.fxName) ~= "string" or op.fxName == "" then
           conflict(i, op, "fxName required")
         elseif not fx_installed(api, op.fxName) then
@@ -441,8 +448,8 @@ function M.validate(api, ops)
           end
         elseif type(op.fx) ~= "number" and type(op.fx) ~= "string" then
           conflict(i, op, "fx reference missing")
-        elseif r.track and r.track.track then
-          local err = check_fx_target(api, r.track.track, op.fx, added_fx[r.track.track] or {}, replaced[r.track.track])
+        elseif chain_of(r.track) then
+          local err = check_fx_target(chain_of(r.track), op.fx)
           if err then conflict(i, op, err) end
         end
       elseif t == "add_send" then
@@ -453,25 +460,26 @@ function M.validate(api, ops)
         if op.fromChunk then
           local ok, chunk = pcall(M.base64_decode, op.fromChunk)
           r.fxchain = ok and M.extract_fxchain(chunk) or nil
-          grafted = r.fxchain
+          if r.fxchain then grafted = M.fxchain_names(r.fxchain) end
           if not r.fxchain then conflict(i, op, "fromChunk holds no FXCHAIN block") end
         elseif op.from ~= nil then
           r.source = need_track("from")
-          if r.source and r.source.track then
+          local key = r.source and (r.source.track or r.source.ref)
+          if key and chains[key] then
+            -- An earlier op changed (or created) the source: copy what it will hold.
+            grafted = { table.unpack(chains[key]) }
+          elseif r.source and r.source.track then
             local _, chunk = api.GetTrackStateChunk(r.source.track, "", false)
-            grafted = M.extract_fxchain(chunk or "")
-            if not grafted then
-              conflict(i, op, "source track has no FX chain")
-            end
+            local block = M.extract_fxchain(chunk or "")
+            if block then grafted = M.fxchain_names(block)
+            else conflict(i, op, "source track has no FX chain") end
           end
         else
           conflict(i, op, "graft_fxchain needs `from` or `fromChunk`")
         end
-        -- Later set_fx_params on this track see the grafted chain, not the old one.
-        if grafted and r.track and r.track.track then
-          replaced[r.track.track] = true
-          added_fx[r.track.track] = M.fxchain_names(grafted)
-        end
+        -- Later ops on the target see the grafted chain, not the old one.
+        local key = r.track and (r.track.track or r.track.ref)
+        if grafted and key then chains[key] = grafted end
       end
 
       if op.as ~= nil then
