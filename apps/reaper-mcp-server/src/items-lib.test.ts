@@ -200,7 +200,7 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
   it('items: refusals change nothing', async () => {
     await runLua(`
       local api = new_fake{
-        chunk_fx = true, missing_fx = "Nope", audio = { ["/s/ok.wav"] = 1 },
+        chunk_fx = true, missing_fx = "Nope", audio = { ["/s/ok.wav"] = 1, ["/s/groove.mid"] = 8 },
         files = { ["/s/notes.txt"] = "hello", ["/res/FXChains/Empty.RfxChain"] = "WNDRECT 0 0 0 0\\n" },
         tracks = { { name = "A", fx = { "EQ" }, items = 1 }, { name = "B" } },
       }
@@ -215,6 +215,7 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       -- missing / unreadable file
       refused("missing file", "file not found", items.insert_audio_file(api, { trackIndex = 0, filePath = "/s/nope.wav" }, c))
       refused("not audio", "cannot read", items.insert_audio_file(api, { trackIndex = 0, filePath = "/s/notes.txt" }, c))
+      refused("MIDI file (length in beats)", "cannot read", items.insert_audio_file(api, { trackIndex = 0, filePath = "/s/groove.mid" }, c))
       refused("unknown track", "Track 9 not found", items.insert_audio_file(api, { trackIndex = 9, filePath = "/s/ok.wav" }, c))
       -- unknown take / FX / item
       refused("unknown take", "Take 5 not found", items.set_active_take(api, { trackIndex = 0, itemIndex = 0, takeIndex = 5 }))

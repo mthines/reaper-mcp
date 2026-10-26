@@ -152,8 +152,10 @@ function M.insert_audio_file(api, p, ctx)
   if not position or position < 0 then return nil, "position must be a number >= 0" end
 
   local src = api.PCM_Source_CreateFromFile(path)
-  local length = src and api.GetMediaSourceLength(src) or 0
-  if not src or not length or length <= 0 then
+  local length, in_beats = 0, false
+  if src then length, in_beats = api.GetMediaSourceLength(src) end
+  -- A MIDI file's length comes back in quarter notes: not audio, and not seconds.
+  if not src or not length or length <= 0 or in_beats then
     if src and api.PCM_Source_Destroy then api.PCM_Source_Destroy(src) end
     return nil, "REAPER cannot read '" .. path .. "' as audio"
   end

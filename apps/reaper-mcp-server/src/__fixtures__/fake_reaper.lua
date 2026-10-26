@@ -374,10 +374,10 @@ function new_fake(spec)
   end
   api.PCM_Source_CreateFromFile = function(path)
     local sec = (spec.audio or {})[path]
-    return { path = path, length = sec or 0 }
+    return { path = path, length = sec or 0, qn = path:lower():match("%.midi?$") ~= nil }
   end
   api.PCM_Source_Destroy = function(src) src.destroyed = true end
-  api.GetMediaSourceLength = function(src) return src.length, false end
+  api.GetMediaSourceLength = function(src) return src.length, src.qn end
   api.SetMediaItemTake_Source = function(tk, src) tk.src = src; write("take_source") end
   api.GetMediaItemTake_Source = function(tk) return tk.src end
   api.GetMediaSourceFileName = function(src) return src.path end
