@@ -113,6 +113,10 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
       assert(exists and exists:find("already exists"), tostring(exists))
       assert(#api.commands == n, "no render over an existing file (REAPER would prompt)")
       assert(project.render(api, { overwrite = true }, fs).rendered and fs.removed[1] == "/tmp/out/mix.flac")
+      local stuck = setmetatable({ remove = function() end }, { __index = fs })
+      local m = #api.commands
+      local _, locked = project.render(api, { overwrite = true }, stuck)
+      assert(locked and locked:find("could not delete") and #api.commands == m, "no render when the delete fails: " .. tostring(locked))
 
       project.set_render(api, { bounds = "time_selection" })
       local _, nosel = project.render(api, { overwrite = true }, fs)

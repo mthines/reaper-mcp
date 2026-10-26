@@ -269,7 +269,11 @@ function M.render(api, p, fs)
   if #existing > 0 and p.overwrite ~= true then
     return nil, "refused: " .. table.concat(existing, ", ") .. " already exists (REAPER would ask whether to overwrite) — pass overwrite: true to replace"
   end
-  for _, t in ipairs(existing) do fs.remove(t) end
+  for _, t in ipairs(existing) do
+    fs.remove(t)
+    -- A file that survives (open elsewhere, read-only) would make REAPER prompt.
+    if fs.exists(t) then return nil, "refused: could not delete " .. t .. " to overwrite it (open in another program or read-only?)" end
+  end
   for _, t in ipairs(targets) do
     local dir = parent_dir(t)
     if dir and api.RecursiveCreateDirectory then api.RecursiveCreateDirectory(dir, 0) end
