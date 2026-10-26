@@ -295,5 +295,232 @@ function new_fake(spec)
   api.GetSetTrackGroupMembershipHigh = function(tr, name, mask, value) return membership(tr, true, name, mask, value) end
   api.TrackList_AdjustWindows = function() end
   api.GetParentTrack = function() return nil end
+
+  install_project_fake(api, spec, write)
   return api
+end
+
+-- ---------------------------------------------------------------------------
+-- Project state for mcp_project_lib.lua: markers, tempo map, project info,
+-- render settings, undo/redo that restores state, and a fake file system.
+--
+-- spec.project = { tempo = 120, markers = { { pos, name, rgn = true, rend, color } },
+--                  tempo_markers = { { time, bpm, num, den } }, info = {}, strings = {} }
+-- spec.fs      = new_fs{ files = { "/a.rpp" }, dirs = { "/tmp" } }
+-- ---------------------------------------------------------------------------
+
+function new_fs(spec)
+  spec = spec or {}
+  local fs = { files = {}, dirs = {}, removed = {} }
+  for _, f in ipairs(spec.files or {}) do fs.files[f] = true end
+  for _, d in ipairs(spec.dirs or {}) do fs.dirs[d] = true end
+  fs.exists = function(p) return fs.files[p] == true end
+  fs.dir_exists = function(p) return fs.dirs[p] == true end
+  fs.remove = function(p) fs.files[p] = nil; fs.removed[#fs.removed + 1] = p end
+  return fs
+end
+
+local function deep_copy(v)
+  if type(v) ~= "table" then return v end
+  local out = {}
+  for k, x in pairs(v) do out[k] = deep_copy(x) end
+  return out
+end
+
+local B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+function b64encode(s)
+  local out = {}
+  for i = 1, #s, 3 do
+    local a, b, c = s:byte(i, i + 2)
+    local n = (a << 16) | ((b or 0) << 8) | (c or 0)
+    for k = 3, 0, -1 do
+      local idx = (n >> (k * 6)) & 63
+      out[#out + 1] = B64:sub(idx + 1, idx + 1)
+    end
+    if not b then out[#out - 1] = "="; out[#out] = "=" elseif not c then out[#out] = "=" end
+  end
+  return table.concat(out)
+end
+
+local EXT = { evaw = ".wav", ffia = ".aif", calf = ".flac", l3pm = ".mp3", vggo = ".ogg", SggO = ".opus" }
+
+function install_project_fake(api, spec, write)
+  local sp = spec.project or {}
+  local proj = {
+    path = spec.project_path or "",
+    tempo = sp.tempo or 120, num = 4, den = 4,
+    markers = {}, tempo_markers = {},
+    info = { PROJECT_SRATE = 44100, PROJECT_SRATE_USE = 0, RENDER_BOUNDSFLAG = 1, RENDER_STARTPOS = 0,
+      RENDER_ENDPOS = 0, RENDER_SRATE = 0, RENDER_CHANNELS = 2, RENDER_SETTINGS = 0 },
+    strings = { RENDER_FILE = "", RENDER_PATTERN = "untitled", RENDER_FORMAT = b64encode("evaw\0\0\0\0"),
+      PROJECT_TITLE = "", PROJECT_AUTHOR = "" },
+    notes = "", ["repeat"] = 0, loop = { 0, 0 },
+  }
+  for k, v in pairs(sp.info or {}) do proj.info[k] = v end
+  for k, v in pairs(sp.strings or {}) do proj.strings[k] = v end
+  local next_num = { [false] = 1, [true] = 1 }
+  for _, m in ipairs(sp.markers or {}) do
+    local rgn = m.rgn == true
+    local num = m.num or next_num[rgn]
+    next_num[rgn] = math.max(next_num[rgn], num + 1)
+    proj.markers[#proj.markers + 1] = { rgn = rgn, pos = m.pos, rend = m.rend or 0, name = m.name or "", num = num, color = m.color or 0 }
+  end
+  for _, t in ipairs(sp.tempo_markers or {}) do
+    proj.tempo_markers[#proj.tempo_markers + 1] = { time = t.time, bpm = t.bpm, num = t.num or 0, den = t.den or 0, linear = false }
+  end
+  api.project = proj
+  api.fs = spec.fs or new_fs()
+  api.metronome = spec.metronome or 0 -- global, not project state: undo leaves it
+  api.commands = {}
+  local function P() return api.project end
+
+  -- Undo/redo that restores the project state captured around each block.
+  api.redo = {}
+  api.undo_states = {}
+  local begin = api.Undo_BeginBlock
+  api.Undo_BeginBlock = function() begin(); api.block_before = deep_copy(P()) end
+  local finish = api.Undo_EndBlock
+  api.Undo_EndBlock = function(label, flags)
+    local dirty = api.block_dirty
+    finish(label, flags)
+    if dirty then
+      api.undo_states[#api.undo] = { before = api.block_before, after = deep_copy(P()) }
+      api.redo = {}
+    end
+  end
+  api.Undo_DoUndo2 = function()
+    local n = #api.undo
+    local st = api.undo_states[n]
+    api.undone = table.remove(api.undo)
+    api.undo_states[n] = nil
+    if st then api.project = deep_copy(st.before) end
+    if api.undone then api.redo[#api.redo + 1] = { label = api.undone, state = st } end
+    return 1
+  end
+  api.Undo_CanRedo2 = function() local r = api.redo[#api.redo]; return r and r.label end
+  api.Undo_DoRedo2 = function()
+    local r = table.remove(api.redo)
+    if not r then return 0 end
+    api.undo[#api.undo + 1] = r.label
+    api.undo_states[#api.undo] = r.state
+    if r.state then api.project = deep_copy(r.state.after) end
+    return 1
+  end
+  api.UpdateTimeline = function() end
+
+  api.EnumProjects = function() return "proj", P().path end
+  api.Main_SaveProject = function()
+    if P().path == "" then error("fake: Main_SaveProject on an unsaved project opens a dialog") end
+    api.fs.files[P().path] = true
+    api.saved = (api.saved or 0) + 1
+  end
+  api.Main_SaveProjectEx = function(_, path)
+    api.fs.files[path] = true
+    api.saved = (api.saved or 0) + 1
+  end
+
+  local function targets()
+    local s = P().strings
+    local fourcc = s.RENDER_FORMAT
+    for cc in pairs(EXT) do if b64encode(cc .. "\0\0\0\0") == fourcc then fourcc = cc end end
+    local ext = EXT[fourcc] or ".wav"
+    if s.RENDER_PATTERN == "" then return "" end
+    local dir = s.RENDER_FILE
+    return (dir ~= "" and (dir .. "/") or "") .. s.RENDER_PATTERN .. ext
+  end
+  api.GetSetProjectInfo = function(_, key, val, set)
+    if set then P().info[key] = val; write("info " .. key) end
+    return P().info[key] or 0
+  end
+  api.GetSetProjectInfo_String = function(_, key, val, set)
+    if key == "RENDER_TARGETS" then return true, targets() end
+    if set then
+      if key == "RENDER_FORMAT" and #val == 4 then val = b64encode(val .. "\0\0\0\0") end
+      P().strings[key] = val
+      write("string " .. key)
+    end
+    return true, P().strings[key] or ""
+  end
+  api.GetSetProjectNotes = function(_, set, notes)
+    if set then P().notes = notes; write("notes") end
+    return P().notes
+  end
+  api.GetSetRepeatEx = function(_, v)
+    if v >= 0 then P()["repeat"] = v; api.writes = api.writes + 1 end
+    return P()["repeat"]
+  end
+  api.GetToggleCommandState = function(id) return id == 40364 and api.metronome or -1 end
+  api.Main_OnCommand = function(id)
+    api.commands[#api.commands + 1] = id
+    if id == 40364 then api.metronome = 1 - api.metronome; api.writes = api.writes + 1 end
+    if id == 42230 then
+      local t = targets()
+      if t ~= "" then api.fs.files[t] = true end
+      api.writes = api.writes + 1
+    end
+  end
+  api.GetSet_LoopTimeRange = function(set, _, s, e)
+    if set then P().loop = { s, e } end
+    return P().loop[1], P().loop[2]
+  end
+
+  -- Tempo map
+  api.Master_GetTempo = function()
+    local t = P().tempo_markers[1]
+    return t and t.bpm or P().tempo
+  end
+  api.TimeMap_GetTimeSigAtTime = function() return 0, P().num, P().den, api.Master_GetTempo() end
+  api.SetCurrentBPM = function(_, bpm) P().tempo = bpm; write("tempo") end
+  api.CountTempoTimeSigMarkers = function() return #P().tempo_markers end
+  api.GetTempoTimeSigMarker = function(_, i)
+    local t = P().tempo_markers[i + 1]
+    if not t then return false, 0, 0, 0, 0, 0, 0, false end
+    return true, t.time, 0, 0, t.bpm, t.num, t.den, t.linear
+  end
+  api.SetTempoTimeSigMarker = function(_, idx, time, _, _, bpm, num, den, linear)
+    local list = P().tempo_markers
+    local m = { time = time, bpm = bpm, num = num, den = den, linear = linear }
+    if idx == -1 then list[#list + 1] = m
+    elseif list[idx + 1] then list[idx + 1] = m
+    else return false end
+    table.sort(list, function(a, b) return a.time < b.time end)
+    write("tempo_marker")
+    return true
+  end
+  api.DeleteTempoTimeSigMarker = function(_, idx)
+    if not P().tempo_markers[idx + 1] then return false end
+    table.remove(P().tempo_markers, idx + 1)
+    write("delete_tempo_marker")
+    return true
+  end
+
+  -- Markers and regions (sorted by position, as REAPER enumerates them)
+  local function sorted()
+    local list = {}
+    for _, m in ipairs(P().markers) do list[#list + 1] = m end
+    table.sort(list, function(a, b) return a.pos < b.pos end)
+    return list
+  end
+  api.CountProjectMarkers = function()
+    local nm, nr = 0, 0
+    for _, m in ipairs(P().markers) do if m.rgn then nr = nr + 1 else nm = nm + 1 end end
+    return nm + nr, nm, nr
+  end
+  api.EnumProjectMarkers3 = function(_, i)
+    local m = sorted()[i + 1]
+    if not m then return 0 end
+    return i + 1, m.rgn, m.pos, m.rend, m.name, m.num, m.color
+  end
+  api.SetProjectMarker4 = function(_, num, rgn, pos, rend, name, color, flags)
+    for _, m in ipairs(P().markers) do
+      if m.rgn == rgn and m.num == num then
+        m.pos, m.rend = pos, rend
+        if name ~= "" or (flags & 1) == 1 then m.name = name end
+        if color ~= 0 then m.color = color end
+        write("set_marker")
+        return true
+      end
+    end
+    return false
+  end
 end

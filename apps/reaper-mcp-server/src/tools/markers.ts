@@ -93,4 +93,42 @@ export function registerMarkerTools(server: McpServer): void {
       return { content: [{ type: 'text', text: `Deleted region ${regionIndex}` }] };
     }
   );
+
+  registerMarkerEditTools(server);
+}
+
+// --- Marker / region editing (logic in reaper/mcp_project_lib.lua) ---
+
+function reply(res: { success: boolean; data?: unknown; error?: string }) {
+  if (!res.success) {
+    return { content: [{ type: 'text' as const, text: `Error: ${res.error}` }], isError: true };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(res.data, null, 2) }] };
+}
+
+function registerMarkerEditTools(server: McpServer): void {
+  server.tool(
+    'edit_marker',
+    'Rename, move or recolor an existing marker by its marker index number (from list_markers). Unspecified fields keep their values; name "" clears the name. Color is a native color int, stored with REAPER\'s 0x1000000 "custom color" flag. Unknown markers change nothing.',
+    {
+      markerIndex: z.coerce.number().int().min(0).describe('Marker index number (list_markers index)'),
+      name: z.string().optional().describe('New name ("" clears it)'),
+      position: z.coerce.number().min(0).optional().describe('New position in seconds'),
+      color: z.coerce.number().int().min(0).optional().describe('Native color int (e.g. ColorToNative(r,g,b))'),
+    },
+    async (params) => reply(await sendCommand('edit_marker', params)),
+  );
+
+  server.tool(
+    'edit_region',
+    'Rename, move/resize or recolor an existing region by its region index number (from list_regions). Unspecified fields keep their values; end must stay after start. Unknown regions change nothing.',
+    {
+      regionIndex: z.coerce.number().int().min(0).describe('Region index number (list_regions index)'),
+      name: z.string().optional().describe('New name ("" clears it)'),
+      start: z.coerce.number().min(0).optional().describe('New start in seconds'),
+      end: z.coerce.number().min(0).optional().describe('New end in seconds'),
+      color: z.coerce.number().int().min(0).optional().describe('Native color int'),
+    },
+    async (params) => reply(await sendCommand('edit_region', params)),
+  );
 }

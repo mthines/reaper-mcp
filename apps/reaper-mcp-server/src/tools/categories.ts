@@ -22,8 +22,13 @@ interface ToolCategory {
 export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   project: {
     name: 'project',
-    description: 'Project-level information: name, tempo, time signature, sample rate, transport state',
-    tools: ['get_project_info'],
+    description: 'Project-level information and operations: info, undo/redo, save (never opens a dialog), render settings + render, project settings (sample rate, title, author, notes, repeat, metronome)',
+    tools: [
+      'get_project_info',
+      'undo_project', 'redo_project', 'save_project',
+      'get_render_settings', 'set_render_settings', 'render_project',
+      'get_project_settings', 'set_project_settings',
+    ],
   },
   tracks: {
     name: 'tracks',
@@ -67,13 +72,13 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   markers: {
     name: 'markers',
-    description: 'Markers and regions: list, add, delete markers and regions with optional names and colors',
-    tools: ['list_markers', 'list_regions', 'add_marker', 'add_region', 'delete_marker', 'delete_region'],
+    description: 'Markers and regions: list, add, edit (rename, move, recolor), delete markers and regions with optional names and colors',
+    tools: ['list_markers', 'list_regions', 'add_marker', 'add_region', 'delete_marker', 'delete_region', 'edit_marker', 'edit_region'],
   },
   tempo: {
     name: 'tempo',
-    description: 'Tempo map: get all tempo and time signature changes with positions, BPM, and linear/step flags',
-    tools: ['get_tempo_map'],
+    description: 'Tempo map: get all tempo and time signature changes; add, edit and delete tempo/time signature markers; set the project tempo',
+    tools: ['get_tempo_map', 'add_tempo_marker', 'edit_tempo_marker', 'delete_tempo_marker', 'set_project_tempo'],
   },
   envelopes: {
     name: 'envelopes',

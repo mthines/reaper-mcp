@@ -170,3 +170,31 @@ describe('marker tools', () => {
     });
   });
 });
+
+describe('marker editing tools', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const cases: [string, Record<string, unknown>][] = [
+    ['edit_marker', { markerIndex: 2, name: 'Hook', position: 6.5, color: 255 }],
+    ['edit_region', { regionIndex: 1, name: 'Intro', start: 0, end: 8, color: 0 }],
+  ];
+
+  it.each(cases)('%s dispatches its params and returns the bridge data', async (name, params) => {
+    const tools = captureTools();
+    const data = { ok: name };
+    mockedSendCommand.mockResolvedValue({ id: 't', success: true, data, timestamp: 0 });
+    const result = await tools[name].handler(params);
+    expect(mockedSendCommand).toHaveBeenCalledTimes(1);
+    const [type, sent] = mockedSendCommand.mock.calls[0];
+    expect(type).toBe(name);
+    if (Object.keys(params).length) expect(sent).toEqual(params);
+    expect(result).toEqual({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
+  });
+
+  it.each(cases)('%s passes a bridge refusal through as an error', async (name, params) => {
+    const tools = captureTools();
+    mockedSendCommand.mockResolvedValue({ id: 't', success: false, error: 'refused: nope', timestamp: 0 });
+    const result = await tools[name].handler(params);
+    expect(result).toEqual({ content: [{ type: 'text', text: 'Error: refused: nope' }], isError: true });
+  });
+});

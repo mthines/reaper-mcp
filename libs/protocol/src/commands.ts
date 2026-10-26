@@ -119,6 +119,21 @@ export type CommandType =
   | 'send_midi_cc'
   | 'send_midi_pc'
   | 'send_midi_note'
+  // Project ops, tempo map and marker editing
+  | 'undo_project'
+  | 'redo_project'
+  | 'save_project'
+  | 'get_render_settings'
+  | 'set_render_settings'
+  | 'render_project'
+  | 'get_project_settings'
+  | 'set_project_settings'
+  | 'add_tempo_marker'
+  | 'edit_tempo_marker'
+  | 'delete_tempo_marker'
+  | 'set_project_tempo'
+  | 'edit_marker'
+  | 'edit_region'
   // Semantic audio analysis (requires Python sidecar)
   | 'render_track_to_wav';
 
@@ -754,4 +769,86 @@ export interface RemoveSendParams {
   track: PlanTrackRef;
   category?: SendCategory;
   index: number;
+}
+// =============================================================================
+// Project ops, tempo map and marker editing
+// =============================================================================
+
+export interface SaveProjectParams {
+  /** Absolute .rpp path. Required when the project was never saved (no Save As dialog is ever opened). */
+  path?: string;
+  /** Replace an existing file at `path`. */
+  overwrite?: boolean;
+}
+
+export type RenderFormat = 'wav' | 'aiff' | 'flac' | 'mp3' | 'ogg' | 'opus';
+export type RenderBounds = 'custom' | 'project' | 'time_selection' | 'all_regions' | 'selected_items' | 'selected_regions';
+
+export interface SetRenderSettingsParams {
+  outputDirectory?: string;
+  filePattern?: string;
+  format?: RenderFormat;
+  bounds?: RenderBounds;
+  /** Seconds; used when bounds is "custom". */
+  startTime?: number;
+  endTime?: number;
+  /** 0 = project sample rate. */
+  sampleRate?: number;
+  channels?: number;
+}
+
+export interface RenderProjectParams {
+  /** Delete existing target files first (otherwise refused: REAPER would prompt). */
+  overwrite?: boolean;
+}
+
+export interface SetProjectSettingsParams {
+  sampleRate?: number;
+  useProjectSampleRate?: boolean;
+  title?: string;
+  author?: string;
+  notes?: string;
+  repeat?: boolean;
+  /** Global REAPER option, not stored in the project. */
+  metronome?: boolean;
+}
+
+export interface AddTempoMarkerParams {
+  position: number;
+  bpm: number;
+  timeSigNumerator?: number;
+  timeSigDenominator?: number;
+  linear?: boolean;
+}
+
+export interface EditTempoMarkerParams {
+  index: number;
+  position?: number;
+  bpm?: number;
+  timeSigNumerator?: number;
+  timeSigDenominator?: number;
+  linear?: boolean;
+}
+
+export interface DeleteTempoMarkerParams {
+  index: number;
+}
+
+export interface SetProjectTempoParams {
+  bpm: number;
+}
+
+export interface EditMarkerParams {
+  markerIndex: number;
+  name?: string;
+  position?: number;
+  color?: number;
+}
+
+export interface EditRegionParams {
+  regionIndex: number;
+  name?: string;
+  start?: number;
+  end?: number;
+  color?: number;
 }
