@@ -57,8 +57,8 @@ export function registerAnalysisTools(server: McpServer): void {
     'measure_tracks',
     'Play audio and collect analysis measurements (LUFS, crest factor, correlation, spectrum) for one or more tracks in a single call. Handles playback start/stop automatically. LUFS supports multi-track; crest/correlation/spectrum use global gmem and are only reliable for single-track measurement. First call may be slower due to JSFX meter auto-insertion.',
     {
-      trackIndices: z.array(z.coerce.number().int().min(0)).min(1).max(8)
-        .describe('Track indices to measure (max 8)'),
+      trackIndices: z.array(z.coerce.number().int().min(-1)).min(1).max(8)
+        .describe('Track indices to measure (max 8; -1 = master track)'),
       metrics: z.array(z.enum(['lufs', 'crest', 'correlation', 'spectrum'])).min(1)
         .describe('Which metrics to collect'),
       durationSeconds: z.coerce.number().min(1).max(30).default(5)
