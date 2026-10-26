@@ -1,7 +1,7 @@
 import { z } from 'zod/v4';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sendCommand } from '../bridge.js';
-import { bridgeText } from './project.js';
+import { bridgeText, reply } from './project.js';
 
 export function registerMarkerTools(server: McpServer): void {
   server.tool(
@@ -100,12 +100,6 @@ export function registerMarkerTools(server: McpServer): void {
 
 // --- Marker / region editing (logic in reaper/mcp_project_lib.lua) ---
 
-function reply(res: { success: boolean; data?: unknown; error?: string }) {
-  if (!res.success) {
-    return { content: [{ type: 'text' as const, text: `Error: ${res.error}` }], isError: true };
-  }
-  return { content: [{ type: 'text' as const, text: JSON.stringify(res.data, null, 2) }] };
-}
 
 function registerMarkerEditTools(server: McpServer): void {
   server.tool(

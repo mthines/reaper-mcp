@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sendCommand } from '../bridge.js';
+import { reply } from './project.js';
 
 export function registerTempoTools(server: McpServer): void {
   server.tool(
@@ -21,12 +22,6 @@ export function registerTempoTools(server: McpServer): void {
 
 // --- Tempo map editing (logic in reaper/mcp_project_lib.lua) ---
 
-function reply(res: { success: boolean; data?: unknown; error?: string }) {
-  if (!res.success) {
-    return { content: [{ type: 'text' as const, text: `Error: ${res.error}` }], isError: true };
-  }
-  return { content: [{ type: 'text' as const, text: JSON.stringify(res.data, null, 2) }] };
-}
 
 const bpm = z.coerce.number().gt(0).max(960).describe('Tempo in BPM (> 0, max 960)');
 const timeSigNumerator = z.coerce.number().int().min(1).max(255).optional().describe('Time signature numerator (give with denominator)');
