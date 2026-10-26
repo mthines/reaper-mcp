@@ -26,11 +26,14 @@ local function int(v)
   return n
 end
 
-local function get_track(api, idx, field)
+-- allow_master: -1 means the master track (FX tools); items never live there.
+local function get_track(api, idx, field, allow_master)
   field = field or "trackIndex"
   local i = int(idx)
   if not i then return nil, field .. " required" end
-  local tr = i >= 0 and api.GetTrack(0, i) or nil
+  local tr
+  if i == -1 and allow_master then tr = api.GetMasterTrack(0)
+  elseif i >= 0 then tr = api.GetTrack(0, i) end
   if not tr then return nil, "Track " .. i .. " not found" end
   return tr, i
 end
@@ -419,13 +422,13 @@ end
 -- -----------------------------------------------------------------------------
 
 local function transfer_fx(api, p, is_move)
-  local src, src_idx = get_track(api, p.trackIndex)
+  local src, src_idx = get_track(api, p.trackIndex, nil, true)
   if not src then return nil, src_idx end
   local fx, err = check_fx_index(api.TrackFX_GetCount(src), p.fxIndex, "track " .. src_idx)
   if not fx then return nil, err end
   local dst, dst_idx = src, src_idx
   if p.toTrackIndex ~= nil then
-    dst, dst_idx = get_track(api, p.toTrackIndex, "toTrackIndex")
+    dst, dst_idx = get_track(api, p.toTrackIndex, "toTrackIndex", true)
     if not dst then return nil, dst_idx end
   end
   local dst_count = api.TrackFX_GetCount(dst)
@@ -456,7 +459,7 @@ function M.move_fx(api, p) return transfer_fx(api, p, true) end
 function M.copy_fx(api, p) return transfer_fx(api, p, false) end
 
 function M.rename_fx(api, p)
-  local tr, idx = get_track(api, p.trackIndex)
+  local tr, idx = get_track(api, p.trackIndex, nil, true)
   if not tr then return nil, idx end
   local fx, err = check_fx_index(api.TrackFX_GetCount(tr), p.fxIndex, "track " .. idx)
   if not fx then return nil, err end
@@ -595,7 +598,7 @@ local function count_chain_fx(lines)
 end
 
 function M.save_fx_chain(api, p, ctx)
-  local tr, idx = get_track(api, p.trackIndex)
+  local tr, idx = get_track(api, p.trackIndex, nil, true)
   if not tr then return nil, idx end
   local count = api.TrackFX_GetCount(tr)
   if count == 0 then return nil, "Track " .. idx .. " has no FX to save" end
@@ -612,7 +615,7 @@ function M.save_fx_chain(api, p, ctx)
 end
 
 function M.load_fx_chain(api, p, ctx)
-  local tr, idx = get_track(api, p.trackIndex)
+  local tr, idx = get_track(api, p.trackIndex, nil, true)
   if not tr then return nil, idx end
   local mode = p.mode or "append"
   if mode ~= "append" and mode ~= "replace" then return nil, "mode must be append or replace" end

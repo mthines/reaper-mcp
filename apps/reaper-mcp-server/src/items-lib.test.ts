@@ -131,6 +131,16 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       assert(r and r.renamedName == "Room" and r.name == "Room" and names(r.fx) == "Comp,Room,Sat")
       local back = items.rename_fx(api, { trackIndex = 1, fxIndex = 1, name = "" })
       assert(back.name == "Verb" and back.renamedName == "", "empty name restores the plugin name")
+
+      -- -1 is the master track for FX tools (a mastering chain lives there).
+      local tm = items.copy_fx(api, { trackIndex = 0, fxIndex = 0, toTrackIndex = -1 })
+      assert(tm and tm.toTrackIndex == -1 and names(tm.toFx) == "Comp", "copied onto the master")
+      local rm = items.rename_fx(api, { trackIndex = -1, fxIndex = 0, name = "Glue" })
+      assert(rm and names(rm.fx) == "Glue", "renamed on the master")
+      local back2 = items.move_fx(api, { trackIndex = -1, fxIndex = 0, toTrackIndex = 0, toIndex = 0 })
+      assert(back2 and #api.master.fx == 0 and names(back2.toFx) == "Glue,Comp,EQ", "moved off the master: " .. names(back2 and back2.toFx or {}))
+      local _, tmpl = items.save_track_template(api, { trackIndex = -1, name = "M" }, ctx(api))
+      assert(tmpl and tmpl:find("Track %-1 not found"), "templates keep refusing the master: " .. tostring(tmpl))
     `);
   });
 

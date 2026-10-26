@@ -3,8 +3,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { passThrough } from './items.js';
 
 const trackIndex = z.coerce.number().int().min(0).describe('0-based track index');
+const fxTrackIndex = z.coerce.number().int().min(-1).describe('0-based track index (-1 = master track)');
 const fxIndex = z.coerce.number().int().min(0).describe('0-based FX index in the track\'s chain');
-const toTrackIndex = z.coerce.number().int().min(0).optional().describe('0-based target track (default: the same track)');
+const toTrackIndex = z.coerce.number().int().min(-1).optional().describe('0-based target track, -1 = master (default: the same track)');
 const toIndex = z.coerce.number().int().min(0).optional().describe('0-based position in the target chain (default: the end)');
 const overwrite = z.boolean().optional().describe('Replace an existing file of that name (default false: refuse)');
 
@@ -12,21 +13,21 @@ export function registerFxHousekeepingTools(server: McpServer): void {
   server.tool(
     'move_fx',
     'Move one FX to another position in its chain, or to another track (with its settings). Returns the chain(s) afterwards.',
-    { trackIndex, fxIndex, toTrackIndex, toIndex },
+    { trackIndex: fxTrackIndex, fxIndex, toTrackIndex, toIndex },
     passThrough('move_fx'),
   );
 
   server.tool(
     'copy_fx',
     'Copy one FX (with its settings) to another position in its chain or onto another track. Returns the chain(s) afterwards.',
-    { trackIndex, fxIndex, toTrackIndex, toIndex },
+    { trackIndex: fxTrackIndex, fxIndex, toTrackIndex, toIndex },
     passThrough('copy_fx'),
   );
 
   server.tool(
     'rename_fx',
     'Rename one FX instance as shown in the FX chain (REAPER 6.37+). An empty name restores the plugin\'s own name.',
-    { trackIndex, fxIndex, name: z.string().describe('New display name, or "" to clear the rename') },
+    { trackIndex: fxTrackIndex, fxIndex, name: z.string().describe('New display name, or "" to clear the rename') },
     passThrough('rename_fx'),
   );
 
@@ -35,7 +36,7 @@ export function registerFxHousekeepingTools(server: McpServer): void {
     'Save a track\'s whole FX chain (with all settings) as an .RfxChain file in REAPER\'s FXChains folder, where REAPER\'s own "Add FX chain" finds it. ' +
       'The name may include subfolders ("Vocals/Lead") but never "..", an absolute path or a drive letter.',
     {
-      trackIndex,
+      trackIndex: fxTrackIndex,
       name: z.string().min(1).describe('File name under FXChains/, without or with .RfxChain'),
       overwrite,
     },
@@ -46,7 +47,7 @@ export function registerFxHousekeepingTools(server: McpServer): void {
     'load_fx_chain',
     'Load an .RfxChain file onto a track: appended after its FX (default) or replacing them. Each loaded FX gets a fresh identity. See list_fx_chains for names.',
     {
-      trackIndex,
+      trackIndex: fxTrackIndex,
       name: z.string().min(1).describe('Name under FXChains/ (e.g. "Vocals/Lead"), or an absolute path to a .RfxChain file'),
       mode: z.enum(['append', 'replace']).optional().describe('append (default) or replace the track\'s FX'),
     },
