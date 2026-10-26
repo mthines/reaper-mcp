@@ -114,7 +114,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
 export function registerCategoryTools(server: McpServer): void {
   server.tool(
     'list_tool_categories',
-    'List all available tool categories with descriptions and tool names. Use this to discover what tools are available without loading all 72+ tool schemas. Categories: project, tracks, fx, transport, midi, media, selection, markers, tempo, envelopes, analysis, discovery, snapshots, routing.',
+    'List all available tool categories with descriptions and tool names. Use this to discover what tools are available without loading all 72+ tool schemas. Categories: project, tracks, fx, transport, midi, media, selection, markers, tempo, envelopes, analysis, discovery, snapshots, routing, plan.',
     {},
     async () => {
       const categories = Object.values(TOOL_CATEGORIES).map((cat) => ({
