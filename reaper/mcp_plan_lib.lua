@@ -329,6 +329,37 @@ local function find_fx(api, track, ref)
   return nil, "fx '" .. ref .. "' not found"
 end
 
+--- Validate-time version of find_fx: also counts the FX that earlier ops in
+--- the plan add to this track (`pending`, the requested fxNames, lowercased),
+--- since those only exist at apply. Returns an error string or nil.
+local function check_fx_target(api, track, ref, pending)
+  local count = api.TrackFX_GetCount(track) + #pending
+  if type(ref) == "number" then
+    if ref >= count then return "fx index " .. ref .. " out of range" end
+    return nil
+  end
+  local want = ref:lower()
+  local digits = ref:match("^%d+$") ~= nil
+  local hits = 0
+  for j = 0, api.TrackFX_GetCount(track) - 1 do
+    local _, name = api.TrackFX_GetFXName(track, j)
+    name = (name or ""):lower()
+    if (digits and name == want) or (not digits and name:find(want, 1, true)) then hits = hits + 1 end
+  end
+  -- A requested fxName ("ReaComp") is usually shorter than the name REAPER
+  -- gives the instance ("VST: ReaComp (Cockos)"), so match either way round.
+  for _, name in ipairs(pending) do
+    if (digits and name == want)
+      or (not digits and (name:find(want, 1, true) or want:find(name, 1, true))) then
+      hits = hits + 1
+    end
+  end
+  if hits > 1 then return "fx name '" .. ref .. "' matches more than one FX" end
+  if hits == 1 then return nil end
+  if digits and tonumber(ref) < count then return nil end
+  return "fx '" .. ref .. "' not found"
+end
+
 -- -----------------------------------------------------------------------------
 -- Validation pass
 -- -----------------------------------------------------------------------------
@@ -392,22 +423,11 @@ function M.validate(api, ops)
           elseif bound.kind ~= "fx" then
             conflict(i, op, "reference " .. op.fx .. " is a track, not an FX")
           end
-        elseif type(op.fx) == "number" then
-          if r.track and r.track.track and op.fx >= api.TrackFX_GetCount(r.track.track) then
-            conflict(i, op, "fx index " .. op.fx .. " out of range")
-          end
-        elseif type(op.fx) ~= "string" then
+        elseif type(op.fx) ~= "number" and type(op.fx) ~= "string" then
           conflict(i, op, "fx reference missing")
         elseif r.track and r.track.track then
-          -- Resolve name targets on existing tracks now, unless an earlier op
-          -- in this plan adds a matching FX (that one only exists at apply).
-          local _, err = find_fx(api, r.track.track, op.fx)
-          local want = op.fx:lower()
-          local pending = false
-          for _, name in ipairs(added_fx[r.track.track] or {}) do
-            if name:find(want, 1, true) then pending = true end
-          end
-          if err and not pending then conflict(i, op, err) end
+          local err = check_fx_target(api, r.track.track, op.fx, added_fx[r.track.track] or {})
+          if err then conflict(i, op, err) end
         end
       elseif t == "add_send" then
         r.from = need_track("from")

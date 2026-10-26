@@ -304,6 +304,28 @@ describe('mcp_plan_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('lua plan: dryRun counts FX added earlier in the plan', async () => {
+    await runLua(`
+      -- index refs (number and digit string) to an FX the plan adds are valid
+      local api = new_fake{ tracks = { { name = "Bus" } } }
+      local ok = plan.run_plan(api, { dryRun = true, ops = {
+        { op = "add_fx", track = "Bus", fxName = "ReaComp" },
+        { op = "set_fx_params", track = "Bus", fx = 0, params = { { index = 0, value = 1 } } },
+        { op = "set_fx_params", track = "Bus", fx = "0", params = { { index = 0, value = 1 } } },
+        { op = "set_fx_params", track = "Bus", fx = 1, params = { { index = 0, value = 1 } } },
+      } }, {})
+      assert(#ok.conflicts == 1 and ok.conflicts[1].op == 3, "only fx 1 is out of range: " .. #ok.conflicts)
+
+      -- a second ReaComp added by the plan makes the name ambiguous
+      local api2 = new_fake{ tracks = { { name = "Bus", fx = { "ReaComp" } } } }
+      local amb = plan.run_plan(api2, { dryRun = true, ops = {
+        { op = "add_fx", track = "Bus", fxName = "ReaComp" },
+        { op = "set_fx_params", track = "Bus", fx = "ReaComp", params = { { index = 0, value = 1 } } },
+      } }, {})
+      assert(amb.valid == false and amb.conflicts[1].error:find("more than one"), "ambiguity reported")
+    `);
+  });
+
   it('lua plan: malformed JSON plan is rejected without writes', async () => {
     await runLua(`
       for _, bad in ipairs({ '[{"op":"set_track"', '[{"op":"set_track",}]', '[1] x', '{"op":tru}' }) do
