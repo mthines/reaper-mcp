@@ -45,9 +45,9 @@ function registerProjectOpsTools(server: McpServer): void {
 
   server.tool(
     'save_project',
-    'Save the REAPER project. Without a path, saves it where it already lives. Never opens a dialog: a project that was never saved is refused unless you pass path (an absolute .rpp file in an existing directory); an existing different file is refused unless overwrite is true.',
+    'Save the REAPER project. Without a path, saves it where it already lives. With path (an absolute .rpp file in an existing directory) it writes a copy there: the open project keeps its own path (savedAsCopy: true), so a never-saved project stays unsaved. Never opens a dialog: a never-saved project without path is refused; an existing different file is refused unless overwrite is true.',
     {
-      path: z.string().optional().describe('Absolute .rpp path to save to (required for a never-saved project)'),
+      path: z.string().optional().describe('Absolute .rpp path to write a copy to'),
       overwrite: z.boolean().optional().describe('Replace an existing file at path'),
     },
     async ({ path, overwrite }) => reply(await sendCommand('save_project', { path, overwrite })),

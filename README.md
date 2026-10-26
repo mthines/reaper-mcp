@@ -216,7 +216,7 @@ Checks that the bridge is connected, knowledge is installed, and MCP config exis
 | Tool | Description |
 |------|-------------|
 | `undo_project` / `redo_project` | Undo / redo, reporting the undo label |
-| `save_project` | Save in place or to a `.rpp` path — never opens a dialog |
+| `save_project` | Save in place, or write a copy to a `.rpp` path — never opens a dialog |
 | `get_render_settings` / `set_render_settings` | Output dir, pattern, format, bounds, sample rate, channels |
 | `render_project` | Render with the current settings (refuses to overwrite unless asked) |
 | `get_project_settings` / `set_project_settings` | Sample rate, title, author, notes, repeat, metronome |

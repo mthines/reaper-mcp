@@ -69,6 +69,7 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
 
       local ok = assert(project.save(api, { path = "/tmp/songs/new.RPP" }, fs))
       assert(ok.saved and fs.exists("/tmp/songs/new.RPP"), "file exists after save with a path")
+      assert(ok.savedAsCopy == true and ok.projectPath == "", "a path writes a copy; the project keeps its own path")
       assert(project.save(api, { path = "/tmp/songs/other.rpp", overwrite = true }, fs).saved)
 
       local saved = new_fake{ fs = fs, project_path = "/tmp/songs/song.rpp" }

@@ -569,6 +569,8 @@ export interface SaveProjectResult {
   saved: true;
   path: string;
   projectPath?: string;
+  /** True when `path` was written as a copy and the open project kept its own path. */
+  savedAsCopy?: boolean;
 }
 
 export interface RenderSettings {

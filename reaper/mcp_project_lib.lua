@@ -70,6 +70,8 @@ end
 --- project that was never saved is refused (REAPER would ask where to save it
 --- in a dialog, which blocks the bridge). With a path, writes the project to
 --- that .rpp file; an existing different file is refused unless overwrite.
+--- A path writes a copy (Main_SaveProjectEx, verified live): the open project
+--- keeps its own path, so the result says savedAsCopy.
 function M.save(api, params, fs)
   local current = project_path(api)
   local path = params.path
@@ -97,7 +99,8 @@ function M.save(api, params, fs)
   end
   api.Main_SaveProjectEx(0, path, 0)
   if not fs.exists(path) then return nil, "save failed: " .. path .. " does not exist after saving" end
-  return { saved = true, path = path, projectPath = project_path(api) }
+  local now = project_path(api)
+  return { saved = true, path = path, projectPath = now, savedAsCopy = now ~= path }
 end
 
 -- ---------------------------------------------------------------------------

@@ -775,7 +775,7 @@ export interface RemoveSendParams {
 // =============================================================================
 
 export interface SaveProjectParams {
-  /** Absolute .rpp path. Required when the project was never saved (no Save As dialog is ever opened). */
+  /** Absolute .rpp path to write a copy to; the open project keeps its own path. Without it, a never-saved project is refused (no Save As dialog is ever opened). */
   path?: string;
   /** Replace an existing file at `path`. */
   overwrite?: boolean;
