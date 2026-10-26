@@ -351,7 +351,7 @@ function new_fake(spec)
     it.active = it.active or 1
     return it
   end
-  for k, t in ipairs(spec.tracks or {}) do
+  for k in ipairs(spec.tracks or {}) do
     for j, it in ipairs(tracks[k].items) do
       init_item(tracks[k], it)
       local names = ((spec.takes or {})[k] or {})[j] or { "Take " .. j }
