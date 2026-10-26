@@ -172,6 +172,10 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
 
       local l = items.list_fx_chains(api, {}, ctx(api))
       assert(l.total == 1 and l.names[1] == "Vocals/Lead")
+      api.items_fs.files["/res/FXChains/low.rfxchain"] = 'BYPASS 0 0 0\\n<VST "Low" x\\n>\\nFXID {55555555-0000-0000-0000-000000000000}\\n'
+      local low, lerr = items.load_fx_chain(api, { trackIndex = 2, name = "low" }, ctx(api))
+      assert(low and low.loaded == 1, "a lower-case .rfxchain loads by its listed name: " .. tostring(lerr))
+      api.items_fs.files["/res/FXChains/low.rfxchain"] = nil
       assert(not items.save_fx_chain(api, { trackIndex = 0, name = "Vocals/Lead" }, ctx(api)), "no silent overwrite")
       assert(items.save_fx_chain(api, { trackIndex = 0, name = "Vocals/Lead", overwrite = true }, ctx(api)))
     `);

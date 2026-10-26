@@ -533,7 +533,14 @@ local function readable_path(api, ctx, sub, name, ext)
     path, rel = resource_path(api, sub, name, ext)
     if not path then return nil, rel end
   end
-  if not ctx.fs.exists(path) then return nil, "file not found: " .. path end
+  if not ctx.fs.exists(path) then
+    -- Case-sensitive file systems: list_files shows "Lead.rfxchain" as "Lead" too.
+    local base = ends_with_ci(path, ext) and path:sub(1, #path - #ext)
+    for _, e in ipairs(base and { ext:lower(), ext:upper() } or {}) do
+      if ctx.fs.exists(base .. e) then return base .. e, rel end
+    end
+    return nil, "file not found: " .. path
+  end
   return path, rel
 end
 
