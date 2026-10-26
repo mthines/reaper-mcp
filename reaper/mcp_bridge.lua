@@ -3020,6 +3020,15 @@ end
 -- Plan executor — one bridge call, one undo block, all-or-nothing
 -- =============================================================================
 
+-- Custom: macros and scripts are only listed in reaper-kb.ini.
+local function read_kb_ini()
+  local f = io.open(reaper.GetResourcePath() .. "/reaper-kb.ini", "r")
+  if not f then return "" end
+  local text = f:read("*a")
+  f:close()
+  return text
+end
+
 local plan_ctx = { applied = {} }  -- idempotency keys of recently applied plans
 
 function handlers.run_plan(params)
@@ -3028,6 +3037,7 @@ function handlers.run_plan(params)
   end
   plan_ctx.snapshot_save = function(name) return handlers.snapshot_save({ name = name }) end
   plan_ctx.actions = actions_lib_ok and actions_lib or nil
+  plan_ctx.kb_text = actions_lib_ok and read_kb_ini() or nil
   return plan_lib.run_plan(reaper, params, plan_ctx)
 end
 
@@ -3053,16 +3063,8 @@ local function decode_list(value, field)
   return list
 end
 
-local function read_kb_ini()
-  local f = io.open(reaper.GetResourcePath() .. "/reaper-kb.ini", "r")
-  if not f then return "" end
-  local text = f:read("*a")
-  f:close()
-  return text
-end
-
 function handlers.search_actions(params)
-  return with_actions_lib(function() return actions_lib.search(reaper, params) end)
+  return with_actions_lib(function() return actions_lib.search(reaper, params, read_kb_ini()) end)
 end
 
 function handlers.get_action(params)
@@ -3070,7 +3072,7 @@ function handlers.get_action(params)
 end
 
 function handlers.run_action(params)
-  return with_actions_lib(function() return actions_lib.run(reaper, params) end)
+  return with_actions_lib(function() return actions_lib.run(reaper, params, read_kb_ini()) end)
 end
 
 function handlers.set_selected_tracks(params)

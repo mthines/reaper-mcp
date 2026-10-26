@@ -171,6 +171,8 @@ function new_fake(spec)
   api.MIDIEditor_OnCommand = function(_, id) run(32060, id) end
   api.MIDIEditor_LastFocused_OnCommand = function(id) run(32061, id) end
   api.UpdateArrange = function() end
+  -- spec.project_path: "" (default) is a project that was never saved.
+  api.EnumProjects = function() return "proj", spec.project_path or "" end
 
   -- Selection and items: tracks take `items = n` in the spec.
   for k, t in ipairs(spec.tracks or {}) do

@@ -464,6 +464,24 @@ describe('mcp_plan_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('lua plan: a run_action macro with a denied step is a conflict', async () => {
+    await runLua(`
+      local acts = { [0] = {
+        { id = 40001, name = "Track: Insert new track" },
+        { id = 40004, name = "File: Quit REAPER" },
+        { id = 56000, name = "Custom: Tidy and quit", named = "tidyquit" },
+      } }
+      local kb = 'ACT 0 0 "tidyquit" "Custom: Tidy and quit" 40001 40004'
+      local api = new_fake{ actions = acts }
+      local dry = plan.run_plan(api, { dryRun = true, ops = { { op = "run_action", action = "_tidyquit", allowDialog = true } } },
+        { actions = actions, kb_text = kb })
+      assert(dry.valid == false and dry.conflicts[1].error:find("macro step 2"), "dryRun reports the step")
+      local res, err = plan.run_plan(api, { ops = { { op = "run_action", action = "_tidyquit" } } }, { actions = actions, kb_text = kb })
+      assert(res == nil and err:find("Quit"), tostring(err))
+      assert(#api.ran == 0 and api.writes == 0, "nothing ran")
+    `);
+  });
+
   it('lua plan: select_tracks by ref then run_action', async () => {
     await runLua(`
       local acts = { [0] = { { id = 40005, name = "Track: Remove tracks", on_run = function(api)

@@ -380,13 +380,15 @@ local KNOWN_OPS = {
 }
 
 --- Validate every op without writing. Returns resolved ops and conflicts.
---- ctx.actions (mcp_actions_lib.lua) is required only for run_action ops.
+--- ctx.actions (mcp_actions_lib.lua) is required only for run_action ops;
+--- ctx.kb_text (reaper-kb.ini) lets it check the steps of a Custom: macro.
 function M.validate(api, ops, ctx)
   ctx = ctx or {}
   local refs = {}       -- "$name" -> { kind = "track" | "fx", op = i }
   local resolved = {}
   local conflicts = {}
   local warnings = {}
+  local macros          -- Custom: macros from ctx.kb_text, parsed on first run_action
   -- Track (or "$ref") -> the lowercased FX names it will hold at this point
   -- of the plan: its own chain, then whatever earlier add_fx / graft ops change.
   local chains = {}
@@ -507,7 +509,8 @@ function M.validate(api, ops, ctx)
             if not id then
               conflict(i, op, name)
             else
-              local refused = actions.check_runnable(api, id, name, sec, op.allowDialog == true)
+              macros = macros or actions.parse_kb(ctx.kb_text)
+              local refused = actions.check_runnable(api, id, name, sec, op.allowDialog == true, macros)
               if refused then conflict(i, op, refused) end
               r.action = { id = id, name = name, section = sec }
             end

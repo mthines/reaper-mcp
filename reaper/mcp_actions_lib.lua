@@ -68,6 +68,50 @@ function M.deny_reason(name)
   return nil
 end
 
+local function unsaved_project(api)
+  if not api.EnumProjects then return false end
+  local _, path = api.EnumProjects(-1, "")
+  return path == nil or path == ""
+end
+
+--- Whether running `name` opens a modal dialog: a "..." name, or Save on a
+--- project that was never saved (REAPER asks where to save it).
+function M.opens_dialog(api, name)
+  if M.is_dialog(name) then return true end
+  return trim(name):lower() == "file: save project" and unsaved_project(api)
+end
+
+local function step_id(api, s)
+  local n = tonumber(s)
+  if n then return n end
+  local id = api.NamedCommandLookup(s:sub(1, 1) == "_" and s or "_" .. s)
+  return id and id > 0 and id or nil
+end
+
+--- Check an action and, for a Custom: macro, every step it runs (nested
+--- macros too), since running the macro runs them all. Returns the deny
+--- reason, or nil, and a label of what opens a dialog, or nil.
+local function inspect(api, id, name, sec, macros, seen)
+  local denied = M.deny_reason(name)
+  if denied then return denied, nil end
+  local dialog = M.opens_dialog(api, name) and ("'" .. trim(name) .. "'") or nil
+  local nid = macros and named_id(api, id)
+  local macro = nid and macros[nid]
+  if not macro or seen[nid] then return nil, dialog end
+  seen[nid] = true
+  local h = handle(api, sec)
+  for k, s in ipairs(macro.steps) do
+    local sid = step_id(api, s)
+    local sname = sid and api.kbd_getTextFromCmd(sid, h)
+    if sname and sname ~= "" then
+      local d, g = inspect(api, sid, sname, sec, macros, seen)
+      if d then return "macro step " .. k .. ": " .. d, nil end
+      dialog = dialog or (g and ("macro step " .. k .. " " .. g))
+    end
+  end
+  return nil, dialog
+end
+
 local function shortcuts(api, sec, id)
   if not api.CountActionShortcuts then return {} end
   local h = handle(api, sec)
@@ -84,7 +128,9 @@ local function section_name(sec)
   return tostring(sec)
 end
 
-function M.describe(api, sec, id, name)
+--- `macros` (from parse_kb) is optional; with it a macro is flagged by its steps.
+function M.describe(api, sec, id, name, macros)
+  local denied, dialog = inspect(api, id, name, sec, macros, {})
   return {
     id = id,
     namedId = named_id(api, id),
@@ -92,15 +138,16 @@ function M.describe(api, sec, id, name)
     section = section_name(sec),
     toggle = api.GetToggleCommandStateEx(sec, id), -- -1: not a toggle
     shortcuts = shortcuts(api, sec, id),
-    opensDialog = M.is_dialog(name),
-    denied = M.deny_reason(name),
+    opensDialog = dialog ~= nil,
+    denied = denied,
   }
 end
 
 --- search_actions: every query word must appear (case-insensitive) in the
 --- name or named id. Returns at most `limit` actions plus the total count.
-function M.search(api, params)
+function M.search(api, params, kb_text)
   local sec = section_id(params.section)
+  local macros = M.parse_kb(kb_text)
   local limit = math.max(1, math.min(tonumber(params.limit) or 20, 100))
   local words = {}
   for w in tostring(params.query or ""):lower():gmatch("%S+") do words[#words + 1] = w end
@@ -112,7 +159,7 @@ function M.search(api, params)
       if not hay:find(w, 1, true) then return false end
     end
     total = total + 1
-    if #found < limit then found[#found + 1] = M.describe(api, sec, id, name) end
+    if #found < limit then found[#found + 1] = M.describe(api, sec, id, name, macros) end
     return false
   end)
   return { section = section_name(sec), query = params.query or "", total = total, returned = #found, actions = found }
@@ -155,12 +202,13 @@ function M.resolve(api, ref, sec)
   return nil, "no action named '" .. ref .. "' — use search_actions to find it"
 end
 
---- Why an action must not run now, or nil when it may.
-function M.check_runnable(api, id, name, sec, allow_dialog)
-  local denied = M.deny_reason(name)
+--- Why an action must not run now, or nil when it may. Pass `macros` (from
+--- parse_kb) so a Custom: macro is judged by the steps it runs.
+function M.check_runnable(api, id, name, sec, allow_dialog, macros)
+  local denied, dialog = inspect(api, id, name, sec, macros, {})
   if denied then return "refused: " .. denied end
-  if M.is_dialog(name) and not allow_dialog then
-    return "refused: '" .. trim(name) .. "' opens a dialog, which blocks REAPER (and this bridge) until a person closes it — pass allowDialog only when someone is at the screen"
+  if dialog and not allow_dialog then
+    return "refused: " .. dialog .. " opens a dialog, which blocks REAPER (and this bridge) until a person closes it — pass allowDialog only when someone is at the screen"
   end
   if sec ~= 0 and not api.MIDIEditor_GetActive() then
     return "'" .. trim(name) .. "' is a MIDI editor action, but no MIDI editor is open"
@@ -181,11 +229,12 @@ function M.exec(api, id, sec)
 end
 
 --- run_action: resolve, refuse unsafe actions, run once in an undo block.
-function M.run(api, params)
+function M.run(api, params, kb_text)
   local sec = section_id(params.section)
   local id, name = M.resolve(api, params.action, sec)
   if not id then return nil, name end
-  local refused = M.check_runnable(api, id, name, sec, params.allowDialog == true)
+  local macros = M.parse_kb(kb_text)
+  local refused = M.check_runnable(api, id, name, sec, params.allowDialog == true, macros)
   if refused then return nil, refused end
 
   api.Undo_BeginBlock()
@@ -193,7 +242,7 @@ function M.run(api, params)
   api.Undo_EndBlock("MCP: " .. trim(name), -1)
   if not ok then return nil, "action '" .. trim(name) .. "' failed: " .. tostring(toggle) end
   if api.UpdateArrange then api.UpdateArrange() end
-  local out = M.describe(api, sec, id, name)
+  local out = M.describe(api, sec, id, name, macros)
   out.ran = true
   out.toggle = toggle
   return out
@@ -211,7 +260,7 @@ function M.parse_kb(text)
       macros["_" .. id] = { name = name, section = tonumber(sec), steps = steps }
     else
       local ssec, sid, sname, path = line:match('^SCR%s+%d+%s+(%d+)%s+(%S+)%s+"([^"]*)"%s+(.+)$')
-      if ssec then scripts["_" .. sid] = { name = sname, section = tonumber(ssec), path = trim(path) } end
+      if ssec then scripts["_" .. sid] = { name = sname, section = tonumber(ssec), path = (trim(path):gsub('^"(.*)"$', "%1")) } end
     end
   end
   return macros, scripts
@@ -222,16 +271,16 @@ function M.get(api, params, kb_text)
   local sec = section_id(params.section)
   local id, name = M.resolve(api, params.action, sec)
   if not id then return nil, name end
-  local out = M.describe(api, sec, id, name)
   local macros, scripts = M.parse_kb(kb_text)
+  local out = M.describe(api, sec, id, name, macros)
   local macro = out.namedId and macros[out.namedId]
   if macro then
     out.kind = "custom"
     out.steps = {}
     for k, s in ipairs(macro.steps) do
-      local sid = tonumber(s) or api.NamedCommandLookup(s:sub(1, 1) == "_" and s or "_" .. s)
-      local sname = sid and sid > 0 and api.kbd_getTextFromCmd(sid, handle(api, sec)) or nil
-      out.steps[k] = { action = s, id = sid ~= 0 and sid or nil, name = (sname ~= "" and sname) or "(no such action in this REAPER — the macro step does nothing)" }
+      local sid = step_id(api, s)
+      local sname = sid and api.kbd_getTextFromCmd(sid, handle(api, sec)) or nil
+      out.steps[k] = { action = s, id = sid, name = (sname ~= "" and sname) or "(no such action in this REAPER — the macro step does nothing)" }
     end
   elseif out.namedId and scripts[out.namedId] then
     out.kind = "script"

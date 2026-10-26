@@ -46,7 +46,7 @@ export function registerActionTools(server: McpServer): void {
     'Run one REAPER action (like pressing its shortcut) in an undo block, and return its toggle state afterwards. ' +
       'Most actions work on the current selection: set it first with set_selected_tracks / set_selected_items. ' +
       'Actions that open a dialog (name ends in "...") are refused unless allowDialog is true, because a dialog blocks REAPER until a person closes it. ' +
-      'Actions that quit REAPER or close/open/replace the project are always refused. To combine actions with other edits in one undo step, use run_plan\'s run_action op.',
+      'Actions that quit REAPER or close/open/replace the project are always refused. A Custom: macro is refused if any step it runs would be. To combine actions with other edits in one undo step, use run_plan\'s run_action op.',
     {
       action: actionRef,
       section: actionSection,

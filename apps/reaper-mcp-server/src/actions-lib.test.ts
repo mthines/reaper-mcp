@@ -38,7 +38,21 @@ KB = table.concat({
   'KEY 9 84 40001 0',
   'ACT 0 0 "aee8e5bd81464f8785373a3222b5d5c2" "Custom: Split and select left" 40001 _SWS_UNSELALL 99999',
   'SCR 4 0 RS1ee9bb "Custom: lyrics.lua" Cockos/lyrics.lua',
+  'ACT 0 0 "tidyquit" "Custom: Tidy and quit" 40001 40004',
+  'ACT 0 0 "renderstems" "Custom: Render stems" 40001 40022',
+  'ACT 0 0 "outer" "Custom: Outer" 40364 _tidyquit',
+  'ACT 0 0 "loopy" "Custom: Loop" _loopy 40001',
 }, "\\n")
+-- ACTIONS plus macros (see KB) and Save, for the safety-gate tests.
+MORE = { [0] = {}, [32060] = ACTIONS[32060] }
+for _, a in ipairs(ACTIONS[0]) do MORE[0][#MORE[0] + 1] = a end
+for _, a in ipairs({
+  { id = 40026, name = "File: Save project" },
+  { id = 56000, name = "Custom: Tidy and quit", named = "tidyquit" },
+  { id = 56001, name = "Custom: Render stems", named = "renderstems" },
+  { id = 56002, name = "Custom: Outer", named = "outer" },
+  { id = 56003, name = "Custom: Loop", named = "loopy" },
+}) do MORE[0][#MORE[0] + 1] = a end
 `;
 
 async function runLua(snippet: string): Promise<void> {
@@ -179,10 +193,46 @@ describe('mcp_actions_lib.lua (wasmoon)', () => {
 
   it('actions: kb.ini parser reads macros and scripts', async () => {
     await runLua(`
-      local m, s = actions.parse_kb(KB .. '\\nACT 2 32060 "abc" "Custom: midi thing" 40003\\ngarbage line')
+      local m, s = actions.parse_kb(KB .. '\\nACT 2 32060 "abc" "Custom: midi thing" 40003\\ngarbage line'
+        .. '\\nSCR 4 0 RSquoted "Custom: spaced.lua" "My Scripts/spaced name.lua"')
       assert(m["_aee8e5bd81464f8785373a3222b5d5c2"].steps[2] == "_SWS_UNSELALL")
       assert(m["_abc"].section == 32060 and m["_abc"].steps[1] == "40003")
       assert(s["_RS1ee9bb"].path == "Cockos/lyrics.lua")
+      assert(s["_RSquoted"].path == "My Scripts/spaced name.lua", "quotes stripped: " .. s["_RSquoted"].path)
+    `);
+  });
+
+  it('actions: a macro is judged by the steps it runs', async () => {
+    await runLua(`
+      local api = new_fake{ actions = MORE }
+      local _, e1 = actions.run(api, { action = "_tidyquit", allowDialog = true }, KB)
+      assert(e1 and e1:find("refused: macro step 2: 'File: Quit REAPER'"), tostring(e1))
+      local _, e2 = actions.run(api, { action = "_outer", allowDialog = true }, KB)
+      assert(e2 and e2:find("macro step 2: macro step 2:"), "nested macro checked: " .. tostring(e2))
+      local _, e3 = actions.run(api, { action = "_renderstems" }, KB)
+      assert(e3 and e3:find("macro step 2 'File: Save project as...' opens a dialog"), tostring(e3))
+      assert(#api.ran == 0 and api.begins == 0, "nothing ran")
+
+      assert(actions.run(api, { action = "_renderstems", allowDialog = true }, KB).ran, "allowDialog covers a dialog step")
+      assert(actions.run(api, { action = "_loopy" }, KB).ran, "a self-referencing macro does not loop forever")
+
+      local found = actions.search(api, { query = "custom tidy" }, KB).actions[1]
+      assert(found.denied and found.denied:find("Quit"), "search flags the macro denied")
+      local g = actions.get(api, { action = "_renderstems" }, KB)
+      assert(g.opensDialog == true and g.denied == nil, "get flags the dialog step")
+      assert(actions.search(api, { query = "custom tidy" }).actions[1].denied == nil, "without kb.ini only the name counts")
+    `);
+  });
+
+  it('actions: Save on a never-saved project opens a dialog', async () => {
+    await runLua(`
+      local unsaved = new_fake{ actions = MORE }
+      local _, err = actions.run(unsaved, { action = 40026 })
+      assert(err and err:find("opens a dialog"), tostring(err))
+      assert(actions.search(unsaved, { query = "file save project" }).actions[1].opensDialog == true)
+
+      local saved = new_fake{ actions = MORE, project_path = "/tmp/song.RPP" }
+      assert(actions.run(saved, { action = 40026 }).ran, "a saved project saves without a dialog")
     `);
   });
 });
