@@ -26,7 +26,8 @@ pnpm nx typecheck reaper-mcp-server
 2. Add response interface to `libs/protocol/src/responses.ts` (if needed)
 3. Create/extend a file in `tools/`, register with `server.tool()`
 4. Add tool name to `MCP_TOOL_NAMES` in `cli.ts`
-5. Add Lua handler in `reaper/mcp_bridge.lua`
+5. Add tool name to a category in `tools/categories.ts`
+6. Add Lua handler in `reaper/mcp_bridge.lua`
 
 ## Key Patterns
 

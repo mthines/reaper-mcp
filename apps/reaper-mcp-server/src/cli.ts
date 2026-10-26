@@ -115,6 +115,7 @@ export const MCP_TOOL_NAMES = [
   'read_track_lufs',
   'read_track_correlation',
   'read_track_crest',
+  'measure_tracks',
   // snapshots
   'snapshot_save',
   'snapshot_restore',
