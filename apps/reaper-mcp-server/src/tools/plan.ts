@@ -156,7 +156,7 @@ export function registerPlanTools(server: McpServer): void {
     'Execute a multi-step edit as ONE bridge call in ONE undo block, all-or-nothing. ' +
       'Use instead of many sequential tool calls. Ops run in order: add_track, set_track, add_fx, ' +
       'set_fx_params, add_send, graft_fxchain (copy a source FX chain onto a track; sends are not copied), ' +
-      'select_tracks, and run_action (any REAPER action — usually after select_tracks; same safety rules as run_action). ' +
+      'select_tracks, and run_action (any REAPER action — usually after select_tracks; same safety rules as run_action; only run_action ops may follow a run_action). ' +
       'Target tracks by index, exact name, "{GUID}", or a "$ref" that an earlier add_track/add_fx bound with `as`. ' +
       'Every target is resolved before anything is written: an unknown or ambiguous track rejects the whole plan, ' +
       'and a failure mid-apply reverts it. Use dryRun to preview resolution and conflicts. ' +

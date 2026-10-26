@@ -380,7 +380,7 @@ local KNOWN_OPS = {
 }
 
 --- Validate every op without writing. Returns resolved ops and conflicts.
---- ctx.actions (mcp_actions_lib.lua) is required only for run_action ops;
+--- ctx.actions (mcp_actions_lib.lua) is required only for run_action and select_tracks ops;
 --- ctx.kb_text (reaper-kb.ini) lets it check the steps of a Custom: macro.
 function M.validate(api, ops, ctx)
   ctx = ctx or {}
