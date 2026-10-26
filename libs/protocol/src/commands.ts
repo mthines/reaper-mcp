@@ -598,7 +598,7 @@ export type PlanOp =
   | { op: 'graft_fxchain'; track: PlanTrackRef; from?: PlanTrackRef; fromChunk?: string };
 
 export interface RunPlanParams {
-  /** JSON-encoded PlanOp[] — sent as a string so the bridge can parse nested JSON with CF_Json_Parse. */
+  /** JSON-encoded PlanOp[] — sent as a string because the bridge's flat parser cannot read nested arrays; mcp_plan_lib.lua decodes it. */
   ops: string;
   dryRun?: boolean;
   idempotencyKey?: string;
