@@ -170,6 +170,19 @@ describe('mcp_plan_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('lua plan: add_track with an index past the end names the new last track', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { name = "Kick" } } }
+      local res, err = plan.run_plan(api, { ops = {
+        { op = "add_track", name = "Bus", index = 9, as = "$bus" },
+        { op = "set_track", track = "$bus", pan = 0.5 },
+      } }, {})
+      assert(err == nil, err)
+      assert(#api.tracks == 2 and api.tracks[2].name == "Bus", "named: " .. tostring(api.tracks[2].name))
+      assert(api.tracks[2].vals.D_PAN == 0.5 and res.results[1].result.track == 1, "bound and reported at index 1")
+    `);
+  });
+
   it('lua plan: repeated idempotencyKey is not re-applied', async () => {
     await runLua(`
       local api = new_fake{ tracks = { { name = "Kick" } } }

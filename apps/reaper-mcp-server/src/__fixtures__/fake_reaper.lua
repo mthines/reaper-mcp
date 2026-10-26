@@ -47,7 +47,7 @@ function new_fake(spec)
   api.GetTrackName = function(tr) return true, tr.name end
   api.GetTrackGUID = function(tr) return tr.guid end
   api.InsertTrackAtIndex = function(i)
-    table.insert(tracks, i + 1, new_track(""))
+    table.insert(tracks, math.min(i, #tracks) + 1, new_track("")) -- REAPER clamps past the end
     write("insert_track")
   end
   api.GetSetMediaTrackInfo_String = function(tr, _, v, set)

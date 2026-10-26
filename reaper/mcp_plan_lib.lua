@@ -490,7 +490,8 @@ local function apply_op(api, r, bound)
   end
 
   if t == "add_track" then
-    local idx = op.index or api.CountTracks(0)
+    -- REAPER clamps an index past the end; read the new track back at the same place.
+    local idx = math.min(op.index or api.CountTracks(0), api.CountTracks(0))
     api.InsertTrackAtIndex(idx, true)
     local tr = api.GetTrack(0, idx)
     if op.name then api.GetSetMediaTrackInfo_String(tr, "P_NAME", op.name, true) end
