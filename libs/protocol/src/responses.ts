@@ -697,6 +697,36 @@ export interface TransferFxResult {
   toFx?: string[];
 }
 
+export interface RenameFxResult {
+  trackIndex: number;
+  fxIndex: number;
+  /** Display name after the rename (the plugin name when cleared). */
+  name: string;
+  /** The custom name, or "" when none is set. */
+  renamedName: string;
+  fx: string[];
+}
+
+export interface TakeFxParameterResult {
+  trackIndex: number;
+  itemIndex: number;
+  takeIndex: number;
+  fxIndex: number;
+  paramIndex: number;
+  /** Normalized value REAPER reads back. */
+  value: number;
+  formatted: string;
+}
+
+export interface TrackTemplateSaveResult {
+  trackIndex: number;
+  name: string;
+  path: string;
+  trackName: string;
+  fx: string[];
+  includeItems: boolean;
+}
+
 export interface FxChainFileResult {
   trackIndex: number;
   name: string;

@@ -117,6 +117,17 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
       local m = #api.commands
       local _, locked = project.render(api, { overwrite = true }, stuck)
       assert(locked and locked:find("could not delete") and #api.commands == m, "no render when the delete fails: " .. tostring(locked))
+      local get_string = api.GetSetProjectInfo_String
+      api.GetSetProjectInfo_String = function(p, key, v, set)
+        if key == "RENDER_TARGETS" then return true, "/tmp/out/mix.flac;/tmp/out/mix.mp3" end
+        return get_string(p, key, v, set)
+      end
+      fs.files["/tmp/out/mix.mp3"] = true
+      local half = setmetatable({ remove = function(p) if p:find("%.flac$") then fs.remove(p) end end }, { __index = fs })
+      local _, partial = project.render(api, { overwrite = true }, half)
+      assert(partial and partial:find("could not delete /tmp/out/mix.mp3") and partial:find("already deleted: /tmp/out/mix.flac"), tostring(partial))
+      api.GetSetProjectInfo_String = get_string
+      fs.files["/tmp/out/mix.mp3"] = nil
 
       project.set_render(api, { bounds = "time_selection" })
       local _, nosel = project.render(api, { overwrite = true }, fs)

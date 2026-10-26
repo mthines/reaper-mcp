@@ -251,7 +251,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 
 | Tool | File | Description |
 |------|------|-------------|
-| `get_selected_tracks` | `tools/selection.ts` | Get currently selected tracks with indices and names |
+| `get_selected_tracks` | `tools/selection.ts` | Get currently selected tracks with indices and names (master as -1) |
 | `set_selected_tracks` | `tools/selection.ts` | Select tracks by index, name or GUID (`replace` or `add`); all resolved first, an unknown one changes nothing |
 | `set_selected_items` | `tools/selection.ts` | Select media items by `{trackIndex, itemIndex}` (`replace` or `add`) |
 | `get_time_selection` | `tools/selection.ts` | Get time/loop selection start, end, length in seconds |
@@ -447,7 +447,6 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 - **Render formats**: `format` and `secondaryFormat` (a second file from the same render; `none` disables it) take wav/aiff/flac/mp3/ogg/opus with REAPER's default options. `render_project` refuses when either is another encoder (seen live: a template's video secondary format left a modal dialog open) — set `secondaryFormat: "none"`.
 - **Render is synchronous**: action 42230 blocks REAPER (and the bridge) until the render finishes. Keep renders short (a time selection or custom bounds). `targets` in `get_render_settings` are the files REAPER will write (`RENDER_TARGETS`).
 - **Undo**: every edit by these tools is one undo point labelled `MCP: …`, so `undo_project` reverts exactly that edit. Repeat and metronome changes are not undoable in REAPER.
-- **Bridge-safe text**: free-text fields of these tools (notes, title, author, names, paths, file pattern) refuse `{` and `}` — the bridge's flat command parser cuts params at an unbalanced brace inside a string. A pre-existing bridge limit; the refusal avoids a silent no-op.
 - **Validation first**: invalid input (unknown marker/region/tempo index, BPM <= 0, unsupported format, end <= start) is refused before anything is written.
 - **Tempo indexes** are `get_tempo_map` indexes; a map with `tempoMarkerCount: 0` holds only the project tempo, set it with `set_project_tempo`. Adding a marker where one already is replaces it (`replacedExisting: true`). REAPER can silently keep the start marker on delete; `delete_tempo_marker` then returns an error instead of a false success. `set_project_tempo` never uses `SetCurrentBPM` with markers present (it inserts a marker at the edit cursor).
 

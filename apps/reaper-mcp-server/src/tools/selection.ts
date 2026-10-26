@@ -5,7 +5,7 @@ import { sendCommand } from '../bridge.js';
 export function registerSelectionTools(server: McpServer): void {
   server.tool(
     'get_selected_tracks',
-    'Get all currently selected tracks in REAPER with their indices and names',
+    'Get all currently selected tracks in REAPER with their indices and names; a selected master track is listed first as index -1',
     {},
     async () => {
       const res = await sendCommand('get_selected_tracks');
@@ -56,10 +56,10 @@ export function registerSelectionTools(server: McpServer): void {
       'Every track is resolved first: an unknown or ambiguous one changes nothing. Returns the selection afterwards.',
     {
       tracks: z
-        .array(z.union([z.number().int().min(0), z.string().min(1)]))
+        .array(z.union([z.number().int().min(-1), z.string().min(1)]))
         .min(1)
         .max(1000)
-        .describe('Tracks to select: index, exact name, or "{GUID}". A digit string means a track name first, then the index.'),
+        .describe('Tracks to select: index (-1 or "master" = master track), exact name, or "{GUID}". A digit string means a track name first, then the index.'),
       mode: selectionMode,
     },
     async ({ tracks, mode }) => {

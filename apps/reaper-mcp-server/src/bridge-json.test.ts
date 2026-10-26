@@ -77,3 +77,45 @@ describe('mcp_bridge.lua json_encode', () => {
     }
   });
 });
+
+// The fallback command decoder (no CF_Json_Parse — SWS doesn't ship one).
+function commandDecoderSource(): string {
+  const start = BRIDGE_SRC.indexOf('local function extract_json_string');
+  const end = BRIDGE_SRC.indexOf('-- JSON forbids raw control characters');
+  if (start < 0 || end < 0) throw new Error('command decoder not found in mcp_bridge.lua');
+  return BRIDGE_SRC.slice(start, end);
+}
+
+async function decode(snippet: string): Promise<unknown> {
+  const lua = await new LuaFactory().createEngine();
+  try {
+    return JSON.parse(await lua.doString(`reaper = {}\n${commandDecoderSource()}\n${encoderSource()}\n${snippet}`));
+  } finally {
+    lua.global.close();
+  }
+}
+
+describe('mcp_bridge.lua fallback command decoder', () => {
+  it('keeps every param when a string holds braces or brackets', async () => {
+    const cmd = JSON.stringify({
+      id: '1', type: 'set_project_settings',
+      params: { notes: 'Bridge } then { and ] [', title: 'Song', bpm: 120 },
+    });
+    expect(await decode(`return json_encode(json_decode(${JSON.stringify(cmd)}))`)).toEqual(JSON.parse(cmd));
+  });
+
+  it('reads array params whose strings hold brackets', async () => {
+    const cmd = JSON.stringify({ params: { items: [{ n: 'x]' }, { n: '{y' }], after: 5 } });
+    const out = await decode(`local o = json_decode(${JSON.stringify(cmd)})
+      return json_encode({ items = json_decode_array(o.params.items), after = o.params.after })`);
+    expect(out).toEqual({ items: [{ n: 'x]' }, { n: '{y' }], after: 5 });
+  });
+
+  it('parses numbers with exponents', async () => {
+    const cmd = '{"params":{"a":1e-7,"b":-2.5E+3,"c":42}}';
+    const out = (await decode(`return json_encode(json_decode(${JSON.stringify(cmd)}))`)) as { params: Record<string, number> };
+    expect(out.params.a).toBeCloseTo(1e-7, 12);
+    expect(out.params.b).toBe(-2500);
+    expect(out.params.c).toBe(42);
+  });
+});

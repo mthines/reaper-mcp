@@ -6,7 +6,7 @@ vi.mock('../bridge.js', () => ({
 
 import { sendCommand } from '../bridge.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { registerProjectTools, bridgeText } from './project.js';
+import { registerProjectTools } from './project.js';
 
 const mockedSendCommand = vi.mocked(sendCommand);
 
@@ -106,16 +106,5 @@ describe('project ops tools', () => {
     mockedSendCommand.mockResolvedValue({ id: 't', success: false, error: 'refused: nope', timestamp: 0 });
     const result = await tools[name].handler(params);
     expect(result).toEqual({ content: [{ type: 'text', text: 'Error: refused: nope' }], isError: true });
-  });
-});
-
-describe('bridgeText', () => {
-  it('accepts plain text with control characters and refuses braces', () => {
-    for (const ok of ['Verse 1\nline 2 — ok', '', 'a\tb', 'a\r\nb']) {
-      expect(bridgeText.safeParse(ok).success).toBe(true);
-    }
-    for (const bad of ['Bridge }', '{x']) {
-      expect(bridgeText.safeParse(bad).success).toBe(false);
-    }
   });
 });

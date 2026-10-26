@@ -14,8 +14,8 @@ export const RUN_PLAN_TIMEOUT_MS = 120_000;
 // Refs are not z.coerce'd: a digit string may be a track *name*, so the bridge
 // resolves "3" by name first and only then by index.
 const trackRef = z
-  .union([z.number().int().min(0), z.string().min(1)])
-  .describe('Track: 0-based index, exact name, "{GUID}", or a "$ref" bound by an earlier add_track');
+  .union([z.number().int().min(-1), z.string().min(1)])
+  .describe('Track: 0-based index (-1 or "master" = master track), exact name, "{GUID}", or a "$ref" bound by an earlier add_track');
 const fxRef = z
   .union([z.number().int().min(0), z.string().min(1)])
   .describe('FX: index on the track, unique name substring, or a "$ref" bound by an earlier add_fx');

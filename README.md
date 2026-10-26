@@ -40,7 +40,7 @@ lands in your clone.
 
 ```
 Claude Code
-  ├── MCP Tools (80) ──→ controls REAPER in real-time
+  ├── MCP Tools (134) ──→ controls REAPER in real-time
   │   ├── Track management (list, get/set properties, arm, phase, input)
   │   ├── FX management (add/remove, get/set parameters, enable/offline, presets)
   │   ├── Transport (play, stop, record, cursor position)
@@ -146,7 +146,9 @@ reaper-mcp doctor
 
 Checks that the bridge is connected, knowledge is installed, and MCP config exists.
 
-## MCP Tools (80)
+## MCP Tools (134)
+
+Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `analyze_track_aesthetics` tools) accepts `-1` for the **master track**.
 
 ### Project & Tracks
 
@@ -186,9 +188,10 @@ Checks that the bridge is connected, knowledge is installed, and MCP config exis
 
 | Tool | Description |
 |------|-------------|
-| `get_selected_tracks` | Currently selected tracks with indices and names |
+| `get_selected_tracks` | Currently selected tracks with indices and names (master as -1) |
 | `get_time_selection` | Time/loop selection start, end, length |
 | `set_time_selection` | Set the time selection range |
+| `set_selected_tracks` / `set_selected_items` | Select tracks (index, name, GUID, master) or items, replacing or adding to the selection |
 
 ### Markers & Regions
 
@@ -286,11 +289,69 @@ For quick A/B testing, bind these action scripts to keyboard shortcuts in REAPER
 | `mcp_snapshot_next.lua` | Restore next snapshot (wraps around) | `Ctrl+Right` |
 | `mcp_snapshot_prev.lua` | Restore previous snapshot (wraps around) | `Ctrl+Left` |
 
+### Track Structure
+
+| Tool | Description |
+|------|-------------|
+| `add_track` | Insert a track (optional name, position) |
+| `delete_track` | Delete a track (never the master) |
+| `move_track` | Move a track to a new position; keeps the user's selection |
+| `set_track_folder` | Folder parent / last-in-folder / normal; collapse state |
+| `set_track_info` | Name, color (`#RRGGBB`/`none`), channel count, master/parent send |
+| `set_track_group` | Group (1-64) membership roles, incl. VCA lead/follow |
+
 ### Routing
 
 | Tool | Description |
 |------|-------------|
-| `get_track_routing` | Sends, receives, parent/folder info for a track |
+| `get_track_routing` | Sends, receives (index, mode, channels), hardware outputs, master send, parent/folder info |
+| `add_send` | Track → track send: level, pan, mute, mode, channels (sidechain into 3/4 widens the destination) |
+| `set_send` | Edit a send, receive or hardware output by index |
+| `remove_send` | Remove a send, receive or hardware output by index |
+| `add_hardware_output` | Route a track to an audio interface output (stereo or mono) |
+
+### Plan Executor
+
+| Tool | Description |
+|------|-------------|
+| `run_plan` | Execute an ordered list of ops in **one** bridge call and **one** undo block, all-or-nothing, with `$refs`, `dryRun`, `idempotencyKey`, and an optional `snapshotBefore` |
+
+### Actions Proxy
+
+| Tool | Description |
+|------|-------------|
+| `search_actions` | Search REAPER's ~6k actions (native, SWS, scripts, `Custom:` macros) inside REAPER; returns id, stable `namedId`, name, toggle state, shortcuts |
+| `get_action` | One action's details; a `Custom:` macro's steps by name, or a script's path (from `reaper-kb.ini`) |
+| `run_action` | Run an action by id, named id or exact name in an undo block; returns the toggle state after. Dialog actions need `allowDialog`; quit/close/open project are always refused |
+
+### Items & Takes
+
+| Tool | Description |
+|------|-------------|
+| `insert_audio_file` | Insert an audio file onto a track as a new item at a position (default: edit cursor); the item is the file's length |
+| `list_takes` | An item's takes: name, active, MIDI/audio, source file, take FX count |
+| `set_active_take` | Make one take the active (playing) take |
+| `get_take_fx` | List a take's FX (default: active take); with `fxIndex`, that FX's parameters |
+| `add_take_fx` | Add an FX to a take's FX chain by name |
+| `remove_take_fx` | Remove one FX from a take's FX chain |
+| `set_take_fx_parameter` | Set one take FX parameter and return the value REAPER reads back |
+| `get_item_appearance` | Item color (`"#RRGGBB"` or `"none"`) and fade lengths, shapes (0-6) and curves |
+| `set_item_color` | Set an item's color, or `"none"` for the track default |
+| `set_item_fades` | Set fade-in/out lengths, shapes and curves (only the fields given change) |
+
+### FX Housekeeping
+
+| Tool | Description |
+|------|-------------|
+| `move_fx` | Move one FX within its chain or to another track |
+| `copy_fx` | Copy one FX (with settings) within its chain or onto another track |
+| `rename_fx` | Rename an FX instance (REAPER 6.37+); `""` restores the plugin name |
+| `save_fx_chain` | Save a track's FX chain as `<resource>/FXChains/<name>.RfxChain` |
+| `load_fx_chain` | Load an `.RfxChain` onto a track (`append` or `replace`), fresh FXIDs |
+| `list_fx_chains` | List saved `.RfxChain` names (FXChains folder and subfolders) |
+| `save_track_template` | Save a track as `<resource>/TrackTemplates/<name>.RTrackTemplate` (items only with `includeItems`) |
+| `insert_track_template` | Insert the track(s) of a template at a position, fresh GUIDs |
+| `list_track_templates` | List saved `.RTrackTemplate` names |
 
 ## Using the Mix Skills
 
@@ -436,81 +497,12 @@ By default Claude Code asks permission for each MCP tool call. `reaper-mcp init`
 ```json
 {
   "permissions": {
-    "allow": [
-      "mcp__reaper__get_project_info",
-      "mcp__reaper__list_tracks",
-      "mcp__reaper__get_track_properties",
-      "mcp__reaper__set_track_property",
-      "mcp__reaper__add_fx",
-      "mcp__reaper__remove_fx",
-      "mcp__reaper__get_fx_parameters",
-      "mcp__reaper__set_fx_parameter",
-      "mcp__reaper__list_available_fx",
-      "mcp__reaper__search_fx",
-      "mcp__reaper__get_fx_preset_list",
-      "mcp__reaper__set_fx_preset",
-      "mcp__reaper__play",
-      "mcp__reaper__stop",
-      "mcp__reaper__record",
-      "mcp__reaper__get_transport_state",
-      "mcp__reaper__set_cursor_position",
-      "mcp__reaper__read_track_meters",
-      "mcp__reaper__read_track_spectrum",
-      "mcp__reaper__read_track_lufs",
-      "mcp__reaper__read_track_correlation",
-      "mcp__reaper__read_track_crest",
-      "mcp__reaper__snapshot_save",
-      "mcp__reaper__snapshot_restore",
-      "mcp__reaper__snapshot_list",
-      "mcp__reaper__snapshot_delete",
-      "mcp__reaper__get_track_routing",
-      "mcp__reaper__set_fx_enabled",
-      "mcp__reaper__set_fx_offline",
-      "mcp__reaper__get_selected_tracks",
-      "mcp__reaper__get_time_selection",
-      "mcp__reaper__set_time_selection",
-      "mcp__reaper__list_markers",
-      "mcp__reaper__list_regions",
-      "mcp__reaper__add_marker",
-      "mcp__reaper__add_region",
-      "mcp__reaper__delete_marker",
-      "mcp__reaper__delete_region",
-      "mcp__reaper__get_tempo_map",
-      "mcp__reaper__get_track_envelopes",
-      "mcp__reaper__get_envelope_points",
-      "mcp__reaper__insert_envelope_point",
-      "mcp__reaper__delete_envelope_point",
-      "mcp__reaper__create_midi_item",
-      "mcp__reaper__list_midi_items",
-      "mcp__reaper__get_midi_notes",
-      "mcp__reaper__analyze_midi",
-      "mcp__reaper__insert_midi_note",
-      "mcp__reaper__insert_midi_notes",
-      "mcp__reaper__edit_midi_note",
-      "mcp__reaper__edit_midi_notes",
-      "mcp__reaper__delete_midi_note",
-      "mcp__reaper__get_midi_cc",
-      "mcp__reaper__insert_midi_cc",
-      "mcp__reaper__delete_midi_cc",
-      "mcp__reaper__get_midi_item_properties",
-      "mcp__reaper__set_midi_item_properties",
-      "mcp__reaper__list_media_items",
-      "mcp__reaper__get_media_item_properties",
-      "mcp__reaper__set_media_item_properties",
-      "mcp__reaper__set_media_items_properties",
-      "mcp__reaper__split_media_item",
-      "mcp__reaper__delete_media_item",
-      "mcp__reaper__move_media_item",
-      "mcp__reaper__trim_media_item",
-      "mcp__reaper__add_stretch_marker",
-      "mcp__reaper__get_stretch_markers",
-      "mcp__reaper__delete_stretch_marker"
-    ]
+    "allow": ["mcp__reaper"]
   }
 }
 ```
 
-The format is `mcp__reaper__{tool_name}`. Once added, Claude Code will run these tools without prompting.
+`mcp__reaper` allows every tool of the `reaper` server; to allow single tools, list them as `mcp__reaper__{tool_name}`. Once added, Claude Code runs them without prompting.
 
 ## CLI Commands
 
