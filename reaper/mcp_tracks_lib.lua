@@ -320,10 +320,18 @@ function M.set_send(api, tr, params)
   local f, err = send_fields(params)
   if not f then return nil, err end
   if cat == 1 and params.destChannel ~= nil then return nil, "use outputChannel for a hardware output" end
-  if cat == 1 and params.outputChannel ~= nil then
+  if cat == 1 and (params.outputChannel ~= nil or params.mono ~= nil) then
     local ch = tonumber(params.outputChannel)
-    if not ch or ch < 1 or ch > 512 then return nil, "outputChannel must be 1-512" end
-    f.I_DSTCHAN = (ch - 1) | (params.mono and 1024 or 0)
+    if params.outputChannel ~= nil and (not ch or ch < 1 or ch > 512) then return nil, "outputChannel must be 1-512" end
+    f.I_DSTCHAN = ch and (ch - 1) or (math.floor(api.GetTrackSendInfo_Value(tr, cat, i, "I_DSTCHAN")) & 0x3FF)
+    if params.mono ~= nil then f.I_DSTCHAN = f.I_DSTCHAN | (params.mono and 1024 or 0) end
+  end
+  -- A channel edit keeps the route's mono bit (1024) unless mono was given.
+  for _, k in ipairs({ "I_SRCCHAN", "I_DSTCHAN" }) do
+    local cur = math.floor(api.GetTrackSendInfo_Value(tr, cat, i, k))
+    if f[k] and f[k] >= 0 and cur >= 0 and not (k == "I_DSTCHAN" and cat == 1 and params.mono ~= nil) then
+      f[k] = f[k] | (cur & 1024)
+    end
   end
   if cat == 0 then ensure_channels(api, api.GetTrackSendInfo_Value(tr, 0, i, "P_DESTTRACK"), f.I_DSTCHAN) end
   if cat == -1 then ensure_channels(api, tr, f.I_DSTCHAN) end
