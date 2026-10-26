@@ -24,6 +24,11 @@ local DENY_PATTERNS = {
   "^file: new project", "^new project$", "^new project %(", "^new project tab",
   "^file: open project", "^open project$", "^open project%.%.%.", "^open project in new tab",
   "^project tabs: close", "^project tabs: switch to",
+  -- Anywhere in the name: SWS and item actions that open or switch to another project.
+  "switch to .*project tab", "send next action to .*project tab",
+  "new project tab", "in new tab", "%(new tab",
+  "open project,", "open project %(", "open projects from", "open last project",
+  "open related project", "open associated", "open reaper project",
 }
 
 local function section_id(name)

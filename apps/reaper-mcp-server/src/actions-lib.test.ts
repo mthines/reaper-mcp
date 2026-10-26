@@ -232,12 +232,22 @@ describe('mcp_actions_lib.lua (wasmoon)', () => {
         "New project tab (ignore default template)", "New project (ignore default template)",
         "File: New project", "File: Open project", "Open project", "Open project in new tab",
         "Project tabs: switch to next project tab", "Project tabs: close all but current",
+        -- SWS / item actions seen in a live REAPER 7.40 + SWS 2.14 action list
+        "SWS: Switch to project tab 1", "SWS: Switch to last project tab", "SWS: Open last project",
+        "SWS: Open projects from list", "SWS: Open related project 1",
+        "SWS/S&M: Resources - Open project, slot 1", "SWS/S&M: Resources - Open project, slot 1 (new tab)",
+        "SWS/S&M: Region Playlist - Crop project to playlist (new project tab)",
+        "Item: Open associated project in new tab", "Xenakios/SWS: Open associated REAPER project of item",
+        "Xenakios/SWS: Open REAPER project in item BWAV info (autosearch for RPP if necessary)",
+        "Action: Momentarily send next action to project tab 1",
       }) do
         assert(actions.deny_reason(name), "should be denied: " .. name)
       end
       for _, name in ipairs({
         "New project bay window", "File: Open render queue", "Project tabs: move project tab left by one",
         "Track: Insert new track", "Open project settings",
+        "SWS/S&M: Open/close Notes window (project notes)", "SWS/S&M: Open project path in explorer/finder",
+        "SWS: Open project list", "SWS: Save list of open projects", "Project tabs: Run background projects",
       }) do
         assert(actions.deny_reason(name) == nil, "should run: " .. name)
       end
