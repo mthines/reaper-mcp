@@ -188,7 +188,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 
 | Tool | Description |
 |------|-------------|
-| `get_selected_tracks` | Currently selected tracks with indices and names |
+| `get_selected_tracks` | Currently selected tracks with indices and names (master as -1) |
 | `get_time_selection` | Time/loop selection start, end, length |
 | `set_time_selection` | Set the time selection range |
 | `set_selected_tracks` / `set_selected_items` | Select tracks (index, name, GUID, master) or items, replacing or adding to the selection |

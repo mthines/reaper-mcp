@@ -5,7 +5,7 @@ import { sendCommand } from '../bridge.js';
 export function registerSelectionTools(server: McpServer): void {
   server.tool(
     'get_selected_tracks',
-    'Get all currently selected tracks in REAPER with their indices and names',
+    'Get all currently selected tracks in REAPER with their indices and names; a selected master track is listed first as index -1',
     {},
     async () => {
       const res = await sendCommand('get_selected_tracks');
