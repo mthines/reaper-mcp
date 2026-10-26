@@ -181,7 +181,9 @@ local JSON_ESCAPES = {
 }
 
 local function json_quote(s)
-  return '"' .. s:gsub('[%c"\\]', function(c)
+  -- Explicit byte range, not %c: %c follows the C locale and, under a UTF-8
+  -- locale, also matches bytes >= 0x80, which would mangle UTF-8 names.
+  return '"' .. s:gsub('[\0-\31\127"\\]', function(c)
     return JSON_ESCAPES[c] or string.format('\\u%04x', c:byte())
   end) .. '"'
 end

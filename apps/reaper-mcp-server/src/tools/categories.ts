@@ -42,7 +42,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   midi: {
     name: 'midi',
-    description: 'MIDI item editing: create items, insert/edit/delete notes and CC events, batch operations, analysis. Use analyze_midi first for large items; paginate with get_midi_notes offset/limit.',
+    description: 'MIDI item editing: create items, insert/edit/delete notes and CC events, batch operations, analysis, plus live MIDI output (send_midi_cc/pc/note). Use analyze_midi first for large items; paginate with get_midi_notes offset/limit.',
     tools: [
       'create_midi_item', 'list_midi_items', 'get_midi_notes', 'analyze_midi',
       'insert_midi_note', 'insert_midi_notes', 'edit_midi_note', 'edit_midi_notes',
@@ -86,7 +86,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   analysis: {
     name: 'analysis',
-    description: 'Audio metering and analysis: peak/RMS meters, FFT spectrum, LUFS loudness, stereo correlation, crest factor',
+    description: 'Audio metering and analysis: peak/RMS meters, FFT spectrum, LUFS loudness, stereo correlation, crest factor, one-call multi-metric measurement (measure_tracks), perceptual aesthetics scores (needs the Python sidecar)',
     tools: ['read_track_meters', 'read_track_spectrum', 'read_track_lufs', 'read_track_correlation', 'read_track_crest', 'measure_tracks', 'analyze_track_aesthetics'],
   },
   discovery: {
@@ -96,7 +96,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   snapshots: {
     name: 'snapshots',
-    description: 'Mixer state snapshots: save, restore, and list named snapshots of volumes, pans, FX, and mutes',
+    description: 'Mixer state snapshots: save, restore, list and delete named snapshots of volumes, pans, FX, and mutes',
     tools: ['snapshot_save', 'snapshot_restore', 'snapshot_list', 'snapshot_delete'],
   },
   routing: {
