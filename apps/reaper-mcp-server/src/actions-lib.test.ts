@@ -23,7 +23,7 @@ ACTIONS = {
     { id = 40364, name = "Options: Toggle metronome", toggle = 0, shortcuts = { "Cmd+Opt+Shift+C" } },
     { id = 40004, name = "File: Quit REAPER" },
     { id = 40022, name = "File: Save project as..." },
-    { id = 40860, name = "File: Close current project tab" },
+    { id = 40860, name = "Close current project tab" },
     { id = 53000, name = "Custom: Split and select left", named = "aee8e5bd81464f8785373a3222b5d5c2" },
     { id = 54000, name = "SWS: Unselect all tracks", named = "SWS_UNSELALL" },
     { id = 55000, name = "Track: Insert new track" .. " (duplicate name)" },
@@ -141,7 +141,7 @@ describe('mcp_actions_lib.lua (wasmoon)', () => {
       assert(e1:find("opens a dialog"), e1)
       local _, e2 = actions.run(api, { action = 40004, allowDialog = true })
       assert(e2:find("refused") and e2:find("close or replace"), e2)
-      local _, e3 = actions.run(api, { action = "File: Close current project tab", allowDialog = true })
+      local _, e3 = actions.run(api, { action = "Close current project tab", allowDialog = true })
       assert(e3:find("refused"), e3)
       assert(#api.ran == 0 and api.writes == 0 and api.begins == 0, "nothing ran, no undo block")
 
@@ -224,15 +224,39 @@ describe('mcp_actions_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('actions: deny list matches REAPER\'s real project and tab action names', async () => {
+    await runLua(`
+      for _, name in ipairs({
+        "File: Quit REAPER", "Close current project tab", "Close project", "Close all projects",
+        "Close all projects but current", "File: Close all projects", "New project", "New project tab",
+        "New project tab (ignore default template)", "New project (ignore default template)",
+        "File: New project", "File: Open project", "Open project", "Open project in new tab",
+        "Project tabs: switch to next project tab", "Project tabs: close all but current",
+      }) do
+        assert(actions.deny_reason(name), "should be denied: " .. name)
+      end
+      for _, name in ipairs({
+        "New project bay window", "File: Open render queue", "Project tabs: move project tab left by one",
+        "Track: Insert new track", "Open project settings",
+      }) do
+        assert(actions.deny_reason(name) == nil, "should run: " .. name)
+      end
+    `);
+  });
+
   it('actions: Save on a never-saved project opens a dialog', async () => {
     await runLua(`
       local unsaved = new_fake{ actions = MORE }
       local _, err = actions.run(unsaved, { action = 40026 })
       assert(err and err:find("opens a dialog"), tostring(err))
       assert(actions.search(unsaved, { query = "file save project" }).actions[1].opensDialog == true)
+      assert(actions.opens_dialog(unsaved, "File: Save new version of project (automatically increment project name)"))
+      assert(actions.opens_dialog(unsaved, "File: Save all projects"))
+      assert(not actions.opens_dialog(unsaved, "Track: Insert new track"))
 
       local saved = new_fake{ actions = MORE, project_path = "/tmp/song.RPP" }
       assert(actions.run(saved, { action = 40026 }).ran, "a saved project saves without a dialog")
+      assert(not actions.opens_dialog(saved, "File: Save all projects"))
     `);
   });
 });

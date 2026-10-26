@@ -14,13 +14,16 @@ local M = {}
 -- have none, so they are not offered.
 M.SECTIONS = { main = 0, midi_editor = 32060, midi_event_list = 32061 }
 
--- App-level actions that would end or replace the session the agent works
--- in. Refused even with allowDialog. Matched against the lowercased name.
-local DENY_PREFIXES = {
-  "file: quit",
-  "file: close project", "file: close all projects", "file: close current project",
-  "file: new project", "file: open project",
-  "project tabs: close",
+-- App-level actions that would end, replace or switch away from the project
+-- the agent works in. Refused even with allowDialog. Lua patterns matched
+-- against the lowercased name; REAPER lists some with a "File:" prefix and
+-- some without ("Close current project tab", "New project tab").
+local DENY_PATTERNS = {
+  "^file: quit", "^quit reaper",
+  "^file: close", "^close project", "^close all projects", "^close current project",
+  "^file: new project", "^new project$", "^new project %(", "^new project tab",
+  "^file: open project", "^open project$", "^open project%.%.%.", "^open project in new tab",
+  "^project tabs: close", "^project tabs: switch to",
 }
 
 local function section_id(name)
@@ -60,8 +63,8 @@ end
 
 function M.deny_reason(name)
   local lower = trim(name):lower()
-  for _, p in ipairs(DENY_PREFIXES) do
-    if lower:sub(1, #p) == p then
+  for _, p in ipairs(DENY_PATTERNS) do
+    if lower:find(p) then
       return "'" .. trim(name) .. "' would close or replace the project the agent is working in"
     end
   end
@@ -74,11 +77,12 @@ local function unsaved_project(api)
   return path == nil or path == ""
 end
 
---- Whether running `name` opens a modal dialog: a "..." name, or Save on a
---- project that was never saved (REAPER asks where to save it).
+--- Whether running `name` opens a modal dialog: a "..." name, or any Save
+--- (project, all projects, new version) on a project that was never saved,
+--- where REAPER asks where to save it.
 function M.opens_dialog(api, name)
   if M.is_dialog(name) then return true end
-  return trim(name):lower() == "file: save project" and unsaved_project(api)
+  return trim(name):lower():sub(1, 10) == "file: save" and unsaved_project(api)
 end
 
 local function step_id(api, s)
