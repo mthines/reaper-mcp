@@ -9,6 +9,16 @@ import { LuaFactory } from 'wasmoon';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BRIDGE_SRC = readFileSync(join(__dirname, '../../../reaper/mcp_bridge.lua'), 'utf8');
+const SNAPSHOT_LIB_SRC = readFileSync(join(__dirname, '../../../reaper/mcp_snapshot_lib.lua'), 'utf8');
+
+// The fallback string decoder (extract_json_string), sliced out of a Lua file.
+function decoderSource(src: string): string {
+  const start = src.indexOf('local function extract_json_string');
+  const endMarker = '  return nil, i';
+  const end = src.indexOf(endMarker, start);
+  if (start < 0 || end < 0) throw new Error('extract_json_string not found');
+  return src.slice(start, src.indexOf('end', end + endMarker.length) + 3);
+}
 
 function encoderSource(): string {
   const start = BRIDGE_SRC.indexOf('local JSON_ESCAPES');
@@ -45,5 +55,25 @@ describe('mcp_bridge.lua json_encode', () => {
   it('escapes object keys too', async () => {
     const out = await encode(`{ ["we\\"ird\\tkey"] = 1 }`);
     expect(JSON.parse(out)).toEqual({ 'we"ird\tkey': 1 });
+  });
+
+  it.each([
+    ['mcp_bridge.lua', () => BRIDGE_SRC],
+    ['mcp_snapshot_lib.lua', () => SNAPSHOT_LIB_SRC],
+  ])('round-trips control characters through the %s decoder (snapshot restore)', async (_name, src) => {
+    const lua = await new LuaFactory().createEngine();
+    try {
+      const ok = await lua.doString(`${encoderSource()}\n${decoderSource(src())}
+        local names = { "Tab\\tName", "a\\rb", "x\\ny", "\\7bell", "z\\127", "a\\0b", "f\\fb\\b", 'Q \\"x\\" \\\\ /', "Ærø 🥁" }
+        for _, n in ipairs(names) do
+          local json = json_encode({ n })
+          local back = extract_json_string(json, 3)
+          if back ~= n then return "mismatch: " .. json end
+        end
+        return "ok"`);
+      expect(ok).toBe('ok');
+    } finally {
+      lua.global.close();
+    }
   });
 });

@@ -110,6 +110,12 @@ local function extract_json_string(str, pos)
       elseif next_ch == 'n' then result[#result + 1] = '\n'
       elseif next_ch == 't' then result[#result + 1] = '\t'
       elseif next_ch == '/' then result[#result + 1] = '/'
+      elseif next_ch == 'r' then result[#result + 1] = '\r'
+      elseif next_ch == 'b' then result[#result + 1] = '\b'
+      elseif next_ch == 'f' then result[#result + 1] = '\f'
+      elseif next_ch == 'u' and str:sub(i + 2, i + 5):match('^%x%x%x%x$') then
+        result[#result + 1] = utf8.char(tonumber(str:sub(i + 2, i + 5), 16))
+        i = i + 4
       else result[#result + 1] = next_ch end
       i = i + 2
     elseif ch == '"' then

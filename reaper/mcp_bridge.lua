@@ -53,6 +53,15 @@ local function extract_json_string(str, pos)
         result[#result + 1] = '\t'
       elseif next_ch == '/' then
         result[#result + 1] = '/'
+      elseif next_ch == 'r' then
+        result[#result + 1] = '\r'
+      elseif next_ch == 'b' then
+        result[#result + 1] = '\b'
+      elseif next_ch == 'f' then
+        result[#result + 1] = '\f'
+      elseif next_ch == 'u' and str:sub(i + 2, i + 5):match('^%x%x%x%x$') then
+        result[#result + 1] = utf8.char(tonumber(str:sub(i + 2, i + 5), 16))
+        i = i + 4
       else
         result[#result + 1] = next_ch
       end
@@ -182,7 +191,8 @@ local JSON_ESCAPES = {
 
 local function json_quote(s)
   -- Explicit byte range, not %c: %c follows the C locale and, under a UTF-8
-  -- locale, also matches bytes >= 0x80, which would mangle UTF-8 names.
+  -- locale, also matches some bytes >= 0x80 (0x80-0x9F on macOS), which are
+  -- UTF-8 continuation bytes ("Æ" is C3 86) and would mangle names.
   return '"' .. s:gsub('[\0-\31\127"\\]', function(c)
     return JSON_ESCAPES[c] or string.format('\\u%04x', c:byte())
   end) .. '"'
