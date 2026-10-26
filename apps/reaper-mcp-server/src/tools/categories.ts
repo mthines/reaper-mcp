@@ -119,12 +119,30 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
     description: 'REAPER action proxy: search ~6k actions (native, SWS, scripts, Custom: macros), inspect one (shortcuts, macro steps), run one by id / stable named id / name. Pair with set_selected_tracks / set_selected_items.',
     tools: ['search_actions', 'get_action', 'run_action'],
   },
+  takes: {
+    name: 'takes',
+    description: 'Items and takes: insert an audio file as an item, list takes and set the active take, take FX (add/remove/list/set params), item color and fade lengths/shapes/curves',
+    tools: [
+      'insert_audio_file', 'list_takes', 'set_active_take',
+      'get_take_fx', 'add_take_fx', 'remove_take_fx', 'set_take_fx_parameter',
+      'get_item_appearance', 'set_item_color', 'set_item_fades',
+    ],
+  },
+  fx_files: {
+    name: 'fx_files',
+    description: 'FX housekeeping: move/copy one FX within or across tracks, rename an FX, save/load .RfxChain files, save/insert track templates, list saved chains and templates',
+    tools: [
+      'move_fx', 'copy_fx', 'rename_fx',
+      'save_fx_chain', 'load_fx_chain', 'list_fx_chains',
+      'save_track_template', 'insert_track_template', 'list_track_templates',
+    ],
+  },
 };
 
 export function registerCategoryTools(server: McpServer): void {
   server.tool(
     'list_tool_categories',
-    'List all available tool categories with descriptions and tool names. Use this to discover what tools are available without loading all 72+ tool schemas. Categories: project, tracks, fx, transport, midi, media, selection, markers, tempo, envelopes, analysis, discovery, snapshots, routing, plan, actions.',
+    'List all available tool categories with descriptions and tool names. Use this to discover what tools are available without loading all 72+ tool schemas. Categories: project, tracks, fx, transport, midi, media, selection, markers, tempo, envelopes, analysis, discovery, snapshots, routing, plan, actions, takes, fx_files.',
     {},
     async () => {
       const categories = Object.values(TOOL_CATEGORIES).map((cat) => ({

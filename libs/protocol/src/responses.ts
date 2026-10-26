@@ -622,3 +622,102 @@ export interface TempoMapResult {
   tempoMarkerCount: number;
 }
 
+// =============================================================================
+// Items, takes, take FX and FX housekeeping
+// =============================================================================
+
+export interface InsertAudioFileResult {
+  trackIndex: number;
+  itemIndex: number;
+  position: number;
+  length: number;
+  takeName: string;
+  sourceFile: string;
+}
+
+/** An empty take slot is listed as { takeIndex, empty: true } only. */
+export interface TakeInfo {
+  takeIndex: number;
+  empty?: true;
+  name?: string;
+  active?: boolean;
+  isMidi?: boolean;
+  sourceFile?: string;
+  fxCount?: number;
+}
+
+export interface TakesResult {
+  trackIndex: number;
+  itemIndex: number;
+  activeTakeIndex: number;
+  takes: TakeInfo[];
+}
+
+export interface TakeFxInfo {
+  fxIndex: number;
+  name: string;
+  enabled: boolean;
+  paramCount: number;
+}
+
+export interface TakeFxResult {
+  trackIndex: number;
+  itemIndex: number;
+  takeIndex: number;
+  fx: TakeFxInfo[];
+  fxIndex?: number;
+  fxName?: string;
+  removedFxIndex?: number;
+  params?: { paramIndex: number; name: string; value: number; min: number; max: number; formatted: string }[];
+  paramTotal?: number;
+  hasMore?: boolean;
+}
+
+export interface ItemAppearance {
+  trackIndex: number;
+  itemIndex: number;
+  /** "#RRGGBB", or "none" for the default color. */
+  color: string;
+  fadeInLength: number;
+  fadeInShape: number;
+  fadeInCurve: number;
+  fadeOutLength: number;
+  fadeOutShape: number;
+  fadeOutCurve: number;
+}
+
+export interface TransferFxResult {
+  trackIndex: number;
+  fxIndex: number;
+  toTrackIndex: number;
+  toIndex: number;
+  /** Source chain after the move/copy. */
+  fx: string[];
+  /** Target chain, when it is another track. */
+  toFx?: string[];
+}
+
+export interface FxChainFileResult {
+  trackIndex: number;
+  name: string;
+  path: string;
+  fx: string[];
+  fxCount?: number;
+  mode?: 'append' | 'replace';
+  loaded?: number;
+  fxCountBefore?: number;
+}
+
+export interface TrackTemplateInsertResult {
+  name: string;
+  path: string;
+  inserted: { index: number; name: string; fx: string[] }[];
+}
+
+export interface ResourceFileList {
+  folder: string;
+  names: string[];
+  total: number;
+  truncated: boolean;
+}
+

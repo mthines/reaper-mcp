@@ -115,6 +115,26 @@ export type CommandType =
   | 'set_send'
   | 'remove_send'
   | 'add_hardware_output'
+  // Items, takes, take FX and FX housekeeping
+  | 'insert_audio_file'
+  | 'list_takes'
+  | 'set_active_take'
+  | 'get_take_fx'
+  | 'add_take_fx'
+  | 'remove_take_fx'
+  | 'set_take_fx_parameter'
+  | 'get_item_appearance'
+  | 'set_item_color'
+  | 'set_item_fades'
+  | 'move_fx'
+  | 'copy_fx'
+  | 'rename_fx'
+  | 'save_fx_chain'
+  | 'load_fx_chain'
+  | 'list_fx_chains'
+  | 'save_track_template'
+  | 'insert_track_template'
+  | 'list_track_templates'
   // Live MIDI output
   | 'send_midi_cc'
   | 'send_midi_pc'
@@ -853,4 +873,115 @@ export interface EditRegionParams {
   start?: number;
   end?: number;
   color?: number;
+}
+
+// =============================================================================
+// Items, takes, take FX and FX housekeeping
+// =============================================================================
+
+export interface InsertAudioFileParams {
+  trackIndex: number;
+  /** Absolute path of an audio file REAPER can read. */
+  filePath: string;
+  /** Seconds; defaults to the edit cursor. */
+  position?: number;
+}
+
+export interface ItemRefParams {
+  trackIndex: number;
+  itemIndex: number;
+}
+
+export interface SetActiveTakeParams extends ItemRefParams {
+  takeIndex: number;
+}
+
+export interface TakeRefParams extends ItemRefParams {
+  /** Defaults to the active take. */
+  takeIndex?: number;
+}
+
+export interface GetTakeFxParams extends TakeRefParams {
+  /** When given, the result also lists that FX's parameters. */
+  fxIndex?: number;
+  offset?: number;
+  limit?: number;
+}
+
+export interface AddTakeFxParams extends TakeRefParams {
+  fxName: string;
+}
+
+export interface RemoveTakeFxParams extends TakeRefParams {
+  fxIndex: number;
+}
+
+export interface SetTakeFxParameterParams extends TakeRefParams {
+  fxIndex: number;
+  paramIndex: number;
+  value: number;
+}
+
+export interface SetItemColorParams extends ItemRefParams {
+  /** "#RRGGBB", or "none" for the default color. */
+  color: string;
+}
+
+/** Fade shape: 0 linear, 1 fast start, 2 fast end, 3 fast start steep, 4 fast end steep, 5 slow start/end, 6 slow start/end steep. */
+export type FadeShape = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface SetItemFadesParams extends ItemRefParams {
+  fadeInLength?: number;
+  fadeOutLength?: number;
+  fadeInShape?: FadeShape;
+  fadeOutShape?: FadeShape;
+  /** -1..1 */
+  fadeInCurve?: number;
+  /** -1..1 */
+  fadeOutCurve?: number;
+}
+
+export interface TransferFxParams {
+  trackIndex: number;
+  fxIndex: number;
+  /** Defaults to the same track. */
+  toTrackIndex?: number;
+  /** Defaults to the end of the target chain. */
+  toIndex?: number;
+}
+
+export interface RenameFxParams {
+  trackIndex: number;
+  fxIndex: number;
+  /** "" restores the plugin's own name. */
+  name: string;
+}
+
+export interface SaveFxChainParams {
+  trackIndex: number;
+  /** Name under <resource>/FXChains/ (subfolders allowed, no "..", no absolute path). */
+  name: string;
+  overwrite?: boolean;
+}
+
+export interface LoadFxChainParams {
+  trackIndex: number;
+  /** Name under <resource>/FXChains/, or an absolute path to a .RfxChain file. */
+  name: string;
+  mode?: 'append' | 'replace';
+}
+
+export interface SaveTrackTemplateParams {
+  trackIndex: number;
+  /** Name under <resource>/TrackTemplates/ (subfolders allowed, no "..", no absolute path). */
+  name: string;
+  includeItems?: boolean;
+  overwrite?: boolean;
+}
+
+export interface InsertTrackTemplateParams {
+  /** Name under <resource>/TrackTemplates/, or an absolute path to a .RTrackTemplate file. */
+  name: string;
+  /** 0-based insert position; defaults to the end. */
+  index?: number;
 }

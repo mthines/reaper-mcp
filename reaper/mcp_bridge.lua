@@ -39,6 +39,8 @@ do
 end
 -- Project ops, tempo map and marker editing (undo/redo, save, render, settings), same install rules.
 local project_lib_ok, project_lib = pcall(dofile, script_dir .. "mcp_project_lib.lua")
+-- Items, takes, take FX, FX move/copy/rename, .RfxChain and track templates, same install rules.
+local items_lib_ok, items_lib = pcall(dofile, script_dir .. "mcp_items_lib.lua")
 
 local last_poll = 0
 local last_heartbeat = 0
@@ -3343,6 +3345,74 @@ end
 function handlers.edit_region(params)
   return with_project_lib(function() return project_lib.edit_region(reaper, params) end)
 end
+
+-- =============================================================================
+-- Items, takes, take FX and FX housekeeping (logic in mcp_items_lib.lua)
+-- =============================================================================
+
+local items_fs = {
+  exists = function(path) return reaper.file_exists(path) end,
+  read = function(path) return read_file(path) end,
+  write = function(path, text)
+    local f, err = io.open(path, "w")
+    if not f then return nil, err end
+    f:write(text)
+    f:close()
+    return true
+  end,
+  mkdir = function(dir) reaper.RecursiveCreateDirectory(dir, 0) end,
+  list = function(dir)
+    local files, dirs = {}, {}
+    -- Index -1 drops REAPER's cached listing so new files show up.
+    reaper.EnumerateFiles(dir, -1)
+    reaper.EnumerateSubdirectories(dir, -1)
+    local i = 0
+    while true do
+      local f = reaper.EnumerateFiles(dir, i)
+      if not f then break end
+      files[#files + 1] = f
+      i = i + 1
+    end
+    i = 0
+    while true do
+      local d = reaper.EnumerateSubdirectories(dir, i)
+      if not d then break end
+      dirs[#dirs + 1] = d
+      i = i + 1
+    end
+    return files, dirs
+  end,
+}
+
+local function with_items_lib(name, params)
+  if not items_lib_ok then
+    return nil, "mcp_items_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(items_lib) .. ")"
+  end
+  if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua" end
+  local ok, res, err = pcall(items_lib[name], reaper, params, { plan = plan_lib, fs = items_fs })
+  if not ok then return nil, tostring(res) end
+  return res, err
+end
+
+function handlers.insert_audio_file(params) return with_items_lib("insert_audio_file", params) end
+function handlers.list_takes(params) return with_items_lib("list_takes", params) end
+function handlers.set_active_take(params) return with_items_lib("set_active_take", params) end
+function handlers.get_take_fx(params) return with_items_lib("get_take_fx", params) end
+function handlers.add_take_fx(params) return with_items_lib("add_take_fx", params) end
+function handlers.remove_take_fx(params) return with_items_lib("remove_take_fx", params) end
+function handlers.set_take_fx_parameter(params) return with_items_lib("set_take_fx_parameter", params) end
+function handlers.get_item_appearance(params) return with_items_lib("get_item_appearance", params) end
+function handlers.set_item_color(params) return with_items_lib("set_item_color", params) end
+function handlers.set_item_fades(params) return with_items_lib("set_item_fades", params) end
+function handlers.move_fx(params) return with_items_lib("move_fx", params) end
+function handlers.copy_fx(params) return with_items_lib("copy_fx", params) end
+function handlers.rename_fx(params) return with_items_lib("rename_fx", params) end
+function handlers.save_fx_chain(params) return with_items_lib("save_fx_chain", params) end
+function handlers.load_fx_chain(params) return with_items_lib("load_fx_chain", params) end
+function handlers.list_fx_chains(params) return with_items_lib("list_fx_chains", params) end
+function handlers.save_track_template(params) return with_items_lib("save_track_template", params) end
+function handlers.insert_track_template(params) return with_items_lib("insert_track_template", params) end
+function handlers.list_track_templates(params) return with_items_lib("list_track_templates", params) end
 
 -- =============================================================================
 -- Selection & Navigation
