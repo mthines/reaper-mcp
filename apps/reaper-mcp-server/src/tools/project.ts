@@ -21,17 +21,6 @@ export function registerProjectTools(server: McpServer): void {
 
 // --- Project ops: undo/redo, save, render, settings (logic in reaper/mcp_project_lib.lua) ---
 
-/**
- * Free text the bridge can carry. Its flat command parser cuts the params object
- * at the first unbalanced brace inside a string (silently dropping params), so
- * refuse braces up front instead of reporting a success that changed nothing.
- */
-export const bridgeText = z
-  .string()
-  .refine((s) => !/[{}]/.test(s), {
-    message: 'must not contain { or } (the REAPER bridge cannot carry them yet)',
-  });
-
 export function reply(res: { success: boolean; data?: unknown; error?: string }) {
   if (!res.success) {
     return { content: [{ type: 'text' as const, text: `Error: ${res.error}` }], isError: true };
@@ -58,7 +47,7 @@ function registerProjectOpsTools(server: McpServer): void {
     'save_project',
     'Save the REAPER project. Without a path, saves it where it already lives. With path (an absolute .rpp file in an existing directory) it writes a copy there: the open project keeps its own path (savedAsCopy: true), so a never-saved project stays unsaved. Never opens a dialog: a never-saved project without path is refused; an existing different file is refused unless overwrite is true.',
     {
-      path: bridgeText.optional().describe('Absolute .rpp path to write a copy to'),
+      path: z.string().optional().describe('Absolute .rpp path to write a copy to'),
       overwrite: z.boolean().optional().describe('Replace an existing file at path'),
     },
     async ({ path, overwrite }) => reply(await sendCommand('save_project', { path, overwrite })),
@@ -75,8 +64,8 @@ function registerProjectOpsTools(server: McpServer): void {
     'set_render_settings',
     'Set any of the project render settings; returns them as read back. All fields are validated before any is written, so an invalid request changes nothing. Formats use REAPER\'s default options for that encoder.',
     {
-      outputDirectory: bridgeText.optional().describe('Absolute output directory'),
-      filePattern: bridgeText.optional().describe('File name pattern without extension; REAPER wildcards like $project allowed'),
+      outputDirectory: z.string().optional().describe('Absolute output directory'),
+      filePattern: z.string().optional().describe('File name pattern without extension; REAPER wildcards like $project allowed'),
       format: z.enum(['wav', 'aiff', 'flac', 'mp3', 'ogg', 'opus']).optional().describe('Output format'),
       secondaryFormat: z.enum(['none', 'wav', 'aiff', 'flac', 'mp3', 'ogg', 'opus']).optional().describe('Second file written by the same render; none disables it'),
       bounds: z.enum(['custom', 'project', 'time_selection', 'all_regions', 'selected_items', 'selected_regions']).optional().describe('What to render'),
@@ -110,9 +99,9 @@ function registerProjectOpsTools(server: McpServer): void {
     {
       sampleRate: z.coerce.number().int().min(8000).max(768000).optional().describe('Project sample rate (Hz)'),
       useProjectSampleRate: z.boolean().optional().describe('Force the project sample rate (may reconfigure the audio device)'),
-      title: bridgeText.optional().describe('Project title (metadata)'),
-      author: bridgeText.optional().describe('Project author (metadata)'),
-      notes: bridgeText.optional().describe('Project notes (replaces them)'),
+      title: z.string().optional().describe('Project title (metadata)'),
+      author: z.string().optional().describe('Project author (metadata)'),
+      notes: z.string().optional().describe('Project notes (replaces them)'),
       repeat: z.boolean().optional().describe('Repeat / loop playback of the time selection'),
       metronome: z.boolean().optional().describe('Metronome on/off'),
     },

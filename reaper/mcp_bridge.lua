@@ -99,6 +99,29 @@ local function extract_json_string(str, pos)
   return nil, i  -- unterminated string
 end
 
+-- The balanced {...} or [...] that starts at `pos`. Unlike %b{} / %b[], it
+-- skips brackets inside strings, so a "}" in a name doesn't end the object.
+local function balanced(str, pos, open, close)
+  local pat = open == "{" and '[\\"{}]' or '[\\"%[%]]'
+  local depth, in_str, i = 0, false, pos
+  while true do
+    i = str:find(pat, i)
+    if not i then return nil end
+    local c = str:sub(i, i)
+    if in_str then
+      if c == "\\" then i = i + 1 elseif c == '"' then in_str = false end
+    elseif c == '"' then
+      in_str = true
+    elseif c == open then
+      depth = depth + 1
+    elseif c == close then
+      depth = depth - 1
+      if depth == 0 then return str:sub(pos, i) end
+    end
+    i = i + 1
+  end
+end
+
 -- Parse a flat JSON object with string/number values in params.
 -- Handles escaped quotes in string values (e.g. JSON arrays passed as strings).
 local function parse_flat_object(str)
@@ -131,7 +154,7 @@ local function parse_flat_object(str)
       end
     elseif ch == '{' then
       -- Nested object — extract with balanced braces
-      local nested = str:match('%b{}', val_start)
+      local nested = balanced(str, val_start, "{", "}")
       if nested then
         obj[key] = parse_flat_object(nested)
         i = val_start + #nested
@@ -140,7 +163,7 @@ local function parse_flat_object(str)
       end
     elseif ch == '[' then
       -- Array — extract with balanced brackets
-      local arr = str:match('%b[]', val_start)
+      local arr = balanced(str, val_start, "[", "]")
       if arr then
         obj[key] = arr  -- keep as string for json_decode_array to parse later
         i = val_start + #arr
@@ -149,7 +172,8 @@ local function parse_flat_object(str)
       end
     elseif ch:match('[%d%-]') then
       -- Number
-      local num_str = str:match('-?%d+%.?%d*', val_start)
+      local num_str = str:match('^-?%d+%.?%d*[eE][-+]?%d+', val_start)
+        or str:match('^-?%d+%.?%d*', val_start)
       if num_str then
         obj[key] = tonumber(num_str)
         i = val_start + #num_str
@@ -198,8 +222,13 @@ local function json_decode_array(input)
 
   -- Fallback: extract each {...} from the array and parse individually
   local arr = {}
-  for obj_str in input:gmatch("%b{}") do
+  local i = 1
+  while true do
+    local s = input:find("{", i, true)
+    local obj_str = s and balanced(input, s, "{", "}")
+    if not obj_str then break end
     arr[#arr + 1] = parse_flat_object(obj_str)
+    i = s + #obj_str
   end
   if #arr > 0 then return arr end
   return nil
@@ -2477,8 +2506,9 @@ function handlers.get_media_item_properties(params)
     start_offset = reaper.GetMediaItemTakeInfo_Value(take, "D_STARTOFFS")
     local source = reaper.GetMediaItemTake_Source(take)
     if source then
-      local _, src_fn = reaper.GetMediaSourceFileName(source, "")
-      source_file = src_fn or ""
+      -- REAPER returns just the file name here (older docs show retval, name).
+      local a, b = reaper.GetMediaSourceFileName(source, "")
+      source_file = type(b) == "string" and b or (type(a) == "string" and a or "")
     end
   end
 
@@ -3419,11 +3449,13 @@ function handlers.list_track_templates(params) return with_items_lib("list_track
 -- =============================================================================
 
 function handlers.get_selected_tracks(params)
-  local count = reaper.CountSelectedTracks(0)
+  -- The *2 variants include the master (IP_TRACKNUMBER -1 -> index -1).
+  local count = reaper.CountSelectedTracks2(0, true)
   local tracks = {}
   for i = 0, count - 1 do
-    local track = reaper.GetSelectedTrack(0, i)
-    local idx = reaper.GetMediaTrackInfo_Value(track, "IP_TRACKNUMBER") - 1
+    local track = reaper.GetSelectedTrack2(0, i, true)
+    local num = reaper.GetMediaTrackInfo_Value(track, "IP_TRACKNUMBER")
+    local idx = num == -1 and -1 or num - 1
     local _, name = reaper.GetTrackName(track)
     tracks[#tracks + 1] = { index = idx, name = name }
   end

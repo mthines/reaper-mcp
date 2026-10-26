@@ -56,10 +56,10 @@ export function registerSelectionTools(server: McpServer): void {
       'Every track is resolved first: an unknown or ambiguous one changes nothing. Returns the selection afterwards.',
     {
       tracks: z
-        .array(z.union([z.number().int().min(0), z.string().min(1)]))
+        .array(z.union([z.number().int().min(-1), z.string().min(1)]))
         .min(1)
         .max(1000)
-        .describe('Tracks to select: index, exact name, or "{GUID}". A digit string means a track name first, then the index.'),
+        .describe('Tracks to select: index (-1 or "master" = master track), exact name, or "{GUID}". A digit string means a track name first, then the index.'),
       mode: selectionMode,
     },
     async ({ tracks, mode }) => {
