@@ -98,6 +98,12 @@ export type CommandType =
   | 'set_multiple_fx_parameters'
   // Plan executor
   | 'run_plan'
+  // Actions proxy + selection setters
+  | 'search_actions'
+  | 'get_action'
+  | 'run_action'
+  | 'set_selected_tracks'
+  | 'set_selected_items'
   // Live MIDI output
   | 'send_midi_cc'
   | 'send_midi_pc'
@@ -595,7 +601,9 @@ export type PlanOp =
     }
   | { op: 'set_fx_params'; track?: PlanTrackRef; fx: PlanFxRef; params: PlanParamValue[] }
   | { op: 'add_send'; from: PlanTrackRef; to: PlanTrackRef; volume?: number; pan?: number; mute?: number }
-  | { op: 'graft_fxchain'; track: PlanTrackRef; from?: PlanTrackRef; fromChunk?: string };
+  | { op: 'graft_fxchain'; track: PlanTrackRef; from?: PlanTrackRef; fromChunk?: string }
+  | { op: 'select_tracks'; tracks: PlanTrackRef[]; mode?: SelectionMode }
+  | { op: 'run_action'; action: ActionRef; section?: ActionSection; allowDialog?: boolean };
 
 export interface RunPlanParams {
   /** JSON-encoded PlanOp[] — sent as a string because the bridge's flat parser cannot read nested arrays; mcp_plan_lib.lua decodes it. */
@@ -604,4 +612,46 @@ export interface RunPlanParams {
   idempotencyKey?: string;
   snapshotBefore?: string;
   label?: string;
+}
+
+// =============================================================================
+// Actions proxy + selection setters
+// =============================================================================
+
+/** Sections with a command entry point: main window, MIDI editor, MIDI event list. */
+export type ActionSection = 'main' | 'midi_editor' | 'midi_event_list';
+
+/** Command id, named id ("_SWS_…", "_aee8…" — stable across sessions), or exact action name. */
+export type ActionRef = number | string;
+
+export type SelectionMode = 'replace' | 'add';
+
+export interface SearchActionsParams {
+  query: string;
+  section?: ActionSection;
+  limit?: number;
+}
+
+export interface GetActionParams {
+  action: ActionRef;
+  section?: ActionSection;
+}
+
+export interface RunActionParams {
+  action: ActionRef;
+  section?: ActionSection;
+  /** Allow actions whose name ends in "..." (they open a modal dialog). */
+  allowDialog?: boolean;
+}
+
+export interface SetSelectedTracksParams {
+  /** JSON-encoded PlanTrackRef[] (the bridge's flat parser cannot read nested arrays). */
+  tracks: string;
+  mode?: SelectionMode;
+}
+
+export interface SetSelectedItemsParams {
+  /** JSON-encoded { trackIndex, itemIndex }[]. */
+  items: string;
+  mode?: SelectionMode;
 }

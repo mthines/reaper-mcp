@@ -10,6 +10,7 @@ import { LuaFactory } from 'wasmoon';
 
 const LIB_SRC = readFileSync(join(__dirname, '../../../reaper/mcp_plan_lib.lua'), 'utf8');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
+const ACTIONS_SRC = readFileSync(join(__dirname, '../../../reaper/mcp_actions_lib.lua'), 'utf8');
 
 const factory = new LuaFactory();
 
@@ -17,8 +18,11 @@ async function runLua(snippet: string): Promise<void> {
   const lua = await factory.createEngine();
   try {
     lua.global.set('LIB_SRC', LIB_SRC);
+    lua.global.set('ACTIONS_SRC', ACTIONS_SRC);
     await lua.doString(FAKE_SRC);
-    await lua.doString(`plan = load(LIB_SRC, "mcp_plan_lib.lua")()\n${snippet}`);
+    await lua.doString(
+      `plan = load(LIB_SRC, "mcp_plan_lib.lua")()\nactions = load(ACTIONS_SRC, "mcp_actions_lib.lua")()\n${snippet}`,
+    );
   } finally {
     lua.global.close();
   }
@@ -428,6 +432,100 @@ describe('mcp_plan_lib.lua (wasmoon)', () => {
       assert(err:find("op 0") and err:find("not defined by an earlier op"), err)
       assert(err:find("op 2") and err:find("only allowed on add_track and add_fx"), err)
       assert(api.writes == 0)
+    `);
+  });
+
+  it('lua plan: denied run_action rejects the plan', async () => {
+    await runLua(`
+      local acts = { [0] = {
+        { id = 40001, name = "Track: Insert new track" },
+        { id = 40004, name = "File: Quit REAPER" },
+        { id = 40022, name = "File: Save project as..." },
+      } }
+      for _, bad in ipairs({
+        { op = "run_action", action = 40004 },
+        { op = "run_action", action = 40022 },
+        { op = "run_action", action = "No such thing" },
+        { op = "run_action", action = 40001, section = "midi_editor" },
+      }) do
+        local api = new_fake{ tracks = { { name = "Kick" } }, actions = acts }
+        local res, err = plan.run_plan(api, { ops = {
+          { op = "set_track", track = "Kick", volume = -6 },
+          bad,
+        } }, { actions = actions })
+        assert(res == nil and err:find("Plan rejected") and err:find("op 1 %(run_action%)"), tostring(err))
+        assert(api.writes == 0 and #api.ran == 0 and api.begins == 0, "nothing written or run")
+      end
+      local api = new_fake{ actions = acts }
+      local dry = plan.run_plan(api, { dryRun = true, ops = { { op = "run_action", action = "track: insert NEW track" } } }, { actions = actions })
+      assert(dry.valid and dry.ops[1].action.id == 40001, "dryRun shows the resolved action")
+      local _, noctx = plan.run_plan(api, { ops = { { op = "run_action", action = 40001 } } }, {})
+      assert(noctx:find("not loaded"), noctx)
+    `);
+  });
+
+  it('lua plan: a run_action macro with a denied step is a conflict', async () => {
+    await runLua(`
+      local acts = { [0] = {
+        { id = 40001, name = "Track: Insert new track" },
+        { id = 40004, name = "File: Quit REAPER" },
+        { id = 56000, name = "Custom: Tidy and quit", named = "tidyquit" },
+      } }
+      local kb = 'ACT 0 0 "tidyquit" "Custom: Tidy and quit" 40001 40004'
+      local api = new_fake{ actions = acts }
+      local dry = plan.run_plan(api, { dryRun = true, ops = { { op = "run_action", action = "_tidyquit", allowDialog = true } } },
+        { actions = actions, kb_text = kb })
+      assert(dry.valid == false and dry.conflicts[1].error:find("macro step 2"), "dryRun reports the step")
+      local res, err = plan.run_plan(api, { ops = { { op = "run_action", action = "_tidyquit" } } }, { actions = actions, kb_text = kb })
+      assert(res == nil and err:find("Quit"), tostring(err))
+      assert(#api.ran == 0 and api.writes == 0, "nothing ran")
+    `);
+  });
+
+  it('lua plan: select_tracks by ref then run_action', async () => {
+    await runLua(`
+      local acts = { [0] = { { id = 40005, name = "Track: Remove tracks", on_run = function(api)
+        for i = #api.tracks, 1, -1 do
+          if api.tracks[i].selected then table.remove(api.tracks, i) end
+        end
+      end } } }
+      local api = new_fake{ tracks = { { name = "Keep", selected = true }, { name = "Old" } }, actions = acts }
+      local res, err = plan.run_plan(api, { ops = {
+        { op = "add_track", name = "Temp", as = "$t" },
+        { op = "select_tracks", tracks = { "$t", "Old" } },
+        { op = "run_action", action = "Track: Remove tracks" },
+      } }, { actions = actions })
+      assert(err == nil, err)
+      assert(res.applied == 3 and api.begins == 1 and api.ends == 1, "one undo block")
+      assert(#res.results[2].result.selected == 2, "selection replaced: Temp + Old")
+      assert(#api.tracks == 1 and api.tracks[1].name == "Keep", "action removed exactly the selected tracks")
+
+      local api2 = new_fake{ tracks = { { name = "A", selected = true }, { name = "B" } }, actions = acts }
+      local r2 = plan.run_plan(api2, { ops = { { op = "select_tracks", tracks = { "B" }, mode = "add" } } }, { actions = actions })
+      assert(#r2.results[1].result.selected == 2, "add keeps A")
+      local _, e = plan.run_plan(api2, { ops = { { op = "select_tracks", tracks = { "$nope" } } } }, { actions = actions })
+      assert(e:find("not defined"), e)
+      local _, noctx = plan.run_plan(api2, { ops = { { op = "select_tracks", tracks = { "B" } } } }, {})
+      assert(noctx:find("mcp_actions_lib.lua is not loaded"), noctx)
+    `);
+  });
+
+  it('lua plan: only run_action may follow a run_action', async () => {
+    await runLua(`
+      local acts = { [0] = { { id = 40001, name = "Track: Insert new track" }, { id = 40285, name = "Track: Go to next track" } } }
+      local api = new_fake{ tracks = { { name = "Kick" } }, actions = acts }
+      local res, err = plan.run_plan(api, { ops = {
+        { op = "run_action", action = 40001 },
+        { op = "set_track", track = "Kick", volume = -3 },
+      } }, { actions = actions })
+      assert(res == nil and err:find("op 1 %(set_track%)") and err:find("only run_action may follow"), tostring(err))
+      assert(#api.ran == 0 and api.writes == 0, "nothing ran")
+      local ok, e2 = plan.run_plan(api, { ops = {
+        { op = "set_track", track = "Kick", volume = -3 },
+        { op = "run_action", action = 40001 },
+        { op = "run_action", action = 40285 },
+      } }, { actions = actions })
+      assert(e2 == nil and ok.applied == 3, tostring(e2))
     `);
   });
 });

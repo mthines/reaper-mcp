@@ -19,6 +19,7 @@ import { registerTempoTools } from './tools/tempo.js';
 import { registerEnvelopeTools } from './tools/envelopes.js';
 import { registerBatchTools } from './tools/batch.js';
 import { registerPlanTools } from './tools/plan.js';
+import { registerActionTools } from './tools/actions.js';
 import { registerCategoryTools } from './tools/categories.js';
 import { registerAestheticsTools } from './tools/aesthetics.js';
 
@@ -97,6 +98,7 @@ export function createServer(): McpServer {
   registerEnvelopeTools(server);
   registerBatchTools(server);
   registerPlanTools(server);
+  registerActionTools(server);
   registerCategoryTools(server);
   registerAestheticsTools(server);
 

@@ -113,5 +113,84 @@ function new_fake(spec)
   api.PreventUIRefresh = function() end
 
   if spec.json then api.CF_Json_Parse = spec.json end
+
+  -- Actions: spec.actions = { [section] = { { id, name, named = "abc",
+  --   toggle = 0|1, shortcuts = { "Cmd+T" }, on_run = fn(api) } } }
+  -- spec.midi_editor = true opens a MIDI editor.
+  local actions = spec.actions or {}
+  api.ran = {}
+  local function find_action(sec, id)
+    for _, a in ipairs(actions[sec] or {}) do if a.id == id then return a end end
+  end
+  local function any_action(id)
+    for _, list in pairs(actions) do
+      for _, a in ipairs(list) do if a.id == id then return a end end
+    end
+  end
+  local function run(sec, id)
+    local a = find_action(sec, id)
+    api.ran[#api.ran + 1] = { section = sec, id = id }
+    write("action " .. id)
+    if a and a.toggle and a.toggle >= 0 then a.toggle = 1 - a.toggle end
+    if a and a.on_run then a.on_run(api) end
+  end
+  api.SectionFromUniqueID = function(sec) return { sec = sec } end
+  api.kbd_enumerateActions = function(h, i)
+    local a = (actions[h.sec] or {})[i + 1]
+    if not a then return 0, "" end
+    return a.id, a.name
+  end
+  api.kbd_getTextFromCmd = function(id, h)
+    local a = find_action(h.sec, id)
+    return a and a.name or ""
+  end
+  api.NamedCommandLookup = function(s)
+    local want = s:sub(1, 1) == "_" and s:sub(2) or s
+    for _, list in pairs(actions) do
+      for _, a in ipairs(list) do if a.named == want then return a.id end end
+    end
+    return 0
+  end
+  api.ReverseNamedCommandLookup = function(id)
+    local a = any_action(id)
+    return a and a.named or nil
+  end
+  api.GetToggleCommandStateEx = function(sec, id)
+    local a = find_action(sec, id)
+    return a and a.toggle or -1
+  end
+  api.CountActionShortcuts = function(h, id)
+    local a = find_action(h.sec, id)
+    return a and a.shortcuts and #a.shortcuts or 0
+  end
+  api.GetActionShortcutDesc = function(h, id, k)
+    return true, find_action(h.sec, id).shortcuts[k + 1]
+  end
+  api.Main_OnCommandEx = function(id) run(0, id) end
+  api.MIDIEditor_GetActive = function() return spec.midi_editor and "editor" or nil end
+  api.MIDIEditor_OnCommand = function(_, id) run(32060, id) end
+  api.MIDIEditor_LastFocused_OnCommand = function(id) run(32061, id) end
+  api.UpdateArrange = function() end
+  -- spec.project_path: "" (default) is a project that was never saved.
+  api.EnumProjects = function() return "proj", spec.project_path or "" end
+
+  -- Selection and items: tracks take `items = n` in the spec.
+  for k, t in ipairs(spec.tracks or {}) do
+    tracks[k].selected = t.selected or false
+    tracks[k].items = {}
+    for j = 1, t.items or 0 do tracks[k].items[j] = { selected = false } end
+  end
+  api.SetTrackSelected = function(tr, on) tr.selected = on; write("select_track") end
+  api.IsTrackSelected = function(tr) return tr.selected == true end
+  api.CountTrackMediaItems = function(tr) return #(tr.items or {}) end
+  api.GetTrackMediaItem = function(tr, j) return (tr.items or {})[j + 1] end
+  api.SelectAllMediaItems = function(_, on)
+    for _, tr in ipairs(tracks) do
+      for _, it in ipairs(tr.items or {}) do it.selected = on end
+    end
+    write("select_all_items")
+  end
+  api.SetMediaItemSelected = function(it, on) it.selected = on; write("select_item") end
+  api.IsMediaItemSelected = function(it) return it.selected == true end
   return api
 end

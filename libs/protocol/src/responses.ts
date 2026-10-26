@@ -486,3 +486,48 @@ export interface RunPlanAlreadyAppliedResult {
 }
 
 export type RunPlanResult = RunPlanDryRunResult | RunPlanAppliedResult | RunPlanAlreadyAppliedResult;
+
+// =============================================================================
+// Actions proxy + selection setters
+// =============================================================================
+
+export interface ActionInfo {
+  id: number;
+  /** Stable id for custom actions, scripts and extensions; absent for native actions. */
+  namedId?: string;
+  name: string;
+  section: string;
+  /** -1 when the action is not a toggle, else 0 (off) / 1 (on). */
+  toggle: number;
+  shortcuts: string[];
+  opensDialog: boolean;
+  /** Reason the action is always refused, if it is. */
+  denied?: string;
+}
+
+export interface SearchActionsResult {
+  section: string;
+  query: string;
+  total: number;
+  returned: number;
+  actions: ActionInfo[];
+}
+
+export interface ActionDetails extends ActionInfo {
+  kind: 'native' | 'extension' | 'custom' | 'script';
+  steps?: { action: string; id?: number; name: string }[];
+  scriptPath?: string;
+}
+
+export interface RunActionResult extends ActionInfo {
+  ran: true;
+}
+
+export interface SelectedTracksResult {
+  selected: { index: number; name: string }[];
+}
+
+export interface SelectedItemsResult {
+  selected: { trackIndex: number; itemIndex: number }[];
+}
+

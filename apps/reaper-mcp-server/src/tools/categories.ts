@@ -62,8 +62,8 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   selection: {
     name: 'selection',
-    description: 'Selection and navigation: get selected tracks, get/set time selection range',
-    tools: ['get_selected_tracks', 'get_time_selection', 'set_time_selection'],
+    description: 'Selection and navigation: get/set selected tracks and items, get/set time selection range',
+    tools: ['get_selected_tracks', 'set_selected_tracks', 'set_selected_items', 'get_time_selection', 'set_time_selection'],
   },
   markers: {
     name: 'markers',
@@ -109,12 +109,17 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
     description: 'Multi-step edits in one call: run_plan applies an ordered list of ops (add/set tracks, add FX, set FX params, add sends, copy FX chains) in one undo block, all-or-nothing, with $refs, dry-run and idempotency',
     tools: ['run_plan'],
   },
+  actions: {
+    name: 'actions',
+    description: 'REAPER action proxy: search ~6k actions (native, SWS, scripts, Custom: macros), inspect one (shortcuts, macro steps), run one by id / stable named id / name. Pair with set_selected_tracks / set_selected_items.',
+    tools: ['search_actions', 'get_action', 'run_action'],
+  },
 };
 
 export function registerCategoryTools(server: McpServer): void {
   server.tool(
     'list_tool_categories',
-    'List all available tool categories with descriptions and tool names. Use this to discover what tools are available without loading all 72+ tool schemas. Categories: project, tracks, fx, transport, midi, media, selection, markers, tempo, envelopes, analysis, discovery, snapshots, routing, plan.',
+    'List all available tool categories with descriptions and tool names. Use this to discover what tools are available without loading all 72+ tool schemas. Categories: project, tracks, fx, transport, midi, media, selection, markers, tempo, envelopes, analysis, discovery, snapshots, routing, plan, actions.',
     {},
     async () => {
       const categories = Object.values(TOOL_CATEGORIES).map((cat) => ({
