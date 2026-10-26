@@ -453,3 +453,36 @@ export interface AestheticsResult {
   modelVersion: string;            // "facebook/audiobox-aesthetics"
   tempFilePath?: string;           // debug only — will be deleted after response
 }
+
+// =============================================================================
+// Plan executor (run_plan)
+// =============================================================================
+
+export interface RunPlanConflict {
+  op: number;      // 0-based op index
+  type: string;    // op type
+  error: string;
+}
+
+export interface RunPlanDryRunResult {
+  dryRun: true;
+  valid: boolean;
+  ops: { index: number; op: string }[];
+  conflicts: RunPlanConflict[];
+  warnings: { op: number; type: string; warning: string }[];
+}
+
+export interface RunPlanAppliedResult {
+  success: true;
+  applied: number;
+  results: { index: number; op: string; result: Record<string, unknown> }[];
+  idempotencyKey?: string;
+}
+
+export interface RunPlanAlreadyAppliedResult {
+  alreadyApplied: true;
+  idempotencyKey: string;
+  result: RunPlanAppliedResult;
+}
+
+export type RunPlanResult = RunPlanDryRunResult | RunPlanAppliedResult | RunPlanAlreadyAppliedResult;
