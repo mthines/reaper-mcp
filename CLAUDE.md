@@ -153,7 +153,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 
 ## MCP Tools (101 total)
 
-Every tool that takes a `trackIndex` (except media item and MIDI tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
+Every tool that takes a `trackIndex` (except media item, MIDI and `analyze_track_aesthetics`) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
 ### Project & Tracks (5)
 

@@ -29,8 +29,8 @@ export function registerAestheticsTools(server: McpServer): void {
     'analyze_track_aesthetics',
     'Analyze the perceptual aesthetic quality of a track\'s audio using Meta\'s Audiobox Aesthetics model (CC-BY 4.0). Bounces the track to a temp WAV file (post-FX, post-fader) and runs 4-axis perceptual quality scoring: Production Quality (PQ), Production Complexity (PC), Content Enjoyment (CE), Content Usefulness (CU). Returns scores 0-10. Requires the Python sidecar (run: node dist/apps/reaper-mcp-server/main.js setup-sidecar).',
     {
-      trackIndex: z.coerce.number().int().min(-1)
-        .describe('Zero-based track index (-1 = master track)'),
+      trackIndex: z.coerce.number().int().min(0)
+        .describe('Zero-based track index'),
       startTime: z.coerce.number().min(0).optional()
         .describe('Start time in seconds (default: 0 or use REAPER time selection)'),
       endTime: z.coerce.number().min(0).optional()
