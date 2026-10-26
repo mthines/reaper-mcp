@@ -389,6 +389,7 @@ function M.validate(api, ops, ctx)
   local conflicts = {}
   local warnings = {}
   local macros          -- Custom: macros from ctx.kb_text, parsed on first run_action
+  local action_at       -- index of the first run_action: later ops can't trust resolved targets
   -- Track (or "$ref") -> the lowercased FX names it will hold at this point
   -- of the plan: its own chain, then whatever earlier add_fx / graft ops change.
   local chains = {}
@@ -417,6 +418,11 @@ function M.validate(api, ops, ctx)
     local t = op.op
     if not KNOWN_OPS[t] then
       conflict(i, op, "unknown op type '" .. tostring(t) .. "'")
+    elseif action_at and t ~= "run_action" then
+      -- Targets resolve before anything runs; an action may add, delete or
+      -- reorder tracks and FX, so a later target could point at the wrong one.
+      conflict(i, op, "only run_action may follow a run_action (op " .. (action_at - 1)
+        .. "): an action can add, delete or reorder tracks; send the rest as a new plan")
     else
       local function need_track(field)
         local res, err = resolve_track(api, op[field], refs)
@@ -486,7 +492,9 @@ function M.validate(api, ops, ctx)
         local key = r.track and (r.track.track or r.track.ref)
         if grafted and key then chains[key] = grafted end
       elseif t == "select_tracks" then
-        if type(op.tracks) ~= "table" or #op.tracks == 0 then
+        if not ctx.actions then
+          conflict(i, op, "mcp_actions_lib.lua is not loaded")
+        elseif type(op.tracks) ~= "table" or #op.tracks == 0 then
           conflict(i, op, "tracks array required")
         else
           r.tracks = {}
@@ -497,6 +505,7 @@ function M.validate(api, ops, ctx)
           end
         end
       elseif t == "run_action" then
+        action_at = action_at or i
         local actions = ctx.actions
         if not actions then
           conflict(i, op, "mcp_actions_lib.lua is not loaded")

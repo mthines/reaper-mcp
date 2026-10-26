@@ -505,6 +505,27 @@ describe('mcp_plan_lib.lua (wasmoon)', () => {
       assert(#r2.results[1].result.selected == 2, "add keeps A")
       local _, e = plan.run_plan(api2, { ops = { { op = "select_tracks", tracks = { "$nope" } } } }, { actions = actions })
       assert(e:find("not defined"), e)
+      local _, noctx = plan.run_plan(api2, { ops = { { op = "select_tracks", tracks = { "B" } } } }, {})
+      assert(noctx:find("mcp_actions_lib.lua is not loaded"), noctx)
+    `);
+  });
+
+  it('lua plan: only run_action may follow a run_action', async () => {
+    await runLua(`
+      local acts = { [0] = { { id = 40001, name = "Track: Insert new track" }, { id = 40285, name = "Track: Go to next track" } } }
+      local api = new_fake{ tracks = { { name = "Kick" } }, actions = acts }
+      local res, err = plan.run_plan(api, { ops = {
+        { op = "run_action", action = 40001 },
+        { op = "set_track", track = "Kick", volume = -3 },
+      } }, { actions = actions })
+      assert(res == nil and err:find("op 1 %(set_track%)") and err:find("only run_action may follow"), tostring(err))
+      assert(#api.ran == 0 and api.writes == 0, "nothing ran")
+      local ok, e2 = plan.run_plan(api, { ops = {
+        { op = "set_track", track = "Kick", volume = -3 },
+        { op = "run_action", action = 40001 },
+        { op = "run_action", action = 40285 },
+      } }, { actions = actions })
+      assert(e2 == nil and ok.applied == 3, tostring(e2))
     `);
   });
 });
