@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readdirSync } from 'node:fs';
 import { TOOL_CATEGORIES } from './tools/categories.js';
 
 /**
