@@ -68,6 +68,8 @@ describe('items and FX housekeeping tools', () => {
     expect(mockedSendCommand).toHaveBeenCalledWith('set_take_fx_parameter', {
       trackIndex: 0, itemIndex: 1, fxIndex: 0, paramIndex: 3, value: 0.5,
     });
+    await call('get_take_fx', { trackIndex: 0, itemIndex: 0, fxIndex: 0, offset: '10', limit: '5' });
+    expect(mockedSendCommand).toHaveBeenLastCalledWith('get_take_fx', { trackIndex: 0, itemIndex: 0, fxIndex: 0, offset: 10, limit: 5 });
     await call('set_active_take', { trackIndex: 0, itemIndex: 0, takeIndex: '2' });
     expect(mockedSendCommand).toHaveBeenLastCalledWith('set_active_take', { trackIndex: 0, itemIndex: 0, takeIndex: 2 });
   });

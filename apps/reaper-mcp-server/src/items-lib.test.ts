@@ -88,7 +88,9 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       local s = items.set_take_fx_parameter(api, { trackIndex = 0, itemIndex = 0, takeIndex = 1, fxIndex = 1, paramIndex = 2, value = 0.25 })
       assert(s and s.value == 0.25 and s.formatted == "0.25", "param reads back")
       local g = items.get_take_fx(api, { trackIndex = 0, itemIndex = 0, takeIndex = 1, fxIndex = 1 })
-      assert(g.params[3].value == 0.25 and #g.params == 4)
+      assert(g.params[3].value == 0.25 and #g.params == 4 and g.paramTotal == 4 and g.hasMore == false)
+      local page = items.get_take_fx(api, { trackIndex = 0, itemIndex = 0, takeIndex = 1, fxIndex = 1, offset = 1, limit = 2 })
+      assert(#page.params == 2 and page.params[1].paramIndex == 1 and page.params[2].value == 0.25 and page.hasMore == true, "paginated")
       local rm = items.remove_take_fx(api, { trackIndex = 0, itemIndex = 0, takeIndex = 1, fxIndex = 0 })
       assert(rm and #rm.fx == 1 and rm.fx[1].name == "ReaComp", "chain reads back changed")
       local list = items.get_take_fx(api, p)
@@ -146,6 +148,12 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       assert(a, tostring(e2))
       assert(a.loaded == 2 and names(a.fx) == "Gate,EQ,Comp", "appended in order: " .. names(a.fx))
       assert(api.tracks[2].fx[2].guid ~= api.tracks[1].fx[1].guid, "fresh FXIDs")
+      api.fs.files["/res/FXChains/Env.RfxChain"] = 'BYPASS 0 0 0\\n<VST "Env" x\\n>\\nFXID {33333333-0000-0000-0000-000000000000}\\n<PARMENV 1 0 1 0\\nEGUID {44444444-0000-0000-0000-000000000000}\\n>\\n'
+      items.load_fx_chain(api, { trackIndex = 0, name = "Env" }, ctx(api))
+      local ch = api.tracks[1].chunk
+      assert(ch:find("EGUID {", 1, true) and not ch:find("44444444", 1, true) and not ch:find("33333333", 1, true), "FXID and EGUID regenerated: " .. ch)
+      api.tracks[1].fx[#api.tracks[1].fx] = nil
+      api.fs.files["/res/FXChains/Env.RfxChain"] = nil
       local r = items.load_fx_chain(api, { trackIndex = 1, name = "Vocals/Lead", mode = "replace" }, ctx(api))
       assert(names(r.fx) == "EQ,Comp", "replace keeps only the chain: " .. names(r.fx))
       local e = items.load_fx_chain(api, { trackIndex = 2, name = s.path }, ctx(api))

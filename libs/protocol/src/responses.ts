@@ -669,6 +669,8 @@ export interface TakeFxResult {
   fxName?: string;
   removedFxIndex?: number;
   params?: { paramIndex: number; name: string; value: number; min: number; max: number; formatted: string }[];
+  paramTotal?: number;
+  hasMore?: boolean;
 }
 
 export interface ItemAppearance {

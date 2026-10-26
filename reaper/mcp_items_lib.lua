@@ -253,14 +253,19 @@ function M.get_take_fx(api, p)
   if p.fxIndex == nil then return take_fx_result(api, p, take, item) end
   local fx, err = check_fx_index(take_fx_count(api, take), p.fxIndex, "take")
   if not fx then return nil, err end
+  local total = api.TakeFX_GetNumParams(take, fx)
+  local offset = math.max(0, int(p.offset) or 0)
+  local limit = int(p.limit) or total
   local params = {}
-  for i = 0, api.TakeFX_GetNumParams(take, fx) - 1 do
+  for i = offset, math.min(total, offset + limit) - 1 do
     local value, min, max = api.TakeFX_GetParam(take, fx, i)
     local _, pname = api.TakeFX_GetParamName(take, fx, i, "")
     local _, formatted = api.TakeFX_GetFormattedParamValue(take, fx, i, "")
     params[#params + 1] = { paramIndex = i, name = pname or "", value = value, min = min, max = max, formatted = formatted or "" }
   end
-  return take_fx_result(api, p, take, item, { fxIndex = fx, params = params })
+  return take_fx_result(api, p, take, item, {
+    fxIndex = fx, params = params, paramTotal = total, hasMore = offset + #params < total,
+  })
 end
 
 function M.add_take_fx(api, p)
@@ -538,6 +543,17 @@ local function writable_path(api, ctx, sub, name, ext, overwrite)
   return path, rel, dir
 end
 
+-- Fresh GUIDs (tracks, FX, items, envelopes) so pasted state never shares an identity with its source.
+local GUID_KEYS = { TRACKID = true, FXID = true, IGUID = true, GUID = true, EGUID = true }
+local function regenerate_guids(chunk, gen_guid)
+  local lines = split_lines(chunk)
+  for i, line in ipairs(lines) do
+    local indent, key = line:match("^(%s*)(%u+)%s+%b{}%s*$")
+    if key and GUID_KEYS[key] then lines[i] = indent .. key .. " " .. gen_guid() end
+  end
+  return table.concat(lines, "\n") .. "\n"
+end
+
 -- -----------------------------------------------------------------------------
 -- .RfxChain save / load
 -- -----------------------------------------------------------------------------
@@ -609,7 +625,7 @@ function M.load_fx_chain(api, p, ctx)
   if n == 0 then return nil, path .. " holds no FX" end
 
   local plan = ctx.plan
-  local fresh = split_lines(plan.regenerate_fxids(table.concat(body, "\n"), api.genGuid))
+  local fresh = split_lines(regenerate_guids(table.concat(body, "\n"), api.genGuid))
   local _, chunk = api.GetTrackStateChunk(tr, "", false)
   local existing = plan.extract_fxchain(chunk or "")
   local block = {}
@@ -714,17 +730,6 @@ local function template_tracks(text)
     end
   end
   return tracks
-end
-
--- Fresh GUIDs so the inserted track never shares an identity with its source.
-local GUID_KEYS = { TRACKID = true, FXID = true, IGUID = true, GUID = true, EGUID = true }
-local function regenerate_guids(chunk, gen_guid)
-  local lines = split_lines(chunk)
-  for i, line in ipairs(lines) do
-    local indent, key = line:match("^(%s*)(%u+)%s+%b{}%s*$")
-    if key and GUID_KEYS[key] then lines[i] = indent .. key .. " " .. gen_guid() end
-  end
-  return table.concat(lines, "\n") .. "\n"
 end
 
 function M.insert_track_template(api, p, ctx)

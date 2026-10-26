@@ -904,6 +904,8 @@ export interface TakeRefParams extends ItemRefParams {
 export interface GetTakeFxParams extends TakeRefParams {
   /** When given, the result also lists that FX's parameters. */
   fxIndex?: number;
+  offset?: number;
+  limit?: number;
 }
 
 export interface AddTakeFxParams extends TakeRefParams {

@@ -55,12 +55,15 @@ export function registerItemTools(server: McpServer): void {
 
   server.tool(
     'get_take_fx',
-    'List the FX on a take (its own FX chain, separate from the track FX). With fxIndex, also lists that FX\'s parameters with values and formatted text.',
+    'List the FX on a take (its own FX chain, separate from the track FX). With fxIndex, also lists that FX\'s parameters with values and formatted text ' +
+      '(paginate large plugins with offset/limit; the result has paramTotal and hasMore).',
     {
       trackIndex,
       itemIndex,
       takeIndex,
       fxIndex: z.coerce.number().int().min(0).optional().describe('0-based take FX index whose parameters to list'),
+      offset: z.coerce.number().int().min(0).optional().describe('Skip the first N parameters (default 0)'),
+      limit: z.coerce.number().int().min(1).optional().describe('Max parameters to return (default all)'),
     },
     passThrough('get_take_fx'),
   );
