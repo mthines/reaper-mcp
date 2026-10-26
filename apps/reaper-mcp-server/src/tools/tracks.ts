@@ -19,7 +19,7 @@ export function registerTrackTools(server: McpServer): void {
   server.tool(
     'get_track_properties',
     'Get detailed properties of a specific track including volume, pan, mute, solo, and FX chain',
-    { trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index') },
+    { trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)') },
     async ({ trackIndex }) => {
       const res = await sendCommand('get_track_properties', { trackIndex });
       if (!res.success) {
@@ -33,7 +33,7 @@ export function registerTrackTools(server: McpServer): void {
     'set_track_property',
     'Set a track property: volume (dB), pan (-1.0 to 1.0), mute/solo/recordArm/phase (0/1), input (REAPER input index)',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       property: z.enum(['volume', 'pan', 'mute', 'solo', 'recordArm', 'phase', 'input']).describe('Property to set: volume (dB), pan (-1.0–1.0), mute/solo/recordArm/phase (0 or 1), input (REAPER input index, -1=no input)'),
       value: z.coerce.number().describe('Value: volume in dB, pan -1.0–1.0, mute/solo/recordArm/phase 0 or 1, input = REAPER input index'),
     },

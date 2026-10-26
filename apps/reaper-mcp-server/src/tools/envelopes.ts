@@ -7,7 +7,7 @@ export function registerEnvelopeTools(server: McpServer): void {
     'get_track_envelopes',
     'List all automation envelopes on a track (volume, pan, mute, FX params, etc.) with point counts',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
     },
     async ({ trackIndex }) => {
       const res = await sendCommand('get_track_envelopes', { trackIndex });
@@ -22,7 +22,7 @@ export function registerEnvelopeTools(server: McpServer): void {
     'get_envelope_points',
     'Get automation points for a track envelope with pagination. Returns time, value, shape, tension per point.',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       envelopeIndex: z.coerce.number().int().min(0).describe('Zero-based envelope index on the track'),
       offset: z.coerce.number().int().min(0).optional().describe('Skip first N points (default 0)'),
       limit: z.coerce.number().int().min(1).optional().describe('Max points to return (default all)'),
@@ -40,7 +40,7 @@ export function registerEnvelopeTools(server: McpServer): void {
     'insert_envelope_point',
     'Insert an automation point on a track envelope at a given time with value and optional shape/tension',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       envelopeIndex: z.coerce.number().int().min(0).describe('Zero-based envelope index on the track'),
       time: z.coerce.number().describe('Time position in seconds'),
       value: z.coerce.number().describe('Envelope value (scale depends on envelope type)'),
@@ -62,7 +62,7 @@ export function registerEnvelopeTools(server: McpServer): void {
     'delete_envelope_point',
     'Delete an automation point from a track envelope by point index',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       envelopeIndex: z.coerce.number().int().min(0).describe('Zero-based envelope index on the track'),
       pointIndex: z.coerce.number().int().min(0).describe('Zero-based point index'),
     },
@@ -81,7 +81,7 @@ export function registerEnvelopeTools(server: McpServer): void {
     'create_track_envelope',
     'Create/show an automation envelope on a track. Use envelopeName for built-in envelopes (Volume, Pan, Mute, Width, Trim Volume) or fxIndex+paramIndex for FX parameter envelopes. The envelope is made visible and active.',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       envelopeName: z.string().optional().describe('Built-in envelope name: "Volume", "Pan", "Mute", "Width", "Trim Volume"'),
       fxIndex: z.coerce.number().int().min(0).optional().describe('FX chain index (for FX parameter envelopes)'),
       paramIndex: z.coerce.number().int().min(0).optional().describe('FX parameter index (required if fxIndex provided)'),
@@ -101,7 +101,7 @@ export function registerEnvelopeTools(server: McpServer): void {
     'set_envelope_properties',
     'Set properties (active, visible, armed) on a track envelope. Requires SWS extension for full support.',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       envelopeIndex: z.coerce.number().int().min(0).describe('Zero-based envelope index on the track'),
       active: z.boolean().optional().describe('Set envelope active/inactive'),
       visible: z.boolean().optional().describe('Set envelope visible/hidden in arrange view'),
@@ -122,7 +122,7 @@ export function registerEnvelopeTools(server: McpServer): void {
     'clear_envelope',
     'Delete ALL automation points from an envelope, resetting it to its default state',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       envelopeIndex: z.coerce.number().int().min(0).describe('Zero-based envelope index on the track'),
     },
     async ({ trackIndex, envelopeIndex }) => {
@@ -138,7 +138,7 @@ export function registerEnvelopeTools(server: McpServer): void {
     'remove_envelope_points',
     'Delete automation points in a time range from a track envelope. Use to surgically remove a section of automation.',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       envelopeIndex: z.coerce.number().int().min(0).describe('Zero-based envelope index on the track'),
       timeStart: z.coerce.number().describe('Start of time range in seconds (inclusive)'),
       timeEnd: z.coerce.number().describe('End of time range in seconds (exclusive)'),
@@ -158,7 +158,7 @@ export function registerEnvelopeTools(server: McpServer): void {
     'insert_envelope_points',
     'Batch insert multiple automation points on a track envelope. Much faster than repeated insert_envelope_point calls.',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       envelopeIndex: z.coerce.number().int().min(0).describe('Zero-based envelope index on the track'),
       points: z.string().describe('JSON array of point objects: [{time, value, shape?, tension?}, ...]'),
     },

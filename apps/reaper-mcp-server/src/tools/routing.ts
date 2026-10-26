@@ -7,7 +7,7 @@ export function registerRoutingTools(server: McpServer): void {
     'get_track_routing',
     'Get sends, receives, and parent/folder information for a track — useful for understanding bus structure',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
     },
     async ({ trackIndex }) => {
       const res = await sendCommand('get_track_routing', { trackIndex });

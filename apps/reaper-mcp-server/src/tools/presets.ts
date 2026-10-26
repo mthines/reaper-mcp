@@ -7,7 +7,7 @@ export function registerPresetTools(server: McpServer): void {
     'get_fx_preset_list',
     'List all available presets for a specific FX plugin on a track',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       fxIndex: z.coerce.number().int().min(0).describe('Zero-based FX index in the chain'),
     },
     async ({ trackIndex, fxIndex }) => {
@@ -23,7 +23,7 @@ export function registerPresetTools(server: McpServer): void {
     'set_fx_preset',
     'Apply a named preset to an FX plugin on a track',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       fxIndex: z.coerce.number().int().min(0).describe('Zero-based FX index in the chain'),
       presetName: z.string().min(1).describe('Exact preset name to apply'),
     },

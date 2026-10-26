@@ -77,14 +77,52 @@ function new_fake(spec)
   api.TrackFX_GetFXGUID = function(tr, fx) return tr.fx[fx + 1] and tr.fx[fx + 1].guid end
   api.TrackFX_GetFXName = function(tr, fx) return true, tr.fx[fx + 1].name end
 
+  -- Routing: category 0 = sends (tr.sends), -1 = receives (the same objects
+  -- in the destination's tr.recvs), 1 = hardware outputs (tr.hw).
+  local function route_list(tr, cat)
+    if cat == -1 then tr.recvs = tr.recvs or {}; return tr.recvs end
+    if cat == 1 then tr.hw = tr.hw or {}; return tr.hw end
+    return tr.sends
+  end
   api.CreateTrackSend = function(src, dst)
-    src.sends[#src.sends + 1] = { dst = dst }
+    local s = { src = src, dst = dst, D_VOL = 1, D_PAN = 0, B_MUTE = 0, I_SENDMODE = 0, I_SRCCHAN = 0, I_DSTCHAN = 0 }
     write("create_send")
+    if dst == nil then
+      local hw = route_list(src, 1)
+      hw[#hw + 1] = s
+      return #hw - 1
+    end
+    src.sends[#src.sends + 1] = s
+    local r = route_list(dst, -1)
+    r[#r + 1] = s
     return #src.sends - 1
   end
-  api.SetTrackSendInfo_Value = function(src, _, s, k, v)
-    src.sends[s + 1][k] = v
+  api.GetTrackNumSends = function(tr, cat) return #route_list(tr, cat) end
+  api.SetTrackSendInfo_Value = function(tr, cat, s, k, v)
+    local snd = route_list(tr, cat)[s + 1]
+    if not snd then return false end
+    snd[k] = v
     write("send " .. k)
+    return true
+  end
+  api.GetTrackSendInfo_Value = function(tr, cat, s, k)
+    local snd = route_list(tr, cat)[s + 1]
+    if not snd then return 0 end
+    if k == "P_DESTTRACK" then return snd.dst end
+    if k == "P_SRCTRACK" then return snd.src end
+    return snd[k] or 0
+  end
+  api.RemoveTrackSend = function(tr, cat, s)
+    local list = route_list(tr, cat)
+    local snd = list[s + 1]
+    if not snd then return false end
+    for _, owner in ipairs({ { snd.src, 0 }, { snd.dst, -1 }, { snd.src, 1 } }) do
+      if owner[1] then
+        local l = route_list(owner[1], owner[2])
+        for j = #l, 1, -1 do if l[j] == snd then table.remove(l, j) end end
+      end
+    end
+    write("remove_send")
     return true
   end
 
@@ -192,5 +230,70 @@ function new_fake(spec)
   end
   api.SetMediaItemSelected = function(it, on) it.selected = on; write("select_item") end
   api.IsMediaItemSelected = function(it) return it.selected == true end
+  -- Master track, structure, color and groups.
+  local master = new_track("MASTER")
+  master.is_master = true
+  api.master = master
+  api.GetMasterTrack = function() return master end
+  local plain_get = api.GetTrack
+  api.GetTrack = function(p, i)
+    if i == -1 and spec.minus_one_is_master then return master end
+    return plain_get(p, i)
+  end
+  local function index_of(tr)
+    for k, t in ipairs(tracks) do if t == tr then return k - 1 end end
+    return nil
+  end
+  api.GetMediaTrackInfo_Value = function(tr, k)
+    if k == "IP_TRACKNUMBER" then
+      if tr.is_master then return -1 end
+      local i = index_of(tr)
+      return i and i + 1 or 0
+    end
+    if k == "I_NCHAN" then return tr.vals[k] or 2 end
+    if k == "B_MAINSEND" then return tr.vals[k] or 1 end
+    return tr.vals[k] or 0
+  end
+  api.ValidatePtr2 = function(_, tr) return tr == master or index_of(tr) ~= nil end
+  api.DeleteTrack = function(tr)
+    local i = index_of(tr)
+    if i then table.remove(tracks, i + 1); write("delete_track") end
+  end
+  -- ReorderSelectedTracks(beforeTrackIdx, makePrevFolder): moves the selected
+  -- tracks, in order, to before the track that is at beforeTrackIdx now.
+  api.ReorderSelectedTracks = function(before)
+    local moving, rest = {}, {}
+    local anchor = tracks[before + 1]
+    for _, t in ipairs(tracks) do
+      if t.selected then moving[#moving + 1] = t else rest[#rest + 1] = t end
+    end
+    if #moving == 0 then return false end
+    local at = #rest + 1
+    if anchor and not anchor.selected then
+      for k, t in ipairs(rest) do if t == anchor then at = k end end
+    end
+    for k, t in ipairs(moving) do table.insert(rest, at + k - 1, t) end
+    for k = 1, #tracks do tracks[k] = rest[k] end
+    write("reorder")
+    return true
+  end
+  api.ColorToNative = function(r, g, b) return r + g * 256 + b * 65536 end
+  api.ColorFromNative = function(c) return c % 256, (c // 256) % 256, (c // 65536) % 256 end
+  -- Groups: tr.groups[name] is a 32-bit mask (low = groups 1-32, high = 33-64).
+  local function membership(tr, high, name, mask, value)
+    tr.groups = tr.groups or {}
+    local key = (high and "H:" or "L:") .. name
+    local cur = tr.groups[key] or 0
+    if mask ~= 0 then
+      cur = (cur & ~mask) | (value & mask)
+      tr.groups[key] = cur
+      write("group " .. name)
+    end
+    return cur
+  end
+  api.GetSetTrackGroupMembership = function(tr, name, mask, value) return membership(tr, false, name, mask, value) end
+  api.GetSetTrackGroupMembershipHigh = function(tr, name, mask, value) return membership(tr, true, name, mask, value) end
+  api.TrackList_AdjustWindows = function() end
+  api.GetParentTrack = function() return nil end
   return api
 end

@@ -12,7 +12,7 @@ export function registerAnalysisTools(server: McpServer): void {
     'read_track_lufs',
     'Read ITU-R BS.1770 loudness data for a track. Auto-inserts the MCP LUFS Meter JSFX if not present. Returns integrated, short-term (3s), and momentary (400ms) LUFS plus true inter-sample peak levels. Audio must be playing to accumulate data.',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
     },
     async ({ trackIndex }) => {
       const res = await sendCommand('read_track_lufs', { trackIndex });
@@ -27,7 +27,7 @@ export function registerAnalysisTools(server: McpServer): void {
     'read_track_correlation',
     'Read stereo field correlation and M/S analysis for a track. Auto-inserts the MCP Correlation Meter JSFX if not present. Returns correlation coefficient (-1 to +1), stereo width, and mid/side levels. Audio must be playing to accumulate data.',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
     },
     async ({ trackIndex }) => {
       const res = await sendCommand('read_track_correlation', { trackIndex });
@@ -42,7 +42,7 @@ export function registerAnalysisTools(server: McpServer): void {
     'read_track_crest',
     'Read crest factor (peak-to-RMS ratio) for a track. Auto-inserts the MCP Crest Factor Meter JSFX if not present. Returns crest factor in dB (higher = more dynamic, lower = over-compressed), peak hold level, and RMS level. Audio must be playing to accumulate data.',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
     },
     async ({ trackIndex }) => {
       const res = await sendCommand('read_track_crest', { trackIndex });

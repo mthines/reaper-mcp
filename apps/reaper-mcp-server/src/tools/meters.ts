@@ -7,7 +7,7 @@ export function registerMeterTools(server: McpServer): void {
     'read_track_meters',
     'Read real-time peak and RMS levels (in dB) for a track. Returns L/R peak and RMS values.',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
     },
     async ({ trackIndex }) => {
       const res = await sendCommand('read_track_meters', { trackIndex });
@@ -22,7 +22,7 @@ export function registerMeterTools(server: McpServer): void {
     'read_track_spectrum',
     'Read real-time FFT frequency spectrum data for a track. Auto-inserts the MCP Spectrum Analyzer JSFX if not present. Returns frequency bins in dB from 0 Hz to Nyquist.',
     {
-      trackIndex: z.coerce.number().int().min(0).describe('Zero-based track index'),
+      trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       fftSize: z.coerce.number().int().optional().describe('FFT size (default 4096). Options: 512, 1024, 2048, 4096, 8192'),
     },
     async ({ trackIndex, fftSize }) => {

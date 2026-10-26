@@ -25,6 +25,18 @@ local script_dir = debug.getinfo(1, "S").source:match("@?(.*[\\/])") or ""
 local plan_lib_ok, plan_lib = pcall(dofile, script_dir .. "mcp_plan_lib.lua")
 -- Action proxy + selection setters (search/get/run_action, set_selected_*), same install rules.
 local actions_lib_ok, actions_lib = pcall(dofile, script_dir .. "mcp_actions_lib.lua")
+-- Track structure + routing setters (add/delete/move track, sends, groups), same install rules.
+local tracks_lib_ok, tracks_lib = pcall(dofile, script_dir .. "mcp_tracks_lib.lua")
+
+-- Track index -1 means the master track, for every tool that takes a
+-- trackIndex. REAPER's own GetTrack returns nil for -1, so nothing relied on it.
+do
+  local get_track = reaper.GetTrack
+  reaper.GetTrack = function(proj, idx)
+    if idx == -1 then return reaper.GetMasterTrack(proj) end
+    return get_track(proj, idx)
+  end
+end
 
 local last_poll = 0
 local last_heartbeat = 0
@@ -3090,6 +3102,162 @@ function handlers.set_selected_items(params)
     if not items then return nil, err end
     return actions_lib.set_selected_items(reaper, items, params.mode)
   end)
+end
+
+-- =============================================================================
+-- Track structure + routing setters (logic in mcp_tracks_lib.lua)
+-- =============================================================================
+
+-- Resolve `params[field]` (index, name, GUID or "master") then run fn(track).
+local function with_tracks_lib(fn)
+  if not tracks_lib_ok then
+    return nil, "mcp_tracks_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(tracks_lib) .. ")"
+  end
+  if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua" end
+  local ok, res, err = pcall(fn)
+  if not ok then return nil, tostring(res) end
+  return res, err
+end
+
+local function track_param(params, field)
+  local ref = params[field]
+  if ref == nil then return nil, field .. " required" end
+  local res, err = plan_lib.resolve_track(reaper, ref, {})
+  if not res then return nil, field .. ": " .. err end
+  return res.track
+end
+
+-- Run one structural edit in its own undo block, with a refreshed track list.
+local function undoable(label, fn)
+  reaper.Undo_BeginBlock()
+  reaper.PreventUIRefresh(1)
+  local ok, res, err = pcall(fn)
+  reaper.PreventUIRefresh(-1)
+  reaper.Undo_EndBlock("MCP: " .. label, -1)
+  reaper.TrackList_AdjustWindows(false)
+  reaper.UpdateArrange()
+  if not ok then return nil, tostring(res) end
+  return res, err
+end
+
+local function as_bool(v)
+  if v == nil then return nil end
+  return v == true or v == 1 or v == "true" or v == "1"
+end
+
+function handlers.add_track(params)
+  return with_tracks_lib(function()
+    return undoable("Add track", function() return tracks_lib.add_track(reaper, params) end)
+  end)
+end
+
+function handlers.delete_track(params)
+  return with_tracks_lib(function()
+    local tr, err = track_param(params, "track")
+    if not tr then return nil, err end
+    return undoable("Delete track", function() return tracks_lib.delete_track(reaper, tr) end)
+  end)
+end
+
+function handlers.move_track(params)
+  return with_tracks_lib(function()
+    local tr, err = track_param(params, "track")
+    if not tr then return nil, err end
+    return undoable("Move track", function() return tracks_lib.move_track(reaper, tr, params.toIndex) end)
+  end)
+end
+
+function handlers.set_track_folder(params)
+  return with_tracks_lib(function()
+    local tr, err = track_param(params, "track")
+    if not tr then return nil, err end
+    return undoable("Set track folder", function() return tracks_lib.set_track_folder(reaper, tr, params) end)
+  end)
+end
+
+function handlers.set_track_info(params)
+  return with_tracks_lib(function()
+    local tr, err = track_param(params, "track")
+    if not tr then return nil, err end
+    params.masterSend = as_bool(params.masterSend)
+    return undoable("Set track info", function() return tracks_lib.set_track_info(reaper, tr, params) end)
+  end)
+end
+
+function handlers.add_send(params)
+  return with_tracks_lib(function()
+    local src, e1 = track_param(params, "from")
+    if not src then return nil, e1 end
+    local dst, e2 = track_param(params, "to")
+    if not dst then return nil, e2 end
+    params.mute = as_bool(params.mute)
+    return undoable("Add send", function() return tracks_lib.add_send(reaper, src, dst, params) end)
+  end)
+end
+
+function handlers.add_hardware_output(params)
+  return with_tracks_lib(function()
+    local tr, err = track_param(params, "track")
+    if not tr then return nil, err end
+    params.mute = as_bool(params.mute)
+    params.mono = as_bool(params.mono)
+    return undoable("Add hardware output", function() return tracks_lib.add_hardware_output(reaper, tr, params) end)
+  end)
+end
+
+function handlers.set_send(params)
+  return with_tracks_lib(function()
+    local tr, err = track_param(params, "track")
+    if not tr then return nil, err end
+    params.mute = as_bool(params.mute)
+    params.mono = as_bool(params.mono)
+    return undoable("Edit send", function() return tracks_lib.set_send(reaper, tr, params) end)
+  end)
+end
+
+function handlers.remove_send(params)
+  return with_tracks_lib(function()
+    local tr, err = track_param(params, "track")
+    if not tr then return nil, err end
+    return undoable("Remove send", function() return tracks_lib.remove_send(reaper, tr, params) end)
+  end)
+end
+
+function handlers.set_track_group(params)
+  return with_tracks_lib(function()
+    local tr, err = track_param(params, "track")
+    if not tr then return nil, err end
+    local roles, rerr = decode_list(params.roles, "roles")
+    if not roles then return nil, rerr end
+    params.roles = roles
+    params.enable = as_bool(params.enable)
+    return undoable("Set track group", function() return tracks_lib.set_track_group(reaper, tr, params) end)
+  end)
+end
+
+-- get_track_routing keeps its fields and gains what the setters change:
+-- send index/mode/channels, hardware outputs, master send, channel count.
+do
+  local base = handlers.get_track_routing
+  handlers.get_track_routing = function(params)
+    local res, err = base(params)
+    if not res or not tracks_lib_ok then return res, err end
+    local tr = reaper.GetTrack(0, params.trackIndex)
+    local ok, extra = pcall(tracks_lib.routing, reaper, tr)
+    if not ok then return res end
+    for k, s in ipairs(res.sends or {}) do
+      local x = extra.sends[k]
+      if x then s.index, s.mode, s.srcChannel, s.destChannel = x.index, x.mode, x.srcChannel, x.destChannel end
+    end
+    for k, r in ipairs(res.receives or {}) do
+      local x = extra.receives[k]
+      if x then r.index, r.mode, r.srcChannel, r.destChannel = x.index, x.mode, x.srcChannel, x.destChannel end
+    end
+    res.hardwareOutputs = extra.hardwareOutputs
+    res.masterSend = extra.masterSend
+    res.channels = extra.channels
+    return res
+  end
 end
 
 -- =============================================================================

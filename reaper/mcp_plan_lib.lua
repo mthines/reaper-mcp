@@ -280,6 +280,9 @@ end
 --- Resolve a track reference to { track = MediaTrack } or { ref = name }
 --- (a track the plan creates). Returns nil, err when unresolvable/ambiguous.
 local function resolve_track(api, ref, refs)
+  if ref == -1 or (type(ref) == "string" and ref:lower() == "master") then
+    return { track = api.GetMasterTrack(0) }
+  end
   if type(ref) == "number" then
     local tr = api.GetTrack(0, math.floor(ref))
     if not tr then return nil, "track " .. track_label(ref) .. " not found" end
