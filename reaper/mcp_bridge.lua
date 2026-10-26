@@ -23,6 +23,8 @@ reaper.RecursiveCreateDirectory(bridge_dir, 0)
 -- Loaded under pcall so an older install without the file keeps every other tool working.
 local script_dir = debug.getinfo(1, "S").source:match("@?(.*[\\/])") or ""
 local plan_lib_ok, plan_lib = pcall(dofile, script_dir .. "mcp_plan_lib.lua")
+-- Action proxy + selection setters (search/get/run_action, set_selected_*), same install rules.
+local actions_lib_ok, actions_lib = pcall(dofile, script_dir .. "mcp_actions_lib.lua")
 
 local last_poll = 0
 local last_heartbeat = 0
@@ -3025,7 +3027,67 @@ function handlers.run_plan(params)
     return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(plan_lib) .. ")"
   end
   plan_ctx.snapshot_save = function(name) return handlers.snapshot_save({ name = name }) end
+  plan_ctx.actions = actions_lib_ok and actions_lib or nil
   return plan_lib.run_plan(reaper, params, plan_ctx)
+end
+
+-- =============================================================================
+-- Action proxy + selection setters (logic in mcp_actions_lib.lua)
+-- =============================================================================
+
+local function with_actions_lib(fn)
+  if not actions_lib_ok then
+    return nil, "mcp_actions_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(actions_lib) .. ")"
+  end
+  local ok, res, err = pcall(fn)
+  if not ok then return nil, tostring(res) end
+  return res, err
+end
+
+-- Arrays arrive as JSON strings: the flat command parser cannot read nested arrays.
+local function decode_list(value, field)
+  if type(value) == "table" then return value end
+  if type(value) ~= "string" or not plan_lib_ok then return nil, field .. " must be a JSON array" end
+  local list, err = plan_lib.json_decode(value)
+  if type(list) ~= "table" then return nil, field .. " is not a valid JSON array" .. (err and (" (" .. err .. ")") or "") end
+  return list
+end
+
+local function read_kb_ini()
+  local f = io.open(reaper.GetResourcePath() .. "/reaper-kb.ini", "r")
+  if not f then return "" end
+  local text = f:read("*a")
+  f:close()
+  return text
+end
+
+function handlers.search_actions(params)
+  return with_actions_lib(function() return actions_lib.search(reaper, params) end)
+end
+
+function handlers.get_action(params)
+  return with_actions_lib(function() return actions_lib.get(reaper, params, read_kb_ini()) end)
+end
+
+function handlers.run_action(params)
+  return with_actions_lib(function() return actions_lib.run(reaper, params) end)
+end
+
+function handlers.set_selected_tracks(params)
+  return with_actions_lib(function()
+    if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua" end
+    local refs, err = decode_list(params.tracks, "tracks")
+    if not refs then return nil, err end
+    return actions_lib.set_selected_tracks(reaper, refs, params.mode, plan_lib.resolve_track)
+  end)
+end
+
+function handlers.set_selected_items(params)
+  return with_actions_lib(function()
+    local items, err = decode_list(params.items, "items")
+    if not items then return nil, err end
+    return actions_lib.set_selected_items(reaper, items, params.mode)
+  end)
 end
 
 -- =============================================================================

@@ -2,6 +2,7 @@ import { z } from 'zod/v4';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { PlanOp } from '@reaper-mcp/protocol';
 import { sendCommand } from '../bridge.js';
+import { actionRef, actionSection } from './actions.js';
 
 /**
  * Applying a plan can re-instantiate many plugins (add_fx, graft_fxchain), which
@@ -74,6 +75,17 @@ const opSchema = z.discriminatedUnion('op', [
     from: trackRef.optional().describe('Source track in this project'),
     fromChunk: z.string().optional().describe('Base64 track state chunk (e.g. a full-chunk snapshot track)'),
   }),
+  z.object({
+    op: z.literal('select_tracks'),
+    tracks: z.array(trackRef).min(1).describe('Tracks to select (refs allowed)'),
+    mode: z.enum(['replace', 'add']).optional().describe('replace (default) or add to the selection'),
+  }),
+  z.object({
+    op: z.literal('run_action'),
+    action: actionRef,
+    section: actionSection,
+    allowDialog: z.boolean().optional(),
+  }),
 ]);
 
 export const runPlanShape = {
@@ -119,6 +131,9 @@ export function validatePlanRefs(ops: PlanOp[]): string[] {
         use(i, 'from', op.from, 'track');
         use(i, 'to', op.to, 'track');
         break;
+      case 'select_tracks':
+        op.tracks.forEach((t, k) => use(i, `tracks[${k}]`, t, 'track'));
+        break;
       case 'graft_fxchain':
         use(i, 'track', op.track, 'track');
         use(i, 'from', op.from, 'track');
@@ -140,7 +155,8 @@ export function registerPlanTools(server: McpServer): void {
     'run_plan',
     'Execute a multi-step edit as ONE bridge call in ONE undo block, all-or-nothing. ' +
       'Use instead of many sequential tool calls. Ops run in order: add_track, set_track, add_fx, ' +
-      'set_fx_params, add_send, graft_fxchain (copy a source FX chain onto a track; sends are not copied). ' +
+      'set_fx_params, add_send, graft_fxchain (copy a source FX chain onto a track; sends are not copied), ' +
+      'select_tracks, and run_action (any REAPER action — usually after select_tracks; same safety rules as run_action). ' +
       'Target tracks by index, exact name, "{GUID}", or a "$ref" that an earlier add_track/add_fx bound with `as`. ' +
       'Every target is resolved before anything is written: an unknown or ambiguous track rejects the whole plan, ' +
       'and a failure mid-apply reverts it. Use dryRun to preview resolution and conflicts. ' +

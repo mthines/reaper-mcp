@@ -132,7 +132,8 @@ describe('cli helpers', () => {
       expect(REAPER_ASSETS).toContain('mcp_snapshot_prev.lua');
       expect(REAPER_ASSETS).toContain('mcp_snapshot_quick_save.lua');
       expect(REAPER_ASSETS).toContain('mcp_plan_lib.lua');
-      expect(REAPER_ASSETS.length).toBe(12);
+      expect(REAPER_ASSETS).toContain('mcp_actions_lib.lua');
+      expect(REAPER_ASSETS.length).toBe(13);
     });
 
     it('KNOWLEDGE_DIRS includes all expected subdirectories', () => {

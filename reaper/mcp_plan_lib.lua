@@ -376,10 +376,13 @@ end
 local KNOWN_OPS = {
   add_track = true, set_track = true, add_fx = true,
   set_fx_params = true, add_send = true, graft_fxchain = true,
+  run_action = true, select_tracks = true,
 }
 
 --- Validate every op without writing. Returns resolved ops and conflicts.
-function M.validate(api, ops)
+--- ctx.actions (mcp_actions_lib.lua) is required only for run_action ops.
+function M.validate(api, ops, ctx)
+  ctx = ctx or {}
   local refs = {}       -- "$name" -> { kind = "track" | "fx", op = i }
   local resolved = {}
   local conflicts = {}
@@ -480,6 +483,36 @@ function M.validate(api, ops)
         -- Later ops on the target see the grafted chain, not the old one.
         local key = r.track and (r.track.track or r.track.ref)
         if grafted and key then chains[key] = grafted end
+      elseif t == "select_tracks" then
+        if type(op.tracks) ~= "table" or #op.tracks == 0 then
+          conflict(i, op, "tracks array required")
+        else
+          r.tracks = {}
+          for k, ref in ipairs(op.tracks) do
+            local res, err = resolve_track(api, ref, refs)
+            if not res then conflict(i, op, "tracks[" .. (k - 1) .. "]: " .. err) end
+            r.tracks[k] = res
+          end
+        end
+      elseif t == "run_action" then
+        local actions = ctx.actions
+        if not actions then
+          conflict(i, op, "mcp_actions_lib.lua is not loaded")
+        else
+          local ok, sec = pcall(actions.section_id, op.section)
+          if not ok then
+            conflict(i, op, sec)
+          else
+            local id, name = actions.resolve(api, op.action, sec)
+            if not id then
+              conflict(i, op, name)
+            else
+              local refused = actions.check_runnable(api, id, name, sec, op.allowDialog == true)
+              if refused then conflict(i, op, refused) end
+              r.action = { id = id, name = name, section = sec }
+            end
+          end
+        end
       end
 
       if op.as ~= nil then
@@ -512,7 +545,7 @@ local function fx_index_by_guid(api, track, guid)
   return nil
 end
 
-local function apply_op(api, r, bound)
+local function apply_op(api, r, bound, ctx)
   local op = r.op
   local t = op.op
 
@@ -605,6 +638,16 @@ local function apply_op(api, r, bound)
       error("SetTrackStateChunk failed", 0)
     end
     return { fxCount = api.TrackFX_GetCount(tr) }
+
+  elseif t == "select_tracks" then
+    local tracks = {}
+    for k, res in ipairs(r.tracks) do tracks[k] = track_of(res) end
+    return { selected = ctx.actions.select_tracks(api, tracks, op.mode) }
+
+  elseif t == "run_action" then
+    local a = r.action
+    local toggle = ctx.actions.exec(api, a.id, a.section)
+    return { id = a.id, name = a.name, toggle = toggle }
   end
 end
 
@@ -620,7 +663,10 @@ end
 
 local function describe(resolved)
   local out = {}
-  for i, r in ipairs(resolved) do out[i] = { index = r.index, op = r.op.op } end
+  for i, r in ipairs(resolved) do
+    out[i] = { index = r.index, op = r.op.op }
+    if r.action then out[i].action = { id = r.action.id, name = r.action.name } end
+  end
   return out
 end
 
@@ -651,7 +697,7 @@ function M.run_plan(api, params, ctx)
     return { alreadyApplied = true, idempotencyKey = key, result = ctx.applied[key] }
   end
 
-  local resolved, conflicts, warnings = M.validate(api, ops)
+  local resolved, conflicts, warnings = M.validate(api, ops, ctx)
 
   if params.dryRun then
     return {
@@ -681,7 +727,7 @@ function M.run_plan(api, params, ctx)
   if api.PreventUIRefresh then api.PreventUIRefresh(1) end
   api.Undo_BeginBlock()
   for i, r in ipairs(resolved) do
-    local ok, res = pcall(apply_op, api, r, bound)
+    local ok, res = pcall(apply_op, api, r, bound, ctx)
     if not ok then
       failed_at, failure = i - 1, tostring(res)
       break
@@ -711,4 +757,5 @@ function M.run_plan(api, params, ctx)
   return data
 end
 
+M.resolve_track = resolve_track
 return M

@@ -78,6 +78,7 @@ export const REAPER_ASSETS = [
   'mcp_snapshot_manager.lua',
   'mcp_snapshot_lib.lua',
   'mcp_plan_lib.lua',
+  'mcp_actions_lib.lua',
   'mcp_snapshot_next.lua',
   'mcp_snapshot_prev.lua',
   'mcp_snapshot_quick_save.lua',
@@ -186,6 +187,11 @@ export const MCP_TOOL_NAMES = [
   'set_multiple_fx_parameters',
   // plan executor
   'run_plan',
+  'search_actions',
+  'get_action',
+  'run_action',
+  'set_selected_tracks',
+  'set_selected_items',
   // progressive discovery
   'list_tool_categories',
   'enable_tool_category',

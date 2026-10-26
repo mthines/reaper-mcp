@@ -61,7 +61,8 @@ reaper-mcp/
         analysis.ts           # read_track_lufs, read_track_correlation, read_track_crest, measure_tracks
         midi.ts               # 14 MIDI editing tools (notes, CC, items, analysis, batch edit)
         media.ts              # 11 media item editing tools (properties, batch, split, move, trim, stretch)
-        selection.ts          # get_selected_tracks, get_time_selection, set_time_selection
+        selection.ts          # get/set_selected_tracks, set_selected_items, get/set_time_selection
+        actions.ts            # search_actions, get_action, run_action (logic in reaper/mcp_actions_lib.lua)
         markers.ts            # list_markers, list_regions, add_marker, add_region, delete_marker, delete_region
         tempo.ts              # get_tempo_map
         envelopes.ts          # get_track_envelopes, get_envelope_points, insert_envelope_point, delete_envelope_point
@@ -115,10 +116,11 @@ reaper-mcp/
     sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs) + knowledge/ into ~/.claude (primary install model)
 
   reaper/                     # Files installed INTO REAPER (copied by setup command)
-    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 81 handlers)
+    mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 86 handlers)
     mcp_snapshot_manager.lua  # Standalone snapshot manager GUI (gfx-based, no extensions required)
     mcp_snapshot_lib.lua      # Shared library for snapshot action scripts
     mcp_plan_lib.lua          # run_plan executor (pure Lua, takes the API as an argument; unit-tested via wasmoon)
+    mcp_actions_lib.lua       # Action proxy + selection setters (pure Lua, unit-tested via wasmoon)
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
     mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
     mcp_snapshot_quick_save.lua # Action: quick save with auto-name
@@ -147,7 +149,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (86 total)
+## MCP Tools (90 total)
 
 ### Project & Tracks (5)
 
@@ -226,11 +228,13 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `get_stretch_markers` | `tools/media.ts` | List stretch markers with positions and source positions |
 | `delete_stretch_marker` | `tools/media.ts` | Delete a stretch marker by index |
 
-### Selection & Navigation Tools (3)
+### Selection & Navigation Tools (5)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `get_selected_tracks` | `tools/selection.ts` | Get currently selected tracks with indices and names |
+| `set_selected_tracks` | `tools/selection.ts` | Select tracks by index, name or GUID (`replace` or `add`); all resolved first, an unknown one changes nothing |
+| `set_selected_items` | `tools/selection.ts` | Select media items by `{trackIndex, itemIndex}` (`replace` or `add`) |
 | `get_time_selection` | `tools/selection.ts` | Get time/loop selection start, end, length in seconds |
 | `set_time_selection` | `tools/selection.ts` | Set the time selection range (start/end in seconds) |
 
@@ -312,6 +316,14 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 |------|------|-------------|
 | `run_plan` | `tools/plan.ts` | Execute an ordered list of ops in **one** bridge call and **one** undo block, all-or-nothing, with `$refs`, `dryRun`, `idempotencyKey`, and an optional `snapshotBefore` |
 
+### Actions Proxy (3)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `search_actions` | `tools/actions.ts` | Search REAPER's ~6k actions (native, SWS, scripts, `Custom:` macros) inside REAPER; returns id, stable `namedId`, name, toggle state, shortcuts |
+| `get_action` | `tools/actions.ts` | One action's details; a `Custom:` macro's steps by name, or a script's path (from `reaper-kb.ini`) |
+| `run_action` | `tools/actions.ts` | Run an action by id, named id or exact name in an undo block; returns the toggle state after. Dialog actions need `allowDialog`; quit/close/open project are always refused |
+
 ### Progressive Discovery (3)
 
 | Tool | File | Description |
@@ -320,7 +332,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
-Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`
+Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`
 
 ### MIDI Editing Concepts
 
@@ -342,13 +354,21 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 ### Plan Executor Concepts (`run_plan`)
 
 - **Use it for any multi-step edit**: one LLM turn and one bridge round trip instead of N sequential tool calls.
-- **Op types**: `add_track`, `set_track` (volume dB, pan, mute, solo, recordArm, phase, input, name), `add_fx` (optional `params`, `enabled`, `position`), `set_fx_params`, `add_send` (volume dB, pan, mute), `graft_fxchain`.
+- **Op types**: `add_track`, `set_track` (volume dB, pan, mute, solo, recordArm, phase, input, name), `add_fx` (optional `params`, `enabled`, `position`), `set_fx_params`, `add_send` (volume dB, pan, mute), `graft_fxchain`, `select_tracks` (`tracks`, `mode`), `run_action` (`action`, `section`, `allowDialog` — same resolution and safety rules as the `run_action` tool, checked in the validate pass).
 - **Targets**: tracks by 0-based index, exact name (then case-insensitive), `"{GUID}"`, or a `"$ref"` bound by an earlier `add_track`/`add_fx` via `as: "$name"`. A digit string matches a track name first, then the index. FX by index, unique name substring, or `$ref`. A numeric FX index means the slot when that op runs, so after `add_fx` with `position: 0` the older FX have moved up one; use a name or an `as` ref to pin a specific FX. Validation checks FX refs against each track's chain as earlier ops (`add_fx`, `graft_fxchain`) change it.
 - **Two passes**: every target is resolved before anything is written; an unknown/ambiguous track or an undefined `$ref` rejects the whole plan. If an op fails mid-apply, the undo block is closed and undone (only when the top undo entry is the plan's own), so no partial edit remains.
 - **`dryRun: true`** returns the resolved op list, `conflicts`, and `warnings` (e.g. an FX name not found in the installed-FX list) without writing.
 - **`idempotencyKey`**: the bridge remembers the last 100 applied keys; re-sending one returns `{ alreadyApplied: true, result }`. The TS tool also uses a 120 s timeout so a slow apply is not reported as failed and retried.
 - **`graft_fxchain`** copies a source `<FXCHAIN` block (from a track via `from`, or a base64 track chunk via `fromChunk`) onto the target, replacing the target's FX chain while keeping its items, envelopes, and sends. FXIDs are regenerated. It does not copy sends: sends live as `AUXRECV` lines on the receiving track and are outside the FX chain. Input FX (`<FXCHAIN_REC`) are not copied either.
 - **No SWS needed**: the ops travel as a JSON string that `mcp_plan_lib.lua` decodes with its own small JSON decoder (SWS has no `CF_Json_Parse`; it is used only if present). Malformed JSON rejects the plan and writes nothing.
+
+### Actions Proxy Concepts
+
+- **Ids**: native actions have fixed numeric ids (`40001`). Custom actions, scripts and extension (SWS) actions get session-specific numbers; their stable handle is the named id (`"_aee8…"`, `"_SWS_…"`) — store and pass that. A digit string is a command id; anything else is a named id (leading `_` optional) or an exact, unique action name.
+- **Sections**: `main` (default), `midi_editor` (needs an open MIDI editor), `midi_event_list`. The inline MIDI editor and media explorer have no command entry point.
+- **Selection first**: most actions act on the selected tracks/items. Use `set_selected_tracks` / `set_selected_items`, or in one undo step `run_plan` with `select_tracks` then `run_action`.
+- **Safety**: an action whose name ends in `...` opens a modal dialog that blocks REAPER's main thread (and with it the bridge) until a person closes it, so it is refused unless `allowDialog: true`. Quit, close/open/new project and close-tab actions are always refused. `search_actions` flags both (`opensDialog`, `denied`).
+- **Search runs in Lua**: enumerating all ~6k main-section actions takes a few ms in REAPER; only matches (up to `limit`, max 100) cross the bridge, with the `total` count.
 
 ### Envelope / Automation Concepts
 
