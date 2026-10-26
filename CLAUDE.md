@@ -58,7 +58,7 @@ reaper-mcp/
         presets.ts            # get_fx_preset_list, set_fx_preset
         snapshots.ts          # snapshot_save, snapshot_restore, snapshot_list, snapshot_delete
         routing.ts            # get_track_routing
-        analysis.ts           # read_track_lufs, read_track_correlation, read_track_crest
+        analysis.ts           # read_track_lufs, read_track_correlation, read_track_crest, measure_tracks
         midi.ts               # 14 MIDI editing tools (notes, CC, items, analysis, batch edit)
         media.ts              # 11 media item editing tools (properties, batch, split, move, trim, stretch)
         selection.ts          # get_selected_tracks, get_time_selection, set_time_selection
@@ -145,7 +145,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (84 total)
+## MCP Tools (85 total)
 
 ### Project & Tracks (5)
 
@@ -287,7 +287,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 |------|------|-------------|
 | `get_track_routing` | `tools/routing.ts` | Sends, receives, parent/folder info for a track |
 
-### Metering & Analysis (5)
+### Metering & Analysis (6)
 
 | Tool | File | Description |
 |------|------|-------------|
@@ -296,6 +296,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `read_track_lufs` | `tools/analysis.ts` | Integrated/short-term/momentary LUFS + true peak |
 | `read_track_correlation` | `tools/analysis.ts` | Stereo correlation, width, mid/side levels |
 | `read_track_crest` | `tools/analysis.ts` | Crest factor (peak-to-RMS ratio) |
+| `measure_tracks` | `tools/analysis.ts` | Play, collect LUFS/crest/correlation/spectrum for 1–8 tracks in one call, stop (TS-composed, no own bridge command) |
 
 ### Perceptual Audio Analysis (1) — Requires Python Sidecar
 

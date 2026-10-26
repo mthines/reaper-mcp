@@ -151,11 +151,11 @@ describe('category tools', () => {
       expect(text).toContain('Available categories:');
     });
 
-    it('returns midi category with all 14 tools', async () => {
+    it('returns midi category with all 17 tools (14 editing + 3 live output)', async () => {
       const result = await tools['enable_tool_category'].handler({ category: 'midi' });
       const content = (result as { content: Array<{ text: string }> }).content[0].text;
       const parsed = JSON.parse(content) as { toolCount: number };
-      expect(parsed.toolCount).toBe(14);
+      expect(parsed.toolCount).toBe(17);
     });
   });
 

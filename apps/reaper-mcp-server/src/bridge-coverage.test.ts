@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readdirSync } from 'node:fs';
+import { TOOL_CATEGORIES } from './tools/categories.js';
 
 /**
  * This test ensures every CommandType defined in the protocol has a
@@ -52,6 +54,17 @@ function getMcpToolNames(): string[] {
   return names;
 }
 
+/** Tool names registered via server.tool('name', …) in tools/*.ts. */
+function getRegisteredTools(): string[] {
+  const dir = join(__dirname, 'tools');
+  const names: string[] = [];
+  for (const file of readdirSync(dir).filter(f => f.endsWith('.ts') && !f.endsWith('.test.ts'))) {
+    const content = readFileSync(join(dir, file), 'utf-8');
+    for (const match of content.matchAll(/server\.tool\(\s*'([^']+)'/g)) names.push(match[1]);
+  }
+  return names;
+}
+
 describe('bridge coverage', () => {
   const commandTypes = getCommandTypes();
   const luaHandlers = new Set(getLuaHandlers());
@@ -75,5 +88,19 @@ describe('bridge coverage', () => {
   it('every CommandType must be in MCP_TOOL_NAMES in cli.ts', () => {
     const missing = commandTypes.filter(t => !mcpToolNames.has(t));
     expect(missing, `Missing from MCP_TOOL_NAMES: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  // Tools composed in TypeScript (measure_tracks) send no command of their own,
+  // so the CommandType check above cannot see them.
+  it('every registered tool must be in MCP_TOOL_NAMES in cli.ts', () => {
+    const missing = getRegisteredTools().filter(t => !mcpToolNames.has(t));
+    expect(missing, `Registered but missing from MCP_TOOL_NAMES: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('every registered tool except the category tools belongs to a category', () => {
+    const categorized = new Set(Object.values(TOOL_CATEGORIES).flatMap(c => c.tools));
+    const own = new Set(['list_tool_categories', 'enable_tool_category', 'disable_tool_category']);
+    const missing = getRegisteredTools().filter(t => !own.has(t) && !categorized.has(t));
+    expect(missing, `Registered but in no tool category: ${missing.join(', ')}`).toEqual([]);
   });
 });

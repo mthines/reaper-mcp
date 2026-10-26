@@ -48,6 +48,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
       'insert_midi_note', 'insert_midi_notes', 'edit_midi_note', 'edit_midi_notes',
       'delete_midi_note', 'get_midi_cc', 'insert_midi_cc', 'delete_midi_cc',
       'get_midi_item_properties', 'set_midi_item_properties',
+      'send_midi_cc', 'send_midi_pc', 'send_midi_note',
     ],
   },
   media: {
@@ -86,7 +87,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   analysis: {
     name: 'analysis',
     description: 'Audio metering and analysis: peak/RMS meters, FFT spectrum, LUFS loudness, stereo correlation, crest factor',
-    tools: ['read_track_meters', 'read_track_spectrum', 'read_track_lufs', 'read_track_correlation', 'read_track_crest'],
+    tools: ['read_track_meters', 'read_track_spectrum', 'read_track_lufs', 'read_track_correlation', 'read_track_crest', 'measure_tracks', 'analyze_track_aesthetics'],
   },
   discovery: {
     name: 'discovery',
@@ -96,7 +97,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   snapshots: {
     name: 'snapshots',
     description: 'Mixer state snapshots: save, restore, and list named snapshots of volumes, pans, FX, and mutes',
-    tools: ['snapshot_save', 'snapshot_restore', 'snapshot_list'],
+    tools: ['snapshot_save', 'snapshot_restore', 'snapshot_list', 'snapshot_delete'],
   },
   routing: {
     name: 'routing',
