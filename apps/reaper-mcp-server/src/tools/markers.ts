@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sendCommand } from '../bridge.js';
+import { bridgeText } from './project.js';
 
 export function registerMarkerTools(server: McpServer): void {
   server.tool(
@@ -112,7 +113,7 @@ function registerMarkerEditTools(server: McpServer): void {
     'Rename, move or recolor an existing marker by its marker index number (from list_markers). Unspecified fields keep their values; name "" clears the name. Color is a native color int, stored with REAPER\'s 0x1000000 "custom color" flag. Unknown markers change nothing.',
     {
       markerIndex: z.coerce.number().int().min(0).describe('Marker index number (list_markers index)'),
-      name: z.string().optional().describe('New name ("" clears it)'),
+      name: bridgeText.optional().describe('New name ("" clears it)'),
       position: z.coerce.number().min(0).optional().describe('New position in seconds'),
       color: z.coerce.number().int().min(0).optional().describe('Native color int (e.g. ColorToNative(r,g,b)); 0 keeps the current color'),
     },
@@ -124,7 +125,7 @@ function registerMarkerEditTools(server: McpServer): void {
     'Rename, move/resize or recolor an existing region by its region index number (from list_regions). Unspecified fields keep their values; end must stay after start. Unknown regions change nothing.',
     {
       regionIndex: z.coerce.number().int().min(0).describe('Region index number (list_regions index)'),
-      name: z.string().optional().describe('New name ("" clears it)'),
+      name: bridgeText.optional().describe('New name ("" clears it)'),
       start: z.coerce.number().min(0).optional().describe('New start in seconds'),
       end: z.coerce.number().min(0).optional().describe('New end in seconds'),
       color: z.coerce.number().int().min(0).optional().describe('Native color int; 0 keeps the current color'),
