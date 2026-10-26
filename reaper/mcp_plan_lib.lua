@@ -308,6 +308,27 @@ local function fx_installed(api, name)
   end
 end
 
+--- Find one FX on a track by unique name substring. A digit-only ref (MCP
+--- clients send numbers as strings) matches an exact name only, then falls back
+--- to the FX index — a substring match would turn "0" into "Ozone 10".
+local function find_fx(api, track, ref)
+  local want = ref:lower()
+  local digits = ref:match("^%d+$") ~= nil
+  local found
+  for j = 0, api.TrackFX_GetCount(track) - 1 do
+    local _, name = api.TrackFX_GetFXName(track, j)
+    name = (name or ""):lower()
+    if (digits and name == want) or (not digits and name:find(want, 1, true)) then
+      if found then return nil, "fx name '" .. ref .. "' matches more than one FX" end
+      found = j
+    end
+  end
+  if found then return found end
+  local n = digits and tonumber(ref)
+  if n and n < api.TrackFX_GetCount(track) then return n end
+  return nil, "fx '" .. ref .. "' not found"
+end
+
 -- -----------------------------------------------------------------------------
 -- Validation pass
 -- -----------------------------------------------------------------------------
@@ -323,6 +344,7 @@ function M.validate(api, ops)
   local resolved = {}
   local conflicts = {}
   local warnings = {}
+  local added_fx = {}   -- existing track -> lowercased fxNames added earlier in the plan
 
   local function conflict(i, op, msg)
     conflicts[#conflicts + 1] = { op = i - 1, type = op.op, error = msg }
@@ -347,6 +369,11 @@ function M.validate(api, ops)
       end
 
       if t == "add_fx" then
+        if r.track and r.track.track and type(op.fxName) == "string" then
+          local list = added_fx[r.track.track] or {}
+          list[#list + 1] = op.fxName:lower()
+          added_fx[r.track.track] = list
+        end
         if type(op.fxName) ~= "string" or op.fxName == "" then
           conflict(i, op, "fxName required")
         elseif not fx_installed(api, op.fxName) then
@@ -371,6 +398,16 @@ function M.validate(api, ops)
           end
         elseif type(op.fx) ~= "string" then
           conflict(i, op, "fx reference missing")
+        elseif r.track and r.track.track then
+          -- Resolve name targets on existing tracks now, unless an earlier op
+          -- in this plan adds a matching FX (that one only exists at apply).
+          local _, err = find_fx(api, r.track.track, op.fx)
+          local want = op.fx:lower()
+          local pending = false
+          for _, name in ipairs(added_fx[r.track.track] or {}) do
+            if name:find(want, 1, true) then pending = true end
+          end
+          if err and not pending then conflict(i, op, err) end
         end
       elseif t == "add_send" then
         r.from = need_track("from")
@@ -479,14 +516,9 @@ local function apply_op(api, r, bound)
       if type(op.fx) == "number" then
         fx = op.fx
       else
-        local want = op.fx:lower()
-        for j = 0, api.TrackFX_GetCount(tr) - 1 do
-          local _, name = api.TrackFX_GetFXName(tr, j)
-          if (name or ""):lower():find(want, 1, true) then
-            if fx then error("fx name '" .. op.fx .. "' matches more than one FX", 0) end
-            fx = j
-          end
-        end
+        local err
+        fx, err = find_fx(api, tr, op.fx)
+        if not fx then error(err, 0) end
       end
     end
     if not fx or fx >= api.TrackFX_GetCount(tr) then error("fx " .. tostring(op.fx) .. " not found", 0) end

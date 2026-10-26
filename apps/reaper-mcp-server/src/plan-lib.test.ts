@@ -275,6 +275,35 @@ describe('mcp_plan_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('lua plan: digit-string fx ref falls back to the FX index', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { name = "Kick", fx = { "ReaEQ", "Ozone 10" } } } }
+      local res, err = plan.run_plan(api, { ops = {
+        { op = "set_fx_params", track = "Kick", fx = "0", params = { { index = 3, value = 0.5 } } },
+      } }, {})
+      assert(err == nil, err)
+      local fx = api.tracks[1].fx
+      assert(fx[1].params[3] == 0.5, "ReaEQ (index 0) got the param")
+      assert(fx[2].params[3] == nil, "Ozone 10 untouched")
+    `);
+  });
+
+  it('lua plan: dryRun reports an unresolvable fx name as a conflict', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { name = "Kick", fx = { "ReaEQ", "ReaEQ (2)" } } } }
+      local res = plan.run_plan(api, { dryRun = true, ops = {
+        { op = "set_fx_params", track = "Kick", fx = "Nope", params = { { index = 0, value = 1 } } },
+        { op = "set_fx_params", track = "Kick", fx = "ReaEQ", params = { { index = 0, value = 1 } } },
+        { op = "add_fx", track = "Kick", fxName = "ReaComp" },
+        { op = "set_fx_params", track = "Kick", fx = "ReaComp", params = { { index = 0, value = 1 } } },
+      } }, {})
+      assert(res.valid == false and #res.conflicts == 2, "conflicts: " .. #res.conflicts)
+      assert(res.conflicts[1].op == 0 and res.conflicts[1].error:find("not found"))
+      assert(res.conflicts[2].op == 1 and res.conflicts[2].error:find("more than one"))
+      assert(api.writes == 0)
+    `);
+  });
+
   it('lua plan: malformed JSON plan is rejected without writes', async () => {
     await runLua(`
       for _, bad in ipairs({ '[{"op":"set_track"', '[{"op":"set_track",}]', '[1] x', '{"op":tru}' }) do
