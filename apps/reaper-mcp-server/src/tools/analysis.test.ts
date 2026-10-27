@@ -252,4 +252,27 @@ describe('analysis tools', () => {
       });
     });
   });
+
+  describe('measure_tracks', () => {
+    it('inserts the meters before playback starts, so they measure the played audio', async () => {
+      vi.useFakeTimers();
+      mockedSendCommand.mockResolvedValue({ id: 'test', success: true, data: {}, timestamp: Date.now() });
+
+      const run = tools['measure_tracks'].handler({
+        trackIndices: [3, 4], metrics: ['lufs'], durationSeconds: 2, startPosition: 0, fftSize: 4096, stopWhenDone: true,
+      });
+      await vi.runAllTimersAsync();
+      await run;
+      vi.useRealTimers();
+
+      const calls = mockedSendCommand.mock.calls.map(([type, params]) => `${type} ${JSON.stringify(params)}`);
+      const play = calls.indexOf('play {}');
+      expect(calls.slice(0, play)).toEqual(expect.arrayContaining([
+        'read_track_lufs {"trackIndex":3,"reset":true}', 'read_track_lufs {"trackIndex":4,"reset":true}',
+      ]));
+      expect(calls.slice(play)).toEqual(expect.arrayContaining([
+        'read_track_lufs {"trackIndex":3}', 'read_track_lufs {"trackIndex":4}',
+      ]));
+    });
+  });
 });

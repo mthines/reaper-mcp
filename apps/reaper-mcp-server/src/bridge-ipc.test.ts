@@ -24,6 +24,8 @@ interface BridgeResponse {
 
 interface Bridge {
   send(type: string, params?: Record<string, unknown>): Promise<BridgeResponse>;
+  /** Run Lua against the booted bridge: stub an API on `reaper` or read fake state back. */
+  lua(code: string): Promise<unknown>;
 }
 
 let engine: LuaEngine | undefined;
@@ -78,6 +80,7 @@ async function startBridge(spec = '{}', playState = 0): Promise<Bridge> {
       expect(response, `bridge answered ${type}`).toBeTruthy();
       return JSON.parse(response as string) as BridgeResponse;
     },
+    lua: (code) => lua.doString(code),
   };
 }
 
@@ -190,5 +193,150 @@ describe('mcp_bridge.lua over file IPC', () => {
   ])('get_transport_state decodes play state %i', async (playState, expected) => {
     const { data } = await (await startBridge('{}', playState)).send('get_transport_state');
     expect(data).toMatchObject(expected);
+  });
+
+  // Without CF_Json_Parse (SWS has none) the command decoder keeps a nested
+  // array as its raw JSON text; batch handlers must still decode it.
+  describe('batch commands carrying arrays', () => {
+    const TWO_TRACKS = '{ tracks = { { name = "Kick", fx = { "ReaEQ" } }, { name = "Snare", fx = { "ReaComp" } } } }';
+
+    it('set_multiple_track_properties applies every entry', async () => {
+      const bridge = await startBridge(TWO_TRACKS);
+      const res = await bridge.send('set_multiple_track_properties', {
+        tracks: [{ trackIndex: 0, pan: -0.5 }, { trackIndex: 1, mute: 1 }],
+      });
+      expect(res.data).toMatchObject({ updated: 2, total: 2 });
+      expect(await bridge.lua('return reaper.tracks[1].vals.D_PAN')).toBe(-0.5);
+      expect(await bridge.lua('return reaper.tracks[2].vals.B_MUTE')).toBe(1);
+    });
+
+    it('set_multiple_fx_parameters applies every entry', async () => {
+      const bridge = await startBridge(TWO_TRACKS);
+      const res = await bridge.send('set_multiple_fx_parameters', {
+        updates: [
+          { trackIndex: 0, fxIndex: 0, paramIndex: 2, value: 0.25 },
+          { trackIndex: 1, fxIndex: 0, paramIndex: 0, value: 0.75 },
+        ],
+      });
+      expect(res.data).toMatchObject({ updated: 2, total: 2 });
+      expect(await bridge.lua('return reaper.tracks[1].fx[1].params[2]')).toBe(0.25);
+      expect(await bridge.lua('return reaper.tracks[2].fx[1].params[0]')).toBe(0.75);
+    });
+
+    it('setup_fx_chain sets each plugin\'s initial parameters', async () => {
+      const bridge = await startBridge('{ tracks = { { name = "Vox" } } }');
+      const res = await bridge.send('setup_fx_chain', {
+        trackIndex: 0,
+        plugins: [{ fxName: 'ReaEQ', parameters: [{ index: 1, value: 0.5 }] }, { fxName: 'ReaComp' }],
+      });
+      expect(res.data).toMatchObject({ added: 2, total: 2 });
+      expect(res.data?.errors).toBeUndefined();
+      expect(await bridge.lua('return reaper.tracks[1].fx[1].params[1]')).toBe(0.5);
+    });
+
+    it('insert_envelope_points inserts every point of the JSON string', async () => {
+      const bridge = await startBridge('{ tracks = { { name = "Pad" } } }');
+      await bridge.lua(`
+        local env = { points = {} }
+        reaper.CountTrackEnvelopes = function() return 1 end
+        reaper.GetTrackEnvelope = function() return env end
+        reaper.InsertEnvelopePoint = function(e, t, v) e.points[#e.points + 1] = { t, v } end
+        reaper.CountEnvelopePoints = function(e) return #e.points end
+      `);
+      const res = await bridge.send('insert_envelope_points', {
+        trackIndex: 0,
+        envelopeIndex: 0,
+        points: JSON.stringify([{ time: 0, value: 1 }, { time: 2, value: 0.5, shape: 2 }]),
+      });
+      expect(res.data).toMatchObject({ insertedPoints: 2, totalPoints: 2 });
+    });
+  });
+
+  it('read_track_lufs gives each track its own raw meter slot and reads that slot', async () => {
+    const tracks = Array.from({ length: 140 }, (_, i) => `{ name = "T${i}" }`).join(', ');
+    const bridge = await startBridge(`{ tracks = { ${tracks} } }`);
+    await bridge.lua(`
+      reaper.TrackFX_GetParam = function(tr, fx, p) return tr.fx[fx + 1].params[p] or 0 end
+      -- The meter writes its readings at gmem[slot * 8 ...], slot being the raw slider value
+      reaper.gmem_read = function(i)
+        local slot = reaper.tracks[139].fx[#reaper.tracks[139].fx].params[1]
+        if slot and i == slot * 8 then return -14 end
+        if slot and i == slot * 8 + 5 then return 3 end
+        return 0
+      end
+    `);
+    const res = await bridge.send('read_track_lufs', { trackIndex: 138 });
+    expect(res.success, res.error).toBe(true);
+    expect(res.data).toMatchObject({ integrated: -14, duration: 3, measuring: true });
+    expect(await bridge.lua('return reaper.tracks[139].fx[#reaper.tracks[139].fx].params[1]')).toBe(139);
+  });
+
+  describe('create_track_envelope', () => {
+    // REAPER's chunk names: VOLENV2/PANENV2/WIDTHENV2 are the normal envelopes,
+    // VOLENV/PANENV/WIDTHENV their Pre-FX twins, VOLENV3 Trim Volume.
+    const ENVELOPE_API = `
+      local by_name = {
+        ["Volume"] = "<VOLENV2", ["Volume (Pre-FX)"] = "<VOLENV", ["Trim Volume"] = "<VOLENV3",
+        ["Pan"] = "<PANENV2", ["Pan (Pre-FX)"] = "<PANENV", ["Width"] = "<WIDTHENV2", ["Mute"] = "<MUTEENV",
+      }
+      local function find(tr, chunk_name)
+        if tr.chunk:find(chunk_name .. "\\n", 1, true) then return { track = tr, name = chunk_name } end
+      end
+      reaper.GetTrackEnvelopeByChunkName = find
+      reaper.GetTrackEnvelopeByName = function(tr, name) return by_name[name] and find(tr, by_name[name]) end
+      reaper.CountTrackEnvelopes = function() return 0 end
+      reaper.CountEnvelopePoints = function() return 0 end
+    `;
+
+    // REAPER drops an envelope block with no points, so each gets one neutral
+    // point at 0 (verified live: 1 = unity volume/width, unmuted; pan 0 = center).
+    it.each([
+      ['Volume', '<VOLENV2', 'PT 0 1 0'],
+      ['Pan', '<PANENV2', 'PT 0 0 0'],
+      ['Width', '<WIDTHENV2', 'PT 0 1 0'],
+      ['Trim Volume', '<VOLENV3', 'PT 0 1 0'],
+      ['Mute', '<MUTEENV', 'PT 0 1 0'],
+    ])('%s creates the %s envelope with a neutral point', async (envelopeName, chunkName, point) => {
+      const bridge = await startBridge('{ tracks = { { name = "Pad" } } }');
+      await bridge.lua(ENVELOPE_API);
+      const res = await bridge.send('create_track_envelope', { trackIndex: 0, envelopeName });
+      expect(res.success, res.error).toBe(true);
+      expect(res.data).toMatchObject({ name: envelopeName });
+      const chunk = (await bridge.lua('return reaper.tracks[1].chunk')) as string;
+      expect(chunk.slice(chunk.indexOf(`${chunkName}\n`)).split('>')[0]).toContain(`\n${point}\n`);
+    });
+
+    it('reports a failure when REAPER drops the envelope', async () => {
+      const bridge = await startBridge('{ tracks = { { name = "Pad" } } }');
+      await bridge.lua(`
+        ${ENVELOPE_API}
+        reaper.GetTrackEnvelopeByName = function() return nil end
+      `);
+      const res = await bridge.send('create_track_envelope', { trackIndex: 0, envelopeName: 'Volume' });
+      expect(res.success).toBe(false);
+      expect(await bridge.lua('return reaper.begins - reaper.ends')).toBe(0);
+    });
+
+    it('refuses an FX index the track does not have, without leaving an undo block open', async () => {
+      const bridge = await startBridge('{ tracks = { { name = "Pad", fx = { "ReaEQ" } } } }');
+      const res = await bridge.send('create_track_envelope', { trackIndex: 0, fxIndex: 3, paramIndex: 0 });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/FX index 3 out of range/);
+      expect(await bridge.lua('return reaper.begins - reaper.ends')).toBe(0);
+    });
+
+    it('creates an FX parameter envelope', async () => {
+      const bridge = await startBridge('{ tracks = { { name = "Pad", fx = { "ReaEQ" } } } }');
+      await bridge.lua(`
+        ${ENVELOPE_API}
+        reaper.TrackFX_GetNumParams = function() return 4 end
+        reaper.GetFXEnvelope = function(tr, fx, p, create) return create and { fx = fx, p = p } or nil end
+        reaper.TrackFX_GetParamName = function() return true, "Gain" end
+      `);
+      const res = await bridge.send('create_track_envelope', { trackIndex: 0, fxIndex: 0, paramIndex: 2 });
+      expect(res.success, res.error).toBe(true);
+      expect(res.data).toMatchObject({ name: 'ReaEQ / Gain' });
+      expect(await bridge.lua('return reaper.begins - reaper.ends')).toBe(0);
+    });
   });
 });

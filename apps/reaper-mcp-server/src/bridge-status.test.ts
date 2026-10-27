@@ -29,7 +29,7 @@ afterEach(() => {
   engine = undefined;
 });
 
-async function startBridge() {
+async function startBridge(setup = '') {
   const factory = new LuaFactory();
   await factory.mountFile(`${SCRIPTS}mcp_bridge.lua`, readFileSync(join(REAPER_DIR, 'mcp_bridge.lua'), 'utf8'));
   for (const lib of LIBS) await factory.mountFile(SCRIPTS + lib, readFileSync(join(REAPER_DIR, lib), 'utf8'));
@@ -49,6 +49,7 @@ async function startBridge() {
     api.CF_GetSWSVersion = false -- no SWS installed
     api.GetExtState = function(s, k) return ext[s .. "/" .. k] or "" end
     api.SetExtState = function(s, k, v) ext[s .. "/" .. k] = v end
+    ${setup}
     reaper = setmetatable(api, { __index = function() return function() end end })
     dofile("${SCRIPTS}mcp_bridge.lua")
   `);
@@ -78,6 +79,9 @@ async function startBridge() {
       await new Promise((r) => setTimeout(r, 250));
       await tick();
       return JSON.parse(await lua.doString('return ext["MCPBridge/status"]')) as Status;
+    },
+    async ext(key: string): Promise<string | null> {
+      return (await lua.doString(`return ext["MCPBridge/${key}"]`)) ?? null;
     },
   };
 }
@@ -149,5 +153,71 @@ describe('bridge settings from the status page', () => {
     const { health } = await (await startBridge()).status();
     // The fake has no SWS and no Effects/reaper-mcp/ JSFX
     expect(health).toMatchObject({ sws: false, jsfx: false, outdated: false });
+  });
+});
+
+// REAPER's EnumInstalledFX(i) -> ok, name, ident; false past the end
+const INSTALLED = `
+  local installed = { { "VST3: Pro-Q 3 (FabFilter)", "Pro-Q 3.vst3" }, { "JS: Dynamics/1175_compressor", "Dynamics/1175_compressor" }, { "AU: Helix Native (Line 6)", "" }, { "JS: 3o.gfxlib.jsfx-inc", "3o.gfxlib.jsfx-inc" }, { "VST3i: Kontakt 7 (Native Instruments) (64 out)", "" } }
+  api.EnumInstalledFX = function(i)
+    local fx = installed[i + 1]
+    if not fx then return false end
+    return true, fx[1], fx[2]
+  end
+`;
+
+describe('installed FX', () => {
+  it('lists what REAPER has installed, not the FX browser folders', async () => {
+    const bridge = await startBridge(INSTALLED);
+    const res = (await bridge.send('list_available_fx')) as { success: boolean; data?: { fxList: Array<{ name: string; type: string; path: string }>; total: number; source: string } };
+    expect(res.data).toMatchObject({ total: 4, source: 'reaper' });
+    expect(res.data?.fxList[0]).toEqual({ name: 'VST3: Pro-Q 3 (FabFilter)', type: 'VST3', path: 'Pro-Q 3.vst3' });
+
+    const au = (await bridge.send('list_available_fx', { category: 'au' })) as { data?: { fxList: Array<{ name: string }> } };
+    expect(au.data?.fxList.map((f) => f.name)).toEqual(['AU: Helix Native (Line 6)']);
+  });
+
+  it('says so when this REAPER cannot enumerate FX', async () => {
+    const bridge = await startBridge('api.EnumInstalledFX = false');
+    const res = (await bridge.send('list_available_fx')) as { data?: { total: number; source: string; warning?: string } };
+    expect(res.data).toMatchObject({ total: 0, source: 'none' });
+    expect(res.data?.warning).toMatch(/6\.37/);
+  });
+
+  it('publishes the installed list for the status page', async () => {
+    const bridge = await startBridge(INSTALLED);
+    await bridge.status();
+    const feed = JSON.parse((await bridge.ext('installed')) as string);
+    expect(feed).toEqual({
+      v: 1,
+      supported: true,
+      fx: [
+        { n: 'VST3: Pro-Q 3 (FabFilter)', t: 'VST3' },
+        { n: 'JS: Dynamics/1175_compressor', t: 'JS' },
+        { n: 'AU: Helix Native (Line 6)', t: 'AU' },
+        { n: 'VST3i: Kontakt 7 (Native Instruments) (64 out)', t: 'VST3' },
+      ],
+    });
+  });
+});
+
+describe('FX used in the project', () => {
+  it('counts each plugin across the project, by its own name', async () => {
+    const bridge = await startBridge(`
+      api.tracks[1].fx = { { name = "VST3: Pro-Q 3 (FabFilter)" }, { name = "ReaComp" }, { name = "VST3: Pro-Q 3 (FabFilter)" } }
+      -- a renamed instance still counts under the plugin's own name
+      api.TrackFX_GetNamedConfigParm = function(tr, i, key)
+        if key == "fx_name" and tr.fx[i + 1].name == "ReaComp" then return true, "VST: ReaComp (Cockos)" end
+        return false, ""
+      end
+    `);
+    await bridge.status();
+    expect(JSON.parse((await bridge.ext('used')) as string)).toEqual({
+      v: 1,
+      fx: [
+        { n: 'VST3: Pro-Q 3 (FabFilter)', c: 2 },
+        { n: 'VST: ReaComp (Cockos)', c: 1 },
+      ],
+    });
   });
 });

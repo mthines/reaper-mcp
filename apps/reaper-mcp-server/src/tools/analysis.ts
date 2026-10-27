@@ -72,28 +72,8 @@ export function registerAnalysisTools(server: McpServer): void {
     },
     async ({ trackIndices, metrics, durationSeconds, startPosition, fftSize, stopWhenDone }) => {
       try {
-        // Check current transport state
-        const transportRes = await sendCommand('get_transport_state', {});
-        const isPlaying = transportRes.success && (transportRes.data as { playing?: boolean })?.playing;
-
-        // Seek and start playback if needed
-        if (startPosition != null) {
-          await sendCommand('set_cursor_position', { position: startPosition });
-        }
-        if (!isPlaying || startPosition != null) {
-          await sendCommand('play', {});
-        }
-
-        // Wait for measurement accumulation
-        await sleep(durationSeconds * 1000);
-
-        // Collect all measurements in parallel
-        const measurementPromises: Array<{
-          trackIndex: number;
-          metric: string;
-          promise: ReturnType<typeof sendCommand>;
-        }> = [];
-
+        // One read command per track and metric
+        const reads: Array<{ trackIndex: number; metric: string; commandType: string; params: Record<string, unknown> }> = [];
         for (const trackIndex of trackIndices) {
           for (const metric of metrics) {
             let commandType: string;
@@ -116,14 +96,39 @@ export function registerAnalysisTools(server: McpServer): void {
               default:
                 continue;
             }
-
-            measurementPromises.push({
-              trackIndex,
-              metric,
-              promise: sendCommand(commandType as Parameters<typeof sendCommand>[0], params),
-            });
+            reads.push({ trackIndex, metric, commandType, params });
           }
         }
+        const sendReads = (prime: boolean) => reads.map((r) => ({
+          trackIndex: r.trackIndex,
+          metric: r.metric,
+          promise: sendCommand(
+            r.commandType as Parameters<typeof sendCommand>[0],
+            prime && r.metric === 'lufs' ? { ...r.params, reset: true } : r.params,
+          ),
+        }));
+
+        // Prime first: a read inserts the meter JSFX, so the meters exist before
+        // the audio they measure; LUFS also restarts its integrated measurement.
+        await Promise.all(sendReads(true).map((m) => m.promise));
+
+        // Check current transport state
+        const transportRes = await sendCommand('get_transport_state', {});
+        const isPlaying = transportRes.success && (transportRes.data as { playing?: boolean })?.playing;
+
+        // Seek and start playback if needed
+        if (startPosition != null) {
+          await sendCommand('set_cursor_position', { position: startPosition });
+        }
+        if (!isPlaying || startPosition != null) {
+          await sendCommand('play', {});
+        }
+
+        // Wait for measurement accumulation
+        await sleep(durationSeconds * 1000);
+
+        // Collect all measurements in parallel
+        const measurementPromises = sendReads(false);
 
         const results = await Promise.all(
           measurementPromises.map(async (m) => ({

@@ -282,6 +282,8 @@ export interface GetTrackRoutingParams {
 
 export interface ReadTrackLufsParams {
   trackIndex: number;
+  /** Restart the measurement (integrated LUFS, true peak, duration) */
+  reset?: boolean;
 }
 
 export interface ReadTrackCorrelationParams {

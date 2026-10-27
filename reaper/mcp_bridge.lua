@@ -231,7 +231,7 @@ local function json_decode_array(input)
     arr[#arr + 1] = parse_flat_object(obj_str)
     i = s + #obj_str
   end
-  if #arr > 0 then return arr end
+  if #arr > 0 or input:match("^%s*%[%s*%]%s*$") then return arr end
   return nil
 end
 
@@ -1070,59 +1070,47 @@ end
 
 -- Helper: detect FX type prefix from name
 local function fx_type_from_name(name)
-  if name:match("^VST3:") then return "VST3"
-  elseif name:match("^VST:") then return "VST"
+  -- Instruments carry an "i" (VST3i:, VSTi:, AUi:, CLAPi:) but are the same plugin formats
+  if name:match("^VST3i?:") then return "VST3"
+  elseif name:match("^VSTi?:") then return "VST"
   elseif name:match("^JS:") then return "JS"
-  elseif name:match("^AU:") then return "AU"
-  elseif name:match("^CLAP:") then return "CLAP"
+  elseif name:match("^AUi?:") then return "AU"
+  elseif name:match("^CLAPi?:") then return "CLAP"
   else return "JS" end  -- default for bare JSFX names
 end
 
--- Enumerate all installed FX using SWS CF_EnumerateInstalledFX if available,
--- otherwise fall back to scanning open projects via TrackFX_AddByName probe.
--- The SWS approach is preferred and more complete.
+-- Every installed FX as REAPER lists it in the FX browser ("VST3: Pro-Q 3 (FabFilter)"), via the native
+-- EnumInstalledFX (REAPER 6.37+). nil when this REAPER is too old to enumerate.
+-- Not reaper-fxfolders.ini: that file holds the FX browser's folder layout (paths, filters), not plugins.
+local function enumerate_installed_fx()
+  if type(reaper.EnumInstalledFX) ~= "function" then return nil end
+  local list, i = {}, 0
+  while true do
+    local ok, name, ident = reaper.EnumInstalledFX(i)
+    if not ok or type(name) ~= "string" or name == "" then break end
+    -- JSFX libraries (.jsfx-inc) show up in the list but can't be loaded as effects
+    if not (name:find("%.jsfx%-inc") or (ident and ident:find("%.jsfx%-inc"))) then
+      list[#list + 1] = { name = name, type = fx_type_from_name(name), ident = ident or "" }
+    end
+    i = i + 1
+  end
+  return list
+end
+
 function handlers.list_available_fx(params)
   local category_filter = params.category
+  local all = enumerate_installed_fx()
+  if not all then
+    return { fxList = {}, total = 0, source = "none",
+             warning = "This REAPER cannot enumerate installed FX (EnumInstalledFX needs REAPER 6.37+)." }
+  end
   local fx_list = {}
-
-  -- Try SWS CF_EnumerateInstalledFX (requires SWS extension)
-  if reaper.CF_EnumerateInstalledFX then
-    local i = 0
-    while true do
-      local ok, name, ident = reaper.CF_EnumerateInstalledFX(i)
-      if not ok then break end
-      local fx_type = fx_type_from_name(name)
-      if not category_filter or fx_type:lower() == category_filter:lower() then
-        fx_list[#fx_list + 1] = {
-          name = name,
-          type = fx_type,
-          path = ident or "",
-        }
-      end
-      i = i + 1
+  for _, fx in ipairs(all) do
+    if not category_filter or fx.type:lower() == category_filter:lower() then
+      fx_list[#fx_list + 1] = { name = fx.name, type = fx.type, path = fx.ident }
     end
-    return { fxList = fx_list, total = #fx_list, source = "sws" }
   end
-
-  -- Fallback: parse reaper-fxfolders.ini for plugin names
-  local resource_path = reaper.GetResourcePath()
-  local ini_path = resource_path .. "/reaper-fxfolders.ini"
-  local content = read_file(ini_path)
-  if content then
-    for line in content:gmatch("[^\r\n]+") do
-      local name = line:match("^Item%d+=(.+)$")
-      if name and name ~= "" then
-        local fx_type = fx_type_from_name(name)
-        if not category_filter or fx_type:lower() == category_filter:lower() then
-          fx_list[#fx_list + 1] = { name = name, type = fx_type }
-        end
-      end
-    end
-    return { fxList = fx_list, total = #fx_list, source = "fxfolders_ini" }
-  end
-
-  return { fxList = fx_list, total = 0, source = "none",
-           warning = "SWS not installed and reaper-fxfolders.ini not found. Install SWS Extensions for full FX enumeration." }
+  return { fxList = fx_list, total = #fx_list, source = "reaper" }
 end
 
 function handlers.search_fx(params)
@@ -1891,17 +1879,21 @@ function handlers.read_track_lufs(params)
   local fx_idx, err = ensure_jsfx_on_track(track, MCP_LUFS_METER_FX_NAME)
   if not fx_idx then return nil, err end
 
-  -- Set the track_slot parameter so this instance writes to a unique gmem offset
-  local desired_slot = idx / 127
+  -- Give this instance its own gmem slot (master -1 -> 0). TrackFX_SetParam
+  -- takes the RAW slider value; changing it resets the measurement.
+  local slot = idx + 1
   local current_slot = reaper.TrackFX_GetParam(track, fx_idx, 1)
-  if math.abs(current_slot - desired_slot) > 0.001 then
-    reaper.TrackFX_SetParam(track, fx_idx, 1, desired_slot)
+  if math.abs(current_slot - slot) > 0.5 then
+    reaper.TrackFX_SetParam(track, fx_idx, 1, slot)
+  end
+  if params.reset then
+    reaper.TrackFX_SetParam(track, fx_idx, 0, 1)  -- the Reset slider; the JSFX sets it back to 0
   end
 
   -- Read from gmem (JSFX writes here from @sample)
   reaper.gmem_attach("MCPLufsMeter")
 
-  local base = idx * 8
+  local base = slot * 8
   local integrated  = reaper.gmem_read(base + 0)
   local short_term  = reaper.gmem_read(base + 1)
   local momentary   = reaper.gmem_read(base + 2)
@@ -3046,12 +3038,7 @@ function handlers.set_multiple_track_properties(params)
   local tracks_input = params.tracks
   if not tracks_input then return nil, "tracks array required" end
 
-  local tracks = nil
-  if type(tracks_input) == "string" then
-    tracks = json_decode(tracks_input)
-  elseif type(tracks_input) == "table" then
-    tracks = tracks_input
-  end
+  local tracks = json_decode_array(tracks_input)
   if not tracks then return nil, "Failed to parse tracks array" end
 
   local updated = 0
@@ -3108,12 +3095,7 @@ function handlers.setup_fx_chain(params)
   local plugins_input = params.plugins
   if not plugins_input then return nil, "plugins array required" end
 
-  local plugins = nil
-  if type(plugins_input) == "string" then
-    plugins = json_decode(plugins_input)
-  elseif type(plugins_input) == "table" then
-    plugins = plugins_input
-  end
+  local plugins = json_decode_array(plugins_input)
   if not plugins then return nil, "Failed to parse plugins array" end
 
   local track = reaper.GetTrack(0, track_idx)
@@ -3141,8 +3123,10 @@ function handlers.setup_fx_chain(params)
 
         -- Set initial parameters if provided
         local param_errors = {}
-        if plugin.parameters and type(plugin.parameters) == "table" then
-          for _, p in ipairs(plugin.parameters) do
+        -- Nested arrays arrive as JSON text from the fallback decoder
+        local plugin_params = plugin.parameters and json_decode_array(plugin.parameters)
+        if plugin_params then
+          for _, p in ipairs(plugin_params) do
             if p.index ~= nil and p.value ~= nil then
               local ok = reaper.TrackFX_SetParam(track, fx_idx, p.index, p.value)
               if not ok then
@@ -3185,12 +3169,7 @@ function handlers.set_multiple_fx_parameters(params)
   local updates_input = params.updates
   if not updates_input then return nil, "updates array required" end
 
-  local updates = nil
-  if type(updates_input) == "string" then
-    updates = json_decode(updates_input)
-  elseif type(updates_input) == "table" then
-    updates = updates_input
-  end
+  local updates = json_decode_array(updates_input)
   if not updates then return nil, "Failed to parse updates array" end
 
   local updated = 0
@@ -3891,51 +3870,67 @@ function handlers.create_track_envelope(params)
   local track = reaper.GetTrack(0, params.trackIndex)
   if not track then return nil, "Track " .. params.trackIndex .. " not found" end
 
+  -- Chunk names of the built-in envelopes, with a neutral value for their first
+  -- point. The unsuffixed VOLENV/PANENV/WIDTHENV are the Pre-FX variants, which
+  -- GetTrackEnvelopeByName("Volume") never finds.
+  local env_map = {
+    ["Volume"] = "VOLENV2",
+    ["Pan"] = "PANENV2",
+    ["Mute"] = "MUTEENV",
+    ["Width"] = "WIDTHENV2",
+    ["Trim Volume"] = "VOLENV3",
+  }
+  local env_neutral = { ["Pan"] = 0 }  -- the rest: 1 = unity gain/width, unmuted
+
+  -- Validate before opening the undo block, so a refusal never leaves one open
+  if params.fxIndex ~= nil then
+    if params.paramIndex == nil then
+      return nil, "paramIndex is required when fxIndex is provided"
+    end
+    local fx_count = reaper.TrackFX_GetCount(track)
+    if params.fxIndex >= fx_count then
+      return nil, "FX index " .. params.fxIndex .. " out of range (track has " .. fx_count .. " FX)"
+    end
+    local param_count = reaper.TrackFX_GetNumParams(track, params.fxIndex)
+    if params.paramIndex >= param_count then
+      return nil, "Parameter index " .. params.paramIndex .. " out of range (FX has " .. param_count .. " parameters)"
+    end
+  elseif params.envelopeName then
+    if not env_map[params.envelopeName] then
+      return nil, "Unknown envelope name: " .. params.envelopeName .. ". Use Volume, Pan, Mute, Width, or Trim Volume"
+    end
+  else
+    return nil, "Must provide either envelopeName or fxIndex+paramIndex"
+  end
+
   reaper.Undo_BeginBlock()
 
   local env = nil
   local env_name = nil
 
   if params.fxIndex ~= nil then
-    -- FX parameter envelope
-    if params.paramIndex == nil then
-      return nil, "paramIndex is required when fxIndex is provided"
-    end
-    local fx_count = reaper.TrackFX_GetNumParms(track)
-    if fx_count == 0 then
-      return nil, "Track " .. params.trackIndex .. " has no FX"
-    end
     -- create=true to create the envelope if it doesn't exist
     env = reaper.GetFXEnvelope(track, params.fxIndex, params.paramIndex, true)
     if not env then
+      reaper.Undo_EndBlock("MCP: Create envelope (failed)", -1)
       return nil, "Failed to create FX parameter envelope (fxIndex=" .. params.fxIndex .. ", paramIndex=" .. params.paramIndex .. ")"
     end
     local _, pname = reaper.TrackFX_GetParamName(track, params.fxIndex, params.paramIndex)
     local _, fname = reaper.TrackFX_GetFXName(track, params.fxIndex)
     env_name = fname .. " / " .. pname
-  elseif params.envelopeName then
+  else
     -- Built-in envelope: use GetTrackEnvelopeByName + show via state chunk
     env = reaper.GetTrackEnvelopeByName(track, params.envelopeName)
     if not env then
-      -- Some envelopes need to be activated first via the track state chunk
-      -- Toggle the envelope visibility via action or chunk editing
-      local env_map = {
-        ["Volume"] = "VOLENV",
-        ["Pan"] = "PANENV",
-        ["Mute"] = "MUTEENV",
-        ["Width"] = "WIDTHENV",
-        ["Trim Volume"] = "VOLENV2",
-      }
+      -- Not in the track yet: add it to the track state chunk
       local chunk_key = env_map[params.envelopeName]
-      if not chunk_key then
-        return nil, "Unknown envelope name: " .. params.envelopeName .. ". Use Volume, Pan, Mute, Width, or Trim Volume"
-      end
-      -- Get track chunk, insert envelope chunk if missing
-      -- Use anchored pattern "<VOLENV\n" to avoid matching VOLENV2 (Trim Volume)
+      -- Anchor on "\n" so a name never matches a longer one (VOLENV vs VOLENV2)
       local _, chunk = reaper.GetTrackStateChunk(track, "", false)
       if not chunk:find("<" .. chunk_key .. "\n") then
-        -- Insert a minimal envelope chunk before the closing >
-        local env_chunk = "\n<" .. chunk_key .. "\nACT 1 -1\nVIS 1 1 1\nLANEHEIGHT 0 0\nARM 0\nDEFSHAPE 0 -1 -1\n>\n"
+        -- Insert a minimal envelope chunk before the closing >. REAPER drops an
+        -- envelope without points, so it gets one neutral point at 0.
+        local neutral = env_neutral[params.envelopeName] or 1
+        local env_chunk = "\n<" .. chunk_key .. "\nACT 1 -1\nVIS 1 1 1\nLANEHEIGHT 0 0\nARM 0\nDEFSHAPE 0 -1 -1\nPT 0 " .. neutral .. " 0\n>\n"
         -- Use position capture to find the last ">" (closing the <TRACK block).
         -- We cannot use "\n>$" because GetTrackStateChunk may include a trailing newline.
         local last_gt = chunk:match(".*()>")
@@ -3951,6 +3946,7 @@ function handlers.create_track_envelope(params)
       end
       env = reaper.GetTrackEnvelopeByName(track, params.envelopeName)
       if not env then
+        reaper.Undo_EndBlock("MCP: Create envelope (failed)", -1)
         return nil, "Failed to create envelope: " .. params.envelopeName
       end
     else
@@ -3961,8 +3957,6 @@ function handlers.create_track_envelope(params)
       reaper.SetEnvelopeStateChunk(env, chunk, false)
     end
     env_name = params.envelopeName
-  else
-    return nil, "Must provide either envelopeName or fxIndex+paramIndex"
   end
 
   -- Find the index of the newly created envelope
@@ -4106,12 +4100,7 @@ function handlers.insert_envelope_points(params)
 
   -- Parse the points JSON string
   local points_str = params.points
-  local points = nil
-  if type(points_str) == "string" then
-    points = json_decode(points_str)
-  elseif type(points_str) == "table" then
-    points = points_str
-  end
+  local points = json_decode_array(points_str)
   if not points then return nil, "Failed to parse points JSON" end
 
   local inserted = 0
@@ -4596,6 +4585,92 @@ local function check_health(now)
   health = next_health
 end
 
+-- Installed FX for the status page's Plugins view, in ExtState MCPBridge/installed (in memory).
+-- Re-enumerated every 60s (a few ms for ~2k plugins) and republished only when the list changed.
+local INSTALLED_FX_INTERVAL = 60
+local last_installed_fx = -INSTALLED_FX_INTERVAL
+local installed_fx_signature
+
+local function publish_installed_fx(now)
+  if now - last_installed_fx < INSTALLED_FX_INTERVAL then return end
+  last_installed_fx = now
+  local list = enumerate_installed_fx()
+  local rows, names = {}, {}
+  for i, fx in ipairs(list or {}) do
+    rows[i] = { n = fx.name, t = fx.type }
+    names[i] = fx.name
+  end
+  local signature = (list and "1" or "0") .. "\n" .. table.concat(names, "\n")
+  if signature == installed_fx_signature then return end
+  installed_fx_signature = signature
+  reaper.SetExtState(STATUS_SECTION, "installed", json_encode({ v = 1, supported = list ~= nil, fx = rows }), false)
+end
+
+-- FX used in the open project (track, master, input and take FX), in ExtState MCPBridge/used, so the
+-- Plugins view can show which plugins this session relies on. Recounted at most every 2s and only when
+-- the project changed (state change count or project tab); republished only when the counts changed.
+local USED_FX_INTERVAL = 2
+local last_used_fx = -USED_FX_INTERVAL
+local used_fx_state, used_fx_signature
+
+-- The plugin's own name ("VST3: Pro-Q 3 (FabFilter)"), not a renamed instance
+local function original_fx_name(get_named, get_name, owner, i)
+  local ok, name = get_named(owner, i, "fx_name")
+  if ok and type(name) == "string" and name ~= "" then return name end
+  local _, display = get_name(owner, i)
+  return type(display) == "string" and display ~= "" and display or nil
+end
+
+local function count_project_fx()
+  local counts = {}
+  local function add(name) if name then counts[name] = (counts[name] or 0) + 1 end end
+  local function track_fx(track)
+    if not track then return end
+    for i = 0, (reaper.TrackFX_GetCount(track) or 0) - 1 do
+      add(original_fx_name(reaper.TrackFX_GetNamedConfigParm, reaper.TrackFX_GetFXName, track, i))
+    end
+    for i = 0, (reaper.TrackFX_GetRecCount(track) or 0) - 1 do
+      add(original_fx_name(reaper.TrackFX_GetNamedConfigParm, reaper.TrackFX_GetFXName, track, 0x1000000 + i))
+    end
+  end
+  track_fx(reaper.GetMasterTrack(0))
+  for t = 0, (reaper.CountTracks(0) or 0) - 1 do track_fx(reaper.GetTrack(0, t)) end
+  for it = 0, (reaper.CountMediaItems(0) or 0) - 1 do
+    local item = reaper.GetMediaItem(0, it)
+    for k = 0, (item and reaper.CountTakes(item) or 0) - 1 do
+      local take = reaper.GetTake(item, k)
+      for i = 0, (take and reaper.TakeFX_GetCount(take) or 0) - 1 do
+        add(original_fx_name(reaper.TakeFX_GetNamedConfigParm, reaper.TakeFX_GetFXName, take, i))
+      end
+    end
+  end
+  return counts
+end
+
+local function publish_used_fx(now)
+  if now - last_used_fx < USED_FX_INTERVAL then return end
+  last_used_fx = now
+  -- Parenthesised: exactly one value, even from an API stub that returns nothing
+  local change_count = (reaper.GetProjectStateChangeCount(0))
+  local state = tostring((reaper.EnumProjects(-1))) .. ":" .. tostring(change_count)
+  -- An unknown change count (older REAPER, tests) means: recount every time
+  if state == used_fx_state and change_count ~= nil then return end
+  used_fx_state = state
+  local counts = count_project_fx()
+  local names = {}
+  for name in pairs(counts) do names[#names + 1] = name end
+  table.sort(names)
+  local rows, parts = {}, {}
+  for i, name in ipairs(names) do
+    rows[i] = { n = name, c = counts[name] }
+    parts[i] = name .. "=" .. counts[name]
+  end
+  local signature = table.concat(parts, "\n")
+  if signature == used_fx_signature then return end
+  used_fx_signature = signature
+  reaper.SetExtState(STATUS_SECTION, "used", json_encode({ v = 1, fx = rows }), false)
+end
+
 -- Command timeline: per-10s buckets for the last hour, keyed by absolute bucket id
 -- (epoch_ms // 10000). Only buckets with commands exist, so idle time costs nothing.
 -- Each bucket: { total, errors, slow (ok and >= HISTORY_SLOW_MS), summed handler ms }.
@@ -4834,6 +4909,8 @@ local function main_loop()
   end
   publish_history(now)
   check_health(now)
+  publish_installed_fx(now)
+  publish_used_fx(now)
 
   reaper.defer(main_loop)
 end

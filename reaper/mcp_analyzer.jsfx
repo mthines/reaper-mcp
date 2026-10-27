@@ -63,7 +63,7 @@ slider3:smoothing=0.8<0,0.99,0.01>Smoothing
   rms_count = 0;
 
 @slider
-  new_fft_size = slider1;
+  new_fft_size = fft_size_slider;  // named slider: slider1 stays 0
   // Snap to valid FFT sizes
   new_fft_size <= 512 ? new_fft_size = 512 :
   new_fft_size <= 1024 ? new_fft_size = 1024 :

@@ -109,6 +109,14 @@ describe('JSFX EEL2 lint checks', () => {
           );
         }
       });
+
+      it('should read a named slider by its variable, not sliderN', () => {
+        // "sliderN:name=..." stores the value in `name`; sliderN itself stays 0
+        const named = [...source.matchAll(/^slider(\d+):(\w+)=/gm)].map(([, n, name]) => ({ n, name }));
+        const code = source.slice(source.search(/^@/m)).replace(/\/\/.*$/gm, '');
+        const misused = named.filter(({ n }) => new RegExp(`\\bslider${n}\\b`).test(code));
+        expect(misused.map(({ n, name }) => `slider${n} (use ${name})`)).toEqual([]);
+      });
     });
   }
 });
