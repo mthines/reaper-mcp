@@ -534,7 +534,7 @@ function handlers.get_project_info(params)
   local proj_path = reaper.GetProjectPath()
   local track_count = reaper.CountTracks(0)
   local tempo = reaper.Master_GetTempo()
-  local _, ts_num, ts_den = reaper.TimeMap_GetTimeSigAtTime(0, 0)
+  local ts_num, ts_den = reaper.TimeMap_GetTimeSigAtTime(0, 0)
   local sr = reaper.GetSetProjectInfo(0, "PROJECT_SRATE", 0, false)
   local play_state = reaper.GetPlayState() -- 0=stopped, 1=playing, 2=paused, 4=recording
   local cursor_pos = reaper.GetCursorPosition()
@@ -1042,7 +1042,7 @@ function handlers.get_transport_state(params)
   local cursor_pos = reaper.GetCursorPosition()
   local play_pos = reaper.GetPlayPosition()
   local tempo = reaper.Master_GetTempo()
-  local _, ts_num, ts_den = reaper.TimeMap_GetTimeSigAtTime(0, 0)
+  local ts_num, ts_den = reaper.TimeMap_GetTimeSigAtTime(0, 0)
 
   return {
     playing = (play_state & 1) ~= 0,
@@ -3735,7 +3735,7 @@ function handlers.get_tempo_map(params)
   -- If no markers, return the project tempo as the single entry
   if count == 0 then
     local bpm = reaper.Master_GetTempo()
-    local _, num, denom = reaper.TimeMap_GetTimeSigAtTime(0, 0)
+    local num, denom = reaper.TimeMap_GetTimeSigAtTime(0, 0)
     markers[1] = {
       index = 0,
       position = 0,
@@ -4471,6 +4471,51 @@ local status = {
 local status_dirty = true
 local last_status_publish = 0
 
+-- Command timeline: per-10s buckets for the last hour, keyed by absolute bucket id
+-- (epoch_ms // 10000). Only buckets with commands exist, so idle time costs nothing.
+-- Each bucket: { total, errors, slow (ok and >= HISTORY_SLOW_MS), summed handler ms }.
+local HISTORY_BUCKET_MS = 10000
+local HISTORY_BUCKETS = 360
+local HISTORY_SLOW_MS = 100
+local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
+local history = {}
+local history_dirty = false
+local last_history_publish = 0
+
+local function record_history(handler_ms, ok)
+  local id = math.floor(now_ms() / HISTORY_BUCKET_MS)
+  local b = history[id]
+  if not b then
+    b = { 0, 0, 0, 0 }
+    history[id] = b
+  end
+  b[1] = b[1] + 1
+  if not ok then b[2] = b[2] + 1 end
+  if ok and handler_ms >= HISTORY_SLOW_MS then b[3] = b[3] + 1 end -- slow successes; errors counted apart
+  b[4] = b[4] + handler_ms
+  history_dirty = true
+end
+
+local function publish_history(now)
+  if not history_dirty or now - last_history_publish < HISTORY_MIN_PUBLISH_INTERVAL then return end
+  last_history_publish = now
+  history_dirty = false
+
+  local oldest = math.floor(now_ms() / HISTORY_BUCKET_MS) - HISTORY_BUCKETS + 1
+  local ids = {}
+  for id in pairs(history) do
+    if id < oldest then history[id] = nil else ids[#ids + 1] = id end
+  end
+  table.sort(ids)
+  local rows = {}
+  for i, id in ipairs(ids) do
+    local b = history[id]
+    rows[i] = { id, b[1], b[2], b[3], math.floor(b[4] * 10 + 0.5) / 10 }
+  end
+  -- b: [bucketId, total, errors, slow, sumMs]; bucket start = bucketId * size
+  reaper.SetExtState(STATUS_SECTION, "history", json_encode({ v = 1, size = HISTORY_BUCKET_MS, b = rows }), false)
+end
+
 local function record_command(cmd_type, handler_ms, ok, err)
   -- Internal commands (e.g. the server's _bridge_diagnostics poller) are noise
   if type(cmd_type) ~= "string" or cmd_type:sub(1, 1) == "_" then return end
@@ -4484,6 +4529,7 @@ local function record_command(cmd_type, handler_ms, ok, err)
   table.insert(status.recent, 1, entry)
   status.recent[STATUS_RECENT_MAX + 1] = nil
   status_dirty = true
+  record_history(handler_ms, ok)
 end
 
 local function publish_status(now, force)
@@ -4629,6 +4675,7 @@ local function main_loop()
   else
     publish_status(now, false)
   end
+  publish_history(now)
 
   reaper.defer(main_loop)
 end
@@ -4693,6 +4740,7 @@ log_event("bridge_start", { reaperVersion = reaper.GetAppVersion(), bridgeDir = 
 reaper.atexit(function()
   log_event("bridge_stop", {})
   reaper.DeleteExtState(STATUS_SECTION, "status", false) -- UI flips to offline at once
+  reaper.DeleteExtState(STATUS_SECTION, "history", false)
 end)
 
 -- Start the loop

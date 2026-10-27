@@ -49,6 +49,15 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('project: tempo map without markers reports the project time signature, not the tempo', async () => {
+    await runLua(`
+      local api = new_fake{ project = { tempo = 96, num = 7, den = 8 } }
+      local m = project.tempo_map(api).markers[1]
+      assert(m.timeSigNumerator == 7 and m.timeSigDenominator == 8, m.timeSigNumerator .. "/" .. m.timeSigDenominator)
+      assert(m.bpm == 96)
+    `);
+  });
+
   it('project: save refuses a never-saved project without a path, and writes the file with one', async () => {
     await runLua(`
       local fs = new_fs{ dirs = { "/tmp/songs" }, files = { "/tmp/songs/other.rpp" } }

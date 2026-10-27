@@ -364,7 +364,7 @@ function M.tempo_map(api)
     }
   end
   if count == 0 then
-    local _, num, den = api.TimeMap_GetTimeSigAtTime(0, 0)
+    local num, den = api.TimeMap_GetTimeSigAtTime(0, 0)
     markers[1] = { index = 0, position = 0, bpm = api.Master_GetTempo(), timeSigNumerator = num, timeSigDenominator = den, linearTempo = false }
   end
   return { markers = markers, count = #markers, tempoMarkerCount = count }

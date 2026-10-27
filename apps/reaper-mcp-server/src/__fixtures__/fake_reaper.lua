@@ -566,7 +566,7 @@ function install_project_fake(api, spec, write)
   local sp = spec.project or {}
   local proj = {
     path = spec.project_path or "",
-    tempo = sp.tempo or 120, num = 4, den = 4,
+    tempo = sp.tempo or 120, num = sp.num or 4, den = sp.den or 4,
     markers = {}, tempo_markers = {},
     info = { PROJECT_SRATE = 44100, PROJECT_SRATE_USE = 0, RENDER_BOUNDSFLAG = 1, RENDER_STARTPOS = 0,
       RENDER_ENDPOS = 0, RENDER_SRATE = 0, RENDER_CHANNELS = 2, RENDER_SETTINGS = 0 },
@@ -688,7 +688,7 @@ function install_project_fake(api, spec, write)
     local t = P().tempo_markers[1]
     return t and t.bpm or P().tempo
   end
-  api.TimeMap_GetTimeSigAtTime = function() return 0, P().num, P().den, api.Master_GetTempo() end
+  api.TimeMap_GetTimeSigAtTime = function() return P().num, P().den, api.Master_GetTempo() end
   api.SetCurrentBPM = function(_, bpm) P().tempo = bpm; write("tempo") end
   api.CountTempoTimeSigMarkers = function() return #P().tempo_markers end
   api.GetTempoTimeSigMarker = function(_, i)
