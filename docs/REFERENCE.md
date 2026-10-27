@@ -35,9 +35,6 @@ git clone https://github.com/mthines/reaper-mcp.git && cd reaper-mcp
 ./scripts/install.sh
 ```
 
-> Prefer to keep the knowledge the skills learn? Fork first and clone your fork
-> instead — see the [README](../README.md#-install-in-3-steps).
-
 `scripts/install.sh` prints one ✓ line per step and writes the full output to
 `tmp/install.log`; `./scripts/install.sh --verbose` streams it instead. A failing
 step shows the end of the log. It runs these steps (each is also runnable on its own):
