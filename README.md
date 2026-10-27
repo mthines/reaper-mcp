@@ -41,19 +41,25 @@ lands in your clone.
 ```
 Claude Code
   ├── MCP Tools (134) ──→ controls REAPER in real-time
-  │   ├── Track management (list, get/set properties, arm, phase, input)
+  │   ├── Track management (list, get/set properties, add/delete/move, folders, color, groups/VCAs)
+  │   ├── Master track (trackIndex -1 or "master" in track, FX, meter and routing tools)
   │   ├── FX management (add/remove, get/set parameters, enable/offline, presets)
+  │   ├── FX housekeeping (move/copy/rename one FX, .RfxChain files, track templates)
   │   ├── Transport (play, stop, record, cursor position)
   │   ├── Metering (peak/RMS, FFT spectrum, LUFS, correlation, crest factor)
-  │   ├── Selection (selected tracks, time selection)
-  │   ├── Markers & regions (list, add, delete)
-  │   ├── Tempo map (all tempo/time sig changes)
+  │   ├── Selection (get/set selected tracks and items, time selection)
+  │   ├── Markers & regions (list, add, edit, delete)
+  │   ├── Tempo map (read, add/edit/delete tempo markers, project BPM)
+  │   ├── Project operations (undo/redo, save, render settings, render)
   │   ├── Envelopes (list, read/write automation points)
   │   ├── MIDI editing (14 tools: notes, CC, items, analysis, batch ops)
   │   ├── Media items (11 tools: properties, split, move, trim, stretch)
+  │   ├── Items & takes (insert audio files, takes, take FX, color, fade shapes)
   │   ├── Plugin discovery (list installed FX, search, presets)
-  │   ├── Snapshots (save/restore/delete mixer state for A/B comparison)
-  │   └── Routing (sends, receives, bus structure)
+  │   ├── Snapshots (save/restore/delete mixer state, optionally scoped to some tracks)
+  │   ├── Routing (sends, receives, sidechains, hardware outputs, bus structure)
+  │   ├── Plan executor (many edits in one call and one undo step, all or nothing)
+  │   └── Actions proxy (search and run REAPER, SWS and custom actions safely)
   │
   └── Mix Engineer Knowledge ──→ knows HOW to use those tools
       ├── Plugin knowledge (ReaEQ, Pro-Q 3, Helix Native, etc.)
@@ -72,6 +78,8 @@ Claude Code ←stdio→ MCP Server (TypeScript) ←JSON files→ Lua Bridge (REA
 ```
 
 REAPER's scripting environment is sandboxed — no sockets, no HTTP. The Lua bridge runs inside REAPER via `reaper.defer()` at ~30ms intervals, polling a shared directory for JSON command/response files. Round-trip latency: ~50-150ms.
+
+The bridge also publishes its own status (connection, defer-loop timing, the last 50 commands with handler time and errors) to REAPER's in-memory ExtState. A small React page, served by REAPER's built-in web interface, reads it — see [Bridge status window](#bridge-status-window).
 
 ## Installation
 
@@ -98,7 +106,9 @@ git clone https://github.com/mthines/reaper-mcp.git && cd reaper-mcp
 1. `pnpm install && pnpm nx build reaper-mcp-server` — deps + build.
 2. `pnpm link --global` (from `dist/apps/reaper-mcp-server`) — puts the
    `reaper-mcp` command on your PATH, pointing at this clone.
-3. `reaper-mcp setup` — installs the Lua bridge + JSFX into REAPER.
+3. `reaper-mcp setup` — installs the Lua bridge, snapshot scripts and JSFX into
+   REAPER, installs the bridge status page, and turns on REAPER's web interface
+   for it.
 4. `scripts/sync-symlinks.sh` — symlinks the skills + knowledge into `~/.claude`:
    - `~/.claude/skills/<name>` → `<repo>/.claude/skills/<name>` (skill dir with `SKILL.md`)
    - `~/.claude/knowledge` → `<repo>/knowledge` (plugins, genres, workflows, reference, lessons)
@@ -120,12 +130,21 @@ automatically when you work inside the repo.
 > [pnpm docs](https://pnpm.io/installation).
 
 **What `setup` installs** into your REAPER resource folder:
-- `mcp_bridge.lua` — persistent Lua bridge script
+- `mcp_bridge.lua` — persistent Lua bridge script, plus the Lua libraries it loads (`mcp_*_lib.lua`)
 - `mcp_snapshot_manager.lua` — snapshot manager GUI (save/restore/delete from REAPER)
+- `mcp_snapshot_next.lua`, `mcp_snapshot_prev.lua`, `mcp_snapshot_quick_save.lua` — A/B action scripts
+- `reaper_www_root/mcp_bridge.html` — the bridge status page
 - `mcp_analyzer.jsfx` — FFT spectrum analyzer
 - `mcp_lufs_meter.jsfx` — ITU-R BS.1770 LUFS meter
 - `mcp_correlation_meter.jsfx` — stereo correlation analyzer
 - `mcp_crest_factor.jsfx` — dynamics/crest factor meter
+- `mcp_midi_emitter.jsfx` — live MIDI output for `send_midi_*`
+
+It also enables REAPER's web browser interface on port 8099 (set
+`REAPER_WEB_PORT` to change it) by adding a control surface to `reaper.ini`. An
+existing web interface is kept as it is. REAPER rewrites `reaper.ini` when it
+quits, so setup only edits it while REAPER is closed and asks you to quit REAPER
+if it is running.
 
 ### Start the Lua Bridge in REAPER
 
@@ -136,7 +155,24 @@ After setup (either option), load the bridge in REAPER:
 3. Select `mcp_bridge.lua` from your REAPER Scripts folder
 4. Click **Run** — the bridge runs persistently in the background
 
-You should see in REAPER's console: `MCP Bridge: Started`
+The bridge opens its status window (see below). Without the web interface it
+prints a one-line note to REAPER's console instead.
+
+### Bridge status window
+
+On start the bridge opens `http://localhost:8099/mcp_bridge.html` as a small
+app window (Chrome, Edge, Brave or Chromium, else your default browser). It
+skips this when the page is already open, so restarting the bridge never stacks
+windows. The page shows:
+
+- live / stale / offline state and the bridge's defer-loop timing
+- a latency strip of recent commands
+- a searchable command log with an errors filter, expandable rows, pause and copy
+
+Rendering happens in the browser, off REAPER's main thread; the bridge only
+writes a small JSON status to memory, at most 5 times a second. Add `?demo` to
+the URL to preview the page with fake data. To stop the window opening, set
+`OPEN_UI_ON_START = false` at the top of `mcp_bridge.lua`.
 
 ### Verify
 
@@ -272,10 +308,12 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 
 Snapshots capture your full mixer state: track volumes, pans, mute/solo, FX chains (all parameter values, enabled/offline states, presets), and send levels. Use them to A/B compare mix decisions or revert to a known-good state.
 
+Pass `trackIndices` to `snapshot_save` to capture only some tracks; restoring that snapshot touches only those tracks. Pass `fullChunk` (on by default for a scoped snapshot) to store each track's exact state chunk. A chunk restore reproduces a plugin's complete internal state, including plugins whose sound lives in their own internal snapshots (such as Helix Native) that parameter values can't capture. Snapshots don't include the master track yet.
+
 | Tool | Description |
 |------|-------------|
-| `snapshot_save` | Save current mixer state (volumes, pans, FX params, sends, mutes) |
-| `snapshot_restore` | Restore a saved snapshot (smart FX matching — only restores params if plugin names match) |
+| `snapshot_save` | Save current mixer state (volumes, pans, FX params, sends, mutes); `trackIndices` scopes it, `fullChunk` stores exact track chunks |
+| `snapshot_restore` | Restore a saved snapshot (chunk snapshots restore their tracks exactly; parameter snapshots only restore params if plugin names match) |
 | `snapshot_list` | List all saved snapshots with metadata |
 | `snapshot_delete` | Delete a saved snapshot by name |
 
@@ -512,7 +550,7 @@ By default Claude Code asks permission for each MCP tool call. `reaper-mcp init`
 | Command | Description |
 |---------|-------------|
 | `reaper-mcp` / `reaper-mcp serve` | Start the MCP server in stdio mode (what Claude Code runs) |
-| `reaper-mcp setup` | Install the Lua bridge + JSFX into REAPER |
+| `reaper-mcp setup` | Install the Lua bridge, snapshot scripts, JSFX and status page into REAPER; enable the web interface |
 | `reaper-mcp setup-sidecar` | Install the optional Python sidecar (perceptual analysis) |
 | `reaper-mcp init` | Configure Claude Code — tool allow-list + `.mcp.json` (copy-free) |
 | `reaper-mcp doctor` | Verify everything is configured correctly |
@@ -559,6 +597,11 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for the full dev workflow.
 | Variable               | Description                        | Default              |
 | ---------------------- | ---------------------------------- | -------------------- |
 | `REAPER_RESOURCE_PATH` | Override REAPER resource directory | Auto-detected per OS |
+| `REAPER_WEB_PORT`      | Port `setup` gives REAPER's web interface (status window) | `8099` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint for traces, metrics and logs | unset (no export) |
+| `OTEL_TRACES_EXPORTER` / `OTEL_METRICS_EXPORTER` / `OTEL_LOGS_EXPORTER` | Set to `otlp` to export that signal | `none` |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Headers for the OTLP endpoint, e.g. `Authorization=Bearer <token>` | unset |
+| `OTEL_SERVICE_NAME` | Service name on exported telemetry | `reaper-mcp-server` |
 
 Platform defaults:
 
@@ -566,13 +609,26 @@ Platform defaults:
 - **Windows**: `%APPDATA%/REAPER`
 - **Linux**: `~/.config/REAPER`
 
+### Telemetry
+
+With the `OTEL_*` variables set, the server exports OpenTelemetry data:
+
+- a span per tool call and per bridge command (the file-IPC round trip)
+- metrics for command duration, handler time, pickup delay and timeouts
+- structured logs (also written to stderr), including the bridge's own
+  lifecycle events and handler errors, timestamped when the bridge recorded them
+
+Put the variables in the `env` block of your `.mcp.json` entry. Keep the token
+out of version control.
+
 ## Project Structure
 
 ```
 reaper-mcp/
 ├── apps/
-│   ├── reaper-mcp-server/        # MCP server (80 tools, esbuild bundle)
-│   └── reaper-mix-agent/         # AI mix agent (knowledge loader, plugin resolver)
+│   ├── reaper-mcp-server/        # MCP server (134 tools, esbuild bundle)
+│   ├── reaper-mix-agent/         # AI mix agent (knowledge loader, plugin resolver)
+│   └── bridge-ui/                # Bridge status page (React → one self-contained HTML file)
 ├── libs/protocol/                # Shared TypeScript types
 ├── .claude/skills/               # Mix skills (/mixer, /critique, /mastering, /learn-plugin, /mix-memory)
 ├── knowledge/                    # AI mix engineer knowledge base (symlinked into ~/.claude/knowledge)
@@ -584,12 +640,14 @@ reaper-mcp/
 ├── scripts/sync-symlinks.sh      # Symlink skills + knowledge into ~/.claude (primary install)
 ├── reaper/                       # Files installed into REAPER
 │   ├── mcp_bridge.lua            # Persistent Lua bridge
+│   ├── mcp_*_lib.lua             # Lua libraries the bridge loads (plan, actions, tracks, project, items, snapshots)
 │   ├── mcp_snapshot_manager.lua  # Snapshot manager GUI (save/restore/delete)
 │   ├── mcp_snapshot_*.lua        # Snapshot action scripts (next/prev/quick-save + shared lib)
 │   ├── mcp_analyzer.jsfx         # FFT spectrum analyzer
 │   ├── mcp_lufs_meter.jsfx       # LUFS meter (BS.1770)
 │   ├── mcp_correlation_meter.jsfx # Stereo correlation meter
-│   └── mcp_crest_factor.jsfx     # Crest factor meter
+│   ├── mcp_crest_factor.jsfx     # Crest factor meter
+│   └── mcp_midi_emitter.jsfx     # Live MIDI output
 ├── docs/TESTING.md               # End-to-end testing guide
 └── nx.json                       # Nx workspace config
 ```
@@ -616,7 +674,7 @@ If existing tools (like `get_project_info`) work but new tools fail or timeout, 
 pnpm install
 pnpm nx run-many --target=build      # Build all
 pnpm nx run-many --target=lint       # Lint all
-pnpm nx run-many --target=test       # Test all (200+ tests)
+pnpm nx run-many --target=test       # Test all (470+ tests)
 pnpm nx run-many --target=build,lint,test  # Everything
 ```
 

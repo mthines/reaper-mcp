@@ -313,7 +313,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 
 | Tool | File | Description |
 |------|------|-------------|
-| `snapshot_save` | `tools/snapshots.ts` | Save mixer state to `.reaper-mcp/snapshots/` (v2: volumes, pans, FX params, sends) |
+| `snapshot_save` | `tools/snapshots.ts` | Save mixer state to `.reaper-mcp/snapshots/` (v2: volumes, pans, FX params, sends); `trackIndices` scopes it, `fullChunk` stores exact track chunks |
 | `snapshot_restore` | `tools/snapshots.ts` | Restore a saved snapshot (FX params only if plugin name matches) |
 | `snapshot_list` | `tools/snapshots.ts` | List project-scoped snapshots (falls back to global for unsaved projects) |
 | `snapshot_delete` | `tools/snapshots.ts` | Delete a saved snapshot by name |
@@ -405,7 +405,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 80 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 134 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
