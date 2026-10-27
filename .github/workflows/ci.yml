@@ -289,7 +289,7 @@ jobs:
           echo "created=true" >> $GITHUB_OUTPUT
 
   # =============================================================================
-  # Step 4: Build and publish to npm + create GitHub release
+  # Step 4: Create the GitHub release (clone-only: nothing is published to npm)
   # =============================================================================
   release:
     needs: [detect-changes, version]
@@ -297,10 +297,8 @@ jobs:
       always() &&
       needs.version.outputs.created == 'true'
     runs-on: ubuntu-latest
-    environment: npm-publish
     permissions:
       contents: write
-      id-token: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
@@ -309,62 +307,10 @@ jobs:
           ref: ${{ needs.version.outputs.tag }}
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-          registry-url: 'https://registry.npmjs.org'
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Build all projects
-        run: pnpm nx run-many --target=build
-
-      - name: Prepare npm package
-        run: |
-          VERSION="${{ needs.version.outputs.version }}"
-          DIST="dist/apps/reaper-mcp-server"
-
-          # Update version in dist package.json (all other metadata is already in source)
-          sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$DIST/package.json"
-
-          # Verify package contents
-          echo "Package version: $VERSION"
-          echo "Package contents:"
-          ls -la "$DIST/"
-          echo "---"
-          echo "Files that will be published (per 'files' field):"
-          ls -la "$DIST/main.js" "$DIST/README.md" "$DIST/LICENSE" 2>/dev/null
-          ls -d "$DIST/reaper" "$DIST/knowledge" "$DIST/claude-rules" "$DIST/claude-skills" 2>/dev/null
-          echo "---"
-          cat "$DIST/package.json"
-
-      - name: Update npm
-        run: npm install -g npm@latest
-
-      - name: Publish to npm
-        working-directory: dist/apps/reaper-mcp-server
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          VERSION="${{ needs.version.outputs.version }}"
-          echo "Publishing @mthines/reaper-mcp@$VERSION"
-
-          if [[ "$VERSION" == *"-"* ]]; then
-            NPM_TAG=$(echo "$VERSION" | sed -E 's/.*-([^.]+)\..*/\1/')
-            echo "Publishing with tag: $NPM_TAG"
-            npm publish --provenance --access public --tag "$NPM_TAG"
-          else
-            npm publish --provenance --access public
-          fi
-
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ needs.version.outputs.version }}"
           TAG="${{ needs.version.outputs.tag }}"
           IS_BETA="${{ needs.detect-changes.outputs.is_beta }}"
 
@@ -385,16 +331,12 @@ jobs:
           ## Install
 
           \`\`\`bash
-          npx @mthines/reaper-mcp setup
-          npx @mthines/reaper-mcp install-skills          # global (default)
-          npx @mthines/reaper-mcp install-skills --project # or project-local
+          git clone https://github.com/mthines/reaper-mcp.git && cd reaper-mcp
+          git checkout $TAG
+          ./scripts/install.sh
           \`\`\`
 
-          ## npm
-
-          \`\`\`bash
-          npm install -g @mthines/reaper-mcp@$VERSION
-          \`\`\`" \
+          Already installed? \`git pull && ./scripts/install.sh\` from your clone." \
             $PRERELEASE_FLAG
 
       - name: Comment on PR (beta releases)
@@ -404,15 +346,15 @@ jobs:
           script: |
             const version = '${{ needs.version.outputs.version }}';
             const prNumber = '${{ needs.detect-changes.outputs.pr_number }}';
-            const body = `## Beta Release Published
+            const body = `## Beta Release Created
 
             **Version:** \`${version}\`
 
-            ### Install
+            ### Try it
             \`\`\`bash
-            npx @mthines/reaper-mcp@${version} setup
-            npx @mthines/reaper-mcp@${version} install-skills          # global (default)
-            npx @mthines/reaper-mcp@${version} install-skills --project # or project-local
+            git clone https://github.com/${context.repo.owner}/${context.repo.repo}.git && cd ${context.repo.repo}
+            git checkout v${version}
+            ./scripts/install.sh
             \`\`\`
 
             [View Release](https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/v${version})`;
