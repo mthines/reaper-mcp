@@ -177,14 +177,14 @@ describe('bridge', () => {
       expect(emit.mock.calls[0][0]).toMatchObject({
         eventName: 'reaper.bridge.bridge_start',
         severityNumber: SeverityNumber.INFO,
-        timestamp: 1000,
+        timestamp: new Date(1000), // a Date: numbers below the SDK time origin get shifted
         attributes: { 'reaper.version': '7.2' },
       });
       expect(JSON.stringify(emit.mock.calls[0][0].attributes)).not.toContain('/Users/someone');
       expect(emit.mock.calls[1][0]).toMatchObject({
         eventName: 'reaper.bridge.handler_error',
         severityNumber: SeverityNumber.ERROR,
-        timestamp: 2000,
+        timestamp: new Date(2000),
         attributes: { 'rpc.method': 'add_fx', 'exception.message': 'boom', 'error.type': 'handler_crash' },
       });
     });

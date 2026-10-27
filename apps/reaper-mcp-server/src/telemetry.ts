@@ -261,7 +261,9 @@ export function emitLog(
     body: redactHome(body),
     attributes: attrs,
     ...(options.eventName && { eventName: options.eventName }),
-    ...(options.timestampMs != null && { timestamp: options.timestampMs }),
+    // A Date, not a number: the SDK reads numbers below its time origin (any
+    // event written before this process started) as performance.now() offsets.
+    ...(options.timestampMs != null && { timestamp: new Date(options.timestampMs) }),
   });
 }
 
