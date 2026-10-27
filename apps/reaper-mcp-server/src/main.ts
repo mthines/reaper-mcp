@@ -4,7 +4,7 @@ import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
 import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, readBridgeEvents, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
-import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges, emitLog, exceptionAttributes } from './telemetry.js';
+import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges, emitLog, exceptionAttributes, readServiceVersion } from './telemetry.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +16,7 @@ import { setupSidecar } from './setup-sidecar.js';
 import { firstRunTelemetryNotice, resolveTelemetry, writeTelemetryConfig, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
 import { getSidecarClient } from './sidecar.js';
+import { renderDoctor, useColor, type Check, type CheckStatus, type Section } from './doctor-report.js';
 
 const execAsync = promisifyUtil(execCb);
 
@@ -165,7 +166,7 @@ function consoleConsentIO() {
 
 function describeTelemetry(): string {
   const { mode, reason } = resolveTelemetry();
-  const label = { default: 'On — anonymous usage data to the developer', custom: 'Custom — your own OTEL_* destination', off: 'Off' }[mode];
+  const label = { default: 'On — pseudonymous usage data to the developer', custom: 'Custom — your own OTEL_* destination', off: 'Off' }[mode];
   return `${label} (${reason})`;
 }
 
@@ -173,7 +174,7 @@ function describeTelemetry(): string {
 async function telemetryCommand(sub = 'status'): Promise<void> {
   if (sub === 'on' || sub === 'off') {
     writeTelemetryConfig({ telemetry: sub === 'on', telemetryNoticeShown: true });
-    console.log(sub === 'on' ? 'Anonymous usage telemetry turned on — thank you!' : 'Telemetry turned off. Nothing will be sent.');
+    console.log(sub === 'on' ? 'Pseudonymous usage telemetry turned on — thank you!' : 'Telemetry turned off. Nothing will be sent.');
     console.log('Restart Claude Code (or run /mcp) for the running server to pick it up.');
   } else if (sub === 'setup') {
     if (!(await firstRunTelemetryNotice(consoleConsentIO()))) console.log(`Telemetry: ${describeTelemetry()}`);
@@ -188,50 +189,52 @@ async function telemetryCommand(sub = 'status'): Promise<void> {
 }
 
 async function doctor(): Promise<void> {
-  console.log('REAPER MCP — System Check\n');
+  const core: Check[] = [];
 
   const bridgeRunning = await isBridgeRunning();
-  console.log(`Lua bridge:    ${bridgeRunning ? '✓ Connected' : '✗ Not detected'}`);
-  if (!bridgeRunning) {
-    console.log('  → Run "reaper-mcp setup" then load mcp_bridge.lua in REAPER');
-  }
+  core.push(
+    bridgeRunning
+      ? { label: 'Lua bridge', status: 'ok', detail: 'Connected' }
+      : { label: 'Lua bridge', status: 'fail', detail: 'Not detected', fix: 'reaper-mcp setup, then run mcp_bridge.lua in REAPER' },
+  );
 
   const globalClaudeDir = join(homedir(), '.claude');
   const localSkills = existsSync(join(process.cwd(), '.claude', 'skills', 'mixer', 'SKILL.md'));
   const globalSkills = existsSync(join(globalClaudeDir, 'skills', 'mixer', 'SKILL.md'));
-  const skillsExist = localSkills || globalSkills;
-  const skillsLocation = localSkills ? '.claude/skills/' : globalSkills ? '~/.claude/skills/' : '';
-  console.log(`Mix skills:    ${skillsExist ? `✓ Found (${skillsLocation})` : '✗ Not linked'}`);
-  if (!skillsExist) {
-    console.log('  → Run "scripts/sync-symlinks.sh" from your clone');
-  }
+  core.push(
+    localSkills || globalSkills
+      ? { label: 'Mix skills', status: 'ok', detail: localSkills ? '.claude/skills' : '~/.claude/skills' }
+      : { label: 'Mix skills', status: 'fail', detail: 'Not linked', fix: 'scripts/sync-symlinks.sh (from your clone)' },
+  );
 
   // The skills read ~/.claude/knowledge (the symlink sync-symlinks.sh creates), or
   // a project-scoped .claude/knowledge — NOT a bare repo-root knowledge/ dir.
-  const knowledgeLinked =
-    existsSync(join(globalClaudeDir, 'knowledge')) ||
-    existsSync(join(process.cwd(), '.claude', 'knowledge'));
-  console.log(`Knowledge base: ${knowledgeLinked ? '✓ Linked (~/.claude/knowledge)' : '✗ Not linked'}`);
-  if (!knowledgeLinked) {
-    console.log('  → Run "scripts/sync-symlinks.sh" from your clone');
-  }
+  const localKnowledge = existsSync(join(process.cwd(), '.claude', 'knowledge'));
+  const knowledgeLinked = localKnowledge || existsSync(join(globalClaudeDir, 'knowledge'));
+  core.push(
+    knowledgeLinked
+      ? { label: 'Knowledge base', status: 'ok', detail: localKnowledge ? '.claude/knowledge' : '~/.claude/knowledge' }
+      : { label: 'Knowledge base', status: 'fail', detail: 'Not linked', fix: 'scripts/sync-symlinks.sh (from your clone)' },
+  );
 
   const userServer = hasUserMcpServer(join(homedir(), '.claude.json'));
   const mcpJsonExists = existsSync(join(process.cwd(), '.mcp.json'));
-  const mcpConfig = userServer ? '✓ Registered for your user (any folder)' : mcpJsonExists ? '✓ .mcp.json found' : '✗ Not registered';
-  console.log(`MCP config:    ${mcpConfig}`);
-  if (!userServer && !mcpJsonExists) {
-    console.log('  → Run "scripts/install.sh" from your clone');
-  }
+  const mcpRegistered = userServer || mcpJsonExists;
+  core.push(
+    mcpRegistered
+      ? { label: 'MCP config', status: 'ok', detail: userServer ? 'Registered for your user (any folder)' : '.mcp.json in this folder' }
+      : { label: 'MCP config', status: 'fail', detail: 'Not registered', fix: 'scripts/install.sh (from your clone)' },
+  );
 
-  console.log(`Telemetry:     ${describeTelemetry()}`);
-
-  console.log('\nTo check SWS Extensions, start REAPER and use the "list_available_fx" tool.');
-  console.log('SWS provides enhanced plugin discovery and snapshot support.\n');
+  core.push({ label: 'SWS', status: 'info', detail: 'Checked live: the bridge page shows it, or ask Claude to run list_available_fx' });
+  const telemetry = resolveTelemetry().mode;
+  core.push({
+    label: 'Telemetry',
+    status: 'info',
+    detail: { default: 'On, pseudonymous · turn off: reaper-mcp telemetry off', custom: 'Your own OTEL_* destination', off: 'Off' }[telemetry],
+  });
 
   // --- Sidecar checks (opt-in; all run independently to show partial state) ---
-  console.log('Python Sidecar (opt-in, for analyze_track_aesthetics):');
-
   const sidecarVenvPath = join(homedir(), '.reaper-mcp', 'sidecar-venv');
   // Venv binary layout differs by OS: POSIX uses bin/, Windows uses Scripts\
   const venvBin = platform() === 'win32' ? 'Scripts' : 'bin';
@@ -241,7 +244,7 @@ async function doctor(): Promise<void> {
 
   // Check (a): Python ≥ 3.10 available
   let pythonOk = false;
-  let pythonDetail = 'not found';
+  let pythonDetail = 'Not found';
   try {
     const pythonBin = process.env['PYTHON_BIN'] ?? 'python3';
     const { stdout, stderr } = await execAsync(`"${pythonBin}" --version`);
@@ -254,19 +257,11 @@ async function doctor(): Promise<void> {
       pythonDetail = versionStr;
     }
   } catch {
-    pythonDetail = 'not found';
-  }
-  console.log(`  Python ≥ 3.10:  ${pythonOk ? `✓ ${pythonDetail}` : `✗ ${pythonDetail}`}`);
-  if (!pythonOk) {
-    console.log('    → Install Python 3.10+ from https://python.org or set PYTHON_BIN');
+    pythonDetail = 'Not found';
   }
 
   // Check (b): venv exists
   const venvExists = existsSync(sidecarVenvPath);
-  console.log(`  Venv:           ${venvExists ? `✓ ${sidecarVenvPath}` : '✗ Not installed'}`);
-  if (!venvExists) {
-    console.log('    → Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar');
-  }
 
   // Check (c): audiobox-aesthetics importable in venv
   let depsOk = false;
@@ -278,39 +273,54 @@ async function doctor(): Promise<void> {
       depsOk = false;
     }
   }
-  console.log(`  Dependencies:   ${depsOk ? '✓ audiobox-aesthetics importable' : '✗ Not installed'}`);
-  if (!depsOk && venvExists) {
-    console.log('    → Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar');
-  }
 
   // Check (d): model weights in HuggingFace cache
   const weightsPath = join(hfCachePath, 'models--facebook--audiobox-aesthetics');
   const weightsExist = existsSync(weightsPath);
-  console.log(`  Model weights:  ${weightsExist ? `✓ ${weightsPath}` : '✗ Not downloaded'}`);
-  if (!weightsExist) {
-    console.log('    → Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar');
-  }
 
-  const sidecarReady = venvExists && depsOk && weightsExist;
-  // The sidecar is opt-in. If the user has not started installing it (no venv
-  // and no weights), don't penalize the exit code. But if they have opted in
-  // (any artifact present) we fail loud on a partial / broken install.
-  // Note: weightsExist checks the shared HuggingFace cache (~/.cache/huggingface).
-  // A user who has the Audiobox weights from an unrelated project and no venv will
-  // see sidecarOptedIn=true and exit code 1. This is intentional: "you have model
-  // weights but no venv" is a broken state this tool cannot use — run setup-sidecar.
-  const sidecarOptedIn = venvExists || weightsExist;
+  // Weights are optional: the sidecar downloads them on first use; setup-sidecar only pre-fetches them
+  const sidecarReady = venvExists && depsOk;
+  // The sidecar is opt-in. If the user has not started installing it (no venv),
+  // don't penalize the exit code. Once they have opted in, fail loud on a broken install.
+  // Weights alone don't count: they live in the shared HuggingFace cache and may come
+  // from an unrelated project.
+  const sidecarOptedIn = venvExists;
   const sidecarBroken = sidecarOptedIn && !sidecarReady;
-  if (!sidecarOptedIn) {
-    console.log('\n  Sidecar: not installed (opt-in). Run setup-sidecar to enable audio AI tools.');
-  } else if (sidecarBroken) {
-    console.log('\n  Sidecar: PARTIALLY INSTALLED — run setup-sidecar to repair.');
-  } else {
-    console.log('\n  Sidecar: fully installed and ready.');
-  }
+  // Not opted in: missing pieces are information, not problems
+  const missing: CheckStatus = sidecarOptedIn ? 'fail' : 'info';
+  const repair = 'reaper-mcp setup-sidecar';
+  const home = (p: string) => p.replace(homedir(), '~');
+  const sidecar: Section = {
+    title: 'Python sidecar',
+    note: 'optional · lets Claude listen to the audio',
+    state: sidecarReady
+      ? { text: 'ready', status: 'ok' }
+      : sidecarBroken
+        ? { text: 'partly installed', status: 'fail' }
+        : { text: `not installed · enable with ${repair}`, status: 'info' },
+    checks: [
+      pythonOk
+        ? { label: 'Python ≥ 3.10', status: 'ok', detail: pythonDetail }
+        : { label: 'Python ≥ 3.10', status: missing, detail: pythonDetail, fix: 'install Python 3.10+ (python.org) or set PYTHON_BIN' },
+      venvExists
+        ? { label: 'Venv', status: 'ok', detail: home(sidecarVenvPath) }
+        : { label: 'Venv', status: missing, detail: 'Not installed', fix: repair },
+      depsOk
+        ? { label: 'Dependencies', status: 'ok', detail: 'audiobox-aesthetics importable' }
+        : { label: 'Dependencies', status: missing, detail: 'Not installed', fix: repair },
+      weightsExist
+        ? { label: 'Model weights', status: 'ok', detail: `Audiobox Aesthetics · ${home(weightsPath)}` }
+        : {
+            label: 'Model weights',
+            status: 'info',
+            detail: "Meta's Audiobox Aesthetics: Claude listens to any track and rates it 0–10 for production quality, complexity and enjoyment",
+            fix: `~831 MB, downloads on first use · or get it now: ${repair}`,
+          },
+    ],
+  };
 
-  console.log('');
-  process.exit(bridgeRunning && knowledgeLinked && mcpJsonExists && !sidecarBroken ? 0 : 1);
+  console.log(renderDoctor([{ title: 'Core', checks: core }, sidecar], { version: readServiceVersion(), color: useColor() }));
+  process.exit(bridgeRunning && knowledgeLinked && mcpRegistered && !sidecarBroken ? 0 : 1);
 }
 
 async function serve(): Promise<void> {
@@ -452,7 +462,7 @@ Usage:
   reaper-mcp init             Configure Claude Code: tool allow-list + .mcp.json (copy-free)
   reaper-mcp doctor           Check that everything is configured correctly
   reaper-mcp status           Check if Lua bridge is running in REAPER
-  reaper-mcp telemetry off    Opt out of anonymous usage telemetry (also: on, status)
+  reaper-mcp telemetry off    Opt out of pseudonymous usage telemetry (also: on, status)
 
 Quick Start (from your clone):
   ./scripts/install.sh        # build, link CLI, bridge, symlink skills + knowledge, configure

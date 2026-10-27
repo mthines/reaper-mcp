@@ -1,6 +1,6 @@
 # Telemetry
 
-reaper-mcp is built by one developer. Anonymous usage telemetry is the only way I can see which tools people use, which ones fail, and where things are slow, so it is **on by default**. You can turn it off at any time, and setup asks you before anything is sent.
+reaper-mcp is built by one developer — me, in my spare time. Pseudonymous usage telemetry is the only way I can see which tools people use, which ones fail, and where things are slow, so it's **on by default**. You can turn it off any time, and setup asks you before anything is sent.
 
 ## Opting out
 

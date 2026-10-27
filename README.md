@@ -289,12 +289,23 @@ did what.
 
 ---
 
-## 🔒 Privacy
+## 🔒 Privacy & telemetry
 
-reaper-mcp sends **anonymous usage telemetry** by default: which tools run, whether they
-fail, and how long they take. It helps me, a solo developer, improve it. It never sends
-your projects, track names, parameters or file paths. Opt out any time with
-`reaper-mcp telemetry off`. The full details are in [TELEMETRY.md](TELEMETRY.md).
+Hi 👋 reaper-mcp isn't a company — it's just me. I'm a developer who loves making music,
+and I build this in my spare time because it's the tool I wanted for my own sessions 🎛️
+
+The catch: I can only test it on my own setup. To make sure it also works on yours —
+other REAPER versions, other plugins, other OSes — reaper-mcp sends **pseudonymous usage
+data** by default: which tools run, whether they fail, and how long they take. A random
+install id groups one machine's calls together. It isn't tied to your name, account or
+computer.
+
+**Never sent:** your projects, track or plugin names, settings, file paths, error
+messages, audio or MIDI. I respect your privacy 🙏
+
+You're in control: setup asks before anything is sent, and `reaper-mcp telemetry off`
+turns it off for good — no hard feelings. Everything that's collected, and where it
+goes, is in [TELEMETRY.md](TELEMETRY.md).
 
 ---
 

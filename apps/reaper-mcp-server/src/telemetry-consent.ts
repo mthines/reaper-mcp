@@ -33,9 +33,9 @@ export const DEFAULT_DESTINATION = {
 
 export const TELEMETRY_DOC_URL = 'https://github.com/mthines/reaper-mcp/blob/main/TELEMETRY.md';
 
-export const TELEMETRY_NOTICE = `Anonymous usage telemetry is ON by default.
+export const TELEMETRY_NOTICE = `Pseudonymous usage telemetry is ON by default.
 reaper-mcp is built by one developer. To see which tools people use, which fail,
-and how fast they are, it sends anonymous usage data: tool names, error types,
+and how fast they are, it sends pseudonymous usage data: tool names, error types,
 timings, and app/OS versions, tagged with a random install id.
 It never sends your projects, track names, parameters, file paths or error text.
 
@@ -145,7 +145,7 @@ export async function firstRunTelemetryNotice(
   let keep = true;
   if (io.interactive) {
     const rl = createInterface({ input: io.input, output: io.output, terminal: false });
-    io.output.write('Keep anonymous telemetry on? [Y/n] ');
+    io.output.write('Keep usage telemetry on? [Y/n] ');
     // 'line' always fires before 'close'; Ctrl+D or a closed stdin counts as Enter.
     const answer = await new Promise<string>((resolve) => {
       rl.once('line', resolve);

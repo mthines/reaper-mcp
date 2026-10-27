@@ -45,7 +45,7 @@ const SCOPE_NAME = 'reaper-mcp-server';
 // Read service version from package.json
 // ---------------------------------------------------------------------------
 
-function readServiceVersion(): string {
+export function readServiceVersion(): string {
   try {
     const require = createRequire(import.meta.url);
     const __dirname = dirname(fileURLToPath(import.meta.url));
