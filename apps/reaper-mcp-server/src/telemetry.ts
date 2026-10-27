@@ -21,6 +21,7 @@ import {
   ATTR_SERVICE_VERSION,
 } from '@opentelemetry/semantic-conventions';
 import { randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -64,6 +65,29 @@ function readServiceVersion(): string {
   return 'unknown';
 }
 
+/**
+ * A random per-install id, created on first run and reused after. It tells
+ * users apart in telemetry without carrying anything that identifies them.
+ * Returns undefined when the file can't be read or written.
+ */
+export function readInstallId(dir = join(homedir(), '.reaper-mcp')): string | undefined {
+  const file = join(dir, 'install-id');
+  try {
+    const existing = readFileSync(file, 'utf-8').trim();
+    if (existing) return existing;
+  } catch {
+    // first run — create it below
+  }
+  try {
+    const id = randomUUID();
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(file, `${id}\n`, 'utf-8');
+    return id;
+  } catch {
+    return undefined;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // SDK lifecycle
 // ---------------------------------------------------------------------------
@@ -81,8 +105,10 @@ export async function initTelemetry(): Promise<void> {
   if (sdk) return; // already initialised
 
   const serviceVersion = readServiceVersion();
+  const installId = readInstallId();
 
   const resource = resourceFromAttributes({
+    ...(installId && { 'enduser.pseudo.id': installId }),
     [ATTR_SERVICE_NAME]: SERVICE_NAME,
     [ATTR_SERVICE_NAMESPACE]: SERVICE_NAMESPACE,
     [ATTR_SERVICE_VERSION]: serviceVersion,

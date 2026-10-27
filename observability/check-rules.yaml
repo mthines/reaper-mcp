@@ -1,0 +1,65 @@
+# Dash0 check rules for reaper-mcp-server (dataset `reaper-mcp`).
+# PrometheusRule format — apply with the Dash0 operator, or paste each `expr`
+# into a new check rule in the Dash0 UI. Every expression was run against live
+# data before it was added here; see DEVELOPMENT.md → "Regression signals".
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: reaper-mcp-server
+spec:
+  groups:
+    - name: reaper-mcp-server
+      interval: 1m
+      rules:
+        - alert: ReaperBridgeDown
+          expr: max by (enduser_pseudo_id, host_name) ({otel_metric_name="reaper.bridge.up"}) == 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: REAPER closed or the Lua bridge script stopped — every tool call will time out.
+
+        - alert: ReaperBridgeTimeouts
+          expr: >-
+            sum by (enduser_pseudo_id) (histogram_count(increase(
+              {otel_metric_name="reaper.bridge.command.duration", error_type="timeout"}[5m]))) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: Bridge commands are not reaching REAPER (no response before the timeout).
+
+        - alert: ReaperBridgeSlow
+          # Timeouts are excluded — they land in the 10–30 s bucket and have their own rule.
+          expr: >-
+            histogram_quantile(0.95, sum(increase(
+              {otel_metric_name="reaper.bridge.command.duration", error_type=""}[10m]))) > 0.5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: p95 bridge round-trip above 0.5 s — the REAPER defer loop is starved (heavy project, blocking render).
+
+        - alert: ReaperMcpToolErrorRatio
+          expr: >-
+            sum by (gen_ai_tool_name) (histogram_count(increase(
+              {otel_metric_name="mcp.server.operation.duration", error_type!=""}[30m])))
+            /
+            sum by (gen_ai_tool_name) (histogram_count(increase(
+              {otel_metric_name="mcp.server.operation.duration"}[30m])))
+            > 0.05
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: More than 5 % of calls to one MCP tool are failing — that tool likely regressed.
+
+        - alert: ReaperMcpErrorLogs
+          # ERROR is reserved for timeouts, handler crashes, unknown commands and
+          # server crashes — user mistakes log at WARN — so any ERROR is worth a look.
+          expr: >-
+            sum(increase({otel_metric_name="dash0.logs", service_name="reaper-mcp-server",
+              otel_log_severity_range="ERROR"}[5m])) > 0
+          labels:
+            severity: info
+          annotations:
+            summary: reaper-mcp-server logged an ERROR (handler crash, server crash, or bridge timeout).

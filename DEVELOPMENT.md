@@ -244,6 +244,11 @@ resource (`service.instance.id`, `deployment.environment.name`). Count them per 
 - `mcp.server.operation.duration{error.type!=""}` / total > 5 % per `gen_ai.tool.name` — a tool regressed.
 - Any `reaper.bridge.handler_error` or `reaper.server.crash` log — a bug, not a user error.
 
+These are ready to apply as check rules in [`observability/check-rules.yaml`](observability/check-rules.yaml).
+
+Every resource carries `enduser.pseudo.id`, a random id created once in `~/.reaper-mcp/install-id`. It tells
+users (installs) apart without identifying anyone; delete the file to get a new one.
+
 ### Routing through an OpenTelemetry Collector (optional)
 
 Exporting straight to Dash0 needs no Collector: the server already redacts at the source — the home directory
