@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" width="1200" height="560" role="img" aria-label="Illustrative session: asked to make the vocals cut through, the mixer saves a snapshot, measures the vocal and guitars, cuts the guitars where they mask the vocal, compresses the vocal, re-measures, and saves an after snapshot for A/B.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d0b1e"/>
+      <stop offset="1" stop-color="#1c1240"/>
+    </linearGradient>
+    <style>
+      text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 18px; }
+      .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif; }
+      .dim { fill: #8a83b5; }
+      .w { fill: #ece9ff; }
+      .g { fill: #5eead4; }
+      .o { fill: #ffb08a; }
+      .v { fill: #c4b5fd; }
+      .y { fill: #ffd166; }
+      .line { opacity: 0; animation: show 0.4s ease-out forwards; }
+      .l1 { animation-delay: 0.3s; } .l2 { animation-delay: 0.9s; } .l3 { animation-delay: 1.5s; }
+      .l4 { animation-delay: 2.1s; } .l5 { animation-delay: 2.7s; } .l6 { animation-delay: 3.3s; }
+      .l7 { animation-delay: 3.9s; } .l8 { animation-delay: 4.5s; }
+      @keyframes show { from { opacity: 0; } to { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { .line { animation: none; opacity: 1; } }
+    </style>
+  </defs>
+
+  <rect width="1200" height="560" rx="24" fill="url(#bg)"/>
+  <!-- window chrome -->
+  <rect x="0" y="0" width="1200" height="52" rx="24" fill="#ffffff" fill-opacity="0.05"/>
+  <rect x="0" y="40" width="1200" height="12" fill="#ffffff" fill-opacity="0.05"/>
+  <circle cx="34" cy="26" r="7" fill="#ff5f57"/><circle cx="58" cy="26" r="7" fill="#febc2e"/><circle cx="82" cy="26" r="7" fill="#28c840"/>
+  <text x="600" y="32" text-anchor="middle" class="sans dim" font-size="15">Claude Code — connected to REAPER</text>
+  <text x="1170" y="32" text-anchor="end" class="sans" font-size="13" fill="#6f6898">illustrative session</text>
+
+  <g transform="translate(48,104)">
+    <g class="line"><text><tspan class="g">❯</tspan><tspan class="w" font-weight="700"> /mixer</tspan><tspan class="w"> The vocals get buried in the chorus. It's a pop song.</tspan></text></g>
+
+    <g class="line l1" transform="translate(0,58)"><text><tspan class="g">✓</tspan><tspan class="w"> Snapshot saved </tspan><tspan class="dim">“Before: vocal clarity”</tspan></text></g>
+
+    <g class="line l2" transform="translate(0,100)"><text><tspan class="v">◎</tspan><tspan class="w"> Measured chorus  </tspan><tspan class="dim">Vocal </tspan><tspan class="y">−19.8 LUFS</tspan><tspan class="dim">  ·  Guitars </tspan><tspan class="y">−15.2 LUFS</tspan></text></g>
+    <g class="line l3" transform="translate(0,134)"><text><tspan class="dim">    Spectrum: guitars stack up at </tspan><tspan class="o">2–4 kHz</tspan><tspan class="dim">, right where the vocal lives</tspan></text></g>
+
+    <g class="line l4" transform="translate(0,184)"><text><tspan class="o">→</tspan><tspan class="w"> Guitar bus  </tspan><tspan class="dim">Pro-Q 3 · −2.5 dB bell at 3.2 kHz, Q 1.4</tspan></text></g>
+    <g class="line l5" transform="translate(0,218)"><text><tspan class="o">→</tspan><tspan class="w"> Vocal       </tspan><tspan class="dim">Pro-C 2 · 3:1, 4 dB gain reduction · fader +1.5 dB</tspan></text></g>
+
+    <g class="line l6" transform="translate(0,268)"><text><tspan class="v">◎</tspan><tspan class="w"> Re-measured  </tspan><tspan class="dim">Vocal now </tspan><tspan class="g">+2.1 dB</tspan><tspan class="dim"> over the guitars in 2–4 kHz · no new peaks</tspan></text></g>
+
+    <g class="line l7" transform="translate(0,318)"><text><tspan class="g">✓</tspan><tspan class="w"> Snapshot saved </tspan><tspan class="dim">“After: vocal clarity”</tspan><tspan class="w">. A/B them, or undo in one step.</tspan></text></g>
+
+    <g class="line l8" transform="translate(0,372)">
+      <rect x="-14" y="-29" width="1118" height="44" rx="14" fill="#22d3a6" fill-opacity="0.1" stroke="#22d3a6" stroke-opacity="0.4"/>
+      <text class="sans" font-size="18"><tspan class="g" font-weight="700">Why: </tspan><tspan class="w">pop puts the vocal up front. Cutting the guitars where they clash beats just turning the vocal up.</tspan></text>
+    </g>
+  </g>
+</svg>

@@ -67,6 +67,16 @@ export function createMcpJson(targetPath: string): boolean {
   return true;
 }
 
+/** True when Claude Code's user config (~/.claude.json) registers a `reaper` MCP server (`claude mcp add --scope user`) */
+export function hasUserMcpServer(claudeJsonPath: string): boolean {
+  try {
+    const config = JSON.parse(readFileSync(claudeJsonPath, 'utf-8'));
+    return Boolean(config?.mcpServers?.reaper);
+  } catch {
+    return false;
+  }
+}
+
 /** Expected REAPER asset files that must be in the package */
 export const REAPER_ASSETS = [
   'mcp_bridge.lua',

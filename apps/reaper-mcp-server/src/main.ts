@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
 import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface } from './cli.js';
 import { setupSidecar } from './setup-sidecar.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
 import { getSidecarClient } from './sidecar.js';
@@ -185,10 +185,12 @@ async function doctor(): Promise<void> {
     console.log('  → Run "scripts/sync-symlinks.sh" from your clone');
   }
 
+  const userServer = hasUserMcpServer(join(homedir(), '.claude.json'));
   const mcpJsonExists = existsSync(join(process.cwd(), '.mcp.json'));
-  console.log(`MCP config:    ${mcpJsonExists ? '✓ .mcp.json found' : '✗ .mcp.json missing'}`);
-  if (!mcpJsonExists) {
-    console.log('  → Run "reaper-mcp init" to create .mcp.json');
+  const mcpConfig = userServer ? '✓ Registered for your user (any folder)' : mcpJsonExists ? '✓ .mcp.json found' : '✗ Not registered';
+  console.log(`MCP config:    ${mcpConfig}`);
+  if (!userServer && !mcpJsonExists) {
+    console.log('  → Run "scripts/install.sh" from your clone');
   }
 
   console.log('\nTo check SWS Extensions, start REAPER and use the "list_available_fx" tool.');

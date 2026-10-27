@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, ensureWebInterface, REAPER_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureWebInterface, REAPER_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `reaper-mcp-test-${randomUUID()}`);
@@ -20,6 +20,23 @@ describe('cli helpers', () => {
 
   afterEach(() => {
     rmSync(tmp, { recursive: true, force: true });
+  });
+
+  describe('hasUserMcpServer', () => {
+    it('is true when ~/.claude.json registers a reaper server', () => {
+      const path = join(tmp, '.claude.json');
+      writeFileSync(path, JSON.stringify({ mcpServers: { reaper: { command: 'node', args: ['main.js', 'serve'] } } }));
+      expect(hasUserMcpServer(path)).toBe(true);
+    });
+
+    it('is false without a reaper server, a missing file, or invalid JSON', () => {
+      const path = join(tmp, '.claude.json');
+      writeFileSync(path, JSON.stringify({ mcpServers: { other: {} } }));
+      expect(hasUserMcpServer(path)).toBe(false);
+      expect(hasUserMcpServer(join(tmp, 'missing.json'))).toBe(false);
+      writeFileSync(path, '{ not json');
+      expect(hasUserMcpServer(path)).toBe(false);
+    });
   });
 
   describe('resolveAssetDir', () => {

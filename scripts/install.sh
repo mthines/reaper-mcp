@@ -3,48 +3,111 @@
 #
 #   ./scripts/install.sh
 #
-# Steps: install deps → build → link the `reaper-mcp` CLI → install the REAPER
-# bridge → symlink the mix skills + knowledge into ~/.claude → configure Claude
-# Code (tool allow-list + .mcp.json). The only manual step left is loading
-# mcp_bridge.lua in REAPER (a GUI action).
+# Needs only Node.js 20+ (and Claude Code). pnpm is used if installed; otherwise
+# the copy that ships with Node (corepack) or a one-off `npx pnpm` — nothing to
+# install globally.
 #
-# Idempotent: safe to re-run after pulling updates.
+# Steps: install deps → build → install the REAPER bridge → symlink the mix
+# skills + knowledge into ~/.claude → configure Claude Code (tool allow-list,
+# user-scope MCP server, .mcp.json) → link the `reaper-mcp` CLI (best effort).
+# The only manual step left is loading mcp_bridge.lua in REAPER (a GUI action).
+#
+# Idempotent: safe to re-run after pulling updates. Prints one line per step;
+# the full output goes to tmp/install.log (or stream it with --verbose).
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
-CLI=("node" "$REPO_ROOT/dist/apps/reaper-mcp-server/main.js")
+MAIN_JS="$REPO_ROOT/dist/apps/reaper-mcp-server/main.js"
+CLI=("node" "$MAIN_JS")
+VERBOSE=""; [ "${1:-}" = "--verbose" ] && VERBOSE=1
+mkdir -p tmp
+LOG="$REPO_ROOT/tmp/install.log"
+: > "$LOG"
 
-step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+note() { printf '    %s\n' "$*"; }
+fail() { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
-step "Installing dependencies (pnpm install)"
-pnpm install
+# run "<label>" cmd...: one ✓/✗ line; output to the log (streamed with --verbose).
+run() {
+  local label="$1"; shift
+  printf '\n==> %s\n' "$label" >> "$LOG"
+  if [ -n "$VERBOSE" ]; then
+    printf '\033[1m==> %s\033[0m\n' "$label"
+    "$@" 2>&1 | tee -a "$LOG" || fail "$label failed. Full log: $LOG"
+  else
+    printf '  …  %s' "$label"
+    if "$@" >> "$LOG" 2>&1; then
+      printf '\r  \033[32m✓\033[0m  %s\n' "$label"
+    else
+      printf '\r  \033[31m✗\033[0m  %s\n\n' "$label"
+      tail -n 25 "$LOG" >&2
+      fail "$label failed. Full log: $LOG  (re-run with --verbose to watch it)"
+    fi
+  fi
+}
 
-step "Building the MCP server"
-pnpm nx build reaper-mcp-server
+printf '\n\033[1m🎚️  reaper-mcp installer\033[0m\n\n'
 
-step "Linking the reaper-mcp CLI to this clone"
-( cd dist/apps/reaper-mcp-server && pnpm link --global )
+# --- Prerequisites -----------------------------------------------------------
+command -v node >/dev/null 2>&1 || fail "Node.js is not installed. Get version 20 or newer from https://nodejs.org and run this again."
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
+[ "$NODE_MAJOR" -ge 20 ] || fail "Node.js $(node -v) is too old. Install version 20 or newer from https://nodejs.org and run this again."
 
-step "Installing the REAPER bridge (Lua + JSFX)"
-"${CLI[@]}" setup
+# pnpm: installed → corepack (bundled with Node 20–24) → one-off npx download.
+PNPM_VERSION="$(node -p 'require("./package.json").packageManager.split("@")[1]')"
+if command -v pnpm >/dev/null 2>&1; then
+  PNPM=(pnpm)
+elif command -v corepack >/dev/null 2>&1; then
+  export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+  PNPM=(corepack pnpm)
+else
+  PNPM=(npx --yes "pnpm@$PNPM_VERSION")
+fi
 
-step "Symlinking the mix skills + knowledge into ~/.claude"
-"$REPO_ROOT/scripts/sync-symlinks.sh"
+# --- Build -------------------------------------------------------------------
+run "Downloading dependencies (takes a minute the first time)" "${PNPM[@]}" install
+run "Building the server" "${PNPM[@]}" nx build reaper-mcp-server
 
-step "Configuring Claude Code (tool allow-list + .mcp.json)"
-"${CLI[@]}" init
+# --- REAPER + Claude Code ----------------------------------------------------
+run "Installing the bridge into REAPER" "${CLI[@]}" setup
+# setup can't finish one part while REAPER is open (or before its first launch); say so.
+grep -q 'Skipped: REAPER is running' "$LOG" && note "REAPER was open, so the status window isn't switched on yet. Quit REAPER and run this again to add it."
+grep -q 'reaper.ini not found' "$LOG" && note "Start REAPER once, quit it, then run this again to switch on the status window."
+run "Adding the mix skills to Claude Code" "$REPO_ROOT/scripts/sync-symlinks.sh"
+run "Pre-approving the REAPER tools in Claude Code" "${CLI[@]}" init
 
-cat <<'EOF'
+if command -v claude >/dev/null 2>&1; then
+  if out="$(claude mcp add --scope user reaper -- node "$MAIN_JS" serve 2>&1)"; then
+    printf '  \033[32m✓\033[0m  Connecting Claude Code to REAPER (works from any folder)\n'
+  elif grep -qi "already exists" <<<"$out"; then
+    printf '  \033[32m✓\033[0m  Claude Code already knows REAPER\n'
+    claude mcp get reaper 2>/dev/null | grep -q "$MAIN_JS" ||
+      note "It points at another copy. To use this one: claude mcp remove --scope user reaper && ./scripts/install.sh"
+  else
+    printf '  \033[33m!\033[0m  Could not connect Claude Code to REAPER: %s\n' "$out"
+    note "Opening Claude Code inside this folder still works."
+  fi
+else
+  printf '  \033[33m!\033[0m  Claude Code is not installed yet\n'
+  note "Get it from https://claude.com/claude-code, then run this again."
+fi
 
-Setup complete. One manual step left — load the bridge in REAPER:
-  Actions > Show action list > Load ReaScript > select mcp_bridge.lua > Run
-  (you should see "MCP Bridge: Started" in REAPER's console)
+# Optional: a `reaper-mcp` command on PATH (doctor/status). Nothing depends on it.
+( cd dist/apps/reaper-mcp-server && "${PNPM[@]}" link --global ) >> "$LOG" 2>&1 || true
 
-If `reaper-mcp` isn't found in new shells, add pnpm's global bin to your PATH
-(it's where `pnpm link --global` installs): https://pnpm.io/installation#using-a-shorter-alias
+BRIDGE="$(sed -n 's/^ *3\. Select: //p' "$LOG" | tail -n 1)"
+TILDE="~"; BRIDGE="${BRIDGE/#"$HOME"/$TILDE}"
+cat <<EOF
 
-Then open Claude Code and mix:
-  /mixer "Please gain stage my tracks"   ·   /critique "Roast my mix"
+✅ Done! One step left: in REAPER, open
+   Actions → Show action list → Load ReaScript…
+   pick mcp_bridge.lua and click Run.
+   ${BRIDGE:+($BRIDGE)}
+
+Then open Claude Code in any folder and mix:
+   /mixer Please gain stage my tracks
+
+Something off? Run  npm run doctor  in this folder.
 EOF

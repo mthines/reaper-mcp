@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" width="1200" height="520" role="img" aria-label="LoreKit is the knowledge core: it holds one record per plugin and the lessons the mixer learns. Every session reads from it before acting and writes back what worked, what didn't, and how your plugins behave. Genre rules, workflows and reference sheets ship with the repo.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d0b1e"/>
+      <stop offset="1" stop-color="#1c1240"/>
+    </linearGradient>
+    <radialGradient id="core" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#a78bfa" stop-opacity="0.55"/>
+      <stop offset="0.6" stop-color="#7c3aed" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#7c3aed" stop-opacity="0"/>
+    </radialGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#cbb8ff"/>
+    </marker>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif; }
+      .h { font-size: 21px; font-weight: 800; fill: #ffffff; }
+      .p { font-size: 15px; fill: #bdb6e6; }
+      .k { font-size: 12px; font-weight: 700; letter-spacing: 1.6px; }
+      .orbit { stroke-dasharray: 4 10; animation: spin 2s linear infinite; }
+      @keyframes spin { to { stroke-dashoffset: -28; } }
+      .halo { transform-box: fill-box; transform-origin: center; animation: breathe 3s ease-in-out infinite alternate; }
+      @keyframes breathe { from { transform: scale(0.92); opacity: 0.7; } to { transform: scale(1.05); opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { .orbit, .halo { animation: none; } }
+    </style>
+  </defs>
+  <rect width="1200" height="520" rx="28" fill="url(#bg)"/>
+
+  <!-- core -->
+  <circle class="halo" cx="600" cy="250" r="170" fill="url(#core)"/>
+  <circle cx="600" cy="250" r="104" fill="#120d2b" stroke="#a78bfa" stroke-width="2"/>
+  <text x="600" y="226" text-anchor="middle" class="k" fill="#cbb8ff">KNOWLEDGE CORE</text>
+  <text x="600" y="264" text-anchor="middle" font-size="38" font-weight="800" fill="#ffffff" letter-spacing="-1">LoreKit</text>
+  <text x="600" y="292" text-anchor="middle" font-size="14" fill="#bdb6e6">memory that persists</text>
+
+  <!-- read / write loop -->
+  <path d="M470 200 C 430 160, 400 150, 372 150" stroke="#cbb8ff" stroke-width="2" fill="none" class="orbit" marker-end="url(#a)"/>
+  <path d="M372 350 C 400 350, 430 340, 470 300" stroke="#5eead4" stroke-width="2" fill="none" class="orbit" marker-end="url(#a)"/>
+  <text x="430" y="138" class="k" fill="#cbb8ff" text-anchor="middle">READ BEFORE ACTING</text>
+  <text x="430" y="378" class="k" fill="#5eead4" text-anchor="middle">WRITE WHAT IT LEARNED</text>
+
+  <path d="M706 250 H828" stroke="#cbb8ff" stroke-opacity="0.6" stroke-width="2" fill="none" class="orbit"/>
+  <circle cx="828" cy="250" r="5" fill="#cbb8ff"/>
+
+  <!-- left: mixer skills -->
+  <g transform="translate(48,70)">
+    <rect width="320" height="360" rx="20" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.14"/>
+    <text x="24" y="40" class="k" fill="#ffb08a">THE SKILLS</text>
+    <text x="24" y="72" class="h">Every session</text>
+    <g font-size="16" font-weight="600" fill="#ece9ff">
+      <text x="24" y="118">🎚️  /mixer</text>
+      <text x="24" y="152">🔥  /critique</text>
+      <text x="24" y="186">💿  /mastering</text>
+      <text x="24" y="220">🎓  /learn-plugin</text>
+    </g>
+    <text x="24" y="268" class="p">Recall what worked last time.</text>
+    <text x="24" y="292" class="p">Get corrected? A lesson is saved</text>
+    <text x="24" y="316" class="p">right then. If it keeps coming up,</text>
+    <text x="24" y="340" class="p">it becomes a permanent rule.</text>
+  </g>
+
+  <!-- right: what's stored -->
+  <g transform="translate(832,70)">
+    <rect width="320" height="360" rx="20" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.14"/>
+    <text x="24" y="40" class="k" fill="#7ff0d2">WHAT IT REMEMBERS</text>
+    <text x="24" y="72" class="h">Your plugins, your ears</text>
+    <rect x="24" y="96" width="272" height="64" rx="12" fill="#a78bfa" fill-opacity="0.14"/>
+    <text x="40" y="122" font-size="15" font-weight="700" fill="#e8e4ff">Plugin records</text>
+    <text x="40" y="145" font-size="13" fill="#bdb6e6">Parameters, sweet spots, gotchas</text>
+    <rect x="24" y="172" width="272" height="64" rx="12" fill="#22d3a6" fill-opacity="0.13"/>
+    <text x="40" y="198" font-size="15" font-weight="700" fill="#e8e4ff">Mixing lessons</text>
+    <text x="40" y="221" font-size="13" fill="#bdb6e6">What you reverted, and why</text>
+    <rect x="24" y="248" width="272" height="64" rx="12" fill="#ff7a45" fill-opacity="0.13"/>
+    <text x="40" y="274" font-size="15" font-weight="700" fill="#e8e4ff">Follows you everywhere</text>
+    <text x="40" y="297" font-size="13" fill="#bdb6e6">Any song folder, any machine</text>
+  </g>
+
+  <!-- footer: shipped knowledge -->
+  <g transform="translate(300,456)">
+    <rect width="600" height="44" rx="22" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.16"/>
+    <text x="300" y="28" text-anchor="middle" font-size="15" fill="#d9d4ff"><tspan font-weight="700" fill="#ffffff">Also built in:</tspan> genre rules · step-by-step workflows · cheat sheets</text>
+  </g>
+</svg>
