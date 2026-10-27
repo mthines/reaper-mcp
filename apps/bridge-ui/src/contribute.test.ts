@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseContribution } from './plugin-contributions.mjs';
-import { contributable, contribution, contributionFileName } from './contribute.js';
+import { contributable, contribution, contributionFileName, PASTE_HERE } from './contribute.js';
 import { DEMO_KNOWLEDGE } from './demo-plugins.js';
 
 const mine = contributable(DEMO_KNOWLEDGE.records);
@@ -32,7 +32,9 @@ describe('contribution', () => {
     const long = mine.map((r) => ({ ...r, source: r.source && { ...r.source, value: `${r.source.value}\n${'x'.repeat(6000)}` } }));
     const big = contribution(long);
     expect(big.prefilled).toBe(false);
-    expect(new URL(big.url).searchParams.has('value')).toBe(false);
+    expect(new URL(big.url).searchParams.get('value')).toBe(PASTE_HERE);
+    // committed unchanged, the workflow rejects it
+    expect(parseContribution(PASTE_HERE).errors.join('\n')).toMatch(/No records/);
   });
 
   it('names the file by date and plugin', () => {

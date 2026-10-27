@@ -6,8 +6,10 @@ import type { PluginRecord } from './plugins.js';
 // The plugin-contributions workflow checks it; the maintainer's label publishes it to LoreKit.
 
 export const CONTRIBUTE_REPO = 'https://github.com/mthines/reaper-mcp';
-// GitHub refuses very long URLs; above this the file is left empty and the records are on the clipboard
+// GitHub refuses very long URLs; above this the file holds PASTE_HERE and the records are on the clipboard
 const MAX_URL = 8000;
+export const PASTE_HERE =
+  'Paste your clipboard here (⌘V / Ctrl+V), replacing this text.\n\nThe MCP Bridge copied your plugin records when you pressed Contribute. If the clipboard is empty, press Contribute again.\n';
 
 export function contributable(records: PluginRecord[]): PluginRecord[] {
   return records.filter((r) => r.layer === 'user' && r.source);
@@ -24,7 +26,7 @@ export function contribution(records: PluginRecord[], fileName = contributionFil
   const text = formatContribution(records.flatMap((r) => (r.source ? [{ key: r.key, tags: r.source.tags, value: r.source.value }] : [])));
   const names = records.map((r) => r.name);
   const message = `Contribute plugin knowledge: ${names.length > 3 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more` : names.join(', ')}`;
-  const base = `${CONTRIBUTE_REPO}/new/main?${new URLSearchParams({ filename: fileName, message })}`;
-  const full = `${base}&${new URLSearchParams({ value: text })}`;
-  return full.length <= MAX_URL ? { url: full, text, prefilled: true } : { url: base, text, prefilled: false };
+  const url = (value: string) => `${CONTRIBUTE_REPO}/new/main?${new URLSearchParams({ filename: fileName, message, value })}`;
+  const full = url(text);
+  return full.length <= MAX_URL ? { url: full, text, prefilled: true } : { url: url(PASTE_HERE), text, prefilled: false };
 }

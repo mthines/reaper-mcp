@@ -11,11 +11,21 @@ name: Plugin contributions
 #
 # Setup: a repo (or `lorekit` environment) secret LOREKIT_PUBLISH_TOKEN, an lk_rw_ token of a
 # write-capable member of the reaper-mcp LoreKit org.
+#
+# Files committed straight to main (by a maintainer) are published by running this workflow by
+# hand (Actions → Plugin contributions → Run workflow): `publish-main` publishes every file in
+# knowledge/contributions/ and deletes them in one commit — git history is the archive.
 
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled]
     paths: ['knowledge/contributions/**']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only check the files and show what would be published'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -23,7 +33,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: plugin-contributions-${{ github.event.pull_request.number }}
+  group: plugin-contributions-${{ github.event.pull_request.number || 'main' }}
   cancel-in-progress: false
 
 env:
@@ -35,7 +45,7 @@ env:
 
 jobs:
   check:
-    if: github.event.action != 'labeled'
+    if: github.event_name == 'pull_request_target' && github.event.action != 'labeled'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4 # main, not the PR
@@ -89,7 +99,7 @@ jobs:
           fi
 
   publish:
-    if: github.event.action == 'labeled' && github.event.label.name == 'publish-to-lorekit'
+    if: github.event_name == 'pull_request_target' && github.event.action == 'labeled' && github.event.label.name == 'publish-to-lorekit'
     runs-on: ubuntu-latest
     environment: lorekit
     steps:
@@ -132,3 +142,56 @@ jobs:
           printf '\nPublishing failed; see the [workflow run](%s). Remove and re-add `publish-to-lorekit` to retry.\n' "$GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID" >> "$RUNNER_TEMP/comment.md"
           gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/comment.md"
           gh pr edit "$PR" --repo "$REPO" --remove-label publish-to-lorekit
+
+  publish-main:
+    # Only someone with write access can run a workflow by hand, so no extra permission check.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: lorekit
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Find contribution files
+        id: files
+        run: |
+          find knowledge/contributions -maxdepth 1 -name '*.md' ! -name README.md | sort > "$RUNNER_TEMP/files.txt"
+          echo "count=$(wc -l < "$RUNNER_TEMP/files.txt" | tr -d ' ')" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/files.txt"
+
+      - name: Publish to LoreKit
+        if: steps.files.outputs.count != '0'
+        env:
+          LOREKIT_PUBLISH_TOKEN: ${{ secrets.LOREKIT_PUBLISH_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          echo "### Plugin contributions on main" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          flag=--publish
+          [ "$DRY_RUN" = "true" ] && flag=
+          # Any invalid file stops the whole run before a write; a failed write keeps every file for a rerun
+          xargs node scripts/publish-plugin-contributions.mjs $flag --summary "$GITHUB_STEP_SUMMARY" < "$RUNNER_TEMP/files.txt"
+
+      - name: Remove published files
+        if: steps.files.outputs.count != '0' && !inputs.dry_run
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          xargs git rm -q < "$RUNNER_TEMP/files.txt"
+          git commit -q -m "chore(knowledge): publish ${{ steps.files.outputs.count }} plugin contribution file(s) to LoreKit" \
+            -m "Published to the built-in layer by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID; the files stay in git history." \
+            -m "$(sed 's/^/- /' "$RUNNER_TEMP/files.txt")"
+          git pull -q --rebase origin main
+          git push -q origin HEAD:main
+          printf '\nRemoved the published files from `main`.\n' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Nothing to publish
+        if: steps.files.outputs.count == '0'
+        run: echo "No contribution files in knowledge/contributions/." >> "$GITHUB_STEP_SUMMARY"

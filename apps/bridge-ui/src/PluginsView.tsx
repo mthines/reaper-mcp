@@ -304,7 +304,7 @@ function toastText(copied: string): string {
     const what = `${mine[1]} record${mine[1] === '1' ? '' : 's'}`;
     return mine[2] === 'filled'
       ? `Opened GitHub with your ${what} · review the file, then propose it`
-      : `Your ${what} are copied · paste them into the empty file on GitHub, then propose it`;
+      : `Your ${what} ${mine[1] === '1' ? 'is' : 'are'} copied · paste over the placeholder on GitHub, then propose it`;
   }
   const paste = ' · paste it into Claude Code';
   const all = copied.match(/^all:[^:]+:(\d+)$/);
