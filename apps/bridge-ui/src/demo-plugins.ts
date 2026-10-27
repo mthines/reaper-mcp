@@ -42,6 +42,10 @@ const RECORDS: PluginRecord[] = [
     notes: 2,
     updatedAt: now - 5 * day,
     preview: 'Pitch correction and pitch shifting. Learned: correction amount 0.35 keeps it natural on the lead vocal; bypass on backing doubles.',
+    source: {
+      value: '# Graillon 3\n\n**Vendor:** Auburn Sounds\n\nPitch correction and pitch shifting.\n\n## Learned notes\n- Correction amount 0.35 keeps it natural on the lead vocal\n- Bypass on backing doubles',
+      tags: ['plugin-knowledge', 'category::pitch', 'preference::70', 'style::character', 'fx::Graillon 3', 'layer::user'],
+    },
   },
   {
     key: 'user::plugins::joey-sturgis-tones/gain-reduction-2',
@@ -55,6 +59,10 @@ const RECORDS: PluginRecord[] = [
     notes: 1,
     updatedAt: now - 9 * day,
     preview: 'Aggressive vocal compressor. Learned: the "Vibe" knob above 0.6 gets harsh on screams.',
+    source: {
+      value: '# Gain Reduction 2\n\n**Vendor:** Joey Sturgis Tones\n\nAggressive vocal compressor.\n\n## Learned notes\n- The "Vibe" knob above 0.6 gets harsh on screams',
+      tags: ['plugin-knowledge', 'category::compressor', 'preference::78', 'style::character', 'fx::Gain Reduction 2', 'layer::user'],
+    },
   },
 ];
 
@@ -98,4 +106,12 @@ const IDS: Record<string, string> = {
 export const DEMO_KNOWLEDGE: KnowledgeFeed = {
   installed: INSTALLED.map((name) => ({ name, type: name.split(':')[0] })),
   records: RECORDS.map((r) => (IDS[r.key] ? { ...r, id: IDS[r.key] } : r)),
+  // What the demo project has loaded
+  used: [
+    { name: 'VST3: Pro-Q3 (FabFilter)', count: 4 },
+    { name: 'VST3: Helix Native (Line 6)', count: 2 },
+    { name: 'VST3: Melodyne (Celemony)', count: 1 },
+    { name: 'VST3: Kontakt 7 (Native Instruments)', count: 1 },
+    { name: 'VST: ReaComp (Cockos)', count: 3 },
+  ],
 };

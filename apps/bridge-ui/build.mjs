@@ -9,6 +9,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 const outDir = join(here, '../../dist/apps/bridge-ui');
 const { version } = JSON.parse(readFileSync(join(here, '../reaper-mcp-server/package.json'), 'utf-8'));
 
+// The public read-only LoreKit token + endpoint for the built-in plugin records, read from the server's
+// knowledge tool so there's one source of truth. The page calls LoreKit's REST API (CORS-enabled);
+// the server's /mcp endpoint is not reachable from a browser.
+const knowledgeSrc = readFileSync(join(here, '../reaper-mcp-server/src/tools/knowledge.ts'), 'utf-8');
+const lorekitToken = knowledgeSrc.match(/BUILTIN_LOREKIT_TOKEN = '(lk_ro_[A-Za-z0-9]+)'/)?.[1];
+const lorekitMcpUrl = knowledgeSrc.match(/LOREKIT_DEFAULT_URL = '(https:\/\/[^']+)\/mcp'/)?.[1];
+if (!lorekitToken || !lorekitMcpUrl) throw new Error('bridge-ui: could not read the LoreKit token/URL from tools/knowledge.ts');
+
 const result = await build({
   entryPoints: [join(here, 'src/main.tsx')],
   bundle: true,
@@ -16,7 +24,12 @@ const result = await build({
   format: 'iife',
   target: 'es2020',
   jsx: 'automatic',
-  define: { 'process.env.NODE_ENV': '"production"', __VERSION__: JSON.stringify(version) },
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    __VERSION__: JSON.stringify(version),
+    __LOREKIT_TOKEN__: JSON.stringify(lorekitToken),
+    __LOREKIT_API__: JSON.stringify(lorekitMcpUrl),
+  },
   outdir: 'out',
   write: false,
   legalComments: 'none',

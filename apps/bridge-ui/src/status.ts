@@ -67,7 +67,7 @@ export interface BridgeStatus {
   sessions?: Session[];
   settings?: BridgeSettings;
   health?: BridgeHealth;
-  /** Experiment: plugin knowledge vs installed FX (only the demo fills it so far) */
+  /** Demo only: the live page builds this from ExtState `installed` and LoreKit (useKnowledge) */
   knowledge?: KnowledgeFeed;
 }
 
@@ -84,7 +84,7 @@ export function statusRequestUrl(now: number): string {
  * REAPER escapes `\`, tab and newline in the value; JSON.parse is tried on the raw value
  * first so both escaped and unescaped replies work. Null when the key is missing or empty.
  */
-function parseExtStateKey(body: string, key: string): unknown {
+export function parseExtStateKey(body: string, key: string): unknown {
   const prefix = `EXTSTATE\tMCPBridge\t${key}\t`;
   const line = body.split('\n').find((l) => l.startsWith(prefix));
   const value = line?.slice(prefix.length);

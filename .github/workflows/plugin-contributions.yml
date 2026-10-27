@@ -1,0 +1,134 @@
+name: Plugin contributions
+
+# PRs that add plugin records under knowledge/contributions/ (opened from the bridge page's
+# "Contribute" button). `check` validates them and comments what would be published; the
+# maintainer approves by adding the `publish-to-lorekit` label, and `publish` writes them into
+# LoreKit's built-in layer (the reaper-mcp org) and closes the PR — the records live in LoreKit,
+# not in the repo.
+#
+# pull_request_target runs this file from main with secrets available, so it never checks out or
+# runs the PR's code: contribution files are downloaded through the API and only parsed.
+#
+# Setup: a repo (or `lorekit` environment) secret LOREKIT_PUBLISH_TOKEN, an lk_rw_ token of a
+# write-capable member of the reaper-mcp LoreKit org.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled]
+    paths: ['knowledge/contributions/**']
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: plugin-contributions-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPO: ${{ github.repository }}
+  PR: ${{ github.event.pull_request.number }}
+  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+  MARKER: '<!-- plugin-contributions -->'
+
+jobs:
+  check:
+    if: github.event.action != 'labeled'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # main, not the PR
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download contribution files
+        id: fetch
+        run: |
+          set +e
+          bash scripts/fetch-pr-contributions.sh "$REPO" "$PR" "$HEAD_SHA" "$RUNNER_TEMP/contrib" > "$RUNNER_TEMP/files.txt"
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Check records
+        id: check
+        env:
+          CONTRIBUTION_ROOT: ${{ runner.temp }}/contrib/
+          OUTSIDE: ${{ steps.fetch.outputs.status }}
+        run: |
+          {
+            echo "$MARKER"
+            echo "### Plugin contribution"
+            echo
+          } > "$RUNNER_TEMP/comment.md"
+          set +e
+          xargs -r node scripts/publish-plugin-contributions.mjs --summary "$RUNNER_TEMP/comment.md" < "$RUNNER_TEMP/files.txt" > /dev/null
+          ok=$?
+          [ -s "$RUNNER_TEMP/files.txt" ] || { echo "No contribution files in this PR." >> "$RUNNER_TEMP/comment.md"; ok=1; }
+          if [ "$OUTSIDE" != "0" ]; then
+            printf '\nThis PR also changes files outside `knowledge/contributions/`. A contribution PR can only add records; please open code changes separately.\n' >> "$RUNNER_TEMP/comment.md"
+            ok=1
+          fi
+          if [ "$ok" = "0" ]; then
+            printf '\nA maintainer publishes these by adding the `publish-to-lorekit` label.\n' >> "$RUNNER_TEMP/comment.md"
+          fi
+          cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
+          exit $ok
+
+      - name: Label and comment
+        if: always() && steps.check.outcome != 'skipped'
+        run: |
+          gh label create plugin-contribution --repo "$REPO" --color 7cc4ff --description "Plugin records for the built-in LoreKit layer" --force
+          gh label create publish-to-lorekit --repo "$REPO" --color 3fb950 --description "Maintainer: publish this PR's plugin records" --force
+          gh pr edit "$PR" --repo "$REPO" --add-label plugin-contribution
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+          else
+            gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/comment.md"
+          fi
+
+  publish:
+    if: github.event.action == 'labeled' && github.event.label.name == 'publish-to-lorekit'
+    runs-on: ubuntu-latest
+    environment: lorekit
+    steps:
+      - name: Only maintainers can publish
+        env:
+          SENDER: ${{ github.event.sender.login }}
+        run: |
+          perm=$(gh api "repos/$REPO/collaborators/$SENDER/permission" --jq .permission)
+          case "$perm" in admin|maintain|write) ;; *) echo "::error::$SENDER has $perm access; publishing needs write"; exit 1 ;; esac
+
+      - uses: actions/checkout@v4 # main, not the PR
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download contribution files
+        run: bash scripts/fetch-pr-contributions.sh "$REPO" "$PR" "$HEAD_SHA" "$RUNNER_TEMP/contrib" > "$RUNNER_TEMP/files.txt"
+
+      - name: Publish to LoreKit
+        env:
+          LOREKIT_PUBLISH_TOKEN: ${{ secrets.LOREKIT_PUBLISH_TOKEN }}
+          CONTRIBUTION_ROOT: ${{ runner.temp }}/contrib/
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          [ -s "$RUNNER_TEMP/files.txt" ] || { echo "::error::No contribution files"; exit 1; }
+          printf '%s\n### Plugin contribution\n\n' "$MARKER" > "$RUNNER_TEMP/comment.md"
+          xargs node scripts/publish-plugin-contributions.mjs --publish --summary "$RUNNER_TEMP/comment.md" < "$RUNNER_TEMP/files.txt"
+
+      - name: Report and close
+        if: success()
+        run: |
+          printf '\nThanks! These records are now built in for everyone. Closing: the records live in LoreKit, not in the repo.\n' >> "$RUNNER_TEMP/comment.md"
+          gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/comment.md"
+          gh pr close "$PR" --repo "$REPO"
+
+      - name: Report failure
+        if: failure()
+        run: |
+          [ -f "$RUNNER_TEMP/comment.md" ] || printf '%s\n### Plugin contribution\n\n' "$MARKER" > "$RUNNER_TEMP/comment.md"
+          printf '\nPublishing failed; see the [workflow run](%s). Remove and re-add `publish-to-lorekit` to retry.\n' "$GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID" >> "$RUNNER_TEMP/comment.md"
+          gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/comment.md"
+          gh pr edit "$PR" --repo "$REPO" --remove-label publish-to-lorekit

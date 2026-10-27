@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { createDemo } from './demo.js';
+import { manualInstallHint, promptInstall, useInstallState } from './install.js';
 import { ResizeHandle, useDrawerWidth } from './ResizeHandle.js';
 import { PluginsView } from './PluginsView.js';
+import { loadLoreKitToken, saveLoreKitToken, useKnowledge } from './useKnowledge.js';
 import type { KnowledgeFeed } from './plugins.js';
 import {
   HISTORY_MAX,
@@ -265,6 +267,12 @@ export function App() {
   const [settings, setSetting] = useSettings(status);
   const [notify, setNotify] = useErrorNotifications(log, sessions);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [loreToken, setLoreToken] = useState(loadLoreKitToken);
+  const chooseLoreToken = (token: string | null) => {
+    setLoreToken(token);
+    saveLoreKitToken(token);
+  };
+  const liveKnowledge = useKnowledge(!DEMO, loreToken);
 
   useEffect(() => {
     document.title = `${state === 'live' ? '●' : '○'} MCP Bridge`;
@@ -289,7 +297,8 @@ export function App() {
           <Log
             log={log}
             sessions={sessions}
-            knowledge={status.knowledge}
+            knowledge={DEMO ? status.knowledge : liveKnowledge}
+            onOpenSettings={settings ? () => setSettingsOpen(true) : undefined}
             view={view}
             onView={chooseView}
             paused={paused}
@@ -303,6 +312,8 @@ export function App() {
               onSet={setSetting}
               notify={notify}
               onNotify={setNotify}
+              loreToken={loreToken}
+              onLoreToken={chooseLoreToken}
               onClose={() => setSettingsOpen(false)}
             />
           )}
@@ -476,12 +487,16 @@ function SettingsPanel({
   onSet,
   notify,
   onNotify,
+  loreToken,
+  onLoreToken,
   onClose,
 }: {
   settings: BridgeSettings;
   onSet: (key: SettingKey, on: boolean) => void;
   notify: boolean;
   onNotify: (on: boolean) => void;
+  loreToken: string | null;
+  onLoreToken: (token: string | null) => void;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -537,9 +552,112 @@ function SettingsPanel({
             disabled={!notifySupported || notifyDenied}
             onChange={onNotify}
           />
+          <InstallSetting />
         </div>
+        <LoreKitSetting token={loreToken} onChange={onLoreToken} />
       </div>
     </aside>
+  );
+}
+
+/** Install the page as a desktop app (it ships a manifest and service worker). */
+function InstallSetting() {
+  const state = useInstallState();
+  return (
+    <div className="install-row">
+      <div className="install-text">
+        <div className="toggle-label">Desktop app</div>
+        <div className="toggle-hint">
+          {state === 'installed'
+            ? 'Running as the installed app.'
+            : state === 'available'
+              ? 'Install this page as an app with its own Dock / taskbar icon and window.'
+              : manualInstallHint(navigator.userAgent)}
+        </div>
+      </div>
+      {state === 'installed' ? (
+        <span className="install-done">
+          <i className="kdot cov-learned" /> Installed
+        </span>
+      ) : (
+        state === 'available' && (
+          <button className="btn btn-sm" onClick={() => void promptInstall()}>
+            Install app
+          </button>
+        )
+      )}
+    </div>
+  );
+}
+
+const LOREKIT_KEYS_URL = 'https://www.lorekit.io/settings/api-keys';
+
+/** The viewer's own read-only LoreKit token, so the Plugins tab includes their `user::` records. */
+function LoreKitSetting({ token, onChange }: { token: string | null; onChange: (token: string | null) => void }) {
+  const [draft, setDraft] = useState('');
+  const trimmed = draft.trim();
+  const invalid = trimmed !== '' && !/^lk_ro_[A-Za-z0-9]+$/.test(trimmed);
+  return (
+    <div className="setting-group">
+      <h3>Your plugin knowledge</h3>
+      {token ? (
+        <div className="lore-connected">
+          <span>
+            <i className="kdot cov-learned" /> LoreKit connected <span className="mono muted">{token.slice(0, 10)}…</span>
+          </span>
+          <button className="btn btn-sm" onClick={() => onChange(null)}>
+            Disconnect
+          </button>
+        </div>
+      ) : (
+        <>
+        <ol className="lore-steps">
+          <li>
+            <a className="btn btn-sm lore-open" href={LOREKIT_KEYS_URL} target="_blank" rel="noreferrer">
+              Open LoreKit API keys ↗
+            </a>
+            <span>Sign in or create a free account</span>
+          </li>
+          <li>
+            Create a key with <b>read-only</b> access and copy it (it starts with <span className="mono">lk_ro_</span>)
+          </li>
+          <li>Paste it here and connect</li>
+        </ol>
+        <form
+          className="lore-form"
+          onSubmit={(ev) => {
+            ev.preventDefault();
+            if (trimmed && !invalid) {
+              onChange(trimmed);
+              setDraft('');
+            }
+          }}
+        >
+          <input
+            className="lore-input mono"
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="lk_ro_…"
+            value={draft}
+            onChange={(ev) => setDraft(ev.target.value)}
+            aria-label="LoreKit read-only token"
+            aria-invalid={invalid}
+          />
+          <button className="btn btn-sm" type="submit" disabled={!trimmed || invalid}>
+            Connect
+          </button>
+        </form>
+        </>
+      )}
+      <p className="setting-hint">
+        {invalid
+          ? 'That isn’t a read-only token. Use one that starts with lk_ro_; this page never needs write access.'
+          : token
+            ? 'The Plugins tab includes the plugins you taught the mixer. The token stays in this browser and is only sent to LoreKit.'
+            : 'The Plugins tab always shows the built-in records. Your token adds the plugins you taught the mixer; it stays in this browser and is only sent to LoreKit.'}
+      </p>
+    </div>
   );
 }
 
@@ -895,10 +1013,12 @@ function Log({
   onTogglePause,
   onClear,
   now,
+  onOpenSettings,
 }: {
   log: CommandEntry[];
   sessions: Map<string, Session>;
   knowledge?: KnowledgeFeed;
+  onOpenSettings?: () => void;
   view: View;
   onView: (v: View) => void;
   paused: boolean;
@@ -1074,7 +1194,7 @@ function Log({
       )}
 
       {view === 'plugins' && knowledge ? (
-        <PluginsView feed={knowledge} query={query} now={now} />
+        <PluginsView feed={knowledge} query={query} now={now} onOpenSettings={onOpenSettings} />
       ) : view === 'tools' ? (
         <ToolsView log={scoped} query={query} now={now} onPick={(tool, errors) => showCalls({ tool, errors })} />
       ) : view === 'sessions' ? (

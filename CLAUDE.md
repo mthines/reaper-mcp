@@ -280,7 +280,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_available_fx` | `tools/discovery.ts` | Discover all installed plugins (VST, VST3, JS, CLAP, AU) |
+| `list_available_fx` | `tools/discovery.ts` | Discover all installed plugins (VST, VST3, JS, CLAP, AU) via REAPER's `EnumInstalledFX` (6.37+) |
 | `search_fx` | `tools/discovery.ts` | Fuzzy search installed plugins by name |
 | `get_fx_preset_list` | `tools/presets.ts` | List available presets for an FX |
 | `set_fx_preset` | `tools/presets.ts` | Load a preset by name |
@@ -669,6 +669,22 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
 - `status.health` (re-checked every 10s): SWS present, JSFX installed in `Effects/reaper-mcp/`, and `outdated` when the
   installed `mcp_bridge.lua` differs from the running copy (setup ran; restart the script). Tested in wasmoon by
   `bridge-status.test.ts`.
+- Plugins tab: the bridge publishes every installed FX (native `EnumInstalledFX`, REAPER 6.37+; the same list
+  `list_available_fx` returns) to ExtState `MCPBridge/installed` as `{v, supported, fx:[{n,t}]}`, re-enumerated every 60s
+  and republished only on change (`.jsfx-inc` libraries are skipped). FX in the open project (track, master, input and
+  take FX, by original name via `fx_name`) go to ExtState `MCPBridge/used` as `{v, fx:[{n,c}]}`, recounted when the
+  project state changes; the page polls `used` every 5s and `installed` every 30s. Rows group by creator (record vendor,
+  else REAPER's `(Vendor)` suffix), project plugins first, with Teach prompts per row, per creator and for all. Plugin records come straight from LoreKit's **REST** API
+  (`GET /memories`, which allows browser origins — the server's `/mcp` endpoint does not): the built-in layer with the
+  public token, which `build.mjs` reads out of `tools/knowledge.ts` at build time, and the viewer's own `user::` records
+  only with their own `lk_ro_` token from Settings (kept in localStorage, never sent to the bridge). Records link into
+  LoreKit by row id. The tab stays hidden until the bridge has published its list. **Contribute N** (with a token, when you have
+  `user::` records) opens GitHub's new-file page with them as one file under `knowledge/contributions/` (format and
+  checks: `scripts/lib/plugin-contributions.mjs`), so GitHub forks and opens the PR. The `plugin-contributions`
+  workflow (`pull_request_target`, never runs PR code) comments what would be published; the maintainer's
+  `publish-to-lorekit` label writes them to the built-in layer with secret `LOREKIT_PUBLISH_TOKEN` (`lk_rw_`, a
+  writer in the `reaper-mcp` org) and closes the PR. Client: `src/lorekit.ts`,
+  hook: `src/useKnowledge.ts`, matching: `src/plugins.ts`.
 - Payload shapes live in `apps/bridge-ui/src/status.ts` (`BridgeStatus`, `BridgeHistory`) and `publish_status()` /
   `publish_history()` in `mcp_bridge.lua` — change both together.
 
