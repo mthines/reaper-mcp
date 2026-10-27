@@ -22,7 +22,7 @@ export function registerMidiTools(server: McpServer): void {
 
   server.tool(
     'list_midi_items',
-    'List all MIDI items on a track with position, length, and note/CC counts',
+    'List all MIDI items on a track with position, length, and note/CC counts. ccCount counts CC messages only; channelEventCount and channelEventCounts include pitch bend, program change and pressure events',
     {
       trackIndex: z.coerce.number().min(0).describe('0-based track index'),
     },
@@ -221,11 +221,11 @@ export function registerMidiTools(server: McpServer): void {
 
   server.tool(
     'delete_midi_cc',
-    'Delete a CC event by index from a MIDI item',
+    'Delete a CC event from a MIDI item by the ccIndex get_midi_cc returned. ccIndex counts every channel event (pitch bend, program change and pressure too), so CC indexes can skip numbers; only pass an index get_midi_cc listed',
     {
       trackIndex: z.coerce.number().min(0).describe('0-based track index'),
       itemIndex: z.coerce.number().min(0).describe('0-based item index on the track'),
-      ccIndex: z.coerce.number().min(0).describe('0-based CC event index to delete'),
+      ccIndex: z.coerce.number().min(0).describe('0-based channel-event index to delete (ccIndex from get_midi_cc)'),
     },
     async ({ trackIndex, itemIndex, ccIndex }) => {
       const res = await sendCommand('delete_midi_cc', { trackIndex, itemIndex, ccIndex });
@@ -238,7 +238,7 @@ export function registerMidiTools(server: McpServer): void {
 
   server.tool(
     'get_midi_item_properties',
-    'Get detailed properties of a MIDI item including position, length, note count, CC count, mute state, and loop setting',
+    'Get detailed properties of a MIDI item including position, length, note count, CC count (CC messages only), channel-event counts by type, mute state, and loop setting',
     {
       trackIndex: z.coerce.number().min(0).describe('0-based track index'),
       itemIndex: z.coerce.number().min(0).describe('0-based item index on the track'),

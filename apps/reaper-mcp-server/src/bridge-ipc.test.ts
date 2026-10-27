@@ -119,6 +119,63 @@ describe('mcp_bridge.lua over file IPC', () => {
     });
   });
 
+  describe('MIDI channel-event counts (issue #22)', () => {
+    // MIDI_CountEvts' "cc" count is every channel event MIDI_GetCC reads, so
+    // ccCount must count only real CCs (0xB0) and report the rest separately.
+    const MIXED = `{
+      tracks = { { name = "Keys", items = 1 } },
+      midi = { { { notes = 0, events = {
+        { 176, 0, 1, 64 }, { 176, 0, 7, 100 }, { 176, 0, 64, 127 },
+        { 224, 0, 0, 64 }, { 192, 0, 5, 0 }, { 208, 0, 90, 0 }, { 160, 0, 60, 80 },
+      } } } },
+    }`;
+    const BREAKDOWN = { cc: 3, pitchBend: 1, programChange: 1, channelPressure: 1, polyAftertouch: 1, other: 0 };
+    const ITEM = { trackIndex: 0, itemIndex: 0 };
+
+    it('list_midi_items counts only CC messages as ccCount', async () => {
+      const { data } = await (await startBridge(MIXED)).send('list_midi_items', { trackIndex: 0 });
+      expect(data?.items).toEqual([
+        expect.objectContaining({ ccCount: 3, channelEventCount: 7, channelEventCounts: BREAKDOWN }),
+      ]);
+    });
+
+    it('get_midi_item_properties counts only CC messages as ccCount', async () => {
+      const { data } = await (await startBridge(MIXED)).send('get_midi_item_properties', ITEM);
+      expect(data).toMatchObject({ ccCount: 3, channelEventCount: 7, channelEventCounts: BREAKDOWN });
+    });
+
+    it('ccCount agrees with the events get_midi_cc returns', async () => {
+      const bridge = await startBridge(MIXED);
+      const cc = await bridge.send('get_midi_cc', ITEM);
+      const props = await bridge.send('get_midi_item_properties', ITEM);
+      expect(props.data?.ccCount).toBe(cc.data?.total);
+    });
+
+    it('analyze_midi reports totalCC as CC messages only', async () => {
+      const { data } = await (await startBridge(MIXED)).send('analyze_midi', ITEM);
+      expect(data).toMatchObject({ totalCC: 3, channelEventCount: 7, channelEventCounts: BREAKDOWN });
+    });
+
+    it('insert_midi_cc returns the CC count after the insert', async () => {
+      const { data } = await (await startBridge(MIXED)).send('insert_midi_cc', {
+        ...ITEM, ccNumber: 11, value: 90, position: 0,
+      });
+      expect(data).toMatchObject({ ccCount: 4, channelEventCount: 8 });
+    });
+
+    it('delete_midi_cc deletes by channel-event index and returns both counts', async () => {
+      // Index 3 is the pitch bend: ccIndex addresses every channel event, as get_midi_cc reports it.
+      const { data } = await (await startBridge(MIXED)).send('delete_midi_cc', { ...ITEM, ccIndex: 3 });
+      expect(data).toMatchObject({ ccCount: 3, channelEventCount: 6 });
+    });
+
+    it('delete_midi_cc names channel events when the index is out of range', async () => {
+      const res = await (await startBridge(MIXED)).send('delete_midi_cc', { ...ITEM, ccIndex: 7 });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/out of range \(item has 7 channel events\)/);
+    });
+  });
+
   it('get_project_info reports the session it is looking at', async () => {
     const bridge = await startBridge('{ tracks = { { name = "Kick" }, { name = "Snare" } }, cursor = 12.5 }');
     const { data } = await bridge.send('get_project_info');

@@ -243,12 +243,24 @@ export interface CrestFactorData {
 
 // --- MIDI editing response types ---
 
+/** Channel events in a MIDI take, by message type (everything MIDI_GetCC enumerates). */
+export interface MidiChannelEventCounts {
+  cc: number;              // 0xB0 control change
+  pitchBend: number;       // 0xE0
+  programChange: number;   // 0xC0
+  channelPressure: number; // 0xD0
+  polyAftertouch: number;  // 0xA0
+  other: number;
+}
+
 export interface MidiItemInfo {
   itemIndex: number;
   position: number;      // seconds
   length: number;        // seconds
   noteCount: number;
-  ccCount: number;
+  ccCount: number;                 // CC messages (0xB0) only = get_midi_cc's unfiltered total
+  channelEventCount: number;       // all channel events; ccIndex addresses these
+  channelEventCounts: MidiChannelEventCounts;
   muted: boolean;
 }
 
@@ -277,7 +289,9 @@ export interface MidiItemProperties {
   position: number;
   length: number;
   noteCount: number;
-  ccCount: number;
+  ccCount: number;                 // CC messages (0xB0) only = get_midi_cc's unfiltered total
+  channelEventCount: number;       // all channel events; ccIndex addresses these
+  channelEventCounts: MidiChannelEventCounts;
   muted: boolean;
   loopSource: boolean;
 }
@@ -296,7 +310,9 @@ export interface MidiAnalysis {
   trackIndex: number;
   itemIndex: number;
   totalNotes: number;
-  totalCC: number;
+  totalCC: number;                 // CC messages (0xB0) only
+  channelEventCount: number;
+  channelEventCounts: MidiChannelEventCounts;
   durationBeats: number;
   pitchStats: MidiPitchStats[];
   velocityHistogram: number[]; // 13 buckets: 0-9, 10-19, ..., 120-127
