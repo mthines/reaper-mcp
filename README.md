@@ -124,11 +124,6 @@ what turns a remote control into an engineer that gets better every session.
 - 📝 **Lessons from your corrections.** Revert a change, or have a re-measure come back
   worse, and it saves a lesson right then. A lesson that keeps coming up becomes one of
   the mixer's permanent rules, so it stops making that mistake.
-- 🧩 **Built-in knowledge plus your own.** It ships with a curated, read-only set of
-  plugin records and lessons, and everything it learns from *you* goes into your own
-  layer on top. When the two disagree, yours wins, so your taste never gets
-  overwritten. The built-in set comes with the server, read-only, and needs no
-  LoreKit account. Connect your own LoreKit to start your layer.
 - 🌍 **It follows you.** The memory isn't tied to one project folder. Whatever song
   you open, it brings what it knows.
 - 🔒 **Audio knowledge only.** It never stores client names, song titles or license keys.
