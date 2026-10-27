@@ -271,6 +271,17 @@ instead of just giving advice:
 - 📊 **Bridge status window.** See every action as it happens, with timing and errors,
   in a small window next to REAPER.
 
+### 👀 Watch it work
+
+The bridge status window opens next to REAPER when you click Run. It shows every
+move the AI makes, as it happens: what it did, how long it took, and anything that
+went wrong. With several Claude sessions connected at once, you can see which one
+did what.
+
+<img src="docs/assets/bridge-status.png" alt="The MCP Bridge status window: uptime, command count, errors, latency, a commands-per-minute timeline, and a live log of tool calls such as read_track_spectrum, set_track_property and snapshot_save, tagged by session." width="100%">
+
+<sub>Demo data. Add <code>?demo</code> to the window's address to explore it without REAPER.</sub>
+
 ---
 
 ## ❓ FAQ
