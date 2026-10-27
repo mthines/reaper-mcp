@@ -182,6 +182,13 @@ reaper-mcp doctor
 
 Checks that the bridge is connected, knowledge is installed, and MCP config exists.
 
+## 🔒 Privacy
+
+reaper-mcp sends **anonymous usage telemetry** by default: which tools run, whether they
+fail, and how long they take. It helps me, a solo developer, improve it. It never sends
+your projects, track names, parameters or file paths. Opt out any time with
+`reaper-mcp telemetry off`. The full details are in [TELEMETRY.md](TELEMETRY.md).
+
 ## MCP Tools (134)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `analyze_track_aesthetics` tools) accepts `-1` for the **master track**.
@@ -270,15 +277,6 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `delete_envelope_point` | Delete an automation point by index |
 
 ### Metering & Analysis
-
-## 🔒 Privacy
-
-reaper-mcp sends **anonymous usage telemetry** by default: which tools run, whether they
-fail, and how long they take. It helps me, a solo developer, improve it. It never sends
-your projects, track names, parameters or file paths. Opt out any time with
-`reaper-mcp telemetry off`. The full details are in [TELEMETRY.md](TELEMETRY.md).
-
----
 
 | Tool | Description |
 |------|-------------|
