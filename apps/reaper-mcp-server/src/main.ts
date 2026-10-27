@@ -3,8 +3,8 @@
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
-import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
-import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges } from './telemetry.js';
+import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, readBridgeEvents, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
+import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges, emitLog, exceptionAttributes } from './telemetry.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -283,7 +283,7 @@ async function serve(): Promise<void> {
   // Initialise OpenTelemetry before any instrumented code runs.
   // Configuration is driven by OTEL_* environment variables (pass via .mcp.json env block).
   await initTelemetry();
-  registerBridgeGauges();
+  registerBridgeGauges(isBridgeRunning);
   startDiagnosticsPoller();
   startEventsPoller();
   log('Starting REAPER MCP Server...');
@@ -294,24 +294,23 @@ async function serve(): Promise<void> {
   // Root span wrapping the entire startup sequence — an early touchpoint for
   // validating the OTel pipeline.  This is a headless process (no inbound HTTP)
   // so we create the root span manually.
-  await tracer.startActiveSpan('mcp.server.startup', { kind: SpanKind.INTERNAL }, async (startupSpan) => {
+  await tracer.startActiveSpan('reaper-mcp startup', { kind: SpanKind.INTERNAL }, async (startupSpan) => {
     try {
       await ensureBridgeDir();
 
       const cleaned = await cleanupStaleFiles();
       if (cleaned > 0) {
-        startupSpan.setAttribute('mcp.bridge.stale_files_cleaned', cleaned);
+        startupSpan.setAttribute('reaper.bridge.stale_files_cleaned', cleaned);
         log(`Cleaned up ${cleaned} stale bridge files`);
       }
 
       // Check bridge connectivity in a child span
-      const bridgeRunning = await tracer.startActiveSpan('mcp.bridge.connect', { kind: SpanKind.INTERNAL }, async (bridgeSpan) => {
+      const bridgeRunning = await tracer.startActiveSpan('check bridge connection', { kind: SpanKind.INTERNAL }, async (bridgeSpan) => {
         const running = await isBridgeRunning();
-        bridgeSpan.setAttribute('mcp.bridge.connected', running);
+        bridgeSpan.setAttribute('reaper.bridge.connected', running);
         if (!running) {
-          bridgeSpan.setStatus({
-            code: SpanStatusCode.UNSET,
-            message: 'Lua bridge not detected — commands will timeout until started',
+          emitLog('warn', 'Lua bridge not detected at startup — commands will time out until it is started', {
+            'reaper.bridge.connected': false,
           });
           log('WARNING: Lua bridge does not appear to be running in REAPER.');
           log('Commands will timeout until the bridge script is started.');
@@ -324,7 +323,7 @@ async function serve(): Promise<void> {
         return running;
       });
 
-      startupSpan.setAttribute('mcp.bridge.connected', bridgeRunning);
+      startupSpan.setAttribute('reaper.bridge.connected', bridgeRunning);
 
       const server = createServer();
       const transport = new StdioServerTransport();
@@ -433,26 +432,34 @@ function shutdownAll(): void {
   }
 }
 
+/** Report Lua events written since the last poll, then flush all telemetry. */
+function flushAndExit(code: number): void {
+  shutdownAll();
+  readBridgeEvents()
+    .catch(() => { /* best-effort: exiting anyway */ })
+    .finally(() => shutdownTelemetry().finally(() => process.exit(code)));
+}
+
 process.on('SIGINT', () => {
   console.error('[reaper-mcp] Interrupted');
-  shutdownAll();
-  shutdownTelemetry().finally(() => process.exit(0));
+  flushAndExit(0);
 });
 
 process.on('SIGTERM', () => {
   console.error('[reaper-mcp] Terminated');
-  shutdownAll();
-  shutdownTelemetry().finally(() => process.exit(0));
+  flushAndExit(0);
 });
 
 process.on('uncaughtException', (err) => {
-  console.error('[reaper-mcp] Uncaught exception:', err);
-  shutdownAll();
-  shutdownTelemetry().finally(() => process.exit(1));
+  emitLog('error', 'Uncaught exception — server exiting', exceptionAttributes(err), {
+    eventName: 'reaper.server.crash',
+  });
+  flushAndExit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
-  console.error('[reaper-mcp] Unhandled rejection:', reason);
-  shutdownAll();
-  shutdownTelemetry().finally(() => process.exit(1));
+  emitLog('error', 'Unhandled promise rejection — server exiting', exceptionAttributes(reason), {
+    eventName: 'reaper.server.crash',
+  });
+  flushAndExit(1);
 });

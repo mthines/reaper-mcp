@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
-import { getTracer } from './telemetry.js';
+import { getTracer, emitLog, exceptionAttributes, getToolDurationHistogram, redactHome } from './telemetry.js';
 import { registerProjectTools } from './tools/project.js';
 import { registerTrackTools } from './tools/tracks.js';
 import { registerFxTools } from './tools/fx.js';
@@ -26,12 +26,19 @@ import { registerFxHousekeepingTools } from './tools/fx-housekeeping.js';
 import { registerCategoryTools } from './tools/categories.js';
 import { registerAestheticsTools } from './tools/aesthetics.js';
 
+// Cap for free-text error messages on span status (full text goes to the log).
+const MAX_STATUS_MESSAGE = 256;
+
 /**
- * Wraps server.tool() so every tool callback runs inside a SERVER span.
- * This produces `mcp.tool {toolName}` spans that parent the CLIENT bridge spans,
- * giving a full trace: tool invocation → bridge command → REAPER response.
+ * Wraps server.tool() so every tool callback runs inside a SERVER span that
+ * follows the OTel MCP semantic conventions: `tools/call {tool}` with
+ * `mcp.method.name`, `gen_ai.tool.name`, `jsonrpc.request.id`, and `error.type`
+ * (`tool_error` when the result has `isError`). The span parents the CLIENT
+ * bridge spans: tool invocation → bridge command → REAPER response.
+ *
+ * Also records `mcp.server.operation.duration` per call.
  */
-function instrumentToolHandlers(server: McpServer): void {
+export function instrumentToolHandlers(server: McpServer): void {
   const originalTool = server.tool.bind(server);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,27 +50,60 @@ function instrumentToolHandlers(server: McpServer): void {
     const originalCb = args[cbIndex] as (...cbArgs: unknown[]) => Promise<unknown>;
 
     args[cbIndex] = async (...cbArgs: unknown[]) => {
-      const tracer = getTracer();
-      return tracer.startActiveSpan(
-        `mcp.tool ${toolName}`,
-        { kind: SpanKind.SERVER, attributes: { 'mcp.tool.name': toolName } },
+      // The SDK passes RequestHandlerExtra as the last callback argument.
+      const extra = cbArgs[cbArgs.length - 1] as { requestId?: string | number; sessionId?: string } | undefined;
+      const startMs = Date.now();
+      const metricAttrs: Record<string, string> = {
+        'mcp.method.name': 'tools/call',
+        'gen_ai.tool.name': toolName,
+        'network.transport': 'pipe',
+      };
+
+      return getTracer().startActiveSpan(
+        `tools/call ${toolName}`,
+        {
+          kind: SpanKind.SERVER,
+          attributes: {
+            ...metricAttrs,
+            'gen_ai.operation.name': 'execute_tool',
+            ...(extra?.requestId != null && { 'jsonrpc.request.id': String(extra.requestId) }),
+            ...(extra?.sessionId && { 'mcp.session.id': extra.sessionId }),
+          },
+        },
         async (span) => {
           try {
             const result = await originalCb(...cbArgs);
-            // Check if the tool returned an error response
             const res = result as { isError?: boolean; content?: { text?: string }[] };
             if (res?.isError) {
+              // Tool-level failure reported to the client (semconv: error.type=tool_error).
+              // Logged at warn: the cause is already logged by the bridge/sidecar span below.
               const errorText = res.content?.[0]?.text ?? 'Tool error';
-              span.setStatus({ code: SpanStatusCode.ERROR, message: errorText });
-              span.setAttribute('mcp.tool.error', errorText);
+              metricAttrs['error.type'] = 'tool_error';
+              span.setAttribute('error.type', 'tool_error');
+              span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(errorText).slice(0, MAX_STATUS_MESSAGE) });
+              emitLog('warn', `Tool ${toolName} returned an error: ${errorText}`, {
+                'gen_ai.tool.name': toolName,
+                'error.type': 'tool_error',
+              });
             }
             return result;
           } catch (err) {
-            const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-            span.setStatus({ code: SpanStatusCode.ERROR, message });
+            const errorType = err instanceof Error ? err.name : 'Error';
+            metricAttrs['error.type'] = errorType;
+            span.setAttribute('error.type', errorType);
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: redactHome(err instanceof Error ? `${err.name}: ${err.message}` : String(err)),
+            });
+            emitLog('error', `Tool ${toolName} threw`, {
+              'gen_ai.tool.name': toolName,
+              'error.type': errorType,
+              ...exceptionAttributes(err),
+            });
             throw err;
           } finally {
             span.end();
+            getToolDurationHistogram().record((Date.now() - startMs) / 1000, metricAttrs);
           }
         },
       );

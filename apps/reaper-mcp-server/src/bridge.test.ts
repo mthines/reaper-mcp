@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { logs, SeverityNumber } from '@opentelemetry/api-logs';
-import { sendCommand, isBridgeRunning, cleanupStaleFiles, ensureBridgeDir, readBridgeEvents } from './bridge.js';
+import { sendCommand, isBridgeRunning, cleanupStaleFiles, ensureBridgeDir, readBridgeEvents, classifyBridgeError } from './bridge.js';
 
 // Mock node:fs/promises
 vi.mock('node:fs/promises', () => ({
@@ -157,12 +157,13 @@ describe('bridge', () => {
 
   describe('readBridgeEvents', () => {
     it('exports each Lua event as an OTel log record with its own timestamp and severity', async () => {
+      // The cached ProxyLogger binds to whichever global provider is registered.
       const emit = vi.fn();
-      vi.spyOn(logs, 'getLogger').mockReturnValue({ emit } as unknown as ReturnType<typeof logs.getLogger>);
+      logs.setGlobalLoggerProvider({ getLogger: () => ({ emit }) } as unknown as Parameters<typeof logs.setGlobalLoggerProvider>[0]);
       vi.spyOn(console, 'error').mockImplementation(() => undefined);
       mockedWriteFile.mockResolvedValue(undefined);
       mockedReadFile.mockResolvedValueOnce(
-        '{"type":"bridge_start","ts":1000,"reaperVersion":"7.2"}\n' +
+        '{"type":"bridge_start","ts":1000,"reaperVersion":"7.2","bridgeDir":"/Users/someone/REAPER"}\n' +
           'not json\n' +
           '{"type":"handler_error","ts":2000,"commandType":"add_fx","error":"boom"}\n',
       );
@@ -174,15 +175,36 @@ describe('bridge', () => {
       );
       expect(emit).toHaveBeenCalledTimes(2);
       expect(emit.mock.calls[0][0]).toMatchObject({
+        eventName: 'reaper.bridge.bridge_start',
         severityNumber: SeverityNumber.INFO,
         timestamp: 1000,
-        attributes: { 'event.name': 'bridge_event', 'mcp.bridge.event.type': 'bridge_start', reaperVersion: '7.2' },
+        attributes: { 'reaper.version': '7.2' },
       });
+      expect(JSON.stringify(emit.mock.calls[0][0].attributes)).not.toContain('/Users/someone');
       expect(emit.mock.calls[1][0]).toMatchObject({
+        eventName: 'reaper.bridge.handler_error',
         severityNumber: SeverityNumber.ERROR,
         timestamp: 2000,
-        attributes: { 'mcp.bridge.event.type': 'handler_error', commandType: 'add_fx', error: 'boom' },
+        attributes: { 'rpc.method': 'add_fx', 'exception.message': 'boom', 'error.type': 'handler_crash' },
       });
+    });
+  });
+
+  describe('classifyBridgeError', () => {
+    it('maps the Lua bridge error prefixes to bounded error.type values', () => {
+      expect(classifyBridgeError('Handler error: attempt to index nil')).toBe('handler_crash');
+      expect(classifyBridgeError('Unknown command type: nope')).toBe('unknown_command');
+      expect(classifyBridgeError('Track 99 not found')).toBe('command_failed');
+      expect(classifyBridgeError(undefined)).toBe('command_failed');
+    });
+  });
+
+  describe('telemetry redaction', () => {
+    it('replaces the home directory (OS username) with ~ in exported log text', async () => {
+      const { homedir } = await import('node:os');
+      const { redactHome } = await import('./telemetry.js');
+      expect(redactHome(`Cannot read ${homedir()}/Music/a.rpp`)).toBe('Cannot read ~/Music/a.rpp');
+      expect(redactHome('/tmp/x.wav')).toBe('/tmp/x.wav');
     });
   });
 });

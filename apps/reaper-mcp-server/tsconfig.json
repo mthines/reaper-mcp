@@ -2,11 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "../../dist/apps/reaper-mcp-server",
-    "rootDir": "src",
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/**/*.ts"],
-  "references": [
-    { "path": "../../libs/protocol" }
+  "include": [
+    "src/**/*.ts"
   ]
 }

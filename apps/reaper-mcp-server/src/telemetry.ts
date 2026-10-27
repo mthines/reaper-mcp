@@ -12,9 +12,9 @@
  */
 
 import { trace, metrics, type Tracer, type Meter } from '@opentelemetry/api';
-import { logs, SeverityNumber } from '@opentelemetry/api-logs';
+import { logs, SeverityNumber, type Logger } from '@opentelemetry/api-logs';
 import { NodeSDK } from '@opentelemetry/sdk-node';
-import { resourceFromAttributes } from '@opentelemetry/resources';
+import { resourceFromAttributes, envDetector, hostDetector, osDetector } from '@opentelemetry/resources';
 import {
   ATTR_SERVICE_NAME,
   ATTR_SERVICE_NAMESPACE,
@@ -22,6 +22,7 @@ import {
 } from '@opentelemetry/semantic-conventions';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -88,11 +89,19 @@ export async function initTelemetry(): Promise<void> {
     // Each Claude Code session spawns its own server over stdio — tell them apart.
     'service.instance.id': randomUUID(),
     'deployment.environment.name': DEPLOYMENT_ENV,
+    // Hand-picked process attributes instead of processDetector, which adds
+    // executable/command paths and argv containing the OS username.
+    'process.pid': process.pid,
+    'process.runtime.name': 'nodejs',
+    'process.runtime.version': process.versions.node,
   });
 
   // NodeSDK reads OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER, OTEL_LOGS_EXPORTER,
   // OTEL_EXPORTER_OTLP_ENDPOINT, and OTEL_EXPORTER_OTLP_HEADERS automatically.
-  sdk = new NodeSDK({ resource });
+  sdk = new NodeSDK({
+    resource,
+    resourceDetectors: [envDetector, hostDetector, osDetector],
+  });
 
   sdk.start();
 
@@ -190,6 +199,16 @@ export function getTraceContext(): TraceContext {
 // Structured logging (stderr + OTLP log records)
 // ---------------------------------------------------------------------------
 
+const HOME_DIR = homedir();
+
+/**
+ * Replace the user's home directory with `~` — error messages and Lua events
+ * carry absolute paths, and the home path contains the OS username.
+ */
+export function redactHome(text: string): string {
+  return HOME_DIR && HOME_DIR !== '/' ? text.split(HOME_DIR).join('~') : text;
+}
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 const SEVERITY: Record<LogLevel, SeverityNumber> = {
@@ -198,6 +217,10 @@ const SEVERITY: Record<LogLevel, SeverityNumber> = {
   warn: SeverityNumber.WARN,
   error: SeverityNumber.ERROR,
 };
+
+// Cached: a ProxyLogger before initTelemetry() that binds to the SDK once it
+// starts, and avoids "shutdown LoggerProvider" warnings from in-flight calls.
+let _logger: Logger | null = null;
 
 export interface LogOptions {
   /** OTel event name; set only when the record has a fixed attribute shape. */
@@ -226,15 +249,16 @@ export function emitLog(
   for (const [key, value] of Object.entries(attributes)) {
     if (value == null) continue;
     attrs[key] =
-      typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+      typeof value === 'number' || typeof value === 'boolean'
         ? value
-        : JSON.stringify(value);
+        : redactHome(typeof value === 'string' ? value : JSON.stringify(value));
   }
 
-  logs.getLogger(SCOPE_NAME).emit({
+  _logger ??= logs.getLogger(SCOPE_NAME);
+  _logger.emit({
     severityNumber: SEVERITY[level],
     severityText: level.toUpperCase(),
-    body,
+    body: redactHome(body),
     attributes: attrs,
     ...(options.eventName && { eventName: options.eventName }),
     ...(options.timestampMs != null && { timestamp: options.timestampMs }),

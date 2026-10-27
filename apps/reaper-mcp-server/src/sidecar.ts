@@ -12,6 +12,8 @@ import { spawn, ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
+import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
+import { getTracer, emitLog, getSidecarDurationHistogram, redactHome } from './telemetry.js';
 
 // ---------------------------------------------------------------------------
 // Paths (must match setup-sidecar.ts constants)
@@ -84,7 +86,48 @@ class SidecarClientImpl implements SidecarClient {
     return existsSync(SIDECAR_SCRIPT_PATH) && existsSync(VENV_PYTHON);
   }
 
-  async analyze(wavPath: string, startTime: number, endTime: number): Promise<AestheticsRawResult> {
+  /**
+   * CLIENT span `sidecar/analyze` (JSON-RPC conventions) around the request,
+   * plus `reaper.sidecar.request.duration` by `rpc.method` and `error.type`.
+   */
+  analyze(wavPath: string, startTime: number, endTime: number): Promise<AestheticsRawResult> {
+    const startMs = Date.now();
+    return getTracer().startActiveSpan(
+      'sidecar/analyze',
+      {
+        kind: SpanKind.CLIENT,
+        attributes: { 'rpc.system': 'jsonrpc', 'rpc.service': 'sidecar', 'rpc.method': 'analyze', 'peer.service': 'reaper-mcp-sidecar' },
+      },
+      async (span) => {
+        const metricAttrs: Record<string, string> = { 'rpc.method': 'analyze' };
+        try {
+          const result = await this.analyzeUntraced(wavPath, startTime, endTime);
+          span.setAttribute('reaper.sidecar.model.version', result.modelVersion);
+          return result;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          const errorType = message.startsWith('Sidecar timeout')
+            ? 'timeout'
+            : message.startsWith('Audio understanding sidecar not installed')
+              ? 'not_installed'
+              : 'sidecar_error';
+          metricAttrs['error.type'] = errorType;
+          span.setAttribute('error.type', errorType);
+          span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(message) });
+          emitLog(errorType === 'not_installed' ? 'warn' : 'error', `Sidecar analyze failed: ${message}`, {
+            'rpc.method': 'analyze',
+            'error.type': errorType,
+          });
+          throw err;
+        } finally {
+          span.end();
+          getSidecarDurationHistogram().record((Date.now() - startMs) / 1000, metricAttrs);
+        }
+      },
+    );
+  }
+
+  private async analyzeUntraced(wavPath: string, startTime: number, endTime: number): Promise<AestheticsRawResult> {
     if (!this.isAvailable()) {
       throw new Error(
         'Audio understanding sidecar not installed. ' +
@@ -109,9 +152,9 @@ class SidecarClientImpl implements SidecarClient {
       // request and kill the process so the next call gets a fresh sidecar.
       const timer = setTimeout(() => {
         if (this.pending.delete(id)) {
-          process.stderr.write(
-            `[reaper-mcp] Sidecar analyze() timed out after ${ANALYZE_TIMEOUT_MS}ms — killing process\n`
-          );
+          emitLog('error', `Sidecar analyze() timed out after ${ANALYZE_TIMEOUT_MS}ms — killing process`, {
+            'reaper.sidecar.timeout_ms': ANALYZE_TIMEOUT_MS,
+          }, { eventName: 'reaper.sidecar.timeout' });
           if (this.process) {
             this.process.kill('SIGKILL');
             this.process = null;
@@ -187,13 +230,20 @@ class SidecarClientImpl implements SidecarClient {
     }
 
     child.on('exit', (code) => {
-      process.stderr.write(`[reaper-mcp] Sidecar process exited (code ${code})\n`);
+      // Exit while requests are pending is a crash; otherwise an expected shutdown.
+      emitLog(this.pending.size > 0 ? 'error' : 'info', `Sidecar process exited (code ${code})`, {
+        'process.exit.code': code ?? -1,
+        'reaper.sidecar.pending_requests': this.pending.size,
+      }, { eventName: 'reaper.sidecar.exit' });
       this.process = null;
       this.handleProcessDeath();
     });
 
     child.on('error', (err) => {
-      process.stderr.write(`[reaper-mcp] Sidecar spawn error: ${err.message}\n`);
+      emitLog('error', `Sidecar spawn error: ${err.message}`, {
+        'error.type': (err as NodeJS.ErrnoException).code ?? err.name,
+        'exception.message': err.message,
+      }, { eventName: 'reaper.sidecar.spawn_error' });
       this.process = null;
       this.handleProcessDeath();
     });
@@ -221,7 +271,7 @@ class SidecarClientImpl implements SidecarClient {
     try {
       response = JSON.parse(line) as JsonRpcResponse;
     } catch {
-      process.stderr.write(`[reaper-mcp] Sidecar returned malformed JSON: ${line}\n`);
+      emitLog('error', 'Sidecar returned malformed JSON', { 'reaper.sidecar.line': line.slice(0, 512) });
       // Reject all pending with a parse error — we can't tell which request this was for
       for (const [id, { reject }] of this.pending.entries()) {
         reject(new Error(`Sidecar returned malformed JSON: ${line}`));
@@ -232,7 +282,7 @@ class SidecarClientImpl implements SidecarClient {
 
     const pending = this.pending.get(response.id);
     if (!pending) {
-      process.stderr.write(`[reaper-mcp] Sidecar response for unknown id ${response.id}\n`);
+      emitLog('warn', `Sidecar response for unknown id ${response.id}`);
       return;
     }
     this.pending.delete(response.id);
@@ -256,7 +306,7 @@ class SidecarClientImpl implements SidecarClient {
       // Attempt one restart
       this.restarting = true;
       this.restartAttempted = true;
-      process.stderr.write('[reaper-mcp] Sidecar crashed; attempting one restart...\n');
+      emitLog('warn', 'Sidecar crashed; attempting one restart', {}, { eventName: 'reaper.sidecar.restart' });
 
       this.spawn().then(() => {
         // Replay pending requests on the new process

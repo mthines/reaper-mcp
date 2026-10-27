@@ -44,7 +44,7 @@ describe('bridge latency profiling (requires REAPER + BRIDGE_PROFILE=1)', () => 
 
     // Compute averages per phase
     const phases = [
-      'spanSetupMs', 'ensureDirMs', 'writeMs', 'logMs',
+      'spanSetupMs', 'ensureDirMs', 'writeMs',
       'pollWaitMs', 'readParseMs', 'cleanupMs', 'metricsMs', 'totalMs',
     ] as const;
 
@@ -86,7 +86,7 @@ describe('bridge latency profiling (requires REAPER + BRIDGE_PROFILE=1)', () => 
     expect(allTimings.length).toBe(10);
 
     const phases = [
-      'spanSetupMs', 'ensureDirMs', 'writeMs', 'logMs',
+      'spanSetupMs', 'ensureDirMs', 'writeMs',
       'pollWaitMs', 'readParseMs', 'cleanupMs', 'metricsMs', 'totalMs',
     ] as const;
 

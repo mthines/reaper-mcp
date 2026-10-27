@@ -197,12 +197,109 @@ The server ships with [OpenTelemetry](https://opentelemetry.io/) instrumentation
 
 ### What is instrumented
 
-- **Bridge commands** (`sendCommand`): each call produces a CLIENT span named `mcp.bridge {commandType}` capturing the full file-IPC round-trip.
-- **Metrics**:
-  - `mcp.bridge.command.duration` (histogram, ms) — round-trip duration per command type
-  - `mcp.bridge.command.count` (counter) — calls by command type and success/failure
-  - `mcp.bridge.timeout.count` (counter) — commands that timed out waiting for REAPER
-- **Auto-instrumentation**: Node.js built-in modules (http, fs, dns, etc.) via `@opentelemetry/auto-instrumentations-node`.
+Names follow the OTel semantic conventions; project-specific names live under `reaper.*` (the `mcp.*`
+namespace belongs to the official MCP conventions). Durations are in seconds.
+
+**Traces** — one trace per tool call:
+
+| Span | Kind | Key attributes |
+|------|------|----------------|
+| `tools/call {tool}` | SERVER | `mcp.method.name`, `gen_ai.tool.name`, `gen_ai.operation.name=execute_tool`, `jsonrpc.request.id`, `error.type` (`tool_error` when the result has `isError`) |
+| `reaper.Bridge/{command}` | CLIENT | `rpc.system=reaper_bridge`, `rpc.method`, `peer.service=reaper`, `reaper.bridge.command.id`, `reaper.bridge.handler_ms` / `pickup_ms`, `error.type` |
+| `sidecar/analyze` | CLIENT | `rpc.system=jsonrpc`, `rpc.method`, `error.type` |
+| `reaper-mcp startup`, `poll bridge diagnostics` | INTERNAL | root spans for headless work |
+
+**Metrics** — error rate is each histogram's count filtered on `error.type`:
+
+| Metric | Unit | Attributes |
+|--------|------|------------|
+| `mcp.server.operation.duration` | s | `mcp.method.name`, `gen_ai.tool.name`, `error.type` |
+| `reaper.bridge.command.duration` | s | `rpc.method`, `error.type` (`timeout`, `handler_crash`, `unknown_command`, `command_failed`) |
+| `reaper.bridge.handler.duration` | s | `rpc.method`, `error.type` — time inside the Lua handler |
+| `reaper.bridge.pickup.duration` | s | — time until the defer loop picked the command up |
+| `reaper.sidecar.request.duration` | s | `rpc.method`, `error.type` |
+| `reaper.bridge.up` | 1 | gauge: 1 while REAPER's heartbeat is fresh, 0 when the bridge is down |
+| `reaper.bridge.defer.interval`, `reaper.bridge.scan.duration` | s | `reaper.statistic` (p50/p95, avg/max) |
+
+**Logs** — trace-correlated OTLP log records (also mirrored as JSON lines on stderr), with event names:
+
+| Event | Severity | When |
+|-------|----------|------|
+| `reaper.bridge.bridge_start` / `bridge_stop` | INFO / WARN | Lua bridge lifecycle, read from `bridge_events.jsonl` with Lua's own timestamp |
+| `reaper.bridge.handler_error` / `handler_unknown` | ERROR | Lua handler crashed / unknown command |
+| `reaper.bridge.command.failed` | WARN or ERROR | handler returned an error (WARN) or crashed (ERROR) |
+| `reaper.bridge.command.timeout` | ERROR | no response from REAPER |
+| `reaper.sidecar.timeout` / `exit` / `spawn_error` / `restart` | ERROR/WARN | Python sidecar lifecycle |
+| `reaper.server.crash` | ERROR | uncaught exception / unhandled rejection (`exception.*` attributes) |
+
+### Regression signals worth alerting on
+
+- `reaper.bridge.up == 0` for 2 min — REAPER closed or the bridge script stopped.
+- Rate of `reaper.bridge.command.duration{error.type="timeout"}` > 0 — commands not reaching REAPER.
+- p95 of `reaper.bridge.command.duration` > 0.5 s — the defer loop is starved (heavy project, blocking render).
+- `mcp.server.operation.duration{error.type!=""}` / total > 5 % per `gen_ai.tool.name` — a tool regressed.
+- Any `reaper.bridge.handler_error` or `reaper.server.crash` log — a bug, not a user error.
+
+### Routing through an OpenTelemetry Collector (optional)
+
+Exporting straight to Dash0 needs no Collector: the server already redacts at the source — the home directory
+(which contains your OS username) becomes `~` in log bodies, log attributes, and span status messages, and the
+resource carries only `process.pid` / `process.runtime.*` instead of the SDK's path-bearing `process.*`
+attributes. If you route through a Collector anyway, this transform is defence in depth for other paths
+(`/Users/<name>`, `/home/<name>`, `C:\\Users\\<name>`) and for other SDKs' `process.command_args`.
+Validated with `otelcol-contrib validate` (v0.120.0) and against live server output.
+
+```yaml
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Mask home directories (they carry the OS username) in free-text error
+  # messages and log bodies emitted by reaper-mcp-server.
+  transform/redact-home-paths:
+    error_mode: ignore
+    metric_statements:
+      - delete_key(resource.attributes, "process.command_args")
+      - replace_pattern(resource.attributes["process.executable.path"], "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where resource.attributes["process.executable.path"] != nil
+      - replace_pattern(resource.attributes["process.command"], "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where resource.attributes["process.command"] != nil
+    trace_statements:
+      - delete_key(resource.attributes, "process.command_args")
+      - replace_pattern(resource.attributes["process.executable.path"], "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where resource.attributes["process.executable.path"] != nil
+      - replace_pattern(resource.attributes["process.command"], "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where resource.attributes["process.command"] != nil
+      - replace_pattern(span.status.message, "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where span.status.message != nil
+    log_statements:
+      - delete_key(resource.attributes, "process.command_args")
+      - replace_pattern(resource.attributes["process.executable.path"], "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where resource.attributes["process.executable.path"] != nil
+      - replace_pattern(resource.attributes["process.command"], "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where resource.attributes["process.command"] != nil
+      - replace_pattern(log.body.string, "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where log.body.string != nil
+      - replace_pattern(log.attributes["exception.message"], "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where log.attributes["exception.message"] != nil
+      - replace_pattern(log.attributes["exception.stacktrace"], "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where log.attributes["exception.stacktrace"] != nil
+  batch: {}
+
+exporters:
+  otlphttp/dash0:
+    endpoint: https://ingress.eu1.dash0.com   # your Dash0 region
+    headers:
+      Authorization: Bearer ${env:DASH0_AUTH_TOKEN}
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [transform/redact-home-paths, batch]
+      exporters: [otlphttp/dash0]
+    metrics:
+      receivers: [otlp]
+      processors: [transform/redact-home-paths, batch]
+      exporters: [otlphttp/dash0]
+    logs:
+      receivers: [otlp]
+      processors: [transform/redact-home-paths, batch]
+      exporters: [otlphttp/dash0]
+```
 
 ### Quick start — console output (no credentials needed)
 
