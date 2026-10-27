@@ -48,7 +48,7 @@ step shows the end of the log. It runs these steps (each is also runnable on its
 2. `reaper-mcp setup` — installs the Lua bridge, snapshot scripts and JSFX into
    REAPER, installs the bridge status page, and turns on REAPER's web interface
    for it.
-4. `scripts/sync-symlinks.sh` — symlinks the skills + knowledge into `~/.claude`:
+3. `scripts/sync-symlinks.sh` — symlinks the skills + knowledge into `~/.claude`:
    - `~/.claude/skills/<name>` → `<repo>/.claude/skills/<name>` (skill dir with `SKILL.md`)
    - `~/.claude/knowledge` → `<repo>/knowledge` (genres, workflows, reference)
 4. `reaper-mcp init` — writes the REAPER tool allow-list to `~/.claude/settings.json`
@@ -91,7 +91,7 @@ if it is running.
 
 ### Start the Lua Bridge in REAPER
 
-After setup (either option), load the bridge in REAPER:
+After setup, load the bridge in REAPER:
 
 1. Open REAPER
 2. **Actions > Show action list > Load ReaScript**
