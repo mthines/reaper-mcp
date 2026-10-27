@@ -232,6 +232,10 @@ namespace belongs to the official MCP conventions). Durations are in seconds.
 | `reaper.sidecar.timeout` / `exit` / `spawn_error` / `restart` | ERROR/WARN | Python sidecar lifecycle |
 | `reaper.server.crash` | ERROR | uncaught exception / unhandled rejection (`exception.*` attributes) |
 
+`reaper.bridge.*` lifecycle events (`bridge_start`, `bridge_stop`, `handler_*`) come from the one shared bridge, so
+whichever server instance drains `bridge_events.jsonl` first reports each event exactly once — under its own
+resource (`service.instance.id`, `deployment.environment.name`). Count them per host, not per server instance.
+
 ### Regression signals worth alerting on
 
 - `reaper.bridge.up == 0` for 2 min — REAPER closed or the bridge script stopped.
