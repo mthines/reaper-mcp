@@ -3,7 +3,7 @@
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
-import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, getReaperScriptsPath, getReaperEffectsPath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
+import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
 import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges } from './telemetry.js';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
 import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
-import { resolveAssetDir, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES } from './cli.js';
+import { resolveAssetDir, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE } from './cli.js';
 import { setupSidecar } from './setup-sidecar.js';
 import { getSidecarClient } from './sidecar.js';
 
@@ -56,6 +56,17 @@ async function setup(): Promise<void> {
     }
   }
 
+  // Bridge status UI, served by REAPER's web interface from reaper_www_root/
+  const wwwSrc = join(resolveAssetDir(__dirname, 'www'), BRIDGE_UI_FILE);
+  const wwwDir = getReaperWwwPath();
+  mkdirSync(wwwDir, { recursive: true });
+  console.log('\nInstalling bridge status UI...');
+  if (installFile(wwwSrc, join(wwwDir, BRIDGE_UI_FILE))) {
+    console.log(`  Installed: reaper_www_root/${BRIDGE_UI_FILE}`);
+  } else {
+    console.log(`  Not found: ${wwwSrc} (build bridge-ui first)`);
+  }
+
   console.log('\nSetup complete!\n');
   console.log('Next steps:');
   console.log('  1. Open REAPER');
@@ -63,6 +74,9 @@ async function setup(): Promise<void> {
   console.log(`  3. Select: ${join(scriptsDir, 'mcp_bridge.lua')}`);
   console.log('  4. Run the script (it will keep running in background via defer loop)');
   console.log('  5. Add reaper-mcp to your Claude Code config (see: reaper-mcp doctor)');
+  console.log('\nOptional: live bridge status page');
+  console.log('  Preferences > Control/OSC/Web > Add > Web browser interface, then open');
+  console.log(`  http://localhost:<port>/${BRIDGE_UI_FILE}`);
 }
 
 // Configure Claude Code for this clone: pre-approve the REAPER tools globally and

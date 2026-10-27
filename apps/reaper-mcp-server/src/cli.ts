@@ -87,6 +87,9 @@ export const REAPER_ASSETS = [
   'mcp_snapshot_quick_save.lua',
 ] as const;
 
+/** Bridge status UI installed into REAPER's reaper_www_root/ (built by apps/bridge-ui) */
+export const BRIDGE_UI_FILE = 'mcp_bridge.html';
+
 /** All MCP tool names registered by the server */
 export const MCP_TOOL_NAMES = [
   // project

@@ -1,0 +1,6 @@
+{
+  "name": "@mthines/reaper-bridge-ui",
+  "version": "0.19.2",
+  "private": true,
+  "type": "module"
+}

@@ -28,6 +28,11 @@
             "glob": "**/*",
             "input": "reaper",
             "output": "reaper"
+          },
+          {
+            "glob": "*.html",
+            "input": "dist/apps/bridge-ui",
+            "output": "www"
           }
         ]
       }
@@ -53,5 +58,6 @@
       },
       "dependsOn": ["build"]
     }
-  }
+  },
+  "implicitDependencies": ["bridge-ui"]
 }

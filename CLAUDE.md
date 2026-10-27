@@ -98,6 +98,11 @@ reaper-mcp/
         low-end.ts            # Low-end management
         stereo-image.ts       # Stereo image mode
 
+  apps/bridge-ui/             # Bridge status page (React → one self-contained mcp_bridge.html)
+    src/status.ts             # Parses ExtState MCPBridge/status, liveness, log merge (unit-tested)
+    src/App.tsx               # Status, latency strip, searchable/filterable command log
+    build.mjs                 # esbuild bundle inlined into dist/apps/bridge-ui/mcp_bridge.html
+
   .claude/skills/             # Mix skills (one dir per skill, each with SKILL.md), symlinked into ~/.claude/skills by scripts/sync-symlinks.sh
     mixer/SKILL.md            # /mixer — executes mixes (live session, reads/writes memory)
     critique/SKILL.md         # /critique — read-only analysis ("roast my mix")
@@ -153,6 +158,7 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 | `@mthines/reaper-mcp` | `/` (root) | -- | Workspace root, scripts |
 | `@mthines/reaper-mcp-server` | `apps/reaper-mcp-server` | `@nx/esbuild` (ESM bundle) | MCP server application |
 | `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
+| `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
 ## MCP Tools (134 total)
@@ -638,6 +644,19 @@ The MIDI emitter (`mcp_midi_emitter.jsfx`) uses a 16-slot ring buffer — the **
 - `write_midi_to_ring(status, d1, d2)` in `mcp_bridge.lua` is the single write path — use it for all MIDI event types
 - Deferred note-off (`send_midi_note` with `durationMs`) uses the same ring path; no separate code path
 - Auto-inserted by all three live MIDI tools via `ensure_jsfx_on_track(track, MCP_MIDI_EMITTER_FX_NAME)`
+
+## Bridge Status Page (REAPER web interface)
+
+`reaper-mcp setup` installs `mcp_bridge.html` into `{REAPER_RESOURCE_PATH}/reaper_www_root/`. With REAPER's
+web interface enabled (Preferences > Control/OSC/Web > Web browser interface), open
+`http://localhost:<port>/mcp_bridge.html` (`?demo` previews it with fake data).
+
+- The bridge publishes JSON to **non-persistent ExtState** `MCPBridge/status` (in memory, no disk IO): counters,
+  defer-loop timing, and the last 50 commands (`n` seq, type, handler ms, ok, error). Throttled to ≤5 Hz and only
+  when something changed, plus a 1s liveness tick. `_`-prefixed internal commands are excluded.
+- The page polls `/_/GET/EXTSTATE/MCPBridge/status` every 500 ms (paused while the tab is hidden), keeps a
+  500-entry log in the browser, and renders entirely outside REAPER — no gfx/ImGui redraw on the main thread.
+- Payload shape lives in `apps/bridge-ui/src/status.ts` (`BridgeStatus`) and `publish_status()` in `mcp_bridge.lua` — change both together.
 
 ## Platform-Specific Paths
 

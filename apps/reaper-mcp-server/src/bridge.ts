@@ -319,6 +319,10 @@ export function getReaperEffectsPath(): string {
   return join(getReaperResourcePath(), 'Effects');
 }
 
+export function getReaperWwwPath(): string {
+  return join(getReaperResourcePath(), 'reaper_www_root');
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

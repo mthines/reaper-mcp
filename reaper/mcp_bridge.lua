@@ -4308,6 +4308,72 @@ handlers["_bridge_diagnostics"] = function(params)
 end
 
 -- =============================================================================
+-- Status feed (read by the web UI: reaper_www_root/mcp_bridge.html)
+-- =============================================================================
+-- Published as JSON to non-persistent ExtState (in-memory, no disk IO). The UI
+-- polls it through REAPER's web interface, so all rendering happens in the
+-- browser, outside REAPER's main thread. Publishing is throttled and only
+-- happens when something changed (plus a 1s liveness tick from the heartbeat).
+
+local STATUS_SECTION = "MCPBridge"
+local STATUS_RECENT_MAX = 50
+local STATUS_MIN_PUBLISH_INTERVAL = 0.2
+
+-- os.time() has 1s resolution; anchor time_precise() to it for ms timestamps
+local epoch_offset = os.time() - reaper.time_precise()
+local function now_ms()
+  return math.floor((reaper.time_precise() + epoch_offset) * 1000)
+end
+
+local status = {
+  startedAt = now_ms(),
+  commands = 0,
+  errors = 0,
+  recent = {}, -- newest first
+}
+local status_dirty = true
+local last_status_publish = 0
+
+local function record_command(cmd_type, handler_ms, ok, err)
+  -- Internal commands (e.g. the server's _bridge_diagnostics poller) are noise
+  if type(cmd_type) ~= "string" or cmd_type:sub(1, 1) == "_" then return end
+  status.commands = status.commands + 1
+  if not ok then status.errors = status.errors + 1 end
+  local entry = { n = status.commands, t = now_ms(), c = cmd_type, ms = math.floor(handler_ms * 100 + 0.5) / 100, ok = ok }
+  if err then
+    -- json_encode doesn't escape control chars; keep the payload valid JSON
+    entry.e = tostring(err):gsub("%c", " "):sub(1, 300)
+  end
+  table.insert(status.recent, 1, entry)
+  status.recent[STATUS_RECENT_MAX + 1] = nil
+  status_dirty = true
+end
+
+local function publish_status(now, force)
+  if not force and (not status_dirty or now - last_status_publish < STATUS_MIN_PUBLISH_INTERVAL) then
+    return
+  end
+  last_status_publish = now
+  status_dirty = false
+
+  local defer_sum, defer_n = 0, math.min(defer_count, defer_buf_size)
+  for i = 1, defer_n do defer_sum = defer_sum + defer_intervals[i] end
+
+  reaper.SetExtState(STATUS_SECTION, "status", json_encode({
+    v = 1,
+    ts = now_ms(),
+    startedAt = status.startedAt,
+    reaperVersion = reaper.GetAppVersion(),
+    project = select(2, reaper.EnumProjects(-1)) or "",
+    bridgeDir = bridge_dir,
+    commands = status.commands,
+    errors = status.errors,
+    deferMs = defer_n > 0 and math.floor(defer_sum / defer_n * 100000 + 0.5) / 100 or 0,
+    recent = status.recent,
+  }), false)
+end
+
+-- =============================================================================
 -- Command dispatcher
 -- =============================================================================
 
@@ -4358,6 +4424,8 @@ local function process_command(filename)
 
   -- Add handler timing to response (rounded to microsecond precision)
   response._handlerMs = math.floor(handler_ms * 1000 + 0.5) / 1000
+
+  record_command(cmd.type, handler_ms, response.success, response.error)
 
   -- Add pickup timing to response for profiling
   if cmd.timestamp then
@@ -4420,6 +4488,9 @@ local function main_loop()
   if now - last_heartbeat >= HEARTBEAT_INTERVAL then
     last_heartbeat = now
     write_heartbeat()
+    publish_status(now, true)
+  else
+    publish_status(now, false)
   end
 
   reaper.defer(main_loop)
@@ -4429,9 +4500,18 @@ end
 -- Startup
 -- =============================================================================
 
-reaper.ShowConsoleMsg("MCP Bridge: Started\n")
-reaper.ShowConsoleMsg("MCP Bridge: Bridge directory: " .. bridge_dir .. "\n")
-reaper.ShowConsoleMsg("MCP Bridge: Polling every " .. (POLL_INTERVAL * 1000) .. "ms\n")
+-- Find the REAPER web interface port (reaper.ini: csurf_N=HTTP <flags> <port> ...)
+local function find_web_port()
+  local ini = read_file(reaper.get_ini_file())
+  return ini and ini:match("\ncsurf_%d+=HTTP %S+ (%d+)")
+end
+
+local web_port = find_web_port()
+if web_port then
+  reaper.ShowConsoleMsg("MCP Bridge: running. Live status: http://localhost:" .. web_port .. "/mcp_bridge.html\n")
+else
+  reaper.ShowConsoleMsg("MCP Bridge: running. For a live status page, enable Preferences > Control/OSC/Web > Web browser interface, then open /mcp_bridge.html\n")
+end
 
 -- Write initial heartbeat
 write_heartbeat()
@@ -4440,7 +4520,10 @@ write_heartbeat()
 log_event("bridge_start", { reaperVersion = reaper.GetAppVersion(), bridgeDir = bridge_dir })
 
 -- Register shutdown handler
-reaper.atexit(function() log_event("bridge_stop", {}) end)
+reaper.atexit(function()
+  log_event("bridge_stop", {})
+  reaper.DeleteExtState(STATUS_SECTION, "status", false) -- UI flips to offline at once
+end)
 
 -- Start the loop
 main_loop()

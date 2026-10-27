@@ -26,6 +26,7 @@ Files installed INTO the REAPER DAW by the `setup` command. These run inside REA
 3. Dispatches to handler function in the `handlers` table
 4. Writes `response_{uuid}.json` with results
 5. Writes `heartbeat.json` every 1s for liveness detection
+6. Publishes a status feed to ExtState `MCPBridge/status` for the web status page (`apps/bridge-ui`)
 
 ### Adding a Handler
 ```lua
