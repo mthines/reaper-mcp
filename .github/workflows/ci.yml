@@ -319,8 +319,9 @@ jobs:
             PRERELEASE_FLAG="--prerelease"
           fi
 
-          # Generate release notes from commits
-          NOTES=$(git log "$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo HEAD~10)"..HEAD --pretty=format:"- %s" --no-merges 2>/dev/null || echo "- Initial release")
+          # Generate release notes from commits, minus the release-bump commits themselves
+          NOTES=$(git log "$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo HEAD~10)"..HEAD --pretty=format:"- %s" --no-merges --invert-grep --grep='^chore(release):' 2>/dev/null || true)
+          [ -n "$NOTES" ] || NOTES="- Maintenance release"
 
           gh release create "$TAG" \
             --title "reaper-mcp $TAG" \
