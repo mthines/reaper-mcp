@@ -221,7 +221,7 @@ export function registerMidiTools(server: McpServer): void {
 
   server.tool(
     'delete_midi_cc',
-    'Delete a channel event by its ccIndex (from get_midi_cc) from a MIDI item. ccIndex addresses every channel event (CC, pitch bend, program change, pressure), not CCs only',
+    'Delete a CC event from a MIDI item by the ccIndex get_midi_cc returned. ccIndex counts every channel event (pitch bend, program change and pressure too), so CC indexes can skip numbers; only pass an index get_midi_cc listed',
     {
       trackIndex: z.coerce.number().min(0).describe('0-based track index'),
       itemIndex: z.coerce.number().min(0).describe('0-based item index on the track'),

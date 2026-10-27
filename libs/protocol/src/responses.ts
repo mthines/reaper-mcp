@@ -258,7 +258,7 @@ export interface MidiItemInfo {
   position: number;      // seconds
   length: number;        // seconds
   noteCount: number;
-  ccCount: number;                 // CC messages (0xB0) only, matches get_midi_cc's total
+  ccCount: number;                 // CC messages (0xB0) only = get_midi_cc's unfiltered total
   channelEventCount: number;       // all channel events; ccIndex addresses these
   channelEventCounts: MidiChannelEventCounts;
   muted: boolean;
@@ -289,7 +289,7 @@ export interface MidiItemProperties {
   position: number;
   length: number;
   noteCount: number;
-  ccCount: number;                 // CC messages (0xB0) only, matches get_midi_cc's total
+  ccCount: number;                 // CC messages (0xB0) only = get_midi_cc's unfiltered total
   channelEventCount: number;       // all channel events; ccIndex addresses these
   channelEventCounts: MidiChannelEventCounts;
   muted: boolean;
