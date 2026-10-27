@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { createDemo } from './demo.js';
 import {
+  HISTORY_MAX,
   commandsPerMinute,
+  deriveSeries,
   formatAgo,
   formatDuration,
   formatMs,
@@ -12,8 +14,13 @@ import {
   statusRequestUrl,
   type BridgeStatus,
   type CommandEntry,
+  type Sample,
+  type Series,
   type Liveness,
 } from './status.js';
+
+const REPO_URL = 'https://github.com/mthines/reaper-mcp';
+declare const __VERSION__: string;
 
 const POLL_MS = 500;
 /** While hidden (minimized, or covered on macOS), keep pinging ui_seen slowly so the bridge knows we're open. */
@@ -77,6 +84,26 @@ function useBridgeFeed(paused: boolean): Feed {
   return feed;
 }
 
+/** Snapshot the bridge's cumulative counters once per tick for the stat sparklines. */
+function useHistory(status: BridgeStatus | null, now: number): Sample[] {
+  const [samples, setSamples] = useState<Sample[]>([]);
+  const statusRef = useRef(status);
+  statusRef.current = status;
+
+  useEffect(() => {
+    const st = statusRef.current;
+    if (!st) return;
+    setSamples((prev) => {
+      const last = prev[prev.length - 1];
+      // Bridge restarted: counters reset, start a fresh history
+      const base = last && st.commands < last.commands ? [] : prev;
+      return [...base, { t: now, commands: st.commands, errors: st.errors, deferMs: st.deferMs }].slice(-HISTORY_MAX);
+    });
+  }, [now]);
+
+  return samples;
+}
+
 /** Re-render on a fixed cadence for relative times / uptime. */
 function useNow(intervalMs: number): number {
   const [now, setNow] = useState(Date.now());
@@ -99,6 +126,8 @@ export function App() {
   const { status, reachable, lastChangeAt, log } = useBridgeFeed(paused);
   const now = useNow(1000);
   const state: Liveness = liveness(status, lastChangeAt, now);
+  const samples = useHistory(status, now);
+  const series = useMemo(() => deriveSeries(samples, log), [samples, log]);
 
   useEffect(() => {
     document.title = `${state === 'live' ? '●' : '○'} MCP Bridge`;
@@ -109,12 +138,18 @@ export function App() {
       <Header status={status} state={state} reachable={reachable} />
       {status ? (
         <>
-          <Stats status={status} log={log} now={now} />
+          <Stats status={status} log={log} now={now} series={series} />
           <Activity log={log} />
           <Log log={log} paused={paused} onTogglePause={() => setPaused((p) => !p)} now={now} />
           <footer className="footer">
             <span className="mono" title="Bridge IPC directory">{status.bridgeDir}</span>
-            <span>Updated {formatAgo(now - lastChangeAt)}</span>
+            <span className="footer-meta">
+              Updated {formatAgo(now - lastChangeAt)}
+              <span className="dot-sep" />
+              <a href={REPO_URL} target="_blank" rel="noreferrer">reaper-mcp v{__VERSION__}</a>
+              <span className="dot-sep" />
+              <a href={`${REPO_URL}/issues`} target="_blank" rel="noreferrer">Report an issue</a>
+            </span>
           </footer>
         </>
       ) : (
@@ -145,10 +180,15 @@ function Header({ status, state, reachable }: { status: BridgeStatus | null; sta
           </p>
         </div>
       </div>
-      <span className={`pill pill-${state}`}>
-        <span className="pill-dot" />
-        {label}
-      </span>
+      <div className="header-actions">
+        <span className={`pill pill-${state}`}>
+          <span className="pill-dot" />
+          {label}
+        </span>
+        <a className="icon-link" href={REPO_URL} target="_blank" rel="noreferrer" title="reaper-mcp on GitHub" aria-label="reaper-mcp on GitHub">
+          <GitHubIcon />
+        </a>
+      </div>
     </header>
   );
 }
@@ -163,7 +203,7 @@ function Mark({ active }: { active: boolean }) {
   );
 }
 
-function Stats({ status, log, now }: { status: BridgeStatus; log: CommandEntry[]; now: number }) {
+function Stats({ status, log, now, series }: { status: BridgeStatus; log: CommandEntry[]; now: number; series: Series }) {
   const lat = latencyStats(status.recent);
   const errorRate = status.commands > 0 ? (status.errors / status.commands) * 100 : 0;
   return (
@@ -173,30 +213,142 @@ function Stats({ status, log, now }: { status: BridgeStatus; log: CommandEntry[]
         value={formatDuration(now - status.startedAt)}
         hint={`since ${new Date(status.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}`}
       />
-      <Stat label="Commands" value={status.commands.toLocaleString()} hint={`${commandsPerMinute(log, now)} / min`} />
+      <Stat
+        label="Commands"
+        value={status.commands.toLocaleString()}
+        hint={`${commandsPerMinute(log, now)} / min`}
+        spark={<Sparkline values={series.commands} floor={2} tone="accent" label="commands per second" variant="bars" format={(v) => `${v} cmd`} />}
+      />
       <Stat
         label="Errors"
         value={status.errors.toLocaleString()}
         hint={status.commands > 0 ? `${errorRate.toFixed(1)}%` : '—'}
         tone={status.errors > 0 ? 'bad' : undefined}
+        spark={<Sparkline values={series.errors} floor={2} tone={series.errors.some((v) => v > 0) ? 'bad' : 'muted'} label="errors per second" variant="bars" format={(v) => `${v} error${v === 1 ? '' : 's'}`} />}
       />
-      <Stat label="Latency" value={lat ? formatMs(lat.avg) : '—'} hint={lat ? `p95 ${formatMs(lat.p95)}` : 'avg handler'} />
+      <Stat
+        label="Latency"
+        value={lat ? formatMs(lat.avg) : '—'}
+        hint={lat ? `p95 ${formatMs(lat.p95)}` : 'avg handler'}
+        spark={<Sparkline values={series.latency} floor={5} tone="accent" label="avg handler ms" format={formatMs} />}
+      />
       <Stat
         label="Loop"
         value={status.deferMs > 0 ? formatMs(status.deferMs) : '—'}
         hint="defer cycle"
         tone={status.deferMs > 100 ? 'warn' : undefined}
+        spark={<Sparkline values={series.loop} floor={40} tone={status.deferMs > 100 ? 'warn' : 'muted'} label="defer cycle ms" format={formatMs} />}
       />
     </section>
   );
 }
 
-function Stat({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'bad' | 'warn' }) {
+function Stat({
+  label,
+  value,
+  hint,
+  tone,
+  spark,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: 'bad' | 'warn';
+  spark?: ReactNode;
+}) {
   return (
     <div className="stat">
       <span className="stat-label">{label}</span>
       <span className={`stat-value ${tone ? `tone-${tone}` : ''}`}>{value}</span>
       {hint && <span className="stat-hint">{hint}</span>}
+      {spark && <div className="stat-spark">{spark}</div>}
+    </div>
+  );
+}
+
+const SPARK_W = 100;
+const SPARK_H = 24;
+
+/**
+ * Last-minute trend, one slot per second, newest on the right. `floor` is the minimum y-range
+ * so quiet periods read as a flat baseline instead of noise blown up to full height.
+ * Counts render as bars; the line variant connects across seconds with no data (null).
+ * Hover shows the value at that second; the guide/dot are HTML so they don't stretch with the SVG.
+ */
+function Sparkline({
+  values,
+  floor,
+  tone,
+  label,
+  format,
+  variant = 'line',
+}: {
+  values: Array<number | null>;
+  floor: number;
+  tone: 'accent' | 'bad' | 'warn' | 'muted';
+  label: string;
+  format: (v: number) => string;
+  variant?: 'line' | 'bars';
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const slots = HISTORY_MAX - 1;
+  const max = Math.max(floor, ...values.map((v) => v ?? 0)) * 1.15;
+  const slotW = SPARK_W / slots;
+  const offset = slots - values.length;
+  const y = (v: number) => SPARK_H - 1 - (v / max) * (SPARK_H - 3);
+
+  const onMove = (ev: MouseEvent<HTMLDivElement>) => {
+    const rect = ev.currentTarget.getBoundingClientRect();
+    const i = Math.floor(((ev.clientX - rect.left) / rect.width) * slots) - offset;
+    setHover(i >= 0 && i < values.length ? i : null);
+  };
+
+  let body: ReactNode;
+  if (variant === 'bars') {
+    body = values.map((v, i) =>
+      v ? (
+        <rect
+          key={i}
+          className={`spark-bar ${hover === i ? 'spark-bar-hover' : ''}`}
+          x={(offset + i) * slotW + slotW * 0.15}
+          width={slotW * 0.7}
+          y={y(v)}
+          height={SPARK_H - y(v)}
+          rx={0.4}
+        />
+      ) : null,
+    );
+  } else {
+    const pts = values.flatMap((v, i) => (v === null ? [] : [[(offset + i + 0.5) * slotW, y(v)] as const]));
+    if (pts.length > 0) {
+      const line = pts.map(([px, py], i) => `${i ? 'L' : 'M'}${px.toFixed(2)},${py.toFixed(2)}`).join('');
+      body = <path className="spark-line" d={pts.length > 1 ? line : `M${pts[0][0]},${pts[0][1]}h0.01`} />;
+    }
+  }
+
+  const hv = hover === null ? undefined : values[hover];
+  const leftPct = hover === null ? 0 : ((offset + hover + 0.5) / slots) * 100;
+  const ago = hover === null ? 0 : values.length - 1 - hover;
+  const tipAlign = leftPct < 18 ? 'start' : leftPct > 82 ? 'end' : 'center';
+
+  return (
+    <div className={`spark-wrap spark-${tone}`} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <svg className="spark" viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" role="img" aria-label={`${label}, last minute`}>
+        <line className="spark-base" x1="0" x2={SPARK_W} y1={SPARK_H - 0.5} y2={SPARK_H - 0.5} />
+        {body}
+      </svg>
+      {hover !== null && (
+        <>
+          <span className="spark-guide" style={{ left: `${leftPct}%` }} />
+          {variant === 'line' && hv != null && (
+            <span className="spark-dot" style={{ left: `${leftPct}%`, top: `${(y(hv) / SPARK_H) * 100}%` }} />
+          )}
+          <span className={`spark-tip spark-tip-${tipAlign}`} style={{ left: `${leftPct}%` }}>
+            <b>{hv == null ? 'no commands' : format(hv)}</b>
+            <span>{ago === 0 ? 'now' : `${ago}s ago`}</span>
+          </span>
+        </>
+      )}
     </div>
   );
 }
@@ -411,6 +563,14 @@ function Offline({ reachable }: { reachable: boolean }) {
         </>
       )}
     </section>
+  );
+}
+
+function GitHubIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+    </svg>
   );
 }
 

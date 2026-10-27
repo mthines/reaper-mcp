@@ -127,3 +127,37 @@ export function formatAgo(ms: number): string {
   if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
   return `${Math.floor(ms / 3_600_000)}h ago`;
 }
+
+/** One per-second snapshot of the bridge's cumulative counters (taken by the page, not the bridge). */
+export interface Sample {
+  t: number;
+  commands: number;
+  errors: number;
+  deferMs: number;
+}
+
+/** Samples kept for the stat sparklines: 60 intervals = the last minute at 1 Hz. */
+export const HISTORY_MAX = 61;
+
+export interface Series {
+  commands: number[];
+  errors: number[];
+  /** Avg handler ms of commands finished in each interval; null when there were none */
+  latency: Array<number | null>;
+  loop: number[];
+}
+
+/** Turn cumulative samples into per-interval sparkline series (one point per gap between samples). */
+export function deriveSeries(samples: Sample[], log: CommandEntry[]): Series {
+  const series: Series = { commands: [], errors: [], latency: [], loop: [] };
+  for (let i = 1; i < samples.length; i++) {
+    const a = samples[i - 1];
+    const b = samples[i];
+    series.commands.push(Math.max(0, b.commands - a.commands));
+    series.errors.push(Math.max(0, b.errors - a.errors));
+    const inWindow = log.filter((e) => e.t > a.t && e.t <= b.t);
+    series.latency.push(inWindow.length ? inWindow.reduce((s, e) => s + e.ms, 0) / inWindow.length : null);
+    series.loop.push(b.deferMs);
+  }
+  return series;
+}

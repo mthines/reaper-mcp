@@ -54,6 +54,9 @@ code {
   gap: 14px;
 }
 
+/* Only the log flexes; everything else keeps its natural height in short windows */
+.header, .stats, .activity, .footer { flex: none; }
+
 /* Header ------------------------------------------------------------------ */
 
 .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -106,6 +109,16 @@ code {
 .pill-offline { color: var(--muted); }
 @keyframes ping { 70% { box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); } 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); } }
 
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.icon-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 8px;
+  color: var(--muted);
+  border: 1px solid transparent;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.icon-link:hover { color: var(--text); background: var(--panel-2); border-color: var(--line-2); }
+
 /* Stats ------------------------------------------------------------------- */
 
 .stats {
@@ -114,13 +127,47 @@ code {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
-  overflow: hidden;
 }
 .stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; min-width: 0; }
 .stat + .stat { border-left: 1px solid var(--line); }
 .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .stat-value { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .stat-hint { font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.stat-spark { margin-top: 8px; height: 24px; }
+.spark-wrap { position: relative; height: 100%; cursor: crosshair; }
+.spark { display: block; width: 100%; height: 100%; overflow: visible; }
+.spark-base { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.spark-line { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.spark-bar { fill: currentColor; opacity: 0.75; }
+.spark-bar-hover { opacity: 1; }
+.spark-accent { color: var(--accent); }
+.spark-bad { color: var(--bad); }
+.spark-warn { color: var(--warn); }
+.spark-muted { color: var(--muted); }
+.spark-guide {
+  position: absolute; top: -2px; bottom: 0; width: 1px;
+  background: var(--line-2);
+  pointer-events: none;
+}
+.spark-dot {
+  position: absolute; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%; background: currentColor;
+  box-shadow: 0 0 0 2px var(--panel);
+  pointer-events: none;
+}
+.spark-tip {
+  position: absolute; bottom: calc(100% + 6px);
+  display: inline-flex; gap: 6px; align-items: baseline;
+  padding: 3px 7px; border-radius: 6px;
+  background: #0b0c0e; border: 1px solid var(--line-2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  font-size: 11px; color: var(--faint); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none; z-index: 2;
+}
+.spark-tip b { color: var(--text); font-weight: 600; }
+.spark-tip-center { transform: translateX(-50%); }
+.spark-tip-end { transform: translateX(-100%); }
 .tone-bad { color: var(--bad); }
 .tone-warn { color: var(--warn); }
 
@@ -290,7 +337,9 @@ kbd {
   color: var(--faint); font-size: 11.5px;
 }
 .footer .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.footer span:last-child { flex: none; }
+.footer-meta { flex: none; display: inline-flex; align-items: center; }
+.footer a { color: var(--muted); text-decoration: none; }
+.footer a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 
 /* Offline ----------------------------------------------------------------- */
 

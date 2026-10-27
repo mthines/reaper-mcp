@@ -1,12 +1,13 @@
 // Bundles the React app and inlines JS + CSS into one self-contained HTML file
 // (REAPER's web server serves single files from reaper_www_root/).
 import { build } from 'esbuild';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir = join(here, '../../dist/apps/bridge-ui');
+const { version } = JSON.parse(readFileSync(join(here, '../reaper-mcp-server/package.json'), 'utf-8'));
 
 const result = await build({
   entryPoints: [join(here, 'src/main.tsx')],
@@ -15,7 +16,7 @@ const result = await build({
   format: 'iife',
   target: 'es2020',
   jsx: 'automatic',
-  define: { 'process.env.NODE_ENV': '"production"' },
+  define: { 'process.env.NODE_ENV': '"production"', __VERSION__: JSON.stringify(version) },
   outdir: 'out',
   write: false,
   legalComments: 'none',

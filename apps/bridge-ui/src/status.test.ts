@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   commandsPerMinute,
+  deriveSeries,
   formatDuration,
   latencyStats,
   liveness,
@@ -87,5 +88,31 @@ describe('stats', () => {
     expect(formatDuration(42_000)).toBe('42s');
     expect(formatDuration(3_725_000)).toBe('1h 2m');
     expect(formatDuration(90_000_000)).toBe('1d 1h');
+  });
+});
+
+describe('deriveSeries', () => {
+  it('turns cumulative samples into per-interval deltas and latency averages', () => {
+    const samples = [
+      { t: 0, commands: 0, errors: 0, deferMs: 30 },
+      { t: 1000, commands: 2, errors: 1, deferMs: 31 },
+      { t: 2000, commands: 2, errors: 1, deferMs: 33 },
+    ];
+    const log: CommandEntry[] = [
+      { n: 2, t: 900, c: 'b', ms: 6, ok: false },
+      { n: 1, t: 400, c: 'a', ms: 2, ok: true },
+    ];
+    expect(deriveSeries(samples, log)).toEqual({
+      commands: [2, 0],
+      errors: [1, 0],
+      latency: [4, null],
+      loop: [31, 33],
+    });
+  });
+
+  it('never goes negative when counters reset', () => {
+    const s = deriveSeries([{ t: 0, commands: 9, errors: 3, deferMs: 30 }, { t: 1000, commands: 1, errors: 0, deferMs: 30 }], []);
+    expect(s.commands).toEqual([0]);
+    expect(s.errors).toEqual([0]);
   });
 });
