@@ -1,161 +1,130 @@
 ---
 name: learn-plugin
-description: Interview the user about a plugin and write it to their personal plugin memory for the mixing skills
+description: Teach the mixing skills a plugin: researches it on the web, tests it live in REAPER and writes its plugin knowledge record to LoreKit, asking the user only what it couldn't work out
 ---
 
 # /learn-plugin
 
-This skill interviews the user about a plugin they want the mixing skills to know
-about, then writes a properly formatted knowledge file to the **plugin knowledge
-base** at `~/.claude/knowledge/plugins/{vendor}/{plugin}.md`.
+This skill teaches the mixing skills a plugin. It writes the plugin's **plugin
+knowledge record** to the user's own LoreKit layer: scope `project::reaper-mcp`,
+key `user::plugins::{vendor}/{plugin}`, following
+`knowledge/reference/memory-protocol.md`.
 
-This is the *manual interview* path. The mixing skills also learn plugins **while
-working** (capturing param maps, kept settings, and gotchas) per
-`knowledge/reference/memory-protocol.md` — this skill is for when the user wants
-to teach a plugin up front. To recall or maintain memory, use `/mix-memory`.
+It does the work itself before asking anything. The **`plugin-researcher`**
+agent researches the plugin on the web, loads it on a scratch track, probes its
+parameters, and writes the record. Then this skill asks the user **only** the
+questions the agent couldn't answer, and folds the answers in.
 
-> **It's versioned.** For a cloned + symlinked install, `~/.claude/knowledge` is
-> the repo, so the file lands in the working tree — remind the user to commit it to
-> their fork (`git add knowledge/plugins/...`) so it ships to anyone who clones.
+The mixing skills use the same agent to bootstrap plugins they don't know. To
+recall or tidy memory, use `/mix-memory`. If the `memory.*` tools are not
+connected, say so and stop.
 
 ## Trigger
 
-When the user types `/learn-plugin` or asks Claude to "learn about a plugin" or "add plugin knowledge".
+The user types `/learn-plugin [plugin]`, or asks Claude to "learn about a
+plugin", "research this plugin" or "add plugin knowledge".
 
 ## Instructions
 
-### Step 1: Ask for the plugin name
+### Step 1: Get the plugin name
 
-Start the conversation:
+Take it from the arguments. If there isn't one, ask a single question:
 
-> "What plugin would you like me to learn about? Tell me its name and what it does."
+> "Which plugin should I learn?"
 
-Wait for the user's response.
+If the user already said something about it (what they use it for, how they set
+it up), keep it as caller context for Step 2. Don't ask for anything else yet.
 
-### Step 2: Gather required information
+### Step 2: Dispatch the researcher
 
-Ask these questions **one group at a time** (not all at once). Wait for each answer before proceeding.
-
-**Group A — Identification:**
-1. "What is the plugin's full name as it appears in REAPER's FX browser? Copy it exactly — for example: `VST3: Pro-Q 3 (FabFilter)` or `JS: ReaEQ (Cockos)`."
-2. "Are there any other names or variations it shows up as? (e.g., different between VST2/VST3, or different on Windows vs Mac)"
-
-**Group B — Categorization:**
-3. "What category best describes this plugin?"
-   - Present options: `eq`, `compressor`, `limiter`, `saturator`, `reverb`, `delay`, `gate`, `de-esser`, `amp-sim`, `channel-strip`, `analyzer`, `stereo-imager`, `multiband`, `pitch-correction`
-4. "What is its character or style?" (optional)
-   - Present options: `transparent`, `character`, `vintage`, `modern`, `surgical`
-5. "Who makes it? (vendor name)"
-
-**Group C — Usage:**
-6. "On a scale of 1–100, how strongly do you prefer this plugin over alternatives for its category? (e.g., 85 = your go-to, 50 = use sometimes, 30 = only when nothing else available)"
-7. "What are the most important parameters you adjust, and what do they do?"
-8. "What are your typical settings for different use cases? For example: how do you set it up on vocals vs kick drum?"
-9. "Are there any factory presets worth loading as starting points?"
-10. "When do you reach for this plugin instead of its alternatives?"
-
-### Step 3: Generate the knowledge file
-
-Once you have all the answers, generate a knowledge file in this format:
-
-```markdown
----
-name: [full display name]
-fx_match: ["[exact REAPER FX list name 1]", "[alternate name 2 if any]"]
-category: [category]
-style: [style if provided]
-vendor: [vendor name]
-preference: [preference score]
-replaces: []
----
-
-# [Plugin Name]
-
-## What it does
-
-[One paragraph describing the plugin based on user's description. Be specific about its sonic character and primary use cases.]
-
-## Key parameters by name
-
-[Table of parameters the user mentioned, with the exact names as they appear in the plugin UI]
-
-| Parameter | Range | Description |
-|-----------|-------|-------------|
-[rows based on user input]
-
-## Recommended settings
-
-[One section per use case the user described]
-
-### [Use case 1]
-
-| Parameter | Value | Why |
-|-----------|-------|-----|
-[rows based on user input]
-
-## Presets worth knowing
-
-[Based on user's answer, or "No notable factory presets. Build from the recommended settings."]
-
-## When to prefer this
-
-[Based on user's answer about when they reach for it]
-
-## Learned notes
-
-<!-- Contextualized observations captured while working with this plugin.
-     The mixing skills append here automatically per memory-protocol.md. -->
+```text
+Agent(subagent_type: "plugin-researcher",
+      prompt: "Plugin: <name>\nCaller context: <anything the user said, or 'none'>")
 ```
 
-### Step 4: Determine the file path
+Tell the user what is happening, in one line: it researches the web and
+briefly adds a scratch track `[MCP] plugin-research` to their project, which it
+removes afterwards. Wait for the report.
 
-- Ask the user: "What vendor slug should I use for the directory? For example, FabFilter would be `fabfilter`, Line 6 would be `line-6`."
-- Suggest a slug if the vendor is obvious.
-- Plugin slug: lowercase plugin name, spaces to hyphens, remove special characters.
+**No `plugin-researcher` agent available** (the Agent tool is missing, or the
+agent isn't installed)? Do its steps here instead. Read
+`~/.claude/agents/plugin-researcher.md` (in the repo:
+`.claude/agents/plugin-researcher.md`) and follow it.
 
-Default target (personal layer):
-`~/.claude/knowledge/plugins/{vendor-slug}/{plugin-slug}.md`
+### Step 3: Ask only the open questions
 
-Example: FabFilter Pro-Q 3 → `~/.claude/knowledge/plugins/fabfilter/pro-q-3.md`
+Show the report's summary lines: the key written, FX names, category/style,
+what was verified live, sources.
 
-(Contributor-only: a plugin meant to ship for all users goes to the repo's
-`knowledge/plugins/{vendor-slug}/{plugin-slug}.md` instead.)
+Then ask **only** the report's open questions, all at once in one
+`AskUserQuestion` call (up to 4). Each question offers the value the agent
+already wrote as the first option, labelled "(keep)":
 
-### Step 5: Write the file
+- **Preference:** offer the proposed number plus the neighbouring bands from
+  the field guide (e.g. "65 — good third-party (keep)", "80 — go-to",
+  "45 — fallback only").
+- **Habit or settings questions:** offer "Use the researched defaults (keep)"
+  and let the user type their own in "Other".
 
-Create the directory if needed, then write the generated file:
+More than 4 open questions? Ask the 4 that change the record the most. List the
+rest as already filled in from research, and say the user can change them with
+another `/learn-plugin`.
 
-```
-mkdir -p ~/.claude/knowledge/plugins/{vendor-slug}
-```
+No open questions besides preference? Ask only the preference confirmation.
 
-Write to `~/.claude/knowledge/plugins/{vendor-slug}/{plugin-slug}.md`. If a
-personal file already exists, **merge** — don't clobber its `## Learned notes`.
+### Step 4: Fold the answers in
 
-### Step 6: Confirm
+Answers that only kept the agent's values change nothing; skip the write.
+Otherwise `memory.read` the `user::` key and change only what the user answered:
 
-Tell the user:
+- preference → the header line **and** the `preference::<n>` tag
+- when they pick it → `## When to prefer this`
+- their own settings → a `###` use case under `## Recommended settings`,
+  marked as the user's own
 
-> "Done! I've written `~/.claude/knowledge/plugins/{vendor}/{plugin}.md`.
+Then `memory.write` the full record and full tag list (a write replaces both),
+with `source_agent: "learn-plugin"` and no `ttl_days`. Keep everything else the
+agent wrote, `## Learned notes` included.
+
+### Step 5: Confirm
+
+> "Done! **[Plugin Name]** is saved to LoreKit as
+> `user::plugins::{vendor}/{plugin}` (preference n/100, [category]).
+> [Verified live: N params, the scaling of K of them. | Not tested live: reason.]
 >
-> The mixing skills will now prefer **[Plugin Name]** for **[category]** tasks, and
-> will keep refining it in `## Learned notes` as they work with it.
->
-> You can edit the file directly. To teach another plugin, run `/learn-plugin`
-> again; to recall or tidy memory, run `/mix-memory`."
+> The mixing skills will use it for **[category]** jobs when it's your
+> highest-preference installed plugin, and will add to its learned notes as they
+> work with it."
+
+If the report said the scratch track couldn't be removed, say that first and
+name the track.
+
+### Step 6: Show how it works
+
+Always end with the overview from the report's **How it works** section, under
+the heading **"How [Plugin Name] works"**. Update it with the user's answers
+from Step 3 first: fill in or correct **Your setup**, and adjust **In practice**
+where an answer changes what the mixer can do. Keep the agent's structure (what
+it is, the key point, the control table, presets, your setup, in practice). Keep
+it plain, not fancy.
+
+The report has no overview (an older agent, or you did the steps inline)?
+Write one in that structure from the final record.
 
 ## Notes
 
-- **Self-improvement loop (per `memory-protocol.md`).** Your main output *is*
-  memory — the plugin file. Beyond that, if the interview itself surfaces a
-  recurring process lesson (e.g. users rarely know the exact FX-browser string, so
-  ask for it first; a category that's repeatedly mis-picked), write/UPDATE a
-  lesson to `~/.claude/knowledge/lessons/mixing/` and mention it. End by asking
-  whether anything about the interview should change next time.
-- Always use the **exact** FX name from REAPER's FX browser — this is critical for pattern matching
-- If the user doesn't know the exact FX name, suggest they open REAPER, go to FX Browser, find the plugin, and copy the name
-- The `preference` score determines which plugin wins when multiple options are available for the same category
-- Do not add gray-matter or YAML library imports — the knowledge-loader parses frontmatter with a simple regex
-- VST3 versions are preferred over VST2 when both exist (add both to fx_match)
-- Files under `~/.claude/knowledge/plugins/` are read by the mixing skills via Read/Glob at runtime; the same tree (the repo's `knowledge/`) is what the `reaper-mix-agent` knowledge-loader bundles. Keep the frontmatter shape consistent so both readers work.
-- If the user is unsure of parameters or good settings, research the web (`WebSearch`/`WebFetch`) to pre-fill, then confirm with them. The `/mixer` and `/mastering` skills do this automatically for unknown plugins (the bootstrap path in `memory-protocol.md`) — `/learn-plugin` is the human-in-the-loop version.
+- **Ask little.** Anything the web or REAPER can answer (exact FX name, vendor,
+  category, parameters, ranges, presets, typical settings) is never asked.
+  The user is asked about their taste and habits, or a fact the sources disagree
+  on and testing couldn't settle.
+- **Self-improvement loop (per `memory-protocol.md`).** The main output is the
+  plugin record. If a run shows a recurring process lesson (e.g. a vendor whose
+  FX names don't match its marketing name, a category that's often mis-picked,
+  a plugin type whose params can't be probed), dedup-search and write or update
+  a `user::mixing-lessons::<slug>` lesson (`source_agent: "learn-plugin"`) and
+  mention it.
+- The `fx::` tags must be the **exact** FX-browser names. They're matched as
+  case-insensitive substrings of installed FX names. The agent takes them from
+  `search_fx`, so they always match this machine.
+- The header line and the tags must stay in step: lookups filter on the tags,
+  people read the header.

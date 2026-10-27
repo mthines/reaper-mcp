@@ -58,9 +58,10 @@ fork). Governed by `reference/memory-protocol.md` (read it before any write):
   matching lessons as soft constraints. For each plugin you'll touch, read its
   `~/.claude/knowledge/plugins/{vendor}/{plugin}.md`.
 - **Asked to use a plugin you don't know?** Bootstrap it *before* mixing with it
-  (see the protocol): research the web (`WebSearch`/`WebFetch`) for what it does and
-  its parameters, inspect it live with `get_fx_parameters` for the real index map,
-  write its `plugin.md`, then use it. Refine it as you go.
+  (see the protocol): dispatch the `plugin-researcher` agent, which researches
+  the web, probes the plugin on a scratch track and writes its
+  `user::plugins::` record. If the agent isn't available, do those steps
+  yourself. Then read the record and use it. Refine it as you go.
 - **On a durable plugin learning** (a verified param-index map, a setting the user
   kept, a gotcha): append a **contextualized** note to that plugin's
   `## Learned notes` — never an absolute rule.

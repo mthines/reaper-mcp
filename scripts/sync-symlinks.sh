@@ -7,6 +7,7 @@
 # Links created (single hop, repo is the source of truth):
 #
 #   ~/.claude/skills/<name>     →  <repo>/.claude/skills/<name>      (skill dir w/ SKILL.md)
+#   ~/.claude/agents/<name>.md  →  <repo>/.claude/agents/<name>.md   (subagent definition)
 #   ~/.claude/knowledge         →  <repo>/knowledge                  (whole tree)
 #
 # Each skill is a directory containing SKILL.md — the layout Claude Code
@@ -41,6 +42,7 @@ done
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLAUDE_DIR="$HOME/.claude"
 CLAUDE_SKILLS_DIR="$CLAUDE_DIR/skills"
+CLAUDE_AGENTS_DIR="$CLAUDE_DIR/agents"
 
 created=0; repaired=0; skipped_ok=0; skipped_unsafe=0
 log() { printf '%s\n' "$*"; }
@@ -86,7 +88,15 @@ while IFS= read -r -d '' skill_md; do
   link "$CLAUDE_SKILLS_DIR/$(basename "$skill_dir")" "$skill_dir"
 done < <(find "$REPO_ROOT/.claude/skills" -mindepth 1 -maxdepth 5 -type f -name SKILL.md -print0)
 
-# 2. Whole knowledge tree → ~/.claude/knowledge
+# 2. Each agent definition → ~/.claude/agents/<name>.md
+if [[ -d "$REPO_ROOT/.claude/agents" ]]; then
+  ensure_dir "$CLAUDE_AGENTS_DIR"
+  while IFS= read -r -d '' agent_md; do
+    link "$CLAUDE_AGENTS_DIR/$(basename "$agent_md")" "$agent_md"
+  done < <(find "$REPO_ROOT/.claude/agents" -mindepth 1 -maxdepth 1 -type f -name '*.md' -print0)
+fi
+
+# 3. Whole knowledge tree → ~/.claude/knowledge
 link "$CLAUDE_DIR/knowledge" "$REPO_ROOT/knowledge"
 
 log ""

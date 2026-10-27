@@ -107,8 +107,10 @@ reaper-mcp/
     mixer/SKILL.md            # /mixer — executes mixes (live session, reads/writes memory)
     critique/SKILL.md         # /critique — read-only analysis ("roast my mix")
     mastering/SKILL.md        # /mastering — mix-bus mastering to a LUFS target
-    learn-plugin/SKILL.md     # /learn-plugin — interview to author a plugin knowledge file
+    learn-plugin/SKILL.md     # /learn-plugin — research + live-probe a plugin via plugin-researcher, ask only the gaps (LoreKit)
     mix-memory/SKILL.md       # /mix-memory — recall / consolidate / promote memory
+  .claude/agents/             # Subagents, symlinked into ~/.claude/agents by scripts/sync-symlinks.sh
+    plugin-researcher.md      # Web research + scratch-track probing → user::plugins:: record; used by /learn-plugin, /mixer, /mastering
 
   knowledge/                  # Knowledge base + memory; symlinked into ~/.claude/knowledge (primary install)
     plugins/                  # Plugin knowledge — read AND written by the skills (FX match, params, learned notes)
@@ -121,7 +123,7 @@ reaper-mcp/
     lessons/mixing/           # Process lessons the skills accumulate (versioned; ignored by the TS knowledge-loader)
 
   scripts/
-    sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs) + knowledge/ into ~/.claude (primary install model)
+    sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (primary install model)
 
   reaper/                     # Files installed INTO REAPER (copied by setup command)
     mcp_tracks_lib.lua        # Pure track-structure + routing logic (wasmoon-tested), loaded by the bridge
@@ -721,7 +723,7 @@ Clone-only model: clone the fork, run the one-command installer, done.
 pnpm nx build reaper-mcp-server                              # build
 ( cd dist/apps/reaper-mcp-server && pnpm link --global )    # put `reaper-mcp` on PATH
 reaper-mcp setup                                            # Lua bridge + JSFX into REAPER
-scripts/sync-symlinks.sh                                    # skills + knowledge → ~/.claude
+scripts/sync-symlinks.sh                                    # skills + agents + knowledge → ~/.claude
 reaper-mcp init                                             # tool allow-list + .mcp.json (copy-free)
 
 # Start MCP server (stdio mode — what Claude Code runs)

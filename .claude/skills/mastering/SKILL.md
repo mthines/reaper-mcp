@@ -43,8 +43,9 @@ a symlink to the repo for cloned installs, so writes are committable):
 - **Before:** read `~/.claude/knowledge/lessons/mixing/INDEX.md` and the notes for
   your limiter/EQ/comp plugins in `~/.claude/knowledge/plugins/` — past targets the
   user preferred and known gotchas.
-- **Unknown plugin?** Bootstrap it first (see protocol): research the web +
-  `get_fx_parameters`, write its `plugin.md`, then use it.
+- **Unknown plugin?** Bootstrap it first (see protocol): dispatch the
+  `plugin-researcher` agent (or follow its steps yourself), then read its
+  `user::plugins::` record and use it.
 - **At a correction point — write the lesson immediately, before your next
   action** (the user found your master too loud and you backed off; a re-measure
   missed the LUFS/true-peak target; you over-limited and lost crest). Non-

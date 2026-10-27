@@ -54,8 +54,8 @@ The link points at `dist/apps/reaper-mcp-server`, so any later
 > `init`, `doctor`, `status`) require a rebuild. For the long-running MCP
 > **server**, prefer `pnpm dev` (tsx watch) below, which needs no rebuild.
 >
-> Skills + knowledge are symlinked (not built) via `scripts/sync-symlinks.sh`, so
-> edits to `.claude/skills/` or `knowledge/` are live immediately.
+> Skills, agents + knowledge are symlinked (not built) via `scripts/sync-symlinks.sh`,
+> so edits to `.claude/skills/`, `.claude/agents/` or `knowledge/` are live immediately.
 >
 > To unlink later: `cd dist/apps/reaper-mcp-server && pnpm unlink --global`.
 
