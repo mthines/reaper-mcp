@@ -354,6 +354,7 @@ function new_fake(spec)
   for k in ipairs(spec.tracks or {}) do
     for j, it in ipairs(tracks[k].items) do
       init_item(tracks[k], it)
+      it.midi = ((spec.midi or {})[k] or {})[j]
       local names = ((spec.takes or {})[k] or {})[j] or { "Take " .. j }
       for _, n in ipairs(names) do it.takes[#it.takes + 1] = new_take(it, n) end
     end
@@ -392,7 +393,37 @@ function new_fake(spec)
     write("active_take")
   end
   api.GetTakeName = function(tk) return tk.name end
-  api.TakeIsMIDI = function() return false end
+  api.TakeIsMIDI = function(tk) return tk.item.midi ~= nil end
+
+  -- MIDI: `spec.midi[track][item] = { notes = n, events = { { chanmsg, chan, msg2, msg3 }, ... } }`
+  -- holds every channel event MIDI_GetCC reads (CC, pitch bend, program change, ...).
+  -- 120 BPM throughout, 960 PPQ.
+  local function midi(tk) return tk.item.midi end
+  api.MIDI_CountEvts = function(tk)
+    local m = midi(tk)
+    return true, m.notes or 0, #m.events, 0
+  end
+  api.MIDI_GetCC = function(tk, i)
+    local e = midi(tk).events[i + 1]
+    if not e then return false end
+    return true, false, false, e.ppq or 0, e[1], e[2], e[3], e[4]
+  end
+  api.MIDI_InsertCC = function(tk, _, _, ppq, chanmsg, chan, msg2, msg3)
+    local evs = midi(tk).events
+    evs[#evs + 1] = { chanmsg, chan, msg2, msg3, ppq = ppq }
+    write("insert_cc")
+    return true
+  end
+  api.MIDI_DeleteCC = function(tk, i)
+    table.remove(midi(tk).events, i + 1)
+    write("delete_cc")
+    return true
+  end
+  api.MIDI_Sort = function() end
+  api.TimeMap2_timeToQN = function(_, t) return t * 2 end
+  api.TimeMap2_QNToTime = function(_, qn) return qn / 2 end
+  api.MIDI_GetPPQPosFromProjTime = function(_, t) return t * 2 * 960 end
+  api.MIDI_GetProjTimeFromPPQPos = function(_, ppq) return ppq / 960 / 2 end
   api.GetSetMediaItemTakeInfo_String = function(tk, _, v, set)
     if set then tk.name = v; write("take_name") end
     return true, tk.name
