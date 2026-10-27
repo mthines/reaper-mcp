@@ -3,7 +3,8 @@
 ## Prerequisites
 
 - Node.js >= 20
-- pnpm (`corepack enable && corepack prepare`)
+- pnpm (`corepack enable && corepack prepare`) — needed for development. End users
+  don't install it: `scripts/install.sh` falls back to `corepack pnpm` or `npx pnpm`.
 - REAPER with the Lua bridge running (see `reaper-mcp setup`)
 
 ## First-time setup
@@ -35,8 +36,9 @@ pnpm nx dev reaper-mcp-server
 
 ## Using the `reaper-mcp` CLI from your local checkout
 
-`scripts/install.sh` links the CLI for you (`pnpm link --global` from
-`dist/apps/reaper-mcp-server`). To (re)link manually:
+`scripts/install.sh` tries to link the CLI for you (`pnpm link --global` from
+`dist/apps/reaper-mcp-server`, best effort — it needs pnpm's global bin dir set up).
+To (re)link manually:
 
 ```bash
 pnpm nx build reaper-mcp-server
@@ -125,6 +127,22 @@ pnpm test                           # All tests
 pnpm nx test reaper-mcp-server      # Server tests only
 pnpm nx test protocol               # Protocol library tests only
 ```
+
+### Install flow test (records the README GIF)
+
+```bash
+pnpm test:install    # needs vhs (brew install vhs) and Claude Code
+```
+
+`scripts/test-install.sh` snapshots the working tree (uncommitted changes
+included) and runs the README install command in a sandbox: an empty `HOME`, a
+macOS-style REAPER folder, and no pnpm on PATH. `scripts/install-demo.tape`
+types the command for real (git redirects the GitHub URL to the snapshot) and
+fails unless the installer prints `Done!`. The script then checks that Claude
+Code, opened in an unrelated folder, sees the `reaper` server, and that `doctor`
+reports it registered. It rewrites `docs/assets/install-demo.gif`, so re-run it
+whenever the installer's output changes. It does not cover loading the bridge in
+REAPER.
 
 ### Stress / performance tests (requires REAPER)
 
