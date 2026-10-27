@@ -1,5 +1,4 @@
-// eslint-disable-next-line @nx/enforce-module-boundaries -- the contribution format lives in scripts/lib, shared with the publish script
-import { formatContribution } from '../../../scripts/lib/plugin-contributions.mjs';
+import { formatContribution } from './plugin-contributions.mjs';
 import type { PluginRecord } from './plugins.js';
 
 // "Contribute": the viewer's own records become a PR adding one file under knowledge/contributions/,

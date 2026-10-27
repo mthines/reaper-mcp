@@ -13,6 +13,7 @@ import {
   commandKind,
   formatParams,
   groupByTool,
+  hasToolCalls,
   isConnected,
   labelSessions,
   sessionName,
@@ -220,5 +221,12 @@ describe('labelSessions', () => {
   it('numbers agents in the same folder by start time', () => {
     const labels = labelSessions([at('late', '/w/repo/main', 5), at('early', '/w/repo/main', 1)]).map((x) => x.label);
     expect(labels).toEqual(['main #2', 'main #1']);
+  });
+});
+
+describe('hasToolCalls', () => {
+  it('leaves out agents that have only pinged', () => {
+    expect(hasToolCalls({ commands: 0 })).toBe(false);
+    expect(hasToolCalls({ commands: 3 })).toBe(true);
   });
 });

@@ -15,6 +15,7 @@ import {
   formatMs,
   formatParams,
   groupByTool,
+  hasToolCalls,
   isConnected,
   labelSessions,
   latencyStats,
@@ -353,7 +354,7 @@ function Header({
   onOpenSettings?: () => void;
 }) {
   const label = state === 'live' ? 'Live' : state === 'stale' ? 'Not responding' : reachable ? 'Bridge stopped' : 'REAPER unreachable';
-  const connected = [...sessions.values()].filter((x) => isConnected(x, now));
+  const connected = [...sessions.values()].filter((x) => isConnected(x, now) && hasToolCalls(x));
   return (
     <header className="header">
       <div className="brand">
@@ -1064,7 +1065,8 @@ function Log({
 
   // Sessions seen in this window's log, plus any the bridge knows about
   const sessionIds = useMemo(() => {
-    const ids = new Set(sessions.keys());
+    // Agents that have only pinged are left out: no calls to filter by
+    const ids = new Set([...sessions.values()].filter(hasToolCalls).map((x) => x.id));
     for (const e of log) if (e.s) ids.add(e.s);
     // Oldest first, so chips don't reshuffle as agents take turns
     const first = (id: string) => sessions.get(id)?.first ?? Infinity;

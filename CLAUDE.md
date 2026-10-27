@@ -680,7 +680,7 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   only with their own `lk_ro_` token from Settings (kept in localStorage, never sent to the bridge). Records link into
   LoreKit by row id. The tab stays hidden until the bridge has published its list. **Contribute N** (with a token, when you have
   `user::` records) opens GitHub's new-file page with them as one file under `knowledge/contributions/` (format and
-  checks: `scripts/lib/plugin-contributions.mjs`), so GitHub forks and opens the PR. The `plugin-contributions`
+  checks: `apps/bridge-ui/src/plugin-contributions.mjs`), so GitHub forks and opens the PR. The `plugin-contributions`
   workflow (`pull_request_target`, never runs PR code) comments what would be published; the maintainer's
   `publish-to-lorekit` label writes them to the built-in layer with secret `LOREKIT_PUBLISH_TOKEN` (`lk_rw_`, a
   writer in the `reaper-mcp` org) and closes the PR. Client: `src/lorekit.ts`,

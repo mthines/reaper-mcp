@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-// eslint-disable-next-line @nx/enforce-module-boundaries -- the format lives in scripts/lib, shared with the publish script; the round trip needs both sides
-import { parseContribution } from '../../../scripts/lib/plugin-contributions.mjs';
+import { parseContribution } from './plugin-contributions.mjs';
 import { contributable, contribution, contributionFileName } from './contribute.js';
 import { DEMO_KNOWLEDGE } from './demo-plugins.js';
 
@@ -30,7 +29,7 @@ describe('contribution', () => {
     expect(url.searchParams.get('filename')).toBe('knowledge/contributions/x.md');
     expect(url.searchParams.get('value')).toBe(small.text);
 
-    const long = mine.map((r) => ({ ...r, source: { ...r.source!, value: `${r.source!.value}\n${'x'.repeat(6000)}` } }));
+    const long = mine.map((r) => ({ ...r, source: r.source && { ...r.source, value: `${r.source.value}\n${'x'.repeat(6000)}` } }));
     const big = contribution(long);
     expect(big.prefilled).toBe(false);
     expect(new URL(big.url).searchParams.has('value')).toBe(false);

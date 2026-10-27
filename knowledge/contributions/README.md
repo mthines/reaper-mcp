@@ -14,6 +14,6 @@ What happens next:
 
 A contribution PR may only add files here. The format (one or more records, each after a
 `<!-- lorekit-record … -->` header with its `key` and `tags`) is defined and checked by
-[`scripts/lib/plugin-contributions.mjs`](../../scripts/lib/plugin-contributions.mjs).
+[`apps/bridge-ui/src/plugin-contributions.mjs`](../../apps/bridge-ui/src/plugin-contributions.mjs).
 Keep personal details (names, file paths, client projects) out of records: they become
 visible to every reaper-mcp user.

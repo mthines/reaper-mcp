@@ -266,6 +266,11 @@ export function isConnected(session: Session, now: number): boolean {
   return !session.ended && now - session.last < 45_000;
 }
 
+/** An agent that has only pinged (connected, no tool calls yet) is noise next to the ones working. */
+export function hasToolCalls(session: Pick<Session, 'commands'>): boolean {
+  return session.commands > 0;
+}
+
 const pathParts = (dir: string | undefined) => (dir ?? '').replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean);
 
 /** "song-a" from "/work/song-a" (or its unique label), falling back to a short id. */
