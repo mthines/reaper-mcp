@@ -37,16 +37,21 @@ sits +4 dB above the average curve".
 Per `reference/memory-protocol.md` (the self-improvement loop is general to every
 mix skill — `/critique` included).
 
-**Recall (before analyzing):**
-- `~/.claude/knowledge/lessons/mixing/INDEX.md` — past process lessons help you
-  weight what to flag.
-- plugin notes in `~/.claude/knowledge/plugins/` — the user's tools and taste.
+**Recall (before analyzing)** — learned memory is in LoreKit, scope
+`project::reaper-mcp` (if `memory.*` isn't connected, say so and carry on):
+- the `loop::mixing-lessons` bucket (capped at 5 + one keyword search) — past
+  process lessons help you weight what to flag.
+- the plugin records for the plugins on the session (match FX names via their
+  `fx::` tags) — both the built-in record (`get_builtin_knowledge`) and the user's
+  `user::plugins::{vendor}/{plugin}` overlay, which wins: the user's tools and taste.
 
 **Capture (process lessons about your *analysis*).** Read-only means you don't
 change the *mix* — it does **not** mean you don't learn:
 - **At a correction point — immediately:** the user says a flag was wrong or
-  intentional, or points out a real problem you missed. Write/UPDATE a lesson to
-  `~/.claude/knowledge/lessons/mixing/` and say you did (file + takeaway).
+  intentional, or points out a real problem you missed. Dedup-search, then
+  write/UPDATE a `user::mixing-lessons::<slug>` lesson (`source_agent: "critique"`;
+  never a built-in key) and
+  say you did (key + takeaway).
 - **End-of-session retrospective (always):** before the report, ask whether your
   read of the mix was off anywhere; capture anything that surfaced.
 - A lesson at `seen_count >= 3` is promotable via `/mix-memory promote`.

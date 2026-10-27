@@ -300,6 +300,9 @@ export const MCP_TOOL_NAMES = [
   'disable_tool_category',
   // semantic audio analysis (requires Python sidecar — opt-in)
   'analyze_track_aesthetics',
+  // built-in mix knowledge (read-only LoreKit proxy)
+  'list_builtin_knowledge',
+  'get_builtin_knowledge',
   // Note: 'render_track_to_wav' is an internal Lua bridge command, NOT a public MCP tool.
   // It must NOT be listed here — MCP_TOOL_NAMES drives the Claude Code allowlist.
 ] as const;

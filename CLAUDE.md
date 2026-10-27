@@ -83,21 +83,6 @@ reaper-mcp/
       commands.ts             # BridgeCommand, CommandType, per-command param interfaces
       responses.ts            # BridgeResponse, ProjectInfo, TrackInfo, FxInfo, etc.
 
-  apps/reaper-mix-agent/      # AI mix engineer agent (TypeScript, esbuild)
-    src/
-      agent.ts                # Agent context factory: loads knowledge, builds system prompt
-      knowledge-loader.ts     # Loads/parses knowledge/ markdown files (frontmatter + body)
-      plugin-resolver.ts      # Matches installed FX against plugin knowledge (fx_match patterns)
-      modes/                  # Workflow mode implementations
-        analyze.ts            # Analysis mode
-        gain-stage.ts         # Gain staging mode
-        mix.ts                # Full mix mode
-        master.ts             # Mastering mode
-        drum-bus.ts           # Drum bus processing
-        vocal-chain.ts        # Vocal chain processing
-        low-end.ts            # Low-end management
-        stereo-image.ts       # Stereo image mode
-
   apps/bridge-ui/             # Bridge status page (React → one self-contained mcp_bridge.html)
     src/status.ts             # Parses ExtState MCPBridge/status, liveness, log merge (unit-tested)
     src/App.tsx               # Status, latency strip, searchable/filterable command log
@@ -113,14 +98,10 @@ reaper-mcp/
     plugin-researcher.md      # Web research + scratch-track probing → user::plugins:: record; used by /learn-plugin, /mixer, /mastering
 
   knowledge/                  # Knowledge base + memory; symlinked into ~/.claude/knowledge (primary install)
-    plugins/                  # Plugin knowledge — read AND written by the skills (FX match, params, learned notes)
-      fabfilter/              # FabFilter Pro-Q 3, Pro-C 2, Pro-L 2
-      neural-dsp/             # Helix Native
-      stock-reaper/           # ReaEQ, ReaComp, ReaLimit, ReaVerb, ReaDelay, ReaGate, JS 1175
     genres/                   # Genre mixing conventions (targets, frequency balance, dynamics)
     workflows/                # Step-by-step mixing workflows (gain-staging, vocal-chain, etc.)
     reference/                # Reference material (frequencies, metering, compression, perceived loudness, memory-protocol)
-    lessons/mixing/           # Process lessons the skills accumulate (versioned; ignored by the TS knowledge-loader)
+                              # Plugin knowledge + process lessons live in LoreKit, scope project::reaper-mcp
 
   scripts/
     sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (primary install model)
@@ -142,16 +123,10 @@ reaper-mcp/
     install.sh                # Manual install helper script
 ```
 
-### knowledge/ ↔ reaper-mix-agent Relationship
+### Where mix knowledge lives
 
-The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
-
-- **`knowledge/`** contains markdown files with YAML frontmatter that define audio engineering knowledge (plugin parameters, genre conventions, mixing workflows, reference material).
-- **`reaper-mix-agent`** loads and parses these files at runtime via `knowledge-loader.ts`, which categorizes them by directory path (`plugins/`, `genres/`, `workflows/`, `reference/`).
-- **`plugin-resolver.ts`** matches the `fx_match` frontmatter field in plugin knowledge files against the user's installed FX list to determine which plugins are available.
-- **Workflow modes** in `modes/` correspond to workflow knowledge files (e.g., `modes/gain-stage.ts` uses `workflows/gain-staging.md`).
-
-**When editing one, update the other:** Adding a new plugin knowledge file requires the `fx_match` patterns that `PluginResolver` uses. Adding a new workflow mode should have a corresponding `knowledge/workflows/` file. Adding new knowledge types requires updating `typeFromPath()` in `knowledge-loader.ts`.
+- **`knowledge/`** (genres, workflows, reference) — curated markdown read on demand by the mix skills; symlinked into `~/.claude/knowledge`.
+- **Plugin knowledge and process lessons** live in **LoreKit**, scope `project::reaper-mcp` — one record per plugin (tags `plugin-knowledge`, `category::…`, `preference::…`, `fx::…`) and lessons (`loop::mixing-lessons`), in two layers: the **built-in** layer (keys `plugins::<vendor>/<plugin>` / `mixing-lessons::<slug>`, owned by the `reaper-mcp` LoreKit org, tag `layer::built-in`, read by everyone through the server's `list_builtin_knowledge` / `get_builtin_knowledge` tools) and each user's own layer on top (keys `user::plugins::…` / `user::mixing-lessons::…`, tag `layer::user`, via the user's own LoreKit `memory.*`). The user's record wins. The skills only ever write `user::` keys; the maintainer moves records into the built-in layer with `/mix-memory publish`. Contract: `knowledge/reference/memory-protocol.md`.
 
 ## Workspace Packages
 
@@ -159,11 +134,10 @@ The `knowledge/` directory and `apps/reaper-mix-agent/` are tightly coupled:
 |---------|----------|-------|---------|
 | `@mthines/reaper-mcp` | `/` (root) | -- | Workspace root, scripts |
 | `@mthines/reaper-mcp-server` | `apps/reaper-mcp-server` | `@nx/esbuild` (ESM bundle) | MCP server application |
-| `@mthines/reaper-mix-agent` | `apps/reaper-mix-agent` | `@nx/esbuild` (ESM bundle) | AI mix engineer agent (loads `knowledge/`) |
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (134 total)
+## MCP Tools (136 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `analyze_track_aesthetics` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -353,6 +327,20 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 |------|------|-------------|
 | `run_plan` | `tools/plan.ts` | Execute an ordered list of ops in **one** bridge call and **one** undo block, all-or-nothing, with `$refs`, `dryRun`, `idempotencyKey`, and an optional `snapshotBefore` |
 
+### Built-in Mix Knowledge (2)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `list_builtin_knowledge` | `tools/knowledge.ts` | List (summaries, tag filter) or full-text search the built-in plugin records and mixing lessons |
+| `get_builtin_knowledge` | `tools/knowledge.ts` | Read one built-in record by key (`plugins::…` / `mixing-lessons::…`) |
+
+TS-only (no bridge command): JSON-RPC to LoreKit with a bundled **public read-only** `lk_ro_` token
+(`BUILTIN_LOREKIT_TOKEN`, scoped to `project::reaper-mcp` + the `reaper-mcp` org; override with
+`REAPER_MCP_LOREKIT_TOKEN` / `REAPER_MCP_LOREKIT_URL`). Non-`lk_ro_` tokens are refused, rows are
+filtered to tag `layer::built-in`, responses are cached 10 min. Scope the token with LoreKit's
+`orgs_only` tenancy ("Selected orgs only") so it never sees its owner's personal rows; under any
+other tenancy it does, and the owning account must keep nothing private in that scope.
+
 ### Actions Proxy (3)
 
 | Tool | File | Description |
@@ -411,7 +399,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
-Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`, `takes`, `fx_files`
+Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`, `takes`, `fx_files`, `knowledge`
 
 ### MIDI Editing Concepts
 

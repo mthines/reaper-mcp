@@ -1,6 +1,6 @@
 # Protocol Library
 
-Shared TypeScript types for commands and responses between `reaper-mcp-server` and `reaper-mix-agent`.
+Shared TypeScript types for commands and responses used by `reaper-mcp-server`.
 
 ## Commands
 
@@ -42,5 +42,4 @@ This library is the contract between 5 locations that must stay in sync:
 ## Consumers
 
 - `@mthines/reaper-mcp-server` — imports types for tool registration and bridge communication
-- `@mthines/reaper-mix-agent` — imports types for knowledge loading context
 - Path alias: `@reaper-mcp/protocol` → `libs/protocol/src/index.ts`

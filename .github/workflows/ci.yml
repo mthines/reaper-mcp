@@ -127,9 +127,6 @@ jobs:
             elif echo "$AFFECTED" | grep -qw "protocol"; then
               CHANGED="true"
               echo "::notice::protocol: changes detected (dependency of server)"
-            elif echo "$AFFECTED" | grep -qw "reaper-mix-agent"; then
-              CHANGED="true"
-              echo "::notice::reaper-mix-agent: changes detected"
             else
               echo "::notice::No publishable changes detected"
             fi
@@ -272,7 +269,7 @@ jobs:
             echo "::notice::Created beta tag $TAG"
           else
             # Update version in all package.json files
-            for PKG in apps/reaper-mcp-server/package.json apps/reaper-mix-agent/package.json libs/protocol/package.json; do
+            for PKG in apps/reaper-mcp-server/package.json libs/protocol/package.json; do
               if [ -f "$PKG" ]; then
                 sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$PKG"
               fi

@@ -41,8 +41,8 @@ before setting one.
 1. **Snapshot before changes** — `snapshot_save`, so the user can A/B and revert.
 2. **Recall memory, then measure, then act** (see Memory + Workflow below).
 3. **Explain the reasoning** in audio terms, then execute.
-4. **Use the best available plugin** — `list_available_fx`, then prefer higher
-   `preference` in the knowledge base; fall back to stock.
+4. **Use the best available plugin** — `list_available_fx`, then prefer the
+   highest `preference::` among LoreKit plugin records that match; fall back to stock.
 5. **Iterate** — change, verify with meters, adjust.
 6. **Optimize for perceived loudness, not just meters** — the ear is far more
    sensitive at 2–5 kHz than at 100 Hz. Load `reference/perceived-loudness.md`
@@ -50,45 +50,58 @@ before setting one.
 
 ## Memory — get better every session
 
-Everything lives in the versioned knowledge base under `~/.claude/knowledge/`
-(a symlink to the repo for cloned installs — so writes are committable to the
-fork). Governed by `reference/memory-protocol.md` (read it before any write):
+Plugin knowledge and process lessons live in **LoreKit**, scope
+`project::reaper-mcp`, via the `memory.*` tools, in two layers: the read-only
+**built-in** layer (`plugins::…`, `mixing-lessons::…`, tag `layer::built-in`) and
+the user's own layer on top (`user::plugins::…`, `user::mixing-lessons::…`, tag
+`layer::user`). Read the built-in layer with the `reaper` tools
+`list_builtin_knowledge` / `get_builtin_knowledge` (no LoreKit account needed) and
+the user layer with `memory.*`; the user's record wins. **Every write goes to a
+`user::` key — never write or delete a built-in key.** Governed by
+`reference/memory-protocol.md` (read it before any write — it has the exact calls,
+record shapes, layer merge and plugin lookup):
 
-- **Start of task:** `Read ~/.claude/knowledge/lessons/mixing/INDEX.md` and treat
-  matching lessons as soft constraints. For each plugin you'll touch, read its
-  `~/.claude/knowledge/plugins/{vendor}/{plugin}.md`.
+- **Start of task:** read the `loop::mixing-lessons` bucket (capped at 5, plus one
+  search on the task's keywords) and treat matching lessons as soft constraints.
+  For each plugin you'll touch, read both `get_builtin_knowledge
+  { key: "plugins::{vendor}/{plugin}" }` and `memory.read` of
+  `user::plugins::{vendor}/{plugin}` (find the slug via the `fx::` tags when
+  you only have the FX name) and combine them.
 - **Asked to use a plugin you don't know?** Bootstrap it *before* mixing with it
   (see the protocol): dispatch the `plugin-researcher` agent, which researches
   the web, probes the plugin on a scratch track and writes its
   `user::plugins::` record. If the agent isn't available, do those steps
   yourself. Then read the record and use it. Refine it as you go.
 - **On a durable plugin learning** (a verified param-index map, a setting the user
-  kept, a gotcha): append a **contextualized** note to that plugin's
-  `## Learned notes` — never an absolute rule.
+  kept, a gotcha): read-merge-write that plugin's `user::` record (an overlay
+  when only a built-in record exists), adding a
+  **contextualized** note under `## Learned notes` — never an absolute rule.
 - **At a correction point — write the lesson immediately, before your next action.**
   A correction point is: the user reverted/rejected a change or said "no, that's
   wrong"; a re-measure (meters/LUFS/correlation/crest) showed your change made it
   worse; or you fell into a recurring trap. This is non-negotiable (see Hard
   Rules) — do not defer it to the end, and **state in chat that you captured it**
-  (file + one-line takeaway). The dominant failure of this loop is *no capture at
+  (key + one-line takeaway). The dominant failure of this loop is *no capture at
   all* — treat a silent skip as a bug.
 - **End-of-session retrospective (always, even on a clean run).** Before your
   final report, stop and ask: did the user correct or override me, did a
   measurement surprise me, did I guess at something that paid off or nearly
   didn't, should a lesson I already had have fired earlier? If anything surfaced,
-  write or UPDATE a lesson (a recurrence bumps `seen_count`, never duplicates).
-  Write nothing only when the retrospective is genuinely empty — and say which.
+  write or UPDATE a lesson (dedup-search first; rewriting the same key bumps the
+  store's `seen_count`, never duplicates). Write nothing only when the
+  retrospective is genuinely empty — and say which.
 - **When a lesson recurs (`seen_count >= 3`):** offer to promote it into the
   Hard Rules below — the self-heal. Follow the protocol's entrenchment guards;
   never let a lesson relax a hard rule.
-- After any write, name the changed file so the user can commit it to their fork.
+- After any write, name the LoreKit key you wrote.
+- **LoreKit not connected?** Say so once and carry on with the knowledge base and
+  general mixing knowledge.
 
 ## Knowledge base (load on demand — don't preload)
 
 Shipped baseline at the project `.claude/knowledge/` or `~/.claude/knowledge/`
-(Glob to locate). Load only what the task needs:
+(Glob to locate). Load only what the task needs (plugin knowledge is in LoreKit — see Memory):
 
-- `plugins/{vendor}/{plugin}.md` — settings for a specific plugin
 - `genres/{genre}.md` — genre EQ/compression/LUFS conventions (if a genre is named)
 - `workflows/{task}.md` — step-by-step procedures; map the request to one:
   gain-staging · session-prep · vocal-chain · drum-bus · low-end · stereo-image ·
@@ -107,7 +120,9 @@ loudness/limiting, defer to `/mastering`.
 4. **Analyze** — `list_tracks`; `play` a representative section; read
    `read_track_meters` / `read_track_spectrum` / `read_track_lufs` /
    `read_track_correlation` / `read_track_crest` as relevant.
-5. **Discover plugins** — `list_available_fx`; pick by knowledge `preference`.
+5. **Discover plugins** — `list_available_fx`; match against LoreKit plugin
+   records by `category::` + `fx::` tags and pick the highest `preference::`
+   (a `user::` record's preference overrides the built-in one).
 6. **Execute** — make changes, explaining each in audio terms.
 7. **Verify** — re-read meters/spectrum; compare against targets; revert if worse.
 8. **Capture** — write any durable plugin learnings / process lessons (Memory).

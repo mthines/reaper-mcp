@@ -1,14 +1,14 @@
 ---
 name: Learn Plugin
 id: learn-plugin
-description: Discover an unknown plugin by reading its parameters, researching online, and creating a knowledge file
+description: Discover an unknown plugin by reading its parameters, researching online, and saving a plugin knowledge record
 ---
 
 # Learn Plugin
 
 ## When to Use
 
-When you encounter an installed FX plugin that has no knowledge file and you need to understand what it does, how to use it, and what parameters to set. This workflow turns an unknown plugin into a documented, reusable knowledge file.
+When you encounter an installed FX plugin that has no plugin record and you need to understand what it does, how to use it, and what parameters to set. This workflow turns an unknown plugin into a documented, reusable plugin record in LoreKit.
 
 ## Prerequisites
 
@@ -76,61 +76,28 @@ From what you've learned, decide:
 | Field | How to determine |
 |-------|-----------------|
 | `name` | Full display name as shown in REAPER |
-| `fx_match` | The exact name from REAPER's FX list, plus common variations (VST/VST3/AU) |
+| `fx` patterns (`fx::` tags) | The exact name from REAPER's FX list, plus common variations (VST/VST3/AU) |
 | `category` | Primary category from: eq, compressor, limiter, saturator, reverb, delay, gate, de-esser, amp-sim, channel-strip, stereo-imager, multiband, pitch-correction |
 | `vendor` | The plugin manufacturer |
 | `preference` | 30-50 for free/stock, 55-70 for decent third-party, 70-85 for preferred, 85-95 for industry-standard |
 | `style` | transparent, character, vintage, modern, or surgical |
 | `replaces` | Stock REAPER plugin IDs this can replace (e.g., "rea-eq", "rea-comp") |
 
-### Step 5: Write the knowledge file
+### Step 5: Write the plugin record
 
-Create the file at `knowledge/plugins/{vendor-slug}/{plugin-slug}.md` using the template structure:
+Plugin knowledge lives in LoreKit, not in this repo: write one record to scope
+`project::reaper-mcp` with key `user::plugins::{vendor-slug}/{plugin-slug}` (the
+user's layer — `plugins::…` keys are the read-only built-in layer). The record
+shape, the tag list (`plugin-knowledge`, `category::…`, `preference::…`, one
+`fx::…` per FX name, …) and the exact `memory.write` call are in
+`reference/memory-protocol.md` → "Plugin knowledge". The fields above become the
+record's header line and its tags; put the verified parameter map from Step 2
+under `## Learned notes`. No expiry.
 
-```markdown
----
-name: {Plugin Name}
-fx_match: ["{exact REAPER name}", "{alternate match}"]
-category: {category}
-style: {style}
-vendor: {Vendor Name}
-preference: {score}
-replaces: [{stock plugins if applicable}]
----
+### Step 6: Verify the plugin record
 
-# {Plugin Name}
-
-## What it does
-
-{1-2 paragraphs: purpose, character, primary use cases}
-
-## Key parameters by name
-
-| Parameter | Range | Description |
-|-----------|-------|-------------|
-| {exact name} | {range} | {description} |
-
-## Recommended settings
-
-### Use case: {instrument or purpose}
-
-| Parameter | Value | Why |
-|-----------|-------|-----|
-| {name} | {value} | {reason} |
-
-## Presets worth knowing
-
-- **{Preset Name}** — {what it does}
-
-## When to prefer this
-
-- {situations where this plugin is the best choice}
-```
-
-### Step 6: Verify the knowledge file
-
-After writing the file, confirm:
-- `fx_match` patterns actually match the installed FX name (case-insensitive substring)
+After writing the record, confirm:
+- its `fx::` tags actually match the installed FX name (case-insensitive substring)
 - All parameter names are EXACT (copy from `get_fx_parameters` output)
 - Category and preference score are appropriate
 - Recommended settings include at least one concrete use case

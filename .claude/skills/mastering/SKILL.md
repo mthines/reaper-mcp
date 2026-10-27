@@ -38,34 +38,38 @@ a platform. Full target table: `reference/metering.md`.
 
 ## Memory
 
-Per `reference/memory-protocol.md` (knowledge base at `~/.claude/knowledge/` —
-a symlink to the repo for cloned installs, so writes are committable):
-- **Before:** read `~/.claude/knowledge/lessons/mixing/INDEX.md` and the notes for
-  your limiter/EQ/comp plugins in `~/.claude/knowledge/plugins/` — past targets the
-  user preferred and known gotchas.
+Per `reference/memory-protocol.md` — plugin knowledge and lessons in LoreKit
+(scope `project::reaper-mcp`), in two layers: the read-only **built-in** layer and
+the user's own `user::` layer on top. Reads combine both; writes go to `user::` keys only.
+- **Before:** read the `loop::mixing-lessons` bucket (capped at 5 + one search on
+  "mastering limiter loudness …") and, for your limiter/EQ/comp plugins, both
+  `get_builtin_knowledge { key: "plugins::{vendor}/{plugin}" }` and `memory.read`
+  of `user::plugins::{vendor}/{plugin}` — past
+  targets the user preferred and known gotchas (the user record wins).
 - **Unknown plugin?** Bootstrap it first (see protocol): dispatch the
   `plugin-researcher` agent (or follow its steps yourself), then read its
   `user::plugins::` record and use it.
 - **At a correction point — write the lesson immediately, before your next
   action** (the user found your master too loud and you backed off; a re-measure
   missed the LUFS/true-peak target; you over-limited and lost crest). Non-
-  negotiable (see Hard Rules); **say in chat that you captured it** (file +
+  negotiable (see Hard Rules); **say in chat that you captured it** (key +
   takeaway). A silent skip is a bug.
 - **End-of-session retrospective (always, even on a clean master).** Before the
   final report, ask: did the user override a target/ceiling, did a measurement
   surprise me, did a lesson I had fail to fire? If anything surfaced, write or
-  UPDATE a lesson (recurrence bumps `seen_count`). A lesson seen `>= 3×` is
-  promotable to a Hard Rule via `/mix-memory promote`.
+  UPDATE a lesson (rewriting the same key bumps the store's `seen_count`). A
+  lesson seen `>= 3×` is promotable to a Hard Rule via `/mix-memory promote`.
 - **Durable facts:** also capture a verified limiter param map or a ceiling the
-  user kept as a plugin `## Learned notes` entry. Name any changed file so the
-  user can commit it.
+  user kept under the `user::plugins::` record's `## Learned notes`
+  (read-merge-write; never write a built-in key). Name the key you wrote.
 
 ## Workflow
 
 1. **Snapshot** — `snapshot_save { name: "pre-master" }`.
 2. **Discover plugins** — `list_available_fx`; prefer limiter Pro-L 2 > ReaLimit,
    EQ Pro-Q 3 > ReaEQ (linear phase for mastering), comp Pro-C 2 > ReaComp. Check
-   `plugins/` knowledge for settings; bootstrap any unknown plugin first.
+   the LoreKit plugin records (built-in + `user::`) for settings; bootstrap any
+   unknown plugin first.
 3. **Assess the bus** — `read_track_meters` / `read_track_spectrum` /
    `read_track_lufs` / `read_track_crest`. Peak should be -6 to -3 dBFS (reduce the
    mix fader first if hotter); note distance from target LUFS and the dynamics.

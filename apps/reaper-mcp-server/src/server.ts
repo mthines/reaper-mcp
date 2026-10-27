@@ -25,6 +25,7 @@ import { registerItemTools } from './tools/items.js';
 import { registerFxHousekeepingTools } from './tools/fx-housekeeping.js';
 import { registerCategoryTools } from './tools/categories.js';
 import { registerAestheticsTools } from './tools/aesthetics.js';
+import { registerKnowledgeTools } from './tools/knowledge.js';
 
 // Cap for free-text error messages on span status (full text goes to the log).
 const MAX_STATUS_MESSAGE = 256;
@@ -148,6 +149,7 @@ export function createServer(): McpServer {
   registerFxHousekeepingTools(server);
   registerCategoryTools(server);
   registerAestheticsTools(server);
+  registerKnowledgeTools(server);
 
   return server;
 }

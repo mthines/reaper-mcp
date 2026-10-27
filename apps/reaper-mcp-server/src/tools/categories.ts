@@ -137,6 +137,11 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
       'save_track_template', 'insert_track_template', 'list_track_templates',
     ],
   },
+  knowledge: {
+    name: 'knowledge',
+    description: 'Built-in mix knowledge (read-only, curated in LoreKit): list/search plugin records and mixing lessons, read one by key. The user\'s own LoreKit layer (user:: keys) overrides it.',
+    tools: ['list_builtin_knowledge', 'get_builtin_knowledge'],
+  },
 };
 
 export function registerCategoryTools(server: McpServer): void {
