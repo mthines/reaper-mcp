@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, REAPER_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, ensureWebInterface, REAPER_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `reaper-mcp-test-${randomUUID()}`);
@@ -197,5 +197,33 @@ describe('package integrity', () => {
   it.skipIf(!distExists)('main.js does not contain node_modules paths', () => {
     const mainJs = readFileSync(join(distDir, 'main.js'), 'utf-8');
     expect(mainJs).not.toContain('node_modules');
+  });
+});
+
+describe('ensureWebInterface', () => {
+  it('adds an HTTP surface and csurf_cnt when none exist', () => {
+    const ini = '[REAPER]\nfoo=1\n\n[audioconfig]\nbar=2\n';
+    const out = ensureWebInterface(ini, 8099);
+    expect(out.changed).toBe(true);
+    expect(out.ini).toBe(
+      "[REAPER]\nfoo=1\ncsurf_cnt=1\ncsurf_0=HTTP 0 8099 '' 'mcp_bridge.html' 0 ''\n\n[audioconfig]\nbar=2\n",
+    );
+  });
+
+  it('appends after existing surfaces and bumps the count', () => {
+    const ini = '[REAPER]\ncsurf_cnt=1\ncsurf_0=OSC "x" 3 8000\n';
+    const out = ensureWebInterface(ini, 8099);
+    expect(out.ini).toContain('csurf_cnt=2\n');
+    expect(out.ini).toContain("csurf_1=HTTP 0 8099 '' 'mcp_bridge.html' 0 ''");
+  });
+
+  it('keeps an existing web interface and reports its port', () => {
+    const ini = "[REAPER]\ncsurf_cnt=1\ncsurf_0=HTTP 0 8080 '' 'index.html' 0 ''\n";
+    expect(ensureWebInterface(ini, 8099)).toEqual({ ini, port: 8080, changed: false });
+  });
+
+  it('preserves CRLF line endings', () => {
+    const out = ensureWebInterface('[REAPER]\r\nfoo=1\r\n', 8099);
+    expect(out.ini).not.toMatch(/[^\r]\n/);
   });
 });

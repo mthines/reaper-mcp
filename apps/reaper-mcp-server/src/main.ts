@@ -3,15 +3,15 @@
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
-import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
+import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
 import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges } from './telemetry.js';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
 import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
-import { resolveAssetDir, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE } from './cli.js';
+import { resolveAssetDir, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface } from './cli.js';
 import { setupSidecar } from './setup-sidecar.js';
 import { getSidecarClient } from './sidecar.js';
 
@@ -31,11 +31,16 @@ async function setup(): Promise<void> {
   const reaperDir = resolveAssetDir(__dirname, 'reaper');
 
   console.log('Installing Lua scripts...');
-  for (const luaFile of ['mcp_bridge.lua', 'mcp_snapshot_manager.lua']) {
-    const src = join(reaperDir, luaFile);
-    const dest = join(scriptsDir, luaFile);
+  // Install every Lua asset (bridge, snapshot manager GUI, the shared snapshot
+  // library it dofile()s at runtime, and the A/B action scripts). REAPER_ASSETS
+  // is the single source of truth — a hardcoded subset previously omitted the
+  // snapshot library and action scripts, leaving stale copies in REAPER.
+  for (const asset of REAPER_ASSETS) {
+    if (!asset.endsWith('.lua')) continue;
+    const src = join(reaperDir, asset);
+    const dest = join(scriptsDir, asset);
     if (installFile(src, dest)) {
-      console.log(`  Installed: ${luaFile}`);
+      console.log(`  Installed: ${asset}`);
     } else {
       console.log(`  Not found: ${src}`);
     }
@@ -56,8 +61,9 @@ async function setup(): Promise<void> {
     }
   }
 
-  // Bridge status UI, served by REAPER's web interface from reaper_www_root/
-  const wwwSrc = join(resolveAssetDir(__dirname, 'www'), BRIDGE_UI_FILE);
+  // Bridge status UI, served by REAPER's web interface from reaper_www_root/.
+  // Built by the bridge-ui project into dist/apps/bridge-ui (a sibling of this bundle).
+  const wwwSrc = join(resolveAssetDir(__dirname, 'bridge-ui'), BRIDGE_UI_FILE);
   const wwwDir = getReaperWwwPath();
   mkdirSync(wwwDir, { recursive: true });
   console.log('\nInstalling bridge status UI...');
@@ -67,6 +73,8 @@ async function setup(): Promise<void> {
     console.log(`  Not found: ${wwwSrc} (build bridge-ui first)`);
   }
 
+  const webPort = await enableWebInterface();
+
   console.log('\nSetup complete!\n');
   console.log('Next steps:');
   console.log('  1. Open REAPER');
@@ -74,9 +82,50 @@ async function setup(): Promise<void> {
   console.log(`  3. Select: ${join(scriptsDir, 'mcp_bridge.lua')}`);
   console.log('  4. Run the script (it will keep running in background via defer loop)');
   console.log('  5. Add reaper-mcp to your Claude Code config (see: reaper-mcp doctor)');
-  console.log('\nOptional: live bridge status page');
-  console.log('  Preferences > Control/OSC/Web > Add > Web browser interface, then open');
-  console.log(`  http://localhost:<port>/${BRIDGE_UI_FILE}`);
+  if (webPort) {
+    console.log(`\nThe bridge opens its status window on start: http://localhost:${webPort}/${BRIDGE_UI_FILE}`);
+  }
+}
+
+/** REAPER rewrites reaper.ini from memory on exit, so only edit it while REAPER is closed. */
+async function isReaperRunning(): Promise<boolean> {
+  const cmd = platform() === 'win32' ? 'tasklist /FI "IMAGENAME eq reaper.exe" /NH' : 'pgrep -xi reaper';
+  try {
+    const { stdout } = await execAsync(cmd);
+    return platform() === 'win32' ? /reaper\.exe/i.test(stdout) : true;
+  } catch {
+    return false; // pgrep exits 1 when nothing matches
+  }
+}
+
+/** Turn on REAPER's web browser interface so the bridge can open its status window. Returns the port, or null. */
+async function enableWebInterface(): Promise<number | null> {
+  console.log('\nEnabling REAPER web interface...');
+  const iniPath = join(getReaperResourcePath(), 'reaper.ini');
+  if (!existsSync(iniPath)) {
+    console.log(`  Skipped: ${iniPath} not found (start REAPER once, quit it, then re-run setup)`);
+    return null;
+  }
+  const requested = Number(process.env['REAPER_WEB_PORT']) || DEFAULT_WEB_PORT;
+  const result = ensureWebInterface(readFileSync(iniPath, 'utf-8'), requested);
+  if (!result.changed) {
+    console.log(`  Already enabled on port ${result.port}`);
+    return result.port;
+  }
+  if (await isReaperRunning()) {
+    if (!process.stdout.isTTY) {
+      console.log('  Skipped: REAPER is running and would overwrite reaper.ini on exit.');
+      console.log('  Quit REAPER and run "reaper-mcp setup" again.');
+      return null;
+    }
+    console.log('  REAPER is running and would overwrite reaper.ini on exit.');
+    console.log('  Quit REAPER to finish (Ctrl+C to skip)...');
+    while (await isReaperRunning()) await new Promise((r) => setTimeout(r, 1000));
+  }
+  // Re-read: REAPER may have rewritten reaper.ini while quitting
+  writeFileSync(iniPath, ensureWebInterface(readFileSync(iniPath, 'utf-8'), requested).ini, 'utf-8');
+  console.log(`  Enabled on port ${result.port} (override with REAPER_WEB_PORT)`);
+  return result.port;
 }
 
 // Configure Claude Code for this clone: pre-approve the REAPER tools globally and

@@ -11,15 +11,21 @@ if #snapshots == 0 then
   return
 end
 
-local idx = lib.get_current_index()
+-- Resolve current position by name (stable across add/delete/re-sort).
+local cur = lib.get_current_name()
+local idx = 0
+for i, s in ipairs(snapshots) do
+  if s.name == cur then idx = i; break end
+end
 idx = idx + 1
 if idx > #snapshots then idx = 1 end
 
 local snap = snapshots[idx]
-local ok, err = lib.restore_snapshot(snap)
+local ok, err, _, warnings = lib.restore_snapshot(snap)
 if ok then
-  lib.set_current_index(idx)
-  lib.toast("Snapshot " .. idx .. "/" .. #snapshots .. ": " .. snap.name)
+  lib.set_current_name(snap.name)
+  local w = (warnings and #warnings > 0) and (" [" .. #warnings .. " warning(s)]") or ""
+  lib.toast("Snapshot " .. idx .. "/" .. #snapshots .. ": " .. snap.name .. w)
 else
   lib.toast("Restore failed: " .. (err or "unknown"))
 end

@@ -143,7 +143,9 @@ code {
 .lg-slow { background: var(--warn); }
 .lg-err { background: var(--bad); }
 .bars {
-  display: flex; align-items: flex-end; gap: 2px;
+  /* Newest on the right; new bars enter there and push older ones left */
+  display: flex; align-items: flex-end; justify-content: flex-end; gap: 2px;
+  overflow: hidden;
   height: 36px;
   background: repeating-linear-gradient(to top, var(--line) 0 1px, transparent 1px 12px);
 }
@@ -152,8 +154,10 @@ code {
   min-width: 2px;
   border-radius: 2px 2px 0 0;
   background: var(--bar);
-  transition: height 0.25s ease;
+  transform-origin: bottom;
+  animation: bar-in 0.35s ease-out;
 }
+@keyframes bar-in { from { transform: scaleY(0); opacity: 0; } }
 .bar:hover { filter: brightness(1.3); }
 .bar-slow { background: var(--warn); }
 .bar-err { background: var(--bad); }
@@ -320,5 +324,5 @@ kbd {
 
 @media (prefers-reduced-motion: reduce) {
   .mark-active span, .pill-live .pill-dot { animation: none; }
-  .bar { transition: none; }
+  .bar { animation: none; }
 }

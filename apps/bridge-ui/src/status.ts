@@ -27,7 +27,13 @@ export interface BridgeStatus {
   recent: CommandEntry[];
 }
 
-export const STATUS_URL = '/_/GET/EXTSTATE/MCPBridge/status';
+/**
+ * One web-interface request that both reads the status and pings `ui_seen`, which the
+ * bridge checks on start so it doesn't open a second window while this page is open.
+ */
+export function statusRequestUrl(now: number): string {
+  return `/_/SET/EXTSTATE/MCPBridge/ui_seen/${now};GET/EXTSTATE/MCPBridge/status`;
+}
 
 /**
  * Parse REAPER's web-interface reply: `EXTSTATE\tMCPBridge\tstatus\t<value>`.

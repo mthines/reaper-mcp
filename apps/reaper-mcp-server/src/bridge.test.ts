@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { sendCommand, isBridgeRunning, cleanupStaleFiles, ensureBridgeDir } from './bridge.js';
+import { logs, SeverityNumber } from '@opentelemetry/api-logs';
+import { sendCommand, isBridgeRunning, cleanupStaleFiles, ensureBridgeDir, readBridgeEvents } from './bridge.js';
 
 // Mock node:fs/promises
 vi.mock('node:fs/promises', () => ({
@@ -151,6 +152,37 @@ describe('bridge', () => {
       const cleaned = await cleanupStaleFiles();
 
       expect(cleaned).toBe(0);
+    });
+  });
+
+  describe('readBridgeEvents', () => {
+    it('exports each Lua event as an OTel log record with its own timestamp and severity', async () => {
+      const emit = vi.fn();
+      vi.spyOn(logs, 'getLogger').mockReturnValue({ emit } as unknown as ReturnType<typeof logs.getLogger>);
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      mockedWriteFile.mockResolvedValue(undefined);
+      mockedReadFile.mockResolvedValueOnce(
+        '{"type":"bridge_start","ts":1000,"reaperVersion":"7.2"}\n' +
+          'not json\n' +
+          '{"type":"handler_error","ts":2000,"commandType":"add_fx","error":"boom"}\n',
+      );
+
+      await readBridgeEvents();
+
+      expect(mockedWriteFile).toHaveBeenCalledWith(
+        '/tmp/test-reaper/Scripts/mcp_bridge_data/bridge_events.jsonl', '', 'utf-8',
+      );
+      expect(emit).toHaveBeenCalledTimes(2);
+      expect(emit.mock.calls[0][0]).toMatchObject({
+        severityNumber: SeverityNumber.INFO,
+        timestamp: 1000,
+        attributes: { 'event.name': 'bridge_event', 'mcp.bridge.event.type': 'bridge_start', reaperVersion: '7.2' },
+      });
+      expect(emit.mock.calls[1][0]).toMatchObject({
+        severityNumber: SeverityNumber.ERROR,
+        timestamp: 2000,
+        attributes: { 'mcp.bridge.event.type': 'handler_error', commandType: 'add_fx', error: 'boom' },
+      });
     });
   });
 });

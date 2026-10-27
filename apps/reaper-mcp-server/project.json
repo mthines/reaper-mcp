@@ -28,11 +28,6 @@
             "glob": "**/*",
             "input": "reaper",
             "output": "reaper"
-          },
-          {
-            "glob": "*.html",
-            "input": "dist/apps/bridge-ui",
-            "output": "www"
           }
         ]
       }

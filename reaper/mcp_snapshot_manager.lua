@@ -57,7 +57,9 @@ local C_STATUS_INFO  = { 0.65, 0.65, 0.70, 1.0 }
 -- =============================================================================
 
 local snapshots = {}         -- list of snapshot tables
-local selected_idx = 0       -- 1-based, 0 = none
+local selected = {}          -- set: { [snapshot_index] = true } for multi-select
+local selected_idx = 0       -- 1-based "lead" row (last clicked); 0 = none
+local sel_anchor = 0         -- anchor row for Shift+click range selection; 0 = none
 local scroll_offset = 0      -- rows scrolled from top
 local hover_row = 0          -- 1-based row under mouse, 0 = none
 local hover_btn = nil        -- "save" | "restore" | "delete" | "refresh" | "close"
@@ -70,436 +72,44 @@ local last_mouse_y = 0
 local last_mouse_cap = 0
 local mouse_was_down = false
 local is_running = true
+local last_click_time = 0      -- reaper.time_precise() of the last row click
+local last_click_row = 0       -- which row that click landed on (1-based)
+local DOUBLE_CLICK_SECS = 0.4  -- max gap between clicks to count as a double-click
 
 -- =============================================================================
--- Path helpers (duplicated from mcp_bridge.lua — standalone script)
+-- Shared snapshot library — single source of truth for save/restore/list, so
+-- the GUI performs the SAME full restore (FX params, sends) as the MCP tools
+-- and the next/prev action scripts. Installed alongside this file by `setup`.
 -- =============================================================================
 
-local function get_snapshot_dir()
-  local proj_path = reaper.GetProjectPath()
-  if proj_path and proj_path ~= "" then
-    return proj_path .. "/.reaper-mcp/snapshots/"
-  end
-  -- Fallback for unsaved projects: use bridge data dir
-  return reaper.GetResourcePath() .. "/Scripts/mcp_bridge_data/snapshots/"
-end
-
-local function ensure_snapshot_dir()
-  reaper.RecursiveCreateDirectory(get_snapshot_dir(), 0)
-end
-
-local function snapshot_path(name)
-  local safe = name:gsub("[^%w%-_%.%s]", "_"):gsub("%s+", "_")
-  return get_snapshot_dir() .. safe .. ".json"
-end
+local _info = debug.getinfo(1, "S")
+local _script_dir = _info.source:match("@?(.*[\\/])")
+local lib = dofile(_script_dir .. "mcp_snapshot_lib.lua")
 
 -- =============================================================================
--- Minimal JSON helpers (enough for snapshot format)
+-- Snapshot logic — delegated to the shared library (single source of truth).
+-- The GUI no longer carries its own JSON/capture/restore code; it uses the same
+-- full restore (FX params + sends) as the MCP tools and the action scripts.
 -- =============================================================================
 
-local function json_encode_string(s)
-  s = tostring(s)
-  s = s:gsub('\\', '\\\\')
-  s = s:gsub('"', '\\"')
-  s = s:gsub('\n', '\\n')
-  s = s:gsub('\r', '\\r')
-  s = s:gsub('\t', '\\t')
-  return '"' .. s .. '"'
-end
-
-local function json_encode(val)
-  local t = type(val)
-  if t == "nil" then
-    return "null"
-  elseif t == "boolean" then
-    return val and "true" or "false"
-  elseif t == "number" then
-    if val ~= val then return "null" end  -- NaN
-    return tostring(val)
-  elseif t == "string" then
-    return json_encode_string(val)
-  elseif t == "table" then
-    -- Check if array
-    local is_array = true
-    local max_i = 0
-    for k, _ in pairs(val) do
-      if type(k) ~= "number" or k ~= math.floor(k) or k < 1 then
-        is_array = false
-        break
-      end
-      if k > max_i then max_i = k end
-    end
-    if is_array and max_i == #val then
-      local parts = {}
-      for i = 1, #val do
-        parts[i] = json_encode(val[i])
-      end
-      return "[" .. table.concat(parts, ",") .. "]"
-    else
-      local parts = {}
-      for k, v in pairs(val) do
-        parts[#parts + 1] = json_encode_string(tostring(k)) .. ":" .. json_encode(v)
-      end
-      return "{" .. table.concat(parts, ",") .. "}"
-    end
-  end
-  return "null"
-end
-
--- Extract a string value from JSON (handles escape sequences)
-local function extract_json_string(str, pos)
-  local result = {}
-  local i = pos
-  while i <= #str do
-    local ch = str:sub(i, i)
-    if ch == '\\' then
-      local next_ch = str:sub(i + 1, i + 1)
-      if next_ch == '"' then result[#result + 1] = '"'
-      elseif next_ch == '\\' then result[#result + 1] = '\\'
-      elseif next_ch == 'n' then result[#result + 1] = '\n'
-      elseif next_ch == 't' then result[#result + 1] = '\t'
-      elseif next_ch == '/' then result[#result + 1] = '/'
-      else result[#result + 1] = next_ch
-      end
-      i = i + 2
-    elseif ch == '"' then
-      return table.concat(result), i + 1
-    else
-      result[#result + 1] = ch
-      i = i + 1
-    end
-  end
-  return nil, i
-end
-
--- Parse a flat JSON object (sufficient for top-level snapshot metadata)
-local function parse_flat_object(str)
-  local obj = {}
-  local i = 1
-  while i <= #str do
-    local key_start = str:find('"', i)
-    if not key_start then break end
-    local key, after_key = extract_json_string(str, key_start + 1)
-    if not key then break end
-    i = after_key
-
-    local colon = str:find(':', i)
-    if not colon then break end
-    local val_start = str:match('^%s*()', colon + 1)
-
-    local ch = str:sub(val_start, val_start)
-    if ch == '"' then
-      local val, next_pos = extract_json_string(str, val_start + 1)
-      if val then
-        obj[key] = val
-        i = next_pos
-      else
-        i = val_start + 1
-      end
-    elseif ch == '{' or ch == '[' then
-      -- Skip nested objects/arrays — not needed for top-level metadata
-      local depth = 1
-      local open_c = ch
-      local close_c = ch == '{' and '}' or ']'
-      local j = val_start + 1
-      while j <= #str and depth > 0 do
-        local c = str:sub(j, j)
-        if c == open_c then depth = depth + 1
-        elseif c == close_c then depth = depth - 1 end
-        j = j + 1
-      end
-      -- Store raw (won't be used for top-level display)
-      i = j
-    else
-      -- Number, boolean, null
-      local val_end = str:find('[,}%]]', val_start)
-      if not val_end then val_end = #str + 1 end
-      local raw = str:sub(val_start, val_end - 1):match("^%s*(.-)%s*$")
-      if raw == "true" then obj[key] = true
-      elseif raw == "false" then obj[key] = false
-      elseif raw == "null" then obj[key] = nil
-      else obj[key] = tonumber(raw)
-      end
-      i = val_end
-    end
-  end
-  return obj
-end
-
--- Count tracks in mixerState.tracks array (rough count from string)
-local function count_tracks_in_snapshot(content)
-  local mixer_start = content:find('"mixerState"')
-  if not mixer_start then return nil end
-  local tracks_start = content:find('"tracks"', mixer_start)
-  if not tracks_start then return nil end
-  local arr_start = content:find('%[', tracks_start)
-  if not arr_start then return nil end
-  -- Count top-level objects in the array
-  local count = 0
-  local depth = 0
-  local i = arr_start
-  while i <= math.min(#content, arr_start + 50000) do
-    local ch = content:sub(i, i)
-    if ch == '[' or ch == '{' then
-      depth = depth + 1
-      if ch == '{' and depth == 2 then count = count + 1 end
-    elseif ch == ']' or ch == '}' then
-      depth = depth - 1
-      if depth == 0 then break end
-    end
-    i = i + 1
-  end
-  return count > 0 and count or nil
-end
-
--- =============================================================================
--- Snapshot I/O
--- =============================================================================
-
-local function read_file(path)
-  local f = io.open(path, "rb")
-  if not f then return nil end
-  local content = f:read("*a")
-  f:close()
-  return content
-end
-
-local function write_file(path, content)
-  local f = io.open(path, "wb")
-  if not f then return false end
-  f:write(content)
-  f:close()
-  return true
-end
-
-local function load_snapshots()
-  ensure_snapshot_dir()
-  local snap_dir = get_snapshot_dir()
-  local result = {}
-
-  local i = 0
-  while true do
-    local fn = reaper.EnumerateFiles(snap_dir, i)
-    if not fn then break end
-    if fn:match("%.json$") then
-      local path = snap_dir .. fn
-      local content = read_file(path)
-      if content then
-        local ok, snap = pcall(parse_flat_object, content)
-        if ok and snap and snap.name then
-          -- Try to count tracks
-          local track_count = nil
-          pcall(function()
-            track_count = count_tracks_in_snapshot(content)
-          end)
-          result[#result + 1] = {
-            name        = snap.name,
-            description = snap.description or "",
-            timestamp   = tonumber(snap.timestamp) or 0,
-            trackCount  = track_count,
-            path        = path,
-          }
-        end
-      end
-    end
-    i = i + 1
-  end
-
-  -- Sort by timestamp descending (newest first)
-  table.sort(result, function(a, b) return a.timestamp > b.timestamp end)
-  return result
-end
+local get_snapshot_dir = lib.get_snapshot_dir
+local load_snapshots   = lib.load_snapshots
 
 local function format_timestamp(ts_ms)
   if not ts_ms or ts_ms == 0 then return "Unknown" end
-  local ts = math.floor(ts_ms / 1000)
-  return os.date("%Y-%m-%d %H:%M", ts)
-end
-
--- =============================================================================
--- Capture mixer state (standalone — duplicated from bridge for self-containment)
--- =============================================================================
-
-local function capture_mixer_state()
-  local state = { version = 2, tracks = {} }
-  local count = reaper.CountTracks(0)
-  for i = 0, count - 1 do
-    local track = reaper.GetTrack(0, i)
-    local _, name = reaper.GetTrackName(track)
-    local vol  = reaper.GetMediaTrackInfo_Value(track, "D_VOL")
-    local pan  = reaper.GetMediaTrackInfo_Value(track, "D_PAN")
-    local mute = reaper.GetMediaTrackInfo_Value(track, "B_MUTE")
-    local solo = reaper.GetMediaTrackInfo_Value(track, "I_SOLO")
-    local color = reaper.GetMediaTrackInfo_Value(track, "I_CUSTOMCOLOR")
-
-    local fx_count = reaper.TrackFX_GetCount(track)
-    local fx_states = {}
-    for j = 0, fx_count - 1 do
-      local enabled = reaper.TrackFX_GetEnabled(track, j)
-      local offline = reaper.TrackFX_GetOffline(track, j)
-      local _, preset = reaper.TrackFX_GetPreset(track, j)
-      local _, fx_name = reaper.TrackFX_GetFXName(track, j)
-      local params_data = {}
-      local param_count = reaper.TrackFX_GetNumParams(track, j)
-      local limit = math.min(param_count, 500)
-      for p = 0, limit - 1 do
-        params_data[p + 1] = reaper.TrackFX_GetParam(track, j, p)
-      end
-      fx_states[j + 1] = {
-        name = fx_name, enabled = enabled, offline = offline,
-        preset = preset or "", params = params_data,
-      }
-    end
-
-    local send_count = reaper.GetTrackNumSends(track, 0)
-    local sends = {}
-    for s = 0, send_count - 1 do
-      local dest_track = reaper.GetTrackSendInfo_Value(track, 0, s, "P_DESTTRACK")
-      local dest_idx = -1
-      local dest_name = ""
-      if dest_track then
-        dest_idx = reaper.GetMediaTrackInfo_Value(dest_track, "IP_TRACKNUMBER") - 1
-        local _, dname = reaper.GetTrackName(dest_track)
-        dest_name = dname or ""
-      end
-      sends[s + 1] = {
-        destTrackIndex = dest_idx, destTrackName = dest_name,
-        volume = reaper.GetTrackSendInfo_Value(track, 0, s, "D_VOL"),
-        pan    = reaper.GetTrackSendInfo_Value(track, 0, s, "D_PAN"),
-        muted  = reaper.GetTrackSendInfo_Value(track, 0, s, "B_MUTE") ~= 0,
-      }
-    end
-
-    local fx_enabled = {}
-    for j = 1, #fx_states do fx_enabled[j] = fx_states[j].enabled end
-
-    state.tracks[i + 1] = {
-      index = i, name = name, color = color,
-      volume = vol, pan = pan,
-      mute = mute ~= 0, solo = solo ~= 0,
-      fx = fx_states, sends = sends, fxEnabled = fx_enabled,
-    }
-  end
-  return state
+  return os.date("%Y-%m-%d %H:%M", math.floor(ts_ms / 1000))
 end
 
 local function do_save_snapshot(name, description)
-  ensure_snapshot_dir()
-  local timestamp = os.time() * 1000
-  local snapshot = {
-    name = name,
-    description = description or "",
-    timestamp = timestamp,
-    mixerState = capture_mixer_state(),
-  }
-  local path = snapshot_path(name)
-  local ok = write_file(path, json_encode(snapshot))
-  if not ok then
-    return false, "Failed to write file: " .. path
-  end
-  return true, nil
+  return lib.save_snapshot(name, description)
 end
 
 local function do_restore_snapshot(snap)
-  local content = read_file(snap.path)
-  if not content then
-    return false, "File not found: " .. snap.path
-  end
-
-  -- We need deeper parsing for restore — use the full flat parser on the file
-  -- For simplicity, show a message and use the MCP bridge if available;
-  -- otherwise we do a best-effort restore.
-  local ok_parse, parsed = pcall(parse_flat_object, content)
-  if not ok_parse or not parsed then
-    return false, "Could not parse snapshot file"
-  end
-
-  -- The mixerState is a nested object — not directly accessible via parse_flat_object.
-  -- We'll do a targeted string extraction of the "mixerState" block and parse it.
-  -- For v2 snapshots this is complex; we perform a simplified restore of
-  -- volume/pan/mute/solo from a targeted parse.
-  local mixer_block_start = content:find('"mixerState"%s*:%s*{')
-  if not mixer_block_start then
-    return false, "No mixerState found in snapshot"
-  end
-
-  -- Find "tracks" array
-  local tracks_start = content:find('"tracks"%s*:%s*%[', mixer_block_start)
-  if not tracks_start then
-    return false, "No tracks found in snapshot"
-  end
-
-  local arr_open = content:find('%[', tracks_start)
-  if not arr_open then return false, "Invalid tracks format" end
-
-  -- Extract each track object
-  local track_objects = {}
-  local depth = 0
-  local obj_start = nil
-  local i = arr_open
-
-  while i <= #content do
-    local ch = content:sub(i, i)
-    if ch == '{' then
-      depth = depth + 1
-      if depth == 1 then obj_start = i end
-    elseif ch == '}' then
-      depth = depth - 1
-      if depth == 0 and obj_start then
-        track_objects[#track_objects + 1] = content:sub(obj_start, i)
-        obj_start = nil
-      end
-    elseif ch == ']' and depth == 0 then
-      break
-    end
-    i = i + 1
-  end
-
-  if #track_objects == 0 then
-    return false, "No track data found in snapshot"
-  end
-
-  reaper.Undo_BeginBlock()
-  local restored = 0
-
-  for _, track_json in ipairs(track_objects) do
-    local ok_t, track_data = pcall(parse_flat_object, track_json)
-    if ok_t and track_data and track_data.index then
-      local track_idx = tonumber(track_data.index)
-      local track = reaper.GetTrack(0, track_idx)
-      if track then
-        if track_data.volume then
-          reaper.SetMediaTrackInfo_Value(track, "D_VOL", tonumber(track_data.volume))
-        end
-        if track_data.pan then
-          reaper.SetMediaTrackInfo_Value(track, "D_PAN", tonumber(track_data.pan))
-        end
-        if track_data.mute ~= nil then
-          local mute_val = (track_data.mute == true or track_data.mute == "true") and 1 or 0
-          reaper.SetMediaTrackInfo_Value(track, "B_MUTE", mute_val)
-        end
-        if track_data.solo ~= nil then
-          local solo_val = (track_data.solo == true or track_data.solo == "true") and 1 or 0
-          reaper.SetMediaTrackInfo_Value(track, "I_SOLO", solo_val)
-        end
-        restored = restored + 1
-      end
-    end
-  end
-
-  reaper.Undo_EndBlock("MCP Snapshot Manager: Restore '" .. snap.name .. "'", -1)
-  reaper.TrackList_AdjustWindows(false)
-  reaper.UpdateArrange()
-
-  return true, nil, restored
+  return lib.restore_snapshot(snap)
 end
 
 local function do_delete_snapshot(snap)
-  local ok, err = os.remove(snap.path)
-  if not ok then
-    return false, "Failed to delete: " .. (err or "unknown error")
-  end
-  return true, nil
+  return lib.delete_snapshot(snap)
 end
 
 -- =============================================================================
@@ -608,6 +218,98 @@ local function set_status(msg, stype, duration)
 end
 
 -- =============================================================================
+-- Selection model (multi-select). `selected` is the set of chosen rows;
+-- `selected_idx` is the lead row (used for restore/double-click/keyboard nav).
+-- =============================================================================
+
+local function clear_selection()
+  selected = {}
+  selected_idx = 0
+  sel_anchor = 0
+end
+
+local function select_single(idx)
+  selected = { [idx] = true }
+  selected_idx = idx
+  sel_anchor = idx
+end
+
+local function toggle_select(idx)
+  if selected[idx] then
+    selected[idx] = nil
+    if selected_idx == idx then            -- lead removed; pick any remaining
+      selected_idx = 0
+      for i in pairs(selected) do selected_idx = i; break end
+    end
+  else
+    selected[idx] = true
+    selected_idx = idx
+  end
+  sel_anchor = idx
+end
+
+local function select_range(a, b)
+  selected = {}
+  local lo, hi = math.min(a, b), math.max(a, b)
+  for i = lo, hi do selected[i] = true end
+  selected_idx = b
+end
+
+-- =============================================================================
+-- Actions (single implementation shared by button, keyboard, and double-click)
+-- =============================================================================
+
+local function restore_selected()
+  if selected_idx <= 0 or selected_idx > #snapshots then return end
+  local snap = snapshots[selected_idx]
+  -- No confirmation: restore applies immediately. It is a single undoable action
+  -- (Ctrl+Z reverts it), which is what makes fast A/B-ing snapshots practical.
+  local ok, err, count, warnings = do_restore_snapshot(snap)
+  if ok then
+    local nwarn = warnings and #warnings or 0
+    local suffix = nwarn > 0 and (", " .. nwarn .. " warning(s) — see console") or ""
+    set_status("Restored '" .. snap.name .. "' (" .. (count or "?") .. " tracks" .. suffix .. ")", "ok")
+    if nwarn > 0 then
+      reaper.ShowConsoleMsg("Restore '" .. snap.name .. "' warnings:\n  " ..
+        table.concat(warnings, "\n  ") .. "\n")
+    end
+  else
+    set_status("Restore failed: " .. (err or "unknown error"), "err")
+  end
+end
+
+local function delete_selected()
+  -- Collect the chosen snapshots (resolve to objects before the list reloads).
+  local victims = {}
+  for i in pairs(selected) do
+    if snapshots[i] then victims[#victims + 1] = snapshots[i] end
+  end
+  if #victims == 0 then return end
+
+  local prompt
+  if #victims == 1 then
+    prompt = "Delete snapshot '" .. victims[1].name .. "'?\n\nThis cannot be undone."
+  else
+    prompt = "Delete " .. #victims .. " snapshots?\n\nThis cannot be undone."
+  end
+  if reaper.ShowMessageBox(prompt, "Delete Snapshot", 1) ~= 1 then return end  -- MB_OKCANCEL
+
+  local deleted, failed = 0, 0
+  for _, snap in ipairs(victims) do
+    local ok = do_delete_snapshot(snap)
+    if ok then deleted = deleted + 1 else failed = failed + 1 end
+  end
+
+  clear_selection()
+  snapshots = load_snapshots()
+  if failed > 0 then
+    set_status("Deleted " .. deleted .. ", " .. failed .. " failed", "err")
+  else
+    set_status("Deleted " .. deleted .. " snapshot(s)", "ok")
+  end
+end
+
+-- =============================================================================
 -- Main draw function
 -- =============================================================================
 
@@ -663,7 +365,7 @@ local function draw()
 
     if snap_idx <= total_rows then
       local snap = snapshots[snap_idx]
-      local is_sel = snap_idx == selected_idx
+      local is_sel = selected[snap_idx] == true
       local is_hov = point_in_rect(mx, my, lx, ry, row_w, ROW_H)
 
       if is_hov then hover_row = snap_idx end
@@ -761,7 +463,7 @@ local function draw()
   local btns = get_button_rects()
   hover_btn = nil
 
-  local has_selection = selected_idx > 0 and selected_idx <= #snapshots
+  local has_selection = next(selected) ~= nil
 
   for btn_name, btn in pairs(btns) do
     local is_hov = point_in_rect(mx, my, btn.x, btn.y, btn.w, btn.h)
@@ -799,12 +501,35 @@ local function draw()
   if mouse_clicked then
     -- Check if clicked on list row
     if hover_row > 0 and hover_row <= total_rows then
-      selected_idx = hover_row
+      local now = reaper.time_precise()
+      local is_double = (hover_row == last_click_row)
+        and (now - last_click_time) < DOUBLE_CLICK_SECS
+      -- Modifier keys (cross-platform): Cmd(32)/Ctrl(4) = toggle, Shift(8) = range.
+      local toggle_mod = (mouse_cap & 4) ~= 0 or (mouse_cap & 32) ~= 0
+      local shift_mod  = (mouse_cap & 8) ~= 0
+
+      if is_double then
+        -- Double-click a row = restore it immediately (acts on the one row).
+        select_single(hover_row)
+        last_click_time = 0  -- reset so a third click doesn't chain
+        last_click_row = 0
+        restore_selected()
+      else
+        if shift_mod and sel_anchor > 0 then
+          select_range(sel_anchor, hover_row)   -- contiguous range from anchor
+        elseif toggle_mod then
+          toggle_select(hover_row)              -- add/remove this row
+        else
+          select_single(hover_row)              -- plain click: just this row
+        end
+        last_click_time = now
+        last_click_row = hover_row
+      end
     end
 
     -- Check button clicks
     if hover_btn and btn_pressed == hover_btn then
-      local has_sel = selected_idx > 0 and selected_idx <= #snapshots
+      local has_sel = next(selected) ~= nil
 
       if hover_btn == "save" then
         -- Generate default name: "Snapshot N" where N is the next available index
@@ -829,13 +554,26 @@ local function draw()
           local sname = fields[1] and fields[1]:match("^%s*(.-)%s*$") or ""
           local sdesc = fields[2] and fields[2]:match("^%s*(.-)%s*$") or ""
           if sname == "" then sname = default_name end
-          local ok, err = do_save_snapshot(sname, sdesc)
-          if ok then
+          -- Warn before clobbering an existing snapshot (names sanitize to a
+          -- filename, so distinct names can also collide to the same file).
+          local proceed = true
+          if lib.snapshot_exists(sname) then
+            proceed = reaper.ShowMessageBox(
+              "A snapshot named '" .. sname .. "' already exists.\n\nOverwrite it?",
+              "Overwrite Snapshot", 1  -- MB_OKCANCEL
+            ) == 1
+          end
+          local ok, err
+          if proceed then ok, err = do_save_snapshot(sname, sdesc) end
+          if not proceed then
+            set_status("Save cancelled (name already exists).", "info")
+          elseif ok then
             set_status("Saved snapshot: " .. sname, "ok")
             snapshots = load_snapshots()
-            -- Select the newly saved snapshot
+            -- Select only the newly saved snapshot
+            clear_selection()
             for j, s in ipairs(snapshots) do
-              if s.name == sname then selected_idx = j; break end
+              if s.name == sname then select_single(j); break end
             end
           else
             set_status("Save failed: " .. (err or "unknown error"), "err")
@@ -843,41 +581,14 @@ local function draw()
         end
 
       elseif hover_btn == "restore" and has_sel then
-        local snap = snapshots[selected_idx]
-        local confirm = reaper.ShowMessageBox(
-          "Restore snapshot '" .. snap.name .. "'?\n\nThis will overwrite current mixer state.\nAn undo point will be created.",
-          "Restore Snapshot", 1  -- MB_OKCANCEL
-        )
-        if confirm == 1 then
-          local ok, err, count = do_restore_snapshot(snap)
-          if ok then
-            set_status("Restored '" .. snap.name .. "' (" .. (count or "?") .. " tracks)", "ok")
-          else
-            set_status("Restore failed: " .. (err or "unknown error"), "err")
-          end
-        end
+        restore_selected()
 
       elseif hover_btn == "delete" and has_sel then
-        local snap = snapshots[selected_idx]
-        local confirm = reaper.ShowMessageBox(
-          "Delete snapshot '" .. snap.name .. "'?\n\nThis cannot be undone.",
-          "Delete Snapshot", 1  -- MB_OKCANCEL
-        )
-        if confirm == 1 then
-          local ok, err = do_delete_snapshot(snap)
-          if ok then
-            set_status("Deleted snapshot: " .. snap.name, "ok")
-            snapshots = load_snapshots()
-            if selected_idx > #snapshots then
-              selected_idx = #snapshots
-            end
-          else
-            set_status("Delete failed: " .. (err or "unknown error"), "err")
-          end
-        end
+        delete_selected()
 
       elseif hover_btn == "refresh" then
         snapshots = load_snapshots()
+        clear_selection()  -- row indices may have changed; don't keep stale selection
         set_status("Refreshed — " .. #snapshots .. " snapshot(s) found.", "info", 2.5)
 
       elseif hover_btn == "close" then
@@ -906,56 +617,30 @@ local function draw()
     is_running = false  -- Window closed
   elseif char == 27 then -- Escape
     is_running = false
-  elseif char == 1685026670 or char == 30064 then -- Up arrow
+  elseif char == 1685026670 or char == 30064 then -- Up arrow (collapses to single)
     if selected_idx > 1 then
-      selected_idx = selected_idx - 1
+      select_single(selected_idx - 1)
       if selected_idx <= scroll_offset then
         scroll_offset = selected_idx - 1
       end
+    elseif selected_idx == 0 and #snapshots > 0 then
+      select_single(1)
     end
-  elseif char == 1685026669 or char == 30065 then -- Down arrow
-    if selected_idx < #snapshots then
-      selected_idx = selected_idx + 1
+  elseif char == 1685026669 or char == 30065 then -- Down arrow (collapses to single)
+    if selected_idx > 0 and selected_idx < #snapshots then
+      select_single(selected_idx + 1)
       local _, _, _, lh2 = get_list_rect()
       local vr = get_visible_rows(lh2)
       if selected_idx > scroll_offset + vr then
         scroll_offset = selected_idx - vr
       end
+    elseif selected_idx == 0 and #snapshots > 0 then
+      select_single(1)
     end
   elseif char == 13 then -- Enter = restore
-    if selected_idx > 0 and selected_idx <= #snapshots then
-      local snap = snapshots[selected_idx]
-      local confirm = reaper.ShowMessageBox(
-        "Restore snapshot '" .. snap.name .. "'?\n\nThis will overwrite current mixer state.\nAn undo point will be created.",
-        "Restore Snapshot", 1
-      )
-      if confirm == 1 then
-        local ok, err, count = do_restore_snapshot(snap)
-        if ok then
-          set_status("Restored '" .. snap.name .. "' (" .. (count or "?") .. " tracks)", "ok")
-        else
-          set_status("Restore failed: " .. (err or "unknown error"), "err")
-        end
-      end
-    end
+    restore_selected()
   elseif char == 6579564 then -- Delete key
-    if selected_idx > 0 and selected_idx <= #snapshots then
-      local snap = snapshots[selected_idx]
-      local confirm = reaper.ShowMessageBox(
-        "Delete snapshot '" .. snap.name .. "'?\n\nThis cannot be undone.",
-        "Delete Snapshot", 1
-      )
-      if confirm == 1 then
-        local ok, err = do_delete_snapshot(snap)
-        if ok then
-          set_status("Deleted snapshot: " .. snap.name, "ok")
-          snapshots = load_snapshots()
-          if selected_idx > #snapshots then selected_idx = #snapshots end
-        else
-          set_status("Delete failed: " .. (err or "unknown error"), "err")
-        end
-      end
-    end
+    delete_selected()
   end
 
   -- Mouse wheel scroll
@@ -993,7 +678,7 @@ gfx.setfont(1, "Arial", 12, 0)
 
 snapshots = load_snapshots()
 if #snapshots > 0 then
-  selected_idx = 1
+  select_single(1)
 end
 
 set_status("Loaded " .. #snapshots .. " snapshot(s) from " .. get_snapshot_dir(), "info", 5.0)

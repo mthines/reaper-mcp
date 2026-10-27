@@ -647,9 +647,15 @@ The MIDI emitter (`mcp_midi_emitter.jsfx`) uses a 16-slot ring buffer — the **
 
 ## Bridge Status Page (REAPER web interface)
 
-`reaper-mcp setup` installs `mcp_bridge.html` into `{REAPER_RESOURCE_PATH}/reaper_www_root/`. With REAPER's
-web interface enabled (Preferences > Control/OSC/Web > Web browser interface), open
-`http://localhost:<port>/mcp_bridge.html` (`?demo` previews it with fake data).
+`reaper-mcp setup` installs `mcp_bridge.html` into `{REAPER_RESOURCE_PATH}/reaper_www_root/` and enables
+REAPER's web interface by adding `csurf_N=HTTP 0 8099 '' 'mcp_bridge.html' 0 ''` to `reaper.ini` (port via
+`REAPER_WEB_PORT`; an existing HTTP surface is kept). It only edits `reaper.ini` while REAPER is closed — REAPER
+rewrites it from memory on exit. On start the bridge opens the page as a small Chromium `--app` window (falls back to
+the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript console when the web interface is missing.
+`?demo` previews the page with fake data.
+
+- Dedupe: every page poll is `SET/EXTSTATE/MCPBridge/ui_seen/<ms>;GET/EXTSTATE/MCPBridge/status`; the bridge skips
+  opening a window when `ui_seen` is under 6s old (the page keeps pinging every 2s while hidden).
 
 - The bridge publishes JSON to **non-persistent ExtState** `MCPBridge/status` (in memory, no disk IO): counters,
   defer-loop timing, and the last 50 commands (`n` seq, type, handler ms, ok, error). Throttled to ≤5 Hz and only

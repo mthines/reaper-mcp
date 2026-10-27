@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createDemo } from './demo.js';
 import {
-  STATUS_URL,
   commandsPerMinute,
   formatAgo,
   formatDuration,
@@ -10,12 +9,15 @@ import {
   liveness,
   mergeLog,
   parseExtStateReply,
+  statusRequestUrl,
   type BridgeStatus,
   type CommandEntry,
   type Liveness,
 } from './status.js';
 
 const POLL_MS = 500;
+/** While hidden (minimized, or covered on macOS), keep pinging ui_seen slowly so the bridge knows we're open. */
+const HIDDEN_POLL_MS = 2000;
 const SLOW_MS = 100;
 const VERY_SLOW_MS = 500;
 
@@ -53,19 +55,17 @@ function useBridgeFeed(paused: boolean): Feed {
       });
 
     const tick = async () => {
-      if (!document.hidden) {
-        if (demo) {
-          apply(demo(), true);
-        } else {
-          try {
-            const res = await fetch(STATUS_URL, { cache: 'no-store' });
-            apply(parseExtStateReply(await res.text()), true);
-          } catch {
-            apply(null, false);
-          }
+      if (demo) {
+        if (!document.hidden) apply(demo(), true);
+      } else {
+        try {
+          const res = await fetch(statusRequestUrl(Date.now()), { cache: 'no-store' });
+          apply(parseExtStateReply(await res.text()), true);
+        } catch {
+          apply(null, false);
         }
       }
-      if (!cancelled) timer = setTimeout(tick, POLL_MS);
+      if (!cancelled) timer = setTimeout(tick, document.hidden ? HIDDEN_POLL_MS : POLL_MS);
     };
     tick();
     return () => {
@@ -89,6 +89,13 @@ function useNow(intervalMs: number): number {
 
 export function App() {
   const [paused, setPaused] = useState(false);
+
+  // Opened by the bridge as a Chromium --app window: settle on a compact size once
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has('app') && window.outerWidth > 1100) {
+      window.resizeTo(980, 720);
+    }
+  }, []);
   const { status, reachable, lastChangeAt, log } = useBridgeFeed(paused);
   const now = useNow(1000);
   const state: Liveness = liveness(status, lastChangeAt, now);

@@ -12,6 +12,7 @@
 local POLL_INTERVAL = 0 -- scan every defer cycle; the notify file makes this cheap
 local HEARTBEAT_INTERVAL = 1.0 -- write heartbeat every 1s
 local MCP_ANALYZER_FX_NAME = "reaper-mcp/mcp_analyzer" -- JSFX analyzer name
+local OPEN_UI_ON_START = true -- open the status window (reaper_www_root/mcp_bridge.html) when the bridge starts
 
 -- Determine bridge directory (REAPER resource path / Scripts / mcp_bridge_data)
 local bridge_dir = reaper.GetResourcePath() .. "/Scripts/mcp_bridge_data/"
@@ -967,6 +968,23 @@ function handlers.read_track_spectrum(params)
     return nil, err or "MCP Spectrum Analyzer JSFX not found. Run 'reaper-mcp setup' to install it."
   end
 
+  -- Apply the requested FFT size to the analyzer's slider1 (snapped to the sizes
+  -- the JSFX supports). JSFX params via TrackFX_(Get|Set)Param use RAW slider
+  -- values, not normalized 0-1 (verified: get_fx_parameters reports FFT Size in
+  -- its 512..8192 range, and SetParam clamps out-of-range values to the slider
+  -- min). Guard with GetParam so repeated polls at the same size don't reset the
+  -- FFT accumulator (the JSFX @slider zeroes its buffers only when the size changes).
+  local fft_size = params.fftSize or 4096
+  fft_size = fft_size <= 512 and 512
+    or fft_size <= 1024 and 1024
+    or fft_size <= 2048 and 2048
+    or fft_size <= 4096 and 4096
+    or 8192
+  local current_fft = reaper.TrackFX_GetParam(track, analyzer_idx, 0)
+  if math.abs(current_fft - fft_size) > 0.5 then
+    reaper.TrackFX_SetParam(track, analyzer_idx, 0, fft_size)
+  end
+
   -- Read spectrum data from gmem
   -- JSFX writes: gmem[0] = bin_count, gmem[1] = peak_db, gmem[2] = rms_db, gmem[3..] = bins
   reaper.gmem_attach("MCPAnalyzer")
@@ -979,7 +997,6 @@ function handlers.read_track_spectrum(params)
   local peak_db = reaper.gmem_read(1)
   local rms_db = reaper.gmem_read(2)
   local sr = reaper.GetSetProjectInfo(0, "PROJECT_SRATE", 0, false)
-  local fft_size = params.fftSize or 4096
 
   local bins = {}
   for i = 0, bin_count - 1 do
@@ -1221,90 +1238,185 @@ local function snapshot_path(name)
   return get_snapshot_dir() .. safe .. ".json"
 end
 
+-- Base64 (standard alphabet). Used to store REAPER track state chunks inside the
+-- snapshot JSON: chunks contain quotes, newlines and {GUID} braces that would
+-- break json_encode and especially the fallback %b{} decoder. Base64's alphabet
+-- (A-Za-z0-9+/=) is safe for both the encoder and either decoder.
+local B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+local B64_LOOKUP = {}
+for _b = 1, #B64_CHARS do B64_LOOKUP[B64_CHARS:sub(_b, _b)] = _b - 1 end
+
+local function base64_encode(data)
+  if not data or data == "" then return "" end
+  local out = {}
+  local len = #data
+  local i = 1
+  while i <= len do
+    local b1 = data:byte(i)
+    local b2 = (i + 1 <= len) and data:byte(i + 1) or 0
+    local b3 = (i + 2 <= len) and data:byte(i + 2) or 0
+    local n = b1 * 65536 + b2 * 256 + b3
+    local c1 = math.floor(n / 262144) % 64
+    local c2 = math.floor(n / 4096) % 64
+    local c3 = math.floor(n / 64) % 64
+    local c4 = n % 64
+    out[#out + 1] = B64_CHARS:sub(c1 + 1, c1 + 1)
+    out[#out + 1] = B64_CHARS:sub(c2 + 1, c2 + 1)
+    out[#out + 1] = (i + 1 <= len) and B64_CHARS:sub(c3 + 1, c3 + 1) or '='
+    out[#out + 1] = (i + 2 <= len) and B64_CHARS:sub(c4 + 1, c4 + 1) or '='
+    i = i + 3
+  end
+  return table.concat(out)
+end
+
+local function base64_decode(data)
+  if not data or data == "" then return "" end
+  data = data:gsub('[^A-Za-z0-9+/]', '')  -- strip padding/whitespace/newlines
+  local out = {}
+  local len = #data
+  local i = 1
+  while i <= len do
+    local c1 = B64_LOOKUP[data:sub(i, i)] or 0
+    local c2 = B64_LOOKUP[data:sub(i + 1, i + 1)] or 0
+    local c3 = B64_LOOKUP[data:sub(i + 2, i + 2)]
+    local c4 = B64_LOOKUP[data:sub(i + 3, i + 3)]
+    local n = c1 * 262144 + c2 * 4096 + (c3 or 0) * 64 + (c4 or 0)
+    out[#out + 1] = string.char(math.floor(n / 65536) % 256)
+    if c3 ~= nil then out[#out + 1] = string.char(math.floor(n / 256) % 256) end
+    if c4 ~= nil then out[#out + 1] = string.char(n % 256) end
+    i = i + 4
+  end
+  return table.concat(out)
+end
+
+-- Parse the trackIndices param, which under the fallback JSON parser arrives as a
+-- raw "[...]" string and under CF_Json_Parse as a Lua table. Returns a list of
+-- 0-based indices, or nil if not provided.
+local function parse_track_indices(value)
+  if value == nil then return nil end
+  if type(value) == "table" then
+    local out = {}
+    for _, v in ipairs(value) do
+      local n = tonumber(v)
+      if n then out[#out + 1] = math.floor(n) end
+    end
+    return (#out > 0) and out or nil
+  end
+  if type(value) == "string" then
+    local out = {}
+    for n in value:gmatch("%-?%d+") do out[#out + 1] = tonumber(n) end
+    return (#out > 0) and out or nil
+  end
+  return nil
+end
+
 local function capture_mixer_state(params)
   params = params or {}
   local include_fx_params = params.includeFxParams ~= false  -- default true
   local max_params = params.maxParamsPerFx or 500
-  local state = { version = 2, tracks = {} }
+
+  -- Optional scope: capture only these 0-based track indices (omit = all tracks).
+  local scope = parse_track_indices(params.trackIndices)
+
+  -- fullChunk: capture exact track state chunks (faithful plugin internal state,
+  -- e.g. Helix Native snapshots) instead of parameter values. Defaults to true
+  -- when scoped (the user wants an exact A/B of specific tracks), false otherwise
+  -- (whole-project chunk snapshots would be very large).
+  local full_chunk = params.fullChunk
+  if full_chunk == nil then full_chunk = (scope ~= nil) end
+
+  local state = { version = 2, tracks = {}, fullChunk = full_chunk and true or false }
   local count = reaper.CountTracks(0)
 
-  for i = 0, count - 1 do
+  -- Build the ordered list of track indices to capture.
+  local indices = {}
+  if scope then
+    state.scoped = true
+    for _, idx in ipairs(scope) do
+      if idx >= 0 and idx < count then indices[#indices + 1] = idx end
+    end
+  else
+    for i = 0, count - 1 do indices[#indices + 1] = i end
+  end
+
+  for _, i in ipairs(indices) do
     local track = reaper.GetTrack(0, i)
-    local _, name = reaper.GetTrackName(track)
-    local vol = reaper.GetMediaTrackInfo_Value(track, "D_VOL")
-    local pan = reaper.GetMediaTrackInfo_Value(track, "D_PAN")
-    local mute = reaper.GetMediaTrackInfo_Value(track, "B_MUTE")
-    local solo = reaper.GetMediaTrackInfo_Value(track, "I_SOLO")
-    local color = reaper.GetMediaTrackInfo_Value(track, "I_CUSTOMCOLOR")
+    if track then
+      local _, name = reaper.GetTrackName(track)
+      local track_entry = {
+        index = i,
+        name = name,
+        color = reaper.GetMediaTrackInfo_Value(track, "I_CUSTOMCOLOR"),
+        volume = reaper.GetMediaTrackInfo_Value(track, "D_VOL"),
+        pan = reaper.GetMediaTrackInfo_Value(track, "D_PAN"),
+        mute = reaper.GetMediaTrackInfo_Value(track, "B_MUTE") ~= 0,
+        solo = reaper.GetMediaTrackInfo_Value(track, "I_SOLO") ~= 0,
+      }
 
-    -- FX state with full parameter capture
-    local fx_count = reaper.TrackFX_GetCount(track)
-    local fx_states = {}
-    for j = 0, fx_count - 1 do
-      local enabled = reaper.TrackFX_GetEnabled(track, j)
-      local offline = reaper.TrackFX_GetOffline(track, j)
-      local _, preset = reaper.TrackFX_GetPreset(track, j)
-      local _, fx_name = reaper.TrackFX_GetFXName(track, j)
-
-      local params_data = {}
-      if include_fx_params then
-        local param_count = reaper.TrackFX_GetNumParams(track, j)
-        local limit = math.min(param_count, max_params)
-        for p = 0, limit - 1 do
-          local val = reaper.TrackFX_GetParam(track, j, p)
-          params_data[p + 1] = val
+      if full_chunk then
+        -- Exact, complete track state: FX chain + each plugin's internal VST
+        -- state (incl. Helix snapshot selection), routing, envelopes. Base64 so
+        -- the chunk's quotes/newlines/{GUID} braces survive the JSON round-trip.
+        local ok, chunk = reaper.GetTrackStateChunk(track, "", false)
+        if ok and chunk and chunk ~= "" then
+          track_entry.chunkB64 = base64_encode(chunk)
         end
+      else
+        -- Lightweight: FX bypass/offline + parameter values + send levels (the
+        -- original, backward-compatible capture).
+        local fx_count = reaper.TrackFX_GetCount(track)
+        local fx_states = {}
+        for j = 0, fx_count - 1 do
+          local _, preset = reaper.TrackFX_GetPreset(track, j)
+          local _, fx_name = reaper.TrackFX_GetFXName(track, j)
+          local params_data = {}
+          if include_fx_params then
+            local param_count = reaper.TrackFX_GetNumParams(track, j)
+            local limit = math.min(param_count, max_params)
+            for p = 0, limit - 1 do
+              params_data[p + 1] = reaper.TrackFX_GetParam(track, j, p)
+            end
+          end
+          fx_states[j + 1] = {
+            name = fx_name,
+            enabled = reaper.TrackFX_GetEnabled(track, j),
+            offline = reaper.TrackFX_GetOffline(track, j),
+            preset = preset or "",
+            params = params_data,
+          }
+        end
+
+        local send_count = reaper.GetTrackNumSends(track, 0)
+        local sends = {}
+        for s = 0, send_count - 1 do
+          local dest_track = reaper.GetTrackSendInfo_Value(track, 0, s, "P_DESTTRACK")
+          local dest_idx = -1
+          local dest_name = ""
+          if dest_track then
+            dest_idx = reaper.GetMediaTrackInfo_Value(dest_track, "IP_TRACKNUMBER") - 1
+            local _, dname = reaper.GetTrackName(dest_track)
+            dest_name = dname or ""
+          end
+          sends[s + 1] = {
+            destTrackIndex = dest_idx,
+            destTrackName = dest_name,
+            volume = reaper.GetTrackSendInfo_Value(track, 0, s, "D_VOL"),
+            pan = reaper.GetTrackSendInfo_Value(track, 0, s, "D_PAN"),
+            muted = reaper.GetTrackSendInfo_Value(track, 0, s, "B_MUTE") ~= 0,
+          }
+        end
+
+        track_entry.fx = fx_states
+        track_entry.sends = sends
+        track_entry.fxEnabled = (function()
+          local arr = {}
+          for j = 1, #fx_states do arr[j] = fx_states[j].enabled end
+          return arr
+        end)()
       end
 
-      fx_states[j + 1] = {
-        name = fx_name,
-        enabled = enabled,
-        offline = offline,
-        preset = preset or "",
-        params = params_data,
-      }
+      state.tracks[#state.tracks + 1] = track_entry
     end
-
-    -- Send levels (volume, pan, mute for existing sends)
-    local send_count = reaper.GetTrackNumSends(track, 0)
-    local sends = {}
-    for s = 0, send_count - 1 do
-      local dest_track = reaper.GetTrackSendInfo_Value(track, 0, s, "P_DESTTRACK")
-      local dest_idx = -1
-      local dest_name = ""
-      if dest_track then
-        dest_idx = reaper.GetMediaTrackInfo_Value(dest_track, "IP_TRACKNUMBER") - 1
-        local _, dname = reaper.GetTrackName(dest_track)
-        dest_name = dname or ""
-      end
-      sends[s + 1] = {
-        destTrackIndex = dest_idx,
-        destTrackName = dest_name,
-        volume = reaper.GetTrackSendInfo_Value(track, 0, s, "D_VOL"),
-        pan = reaper.GetTrackSendInfo_Value(track, 0, s, "D_PAN"),
-        muted = reaper.GetTrackSendInfo_Value(track, 0, s, "B_MUTE") ~= 0,
-      }
-    end
-
-    state.tracks[i + 1] = {
-      index = i,
-      name = name,
-      color = color,
-      volume = vol,
-      pan = pan,
-      mute = mute ~= 0,
-      solo = solo ~= 0,
-      fx = fx_states,
-      sends = sends,
-      -- Legacy compat: flat fxEnabled array (derived from fx_states)
-      fxEnabled = (function()
-        local arr = {}
-        for j = 1, #fx_states do
-          arr[j] = fx_states[j].enabled
-        end
-        return arr
-      end)(),
-    }
   end
   return state
 end
@@ -1318,14 +1430,17 @@ function handlers.snapshot_save(params)
   ensure_snapshot_dir()
 
   local timestamp = os.time() * 1000
+  local mixer_state = capture_mixer_state({
+    includeFxParams = params.includeFxParams ~= false,
+    maxParamsPerFx = params.maxParamsPerFx or 500,
+    trackIndices = params.trackIndices,
+    fullChunk = params.fullChunk,
+  })
   local snapshot = {
     name = name,
     description = params.description or "",
     timestamp = timestamp,
-    mixerState = capture_mixer_state({
-      includeFxParams = params.includeFxParams ~= false,
-      maxParamsPerFx = params.maxParamsPerFx or 500,
-    }),
+    mixerState = mixer_state,
   }
 
   local path = snapshot_path(name)
@@ -1334,7 +1449,16 @@ function handlers.snapshot_save(params)
     return nil, "Failed to write snapshot file: " .. path
   end
 
-  return { success = true, name = name, timestamp = timestamp, path = path, storageLocation = get_snapshot_storage_location() }
+  return {
+    success = true,
+    name = name,
+    timestamp = timestamp,
+    path = path,
+    storageLocation = get_snapshot_storage_location(),
+    scoped = mixer_state.scoped == true,
+    fullChunk = mixer_state.fullChunk == true,
+    tracksCaptured = #mixer_state.tracks,
+  }
 end
 
 function handlers.snapshot_restore(params)
@@ -1385,6 +1509,18 @@ function handlers.snapshot_restore(params)
 
       local track = reaper.GetTrack(0, track_state.index)
       if track then
+        if track_state.chunkB64 then
+          -- Exact restore: replace the entire track state from the saved chunk.
+          -- This faithfully reproduces each plugin's internal state (incl. Helix
+          -- Native snapshot selection) which parameter-value restore cannot. The
+          -- chunk is this track's own state only, so children (e.g. guitars under
+          -- a folder) are untouched.
+          if reaper.SetTrackStateChunk(track, base64_decode(track_state.chunkB64), false) then
+            restored = restored + 1
+          else
+            warnings[#warnings + 1] = "Track " .. track_state.index .. ": SetTrackStateChunk failed"
+          end
+        else
         -- Basic mixer state (all versions)
         reaper.SetMediaTrackInfo_Value(track, "D_VOL", track_state.volume)
         reaper.SetMediaTrackInfo_Value(track, "D_PAN", track_state.pan)
@@ -1455,6 +1591,7 @@ function handlers.snapshot_restore(params)
         end
 
         restored = restored + 1
+        end
       end
     end
   end
@@ -4506,11 +4643,44 @@ local function find_web_port()
   return ini and ini:match("\ncsurf_%d+=HTTP %S+ (%d+)")
 end
 
+-- The page pings ExtState ui_seen on every poll; a recent ping means it's already open
+local function ui_recently_seen()
+  local seen = tonumber(reaper.GetExtState(STATUS_SECTION, "ui_seen"))
+  return seen ~= nil and math.abs(os.time() * 1000 - seen) < 6000
+end
+
+local function shell_quote(s)
+  return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
+-- Open the status page as a small chromeless app window (Chromium --app), else the default browser
+local function open_status_window(url)
+  local os_name = reaper.GetOS()
+  local cmd
+  if os_name:match("^OSX") or os_name:match("^macOS") then
+    for _, app in ipairs({ "Google Chrome", "Microsoft Edge", "Brave Browser", "Chromium" }) do
+      local bin = "/Applications/" .. app .. ".app/Contents/MacOS/" .. app
+      if file_exists(bin) then
+        cmd = shell_quote(bin) .. " --app=" .. shell_quote(url) .. " --window-size=980,720 >/dev/null 2>&1 &"
+        break
+      end
+    end
+    cmd = cmd or ("open " .. shell_quote(url))
+  elseif os_name:match("^Win") then
+    cmd = 'start "" msedge --app="' .. url .. '" --window-size=980,720'
+  else
+    local q = shell_quote(url)
+    cmd = "(google-chrome --app=" .. q .. " || chromium --app=" .. q .. " || xdg-open " .. q .. ") >/dev/null 2>&1 &"
+  end
+  os.execute(cmd)
+end
+
 local web_port = find_web_port()
-if web_port then
-  reaper.ShowConsoleMsg("MCP Bridge: running. Live status: http://localhost:" .. web_port .. "/mcp_bridge.html\n")
-else
-  reaper.ShowConsoleMsg("MCP Bridge: running. For a live status page, enable Preferences > Control/OSC/Web > Web browser interface, then open /mcp_bridge.html\n")
+if not web_port then
+  reaper.ShowConsoleMsg("MCP Bridge: running. For the status window, quit REAPER and run `reaper-mcp setup` "
+    .. "(or enable Preferences > Control/OSC/Web > Web browser interface).\n")
+elseif OPEN_UI_ON_START and not ui_recently_seen() then
+  open_status_window("http://localhost:" .. web_port .. "/mcp_bridge.html?app")
 end
 
 -- Write initial heartbeat

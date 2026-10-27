@@ -12,6 +12,7 @@
  */
 
 import { trace, metrics, type Tracer, type Meter } from '@opentelemetry/api';
+import { logs, SeverityNumber } from '@opentelemetry/api-logs';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import {
@@ -19,6 +20,7 @@ import {
   ATTR_SERVICE_NAMESPACE,
   ATTR_SERVICE_VERSION,
 } from '@opentelemetry/semantic-conventions';
+import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -83,6 +85,8 @@ export async function initTelemetry(): Promise<void> {
     [ATTR_SERVICE_NAME]: SERVICE_NAME,
     [ATTR_SERVICE_NAMESPACE]: SERVICE_NAMESPACE,
     [ATTR_SERVICE_VERSION]: serviceVersion,
+    // Each Claude Code session spawns its own server over stdio — tell them apart.
+    'service.instance.id': randomUUID(),
     'deployment.environment.name': DEPLOYMENT_ENV,
   });
 
@@ -183,147 +187,204 @@ export function getTraceContext(): TraceContext {
 }
 
 // ---------------------------------------------------------------------------
-// Pre-created metric instruments
+// Structured logging (stderr + OTLP log records)
 // ---------------------------------------------------------------------------
 
-/**
- * Lazily-created metric instruments.  Instruments are created once per
- * process — calling getMeter() multiple times for the same name is fine, but
- * creating instruments inside hot paths should be avoided.
- */
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-let _commandDurationHistogram: ReturnType<Meter['createHistogram']> | null =
-  null;
-let _commandCounter: ReturnType<Meter['createCounter']> | null = null;
-let _timeoutCounter: ReturnType<Meter['createCounter']> | null = null;
+const SEVERITY: Record<LogLevel, SeverityNumber> = {
+  debug: SeverityNumber.DEBUG,
+  info: SeverityNumber.INFO,
+  warn: SeverityNumber.WARN,
+  error: SeverityNumber.ERROR,
+};
 
-export function getCommandDurationHistogram(): ReturnType<
-  Meter['createHistogram']
-> {
-  if (!_commandDurationHistogram) {
-    _commandDurationHistogram = getMeter().createHistogram(
-      'mcp.bridge.command.duration',
-      {
-        description: 'Duration of MCP bridge commands (file IPC round-trip)',
-        unit: 'ms',
-      },
-    );
-  }
-  return _commandDurationHistogram;
-}
-
-export function getCommandCounter(): ReturnType<Meter['createCounter']> {
-  if (!_commandCounter) {
-    _commandCounter = getMeter().createCounter('mcp.bridge.command.count', {
-      description: 'Number of MCP bridge commands sent, by type and success',
-    });
-  }
-  return _commandCounter;
-}
-
-export function getTimeoutCounter(): ReturnType<Meter['createCounter']> {
-  if (!_timeoutCounter) {
-    _timeoutCounter = getMeter().createCounter('mcp.bridge.timeout.count', {
-      description:
-        'Number of MCP bridge commands that timed out waiting for REAPER',
-    });
-  }
-  return _timeoutCounter;
-}
-
-// ---------------------------------------------------------------------------
-// Bridge-side metric instruments (handler timing, pickup latency)
-// ---------------------------------------------------------------------------
-
-let _handlerDurationHistogram: ReturnType<Meter['createHistogram']> | null =
-  null;
-let _pickupDurationHistogram: ReturnType<Meter['createHistogram']> | null =
-  null;
-
-export function getHandlerDurationHistogram(): ReturnType<
-  Meter['createHistogram']
-> {
-  if (!_handlerDurationHistogram) {
-    _handlerDurationHistogram = getMeter().createHistogram(
-      'mcp.bridge.handler.duration',
-      {
-        description:
-          'Time Lua spent executing the command handler inside REAPER',
-        unit: 'ms',
-        advice: {
-          explicitBucketBoundaries: [
-            0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500,
-          ],
-        },
-      },
-    );
-  }
-  return _handlerDurationHistogram;
-}
-
-export function getPickupDurationHistogram(): ReturnType<
-  Meter['createHistogram']
-> {
-  if (!_pickupDurationHistogram) {
-    _pickupDurationHistogram = getMeter().createHistogram(
-      'mcp.bridge.pickup.duration',
-      {
-        description:
-          'Time from Node writing the command file to Lua picking it up (defer cycle latency)',
-        unit: 'ms',
-        advice: {
-          explicitBucketBoundaries: [
-            1, 2, 5, 10, 16, 33, 50, 100, 200, 500, 1000,
-          ],
-        },
-      },
-    );
-  }
-  return _pickupDurationHistogram;
-}
-
-// ---------------------------------------------------------------------------
-// Bridge diagnostics gauge state
-// ---------------------------------------------------------------------------
-
-let _deferP50Ms = 0;
-let _deferP95Ms = 0;
-let _scanAvgMs = 0;
-let _scanMaxMs = 0;
-
-export function updateDeferStats(p50: number, p95: number): void {
-  _deferP50Ms = p50;
-  _deferP95Ms = p95;
-}
-
-export function updateScanStats(avg: number, max: number): void {
-  _scanAvgMs = avg;
-  _scanMaxMs = max;
+export interface LogOptions {
+  /** OTel event name; set only when the record has a fixed attribute shape. */
+  eventName?: string;
+  /** Override the record time — for bridge events Lua wrote before the poller read them. */
+  timestampMs?: number;
 }
 
 /**
- * Register ObservableGauge instruments for bridge diagnostics.
- * Must be called after `initTelemetry()`.
+ * Emit a structured log: a JSON line on stderr (as before) plus an OTel log
+ * record, exported when OTEL_LOGS_EXPORTER is set and a no-op otherwise. The
+ * active span context is attached automatically, so records correlate with
+ * the tool and bridge spans.
  */
-export function registerBridgeGauges(): void {
-  getMeter()
-    .createObservableGauge('mcp.bridge.defer.interval', {
-      description: 'REAPER defer loop interval (p50/p95 over last 100 cycles)',
-      unit: 'ms',
+export function emitLog(
+  level: LogLevel,
+  body: string,
+  attributes: Record<string, unknown> = {},
+  options: LogOptions = {},
+): void {
+  console.error(
+    JSON.stringify({ level, msg: body, event: options.eventName, ...attributes, ...getTraceContext() }),
+  );
+
+  const attrs: Record<string, string | number | boolean> = {};
+  for (const [key, value] of Object.entries(attributes)) {
+    if (value == null) continue;
+    attrs[key] =
+      typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+        ? value
+        : JSON.stringify(value);
+  }
+
+  logs.getLogger(SCOPE_NAME).emit({
+    severityNumber: SEVERITY[level],
+    severityText: level.toUpperCase(),
+    body,
+    attributes: attrs,
+    ...(options.eventName && { eventName: options.eventName }),
+    ...(options.timestampMs != null && { timestamp: options.timestampMs }),
+  });
+}
+
+/** `exception.*` log attributes for an unknown thrown value (semconv). */
+export function exceptionAttributes(err: unknown): Record<string, string | undefined> {
+  if (err instanceof Error) {
+    return { 'exception.type': err.name, 'exception.message': err.message, 'exception.stacktrace': err.stack };
+  }
+  return { 'exception.type': typeof err, 'exception.message': String(err) };
+}
+
+// ---------------------------------------------------------------------------
+// Metric instruments
+// ---------------------------------------------------------------------------
+//
+// Durations are in seconds (semconv). Attributes stay low-cardinality:
+// `rpc.method` is the bridge command type and `gen_ai.tool.name` the MCP tool
+// name — both bounded by the ~90 registered commands/tools. Error rate is the
+// histogram count filtered on `error.type`, so there are no separate counters.
+
+type Histogram = ReturnType<Meter['createHistogram']>;
+
+// Bucket boundaries from the MCP semconv for `mcp.server.operation.duration`.
+const OPERATION_BUCKETS_S = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 60, 120, 300];
+
+let _toolDuration: Histogram | null = null;
+let _commandDuration: Histogram | null = null;
+let _handlerDuration: Histogram | null = null;
+let _pickupDuration: Histogram | null = null;
+let _sidecarDuration: Histogram | null = null;
+
+/** MCP semconv `mcp.server.operation.duration` — one record per tool call. */
+export function getToolDurationHistogram(): Histogram {
+  _toolDuration ??= getMeter().createHistogram('mcp.server.operation.duration', {
+    description: 'Duration of MCP requests handled by the server',
+    unit: 's',
+    advice: { explicitBucketBoundaries: OPERATION_BUCKETS_S },
+  });
+  return _toolDuration;
+}
+
+/** Full file-IPC round-trip of a bridge command, timeouts included. */
+export function getCommandDurationHistogram(): Histogram {
+  _commandDuration ??= getMeter().createHistogram('reaper.bridge.command.duration', {
+    description: 'Round-trip duration of commands sent to the REAPER Lua bridge',
+    unit: 's',
+    advice: { explicitBucketBoundaries: [0.01, 0.025, 0.05, 0.1, 0.15, 0.25, 0.5, 1, 2.5, 5, 10, 30] },
+  });
+  return _commandDuration;
+}
+
+/** Time Lua spent inside the command handler (reported by the bridge). */
+export function getHandlerDurationHistogram(): Histogram {
+  _handlerDuration ??= getMeter().createHistogram('reaper.bridge.handler.duration', {
+    description: 'Time the Lua bridge spent executing a command handler inside REAPER',
+    unit: 's',
+    advice: {
+      explicitBucketBoundaries: [0.0001, 0.00025, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+    },
+  });
+  return _handlerDuration;
+}
+
+/** Time from Node writing the command file to Lua picking it up. */
+export function getPickupDurationHistogram(): Histogram {
+  _pickupDuration ??= getMeter().createHistogram('reaper.bridge.pickup.duration', {
+    description: 'Time from writing a command file to the Lua defer loop picking it up',
+    unit: 's',
+    advice: { explicitBucketBoundaries: [0.001, 0.002, 0.005, 0.01, 0.016, 0.033, 0.05, 0.1, 0.2, 0.5, 1] },
+  });
+  return _pickupDuration;
+}
+
+/** Python sidecar JSON-RPC call duration (inference included). */
+export function getSidecarDurationHistogram(): Histogram {
+  _sidecarDuration ??= getMeter().createHistogram('reaper.sidecar.request.duration', {
+    description: 'Duration of JSON-RPC requests to the Python analysis sidecar',
+    unit: 's',
+    advice: { explicitBucketBoundaries: [0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60, 120] },
+  });
+  return _sidecarDuration;
+}
+
+// ---------------------------------------------------------------------------
+// Bridge health gauges
+// ---------------------------------------------------------------------------
+
+// Diagnostics are only observed while fresh, so a dead bridge produces a gap
+// instead of repeating its last good value forever.
+const DIAGNOSTICS_MAX_AGE_MS = 3 * 60_000;
+
+interface BridgeDiagnostics {
+  deferP50Ms: number;
+  deferP95Ms: number;
+  scanAvgMs: number;
+  scanMaxMs: number;
+  updatedAt: number;
+}
+
+let _diagnostics: BridgeDiagnostics | null = null;
+
+export function updateBridgeDiagnostics(d: Omit<BridgeDiagnostics, 'updatedAt'>): void {
+  _diagnostics = { ...d, updatedAt: Date.now() };
+}
+
+/**
+ * Register the bridge's ObservableGauges. Must be called after `initTelemetry()`.
+ *
+ * `reaper.bridge.up` is the primary health signal: 1 while REAPER's heartbeat
+ * file is fresh, 0 when the Lua bridge is stopped or REAPER is closed.
+ */
+export function registerBridgeGauges(isBridgeUp: () => Promise<boolean>): void {
+  const meter = getMeter();
+
+  meter
+    .createObservableGauge('reaper.bridge.up', {
+      description: 'Whether the REAPER Lua bridge heartbeat is fresh (1) or stale/missing (0)',
+      unit: '1',
     })
-    .addCallback((obs) => {
-      obs.observe(_deferP50Ms, { percentile: 'p50' });
-      obs.observe(_deferP95Ms, { percentile: 'p95' });
+    .addCallback(async (obs) => {
+      obs.observe((await isBridgeUp()) ? 1 : 0);
     });
 
-  getMeter()
-    .createObservableGauge('mcp.bridge.scan.duration', {
-      description:
-        'Time Lua spends per main_loop scan cycle (avg/max over last 100 scans)',
-      unit: 'ms',
+  const fresh = () =>
+    _diagnostics && Date.now() - _diagnostics.updatedAt < DIAGNOSTICS_MAX_AGE_MS ? _diagnostics : null;
+
+  meter
+    .createObservableGauge('reaper.bridge.defer.interval', {
+      description: 'REAPER defer loop interval over the last 100 cycles',
+      unit: 's',
     })
     .addCallback((obs) => {
-      obs.observe(_scanAvgMs, { percentile: 'avg' });
-      obs.observe(_scanMaxMs, { percentile: 'max' });
+      const d = fresh();
+      if (!d) return;
+      obs.observe(d.deferP50Ms / 1000, { 'reaper.statistic': 'p50' });
+      obs.observe(d.deferP95Ms / 1000, { 'reaper.statistic': 'p95' });
+    });
+
+  meter
+    .createObservableGauge('reaper.bridge.scan.duration', {
+      description: 'Time the Lua bridge spends per main-loop scan over the last 100 scans',
+      unit: 's',
+    })
+    .addCallback((obs) => {
+      const d = fresh();
+      if (!d) return;
+      obs.observe(d.scanAvgMs / 1000, { 'reaper.statistic': 'avg' });
+      obs.observe(d.scanMaxMs / 1000, { 'reaper.statistic': 'max' });
     });
 }

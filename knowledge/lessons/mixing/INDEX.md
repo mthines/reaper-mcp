@@ -17,3 +17,5 @@ lesson schema, entrenchment guards, and the promotion/self-heal flow are in
 ## Lessons
 
 <!-- - [short title](entries/2026-06-28-slug.md) — one-line takeaway [seen:1] -->
+- [Don't hard-clip a full drum bus for loudness](entries/2026-06-29-drum-bus-clip-buries-attack.md) — clipping ~3 dB off a full drum bus shaves kick/snare attack and buries the kit even at net-neutral RMS; keep bus clipping ≈1–1.5 dB or clip kick/snare individually [seen:1]
+- [Reconcile REAPER 1-based vs MCP 0-based track numbers; verify target carries signal](entries/2026-06-29-reconcile-track-numbering-verify-signal.md) — confirm a user's track number by NAME (MCP index is off-by-one), meter a child not the folder parent, and trust the user's ears over repeated bad measurements [seen:1]

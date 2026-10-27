@@ -90,6 +90,43 @@ export const REAPER_ASSETS = [
 /** Bridge status UI installed into REAPER's reaper_www_root/ (built by apps/bridge-ui) */
 export const BRIDGE_UI_FILE = 'mcp_bridge.html';
 
+/** Default port for the REAPER web interface that setup enables (8080 often clashes with dev servers) */
+export const DEFAULT_WEB_PORT = 8099;
+
+/**
+ * Enable REAPER's web browser interface in reaper.ini text, serving the bridge UI.
+ * Control surfaces live in [REAPER] as `csurf_cnt=N` + `csurf_<i>=HTTP <flags> <port> '<user:pass>' '<page>' 0 ''`.
+ * An existing HTTP surface is kept as-is (its port is returned) so a user's own setup is never touched.
+ * Only safe while REAPER is closed: REAPER rewrites reaper.ini from memory on exit.
+ */
+export function ensureWebInterface(ini: string, port: number): { ini: string; port: number; changed: boolean } {
+  const existing = ini.match(/^csurf_\d+=HTTP \S+ (\d+)/m);
+  if (existing) return { ini, port: Number(existing[1]), changed: false };
+
+  const eol = ini.includes('\r\n') ? '\r\n' : '\n';
+  const lines = ini.split(/\r?\n/);
+  let start = lines.findIndex((l) => l.trim() === '[REAPER]');
+  if (start === -1) {
+    lines.unshift('[REAPER]');
+    start = 0;
+  }
+  let end = lines.findIndex((l, i) => i > start && l.startsWith('['));
+  if (end === -1) end = lines.length;
+  // Keep the section free of trailing blank lines before inserting
+  while (end - 1 > start && lines[end - 1].trim() === '') end--;
+
+  const cntIdx = lines.findIndex((l, i) => i > start && i < end && l.startsWith('csurf_cnt='));
+  const count = cntIdx === -1 ? 0 : Number(lines[cntIdx].slice('csurf_cnt='.length)) || 0;
+  const entry = `csurf_${count}=HTTP 0 ${port} '' '${BRIDGE_UI_FILE}' 0 ''`;
+  if (cntIdx === -1) {
+    lines.splice(end, 0, `csurf_cnt=${count + 1}`, entry);
+  } else {
+    lines[cntIdx] = `csurf_cnt=${count + 1}`;
+    lines.splice(end, 0, entry);
+  }
+  return { ini: lines.join(eol), port, changed: true };
+}
+
 /** All MCP tool names registered by the server */
 export const MCP_TOOL_NAMES = [
   // project

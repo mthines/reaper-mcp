@@ -7,7 +7,7 @@ import type { BridgeResponse } from '@reaper-mcp/protocol';
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import {
   getTracer,
-  getTraceContext,
+  emitLog,
   getCommandDurationHistogram,
   getCommandCounter,
   getTimeoutCounter,
@@ -15,6 +15,7 @@ import {
   getPickupDurationHistogram,
   updateDeferStats,
   updateScanStats,
+  type LogLevel,
 } from './telemetry.js';
 
 const POLL_INTERVAL_MS = 10;
@@ -44,7 +45,7 @@ export let lastTimings: BridgePhaseTimings | null = null;
  * - Windows: %APPDATA%/REAPER
  * - Linux: ~/.config/REAPER
  */
-function getReaperResourcePath(): string {
+export function getReaperResourcePath(): string {
   const env = process.env['REAPER_RESOURCE_PATH'];
   if (env) return env;
 
@@ -130,15 +131,7 @@ export async function sendCommand(
       if (profiling) t['write'] = now() - tWrite;
 
       const tLog = now();
-      const traceCtx = getTraceContext();
-      console.error(
-        JSON.stringify({
-          msg: 'bridge_command_sent',
-          commandType: type,
-          commandId: id,
-          ...traceCtx,
-        })
-      );
+      emitLog('debug', 'bridge_command_sent', { commandType: type, commandId: id });
       if (profiling) t['log'] = now() - tLog;
 
       // Poll for response
@@ -194,16 +187,12 @@ export async function sendCommand(
           if (!succeeded) {
             span.setStatus({ code: SpanStatusCode.ERROR, message: response.error ?? 'Bridge error' });
             span.setAttribute('mcp.response.error', response.error ?? 'unknown');
-            console.error(
-              JSON.stringify({
-                msg: 'bridge_command_error',
-                commandType: type,
-                commandId: id,
-                error: response.error,
-                durationMs,
-                ...traceCtx,
-              })
-            );
+            emitLog('error', 'bridge_command_error', {
+              commandType: type,
+              commandId: id,
+              error: response.error,
+              durationMs,
+            });
           }
 
           span.end();
@@ -252,15 +241,7 @@ export async function sendCommand(
       getCommandCounter().add(1, { command_type: type, success: 'false' });
       getTimeoutCounter().add(1, { command_type: type });
 
-      console.error(
-        JSON.stringify({
-          msg: 'bridge_command_timeout',
-          commandType: type,
-          commandId: id,
-          timeoutMs,
-          ...traceCtx,
-        })
-      );
+      emitLog('error', 'bridge_command_timeout', { commandType: type, commandId: id, timeoutMs });
 
       return {
         id,
@@ -331,9 +312,18 @@ function sleep(ms: number): Promise<void> {
 // Bridge telemetry pollers
 // ---------------------------------------------------------------------------
 
+// Lua lifecycle/crash events (see log_event() in mcp_bridge.lua) → log severity.
+const BRIDGE_EVENT_LEVELS: Record<string, LogLevel> = {
+  bridge_start: 'info',
+  bridge_stop: 'warn',
+  handler_error: 'error',
+  handler_unknown: 'warn',
+};
+
 /**
  * Read and consume bridge events from the JSONL log file.
- * Emits each event as a structured log to stderr.
+ * Emits each event as a structured log (stderr + OTLP), timestamped with the
+ * time Lua recorded it rather than when the poller picked it up.
  */
 export async function readBridgeEvents(): Promise<void> {
   const eventsPath = join(getBridgeDir(), 'bridge_events.jsonl');
@@ -352,8 +342,14 @@ export async function readBridgeEvents(): Promise<void> {
   const lines = content.split('\n').filter((l) => l.trim() !== '');
   for (const line of lines) {
     try {
-      const evt = JSON.parse(line) as Record<string, unknown>;
-      console.error(JSON.stringify({ msg: 'bridge_event', ...evt }));
+      const { type, ts, ...rest } = JSON.parse(line) as Record<string, unknown>;
+      const eventType = typeof type === 'string' ? type : 'unknown';
+      emitLog(
+        BRIDGE_EVENT_LEVELS[eventType] ?? 'info',
+        'bridge_event',
+        { 'mcp.bridge.event.type': eventType, ...rest },
+        typeof ts === 'number' ? ts : undefined,
+      );
     } catch {
       // skip malformed lines
     }

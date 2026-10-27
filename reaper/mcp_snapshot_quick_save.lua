@@ -15,27 +15,11 @@ for _, s in ipairs(snapshots) do
 end
 
 local name = "Snapshot " .. next_idx
-lib.ensure_snapshot_dir()
-
-local snapshot = {
-  name = name,
-  description = "",
-  timestamp = os.time() * 1000,
-  mixerState = lib.capture_mixer_state(),
-}
-
-local path = lib.snapshot_path(name)
-local ok = lib.write_file(path, lib.json_encode(snapshot))
+local ok, err, track_count = lib.save_snapshot(name, "")
 if ok then
-  -- Set current index to the new snapshot so next/prev starts from here
-  local updated = lib.load_snapshots()
-  for i, s in ipairs(updated) do
-    if s.name == name then
-      lib.set_current_index(i)
-      break
-    end
-  end
-  lib.toast("Saved: " .. name .. " (" .. #snapshot.mixerState.tracks .. " tracks)")
+  -- Make next/prev A/B start from the snapshot we just saved.
+  lib.set_current_name(name)
+  lib.toast("Saved: " .. name .. " (" .. (track_count or "?") .. " tracks)")
 else
-  lib.toast("Save failed: " .. path)
+  lib.toast("Save failed: " .. (err or name))
 end

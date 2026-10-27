@@ -6,6 +6,7 @@ import {
   liveness,
   mergeLog,
   parseExtStateReply,
+  statusRequestUrl,
   type BridgeStatus,
   type CommandEntry,
 } from './status.js';
@@ -39,6 +40,12 @@ describe('parseExtStateReply', () => {
     expect(parseExtStateReply('EXTSTATE\tMCPBridge\tstatus\t\n')).toBeNull();
     expect(parseExtStateReply('')).toBeNull();
     expect(parseExtStateReply('EXTSTATE\tMCPBridge\tstatus\t{broken\n')).toBeNull();
+  });
+});
+
+describe('statusRequestUrl', () => {
+  it('pings ui_seen and reads the status in one request', () => {
+    expect(statusRequestUrl(123)).toBe('/_/SET/EXTSTATE/MCPBridge/ui_seen/123;GET/EXTSTATE/MCPBridge/status');
   });
 });
 
