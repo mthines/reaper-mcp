@@ -2045,6 +2045,25 @@ local function ppq_to_beats(take, item)
   end
 end
 
+-- Helper: count a take's channel events by type. MIDI_CountEvts' "cc" count is
+-- every channel event MIDI_GetCC enumerates (CC, pitch bend, program change,
+-- channel/poly pressure), so ccCount comes from here: CC messages (0xB0) only.
+local CHANNEL_EVENT_KINDS = {
+  [176] = "cc", [224] = "pitchBend", [192] = "programChange",
+  [208] = "channelPressure", [160] = "polyAftertouch",
+}
+
+local function count_channel_events(take)
+  local _, _, evt_cnt, _ = reaper.MIDI_CountEvts(take)
+  local counts = { cc = 0, pitchBend = 0, programChange = 0, channelPressure = 0, polyAftertouch = 0, other = 0 }
+  for i = 0, evt_cnt - 1 do
+    local _, _, _, _, chanmsg = reaper.MIDI_GetCC(take, i)
+    local kind = CHANNEL_EVENT_KINDS[chanmsg] or "other"
+    counts[kind] = counts[kind] + 1
+  end
+  return counts.cc, evt_cnt, counts
+end
+
 function handlers.create_midi_item(params)
   local track_idx = params.trackIndex
   local start_pos = params.startPosition
@@ -2095,13 +2114,16 @@ function handlers.list_midi_items(params)
     local item = reaper.GetTrackMediaItem(track, i)
     local take = reaper.GetActiveTake(item)
     if take and reaper.TakeIsMIDI(take) then
-      local _, note_cnt, cc_cnt, _ = reaper.MIDI_CountEvts(take)
+      local _, note_cnt, _, _ = reaper.MIDI_CountEvts(take)
+      local cc_cnt, evt_cnt, evt_counts = count_channel_events(take)
       items[#items + 1] = {
         itemIndex = i,
         position = reaper.GetMediaItemInfo_Value(item, "D_POSITION"),
         length = reaper.GetMediaItemInfo_Value(item, "D_LENGTH"),
         noteCount = note_cnt,
         ccCount = cc_cnt,
+        channelEventCount = evt_cnt,
+        channelEventCounts = evt_counts,
         muted = reaper.GetMediaItemInfo_Value(item, "B_MUTE") ~= 0,
       }
     end
@@ -2157,7 +2179,8 @@ function handlers.analyze_midi(params)
   local track, item, take, err = get_midi_take(params)
   if err then return nil, err end
 
-  local _, note_cnt, cc_cnt, _ = reaper.MIDI_CountEvts(take)
+  local _, note_cnt, _, _ = reaper.MIDI_CountEvts(take)
+  local cc_cnt, evt_cnt, evt_counts = count_channel_events(take)
   local to_beats = ppq_to_beats(take, item)
 
   -- Per-pitch accumulators
@@ -2245,6 +2268,8 @@ function handlers.analyze_midi(params)
     itemIndex = params.itemIndex,
     totalNotes = note_cnt,
     totalCC = cc_cnt,
+    channelEventCount = evt_cnt,
+    channelEventCounts = evt_counts,
     durationBeats = math.floor(max_end_beat * 100 + 0.5) / 100,
     pitchStats = pitch_stats,
     velocityHistogram = vel_histogram,
@@ -2512,8 +2537,8 @@ function handlers.insert_midi_cc(params)
 
   reaper.UpdateArrange()
 
-  local _, _, cc_cnt, _ = reaper.MIDI_CountEvts(take)
-  return { success = true, ccCount = cc_cnt }
+  local cc_cnt, evt_cnt = count_channel_events(take)
+  return { success = true, ccCount = cc_cnt, channelEventCount = evt_cnt }
 end
 
 function handlers.delete_midi_cc(params)
@@ -2523,9 +2548,10 @@ function handlers.delete_midi_cc(params)
   local cc_idx = params.ccIndex
   if cc_idx == nil then return nil, "ccIndex required" end
 
-  local _, _, cc_cnt, _ = reaper.MIDI_CountEvts(take)
-  if cc_idx >= cc_cnt then
-    return nil, "CC index " .. cc_idx .. " out of range (item has " .. cc_cnt .. " CC events)"
+  -- ccIndex addresses every channel event (as get_midi_cc reports it), not CCs only
+  local _, _, evt_cnt, _ = reaper.MIDI_CountEvts(take)
+  if cc_idx >= evt_cnt then
+    return nil, "CC index " .. cc_idx .. " out of range (item has " .. evt_cnt .. " channel events)"
   end
 
   reaper.Undo_BeginBlock()
@@ -2534,15 +2560,16 @@ function handlers.delete_midi_cc(params)
 
   reaper.UpdateArrange()
 
-  local _, _, new_cnt, _ = reaper.MIDI_CountEvts(take)
-  return { success = true, ccCount = new_cnt }
+  local cc_cnt, new_evt_cnt = count_channel_events(take)
+  return { success = true, ccCount = cc_cnt, channelEventCount = new_evt_cnt }
 end
 
 function handlers.get_midi_item_properties(params)
   local track, item, take, err = get_midi_take(params)
   if err then return nil, err end
 
-  local _, note_cnt, cc_cnt, _ = reaper.MIDI_CountEvts(take)
+  local _, note_cnt, _, _ = reaper.MIDI_CountEvts(take)
+  local cc_cnt, evt_cnt, evt_counts = count_channel_events(take)
 
   return {
     trackIndex = params.trackIndex,
@@ -2551,6 +2578,8 @@ function handlers.get_midi_item_properties(params)
     length = reaper.GetMediaItemInfo_Value(item, "D_LENGTH"),
     noteCount = note_cnt,
     ccCount = cc_cnt,
+    channelEventCount = evt_cnt,
+    channelEventCounts = evt_counts,
     muted = reaper.GetMediaItemInfo_Value(item, "B_MUTE") ~= 0,
     loopSource = reaper.GetMediaItemInfo_Value(item, "B_LOOPSRC") ~= 0,
   }
