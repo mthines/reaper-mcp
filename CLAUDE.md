@@ -662,7 +662,25 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   when something changed, plus a 1s liveness tick. `_`-prefixed internal commands are excluded.
 - The page polls `/_/GET/EXTSTATE/MCPBridge/status` every 500 ms (paused while the tab is hidden), keeps a
   500-entry log in the browser, and renders entirely outside REAPER — no gfx/ImGui redraw on the main thread.
-- Payload shape lives in `apps/bridge-ui/src/status.ts` (`BridgeStatus`) and `publish_status()` in `mcp_bridge.lua` — change both together.
+- Timeline: the bridge also keeps per-10s command buckets for the last hour (sparse, `[id, total, errors, slow, sumMs]`)
+  in ExtState `MCPBridge/history`, republished at most 1 Hz when changed; the page groups them into bars for 5m–1h.
+- Installable PWA: `apps/bridge-ui/public/` (manifest, service worker, icons) is copied next to the page; every file is
+  `mcp_bridge*` and the service worker is scoped to `/mcp_bridge` so REAPER's other web remotes are untouched.
+- Sessions: each `reaper-mcp serve` process tags every command with flat top-level `sessionId` / `sessionDir` /
+  `sessionClient` (from Claude Code's `CLAUDE_CODE_SESSION_ID` / `CLAUDE_PROJECT_DIR`, else `pid-<n>` / cwd — no hook
+  needed) and pings `_session` every 20s plus a goodbye on exit (`src/session.ts`). The bridge keeps the last hour of
+  sessions in the status; the page shows connected agents, per-session chips, and Calls / Tools / Sessions views.
+  Entries also carry `s` (session) and `p` (params JSON, truncated to 400 chars).
+- Settings the page writes via `/_/SET/EXTSTATE[PERSIST]/MCPBridge/<key>/<0|1>`, echoed back in `status.settings`:
+  `cfg_paused` (in-memory: every non-`_` command fails until resumed or REAPER restarts), `cfg_readonly` (persistent:
+  only `get_`/`list_`/`read_`/`analyze_`/`search_`/`measure_` + transport/navigation pass — `readonly_allows()`,
+  mirrored by `commandKind()` in `status.ts`), `cfg_open_on_start` (persistent, overrides `OPEN_UI_ON_START`).
+  Desktop error notifications are page-side (Notification API + localStorage).
+- `status.health` (re-checked every 10s): SWS present, JSFX installed in `Effects/reaper-mcp/`, and `outdated` when the
+  installed `mcp_bridge.lua` differs from the running copy (setup ran; restart the script). Tested in wasmoon by
+  `bridge-status.test.ts`.
+- Payload shapes live in `apps/bridge-ui/src/status.ts` (`BridgeStatus`, `BridgeHistory`) and `publish_status()` /
+  `publish_history()` in `mcp_bridge.lua` — change both together.
 
 ## Platform-Specific Paths
 

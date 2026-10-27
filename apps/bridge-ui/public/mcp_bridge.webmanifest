@@ -1,0 +1,16 @@
+{
+  "name": "REAPER MCP Bridge",
+  "short_name": "MCP Bridge",
+  "description": "Live status and command log for the reaper-mcp bridge",
+  "id": "/mcp_bridge.html",
+  "start_url": "/mcp_bridge.html?app",
+  "scope": "/mcp_bridge",
+  "display": "standalone",
+  "background_color": "#0e0f11",
+  "theme_color": "#0e0f11",
+  "icons": [
+    { "src": "/mcp_bridge_icon_192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/mcp_bridge_icon_512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/mcp_bridge_icon_512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

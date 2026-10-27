@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bucketize,
   commandsPerMinute,
   deriveSeries,
   formatDuration,
@@ -7,7 +8,14 @@ import {
   liveness,
   mergeLog,
   parseExtStateReply,
+  parseHistoryReply,
   statusRequestUrl,
+  commandKind,
+  formatParams,
+  groupByTool,
+  isConnected,
+  sessionName,
+  settingUrl,
   type BridgeStatus,
   type CommandEntry,
 } from './status.js';
@@ -46,7 +54,9 @@ describe('parseExtStateReply', () => {
 
 describe('statusRequestUrl', () => {
   it('pings ui_seen and reads the status in one request', () => {
-    expect(statusRequestUrl(123)).toBe('/_/SET/EXTSTATE/MCPBridge/ui_seen/123;GET/EXTSTATE/MCPBridge/status');
+    expect(statusRequestUrl(123)).toBe(
+      '/_/SET/EXTSTATE/MCPBridge/ui_seen/123;GET/EXTSTATE/MCPBridge/status;GET/EXTSTATE/MCPBridge/history',
+    );
   });
 });
 
@@ -114,5 +124,82 @@ describe('deriveSeries', () => {
     const s = deriveSeries([{ t: 0, commands: 9, errors: 3, deferMs: 30 }, { t: 1000, commands: 1, errors: 0, deferMs: 30 }], []);
     expect(s.commands).toEqual([0]);
     expect(s.errors).toEqual([0]);
+  });
+});
+
+describe('history', () => {
+  const history = { v: 1, size: 10_000, b: [[100, 4, 1, 1, 220], [102, 2, 0, 0, 3], [50, 9, 0, 0, 9]] as Array<[number, number, number, number, number]> };
+
+  it('reads the history key from a combined reply', () => {
+    const body = `EXTSTATE\tMCPBridge\tstatus\t${JSON.stringify(status)}\nEXTSTATE\tMCPBridge\thistory\t${JSON.stringify(history)}\n`;
+    expect(parseHistoryReply(body)).toEqual(history);
+    expect(parseExtStateReply(body)).toEqual(status);
+    expect(parseHistoryReply('EXTSTATE\tMCPBridge\thistory\t\n')).toBeNull();
+  });
+
+  it('groups buckets into aligned bars and drops ones outside the range', () => {
+    // 30s bars over 60s; now = 1_030_000 is inside the bar [1_020k, 1_050k), so the window starts at 990k
+    const bars = bucketize(history, 60_000, 2, 1_030_000);
+    expect(bars.map((b) => [b.start, b.total, b.errors, b.slow])).toEqual([
+      [990_000, 4, 1, 1],
+      [1_020_000, 2, 0, 0],
+    ]);
+    expect(bars[0].avgMs).toBe(55);
+    expect(bars[1].avgMs).toBe(1.5);
+    expect(bucketize(null, 60_000, 2, 1_030_000).every((b) => b.total === 0 && b.avgMs === null)).toBe(true);
+  });
+});
+
+describe('groupByTool', () => {
+  const log: CommandEntry[] = [
+    { n: 4, t: 400, c: 'set_fx_parameter', ms: 2, ok: false, e: 'bad index' },
+    { n: 3, t: 300, c: 'list_tracks', ms: 1, ok: true },
+    { n: 2, t: 200, c: 'set_fx_parameter', ms: 4, ok: true },
+    { n: 1, t: 100, c: 'set_fx_parameter', ms: 6, ok: false, e: 'older error' },
+  ];
+
+  it('counts calls, errors and latency per command type', () => {
+    const [fx, tracks] = groupByTool(log);
+    expect(fx).toMatchObject({ c: 'set_fx_parameter', kind: 'write', count: 3, errors: 2, avg: 4, max: 6, last: 400, lastError: 'bad index' });
+    expect(tracks).toMatchObject({ c: 'list_tracks', kind: 'read', count: 1, errors: 0 });
+  });
+
+  it('sorts by the chosen column', () => {
+    expect(groupByTool(log, 'recent').map((g) => g.c)).toEqual(['set_fx_parameter', 'list_tracks']);
+    expect(groupByTool(log, 'slowest')[0].c).toBe('set_fx_parameter');
+  });
+});
+
+describe('sessions', () => {
+  it('names a session after its project folder', () => {
+    expect(sessionName({ id: 'abc', dir: '/work/song-a/' })).toBe('song-a');
+    expect(sessionName({ id: 'C:\\x', dir: 'C:\\Music\\demo' })).toBe('demo');
+    expect(sessionName({ id: 'pid-4242' })).toBe('pid 4242');
+  });
+
+  it('treats a session as gone after a goodbye or two missed pings', () => {
+    const s = { id: 'a', first: 0, last: 1000, commands: 0, errors: 0 };
+    expect(isConnected(s, 30_000)).toBe(true);
+    expect(isConnected(s, 60_000)).toBe(false);
+    expect(isConnected({ ...s, ended: true }, 2000)).toBe(false);
+  });
+});
+
+describe('settings and params', () => {
+  it('keeps pause in memory and persists the rest', () => {
+    expect(settingUrl('cfg_paused', true)).toBe('/_/SET/EXTSTATE/MCPBridge/cfg_paused/1');
+    expect(settingUrl('cfg_readonly', false)).toBe('/_/SET/EXTSTATEPERSIST/MCPBridge/cfg_readonly/0');
+  });
+
+  it('classifies commands like the bridge read-only gate', () => {
+    expect(commandKind('get_fx_parameters')).toBe('read');
+    expect(commandKind('play')).toBe('transport');
+    expect(commandKind('run_action')).toBe('write');
+  });
+
+  it('pretty-prints params and marks truncated ones', () => {
+    expect(formatParams('{"trackIndex":0}')).toBe('{\n  "trackIndex": 0\n}');
+    expect(formatParams('{"notes":"[1,2')).toBe('{"notes":"[1,2…');
+    expect(formatParams(undefined)).toBeNull();
   });
 });

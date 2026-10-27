@@ -9,6 +9,12 @@ export interface BridgeCommand {
   type: CommandType;
   params: Record<string, unknown>;
   timestamp: number;
+  /** Agent session that sent the command (Claude Code session id, else `pid-<n>`); shown on the bridge status page */
+  sessionId?: string;
+  /** Project directory of that session */
+  sessionDir?: string;
+  /** MCP client name, e.g. "claude-code" */
+  sessionClient?: string;
 }
 
 export type CommandType =

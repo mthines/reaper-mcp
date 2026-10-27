@@ -16,6 +16,7 @@ import {
   updateBridgeDiagnostics,
   type LogLevel,
 } from './telemetry.js';
+import { getSessionInfo } from './session.js';
 
 const POLL_INTERVAL_MS = 10;
 
@@ -146,11 +147,16 @@ export async function sendCommand(
         // High-cardinality — span attribute only, never a metric attribute or span name.
         span.setAttribute('reaper.bridge.command.id', id);
 
+        const session = getSessionInfo();
         const command: BridgeCommand = {
           id,
           type,
           params,
           timestamp: Date.now(),
+          // Flat fields: the bridge's fallback JSON parser only nests one level (params)
+          sessionId: session.id,
+          sessionDir: session.dir,
+          sessionClient: session.client,
         };
 
         // Write command file, then notify file so Lua can find it without directory listing.

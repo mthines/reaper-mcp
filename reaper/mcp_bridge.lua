@@ -4403,6 +4403,12 @@ end
 -- Bridge diagnostics handler
 -- =============================================================================
 
+-- Session ping from each MCP server (see apps/reaper-mcp-server/src/session.ts); the session itself
+-- is recorded from the command's top-level fields in record_command
+handlers["_session"] = function(params)
+  return { ok = true }
+end
+
 handlers["_bridge_diagnostics"] = function(params)
   -- Compute defer interval stats from circular buffer
   local intervals = {}
@@ -4471,6 +4477,96 @@ local status = {
 local status_dirty = true
 local last_status_publish = 0
 
+-- Agent sessions (one per MCP server process): commands carry sessionId/sessionDir/sessionClient,
+-- and each server pings `_session` every 20s so idle agents still show as connected.
+local SESSIONS_MAX = 20
+local SESSION_FORGET_S = 3600
+local sessions = {}
+
+local function touch_session(cmd, ok)
+  local id = cmd.sessionId
+  if type(id) ~= "string" or id == "" then return nil end
+  local s = sessions[id]
+  local t = now_ms()
+  if not s then
+    s = { id = id, first = t, commands = 0, errors = 0 }
+    sessions[id] = s
+  end
+  s.last = t
+  if type(cmd.sessionDir) == "string" and cmd.sessionDir ~= "" then s.dir = cmd.sessionDir end
+  if type(cmd.sessionClient) == "string" and cmd.sessionClient ~= "" then s.client = cmd.sessionClient end
+  s.ended = nil
+  if ok ~= nil then
+    s.commands = s.commands + 1
+    if not ok then s.errors = s.errors + 1 end
+  end
+  status_dirty = true
+  return s
+end
+
+local function session_list()
+  local list, cutoff = {}, now_ms() - SESSION_FORGET_S * 1000
+  for id, s in pairs(sessions) do
+    if s.last < cutoff then sessions[id] = nil else list[#list + 1] = s end
+  end
+  table.sort(list, function(a, b) return a.last > b.last end)
+  for i = SESSIONS_MAX + 1, #list do
+    sessions[list[i].id] = nil
+    list[i] = nil
+  end
+  return list
+end
+
+-- Settings written by the status page through REAPER's web interface (/_/SET/EXTSTATE...).
+-- cfg_paused is in-memory only (resets with REAPER); the others persist in reaper-extstate.ini.
+local function cfg(key)
+  return reaper.GetExtState(STATUS_SECTION, key) == "1"
+end
+
+-- Read-only mode lets agents inspect and audition but never change the project
+local READONLY_PREFIXES = { "get_", "list_", "read_", "analyze_", "search_", "measure_" }
+local READONLY_ALLOW = {
+  snapshot_list = true, render_track_to_wav = true,
+  play = true, stop = true, set_cursor_position = true, set_time_selection = true,
+}
+local function readonly_allows(cmd_type)
+  if READONLY_ALLOW[cmd_type] then return true end
+  for _, p in ipairs(READONLY_PREFIXES) do
+    if cmd_type:sub(1, #p) == p then return true end
+  end
+  return false
+end
+
+-- Setup health and staleness, re-checked every 10s (cheap: one file read + a few stats)
+local script_path = select(2, reaper.get_action_context())
+local script_source = script_path and read_file(script_path)
+local HEALTH_INTERVAL = 10
+local last_health_check = -HEALTH_INTERVAL
+local health = { sws = false, jsfx = true, outdated = false }
+local JSFX_FILES = { "mcp_analyzer.jsfx", "mcp_lufs_meter.jsfx", "mcp_correlation_meter.jsfx", "mcp_crest_factor.jsfx", "mcp_midi_emitter.jsfx" }
+
+local function check_health(now)
+  if now - last_health_check < HEALTH_INTERVAL then return end
+  last_health_check = now
+  local fx_dir = reaper.GetResourcePath() .. "/Effects/reaper-mcp/"
+  local missing = {}
+  for _, f in ipairs(JSFX_FILES) do
+    if not file_exists(fx_dir .. f) then missing[#missing + 1] = f end
+  end
+  local installed = script_path and read_file(script_path)
+  local next_health = {
+    sws = type(reaper.CF_GetSWSVersion) == "function",
+    jsfx = #missing == 0,
+    missingJsfx = #missing > 0 and missing or nil,
+    -- The installed script changed under us (setup ran): this running copy is stale until restarted
+    outdated = script_source ~= nil and installed ~= nil and installed ~= script_source,
+  }
+  if next_health.sws ~= health.sws or next_health.jsfx ~= health.jsfx or next_health.outdated ~= health.outdated then
+    status_dirty = true
+  end
+  health = next_health
+end
+
 -- Command timeline: per-10s buckets for the last hour, keyed by absolute bucket id
 -- (epoch_ms // 10000). Only buckets with commands exist, so idle time costs nothing.
 -- Each bucket: { total, errors, slow (ok and >= HISTORY_SLOW_MS), summed handler ms }.
@@ -4516,20 +4612,38 @@ local function publish_history(now)
   reaper.SetExtState(STATUS_SECTION, "history", json_encode({ v = 1, size = HISTORY_BUCKET_MS, b = rows }), false)
 end
 
-local function record_command(cmd_type, handler_ms, ok, err)
-  -- Internal commands (e.g. the server's _bridge_diagnostics poller) are noise
-  if type(cmd_type) ~= "string" or cmd_type:sub(1, 1) == "_" then return end
+local STATUS_PARAMS_MAX = 400
+
+local function record_command(cmd, handler_ms, ok, err)
+  local cmd_type = cmd.type
+  -- Internal commands (e.g. the server's _bridge_diagnostics poller) are noise, but still mark the session alive
+  if type(cmd_type) ~= "string" or cmd_type:sub(1, 1) == "_" then
+    local s = touch_session(cmd, nil)
+    if s and cmd_type == "_session" and type(cmd.params) == "table" and cmd.params.ended then s.ended = true end
+    return
+  end
+  local session = touch_session(cmd, ok)
   status.commands = status.commands + 1
   if not ok then status.errors = status.errors + 1 end
   local entry = { n = status.commands, t = now_ms(), c = cmd_type, ms = math.floor(handler_ms * 100 + 0.5) / 100, ok = ok }
+  if session then entry.s = session.id end
+  if type(cmd.params) == "table" and next(cmd.params) ~= nil then
+    entry.p = json_encode(cmd.params):sub(1, STATUS_PARAMS_MAX)
+  end
   if err then
-    -- json_encode doesn't escape control chars; keep the payload valid JSON
     entry.e = tostring(err):gsub("%c", " "):sub(1, 300)
   end
   table.insert(status.recent, 1, entry)
   status.recent[STATUS_RECENT_MAX + 1] = nil
   status_dirty = true
   record_history(handler_ms, ok)
+end
+
+-- cfg_open_on_start ("1"/"0") overrides OPEN_UI_ON_START once the user has chosen in the page
+local function open_on_start()
+  local v = reaper.GetExtState(STATUS_SECTION, "cfg_open_on_start")
+  if v == "" then return OPEN_UI_ON_START end
+  return v == "1"
 end
 
 local function publish_status(now, force)
@@ -4553,6 +4667,9 @@ local function publish_status(now, force)
     errors = status.errors,
     deferMs = defer_n > 0 and math.floor(defer_sum / defer_n * 100000 + 0.5) / 100 or 0,
     recent = status.recent,
+    sessions = session_list(),
+    settings = { paused = cfg("cfg_paused"), readonly = cfg("cfg_readonly"), openOnStart = open_on_start() },
+    health = health,
   }), false)
 end
 
@@ -4578,7 +4695,18 @@ local function process_command(filename)
   local response = {}
   local handler_ms = 0
 
-  if handler then
+  local internal = type(cmd.type) == "string" and cmd.type:sub(1, 1) == "_"
+  local blocked
+  if not internal and cfg("cfg_paused") then
+    blocked = "Paused by user in the MCP Bridge window. Ask the user to resume agent control."
+  elseif not internal and cfg("cfg_readonly") and not readonly_allows(cmd.type) then
+    blocked = "Read-only mode is on in the MCP Bridge window: '" .. tostring(cmd.type)
+      .. "' would change the project. Ask the user to turn read-only off."
+  end
+
+  if blocked then
+    response = { id = cmd.id, success = false, error = blocked, timestamp = os.time() * 1000 }
+  elseif handler then
     local handler_start = reaper.time_precise()
     local ok, data_or_err, err_msg = pcall(handler, cmd.params or {})
     handler_ms = (reaper.time_precise() - handler_start) * 1000
@@ -4608,7 +4736,7 @@ local function process_command(filename)
   -- Add handler timing to response (rounded to microsecond precision)
   response._handlerMs = math.floor(handler_ms * 1000 + 0.5) / 1000
 
-  record_command(cmd.type, handler_ms, response.success, response.error)
+  record_command(cmd, handler_ms, response.success, response.error)
 
   -- Add pickup timing to response for profiling
   if cmd.timestamp then
@@ -4676,6 +4804,7 @@ local function main_loop()
     publish_status(now, false)
   end
   publish_history(now)
+  check_health(now)
 
   reaper.defer(main_loop)
 end
@@ -4726,7 +4855,7 @@ local web_port = find_web_port()
 if not web_port then
   reaper.ShowConsoleMsg("MCP Bridge: running. For the status window, quit REAPER and run `reaper-mcp setup` "
     .. "(or enable Preferences > Control/OSC/Web > Web browser interface).\n")
-elseif OPEN_UI_ON_START and not ui_recently_seen() then
+elseif open_on_start() and not ui_recently_seen() then
   open_status_window("http://localhost:" .. web_port .. "/mcp_bridge.html?app")
 end
 

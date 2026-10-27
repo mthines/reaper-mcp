@@ -11,6 +11,40 @@ export interface CommandEntry {
   ok: boolean;
   /** Error message when ok is false */
   e?: string;
+  /** Session id of the agent that sent it */
+  s?: string;
+  /** Request params as JSON, truncated by the bridge (may not parse) */
+  p?: string;
+}
+
+/** One agent connection (an MCP server process), keyed by Claude Code session id. */
+export interface Session {
+  id: string;
+  /** Project directory the agent runs in */
+  dir?: string;
+  /** MCP client name, e.g. "claude-code" */
+  client?: string;
+  first: number;
+  last: number;
+  commands: number;
+  errors: number;
+  /** Set when the server said goodbye */
+  ended?: boolean;
+}
+
+/** Settings the page writes to ExtState, echoed back by the bridge. */
+export interface BridgeSettings {
+  paused: boolean;
+  readonly: boolean;
+  openOnStart: boolean;
+}
+
+export interface BridgeHealth {
+  sws: boolean;
+  jsfx: boolean;
+  missingJsfx?: string[];
+  /** The installed mcp_bridge.lua changed since this copy started (setup ran): restart it */
+  outdated: boolean;
 }
 
 /** Shape published by mcp_bridge.lua to ExtState MCPBridge/status. */
@@ -25,36 +59,84 @@ export interface BridgeStatus {
   errors: number;
   deferMs: number;
   recent: CommandEntry[];
+  /** Absent on bridges older than the session feed */
+  sessions?: Session[];
+  settings?: BridgeSettings;
+  health?: BridgeHealth;
 }
 
 /**
- * One web-interface request that both reads the status and pings `ui_seen`, which the
- * bridge checks on start so it doesn't open a second window while this page is open.
+ * One web-interface request that pings `ui_seen` (the bridge checks it on start so it doesn't
+ * open a second window while this page is open) and reads the status and timeline keys.
  */
 export function statusRequestUrl(now: number): string {
-  return `/_/SET/EXTSTATE/MCPBridge/ui_seen/${now};GET/EXTSTATE/MCPBridge/status`;
+  return `/_/SET/EXTSTATE/MCPBridge/ui_seen/${now};GET/EXTSTATE/MCPBridge/status;GET/EXTSTATE/MCPBridge/history`;
 }
 
 /**
- * Parse REAPER's web-interface reply: `EXTSTATE\tMCPBridge\tstatus\t<value>`.
- * REAPER escapes `\`, tab and newline in the value; JSON.parse is tried on the
- * raw value first so both escaped and unescaped replies work.
- * Returns null when the key is missing or empty (bridge not running).
+ * Parse one JSON value from REAPER's web-interface reply lines: `EXTSTATE\tMCPBridge\t<key>\t<value>`.
+ * REAPER escapes `\`, tab and newline in the value; JSON.parse is tried on the raw value
+ * first so both escaped and unescaped replies work. Null when the key is missing or empty.
  */
-export function parseExtStateReply(body: string): BridgeStatus | null {
-  const line = body.split('\n').find((l) => l.startsWith('EXTSTATE\t'));
-  if (!line) return null;
-  const value = line.split('\t').slice(3).join('\t');
+function parseExtStateKey(body: string, key: string): unknown {
+  const prefix = `EXTSTATE\tMCPBridge\t${key}\t`;
+  const line = body.split('\n').find((l) => l.startsWith(prefix));
+  const value = line?.slice(prefix.length);
   if (!value) return null;
   for (const candidate of [value, unescapeReaper(value)]) {
     try {
-      const parsed = JSON.parse(candidate) as BridgeStatus;
-      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.recent)) return parsed;
+      return JSON.parse(candidate);
     } catch {
       // try the next candidate
     }
   }
   return null;
+}
+
+export function parseExtStateReply(body: string): BridgeStatus | null {
+  const parsed = parseExtStateKey(body, 'status') as BridgeStatus | null;
+  return parsed && typeof parsed === 'object' && Array.isArray(parsed.recent) ? parsed : null;
+}
+
+/** Command timeline published by the bridge: sparse buckets, `[bucketId, total, errors, slow, sumMs]`. */
+export interface BridgeHistory {
+  v: number;
+  /** Bucket size in ms; bucket start = bucketId * size */
+  size: number;
+  b: Array<[number, number, number, number, number]>;
+}
+
+export function parseHistoryReply(body: string): BridgeHistory | null {
+  const parsed = parseExtStateKey(body, 'history') as BridgeHistory | null;
+  return parsed && typeof parsed === 'object' && Array.isArray(parsed.b) && parsed.size > 0 ? parsed : null;
+}
+
+export interface TimeBar {
+  start: number;
+  end: number;
+  total: number;
+  errors: number;
+  slow: number;
+  /** Average handler ms, null when the bar is empty */
+  avgMs: number | null;
+}
+
+/** Group the bridge's buckets into `bars` equal bars covering the last `rangeMs`. */
+export function bucketize(history: BridgeHistory | null, rangeMs: number, bars: number, now: number): TimeBar[] {
+  const barMs = rangeMs / bars;
+  // Align to bar boundaries so bars don't shift every second; the last bar holds "now"
+  const start = Math.ceil(now / barMs) * barMs - rangeMs;
+  const size = history?.size ?? 1;
+  const sums = Array.from({ length: bars }, (_, i) => ({ start: start + i * barMs, end: start + (i + 1) * barMs, total: 0, errors: 0, slow: 0, ms: 0 }));
+  for (const [id, total, errors, slow, ms] of history?.b ?? []) {
+    const i = Math.floor((id * size - start) / barMs);
+    if (i < 0 || i >= bars) continue;
+    sums[i].total += total;
+    sums[i].errors += errors;
+    sums[i].slow += slow;
+    sums[i].ms += ms;
+  }
+  return sums.map(({ ms, ...bar }) => ({ ...bar, avgMs: bar.total ? ms / bar.total : null }));
 }
 
 function unescapeReaper(v: string): string {
@@ -160,4 +242,96 @@ export function deriveSeries(samples: Sample[], log: CommandEntry[]): Series {
     series.loop.push(b.deferMs);
   }
   return series;
+}
+
+export type SettingKey = 'cfg_paused' | 'cfg_readonly' | 'cfg_open_on_start';
+
+/**
+ * Write one setting through the web interface. Pause is in-memory (clears when REAPER restarts so
+ * a forgotten pause can't silently break agents next session); the others persist.
+ */
+export function settingUrl(key: SettingKey, on: boolean): string {
+  const verb = key === 'cfg_paused' ? 'SET/EXTSTATE' : 'SET/EXTSTATEPERSIST';
+  return `/_/${verb}/MCPBridge/${key}/${on ? 1 : 0}`;
+}
+
+/** Sessions ping every 20s; two missed pings (or a goodbye) means the agent is gone. */
+export function isConnected(session: Session, now: number): boolean {
+  return !session.ended && now - session.last < 45_000;
+}
+
+/** "song-a" from "/work/song-a", falling back to a short id. */
+export function sessionName(session: Pick<Session, 'id' | 'dir'>): string {
+  const base = session.dir?.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
+  return base || session.id.replace(/^pid-/, 'pid ').slice(0, 8);
+}
+
+/** Stable color slot (0-5) per session so its dot keeps its color across reloads. */
+export function sessionHue(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h % 6;
+}
+
+export type CommandKind = 'read' | 'write' | 'transport';
+
+const READ_PREFIXES = ['get_', 'list_', 'read_', 'analyze_', 'search_', 'measure_'];
+const TRANSPORT = new Set(['play', 'stop', 'record', 'set_cursor_position', 'set_time_selection']);
+
+/** Rough intent of a command: inspects the project, changes it, or drives transport. Mirrors the bridge's read-only allowlist. */
+export function commandKind(c: string): CommandKind {
+  if (TRANSPORT.has(c)) return 'transport';
+  if (READ_PREFIXES.some((p) => c.startsWith(p)) || c === 'snapshot_list' || c === 'render_track_to_wav') return 'read';
+  return 'write';
+}
+
+export interface ToolGroup {
+  c: string;
+  kind: CommandKind;
+  count: number;
+  errors: number;
+  avg: number;
+  p95: number;
+  max: number;
+  /** Newest call's timestamp */
+  last: number;
+  /** Most recent error message, if any */
+  lastError?: string;
+}
+
+export type ToolSort = 'count' | 'errors' | 'slowest' | 'recent';
+
+/** Aggregate the log per command type. `entries` is newest first, as the log keeps it. */
+export function groupByTool(entries: CommandEntry[], sort: ToolSort = 'count'): ToolGroup[] {
+  const groups = new Map<string, { entries: CommandEntry[]; errors: number; lastError?: string }>();
+  for (const e of entries) {
+    const g = groups.get(e.c) ?? { entries: [], errors: 0 };
+    g.entries.push(e);
+    if (!e.ok) {
+      g.errors += 1;
+      g.lastError ??= e.e;
+    }
+    groups.set(e.c, g);
+  }
+  const rows: ToolGroup[] = [...groups].map(([c, g]) => {
+    const lat = latencyStats(g.entries) as LatencyStats;
+    return { c, kind: commandKind(c), count: g.entries.length, errors: g.errors, avg: lat.avg, p95: lat.p95, max: lat.max, last: g.entries[0].t, lastError: g.lastError };
+  });
+  const by: Record<ToolSort, (a: ToolGroup, b: ToolGroup) => number> = {
+    count: (a, b) => b.count - a.count,
+    errors: (a, b) => b.errors - a.errors || b.count - a.count,
+    slowest: (a, b) => b.p95 - a.p95,
+    recent: (a, b) => b.last - a.last,
+  };
+  return rows.sort((a, b) => by[sort](a, b) || a.c.localeCompare(b.c));
+}
+
+/** Pretty-print captured params; the bridge truncates long ones, so fall back to the raw text. */
+export function formatParams(p: string | undefined): string | null {
+  if (!p) return null;
+  try {
+    return JSON.stringify(JSON.parse(p), null, 2);
+  } catch {
+    return `${p}…`;
+  }
 }

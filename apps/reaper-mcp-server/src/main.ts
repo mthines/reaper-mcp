@@ -11,8 +11,9 @@ import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
 import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
-import { resolveAssetDir, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface } from './cli.js';
 import { setupSidecar } from './setup-sidecar.js';
+import { endSession, setSessionClient, startSessionPing } from './session.js';
 import { getSidecarClient } from './sidecar.js';
 
 const execAsync = promisifyUtil(execCb);
@@ -61,16 +62,16 @@ async function setup(): Promise<void> {
     }
   }
 
-  // Bridge status UI, served by REAPER's web interface from reaper_www_root/.
-  // Built by the bridge-ui project into dist/apps/bridge-ui (a sibling of this bundle).
-  const wwwSrc = join(resolveAssetDir(__dirname, 'bridge-ui'), BRIDGE_UI_FILE);
-  const wwwDir = getReaperWwwPath();
-  mkdirSync(wwwDir, { recursive: true });
+  // Bridge status UI (page + PWA manifest, service worker, icons), served by REAPER's web
+  // interface from reaper_www_root/. Built by the bridge-ui project into dist/apps/bridge-ui
+  // (a sibling of this bundle). Files are all mcp_bridge* so other web remotes are untouched.
+  const wwwSrc = resolveAssetDir(__dirname, 'bridge-ui');
   console.log('\nInstalling bridge status UI...');
-  if (installFile(wwwSrc, join(wwwDir, BRIDGE_UI_FILE))) {
-    console.log(`  Installed: reaper_www_root/${BRIDGE_UI_FILE}`);
+  if (existsSync(join(wwwSrc, BRIDGE_UI_FILE))) {
+    const count = copyDirSync(wwwSrc, getReaperWwwPath());
+    console.log(`  Installed: reaper_www_root/${BRIDGE_UI_FILE} (+${count - 1} PWA files)`);
   } else {
-    console.log(`  Not found: ${wwwSrc} (build bridge-ui first)`);
+    console.log(`  Not found: ${join(wwwSrc, BRIDGE_UI_FILE)} (build bridge-ui first)`);
   }
 
   const webPort = await enableWebInterface();
@@ -329,6 +330,8 @@ async function serve(): Promise<void> {
       const transport = new StdioServerTransport();
 
       await server.connect(transport);
+      server.server.oninitialized = () => setSessionClient(server.server.getClientVersion()?.name);
+      startSessionPing();
       startupSpan.setStatus({ code: SpanStatusCode.OK });
       log('MCP server connected via stdio');
     } catch (error) {
@@ -434,10 +437,14 @@ function shutdownAll(): void {
 
 /** Report Lua events written since the last poll, then flush all telemetry. */
 function flushAndExit(code: number): void {
-  shutdownAll();
-  readBridgeEvents()
-    .catch(() => { /* best-effort: exiting anyway */ })
-    .finally(() => shutdownTelemetry().finally(() => process.exit(code)));
+  // Tell the bridge first (bounded to 1s) so the status page marks this session disconnected
+  endSession()
+    .finally(() => {
+      shutdownAll();
+      readBridgeEvents()
+        .catch(() => { /* best-effort: exiting anyway */ })
+        .finally(() => shutdownTelemetry().finally(() => process.exit(code)));
+    });
 }
 
 process.on('SIGINT', () => {
