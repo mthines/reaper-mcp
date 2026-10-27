@@ -244,7 +244,7 @@ instead of just giving advice:
 | 🔀 **Routing**: sends, buses, sidechains, hardware outputs | 🎹 **MIDI**: write, edit and analyze notes & CC, live MIDI out | ✂️ **Editing**: split, trim, move, fades, takes, stretch markers |
 | 📍 **Arrangement**: markers, regions, tempo map | 〰️ **Automation**: envelopes and automation points | 💾 **Project**: save, render, undo/redo, snapshots, REAPER actions |
 
-👉 Full list: **[docs/TOOLS.md](docs/TOOLS.md)**
+👉 The main tools by area: **[docs/TOOLS.md](docs/TOOLS.md)**
 
 ### 🎸 Genre-aware out of the box
 
@@ -337,7 +337,7 @@ No. It reads meter values and settings from your running session, not your audio
 
 - 📖 **[docs/REFERENCE.md](docs/REFERENCE.md)**: architecture, install internals, CLI,
   environment variables, telemetry, project structure
-- 🧰 **[docs/TOOLS.md](docs/TOOLS.md)**: every MCP tool
+- 🧰 **[docs/TOOLS.md](docs/TOOLS.md)**: the main tools by area
 - 🧑‍💻 **[DEVELOPMENT.md](DEVELOPMENT.md)**: build, test, run from source, MCP Inspector
 - 🧪 **[docs/TESTING.md](docs/TESTING.md)**: end-to-end testing guide
 

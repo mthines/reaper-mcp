@@ -1,6 +1,6 @@
 # MCP Tools
 
-Every tool reaper-mcp gives Claude, grouped by area. Back to the [README](../README.md) · [Reference](REFERENCE.md).
+The main tools reaper-mcp gives Claude, by area. For the complete list, see the MCP Tools section of [CLAUDE.md](../CLAUDE.md). Back to the [README](../README.md) · [Reference](REFERENCE.md).
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `analyze_track_aesthetics` tools) accepts `-1` for the **master track**.
 
