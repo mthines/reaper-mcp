@@ -59,7 +59,9 @@ NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
 PNPM_VERSION="$(node -p 'require("./package.json").packageManager.split("@")[1]')"
 if command -v pnpm >/dev/null 2>&1; then
   PNPM=(pnpm)
-elif command -v corepack >/dev/null 2>&1; then
+elif command -v corepack >/dev/null 2>&1 &&
+  COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack pnpm --version >> "$LOG" 2>&1; then
+  # Only when corepack can actually run pnpm (it can fail offline or on a broken install).
   export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
   PNPM=(corepack pnpm)
 else
@@ -83,7 +85,9 @@ if command -v claude >/dev/null 2>&1; then
     printf '  \033[32m✓\033[0m  Connecting Claude Code to REAPER (works from any folder)\n'
   elif grep -qi "already exists" <<<"$out"; then
     printf '  \033[32m✓\033[0m  Claude Code already knows REAPER\n'
-    claude mcp get reaper 2>/dev/null | grep -q "$MAIN_JS" ||
+    # Capture first: with pipefail, grep -q closing the pipe early can fail the check.
+    current="$(claude mcp get reaper 2>/dev/null || true)"
+    grep -qF "$MAIN_JS" <<<"$current" ||
       note "It points at another copy. To use this one: claude mcp remove --scope user reaper && ./scripts/install.sh"
   else
     printf '  \033[33m!\033[0m  Could not connect Claude Code to REAPER: %s\n' "$out"
