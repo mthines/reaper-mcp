@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureWebInterface, REAPER_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
@@ -117,21 +117,31 @@ describe('cli helpers', () => {
   });
 
   describe('createMcpJson', () => {
-    it('creates .mcp.json with correct config', () => {
+    it('creates .mcp.json that runs the server script with node by absolute path', () => {
       const path = join(tmp, '.mcp.json');
+      const script = join(tmp, 'dist', 'main.js');
 
-      expect(createMcpJson(path)).toBe(true);
+      expect(createMcpJson(path, script)).toBe(true);
 
       const content = JSON.parse(readFileSync(path, 'utf-8'));
-      expect(content.mcpServers.reaper.command).toBe('reaper-mcp');
-      expect(content.mcpServers.reaper.args).toEqual(['serve']);
+      expect(content.mcpServers.reaper.command).toBe('node');
+      expect(content.mcpServers.reaper.args).toEqual([script, 'serve']);
+    });
+
+    it('resolves a relative server script to an absolute path', () => {
+      const path = join(tmp, '.mcp.json');
+
+      createMcpJson(path, 'dist/main.js');
+
+      const content = JSON.parse(readFileSync(path, 'utf-8'));
+      expect(content.mcpServers.reaper.args).toEqual([resolve('dist/main.js'), 'serve']);
     });
 
     it('returns false when file already exists', () => {
       const path = join(tmp, '.mcp.json');
       writeFileSync(path, '{}');
 
-      expect(createMcpJson(path)).toBe(false);
+      expect(createMcpJson(path, join(tmp, 'main.js'))).toBe(false);
     });
   });
 

@@ -1,5 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 /** Resolve asset path — checks sibling, parent, and walks up to repo root for dev/source usage */
 export function resolveAssetDir(baseDir: string, name: string): string {
@@ -52,14 +52,17 @@ export function installFile(src: string, dest: string): boolean {
   return false;
 }
 
-/** Create .mcp.json with reaper server config */
-export function createMcpJson(targetPath: string): boolean {
+/**
+ * Create .mcp.json with reaper server config. It runs `node <serverScript> serve` by
+ * absolute path, so it works without `reaper-mcp` on PATH.
+ */
+export function createMcpJson(targetPath: string, serverScript: string): boolean {
   if (existsSync(targetPath)) return false;
   const config = JSON.stringify({
     mcpServers: {
       reaper: {
-        command: 'reaper-mcp',
-        args: ['serve'],
+        command: 'node',
+        args: [resolve(serverScript), 'serve'],
       },
     },
   }, null, 2);

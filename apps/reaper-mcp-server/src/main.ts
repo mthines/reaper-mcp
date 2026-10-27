@@ -6,7 +6,7 @@ import { createServer } from './server.js';
 import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, readBridgeEvents, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
 import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges, emitLog, exceptionAttributes } from './telemetry.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
 import { exec as execCb } from 'node:child_process';
@@ -130,7 +130,7 @@ async function enableWebInterface(): Promise<number | null> {
 }
 
 // Configure Claude Code for this clone: pre-approve the REAPER tools globally and
-// drop a .mcp.json pointing at the local reaper-mcp CLI. Copy-free — the skills
+// drop a .mcp.json that runs this clone's built main.js. Copy-free — the skills
 // and knowledge come from the symlinks created by scripts/sync-symlinks.sh.
 async function init(): Promise<void> {
   console.log('REAPER MCP — Configure Claude Code\n');
@@ -141,9 +141,9 @@ async function init(): Promise<void> {
   const result = ensureClaudeSettings(settingsPath);
   console.log(`Claude settings (${MCP_TOOL_NAMES.length} REAPER tools allow-listed): ${result} → ${settingsPath}`);
 
-  // .mcp.json in the current directory, pointing at the local reaper-mcp CLI.
+  // .mcp.json in the current directory: `node <this script> serve`, so it needs no PATH link.
   const mcpJsonPath = join(process.cwd(), '.mcp.json');
-  if (createMcpJson(mcpJsonPath)) {
+  if (createMcpJson(mcpJsonPath, resolve(process.argv[1]))) {
     console.log(`Created: ${mcpJsonPath}`);
   } else {
     console.log(`.mcp.json already exists — leaving it untouched.`);

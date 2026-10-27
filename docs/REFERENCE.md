@@ -52,7 +52,8 @@ step shows the end of the log. It runs these steps (each is also runnable on its
    - `~/.claude/skills/<name>` → `<repo>/.claude/skills/<name>` (skill dir with `SKILL.md`)
    - `~/.claude/knowledge` → `<repo>/knowledge` (genres, workflows, reference)
 4. `reaper-mcp init` — writes the REAPER tool allow-list to `~/.claude/settings.json`
-   and a `.mcp.json` in the clone pointing at `reaper-mcp` (copy-free).
+   and a `.mcp.json` in the clone that runs
+   `node <clone>/dist/apps/reaper-mcp-server/main.js serve` (copy-free).
 5. `claude mcp add --scope user reaper -- node <clone>/dist/apps/reaper-mcp-server/main.js serve`
    — registers the server for your user, by absolute path, so Claude Code sees
    REAPER from any folder without `reaper-mcp` on PATH. An existing user-scope
@@ -244,14 +245,15 @@ REAPER tools in every folder:
 claude mcp add --scope user reaper -- node /path/to/reaper-mcp/dist/apps/reaper-mcp-server/main.js serve
 ```
 
-`reaper-mcp init` also writes a `.mcp.json` in the clone, pointing at the CLI on your PATH:
+`reaper-mcp init` also writes a `.mcp.json` in the clone. It runs the built
+`main.js` by absolute path, so it does not need `reaper-mcp` on your PATH:
 
 ```json
 {
   "mcpServers": {
     "reaper": {
-      "command": "reaper-mcp",
-      "args": ["serve"]
+      "command": "node",
+      "args": ["/path/to/reaper-mcp/dist/apps/reaper-mcp-server/main.js", "serve"]
     }
   }
 }
