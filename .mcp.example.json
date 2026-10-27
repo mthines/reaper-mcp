@@ -11,7 +11,7 @@
         "OTEL_METRICS_EXPORTER": "otlp",
         "OTEL_LOGS_EXPORTER": "otlp",
         "OTEL_RESOURCE_ATTRIBUTES": "service.namespace=reaper-mcp,deployment.environment.name=development",
-        "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer <AUTH_TOKEN>"
+        "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer <AUTH_TOKEN>;Dataset=reaper-mcp"
       }
     }
   }

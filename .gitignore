@@ -14,4 +14,5 @@ dist/
 .gw
 .gw/
 
+.mcp.json
 tmp
