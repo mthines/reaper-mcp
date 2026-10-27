@@ -85,7 +85,9 @@ handling and dynamics to the style. Just tell it what you're making.
 
 ### 🧠 It remembers
 With **[LoreKit](#-lorekit-the-knowledge-core)** as its memory, it keeps what it learns
-about your plugins and your taste. Correct it once and it won't repeat the mistake.
+about your plugins and your taste, so a correction sticks. It also draws on a shared
+plugin library that grows every time someone
+**[contributes](knowledge/contributions/README.md)**, you included.
 
 </td>
 <td valign="top">
