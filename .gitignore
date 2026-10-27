@@ -16,3 +16,6 @@ dist/
 
 .mcp.json
 tmp
+
+# local telemetry dump
+telemetry.jsonl

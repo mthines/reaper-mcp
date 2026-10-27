@@ -124,6 +124,11 @@ what turns a remote control into an engineer that gets better every session.
 - 📝 **Lessons from your corrections.** Revert a change, or have a re-measure come back
   worse, and it saves a lesson right then. A lesson that keeps coming up becomes one of
   the mixer's permanent rules, so it stops making that mistake.
+- 🧩 **Built-in knowledge plus your own.** It ships with a curated, read-only set of
+  plugin records and lessons, and everything it learns from *you* goes into your own
+  layer on top. When the two disagree, yours wins, so your taste never gets
+  overwritten. The built-in set comes with the server, read-only, and needs no
+  LoreKit account. Connect your own LoreKit to start your layer.
 - 🌍 **It follows you.** The memory isn't tied to one project folder. Whatever song
   you open, it brings what it knows.
 - 🔒 **Audio knowledge only.** It never stores client names, song titles or license keys.
@@ -223,7 +228,7 @@ want and the right one starts.
 | 🎚️ | **`/mixer`** | Does the mixing: gain staging, vocal chains, drum bus, low end, stereo image | `/mixer Build a vocal chain on track 3` |
 | 🔥 | **`/critique`** | "Roast my mix." A measured report of what to fix. **Changes nothing.** | `/critique What's holding this mix back?` |
 | 💿 | **`/mastering`** | A mastering chain on the mix bus, aimed at a platform's loudness | `/mastering Master this for Spotify` |
-| 🎓 | **`/learn-plugin`** | Teaches it a plugin you own and saves it to LoreKit | `/learn-plugin JST Gain Reduction Deluxe` |
+| 🎓 | **`/learn-plugin`** | Researches a plugin you own, tests it live and saves it to LoreKit, asking you only what it can't work out | `/learn-plugin JST Gain Reduction Deluxe` |
 | 🗂️ | **`/mix-memory`** | Shows what it remembers, and tidies it up | `/mix-memory What do you know about Pro-C 2?` |
 
 ---

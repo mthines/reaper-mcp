@@ -78,6 +78,8 @@ run "Installing the bridge into REAPER" "${CLI[@]}" setup
 grep -q 'Skipped: REAPER is running' "$LOG" && note "REAPER was open, so the status window isn't switched on yet. Quit REAPER and run this again to add it."
 grep -q 'reaper.ini not found' "$LOG" && note "Start REAPER once, quit it, then run this again to switch on the status window."
 run "Adding the mix skills to Claude Code" "$REPO_ROOT/scripts/sync-symlinks.sh"
+# Telemetry notice + Keep on? [Y/n], straight to the terminal: run() would hide the prompt in the log.
+"${CLI[@]}" telemetry setup
 run "Pre-approving the REAPER tools in Claude Code" "${CLI[@]}" init
 
 if command -v claude >/dev/null 2>&1; then
