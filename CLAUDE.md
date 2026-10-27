@@ -683,7 +683,10 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   checks: `apps/bridge-ui/src/plugin-contributions.mjs`), so GitHub forks and opens the PR. The `plugin-contributions`
   workflow (`pull_request_target`, never runs PR code) comments what would be published; the maintainer's
   `publish-to-lorekit` label writes them to the built-in layer with secret `LOREKIT_PUBLISH_TOKEN` (`lk_rw_`, a
-  writer in the `reaper-mcp` org) and closes the PR. Client: `src/lorekit.ts`,
+  writer in the `reaper-mcp` org) and closes the PR. Files a maintainer commits straight to `main` are published by
+  running the workflow by hand (`workflow_dispatch`, job `publish-main`, optional `dry_run`): it publishes every file
+  in the folder and removes them in one bot commit. Records too long for the URL open with a paste prompt
+  (`PASTE_HERE` in `src/contribute.ts`) and are on the clipboard. Client: `src/lorekit.ts`,
   hook: `src/useKnowledge.ts`, matching: `src/plugins.ts`.
 - Payload shapes live in `apps/bridge-ui/src/status.ts` (`BridgeStatus`, `BridgeHistory`) and `publish_status()` /
   `publish_history()` in `mcp_bridge.lua` — change both together.

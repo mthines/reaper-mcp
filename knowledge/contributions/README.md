@@ -12,6 +12,16 @@ What happens next:
 3. The workflow writes the records into LoreKit's built-in layer (the `reaper-mcp` org) and
    closes the PR. The records live in LoreKit, so nothing is merged into this folder.
 
+If the records don't fit in GitHub's URL, the file opens with a paste prompt instead: your
+records are on the clipboard, so paste over the prompt (⌘A, ⌘V) and propose the file.
+
+**Maintainers** with write access can also commit a file straight to `main` here. Publish it
+by running the workflow by hand: Actions → **Plugin contributions** → **Run workflow**
+(`gh workflow run plugin-contributions.yml`). It publishes every file in this folder, then
+deletes them in one commit, so git history keeps the originals. Tick `dry_run` to see what it
+would publish without writing anything. One invalid file stops the run before any write; a
+failed write keeps the files, so you can just run it again.
+
 A contribution PR may only add files here. The format (one or more records, each after a
 `<!-- lorekit-record … -->` header with its `key` and `tags`) is defined and checked by
 [`apps/bridge-ui/src/plugin-contributions.mjs`](../../apps/bridge-ui/src/plugin-contributions.mjs).
