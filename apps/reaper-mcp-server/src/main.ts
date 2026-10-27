@@ -13,6 +13,7 @@ import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
 import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface } from './cli.js';
 import { setupSidecar } from './setup-sidecar.js';
+import { firstRunTelemetryNotice, resolveTelemetry, writeTelemetryConfig, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
 import { getSidecarClient } from './sidecar.js';
 
@@ -149,11 +150,41 @@ async function init(): Promise<void> {
     console.log(`.mcp.json already exists — leaving it untouched.`);
   }
 
+  await firstRunTelemetryNotice(consoleConsentIO());
+
   console.log('\nIf you haven\'t yet, symlink the skills + knowledge and install the bridge:');
   console.log('  scripts/sync-symlinks.sh   # mix skills + knowledge → ~/.claude');
   console.log('  reaper-mcp setup           # Lua bridge + JSFX → REAPER');
   console.log('then load mcp_bridge.lua in REAPER.');
   console.log('\nTry: /mixer "Please gain stage my tracks"  ·  /critique "Roast my mix"');
+}
+
+function consoleConsentIO() {
+  return { input: process.stdin, output: process.stdout, interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY) };
+}
+
+function describeTelemetry(): string {
+  const { mode, reason } = resolveTelemetry();
+  const label = { default: 'On — anonymous usage data to the developer', custom: 'Custom — your own OTEL_* destination', off: 'Off' }[mode];
+  return `${label} (${reason})`;
+}
+
+// reaper-mcp telemetry [status|on|off|setup]
+async function telemetryCommand(sub = 'status'): Promise<void> {
+  if (sub === 'on' || sub === 'off') {
+    writeTelemetryConfig({ telemetry: sub === 'on', telemetryNoticeShown: true });
+    console.log(sub === 'on' ? 'Anonymous usage telemetry turned on — thank you!' : 'Telemetry turned off. Nothing will be sent.');
+    console.log('Restart Claude Code (or run /mcp) for the running server to pick it up.');
+  } else if (sub === 'setup') {
+    if (!(await firstRunTelemetryNotice(consoleConsentIO()))) console.log(`Telemetry: ${describeTelemetry()}`);
+    return;
+  } else if (sub !== 'status') {
+    console.log('Usage: reaper-mcp telemetry [status|on|off]');
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`Telemetry: ${describeTelemetry()}`);
+  console.log(`What is and isn't collected: ${TELEMETRY_DOC_URL}`);
 }
 
 async function doctor(): Promise<void> {
@@ -192,6 +223,8 @@ async function doctor(): Promise<void> {
   if (!userServer && !mcpJsonExists) {
     console.log('  → Run "scripts/install.sh" from your clone');
   }
+
+  console.log(`Telemetry:     ${describeTelemetry()}`);
 
   console.log('\nTo check SWS Extensions, start REAPER and use the "list_available_fx" tool.');
   console.log('SWS provides enhanced plugin discovery and snapshot support.\n');
@@ -375,6 +408,13 @@ switch (command) {
     });
     break;
 
+  case 'telemetry':
+    telemetryCommand(process.argv[3]).catch((err: unknown) => {
+      console.error('Telemetry command failed:', err);
+      process.exit(1);
+    });
+    break;
+
   case 'setup-sidecar':
     setupSidecar().catch((err) => {
       console.error('Sidecar setup failed:', err);
@@ -412,6 +452,7 @@ Usage:
   reaper-mcp init             Configure Claude Code: tool allow-list + .mcp.json (copy-free)
   reaper-mcp doctor           Check that everything is configured correctly
   reaper-mcp status           Check if Lua bridge is running in REAPER
+  reaper-mcp telemetry off    Opt out of anonymous usage telemetry (also: on, status)
 
 Quick Start (from your clone):
   ./scripts/install.sh        # build, link CLI, bridge, symlink skills + knowledge, configure

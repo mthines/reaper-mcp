@@ -13,7 +13,9 @@
 
 import { trace, metrics, type Tracer, type Meter } from '@opentelemetry/api';
 import { logs, SeverityNumber, type Logger } from '@opentelemetry/api-logs';
-import { NodeSDK } from '@opentelemetry/sdk-node';
+import { NodeSDK, metrics as sdkMetrics, tracing } from '@opentelemetry/sdk-node';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
 import { resourceFromAttributes, envDetector, hostDetector, osDetector } from '@opentelemetry/resources';
 import {
   ATTR_SERVICE_NAME,
@@ -26,6 +28,7 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { AnonymizingSpanExporter, DEFAULT_DESTINATION, resolveTelemetry } from './telemetry-consent.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -104,17 +107,25 @@ let sdk: NodeSDK | null = null;
 export async function initTelemetry(): Promise<void> {
   if (sdk) return; // already initialised
 
+  const decision = resolveTelemetry();
+  if (decision.mode === 'off') {
+    // No SDK at all: an SDK with no OTEL_* settings would still default to OTLP on localhost.
+    console.error(`[reaper-mcp] Telemetry off (${decision.reason})`);
+    return;
+  }
+  const anonymous = decision.mode === 'default';
+
   const serviceVersion = readServiceVersion();
   const installId = readInstallId();
 
   const resource = resourceFromAttributes({
     ...(installId && { 'enduser.pseudo.id': installId }),
-    [ATTR_SERVICE_NAME]: SERVICE_NAME,
+    [ATTR_SERVICE_NAME]: anonymous ? DEFAULT_DESTINATION.serviceName : SERVICE_NAME,
     [ATTR_SERVICE_NAMESPACE]: SERVICE_NAMESPACE,
     [ATTR_SERVICE_VERSION]: serviceVersion,
     // Each Claude Code session spawns its own server over stdio — tell them apart.
     'service.instance.id': randomUUID(),
-    'deployment.environment.name': DEPLOYMENT_ENV,
+    'deployment.environment.name': anonymous ? 'production' : DEPLOYMENT_ENV,
     // Hand-picked process attributes instead of processDetector, which adds
     // executable/command paths and argv containing the OS username.
     'process.pid': process.pid,
@@ -124,6 +135,27 @@ export async function initTelemetry(): Promise<void> {
 
   // NodeSDK reads OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER, OTEL_LOGS_EXPORTER,
   // OTEL_EXPORTER_OTLP_ENDPOINT, and OTEL_EXPORTER_OTLP_HEADERS automatically.
+  if (anonymous) {
+    const { endpoint, dataset, token } = DEFAULT_DESTINATION;
+    const headers = { Authorization: `Bearer ${token}`, Dataset: dataset };
+    sdk = new NodeSDK({
+      resource,
+      // No hostDetector: host name and host id identify the machine.
+      resourceDetectors: [envDetector, osDetector],
+      spanProcessors: [
+        new tracing.BatchSpanProcessor(new AnonymizingSpanExporter(new OTLPTraceExporter({ url: `${endpoint}/v1/traces`, headers }))),
+      ],
+      metricReaders: [
+        new sdkMetrics.PeriodicExportingMetricReader({ exporter: new OTLPMetricExporter({ url: `${endpoint}/v1/metrics`, headers }) }),
+      ],
+      // Log records carry error text, which anonymous telemetry leaves out.
+      logRecordProcessors: [],
+    });
+    sdk.start();
+    console.error(`[reaper-mcp] Anonymous usage telemetry on (${decision.reason})`);
+    return;
+  }
+
   sdk = new NodeSDK({
     resource,
     resourceDetectors: [envDetector, hostDetector, osDetector],

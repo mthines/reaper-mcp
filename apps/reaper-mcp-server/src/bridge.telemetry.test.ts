@@ -24,7 +24,10 @@ let received: string[];
 
 /** Answer every command file like the Lua bridge does, recording its type. */
 function startFakeBridge(): void {
+  let busy = false; // ticks must not overlap, or two could answer the same command
   responder = setInterval(async () => {
+    if (busy) return;
+    busy = true;
     for (const file of await readdir(bridgeDir).catch(() => [] as string[])) {
       if (!file.startsWith('command_')) continue;
       const path = join(bridgeDir, file);
@@ -37,6 +40,7 @@ function startFakeBridge(): void {
         : {};
       await writeFile(join(bridgeDir, `response_${cmd.id}.json`), JSON.stringify({ id: cmd.id, success: true, data, _handlerMs: 0.2, _pickupMs: 3 }));
     }
+    busy = false;
   }, 2);
 }
 

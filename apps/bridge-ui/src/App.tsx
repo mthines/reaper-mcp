@@ -11,6 +11,7 @@ import {
   formatParams,
   groupByTool,
   isConnected,
+  labelSessions,
   latencyStats,
   liveness,
   mergeLog,
@@ -252,7 +253,12 @@ export function App() {
   const state: Liveness = liveness(status, lastChangeAt, now);
   const samples = useHistory(status, now);
   const series = useMemo(() => deriveSeries(samples, log), [samples, log]);
-  const sessions = useMemo(() => new Map((status?.sessions ?? []).map((x) => [x.id, x])), [status?.sessions]);
+  const sessions = useMemo(() => new Map(labelSessions(status?.sessions ?? []).map((x) => [x.id, x])), [status?.sessions]);
+  const [view, setView] = useState<View>(loadView);
+  const chooseView = (v: View) => {
+    setView(v);
+    save(VIEW_KEY, v);
+  };
   const [settings, setSetting] = useSettings(status);
   const [notify, setNotify] = useErrorNotifications(log, sessions);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -268,6 +274,8 @@ export function App() {
         state={state}
         reachable={reachable}
         now={now}
+        sessions={sessions}
+        onShowAgents={() => chooseView('sessions')}
         onOpenSettings={settings ? () => setSettingsOpen((o) => !o) : undefined}
       />
       {status ? (
@@ -278,6 +286,8 @@ export function App() {
           <Log
             log={log}
             sessions={sessions}
+            view={view}
+            onView={chooseView}
             paused={paused}
             onTogglePause={() => setPaused((p) => !p)}
             onClear={clearLog}
@@ -315,16 +325,20 @@ function Header({
   state,
   reachable,
   now,
+  sessions,
+  onShowAgents,
   onOpenSettings,
 }: {
   status: BridgeStatus | null;
   state: Liveness;
   reachable: boolean;
   now: number;
+  sessions: Map<string, Session>;
+  onShowAgents: () => void;
   onOpenSettings?: () => void;
 }) {
   const label = state === 'live' ? 'Live' : state === 'stale' ? 'Not responding' : reachable ? 'Bridge stopped' : 'REAPER unreachable';
-  const connected = status?.sessions?.filter((x) => isConnected(x, now)) ?? [];
+  const connected = [...sessions.values()].filter((x) => isConnected(x, now));
   return (
     <header className="header">
       <div className="brand">
@@ -346,9 +360,14 @@ function Header({
       </div>
       <div className="header-actions">
         {status?.sessions && state === 'live' && (
-          <span
+          <button
             className={`agents ${connected.length ? 'agents-on' : ''}`}
-            title={connected.length ? connected.map((x) => `${sessionName(x)}${x.client ? ` (${x.client})` : ''}`).join('\n') : 'No agent has pinged in the last 45s'}
+            onClick={onShowAgents}
+            title={
+              (connected.length
+                ? `Connected: ${connected.map((x) => `${sessionName(x)}${x.client ? ` (${x.client})` : ''}`).join(', ')}`
+                : 'No agent has pinged in the last 45s') + '\nClick to see sessions'
+            }
           >
             <span className="agents-dots" aria-hidden>
               {connected.slice(0, 4).map((x) => (
@@ -356,7 +375,7 @@ function Header({
               ))}
             </span>
             {connected.length === 0 ? 'No agents' : `${connected.length} agent${connected.length === 1 ? '' : 's'}`}
-          </span>
+          </button>
         )}
         {onOpenSettings && (
           <button className="icon-link" onClick={onOpenSettings} title="Settings" aria-label="Settings">
@@ -856,9 +875,16 @@ const VIEWS: Array<{ key: View; label: string }> = [
   { key: 'sessions', label: 'Sessions' },
 ];
 
+function loadView(): View {
+  const saved = load(VIEW_KEY);
+  return VIEWS.some((v) => v.key === saved) ? (saved as View) : 'calls';
+}
+
 function Log({
   log,
   sessions,
+  view,
+  onView,
   paused,
   onTogglePause,
   onClear,
@@ -866,12 +892,13 @@ function Log({
 }: {
   log: CommandEntry[];
   sessions: Map<string, Session>;
+  view: View;
+  onView: (v: View) => void;
   paused: boolean;
   onTogglePause: () => void;
   onClear: () => void;
   now: number;
 }) {
-  const [view, setView] = useState<View>(() => (VIEWS.some((v) => v.key === load(VIEW_KEY)) ? (load(VIEW_KEY) as View) : 'calls'));
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [sessionFilter, setSessionFilter] = useState<string | null>(null);
@@ -880,8 +907,7 @@ function Log({
   const searchRef = useRef<HTMLInputElement>(null);
 
   const choose = (v: View) => {
-    setView(v);
-    save(VIEW_KEY, v);
+    onView(v);
     if (v !== 'calls') setSelected(null);
   };
 
@@ -1188,6 +1214,10 @@ function SessionsView({
   }
   return (
     <div className="rows sessions">
+      <p className="sessions-help">
+        An agent is one MCP server, usually one Claude Code session; agents in the same folder are numbered by start
+        time. It pings every 20s and shows as idle after 45s without one. Click a card to see only its calls.
+      </p>
       {cards.map((x) => {
         const own = log.filter((e) => e.s === x.id);
         const tools = groupByTool(own).slice(0, 4);
@@ -1196,11 +1226,16 @@ function SessionsView({
           <button key={x.id} className="session-card" onClick={() => onPick(x.id)} title="Show this session's calls">
             <div className="session-top">
               <i className={`sdot hue-${sessionHue(x.id)} ${live ? '' : 'sdot-off'}`} />
-              <span className="session-name">{sessionName(x)}</span>
+              <span className="session-name" title={sessionName(x)}>{sessionName(x)}</span>
               {x.client && <span className="tag">{x.client}</span>}
               <span className={`session-state ${live ? 'on' : ''}`}>{live ? 'Connected' : x.ended ? 'Disconnected' : 'Idle'}</span>
             </div>
-            {x.dir && <div className="session-dir mono" title={x.dir}>{x.dir}</div>}
+            {x.dir && (
+              <div className="session-dir mono" title={x.dir}>
+                {/* rtl + bdi: truncate the start of the path so the folder at the end stays visible */}
+                <bdi>{x.dir}</bdi>
+              </div>
+            )}
             <div className="session-facts">
               <span><b>{(x.commands || own.length).toLocaleString()}</b> calls</span>
               <span className={x.errors ? 'tone-bad' : ''}><b>{x.errors.toLocaleString()}</b> errors</span>

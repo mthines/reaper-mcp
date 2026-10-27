@@ -279,6 +279,15 @@ did what.
 
 ---
 
+## 🔒 Privacy
+
+reaper-mcp sends **anonymous usage telemetry** by default: which tools run, whether they
+fail, and how long they take. It helps me, a solo developer, improve it. It never sends
+your projects, track names, parameters or file paths. Opt out any time with
+`reaper-mcp telemetry off`. The full details are in [TELEMETRY.md](TELEMETRY.md).
+
+---
+
 ## ❓ FAQ
 
 <details>

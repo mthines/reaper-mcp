@@ -14,6 +14,7 @@ import {
   formatParams,
   groupByTool,
   isConnected,
+  labelSessions,
   sessionName,
   settingUrl,
   type BridgeStatus,
@@ -201,5 +202,23 @@ describe('settings and params', () => {
     expect(formatParams('{"trackIndex":0}')).toBe('{\n  "trackIndex": 0\n}');
     expect(formatParams('{"notes":"[1,2')).toBe('{"notes":"[1,2…');
     expect(formatParams(undefined)).toBeNull();
+  });
+});
+
+describe('labelSessions', () => {
+  const at = (id: string, dir: string, first: number) => ({ id, dir, first, last: first, commands: 0, errors: 0 });
+
+  it('keeps folder names when they are unique', () => {
+    expect(labelSessions([at('a', '/w/song-a', 1), at('b', '/w/song-b', 2)]).map((x) => x.label)).toEqual(['song-a', 'song-b']);
+  });
+
+  it('adds the parent folder when two folders share a name', () => {
+    const labels = labelSessions([at('a', '/w/one/main', 1), at('b', '/w/two/main', 2)]).map((x) => x.label);
+    expect(labels).toEqual(['one/main', 'two/main']);
+  });
+
+  it('numbers agents in the same folder by start time', () => {
+    const labels = labelSessions([at('late', '/w/repo/main', 5), at('early', '/w/repo/main', 1)]).map((x) => x.label);
+    expect(labels).toEqual(['main #2', 'main #1']);
   });
 });
