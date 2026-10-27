@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
 import type { BridgeCommand, CommandType } from '@reaper-mcp/protocol';
 import type { BridgeResponse } from '@reaper-mcp/protocol';
-import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
+import { ProxyTracerProvider, SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import {
   getTracer,
   emitLog,
@@ -94,12 +94,18 @@ export function classifyBridgeError(error: string | undefined): BridgeErrorType 
  *   the timing Lua piggybacks on the response.
  * - A warn/error log on failure, correlated to the span.
  */
+/** A provider with no delegate hands out no-op tracers: spans are never recorded. */
+const NOOP_TRACER = new ProxyTracerProvider().getTracer('noop');
+
 export async function sendCommand(
   type: CommandType,
   params: Record<string, unknown> = {},
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<BridgeResponse> {
-  const tracer = getTracer();
+  // Internal `_` commands (the diagnostics poller) are plumbing, not usage: like the
+  // bridge status page, keep them out of traces and the per-command metrics.
+  const internal = type.startsWith('_');
+  const tracer = internal ? NOOP_TRACER : getTracer();
   const startMs = Date.now();
   const t: Record<string, number> = {};
   const profiling = PROFILE_BRIDGE;
@@ -126,7 +132,7 @@ export async function sendCommand(
           span.setAttribute('error.type', errorType);
         }
         span.end();
-        getCommandDurationHistogram().record((Date.now() - startMs) / 1000, attrs);
+        if (!internal) getCommandDurationHistogram().record((Date.now() - startMs) / 1000, attrs);
       };
 
       try {
@@ -190,14 +196,14 @@ export async function sendCommand(
             span.setAttribute('reaper.bridge.poll_attempts', pollAttempts);
             if (handlerMs != null) {
               span.setAttribute('reaper.bridge.handler_ms', handlerMs);
-              getHandlerDurationHistogram().record(handlerMs / 1000, {
+              if (!internal) getHandlerDurationHistogram().record(handlerMs / 1000, {
                 'rpc.method': type,
                 ...(errorType && { 'error.type': errorType }),
               });
             }
             if (pickupMs != null) {
               span.setAttribute('reaper.bridge.pickup_ms', pickupMs);
-              getPickupDurationHistogram().record(pickupMs / 1000);
+              if (!internal) getPickupDurationHistogram().record(pickupMs / 1000);
             }
             if (deferCycle != null) {
               span.setAttribute('reaper.bridge.defer_cycle', deferCycle);
@@ -413,29 +419,20 @@ let _eventsTimer: ReturnType<typeof setInterval> | null = null;
  */
 export async function pollBridgeDiagnostics(): Promise<void> {
   if (!(await isBridgeRunning())) return;
-  await getTracer().startActiveSpan('poll bridge diagnostics', { kind: SpanKind.INTERNAL }, async (span) => {
-    try {
-      const res = await sendCommand('_bridge_diagnostics' as CommandType, {}, 5_000);
-      if (!res.success) {
-        span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(res.error ?? 'diagnostics failed') });
-        return;
-      }
-      const d = (res.data ?? {}) as {
-        deferIntervals?: { p50Ms: number; p95Ms: number };
-        scanDurations?: { avgMs: number; maxMs: number };
-      };
-      if (d.deferIntervals && d.scanDurations) {
-        updateBridgeDiagnostics({
-          deferP50Ms: d.deferIntervals.p50Ms,
-          deferP95Ms: d.deferIntervals.p95Ms,
-          scanAvgMs: d.scanDurations.avgMs,
-          scanMaxMs: d.scanDurations.maxMs,
-        });
-      }
-    } finally {
-      span.end();
-    }
-  });
+  const res = await sendCommand('_bridge_diagnostics' as CommandType, {}, 5_000);
+  if (!res.success) return;
+  const d = (res.data ?? {}) as {
+    deferIntervals?: { p50Ms: number; p95Ms: number };
+    scanDurations?: { avgMs: number; maxMs: number };
+  };
+  if (d.deferIntervals && d.scanDurations) {
+    updateBridgeDiagnostics({
+      deferP50Ms: d.deferIntervals.p50Ms,
+      deferP95Ms: d.deferIntervals.p95Ms,
+      scanAvgMs: d.scanDurations.avgMs,
+      scanMaxMs: d.scanDurations.maxMs,
+    });
+  }
 }
 
 /**
