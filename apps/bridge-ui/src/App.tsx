@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { createDemo } from './demo.js';
+import { ResizeHandle, useDrawerWidth } from './ResizeHandle.js';
+import { PluginsView } from './PluginsView.js';
+import type { KnowledgeFeed } from './plugins.js';
 import {
   HISTORY_MAX,
   bucketize,
@@ -286,6 +289,7 @@ export function App() {
           <Log
             log={log}
             sessions={sessions}
+            knowledge={status.knowledge}
             view={view}
             onView={chooseView}
             paused={paused}
@@ -867,12 +871,13 @@ function Timeline({ history, now }: { history: BridgeHistory | null; now: number
 }
 
 type Filter = 'all' | 'errors';
-type View = 'calls' | 'tools' | 'sessions';
+type View = 'calls' | 'tools' | 'sessions' | 'plugins';
 const VIEW_KEY = 'mcp-bridge-view';
 const VIEWS: Array<{ key: View; label: string }> = [
   { key: 'calls', label: 'Calls' },
   { key: 'tools', label: 'Tools' },
   { key: 'sessions', label: 'Sessions' },
+  { key: 'plugins', label: 'Plugins' },
 ];
 
 function loadView(): View {
@@ -883,6 +888,7 @@ function loadView(): View {
 function Log({
   log,
   sessions,
+  knowledge,
   view,
   onView,
   paused,
@@ -892,6 +898,7 @@ function Log({
 }: {
   log: CommandEntry[];
   sessions: Map<string, Session>;
+  knowledge?: KnowledgeFeed;
   view: View;
   onView: (v: View) => void;
   paused: boolean;
@@ -988,7 +995,7 @@ function Log({
     <section className="log">
       <div className="toolbar">
         <div className="seg" role="tablist" aria-label="View">
-          {VIEWS.map((v) => (
+          {VIEWS.filter((v) => v.key !== 'plugins' || knowledge).map((v) => (
             <button key={v.key} role="tab" aria-selected={view === v.key} onClick={() => choose(v.key)}>
               {v.label}
             </button>
@@ -1011,7 +1018,7 @@ function Log({
               ref={searchRef}
               value={query}
               onChange={(ev) => setQuery(ev.target.value)}
-              placeholder={view === 'tools' ? 'Filter tools' : 'Filter commands or errors'}
+              placeholder={view === 'tools' ? 'Filter tools' : view === 'plugins' ? 'Filter plugins or categories' : 'Filter commands or errors'}
               spellCheck={false}
             />
             {!query && <kbd>/</kbd>}
@@ -1040,7 +1047,7 @@ function Log({
         )}
       </div>
 
-      {multiSession && view !== 'sessions' && (
+      {multiSession && (view === 'calls' || view === 'tools') && (
         <div className="chips" role="tablist" aria-label="Agent session">
           <button role="tab" aria-selected={sessionFilter === null} className="chip" onClick={() => setSessionFilter(null)}>
             All agents
@@ -1066,7 +1073,9 @@ function Log({
         </div>
       )}
 
-      {view === 'tools' ? (
+      {view === 'plugins' && knowledge ? (
+        <PluginsView feed={knowledge} query={query} now={now} />
+      ) : view === 'tools' ? (
         <ToolsView log={scoped} query={query} now={now} onPick={(tool, errors) => showCalls({ tool, errors })} />
       ) : view === 'sessions' ? (
         <SessionsView ids={sessionIds} sessionOf={sessionOf} log={log} now={now} onPick={(session) => showCalls({ session, tool: '' })} />
@@ -1309,6 +1318,7 @@ function Row({
 
 /** Right-hand sidebar with everything known about one command. ↑/↓ move between rows, Esc closes. */
 function Details({ entry: e, session, now, onClose }: { entry: CommandEntry; session: Session | null; now: number; onClose: () => void }) {
+  const width = useDrawerWidth();
   const [copied, setCopied] = useState<string | null>(null);
   const time = new Date(e.t);
   const speed = e.ms >= VERY_SLOW_MS ? 'Very slow' : e.ms >= SLOW_MS ? 'Slow' : 'Fast';
@@ -1325,7 +1335,8 @@ function Details({ entry: e, session, now, onClose }: { entry: CommandEntry; ses
   };
 
   return (
-    <aside className="drawer" aria-label={`Details for ${e.c}`}>
+    <aside className="drawer" aria-label={`Details for ${e.c}`} style={width.style}>
+      <ResizeHandle fraction={width.fraction} onCommit={width.setFraction} />
       <div className="drawer-head">
         <div className="drawer-title">
           <span className={`status-dot ${e.ok ? 'ok' : 'err'}`} />

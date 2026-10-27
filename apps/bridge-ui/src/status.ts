@@ -1,3 +1,5 @@
+import type { KnowledgeFeed } from './plugins.js';
+
 /** One command the bridge handled (newest first in BridgeStatus.recent). */
 export interface CommandEntry {
   /** Sequence number since bridge start (1-based) */
@@ -65,6 +67,8 @@ export interface BridgeStatus {
   sessions?: Session[];
   settings?: BridgeSettings;
   health?: BridgeHealth;
+  /** Experiment: plugin knowledge vs installed FX (only the demo fills it so far) */
+  knowledge?: KnowledgeFeed;
 }
 
 /**

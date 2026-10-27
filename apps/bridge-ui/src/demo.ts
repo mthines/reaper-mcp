@@ -1,5 +1,7 @@
 import { commandKind, type BridgeHistory, type BridgeSettings, type BridgeStatus, type CommandEntry, type Session, type SettingKey } from './status.js';
 
+import { DEMO_KNOWLEDGE } from './demo-plugins.js';
+
 // Fake bridge for `mcp_bridge.html?demo` — lets the UI be previewed without REAPER.
 
 const COMMANDS: Array<[string, number, Record<string, unknown>]> = [
@@ -103,6 +105,7 @@ export function createDemo(): Demo {
           sessions: [...sessions].sort((a, b) => b.last - a.last),
           settings: { ...settings },
           health: { sws: true, jsfx: true, outdated: new URLSearchParams(location.search).has('outdated') },
+          knowledge: DEMO_KNOWLEDGE,
         },
         history: { v: 1, size: BUCKET_MS, b: [...buckets.values()].sort((a, b) => a[0] - b[0]) },
       };
