@@ -4,7 +4,7 @@ import { createDemo } from './demo.js';
 import { manualInstallHint, openInBrowserToInstall, promptInstall, useInstallState } from './install.js';
 import { ResizeHandle, useDrawerWidth } from './ResizeHandle.js';
 import { PluginsView } from './PluginsView.js';
-import { loadLoreKitToken, saveLoreKitToken, useKnowledge } from './useKnowledge.js';
+import { LOREKIT_PUBLISH_TOKEN_KEY, loadLoreKitToken, saveLoreKitToken, useKnowledge } from './useKnowledge.js';
 import type { KnowledgeFeed } from './plugins.js';
 import {
   HISTORY_MAX,
@@ -335,12 +335,17 @@ export function App() {
   const [notify, setNotify] = useErrorNotifications(log, sessions);
   // `?install`: opened from the bridge window's Install button, so show the install setting straight away
   const [settingsOpen, setSettingsOpen] = useState(() => new URLSearchParams(location.search).has('install'));
-  const [loreToken, setLoreToken] = useState(loadLoreKitToken);
+  const [loreToken, setLoreToken] = useState(() => loadLoreKitToken());
   const chooseLoreToken = (token: string | null) => {
     setLoreToken(token);
     saveLoreKitToken(token);
   };
-  const liveKnowledge = useKnowledge(!DEMO, loreToken);
+  const [publishToken, setPublishToken] = useState(() => loadLoreKitToken(LOREKIT_PUBLISH_TOKEN_KEY));
+  const choosePublishToken = (token: string | null) => {
+    setPublishToken(token);
+    saveLoreKitToken(token, LOREKIT_PUBLISH_TOKEN_KEY);
+  };
+  const liveKnowledge = useKnowledge(!DEMO, loreToken, publishToken);
 
   useEffect(() => {
     document.title = `${state === 'live' ? '●' : '○'} MCP Bridge`;
@@ -385,6 +390,8 @@ export function App() {
               onNotify={setNotify}
               loreToken={loreToken}
               onLoreToken={chooseLoreToken}
+              publishToken={publishToken}
+              onPublishToken={choosePublishToken}
               onClose={() => setSettingsOpen(false)}
             />
           )}
@@ -560,6 +567,8 @@ function SettingsPanel({
   onNotify,
   loreToken,
   onLoreToken,
+  publishToken,
+  onPublishToken,
   onClose,
 }: {
   settings: BridgeSettings;
@@ -568,6 +577,8 @@ function SettingsPanel({
   onNotify: (on: boolean) => void;
   loreToken: string | null;
   onLoreToken: (token: string | null) => void;
+  publishToken: string | null;
+  onPublishToken: (token: string | null) => void;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -626,6 +637,7 @@ function SettingsPanel({
           <InstallSetting />
         </div>
         <LoreKitSetting token={loreToken} onChange={onLoreToken} />
+        <PublishSetting token={publishToken} readToken={loreToken} onChange={onPublishToken} />
       </div>
     </aside>
   );
@@ -729,10 +741,70 @@ function LoreKitSetting({ token, onChange }: { token: string | null; onChange: (
       )}
       <p className="setting-hint">
         {invalid
-          ? 'That isn’t a read-only token. Use one that starts with lk_ro_; this page never needs write access.'
+          ? 'That isn’t a read-only token. Use one that starts with lk_ro_ here; a write token only goes under Publish to built-in.'
           : token
             ? 'The Plugins tab includes the plugins you taught the mixer. The token stays in this browser and is only sent to LoreKit.'
             : 'The Plugins tab always shows the built-in records. Your token adds the plugins you taught the mixer; it stays in this browser and is only sent to LoreKit.'}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Members of the reaper-mcp LoreKit org publish their records into the built-in layer straight from the
+ * plugin drawer, without the GitHub contribution PR. LoreKit checks the membership on every write.
+ */
+function PublishSetting({ token, readToken, onChange }: { token: string | null; readToken: string | null; onChange: (token: string | null) => void }) {
+  const [draft, setDraft] = useState('');
+  const trimmed = draft.trim();
+  const invalid = trimmed !== '' && !/^lk_rw_[A-Za-z0-9]+$/.test(trimmed);
+  return (
+    <div className="setting-group">
+      <h3>Publish to built-in</h3>
+      {token ? (
+        <div className="lore-connected">
+          <span>
+            <i className="kdot cov-built-in" /> Publishing enabled <span className="mono muted">{token.slice(0, 10)}…</span>
+          </span>
+          <button className="btn btn-sm" onClick={() => onChange(null)}>
+            Remove
+          </button>
+        </div>
+      ) : (
+        <form
+          className="lore-form"
+          onSubmit={(ev) => {
+            ev.preventDefault();
+            if (trimmed && !invalid) {
+              onChange(trimmed);
+              setDraft('');
+            }
+          }}
+        >
+          <input
+            className="lore-input mono"
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="lk_rw_…"
+            value={draft}
+            onChange={(ev) => setDraft(ev.target.value)}
+            aria-label="LoreKit read + write token for publishing"
+            aria-invalid={invalid}
+          />
+          <button className="btn btn-sm" type="submit" disabled={!trimmed || invalid}>
+            Enable
+          </button>
+        </form>
+      )}
+      <p className="setting-hint">
+        {invalid
+          ? 'Publishing needs a read + write token, starting with lk_rw_.'
+          : token
+            ? readToken
+              ? 'Your records get a Publish to built-in button. LoreKit only accepts it while you’re a member of the reaper-mcp org.'
+              : 'Connect your read-only token above too, so your records (and their Publish button) show up.'
+            : 'For members of the reaper-mcp LoreKit org: publish your records for everyone without a GitHub pull request. Create a read + write key limited to project::reaper-mcp and the reaper-mcp org. Everyone else uses Contribute.'}
       </p>
     </div>
   );

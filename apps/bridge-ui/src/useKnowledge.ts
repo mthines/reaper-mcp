@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchRecords, parseInstalled, parseUsed } from './lorekit.js';
+import { fetchRecords, parseInstalled, parseUsed, publishRecord } from './lorekit.js';
 import type { InstalledFx, KnowledgeFeed, PluginRecord, UsedFx } from './plugins.js';
 import { parseExtStateKey } from './status.js';
 
@@ -11,19 +11,21 @@ const USED_POLL_MS = 5_000;
 const INSTALLED_EVERY = 6;
 const RECORDS_REFRESH_MS = 10 * 60_000;
 export const LOREKIT_TOKEN_KEY = 'mcp_bridge.lorekit_token';
+/** The viewer's lk_rw_ token for publishing into the built-in layer (reaper-mcp org members only) */
+export const LOREKIT_PUBLISH_TOKEN_KEY = 'mcp_bridge.lorekit_publish_token';
 
-export function loadLoreKitToken(): string | null {
+export function loadLoreKitToken(key = LOREKIT_TOKEN_KEY): string | null {
   try {
-    return localStorage.getItem(LOREKIT_TOKEN_KEY);
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
-export function saveLoreKitToken(token: string | null): void {
+export function saveLoreKitToken(token: string | null, key = LOREKIT_TOKEN_KEY): void {
   try {
-    if (token) localStorage.setItem(LOREKIT_TOKEN_KEY, token);
-    else localStorage.removeItem(LOREKIT_TOKEN_KEY);
+    if (token) localStorage.setItem(key, token);
+    else localStorage.removeItem(key);
   } catch {
     // per-viewer convenience only
   }
@@ -34,11 +36,13 @@ export function saveLoreKitToken(token: string | null): void {
  * when it changes) joined with plugin records read from LoreKit. Undefined until the bridge has
  * published its list, so the tab stays hidden on a bridge that predates it.
  */
-export function useKnowledge(enabled: boolean, userToken: string | null): KnowledgeFeed | undefined {
+export function useKnowledge(enabled: boolean, userToken: string | null, publishToken: string | null = null): KnowledgeFeed | undefined {
   const [installed, setInstalled] = useState<{ supported: boolean; fx: InstalledFx[] } | null>(null);
   const [builtIn, setBuiltIn] = useState<{ records: PluginRecord[]; error?: string } | null>(null);
   const [user, setUser] = useState<{ records: PluginRecord[]; error?: string } | null>(null);
   const [used, setUsed] = useState<UsedFx[] | undefined>(undefined);
+  // Bumped after a publish so both layers are read again straight away
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (!enabled) return;
@@ -89,7 +93,7 @@ export function useKnowledge(enabled: boolean, userToken: string | null): Knowle
       ctrl.abort();
       clearInterval(id);
     };
-  }, [ready]);
+  }, [ready, reload]);
 
   useEffect(() => {
     setUser(null);
@@ -106,7 +110,7 @@ export function useKnowledge(enabled: boolean, userToken: string | null): Knowle
       ctrl.abort();
       clearInterval(id);
     };
-  }, [ready, userToken]);
+  }, [ready, userToken, reload]);
 
   if (!ready || !installed) return undefined;
   const problems = [
@@ -121,6 +125,13 @@ export function useKnowledge(enabled: boolean, userToken: string | null): Knowle
     userLayer: !userToken ? 'off' : user?.error ? 'error' : 'on',
     problem: problems.length ? problems.join(' ') : undefined,
     used,
+    publish: publishToken
+      ? async (record, options) => {
+          const result = await publishRecord(__LOREKIT_API__, publishToken, record, options);
+          setReload((n) => n + 1);
+          return result;
+        }
+      : undefined,
   };
 }
 

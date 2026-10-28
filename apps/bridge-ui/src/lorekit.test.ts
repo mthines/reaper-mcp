@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchRecords, parseInstalled, parseRecord, type LoreKitEntry } from './lorekit.js';
+import { fetchRecords, parseInstalled, parseRecord, publishRecord, type LoreKitEntry } from './lorekit.js';
 
 const builtIn: LoreKitEntry = {
   id: '84daa88a-5e98-4e52-8cf2-bb3f14ce1a6f',
@@ -72,6 +72,73 @@ describe('fetchRecords', () => {
   it('says when LoreKit rejects the token', async () => {
     vi.stubGlobal('fetch', async () => new Response('{}', { status: 401 }));
     await expect(fetchRecords('https://lk.test/v1', 'lk_ro_bad', 'user')).rejects.toThrow(/refused the token/);
+  });
+});
+
+describe('publishRecord', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const parsed = parseRecord({ ...user, value: '# Graillon 3\n\nPitch correction.' });
+  if (!parsed?.source) throw new Error('fixture must parse as a user record');
+  const mine = { ...parsed, source: parsed.source };
+  type Call = { url: string; method?: string; body?: Record<string, unknown> };
+
+  function stub(answer: (c: Call) => Response) {
+    const calls: Call[] = [];
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      expect((init.headers as Record<string, string>).Authorization).toBe('Bearer lk_rw_abc');
+      const c = { url, method: init.method, body: init.body ? JSON.parse(String(init.body)) : undefined };
+      calls.push(c);
+      return answer(c);
+    });
+    return calls;
+  }
+
+  it('writes the record under the reaper-mcp org as a built-in record, then archives the copy', async () => {
+    const calls = stub(() => new Response(JSON.stringify({ id: 'x' })));
+    expect(await publishRecord('https://lk.test/v1', 'lk_rw_abc', mine, { removeCopy: true })).toEqual({ key: 'plugins::auburn-sounds/graillon-3', removedCopy: true });
+    expect(calls[0]).toMatchObject({
+      url: 'https://lk.test/v1/memories',
+      method: 'POST',
+      body: {
+        scope: 'project::reaper-mcp',
+        org: 'reaper-mcp',
+        key: 'plugins::auburn-sounds/graillon-3',
+        value: '# Graillon 3\n\nPitch correction.',
+        tags: ['plugin-knowledge', 'category::pitch', 'fx::Graillon 3', 'layer::built-in'],
+      },
+    });
+    expect(calls[1].method).toBe('DELETE');
+    expect(calls[1].url).toBe('https://lk.test/v1/memories?scope=project%3A%3Areaper-mcp&key=user%3A%3Aplugins%3A%3Aauburn-sounds%2Fgraillon-3');
+  });
+
+  it('keeps the copy when asked', async () => {
+    const calls = stub(() => new Response('{}'));
+    expect(await publishRecord('https://lk.test/v1', 'lk_rw_abc', mine, { removeCopy: false })).toMatchObject({ removedCopy: false });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('says when the token is not a writer in the org, and archives nothing', async () => {
+    const calls = stub(() => new Response('{}', { status: 403 }));
+    await expect(publishRecord('https://lk.test/v1', 'lk_rw_abc', mine, { removeCopy: true })).rejects.toThrow(/member of the reaper-mcp org/);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('treats a write LoreKit routed elsewhere as a failure', async () => {
+    stub(() => new Response(JSON.stringify({ id: 'x', notice: 'fell back to personal' })));
+    await expect(publishRecord('https://lk.test/v1', 'lk_rw_abc', mine, { removeCopy: true })).rejects.toThrow(/fell back to personal/);
+  });
+
+  it('reports a failed archive as a warning, not a failed publish', async () => {
+    stub((c) => new Response('{}', { status: c.method === 'DELETE' ? 500 : 200 }));
+    expect(await publishRecord('https://lk.test/v1', 'lk_rw_abc', mine, { removeCopy: true })).toMatchObject({ removedCopy: false, warning: expect.stringMatching(/wasn't archived/) });
+  });
+
+  it('runs the contribution checks before writing anything', async () => {
+    const calls = stub(() => new Response('{}'));
+    const bad = { ...mine, source: { ...mine.source, tags: ['plugin-knowledge', 'secret::x'] } };
+    await expect(publishRecord('https://lk.test/v1', 'lk_rw_abc', bad, { removeCopy: true })).rejects.toThrow(/not allowed/);
+    await expect(publishRecord('https://lk.test/v1', 'lk_ro_abc', mine, { removeCopy: true })).rejects.toThrow(/lk_rw_/);
+    expect(calls).toHaveLength(0);
   });
 });
 

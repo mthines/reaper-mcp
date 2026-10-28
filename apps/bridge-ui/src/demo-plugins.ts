@@ -114,4 +114,9 @@ export const DEMO_KNOWLEDGE: KnowledgeFeed = {
     { name: 'VST3: Kontakt 7 (Native Instruments)', count: 1 },
     { name: 'VST: ReaComp (Cockos)', count: 3 },
   ],
+  // Pretends the viewer is a reaper-mcp org member, so ?demo shows the Publish flow without LoreKit
+  publish: async (record, { removeCopy }) => {
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    return { key: record.key.replace(/^user::/, ''), removedCopy: removeCopy };
+  },
 };

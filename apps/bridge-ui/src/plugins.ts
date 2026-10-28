@@ -38,6 +38,17 @@ export interface KnowledgeFeed {
   problem?: string;
   /** FX in the open project and how many instances (track, master, input and take FX) */
   used?: UsedFx[];
+  /** Write one of the viewer's records into the built-in layer; only with a publish token in Settings */
+  publish?: (record: PluginRecord, options: { removeCopy: boolean }) => Promise<PublishResult>;
+}
+
+export interface PublishResult {
+  /** The built-in key written, e.g. `plugins::fabfilter/pro-q-3` */
+  key: string;
+  /** Whether the viewer's `user::` copy was archived */
+  removedCopy: boolean;
+  /** Published, but something after it didn't work (e.g. archiving the copy) */
+  warning?: string;
 }
 
 export interface UsedFx {
@@ -48,7 +59,10 @@ export interface UsedFx {
 export type Coverage = 'learned' | 'built-in' | 'unknown';
 
 export interface PluginRow {
+  /** The preferred format (VST3, then CLAP, VST, AU …); its name goes into the Teach prompt */
   fx: InstalledFx;
+  /** Every installed format of the plugin, preferred first ("VST3i: Vital", "CLAPi: Vital", …) */
+  variants: InstalledFx[];
   /** Display name without the "VST3:" prefix and "(Vendor)" suffix */
   label: string;
   coverage: Coverage;
@@ -94,6 +108,11 @@ const norm = (s: string) =>
     .replace(/\s*\(mono\)/g, '')
     .replace(/[\s_-]+/g, '');
 
+/** The format as REAPER writes it ("VST3i", "CLAP", "JS"); empty when the name has no prefix. */
+export function fxFormat(name: string): string {
+  return name.match(PREFIX)?.[1] ?? '';
+}
+
 export function fxLabel(name: string): string {
   return parseFxName(name).title;
 }
@@ -115,25 +134,47 @@ export function creatorOf(fx: InstalledFx, record?: PluginRecord): string {
   return parsed.vendor || 'Other';
 }
 
-/** Pair every installed FX with the record the mix skills would use for it. */
+const FORMAT_ORDER = ['VST3', 'CLAP', 'VST', 'AU', 'LV2', 'DX', 'JS'];
+const formatRank = (fx: InstalledFx) => {
+  const i = FORMAT_ORDER.indexOf(parseFxName(fx.name).type);
+  return i < 0 ? FORMAT_ORDER.length : i;
+};
+
+// The same plugin in any format: title (spacing-tolerant) plus vendor
+const pluginKey = (name: string) => `${norm(name)}\u0000${(parseFxName(name).vendor ?? '').toLowerCase()}`;
+
+/** One plugin in every format it's installed in: the same title from the same vendor ("VST3i: Vital" + "CLAPi: Vital"). */
+function byPlugin(installed: InstalledFx[]): InstalledFx[][] {
+  const plugins = new Map<string, InstalledFx[]>();
+  for (const fx of installed) {
+    const key = pluginKey(fx.name);
+    plugins.set(key, [...(plugins.get(key) ?? []), fx]);
+  }
+  return [...plugins.values()].map((variants) => [...variants].sort((a, b) => formatRank(a) - formatRank(b)));
+}
+
+/** Pair every installed plugin (all its formats in one row) with the record the mix skills would use for it. */
 export function pluginCoverage(feed: KnowledgeFeed): PluginRow[] {
   const exact = new Map<string, number>();
   const loose = new Map<string, number>();
   for (const u of feed.used ?? []) {
     exact.set(u.name, (exact.get(u.name) ?? 0) + u.count);
-    loose.set(norm(u.name), (loose.get(norm(u.name)) ?? 0) + u.count);
+    loose.set(pluginKey(u.name), (loose.get(pluginKey(u.name)) ?? 0) + u.count);
   }
-  return feed.installed.map((fx) => {
-    const user = feed.records.find((r) => r.layer === 'user' && matches(r, fx));
-    const builtIn = feed.records.find((r) => r.layer === 'built-in' && matches(r, fx));
+  return byPlugin(feed.installed).map((variants) => {
+    const fx = variants[0];
+    const user = feed.records.find((r) => r.layer === 'user' && variants.some((v) => matches(r, v)));
+    const builtIn = feed.records.find((r) => r.layer === 'built-in' && variants.some((v) => matches(r, v)));
     const record = user ?? builtIn;
+    const instances = variants.reduce((n, v) => n + (exact.get(v.name) ?? 0), 0);
     return {
       fx,
+      variants,
       label: fxLabel(fx.name),
       coverage: user ? 'learned' : builtIn ? 'built-in' : 'unknown',
       record,
       shadows: user && builtIn ? builtIn : undefined,
-      used: exact.get(fx.name) ?? loose.get(norm(fx.name)) ?? 0,
+      used: instances || loose.get(pluginKey(fx.name)) || 0,
       creator: creatorOf(fx, record),
     };
   });

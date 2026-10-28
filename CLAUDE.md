@@ -696,6 +696,13 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   in the folder and removes them in one bot commit. Records too long for the URL open with a paste prompt
   (`PASTE_HERE` in `src/contribute.ts`) and are on the clipboard. Client: `src/lorekit.ts`,
   hook: `src/useKnowledge.ts`, matching: `src/plugins.ts`.
+  Members of the `reaper-mcp` LoreKit org can skip GitHub: an `lk_rw_` token under
+  Settings → **Publish to built-in** (localStorage, separate from the read token) adds a **Publish to built-in** button
+  to their own records. It runs the same `parseContribution` checks, `POST /memories` with `org: reaper-mcp`, then
+  soft-archives the `user::` copy (opt-out checkbox). LoreKit enforces write membership; add a publisher by inviting
+  them to the org as a member. Logic: `publishRecord()` in `src/lorekit.ts`; `?demo` fakes it.
+  One plugin installed in several formats (same title and vendor, e.g. `VST3i:`/`CLAPi:`/`VSTi: Vital (Vital Audio)`)
+  is one row (`PluginRow.variants`, VST3 preferred for the Teach prompt), counting the instances of every format.
 - Payload shapes live in `apps/bridge-ui/src/status.ts` (`BridgeStatus`, `BridgeHistory`, `LongHistory`) and
   `publish_status()` / `publish_history()` / `publish_log()` in `mcp_bridge.lua` — change both together.
 

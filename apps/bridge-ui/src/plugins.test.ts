@@ -75,6 +75,26 @@ describe('plugins in the open project', () => {
     ]);
   });
 
+  it('lists a plugin installed in several formats once, preferring VST3, with the instances of every format', () => {
+    const rows = pluginCoverage({
+      installed: [
+        { name: 'VSTi: Vital (Vital Audio)', type: 'VST' },
+        { name: 'CLAPi: Vital (Vital Audio)', type: 'CLAP' },
+        { name: 'VST3i: Vital (Vital Audio)', type: 'VST3' },
+        { name: 'VST: Vital (Someone Else)', type: 'VST' }, // same title, another maker: its own row
+      ],
+      records: [],
+      used: [
+        { name: 'VST3i: Vital (Vital Audio)', count: 7 },
+        { name: 'CLAPi: Vital (Vital Audio)', count: 2 },
+      ],
+    });
+    expect(rows.map((r) => [r.fx.name, r.used, r.variants.map((v) => v.name)])).toEqual([
+      ['VST3i: Vital (Vital Audio)', 9, ['VST3i: Vital (Vital Audio)', 'CLAPi: Vital (Vital Audio)', 'VSTi: Vital (Vital Audio)']],
+      ['VST: Vital (Someone Else)', 0, ['VST: Vital (Someone Else)']],
+    ]);
+  });
+
   it('reads the bridge payload of FX in the project', () => {
     expect(parseUsed({ v: 1, fx: [{ n: 'VST: ReaComp (Cockos)', c: 2 }, { n: 'x' }, { n: 'y', c: 0 }] })).toEqual([{ name: 'VST: ReaComp (Cockos)', count: 2 }]);
     expect(parseUsed({ v: 1 })).toBeNull();
