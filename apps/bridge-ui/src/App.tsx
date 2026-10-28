@@ -1523,9 +1523,9 @@ function Log({
         ev.preventDefault();
         searchRef.current?.focus();
       } else if (ev.key === 'Escape') {
-        // Close the details sidebar first, then clear the filter
+        // Close the details sidebar first, then clear the chart selection, then the filter
         if (selectedRef.current) setSelected(null);
-        else {
+        else if (!clearChartSelection.current()) {
           setQuery('');
           searchRef.current?.blur();
         }
@@ -1564,6 +1564,14 @@ function Log({
 
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  // Esc clears the chart selection where its banner shows; true when there was one to clear
+  const clearChartSelection = useRef((): boolean => false);
+  clearChartSelection.current = () => {
+    if (!selection || view === 'plugins') return false;
+    track({ name: 'timeline_span_selected', selected: false });
+    onClearSelection();
+    return true;
+  };
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
@@ -1668,7 +1676,7 @@ function Log({
               <span className="selection-note"> · the log keeps the latest {LOG_MAX.toLocaleString()}; older commands are only counted in the chart</span>
             )}
           </span>
-          <button className="btn" onClick={onClearSelection}>
+          <button className="btn" onClick={onClearSelection} title="Clear selection (Esc)">
             Clear selection
           </button>
         </div>
