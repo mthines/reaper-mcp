@@ -11,9 +11,6 @@ dist/
 # Claude Code local settings
 .claude/settings.local.json
 
-.gw
-.gw/
-
 .mcp.json
 tmp
 
