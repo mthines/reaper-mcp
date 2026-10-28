@@ -83,26 +83,40 @@ code {
 }
 .dot-sep { display: inline-block; width: 3px; height: 3px; border-radius: 50%; background: var(--faint); margin: 0 8px; vertical-align: middle; }
 
-.mark {
-  width: 34px; height: 34px; flex: none;
-  display: flex; align-items: center; justify-content: center; gap: 2.5px;
-  border-radius: 9px;
-  background: linear-gradient(180deg, var(--panel-2), var(--panel));
-  border: 1px solid var(--line-2);
+/* Logo: grey dot when the bridge is down; while live the orange dot is an eye that blinks now and then. */
+.mark { width: 34px; height: 34px; flex: none; display: block; }
+.mark .mark-arc { stroke: #d9d3e6; opacity: 0.55; transition: opacity 0.3s; }
+.mark .mark-dot { fill: var(--faint); transition: fill 0.3s; }
+.mark .mark-glow { opacity: 0; transition: opacity 0.3s; }
+.mark-active .mark-arc, .mark-active .mark-glow { opacity: 1; }
+.mark-active .mark-dot { fill: url(#mark-dot); }
+/* The lid is two layers: .mark-lid-rest sets where it rests (animated, half-closed on hover), and
+   .mark-lid blinks on top of that. A closed lid sits 140px down, so a blink travels 140px minus the rest. */
+.mark-btn { --lid-rest: 0px; }
+.mark .mark-lid-rest { transition: transform 0.22s ease-out; }
+/* Hover: the lid eases part-way down (sleepy eye), a hint that the logo does something. */
+@media (hover: hover) {
+  .mark-btn:hover { --lid-rest: 46px; }
+  .mark-btn:hover .mark-lid-rest { transform: translateY(46px); }
 }
-.mark span {
-  width: 3px;
-  height: calc(var(--h) * 18px);
-  border-radius: 2px;
-  background: var(--faint);
-  transition: background 0.3s;
+/* 16s cycle (1% = 160ms): one blink midway, a quick double blink at the end.
+   The lid snaps shut (ease-in, ~80ms) and opens a little slower (ease-out, ~140ms). */
+.mark-active .mark-lid { animation: blink 16s infinite; }
+@keyframes blink {
+  0%, 44%, 96% { transform: translateY(0); animation-timing-function: ease-in; }
+  44.5%, 96.5%, 97.8% { transform: translateY(calc(140px - var(--lid-rest))); animation-timing-function: ease-out; }
+  45.4%, 97.3%, 98.7%, 100% { transform: translateY(0); animation-timing-function: ease-in; }
 }
-.mark-active span {
-  background: var(--live);
-  animation: eq 1.1s ease-in-out infinite alternate;
-  animation-delay: calc(var(--i) * -0.23s);
+/* Click: one blink now (wins over the idle cycle), and the eye eases toward the cursor while watching. */
+.mark.mark-blink .mark-lid { animation: blink-once 0.24s; }
+@keyframes blink-once {
+  0% { transform: translateY(0); animation-timing-function: ease-in; }
+  35% { transform: translateY(calc(140px - var(--lid-rest))); animation-timing-function: ease-out; }
+  100% { transform: translateY(0); }
 }
-@keyframes eq { from { transform: scaleY(0.45); } to { transform: scaleY(1); } }
+.mark .mark-eye { transition: transform 0.18s ease-out; }
+.mark-btn { display: block; flex: none; padding: 0; border: 0; background: none; border-radius: 9px; cursor: pointer; }
+.mark-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .pill {
   display: inline-flex; align-items: center; gap: 7px;
@@ -804,7 +818,9 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mark-active span, .pill-live .pill-dot { animation: none; }
+  .mark-active .mark-lid, .mark.mark-blink .mark-lid, .pill-live .pill-dot { animation: none; }
+  .mark .mark-lid-rest { transition: none; }
+  .mark .mark-eye { transition: none; }
   .tstack { transition: none; }
   .drawer { animation: none; }
   .switch, .switch::after { transition: none; }
