@@ -1133,6 +1133,8 @@ function handlers.search_fx(params)
   return { query = query, matches = matches, total = #matches }
 end
 
+local PRESET_LIST_MAX = 256
+
 function handlers.get_fx_preset_list(params)
   local track_idx = params.trackIndex
   local fx_idx = params.fxIndex
@@ -1143,22 +1145,49 @@ function handlers.get_fx_preset_list(params)
   local track = reaper.GetTrack(0, track_idx)
   if not track then return nil, "Track " .. track_idx .. " not found" end
 
-  local preset_count = reaper.TrackFX_GetPresetIndex(track, fx_idx)
   local presets = {}
 
-  -- TrackFX_GetPresetIndex returns current index and total count
-  -- We iterate by cycling through presets
-  -- Wrap in undo block to prevent intermediate preset changes from polluting undo history
-  local _, total = reaper.TrackFX_GetPresetIndex(track, fx_idx)
+  -- Names are only readable by loading each preset, so the FX state is saved first and put back
+  -- afterwards. Restoring the starting preset index alone is not enough: with no preset active
+  -- it is -1, which loads REAPER's default preset instead of the previous settings.
+  local current, total = reaper.TrackFX_GetPresetIndex(track, fx_idx)
+  if total and total > PRESET_LIST_MAX then
+    -- e.g. Kontakt's 2048 "Program N" slots: cycling them is slow, and each load can send
+    -- program changes, so only report the current preset
+    local _, current_preset = reaper.TrackFX_GetPreset(track, fx_idx)
+    return {
+      trackIndex = track_idx, fxIndex = fx_idx, total = total, truncated = true,
+      currentPreset = current_preset,
+      presets = {},
+      note = "More than " .. PRESET_LIST_MAX .. " presets (usually generic program slots); not enumerated",
+    }
+  end
   if total and total > 0 then
+    local chunk
+    if reaper.TrackFX_GetNamedConfigParm then
+      local ok, c = reaper.TrackFX_GetNamedConfigParm(track, fx_idx, "vst_chunk")
+      if ok and c ~= "" then chunk = c end
+    end
+    local params = {}
+    for p = 0, reaper.TrackFX_GetNumParams(track, fx_idx) - 1 do
+      params[p] = reaper.TrackFX_GetParamNormalized(track, fx_idx, p)
+    end
+
+    -- Undo block keeps the intermediate preset loads out of the undo history
     reaper.Undo_BeginBlock()
     for i = 0, total - 1 do
       reaper.TrackFX_SetPresetByIndex(track, fx_idx, i)
       local _, preset_name = reaper.TrackFX_GetPreset(track, fx_idx)
       presets[#presets + 1] = { index = i, name = preset_name or ("Preset " .. i) }
     end
-    -- Restore original preset
-    reaper.TrackFX_SetPresetByIndex(track, fx_idx, preset_count)
+    if current and current >= 0 then reaper.TrackFX_SetPresetByIndex(track, fx_idx, current) end
+    if chunk then reaper.TrackFX_SetNamedConfigParm(track, fx_idx, "vst_chunk", chunk) end
+    -- Params too: JSFX have no vst_chunk, and a plugin may not apply the chunk to its params
+    for p, v in pairs(params) do
+      if reaper.TrackFX_GetParamNormalized(track, fx_idx, p) ~= v then
+        reaper.TrackFX_SetParamNormalized(track, fx_idx, p, v)
+      end
+    end
     reaper.Undo_EndBlock("MCP: Get FX preset list", -1)
   else
     -- Plugin doesn't report preset count; return current preset only

@@ -1,6 +1,6 @@
 ---
 name: learn-plugin
-description: Teach the mixing skills a plugin: researches it on the web, tests it live in REAPER and writes its plugin knowledge record to LoreKit, asking the user only what it couldn't work out
+description: Teach the mixing skills one plugin or a list of them (researched in parallel): researches each on the web, tests it live in REAPER and writes its plugin knowledge record to LoreKit, asking the user only what it couldn't work out
 ---
 
 # /learn-plugin
@@ -26,25 +26,35 @@ plugin", "research this plugin" or "add plugin knowledge".
 
 ## Instructions
 
-### Step 1: Get the plugin name
+### Step 1: Get the plugin name(s)
 
-Take it from the arguments. If there isn't one, ask a single question:
+Take them from the arguments: one plugin, or a list (one per line, or comma
+separated). If there are none, ask a single question:
 
 > "Which plugin should I learn?"
 
-If the user already said something about it (what they use it for, how they set
-it up), keep it as caller context for Step 2. Don't ask for anything else yet.
+If the user already said something about one (what they use it for, how they
+set it up), keep it as caller context for that plugin in Step 2. Don't ask for
+anything else yet.
 
-### Step 2: Dispatch the researcher
+### Step 2: Dispatch the researchers, all at once
+
+One `plugin-researcher` per plugin, **all in the same message** so they run in
+parallel. Even when the user says "one at a time", run them in parallel: the
+agents are built for it, and only the questions are asked plugin by plugin.
+Give each one a short, unique uppercase tag for its scratch track:
 
 ```text
 Agent(subagent_type: "plugin-researcher",
-      prompt: "Plugin: <name>\nCaller context: <anything the user said, or 'none'>")
+      prompt: "Plugin: <exact name>\nScratch track tag: <TAG, e.g. PROQ4>\nCaller context: <anything the user said, or 'none'>")
 ```
 
-Tell the user what is happening, in one line: it researches the web and
-briefly adds a scratch track `[MCP] plugin-research` to their project, which it
-removes afterwards. Wait for the report.
+Tell the user what is happening, in one line: each researcher looks the plugin
+up on the web and briefly adds a scratch track `[MCP] plugin-research <TAG>` to
+their project, which it removes afterwards. Several at once can make REAPER lag
+for a moment while heavy plugins load. Then wait for the reports. As each one
+arrives, give a one-line status (key, proposed preference, what was verified
+live, number of open questions). Don't ask yet.
 
 **No `plugin-researcher` agent available** (the Agent tool is missing, or the
 agent isn't installed)? Do its steps here instead. Read
@@ -72,6 +82,21 @@ another `/learn-plugin`.
 
 No open questions besides preference? Ask only the preference confirmation.
 
+**Several plugins:** start asking once most reports are in, without waiting for
+a slow last one. `AskUserQuestion` takes 4 questions per call, so batch across
+plugins and name the plugin in every question:
+
+1. Preferences first, 4 plugins per call. Two utilities with the same kind of
+   question can share one question.
+2. Then the facts about the user's setup that change the records the most,
+   e.g. what an offline instance or a hardware-control track is for.
+3. Then habits, settings and naming questions, which matter less.
+
+Stop after about 3–4 calls. Anything still unasked keeps the researched value;
+list those questions at the end, and say the user can change any of them with
+another `/learn-plugin`. When an answer can be checked in REAPER (e.g. "it was
+offline, check again"), check it read-only and fold in what you find.
+
 ### Step 4: Fold the answers in
 
 Answers that only kept the agent's values change nothing; skip the write.
@@ -86,6 +111,11 @@ Then `memory.write` the full record and full tag list (a write replaces both),
 with `source_agent: "learn-plugin"` and no `ttl_days`. Keep everything else the
 agent wrote, `## Learned notes` included.
 
+**Several plugins:** make the writes in parallel, one subagent per record, or a
+single subagent for several records that only change the preference. Give each
+one the key, the exact changes, and the rule to keep everything else word for
+word.
+
 ### Step 5: Confirm
 
 > "Done! **[Plugin Name]** is saved to LoreKit as
@@ -98,6 +128,9 @@ agent wrote, `## Learned notes` included.
 
 If the report said the scratch track couldn't be removed, say that first and
 name the track.
+
+**Several plugins:** one table instead (plugin, key, preference, category,
+verified live), then the Step 6 overviews, shortened to a few lines each.
 
 ### Step 6: Show how it works
 

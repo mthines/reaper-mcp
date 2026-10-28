@@ -70,8 +70,23 @@ disagree.
 never change their tracks, FX, selection or transport. Don't start playback
 (that would play their project out loud).
 
-1. `add_track { name: "[MCP] plugin-research" }` at the end of the track list.
-   Then `add_fx` the exact FX name from Step 2 on it. (`run_plan` with
+Other researchers may be running at the same time on the same project, each
+with its own scratch track. So:
+
+- Name your track `[MCP] plugin-research <TAG>`, where `<TAG>` is a short
+  uppercase form of the plugin name (e.g. `PROQ4`). Use the tag the caller
+  gives you, if any.
+- Track indexes shift while other researchers add and delete their tracks.
+  Write by your exact track name (`run_plan` targets accept names). Before
+  every index-only call, `list_tracks` for your track's current index, and
+  check that the `fxName` in each result is your plugin; discard a result that
+  isn't.
+- Never touch another `[MCP] plugin-research …` track, and ignore them when you
+  check that nothing else changed.
+- Under load the bridge can be slow: retry a timed-out call once.
+
+1. `add_track { name: "[MCP] plugin-research <TAG>" }` at the end of the track
+   list. Then `add_fx` the exact FX name from Step 2 on it. (`run_plan` with
    `add_track` + `add_fx` does both in one undo step.)
 2. `get_fx_parameters` (all params): the real parameter names and indices,
    their defaults, and their formatted values. Note the param count, and which
@@ -82,9 +97,11 @@ never change their tracks, FX, selection or transport. Don't start playback
    (linear, log frequency, stepped/enum with its option list, inverted).
    Afterwards put the default back. For a stepped parameter, list every option
    with the normalized value that picks it.
-4. `get_fx_preset_list`: the factory presets, as names.
-5. **Clean up, always**, even if a step failed: `delete_track` the scratch
-   track. Then `list_tracks` to check it's gone and nothing else changed. If
+4. `get_fx_preset_list`: the factory presets, as names. A list over 256
+   comes back `truncated` (generic program slots); say so in the record.
+5. **Clean up, always**, even if a step failed: `delete_track` your scratch
+   track (look up its current index by name first). Then `list_tracks` to
+   check it's gone and nothing else changed. If
    the delete fails, report it as the first line of your report.
 
 ## Step 5 — Build and write the record

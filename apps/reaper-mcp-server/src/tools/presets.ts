@@ -5,7 +5,8 @@ import { sendCommand } from '../bridge.js';
 export function registerPresetTools(server: McpServer): void {
   server.tool(
     'get_fx_preset_list',
-    'List all available presets for a specific FX plugin on a track',
+    'List all available presets for a specific FX plugin on a track. Reads names by loading each preset, then restores the FX state; ' +
+      'a MIDI plugin (e.g. ReaControlMIDI) may send each preset\'s messages while listing. Lists over 256 (generic program slots) are not enumerated (truncated: true).',
     {
       trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       fxIndex: z.coerce.number().int().min(0).describe('Zero-based FX index in the chain'),
