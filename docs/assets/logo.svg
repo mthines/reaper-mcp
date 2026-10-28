@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 200" width="720" height="200" role="img" aria-label="reaper-mcp">
+  <defs>
+    <linearGradient id="rf-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b1532"/>
+      <stop offset="0.6" stop-color="#0e0b18"/>
+      <stop offset="1" stop-color="#220d22"/>
+    </linearGradient>
+    <radialGradient id="rf-glow" cx="0.5" cy="0.66" r="0.42">
+      <stop offset="0" stop-color="#ff6a4d" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#ff6a4d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rf-arc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d9d3e6"/>
+    </linearGradient>
+    <linearGradient id="rf-dot" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffa24c"/>
+      <stop offset="1" stop-color="#ff4f5e"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(20,20) scale(0.3125)">
+  <rect width="512" height="512" rx="116" fill="url(#rf-bg)"/>
+  <rect width="512" height="512" rx="116" fill="url(#rf-glow)"/>
+  <rect x="2" y="2" width="508" height="508" rx="114" fill="none" stroke="#ffffff" stroke-opacity="0.06" stroke-width="4"/>
+  <!-- Fermata: the arc holds, the dot is the moment it holds -->
+  <path d="M100 330 A156 156 0 0 1 412 330" fill="none" stroke="url(#rf-arc)" stroke-width="56" stroke-linecap="round"/>
+  <circle cx="256" cy="318" r="58" fill="url(#rf-dot)"/>
+</g>
+  <text x="208" y="128" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="88" font-weight="800" letter-spacing="-3"><tspan fill="#15121c">reaper</tspan><tspan fill="#ff7a45">-mcp</tspan></text>
+</svg>

@@ -1,5 +1,12 @@
 <div align="center">
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
+  <img src="docs/assets/logo.svg" alt="reaper-mcp" width="360">
+</picture>
+
+<br><br>
+
 <img src="docs/assets/hero.svg" alt="reaper-mcp — Mix by talking. An AI mix engineer inside your REAPER session." width="100%">
 
 <br>

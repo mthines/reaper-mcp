@@ -2,7 +2,7 @@
 // Network-first for the app shell so updates land immediately; the cached copy lets the
 // installed app open while REAPER is closed and show its "Can't reach REAPER" state.
 // REAPER's /_/ command API is outside the scope and never touched.
-const CACHE = 'mcp-bridge-v1';
+const CACHE = 'mcp-bridge-v2';
 const SHELL = ['/mcp_bridge.html', '/mcp_bridge.webmanifest', '/mcp_bridge_icon_192.png', '/mcp_bridge_icon_512.png'];
 
 self.addEventListener('install', (event) => {
