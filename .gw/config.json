@@ -9,5 +9,8 @@
         "pnpm install"
       ]
     }
-  }
+  },
+  "autoCopyFiles": [
+    ".mcp.json"
+  ]
 }
