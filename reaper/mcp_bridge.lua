@@ -4556,7 +4556,8 @@ local function readonly_allows(cmd_type)
 end
 
 -- Setup health and staleness, re-checked every 10s (cheap: one file read + a few stats)
-local script_path = select(2, reaper.get_action_context())
+-- Read at load: inside deferred callbacks get_action_context no longer describes this script's launch
+local _, script_path, _, script_cmd_id = reaper.get_action_context()
 local script_source = script_path and read_file(script_path)
 local HEALTH_INTERVAL = 10
 local last_health_check = -HEALTH_INTERVAL
@@ -4583,6 +4584,130 @@ local function check_health(now)
     status_dirty = true
   end
   health = next_health
+end
+
+-- Self-update and restart, requested from the status page with one click.
+-- The page writes ExtState MCPBridge/request = "<update|restart>-<token>" through REAPER's web interface.
+-- The token is random per run and only readable from the status feed: REAPER's web server sends no CORS
+-- headers, so another website can fire a SET at localhost but can't read the token to make it count.
+-- Updating runs <clone>/scripts/update.sh (git pull --ff-only + install.sh) detached, so REAPER never blocks;
+-- `reaper-mcp setup` writes mcp_update.conf (clone path + node binary) next to this script.
+math.randomseed(math.floor(reaper.time_precise() * 1e6) % 2147483647)
+local control_token = string.format("%08x%08x", math.random(0, 0x7fffffff), math.random(0, 0x7fffffff))
+local is_windows = (reaper.GetOS and reaper.GetOS() or ""):match("^Win") ~= nil
+local UPDATE_LOG = bridge_dir .. "update.log"
+local UPDATE_EXIT = bridge_dir .. "update.exit"
+local update = nil -- { state = "running" | "failed" | "done", startedAt, log = { lines } }
+local last_update_poll = 0
+
+-- REAPER 7.03+: re-running this script stops it and starts the (possibly newer) installed copy
+local can_restart = type(reaper.set_action_options) == "function" and type(script_cmd_id) == "number" and script_cmd_id > 0
+if can_restart then reaper.set_action_options(3) end -- 1: terminate when re-launched, 2: then start again
+
+local function update_config()
+  local text = read_file(script_dir .. "mcp_update.conf")
+  if not text then return nil end
+  local conf = {}
+  for key, value in text:gmatch("([%w_]+)=([^\r\n]*)") do conf[key] = value end
+  if not conf.repo or conf.repo == "" or not file_exists(conf.repo .. "/scripts/update.sh") then return nil end
+  return conf
+end
+
+local function restart_bridge()
+  log_event("bridge_restart", {})
+  reaper.Main_OnCommand(script_cmd_id, 0)
+end
+
+local function shell_quote(s)
+  return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
+-- kind "update": pull the latest version and reinstall; "rebuild": developers, build the working tree as it is
+local function start_update(kind)
+  if is_windows or (update and update.state == "running") then return end
+  local conf = update_config()
+  if not conf then return end
+  os.remove(UPDATE_LOG)
+  os.remove(UPDATE_EXIT)
+  -- REAPER started from the Dock has a bare PATH: put the node that ran setup (and its pnpm/corepack) first
+  local node_dir = conf.node and conf.node:match("^(.*)/[^/]+$")
+  local path = (node_dir and (shell_quote(node_dir) .. ":") or "") .. "/opt/homebrew/bin:/usr/local/bin:$PATH"
+  os.execute("( cd " .. shell_quote(conf.repo) .. " && PATH=" .. path .. " ./scripts/update.sh" .. (kind == "rebuild" and " --rebuild" or "") .. " < /dev/null > " .. shell_quote(UPDATE_LOG)
+    .. " 2>&1; echo $? > " .. shell_quote(UPDATE_EXIT) .. " ) >/dev/null 2>&1 &")
+  update = { kind = kind, state = "running", startedAt = now_ms(), log = {} }
+  log_event("bridge_update_start", { kind = kind })
+  status_dirty = true
+end
+
+-- Last lines of the update log, without colors or carriage-return progress redraws
+local function update_log_tail(max)
+  local text = read_file(UPDATE_LOG) or ""
+  local lines = {}
+  for line in text:gmatch("[^\n]+") do
+    line = line:gsub("\27%[[%d;]*%a", ""):match("([^\r]*)\r*$") or ""
+    if line:match("%S") then lines[#lines + 1] = line end
+  end
+  local tail = {}
+  for i = math.max(1, #lines - max + 1), #lines do tail[#tail + 1] = lines[i] end
+  return tail
+end
+
+local function check_control(now)
+  local request = reaper.GetExtState(STATUS_SECTION, "request")
+  if request and request ~= "" then
+    reaper.DeleteExtState(STATUS_SECTION, "request", false)
+    local action, token = request:match("^(%a+)%-(%x+)$")
+    if token == control_token then
+      if action == "update" or action == "rebuild" then start_update(action)
+      elseif action == "restart" and can_restart then restart_bridge() return end
+    end
+  end
+  if not update or update.state ~= "running" or now - last_update_poll < 1 then return end
+  last_update_poll = now
+  local log = update_log_tail(12)
+  if #log ~= #update.log or log[#log] ~= update.log[#update.log] then
+    update.log = log
+    status_dirty = true
+  end
+  local code = read_file(UPDATE_EXIT)
+  if not code then return end
+  code = tonumber(code:match("%d+"))
+  update.state = code == 0 and "done" or "failed"
+  log_event("bridge_update_end", { exitCode = code })
+  status_dirty = true
+  -- The installer replaced this script: load the new copy (the page reloads when startedAt changes)
+  if update.state == "done" and can_restart then
+    local installed = script_path and read_file(script_path)
+    if installed and installed ~= script_source then restart_bridge() end
+  end
+end
+
+-- What the status page may offer: published in the status feed together with the token
+local can_update, conf_dev, last_can_update_check = false, false, -10
+local function refresh_update_config()
+  local now = reaper.time_precise()
+  if now - last_can_update_check < 10 then return end
+  last_can_update_check = now
+  local conf = not is_windows and update_config() or nil
+  can_update, conf_dev = conf ~= nil, conf ~= nil and conf.dev == "1"
+end
+
+-- Developer mode: the page's toggle (cfg_dev "1"/"0") once chosen, else what setup detected (dev=1 in mcp_update.conf)
+local function dev_mode()
+  refresh_update_config()
+  local v = reaper.GetExtState(STATUS_SECTION, "cfg_dev")
+  if v == nil or v == "" then return conf_dev end
+  return v == "1"
+end
+
+local function control_status()
+  refresh_update_config()
+  return {
+    token = control_token,
+    canRestart = can_restart,
+    canUpdate = can_update,
+    update = update,
+  }
 end
 
 -- Installed FX for the status page's Plugins view, in ExtState MCPBridge/installed (in memory).
@@ -4892,8 +5017,9 @@ local function publish_status(now, force)
     deferMs = defer_n > 0 and math.floor(defer_sum / defer_n * 100000 + 0.5) / 100 or 0,
     recent = status.recent,
     sessions = session_list(),
-    settings = { paused = cfg("cfg_paused"), readonly = cfg("cfg_readonly"), openOnStart = open_on_start() },
+    settings = { paused = cfg("cfg_paused"), readonly = cfg("cfg_readonly"), openOnStart = open_on_start(), dev = dev_mode() },
     health = health,
+    control = control_status(),
   }), false)
 end
 
@@ -5031,6 +5157,7 @@ local function main_loop()
   save_history(now, false)
   publish_log()
   check_health(now)
+  check_control(now)
   publish_installed_fx(now)
   publish_used_fx(now)
 
@@ -5051,10 +5178,6 @@ end
 local function ui_recently_seen()
   local seen = tonumber(reaper.GetExtState(STATUS_SECTION, "ui_seen"))
   return seen ~= nil and math.abs(os.time() * 1000 - seen) < 6000
-end
-
-local function shell_quote(s)
-  return "'" .. s:gsub("'", "'\\''") .. "'"
 end
 
 -- Open the status page as a small chromeless app window (Chromium --app), else the default browser

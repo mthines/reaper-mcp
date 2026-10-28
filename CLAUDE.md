@@ -677,6 +677,19 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
 - `status.health` (re-checked every 10s): SWS present, JSFX installed in `Effects/reaper-mcp/`, and `outdated` when the
   installed `mcp_bridge.lua` differs from the running copy (setup ran; restart the script). Tested in wasmoon by
   `bridge-status.test.ts`.
+- One-click update and restart (`status.control`): the page checks GitHub's latest release (cached 6h in
+  localStorage, `src/update.ts`) and offers **Update**; the outdated notice offers **Restart bridge**. The page writes
+  `/_/SET/EXTSTATE/MCPBridge/request/<update|restart>-<token>`; the token is random per bridge run and only readable
+  from the status feed (REAPER's web server sends no CORS headers), so other sites can fire the request but never with
+  a valid token. Update runs `<clone>/scripts/update.sh` (`git pull --ff-only` + `install.sh`; refuses on local changes)
+  detached, with the clone and node path from `Scripts/mcp_update.conf` (written by `setup` when it runs from a git
+  clone; never on Windows). Restart uses `set_action_options(3)` (REAPER 7.03+): the bridge re-runs its own action and
+  REAPER relaunches the installed copy. It restarts itself after a successful update; the page reloads when
+  `startedAt` changes (or once when the update is done, if the bridge script didn't change).
+  **Developer mode** (`settings.dev`): `setup` writes `dev=1` for a clone with uncommitted changes, a branch other
+  than `main` or unpushed commits (`isDevClone()` in `cli.ts`); the Settings toggle (`cfg_dev`, persistent) overrides
+  it. In dev mode the release notice is hidden and the header shows **Rebuild & reload** (request `rebuild-<token>`):
+  `update.sh --rebuild` builds the working tree as it is (`--skip-nx-cache`) and runs `setup`, no git involved.
 - Plugins tab: the bridge publishes every installed FX (native `EnumInstalledFX`, REAPER 6.37+; the same list
   `list_available_fx` returns) to ExtState `MCPBridge/installed` as `{v, supported, fx:[{n,t}]}`, re-enumerated every 60s
   and republished only on change (`.jsfx-inc` libraries are skipped). FX in the open project (track, master, input and

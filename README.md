@@ -167,8 +167,8 @@ git clone https://github.com/mthines/reaper-mcp.git && cd reaper-mcp && ./script
 ```
 
 That's it. It installs everything, puts the connector into REAPER and sets up Claude Code.
-Nothing else to install. Run it again any time to update:
-`git pull && ./scripts/install.sh`.
+Nothing else to install. When a new version is out, the bridge window in REAPER shows an
+**Update** button that does the rest. From a terminal it's `./scripts/update.sh`.
 
 <img src="docs/assets/install-demo.gif" alt="A real run of the install command: six green checkmarks, then Done! with the one step left in REAPER." width="100%">
 

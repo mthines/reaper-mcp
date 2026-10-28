@@ -1,5 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 /** Resolve asset path — checks sibling, parent, and walks up to repo root for dev/source usage */
 export function resolveAssetDir(baseDir: string, name: string): string {
@@ -342,3 +342,40 @@ export function resolveAssetDirWithFallback(baseDir: string, buildName: string, 
 
 /** Expected knowledge subdirectories */
 export const KNOWLEDGE_DIRS = ['genres', 'plugins', 'workflows', 'reference'] as const;
+
+/** The git clone this build runs from (has scripts/update.sh and .git), walking up from `startDir`; null outside a clone. */
+export function findCloneRoot(startDir: string): string | null {
+  let dir = resolve(startDir);
+  for (let i = 0; i < 6; i++) {
+    if (existsSync(join(dir, 'scripts', 'update.sh')) && existsSync(join(dir, '.git'))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+/**
+ * mcp_update.conf, installed next to mcp_bridge.lua: where the status page's Update button finds the clone,
+ * and the node binary to put first on PATH (REAPER started from the Dock has a bare PATH).
+ * Plain key=value lines because the bridge's fallback JSON parser is flat-only.
+ */
+export function updateConfigText(repo: string, node: string, dev = false): string {
+  return `repo=${repo}\nnode=${node}\ndev=${dev ? 1 : 0}\n`;
+}
+
+export interface CloneState {
+  /** Tracked files with uncommitted changes */
+  dirty: boolean;
+  branch: string;
+  /** Commits not on the upstream branch; null without one */
+  ahead: number | null;
+}
+
+/**
+ * A clone someone develops in (uncommitted work, a feature branch, unpushed commits, no upstream) gets
+ * "Rebuild & reload" on the status page instead of pulling releases. The page's Developer mode toggle overrides it.
+ */
+export function isDevClone({ dirty, branch, ahead }: CloneState): boolean {
+  return dirty || branch !== 'main' || ahead === null || ahead > 0;
+}

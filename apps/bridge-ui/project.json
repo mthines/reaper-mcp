@@ -10,6 +10,11 @@
         "command": "node apps/bridge-ui/build.mjs",
         "cwd": "{workspaceRoot}"
       },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/apps/reaper-mcp-server/package.json",
+        "{workspaceRoot}/apps/reaper-mcp-server/src/tools/knowledge.ts"
+      ],
       "outputs": ["{workspaceRoot}/dist/apps/bridge-ui"]
     }
   }

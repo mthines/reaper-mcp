@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Combobox } from './Combobox.js';
 import { createDemo } from './demo.js';
+import { compareVersions, controlUrl, updateLog, useLatestRelease, type BridgeAction } from './update.js';
 import { manualInstallHint, openInBrowserToInstall, promptInstall, useInstallState } from './install.js';
 import { ResizeHandle, useDrawerWidth } from './ResizeHandle.js';
 import { PluginsView } from './PluginsView.js';
@@ -226,6 +227,7 @@ const SETTING_FIELD: Record<SettingKey, keyof BridgeSettings> = {
   cfg_paused: 'paused',
   cfg_readonly: 'readonly',
   cfg_open_on_start: 'openOnStart',
+  cfg_dev: 'dev',
 };
 
 /**
@@ -242,7 +244,7 @@ function useSettings(status: BridgeStatus | null): [BridgeSettings | null, (key:
       const left = Object.fromEntries(Object.entries(p).filter(([k, v]) => echoed[k as keyof BridgeSettings] !== v));
       return Object.keys(left).length === Object.keys(p).length ? p : left;
     });
-  }, [echoed?.paused, echoed?.readonly, echoed?.openOnStart]);
+  }, [echoed?.paused, echoed?.readonly, echoed?.openOnStart, echoed?.dev]);
 
   const set = (key: SettingKey, on: boolean) => {
     setPending((p) => ({ ...p, [SETTING_FIELD[key]]: on }));
@@ -334,6 +336,7 @@ export function App() {
   const [settings, setSetting] = useSettings(status);
   const [notify, setNotify] = useErrorNotifications(log, sessions);
   // `?install`: opened from the bridge window's Install button, so show the install setting straight away
+  const request = useBridgeRequest(status);
   const [settingsOpen, setSettingsOpen] = useState(() => new URLSearchParams(location.search).has('install'));
   const [loreToken, setLoreToken] = useState(() => loadLoreKitToken());
   const chooseLoreToken = (token: string | null) => {
@@ -361,10 +364,13 @@ export function App() {
         sessions={sessions}
         onShowAgents={() => chooseView('sessions')}
         onOpenSettings={settings ? () => setSettingsOpen((o) => !o) : undefined}
+        onRebuild={
+          settings?.dev && status?.control?.canUpdate && status.control.update?.state !== 'running' ? () => request('rebuild') : undefined
+        }
       />
       {status ? (
         <>
-          <Notices status={status} settings={settings} onSet={setSetting} />
+          <Notices status={status} settings={settings} onSet={setSetting} request={request} />
           <Stats status={status} log={log} now={now} series={series} />
           <Timeline history={history} longHistory={longHistory} now={now} selection={selection} onSelect={setSelection} />
           <Log
@@ -393,6 +399,7 @@ export function App() {
               publishToken={publishToken}
               onPublishToken={choosePublishToken}
               onClose={() => setSettingsOpen(false)}
+              canUpdate={status.control?.canUpdate === true}
             />
           )}
           <footer className="footer">
@@ -421,6 +428,7 @@ function Header({
   sessions,
   onShowAgents,
   onOpenSettings,
+  onRebuild,
 }: {
   status: BridgeStatus | null;
   state: Liveness;
@@ -429,6 +437,7 @@ function Header({
   sessions: Map<string, Session>;
   onShowAgents: () => void;
   onOpenSettings?: () => void;
+  onRebuild?: () => void;
 }) {
   const label = state === 'live' ? 'Live' : state === 'stale' ? 'Not responding' : reachable ? 'Bridge stopped' : 'REAPER unreachable';
   const connected = [...sessions.values()].filter((x) => isConnected(x, now) && hasToolCalls(x));
@@ -470,6 +479,15 @@ function Header({
             {connected.length === 0 ? 'No agents' : `${connected.length} agent${connected.length === 1 ? '' : 's'}`}
           </button>
         )}
+        {onRebuild && (
+          <button
+            className="btn btn-sm"
+            onClick={onRebuild}
+            title="Developer mode: build your working tree, install it into REAPER, restart the bridge and reload"
+          >
+            Rebuild &amp; reload
+          </button>
+        )}
         {onOpenSettings && (
           <button className="icon-link" onClick={onOpenSettings} title="Settings" aria-label="Settings">
             <GearIcon />
@@ -494,14 +512,94 @@ function Notices({
   status,
   settings,
   onSet,
+  request,
 }: {
   status: BridgeStatus;
   settings: BridgeSettings | null;
   onSet: (key: SettingKey, on: boolean) => void;
+  request: BridgeRequest;
 }) {
   const [swsDismissed, setSwsDismissed] = useState(() => load(SWS_DISMISS_KEY) === '1');
+  const [skipped, setSkipped] = useState(() => load(UPDATE_SKIP_KEY));
+  const [updateDoneDismissed, setUpdateDoneDismissed] = useState(false);
   const health = status.health;
+  const control = status.control;
+  const update = control?.update;
+  const dev = settings?.dev === true;
+  const rebuild = update?.kind === 'rebuild';
+  const release = useLatestRelease(!DEMO && !dev);
   const notices: ReactNode[] = [];
+
+  if (update?.state === 'done' && !updateDoneDismissed) {
+    notices.push(
+      <Notice
+        key="update"
+        tone="info"
+        action={
+          <button className="icon-btn" aria-label="Dismiss" title="Dismiss" onClick={() => setUpdateDoneDismissed(true)}>
+            <CloseIcon />
+          </button>
+        }
+      >
+        <b>{rebuild ? 'Rebuilt from your working tree' : `reaper-mcp is up to date (v${__VERSION__})`}.</b> Restart Claude Code, or run{' '}
+        <code>/mcp</code> there, to use the new tools.
+      </Notice>,
+    );
+  } else if (update?.state === 'running') {
+    const log = updateLog(update);
+    notices.push(
+      <Notice key="update" tone="info">
+        <b>{rebuild ? 'Rebuilding from your working tree…' : 'Updating reaper-mcp…'}</b>{' '}
+        {rebuild ? 'The bridge restarts and this page reloads when it’s done.' : 'This takes a minute or two; the bridge restarts when it’s done.'}
+        {log.length > 0 && <span className="notice-log mono">{log[log.length - 1]}</span>}
+      </Notice>,
+    );
+  } else if (update?.state === 'failed') {
+    const log = updateLog(update);
+    notices.push(
+      <Notice key="update" tone="bad" action={<button className="btn btn-sm" onClick={() => request(rebuild ? 'rebuild' : 'update')}>Try again</button>}>
+        <b>{rebuild ? 'The rebuild didn’t finish.' : 'The update didn’t finish.'}</b> {log[log.length - 1] ?? 'See tmp/install.log in your reaper-mcp folder.'}
+        {log.length > 1 && (
+          <details className="notice-details">
+            <summary>Show log</summary>
+            <pre className="mono">{log.join('\n')}</pre>
+          </details>
+        )}
+      </Notice>,
+    );
+  } else if (!dev && release && compareVersions(release.version, __VERSION__) > 0 && skipped !== release.version) {
+    notices.push(
+      <Notice
+        key="update"
+        tone="info"
+        action={
+          <span className="notice-actions">
+            {control?.canUpdate && (
+              <button className="btn btn-sm" onClick={() => request('update')}>
+                Update
+              </button>
+            )}
+            <button
+              className="icon-btn"
+              aria-label="Skip this version"
+              title="Skip this version"
+              onClick={() => { setSkipped(release.version); save(UPDATE_SKIP_KEY, release.version); }}
+            >
+              <CloseIcon />
+            </button>
+          </span>
+        }
+      >
+        <b>reaper-mcp v{release.version} is available</b> (you have v{__VERSION__}).{' '}
+        <a href={release.url} target="_blank" rel="noreferrer">What’s new</a>
+        {!control?.canUpdate && (
+          <>
+            {' '}· Update from your reaper-mcp folder: <code>git pull &amp;&amp; ./scripts/install.sh</code>
+          </>
+        )}
+      </Notice>,
+    );
+  }
 
   if (settings?.paused) {
     notices.push(
@@ -519,8 +617,13 @@ function Notices({
   }
   if (health?.outdated) {
     notices.push(
-      <Notice key="outdated" tone="warn">
-        <b>A newer bridge is installed.</b> Stop <code>mcp_bridge.lua</code> and run it again to load it.
+      <Notice
+        key="outdated"
+        tone="warn"
+        action={control?.canRestart && <button className="btn btn-sm" onClick={() => request('restart')}>Restart bridge</button>}
+      >
+        <b>A newer bridge is installed.</b>{' '}
+        {control?.canRestart ? 'Restart it to load it.' : <>Stop <code>mcp_bridge.lua</code> and run it again to load it.</>}
       </Notice>,
     );
   }
@@ -550,6 +653,47 @@ function Notices({
   return notices.length ? <div className="notices">{notices}</div> : null;
 }
 
+const UPDATE_SKIP_KEY = 'mcp-bridge-update-skipped';
+
+type BridgeRequest = (action: BridgeAction) => void;
+
+/**
+ * Send an update/restart request to the bridge, and reload the page once the bridge comes back as a new
+ * run (its startedAt changes): the installer may have replaced this page too.
+ */
+function useBridgeRequest(status: BridgeStatus | null): BridgeRequest {
+  const expectRestart = useRef(false);
+  const startedAt = useRef(status?.startedAt);
+  if (status?.control?.update) expectRestart.current = true;
+  useEffect(() => {
+    if (!status || status.startedAt === startedAt.current) return;
+    const restarted = startedAt.current !== undefined;
+    startedAt.current = status.startedAt;
+    if (restarted && expectRestart.current) location.reload();
+  }, [status?.startedAt]);
+  // An update that left the bridge script as it was doesn't restart it, but the installer still replaced this page
+  const update = status?.control?.update;
+  useEffect(() => {
+    if (update?.state !== 'done' || DEMO) return;
+    const key = `mcp-bridge-reloaded-${update.startedAt}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, '1');
+    } catch {
+      return; // no way to remember the reload: never risk a reload loop
+    }
+    location.reload();
+  }, [update?.state, update?.startedAt]);
+  return (action) => {
+    const token = status?.control?.token;
+    if (!token || DEMO) return;
+    expectRestart.current = true;
+    fetch(controlUrl(action, token), { cache: 'no-store' }).catch(() => {
+      /* the bridge's status shows whether it took */
+    });
+  };
+}
+
 function Notice({ tone, action, children }: { tone: 'warn' | 'bad' | 'info'; action?: ReactNode; children: ReactNode }) {
   return (
     <div className={`notice notice-${tone}`} role="status">
@@ -570,6 +714,7 @@ function SettingsPanel({
   publishToken,
   onPublishToken,
   onClose,
+  canUpdate,
 }: {
   settings: BridgeSettings;
   onSet: (key: SettingKey, on: boolean) => void;
@@ -580,6 +725,7 @@ function SettingsPanel({
   publishToken: string | null;
   onPublishToken: (token: string | null) => void;
   onClose: () => void;
+  canUpdate: boolean;
 }) {
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => ev.key === 'Escape' && onClose();
@@ -636,6 +782,17 @@ function SettingsPanel({
           />
           <InstallSetting />
         </div>
+        {canUpdate && (
+          <div className="setting-group">
+            <h3>Updates</h3>
+            <Toggle
+              label="Developer mode"
+              hint="Rebuild & reload builds your working tree as it is, uncommitted changes included, instead of offering release updates. Detected from your clone until you choose. Persists."
+              on={settings.dev === true}
+              onChange={(on) => onSet('cfg_dev', on)}
+            />
+          </div>
+        )}
         <LoreKitSetting token={loreToken} onChange={onLoreToken} />
         <PublishSetting token={publishToken} readToken={loreToken} onChange={onPublishToken} />
       </div>

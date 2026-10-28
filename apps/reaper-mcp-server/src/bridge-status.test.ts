@@ -22,8 +22,9 @@ interface Status {
   commands: number;
   recent: Entry[];
   sessions: Session[];
-  settings: { paused: boolean; readonly: boolean; openOnStart: boolean };
+  settings: { paused: boolean; readonly: boolean; openOnStart: boolean; dev: boolean };
   health: { sws: boolean; jsfx: boolean; outdated: boolean };
+  control: { token: string; canRestart: boolean; canUpdate: boolean; update?: { kind: string; state: string } };
 }
 
 let engine: LuaEngine | undefined;
@@ -32,13 +33,13 @@ afterEach(() => {
   engine = undefined;
 });
 
-/** Files left in the bridge folder by an earlier run, keyed by name (the restart tests). */
+/** Extra files: a bare name lands in the bridge folder (left by an earlier run, the restart tests), an absolute path as is. */
 async function startBridge(setup = '', files: Record<string, string> = {}) {
   const factory = new LuaFactory();
   await factory.mountFile(`${SCRIPTS}mcp_bridge.lua`, readFileSync(join(REAPER_DIR, 'mcp_bridge.lua'), 'utf8'));
   for (const lib of LIBS) await factory.mountFile(SCRIPTS + lib, readFileSync(join(REAPER_DIR, lib), 'utf8'));
   await factory.mountFile(`${BRIDGE_DIR}.keep`, '');
-  for (const [name, content] of Object.entries(files)) await factory.mountFile(BRIDGE_DIR + name, content);
+  for (const [name, content] of Object.entries(files)) await factory.mountFile(name.startsWith('/') ? name : BRIDGE_DIR + name, content);
   const lua = await factory.createEngine();
   engine = lua;
   await lua.doString(FAKE_SRC);
@@ -86,6 +87,10 @@ async function startBridge(setup = '', files: Record<string, string> = {}) {
       await new Promise((r) => setTimeout(r, 250));
       await tick();
       return JSON.parse(await lua.doString('return ext["MCPBridge/status"]')) as Status;
+    },
+    /** A Lua global (or any expression) from the bridge's state */
+    async eval(expr: string): Promise<unknown> {
+      return lua.doString(`return ${expr}`);
     },
     async ext(key: string): Promise<string | null> {
       return (await lua.doString(`return ext["MCPBridge/${key}"]`)) ?? null;
@@ -172,6 +177,59 @@ describe('bridge settings from the status page', () => {
     const { health } = await (await startBridge()).status();
     // The fake has no SWS and no Effects/reaper-mcp/ JSFX
     expect(health).toMatchObject({ sws: false, jsfx: false, outdated: false });
+  });
+});
+
+// REAPER 7.03+: set_action_options lets the script restart itself by running its own action
+const SELF_RESTART = `
+  api.set_action_options = function(flags) action_options = flags end
+  api.get_action_context = function() return false, "${SCRIPTS}mcp_bridge.lua", 0, 55555 end
+  api.Main_OnCommand = function(id) ran_command = id end
+`;
+
+describe('restart and update requests from the page', () => {
+  it('restarts only for a request carrying this run\'s token', async () => {
+    const bridge = await startBridge(SELF_RESTART);
+    const { control } = await bridge.status();
+    expect(control).toMatchObject({ canRestart: true, canUpdate: false });
+    expect(control.token).toMatch(/^[0-9a-f]{16}$/);
+    expect(await bridge.eval('action_options')).toBe(3);
+
+    await bridge.set('request', 'restart-0123456789abcdef');
+    await bridge.status();
+    expect(await bridge.eval('ran_command')).toBeNull();
+    expect(await bridge.ext('request')).toBeNull(); // consumed either way
+
+    await bridge.set('request', `restart-${control.token}`);
+    await bridge.status();
+    expect(await bridge.eval('ran_command')).toBe(55555);
+  });
+
+  // setup wrote mcp_update.conf for a developer clone; the clone has scripts/update.sh
+  const DEV_CLONE = {
+    '/clone/scripts/update.sh': '',
+    [`${SCRIPTS}mcp_update.conf`]: 'repo=/clone\nnode=/usr/local/bin/node\ndev=1\n',
+  };
+
+  it('developer mode follows setup until the page chooses, and rebuilds the working tree', async () => {
+    const bridge = await startBridge('os.execute = function(cmd) executed = cmd return true end', DEV_CLONE);
+    let status = await bridge.status();
+    expect(status.control.canUpdate).toBe(true);
+    expect(status.settings.dev).toBe(true);
+
+    await bridge.set('request', `rebuild-${status.control.token}`);
+    await bridge.status(); // requests are handled after the tick's publish: the next one shows it
+    status = await bridge.status();
+    expect(status.control.update).toMatchObject({ kind: 'rebuild', state: 'running' });
+    expect(await bridge.eval('executed')).toContain('./scripts/update.sh --rebuild');
+
+    await bridge.set('cfg_dev', '0');
+    expect((await bridge.status()).settings.dev).toBe(false);
+  });
+
+  it('offers no restart on REAPER without set_action_options', async () => {
+    const { control } = await (await startBridge('api.set_action_options = false')).status();
+    expect(control.canRestart).toBe(false);
   });
 });
 

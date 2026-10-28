@@ -171,6 +171,10 @@ button.agents:hover { color: var(--text); background: var(--panel-2); border-col
 .notice b { color: var(--text); font-weight: 600; }
 .notice a { color: var(--accent); }
 .notice-text { flex: 1; min-width: 0; }
+.notice-actions { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.notice-log { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notice-details summary { cursor: pointer; margin-top: 4px; color: var(--muted); font-size: 12px; }
+.notice-details pre { margin: 6px 0 0; padding: 8px; max-height: 200px; overflow: auto; font-size: 11px; background: rgba(0, 0, 0, 0.25); border-radius: 6px; white-space: pre-wrap; }
 .notice-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--tone); }
 .notice-warn { --tone: var(--warn); border-color: rgba(245, 184, 75, 0.3); background: rgba(245, 184, 75, 0.06); }
 .notice-bad { --tone: var(--bad); border-color: rgba(248, 113, 113, 0.3); background: rgba(248, 113, 113, 0.06); }

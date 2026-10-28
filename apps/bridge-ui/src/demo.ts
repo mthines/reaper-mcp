@@ -55,7 +55,7 @@ export function createDemo(): Demo {
     b[4] += ms;
     map.set(id, b);
   };
-  const settings: BridgeSettings = { paused: false, readonly: false, openOnStart: true };
+  const settings: BridgeSettings = { paused: false, readonly: false, openOnStart: true, dev: false };
   const sessions: Session[] = [
     { id: '4f1c2a9e-1b7d-4c55-9a51-7f0d3e2b8c10', dir: '/Users/you/Music/midnight-drive', client: 'claude-code', first: startedAt + 60_000, last: 0, commands: 0, errors: 0 },
     { id: '9b2e77d0-5c3a-4e8f-b1d2-2a6c9f4e0d31', dir: '/Users/you/Music/stems-prep', client: 'claude-code', first: startedAt + 20 * 60_000, last: 0, commands: 0, errors: 0 },
@@ -142,6 +142,7 @@ export function createDemo(): Demo {
     set(key, on) {
       if (key === 'cfg_paused') settings.paused = on;
       else if (key === 'cfg_readonly') settings.readonly = on;
+      else if (key === 'cfg_dev') settings.dev = on;
       else settings.openOnStart = on;
     },
   };

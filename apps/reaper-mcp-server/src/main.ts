@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
 import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
 import { setupSidecar } from './setup-sidecar.js';
 import { firstRunTelemetryNotice, resolveTelemetry, writeTelemetryConfig, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
@@ -47,6 +47,14 @@ async function setup(): Promise<void> {
     } else {
       console.log(`  Not found: ${src}`);
     }
+  }
+
+  // Lets the status page's Update button pull and reinstall this clone (it runs scripts/update.sh)
+  const cloneRoot = findCloneRoot(__dirname);
+  if (cloneRoot) {
+    const dev = isDevClone(await cloneState(cloneRoot));
+    writeFileSync(join(scriptsDir, 'mcp_update.conf'), updateConfigText(cloneRoot, process.execPath, dev));
+    console.log(`  Installed: mcp_update.conf (${dev ? 'developer clone: Rebuild & reload' : 'one-click updates'} from the status page)`);
   }
 
   const effectsDir = join(getReaperEffectsPath(), 'reaper-mcp');
@@ -87,6 +95,18 @@ async function setup(): Promise<void> {
   console.log('  5. Add reaper-mcp to your Claude Code config (see: reaper-mcp doctor)');
   if (webPort) {
     console.log(`\nThe bridge opens its status window on start: http://localhost:${webPort}/${BRIDGE_UI_FILE}`);
+  }
+}
+
+/** Git state of the clone for isDevClone; a git failure reads as a dev clone (never offer a pull that can't work). */
+async function cloneState(repo: string): Promise<CloneState> {
+  const git = async (args: string) => (await execAsync(`git -C "${repo}" ${args}`)).stdout.trim();
+  try {
+    const [status, branch] = await Promise.all([git('status --porcelain --untracked-files=no'), git('rev-parse --abbrev-ref HEAD')]);
+    const ahead = await git('rev-list --count @{u}..HEAD').then(Number, () => null);
+    return { dirty: status !== '', branch, ahead };
+  } catch {
+    return { dirty: true, branch: '', ahead: null };
   }
 }
 

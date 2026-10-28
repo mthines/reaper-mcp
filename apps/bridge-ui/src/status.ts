@@ -41,6 +41,8 @@ export interface BridgeSettings {
   paused: boolean;
   readonly: boolean;
   openOnStart: boolean;
+  /** Developer mode: Rebuild & reload instead of release updates. Absent on bridges older than it */
+  dev?: boolean;
 }
 
 export interface BridgeHealth {
@@ -49,6 +51,26 @@ export interface BridgeHealth {
   missingJsfx?: string[];
   /** The installed mcp_bridge.lua changed since this copy started (setup ran): restart it */
   outdated: boolean;
+}
+
+/** A self-update run by the bridge (scripts/update.sh); gone once the bridge restarts into the new version. */
+export interface BridgeUpdate {
+  /** update: pull the latest version; rebuild: build the working tree as it is (developer mode) */
+  kind?: 'update' | 'rebuild';
+  state: 'running' | 'failed' | 'done';
+  startedAt: number;
+  /** Last lines of the update log; an empty Lua table can arrive as `{}` */
+  log: string[] | Record<string, never>;
+}
+
+/** One-click actions the page may request; `token` must accompany every request (see controlUrl). */
+export interface BridgeControl {
+  token: string;
+  /** REAPER 7.03+ (set_action_options): the bridge can restart itself */
+  canRestart: boolean;
+  /** setup wrote mcp_update.conf for a git clone (not on Windows) */
+  canUpdate: boolean;
+  update?: BridgeUpdate;
 }
 
 /** Shape published by mcp_bridge.lua to ExtState MCPBridge/status. */
@@ -67,6 +89,8 @@ export interface BridgeStatus {
   sessions?: Session[];
   settings?: BridgeSettings;
   health?: BridgeHealth;
+  /** Absent on bridges older than one-click update */
+  control?: BridgeControl;
   /** Demo only: the live page builds this from ExtState `installed` and LoreKit (useKnowledge) */
   knowledge?: KnowledgeFeed;
 }
@@ -328,7 +352,7 @@ export function deriveSeries(samples: Sample[], log: CommandEntry[]): Series {
   return series;
 }
 
-export type SettingKey = 'cfg_paused' | 'cfg_readonly' | 'cfg_open_on_start';
+export type SettingKey = 'cfg_paused' | 'cfg_readonly' | 'cfg_open_on_start' | 'cfg_dev';
 
 /**
  * Write one setting through the web interface. Pause is in-memory (clears when REAPER restarts so

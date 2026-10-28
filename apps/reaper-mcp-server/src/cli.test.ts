@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureWebInterface, REAPER_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureWebInterface, findCloneRoot, isDevClone, updateConfigText, REAPER_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `reaper-mcp-test-${randomUUID()}`);
@@ -252,5 +252,44 @@ describe('ensureWebInterface', () => {
   it('preserves CRLF line endings', () => {
     const out = ensureWebInterface('[REAPER]\r\nfoo=1\r\n', 8099);
     expect(out.ini).not.toMatch(/[^\r]\n/);
+  });
+});
+
+describe('findCloneRoot', () => {
+  const root = join(tmpdir(), `clone-${randomUUID()}`);
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('finds the clone from its build output', () => {
+    mkdirSync(join(root, '.git'), { recursive: true });
+    mkdirSync(join(root, 'scripts'), { recursive: true });
+    writeFileSync(join(root, 'scripts', 'update.sh'), '');
+    const dist = join(root, 'dist', 'apps', 'reaper-mcp-server');
+    mkdirSync(dist, { recursive: true });
+    expect(findCloneRoot(dist)).toBe(resolve(root));
+  });
+
+  it('is null outside a git clone', () => {
+    mkdirSync(join(root, 'scripts'), { recursive: true });
+    writeFileSync(join(root, 'scripts', 'update.sh'), '');
+    expect(findCloneRoot(join(root, 'scripts'))).toBeNull();
+  });
+});
+
+describe('updateConfigText', () => {
+  it('writes key=value lines the bridge reads', () => {
+    expect(updateConfigText('/Users/me/reaper-mcp', '/opt/homebrew/bin/node', true)).toBe(
+      'repo=/Users/me/reaper-mcp\nnode=/opt/homebrew/bin/node\ndev=1\n',
+    );
+  });
+});
+
+describe('isDevClone', () => {
+  const release = { dirty: false, branch: 'main', ahead: 0 };
+  it('is a release install only when clean, on main and in sync with upstream', () => {
+    expect(isDevClone(release)).toBe(false);
+    expect(isDevClone({ ...release, dirty: true })).toBe(true);
+    expect(isDevClone({ ...release, branch: 'feat/x' })).toBe(true);
+    expect(isDevClone({ ...release, ahead: 2 })).toBe(true);
+    expect(isDevClone({ ...release, ahead: null })).toBe(true);
   });
 });
