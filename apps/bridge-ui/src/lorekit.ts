@@ -153,6 +153,29 @@ export async function publishRecord(api: string, token: string, record: PluginRe
   return { key: built.key, removedCopy: true };
 }
 
+export type PublishOutcome = { record: PluginRecord; result: PublishResult } | { record: PluginRecord; error: string };
+
+/**
+ * Publish several records one after another (LoreKit sees one write at a time), carrying on past a failure so
+ * one bad record doesn't hold back the rest. `onProgress` gets the number done so far.
+ */
+export async function publishAll(
+  records: PluginRecord[],
+  publish: (record: PluginRecord) => Promise<PublishResult>,
+  onProgress?: (done: number) => void,
+): Promise<PublishOutcome[]> {
+  const outcomes: PublishOutcome[] = [];
+  for (const record of records) {
+    try {
+      outcomes.push({ record, result: await publish(record) });
+    } catch (e) {
+      outcomes.push({ record, error: e instanceof Error ? e.message : String(e) });
+    }
+    onProgress?.(outcomes.length);
+  }
+  return outcomes;
+}
+
 /** The bridge's ExtState `installed` payload: `{ v, supported, fx: [{ n, t }] }`. */
 export function parseInstalled(raw: unknown): { supported: boolean; fx: InstalledFx[] } | null {
   if (!raw || typeof raw !== 'object') return null;

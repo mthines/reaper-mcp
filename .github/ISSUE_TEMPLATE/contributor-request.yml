@@ -1,0 +1,29 @@
+name: Become a contributor
+description: Ask to join the reaper-mcp LoreKit org, so you can publish plugin knowledge to the built-in layer from the MCP Bridge
+title: "Contributor request: "
+labels: ["contributor-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Contributors publish the plugin records they've taught the mixer straight into the built-in layer that everyone reads, without a pull request.
+        This issue is public: **don't post your email address or any LoreKit token here.** If we need your email for the invite, we'll ask privately.
+  - type: input
+    id: lorekit
+    attributes:
+      label: Your LoreKit username
+      description: The account to invite to the reaper-mcp org (sign up at lorekit.io first)
+    validations:
+      required: true
+  - type: textarea
+    id: plugins
+    attributes:
+      label: What have you taught the mixer?
+      description: The plugins you have records for, or a past Contribute pull request
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Anything else?
+      description: What you mix, which plugins you'd like to cover, or how you found reaper-mcp

@@ -924,3 +924,5 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 .kn-publish-check input { margin-top: 2px; }
 .kn-publish-actions { display: flex; gap: 8px; }
 .kn-publish-warn { font-size: 12px; color: #f87171; line-height: 1.45; }
+.setting-link { color: var(--accent); text-decoration: none; }
+.setting-link:hover { text-decoration: underline; }

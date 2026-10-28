@@ -412,6 +412,8 @@ export function App() {
               <a href={REPO_URL} target="_blank" rel="noreferrer">reaper-mcp v{__VERSION__}</a>
               <span className="dot-sep" />
               <a href={`${REPO_URL}/issues`} target="_blank" rel="noreferrer">Report an issue</a>
+              <span className="dot-sep" />
+              <a href={DISCORD_URL} target="_blank" rel="noreferrer">Discord</a>
             </span>
           </footer>
         </>
@@ -913,6 +915,10 @@ function LoreKitSetting({ token, onChange }: { token: string | null; onChange: (
  * Members of the reaper-mcp LoreKit org publish their records into the built-in layer straight from the
  * plugin drawer, without the GitHub contribution PR. LoreKit checks the membership on every write.
  */
+const DISCORD_URL = 'https://discord.gg/Eg8tznuXp4';
+/** A GitHub issue form asking to join the reaper-mcp LoreKit org (.github/ISSUE_TEMPLATE/contributor-request.yml). */
+const CONTRIBUTOR_REQUEST_URL = `${REPO_URL}/issues/new?template=contributor-request.yml`;
+
 function PublishSetting({ token, readToken, onChange }: { token: string | null; readToken: string | null; onChange: (token: string | null) => void }) {
   const [draft, setDraft] = useState('');
   const trimmed = draft.trim();
@@ -965,6 +971,18 @@ function PublishSetting({ token, readToken, onChange }: { token: string | null; 
               : 'Connect your read-only token above too, so your records (and their Publish button) show up.'
             : 'For members of the reaper-mcp LoreKit org: publish your records for everyone without a GitHub pull request. Create a read + write key limited to project::reaper-mcp and the reaper-mcp org. Everyone else uses Contribute.'}
       </p>
+      {!token && (
+        <p className="setting-hint">
+          Not a member yet? Ask to become a contributor{' '}
+          <a className="setting-link" href={DISCORD_URL} target="_blank" rel="noreferrer">
+            on Discord ↗
+          </a>{' '}
+          or{' '}
+          <a className="setting-link" href={CONTRIBUTOR_REQUEST_URL} target="_blank" rel="noreferrer">
+            on GitHub ↗
+          </a>
+        </p>
+      )}
     </div>
   );
 }

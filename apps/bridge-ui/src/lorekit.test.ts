@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchRecords, parseInstalled, parseRecord, publishRecord, type LoreKitEntry } from './lorekit.js';
+import { fetchRecords, parseInstalled, parseRecord, publishAll, publishRecord, type LoreKitEntry } from './lorekit.js';
 
 const builtIn: LoreKitEntry = {
   id: '84daa88a-5e98-4e52-8cf2-bb3f14ce1a6f',
@@ -139,6 +139,26 @@ describe('publishRecord', () => {
     await expect(publishRecord('https://lk.test/v1', 'lk_rw_abc', bad, { removeCopy: true })).rejects.toThrow(/not allowed/);
     await expect(publishRecord('https://lk.test/v1', 'lk_ro_abc', mine, { removeCopy: true })).rejects.toThrow(/lk_rw_/);
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('publishAll', () => {
+  const rec = (key: string) => ({ key }) as Parameters<typeof publishAll>[0][number];
+  it('publishes in order and carries on past a failure', async () => {
+    const order: string[] = [];
+    const progress: number[] = [];
+    const outcomes = await publishAll(
+      [rec('user::plugins::a/x'), rec('user::plugins::b/y'), rec('user::plugins::c/z')],
+      async (r) => {
+        order.push(r.key);
+        if (r.key.includes('b/y')) throw new Error('LoreKit answered 500');
+        return { key: r.key.replace(/^user::/, ''), removedCopy: true };
+      },
+      (n) => progress.push(n),
+    );
+    expect(order).toEqual(['user::plugins::a/x', 'user::plugins::b/y', 'user::plugins::c/z']);
+    expect(progress).toEqual([1, 2, 3]);
+    expect(outcomes.map((o) => ('error' in o ? o.error : o.result.key))).toEqual(['plugins::a/x', 'LoreKit answered 500', 'plugins::c/z']);
   });
 });
 

@@ -713,7 +713,10 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   Settings → **Publish to built-in** (localStorage, separate from the read token) adds a **Publish to built-in** button
   to their own records. It runs the same `parseContribution` checks, `POST /memories` with `org: reaper-mcp`, then
   soft-archives the `user::` copy (opt-out checkbox). LoreKit enforces write membership; add a publisher by inviting
-  them to the org as a member. Logic: `publishRecord()` in `src/lorekit.ts`; `?demo` fakes it.
+  them to the org as a member. With that token the header's **Contribute N** becomes **Publish N to built-in**: one
+  inline confirm, then each record in turn (`publishAll()`, carries on past a failure, offers Retry for the failed).
+  Settings links non-members to ask on Discord or through the `contributor-request` GitHub issue form
+  (`.github/ISSUE_TEMPLATE/contributor-request.yml`). Logic: `publishRecord()` in `src/lorekit.ts`; `?demo` fakes it.
   One plugin installed in several formats (same title and vendor, e.g. `VST3i:`/`CLAPi:`/`VSTi: Vital (Vital Audio)`)
   is one row (`PluginRow.variants`, VST3 preferred for the Teach prompt), counting the instances of every format.
 - Payload shapes live in `apps/bridge-ui/src/status.ts` (`BridgeStatus`, `BridgeHistory`, `LongHistory`) and

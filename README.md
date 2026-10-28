@@ -134,6 +134,8 @@ what turns a remote control into an engineer that gets better every session.
 - 🤝 **Share what you taught it.** Press **Contribute** in the bridge page's Plugins tab
   and your plugin records become a pull request. Once the maintainer approves it, they're
   built in for every reaper-mcp user ([how it works](knowledge/contributions/README.md)).
+  Regular contributors can publish straight to built-in, no pull request: ask on
+  [Discord](https://discord.gg/Eg8tznuXp4).
 - 🌍 **It follows you.** The memory isn't tied to one project folder. Whatever song
   you open, it brings what it knows.
 - 🔒 **Audio knowledge only.** It never stores client names, song titles or license keys.
