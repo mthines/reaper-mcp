@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   bucketize,
+  historyTiers,
+  inSpan,
+  parseLogReply,
+  parseLongHistoryReply,
+  restoreLog,
+  spanOfBars,
+  timelineBars,
   commandsPerMinute,
   deriveSeries,
   formatDuration,
@@ -228,5 +235,77 @@ describe('hasToolCalls', () => {
   it('leaves out agents that have only pinged', () => {
     expect(hasToolCalls({ commands: 0 })).toBe(false);
     expect(hasToolCalls({ commands: 3 })).toBe(true);
+  });
+});
+
+describe('persisted log', () => {
+  const e = (n: number, t = n * 1000): CommandEntry => ({ n, t, c: 'list_tracks', ms: 1, ok: true });
+
+  it('restores the persisted log beyond the live window', () => {
+    const saved = Array.from({ length: 120 }, (_, i) => e(120 - i)); // newest first
+    const live = [e(122), e(121), e(120), e(119)];
+    const body = `EXTSTATE\tMCPBridge\tlog\t${JSON.stringify({ v: 1, entries: saved })}\n`;
+    const restored = restoreLog(live, parseLogReply(body) ?? []);
+    expect(restored).toHaveLength(122);
+    expect(restored.slice(0, 3).map((x) => x.n)).toEqual([122, 121, 120]);
+    expect(restored[121].n).toBe(1);
+  });
+
+  it('keeps entries the user cleared out', () => {
+    expect(restoreLog([e(5)], [e(4), e(3), e(2)], 3).map((x) => x.n)).toEqual([5, 4]);
+  });
+
+  it('ignores a missing log key', () => {
+    expect(parseLogReply('EXTSTATE\tMCPBridge\tstatus\t{}\n')).toBeNull();
+  });
+});
+
+describe('long timeline', () => {
+  const hour = 3_600_000;
+  const day = 24 * hour;
+  const now = 1_000 * day;
+  const short = { v: 1, size: 10_000, b: [[Math.floor((now - 60_000) / 10_000), 2, 0, 0, 4]] as Array<[number, number, number, number, number]> };
+  const longBody = `EXTSTATE\tMCPBridge\thistory_long\t${JSON.stringify({
+    v: 1,
+    tiers: [
+      { size: 60_000, b: [[Math.floor((now - 60_000) / 60_000), 2, 0, 0, 4], [Math.floor((now - 5 * hour) / 60_000), 3, 1, 0, 9]] },
+      { size: 600_000, b: [[Math.floor((now - 60_000) / 600_000), 2, 0, 0, 4], [Math.floor((now - 5 * hour) / 600_000), 3, 1, 0, 9], [Math.floor((now - 3 * day) / 600_000), 7, 0, 2, 20]] },
+    ],
+  })}\n`;
+  const tiers = historyTiers(short, parseLongHistoryReply(longBody));
+
+  const sum = (bars: { total: number }[]) => bars.reduce((s, b) => s + b.total, 0);
+
+  it('uses 10s buckets for the last hour', () => {
+    expect(sum(timelineBars(tiers, hour, 60, now))).toBe(2);
+  });
+
+  it('covers the past day from the 1m buckets', () => {
+    const bars = timelineBars(tiers, day, 96, now);
+    expect(bars).toHaveLength(96);
+    expect(sum(bars)).toBe(5);
+  });
+
+  it('covers the past week from the 10m buckets', () => {
+    const bars = timelineBars(tiers, 7 * day, 168, now);
+    expect(bars).toHaveLength(168);
+    expect(bars[1].end - bars[1].start).toBe(hour);
+    expect(sum(bars)).toBe(12);
+    expect(bars.find((b) => b.start <= now - 3 * day && now - 3 * day < b.end)?.total).toBe(7);
+  });
+
+  it('draws empty bars before the bridge published any history', () => {
+    expect(sum(timelineBars([], 7 * day, 168, now))).toBe(0);
+  });
+});
+
+describe('chart selection', () => {
+  it('filters to the selection, whichever way it was dragged', () => {
+    const bars = bucketize(null, 60_000, 6, 60_000); // six 10s bars: 0..60s
+    const span = spanOfBars(bars, 3, 1);
+    expect(span).toEqual({ start: 10_000, end: 40_000 });
+    const log: CommandEntry[] = [5_000, 10_000, 25_000, 39_999, 40_000].map((t, i) => ({ n: i + 1, t, c: 'x', ms: 1, ok: true }));
+    expect(inSpan(log, span).map((e) => e.t)).toEqual([10_000, 25_000, 39_999]);
+    expect(inSpan(log, null)).toBe(log);
   });
 });

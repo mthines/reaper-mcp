@@ -2,7 +2,7 @@ import type { KnowledgeFeed } from './plugins.js';
 
 /** One command the bridge handled (newest first in BridgeStatus.recent). */
 export interface CommandEntry {
-  /** Sequence number since bridge start (1-based) */
+  /** Sequence number (1-based), continued across bridge restarts */
   n: number;
   /** Epoch ms when the handler finished */
   t: number;
@@ -75,8 +75,9 @@ export interface BridgeStatus {
  * One web-interface request that pings `ui_seen` (the bridge checks it on start so it doesn't
  * open a second window while this page is open) and reads the status and timeline keys.
  */
-export function statusRequestUrl(now: number): string {
-  return `/_/SET/EXTSTATE/MCPBridge/ui_seen/${now};GET/EXTSTATE/MCPBridge/status;GET/EXTSTATE/MCPBridge/history`;
+export function statusRequestUrl(now: number, extraKeys: string[] = []): string {
+  const extra = extraKeys.map((k) => `;GET/EXTSTATE/MCPBridge/${k}`).join('');
+  return `/_/SET/EXTSTATE/MCPBridge/ui_seen/${now};GET/EXTSTATE/MCPBridge/status;GET/EXTSTATE/MCPBridge/history${extra}`;
 }
 
 /**
@@ -115,6 +116,74 @@ export interface BridgeHistory {
 export function parseHistoryReply(body: string): BridgeHistory | null {
   const parsed = parseExtStateKey(body, 'history') as BridgeHistory | null;
   return parsed && typeof parsed === 'object' && Array.isArray(parsed.b) && parsed.size > 0 ? parsed : null;
+}
+
+type Bucket = [number, number, number, number, number];
+
+/** The day/week timeline (ExtState `history_long`): 1m buckets for 24h and 10m buckets for 7d. */
+export interface LongHistory {
+  v: number;
+  tiers: Array<{ size: number; b: Bucket[] }>;
+}
+
+export function parseLongHistoryReply(body: string): LongHistory | null {
+  const parsed = parseExtStateKey(body, 'history_long') as LongHistory | null;
+  return parsed && typeof parsed === 'object' && Array.isArray(parsed.tiers) ? parsed : null;
+}
+
+/** The bridge's saved command log (ExtState `log`, newest first), kept across restarts. */
+export function parseLogReply(body: string): CommandEntry[] | null {
+  const parsed = parseExtStateKey(body, 'log') as { entries?: unknown } | null;
+  return parsed && Array.isArray(parsed.entries) ? (parsed.entries as CommandEntry[]) : null;
+}
+
+/**
+ * Merge the bridge's saved log into the page's log: the union by sequence number, newest first,
+ * capped at LOG_MAX. Entries at or below `clearedThrough` (cleared by the user) stay out.
+ */
+export function restoreLog(log: CommandEntry[], saved: CommandEntry[], clearedThrough = 0): CommandEntry[] {
+  const byN = new Map<number, CommandEntry>();
+  for (const e of saved) if (e.n > clearedThrough) byN.set(e.n, e);
+  for (const e of log) byN.set(e.n, e);
+  return [...byN.values()].sort((a, b) => b.n - a.n).slice(0, LOG_MAX);
+}
+
+/** How far back each bucket size reaches; mirrors HISTORY_TIERS in reaper/mcp_bridge.lua. */
+const TIER_SPAN_MS: Record<number, number> = { 10_000: 3_600_000, 60_000: 86_400_000, 600_000: 7 * 86_400_000 };
+
+/** Every timeline tier the bridge publishes, finest first. */
+export function historyTiers(history: BridgeHistory | null, long: LongHistory | null): BridgeHistory[] {
+  const tiers: BridgeHistory[] = history ? [history] : [];
+  for (const t of long?.tiers ?? []) tiers.push({ v: long?.v ?? 1, size: t.size, b: t.b });
+  return tiers.sort((a, b) => a.size - b.size);
+}
+
+/**
+ * Bars for a range from the finest tier that both reaches back over the whole range and fits whole
+ * buckets into a bar (10s buckets for an hour, 1m for a day, 10m for a week).
+ */
+export function timelineBars(tiers: BridgeHistory[], rangeMs: number, bars: number, now: number): TimeBar[] {
+  const barMs = rangeMs / bars;
+  const fits = tiers.filter((t) => t.size <= barMs && barMs % t.size === 0);
+  const tier = fits.find((t) => (TIER_SPAN_MS[t.size] ?? 0) >= rangeMs) ?? fits[fits.length - 1] ?? null;
+  return bucketize(tier, rangeMs, bars, now);
+}
+
+/** A time span picked on the chart: [start, end) in epoch ms. */
+export interface Span {
+  start: number;
+  end: number;
+}
+
+/** The span covered by bars `from`..`to` (either order, inclusive). */
+export function spanOfBars(bars: TimeBar[], from: number, to: number): Span {
+  const [a, b] = from <= to ? [from, to] : [to, from];
+  return { start: bars[a].start, end: bars[b].end };
+}
+
+/** The entries inside the span; all of them when there is no span. */
+export function inSpan<T extends { t: number }>(entries: T[], span: Span | null): T[] {
+  return span ? entries.filter((e) => e.t >= span.start && e.t < span.end) : entries;
 }
 
 export interface TimeBar {
@@ -179,7 +248,7 @@ export function commandsPerMinute(entries: CommandEntry[], now: number): number 
   return entries.filter((e) => now - e.t <= 60_000).length;
 }
 
-export const LOG_MAX = 500;
+export const LOG_MAX = 1000;
 
 /**
  * Merge the bridge's latest window (newest first) into the page's longer log,
