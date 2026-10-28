@@ -24,7 +24,7 @@ interface Status {
   sessions: Session[];
   settings: { paused: boolean; readonly: boolean; openOnStart: boolean; dev: boolean };
   health: { sws: boolean; jsfx: boolean; outdated: boolean };
-  control: { token: string; canRestart: boolean; canUpdate: boolean; update?: { kind: string; state: string } };
+  control: { token: string; canRestart: boolean; canUpdate: boolean; changed?: boolean; update?: { kind: string; state: string } };
 }
 
 let engine: LuaEngine | undefined;
@@ -225,6 +225,21 @@ describe('restart and update requests from the page', () => {
 
     await bridge.set('cfg_dev', '0');
     expect((await bridge.status()).settings.dev).toBe(false);
+  });
+
+  it('reports source changes since the last install only in developer mode', async () => {
+    const exec = 'os.execute = function(cmd) executed = cmd return true end';
+    const clean = await startBridge(exec, DEV_CLONE);
+    expect((await clean.status()).control.changed).toBe(false);
+    expect(await clean.eval('executed')).toMatch(/find .* -newer '.*mcp_update\.conf' -print -quit/);
+
+    // the background find left a match from its last run
+    const edited = await startBridge(exec, { ...DEV_CLONE, source_changes: 'apps/bridge-ui/src/App.tsx\n' });
+    expect((await edited.status()).control.changed).toBe(true);
+
+    const user = await startBridge(exec, { ...DEV_CLONE, [`${SCRIPTS}mcp_update.conf`]: 'repo=/clone\ndev=0\n', source_changes: 'x\n' });
+    expect((await user.status()).control.changed).toBe(false);
+    expect(await user.eval('executed')).toBeNull();
   });
 
   it('offers no restart on REAPER without set_action_options', async () => {

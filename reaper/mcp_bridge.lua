@@ -4597,6 +4597,7 @@ local control_token = string.format("%08x%08x", math.random(0, 0x7fffffff), math
 local is_windows = (reaper.GetOS and reaper.GetOS() or ""):match("^Win") ~= nil
 local UPDATE_LOG = bridge_dir .. "update.log"
 local UPDATE_EXIT = bridge_dir .. "update.exit"
+local SOURCE_CHANGES = bridge_dir .. "source_changes"
 local update = nil -- { state = "running" | "failed" | "done", startedAt, log = { lines } }
 local last_update_poll = 0
 
@@ -4673,6 +4674,7 @@ local function check_control(now)
   if not code then return end
   code = tonumber(code:match("%d+"))
   update.state = code == 0 and "done" or "failed"
+  if update.state == "done" then os.remove(SOURCE_CHANGES) end -- re-checked against the new install
   log_event("bridge_update_end", { exitCode = code })
   status_dirty = true
   -- The installer replaced this script: load the new copy (the page reloads when startedAt changes)
@@ -4700,12 +4702,37 @@ local function dev_mode()
   return v == "1"
 end
 
+-- Developer mode: whether the clone has source files newer than the last install (setup rewrites
+-- mcp_update.conf, so its mtime marks it). find runs detached every few seconds and leaves the first
+-- match in SOURCE_CHANGES; git and the file walk stay off REAPER's main thread.
+local SOURCE_CHECK_INTERVAL = 5
+local source_changed, last_source_check = false, -SOURCE_CHECK_INTERVAL
+local function check_source_changes(now)
+  if is_windows or now - last_source_check < SOURCE_CHECK_INTERVAL or not dev_mode() or not can_update then return end
+  if update and update.state == "running" then return end
+  last_source_check = now
+  local changed = (read_file(SOURCE_CHANGES) or ""):match("%S") ~= nil
+  if changed ~= source_changed then
+    source_changed = changed
+    status_dirty = true
+  end
+  local conf = update_config()
+  if not conf then return end
+  local tmp = shell_quote(SOURCE_CHANGES .. ".tmp")
+  os.execute("( cd " .. shell_quote(conf.repo) .. " && find apps libs reaper knowledge scripts .claude package.json pnpm-lock.yaml"
+    .. " \\( -name node_modules -o -name dist -o -name .nx -o -name __pycache__ -o -name .DS_Store -o -name '*.tsbuildinfo' -o -name '*.timestamp-*' \\) -prune"
+    .. " -o -type f -newer " .. shell_quote(script_dir .. "mcp_update.conf") .. " -print -quit > " .. tmp .. " 2>/dev/null;"
+    .. " mv " .. tmp .. " " .. shell_quote(SOURCE_CHANGES) .. " ) >/dev/null 2>&1 &")
+end
+
 local function control_status()
   refresh_update_config()
   return {
     token = control_token,
     canRestart = can_restart,
     canUpdate = can_update,
+    -- Developer mode: source changed since the last install, so Rebuild & reload has something to do
+    changed = source_changed,
     update = update,
   }
 end
@@ -5158,6 +5185,7 @@ local function main_loop()
   publish_log()
   check_health(now)
   check_control(now)
+  check_source_changes(now)
   publish_installed_fx(now)
   publish_used_fx(now)
 

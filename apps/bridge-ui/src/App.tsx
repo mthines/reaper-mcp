@@ -365,7 +365,9 @@ export function App() {
         onShowAgents={() => chooseView('sessions')}
         onOpenSettings={settings ? () => setSettingsOpen((o) => !o) : undefined}
         onRebuild={
-          settings?.dev && status?.control?.canUpdate && status.control.update?.state !== 'running' ? () => request('rebuild') : undefined
+          settings?.dev && status?.control?.canUpdate && status.control.changed && status.control.update?.state !== 'running'
+            ? () => request('rebuild')
+            : undefined
         }
       />
       {status ? (
@@ -483,7 +485,7 @@ function Header({
           <button
             className="btn btn-sm"
             onClick={onRebuild}
-            title="Developer mode: build your working tree, install it into REAPER, restart the bridge and reload"
+            title="Developer mode: your working tree changed since the last install. Build it, install it into REAPER, restart the bridge and reload"
           >
             Rebuild &amp; reload
           </button>

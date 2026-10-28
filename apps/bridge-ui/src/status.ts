@@ -70,6 +70,8 @@ export interface BridgeControl {
   canRestart: boolean;
   /** setup wrote mcp_update.conf for a git clone (not on Windows) */
   canUpdate: boolean;
+  /** Developer mode: the clone has source files newer than the last install */
+  changed?: boolean;
   update?: BridgeUpdate;
 }
 

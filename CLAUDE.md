@@ -688,7 +688,7 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   `startedAt` changes (or once when the update is done, if the bridge script didn't change).
   **Developer mode** (`settings.dev`): `setup` writes `dev=1` for a clone with uncommitted changes, a branch other
   than `main` or unpushed commits (`isDevClone()` in `cli.ts`); the Settings toggle (`cfg_dev`, persistent) overrides
-  it. In dev mode the release notice is hidden and the header shows **Rebuild & reload** (request `rebuild-<token>`):
+  it. In dev mode the release notice is hidden and, once source files are newer than the last install (a detached `find -newer mcp_update.conf` every 5s, `control.changed`), the header shows **Rebuild & reload** (request `rebuild-<token>`):
   `update.sh --rebuild` builds the working tree as it is (`--skip-nx-cache`) and runs `setup`, no git involved.
 - Plugins tab: the bridge publishes every installed FX (native `EnumInstalledFX`, REAPER 6.37+; the same list
   `list_available_fx` returns) to ExtState `MCPBridge/installed` as `{v, supported, fx:[{n,t}]}`, re-enumerated every 60s
