@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { track } from './analytics.js';
 import { fetchRecords, parseInstalled, parseUsed, publishRecord } from './lorekit.js';
 import type { InstalledFx, KnowledgeFeed, PluginRecord, UsedFx } from './plugins.js';
 import { parseExtStateKey } from './status.js';
@@ -85,7 +86,11 @@ export function useKnowledge(enabled: boolean, userToken: string | null, publish
     const load = () =>
       fetchRecords(__LOREKIT_API__, __LOREKIT_TOKEN__, 'built-in', ctrl.signal).then(
         (records) => setBuiltIn({ records }),
-        (e: unknown) => !ctrl.signal.aborted && setBuiltIn((prev) => ({ records: prev?.records ?? [], error: errorText(e) })),
+        (e: unknown) => {
+          if (ctrl.signal.aborted) return;
+          track({ name: 'knowledge_load_failed', layer: 'built-in' });
+          setBuiltIn((prev) => ({ records: prev?.records ?? [], error: errorText(e) }));
+        },
       );
     load();
     const id = setInterval(load, RECORDS_REFRESH_MS);
@@ -102,7 +107,11 @@ export function useKnowledge(enabled: boolean, userToken: string | null, publish
     const load = () =>
       fetchRecords(__LOREKIT_API__, userToken, 'user', ctrl.signal).then(
         (records) => setUser({ records }),
-        (e: unknown) => !ctrl.signal.aborted && setUser({ records: [], error: errorText(e) }),
+        (e: unknown) => {
+          if (ctrl.signal.aborted) return;
+          track({ name: 'knowledge_load_failed', layer: 'user' });
+          setUser({ records: [], error: errorText(e) });
+        },
       );
     load();
     const id = setInterval(load, RECORDS_REFRESH_MS);

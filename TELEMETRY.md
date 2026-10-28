@@ -36,6 +36,14 @@ Plus periodic health numbers for the REAPER bridge, such as whether it's running
 
 Nothing is collected while telemetry is off. If you set your own `OTEL_*` exporter variables, telemetry goes only to your destination, in full, and nothing goes to the developer.
 
+## The bridge page
+
+The bridge status page (`mcp_bridge.html`, opened from REAPER) sends its own pseudonymous usage statistics so I can see which parts of it people use: which views you open (Calls, Tools, Sessions, Plugins), which buttons and settings you use (Teach, Contribute, Publish, filters, the timeline range…), whether the bridge goes offline while the page is open, page load speed, and errors in the page's own code. Each event carries a random id kept in that browser, the reaper-mcp version, and whether the page runs as the bridge window, an installed app or a browser tab. The full list is in [`apps/bridge-ui/tracking-plan.yaml`](apps/bridge-ui/tracking-plan.yaml).
+
+It never sends plugin, track, project or agent session names, what you type in the search box, your LoreKit tokens, the page's address (host or LAN IP) or the bridge's polling.
+
+Turn it off under **Settings → Privacy → Share usage statistics** on the page. It is also off when your browser sends Global Privacy Control or Do Not Track, and in the `?demo` preview. The page keeps its own setting, so `reaper-mcp telemetry off` doesn't switch it off. The code is in [`apps/bridge-ui/src/analytics.ts`](apps/bridge-ui/src/analytics.ts).
+
 ## Where it goes
 
 The data goes to an observability backend ([Dash0](https://www.dash0.com)) over OTLP, into a dataset only the developer can read. The ingest token built into the CLI can only write to that dataset, not read from it. The code that decides all of this is in [`apps/reaper-mcp-server/src/telemetry-consent.ts`](apps/reaper-mcp-server/src/telemetry-consent.ts).

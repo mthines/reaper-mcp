@@ -719,6 +719,11 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   (`.github/ISSUE_TEMPLATE/contributor-request.yml`). Logic: `publishRecord()` in `src/lorekit.ts`; `?demo` fakes it.
   One plugin installed in several formats (same title and vendor, e.g. `VST3i:`/`CLAPi:`/`VSTi: Vital (Vital Audio)`)
   is one row (`PluginRow.variants`, VST3 preferred for the Teach prompt), counting the instances of every format.
+- Usage statistics: `src/analytics.ts` is the only module that imports `@dash0/sdk-web` (pinned); components call
+  `track()` / `trackView()` with a typed `TrackEvent`. Events are listed in `apps/bridge-ui/tracking-plan.yaml`; add an
+  event there and in `TrackEvent` together, never with names, search text, tokens or paths. The destination is the
+  server's `DEFAULT_DESTINATION` (read by `build.mjs` from `telemetry-consent.ts`), service `reaper-mcp-bridge-ui`.
+  On by default, off via Settings → Privacy, GPC/DNT, or `?demo`; fetch/xhr tracing stays off (the page polls the bridge).
 - Payload shapes live in `apps/bridge-ui/src/status.ts` (`BridgeStatus`, `BridgeHistory`, `LongHistory`) and
   `publish_status()` / `publish_history()` / `publish_log()` in `mcp_bridge.lua` — change both together.
 

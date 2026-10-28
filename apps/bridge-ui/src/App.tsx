@@ -4,6 +4,7 @@ import { createDemo } from './demo.js';
 import { compareVersions, controlUrl, updateLog, useLatestRelease, type BridgeAction } from './update.js';
 import { manualInstallHint, openInBrowserToInstall, promptInstall, useInstallState } from './install.js';
 import { ResizeHandle, useDrawerWidth } from './ResizeHandle.js';
+import { setUsageStats, startAnalytics, track, trackView, type TrackEvent, type UsageStatsState } from './analytics.js';
 import { PluginsView } from './PluginsView.js';
 import { LOREKIT_PUBLISH_TOKEN_KEY, loadLoreKitToken, saveLoreKitToken, useKnowledge } from './useKnowledge.js';
 import type { KnowledgeFeed } from './plugins.js';
@@ -330,21 +331,34 @@ export function App() {
   const sessions = useMemo(() => new Map(labelSessions(status?.sessions ?? []).map((x) => [x.id, x])), [status?.sessions]);
   const [view, setView] = useState<View>(loadView);
   const chooseView = (v: View) => {
+    if (v !== view) trackView(v);
     setView(v);
     save(VIEW_KEY, v);
   };
   const [settings, setSetting] = useSettings(status);
-  const [notify, setNotify] = useErrorNotifications(log, sessions);
+  const changeSetting = (source: 'settings' | 'notice') => (key: SettingKey, on: boolean) => {
+    track({ name: 'setting_changed', setting: SETTING_NAME[key], enabled: on, source });
+    setSetting(key, on);
+  };
+  const [notify, setNotifyState] = useErrorNotifications(log, sessions);
+  const setNotify = (on: boolean) => {
+    track({ name: 'setting_changed', setting: 'error_notifications', enabled: on, source: 'settings' });
+    setNotifyState(on);
+  };
+  const [usageStats, setUsageStatsState] = useState<UsageStatsState>(() => startAnalytics(Boolean(DEMO)));
+  const chooseUsageStats = (on: boolean) => setUsageStatsState(setUsageStats(on, Boolean(DEMO)));
   // `?install`: opened from the bridge window's Install button, so show the install setting straight away
   const request = useBridgeRequest(status);
   const [settingsOpen, setSettingsOpen] = useState(() => new URLSearchParams(location.search).has('install'));
   const [loreToken, setLoreToken] = useState(() => loadLoreKitToken());
   const chooseLoreToken = (token: string | null) => {
+    track({ name: 'lorekit_token_changed', kind: 'read', connected: token !== null });
     setLoreToken(token);
     saveLoreKitToken(token);
   };
   const [publishToken, setPublishToken] = useState(() => loadLoreKitToken(LOREKIT_PUBLISH_TOKEN_KEY));
   const choosePublishToken = (token: string | null) => {
+    track({ name: 'lorekit_token_changed', kind: 'publish', connected: token !== null });
     setPublishToken(token);
     saveLoreKitToken(token, LOREKIT_PUBLISH_TOKEN_KEY);
   };
@@ -353,6 +367,17 @@ export function App() {
   useEffect(() => {
     document.title = `${state === 'live' ? '●' : '○'} MCP Bridge`;
   }, [state]);
+  // The bridge as viewers see it: going stale or offline while the page is open
+  const lastState = useRef<Liveness | null>(null);
+  useEffect(() => {
+    if (lastState.current !== null && lastState.current !== state) track({ name: 'bridge_state_changed', state });
+    lastState.current = state;
+  }, [state]);
+  const openSettings = (toggle: boolean) => () => {
+    const next = toggle ? !settingsOpen : true;
+    if (next && !settingsOpen) track({ name: 'settings_opened' });
+    setSettingsOpen(next);
+  };
 
   return (
     <div className="shell">
@@ -363,7 +388,7 @@ export function App() {
         now={now}
         sessions={sessions}
         onShowAgents={() => chooseView('sessions')}
-        onOpenSettings={settings ? () => setSettingsOpen((o) => !o) : undefined}
+        onOpenSettings={settings ? openSettings(true) : undefined}
         onRebuild={
           settings?.dev && status?.control?.canUpdate && status.control.changed && status.control.update?.state !== 'running'
             ? () => request('rebuild')
@@ -372,7 +397,7 @@ export function App() {
       />
       {status ? (
         <>
-          <Notices status={status} settings={settings} onSet={setSetting} request={request} />
+          <Notices status={status} settings={settings} onSet={changeSetting('notice')} request={request} />
           <Stats status={status} log={log} now={now} series={series} />
           <Timeline history={history} longHistory={longHistory} now={now} selection={selection} onSelect={setSelection} />
           <Log
@@ -382,20 +407,25 @@ export function App() {
             onClearSelection={() => setSelection(null)}
             sessions={sessions}
             knowledge={DEMO ? status.knowledge : liveKnowledge}
-            onOpenSettings={settings ? () => setSettingsOpen(true) : undefined}
+            onOpenSettings={settings ? openSettings(false) : undefined}
             view={view}
             onView={chooseView}
             paused={paused}
-            onTogglePause={() => setPaused((p) => !p)}
+            onTogglePause={() => {
+              track({ name: 'log_paused', paused: !paused });
+              setPaused(!paused);
+            }}
             onClear={clearLog}
             now={now}
           />
           {settingsOpen && settings && (
             <SettingsPanel
               settings={settings}
-              onSet={setSetting}
+              onSet={changeSetting('settings')}
               notify={notify}
               onNotify={setNotify}
+              usageStats={usageStats}
+              onUsageStats={chooseUsageStats}
               loreToken={loreToken}
               onLoreToken={chooseLoreToken}
               publishToken={publishToken}
@@ -713,6 +743,8 @@ function SettingsPanel({
   onSet,
   notify,
   onNotify,
+  usageStats,
+  onUsageStats,
   loreToken,
   onLoreToken,
   publishToken,
@@ -724,6 +756,8 @@ function SettingsPanel({
   onSet: (key: SettingKey, on: boolean) => void;
   notify: boolean;
   onNotify: (on: boolean) => void;
+  usageStats: UsageStatsState;
+  onUsageStats: (on: boolean) => void;
   loreToken: string | null;
   onLoreToken: (token: string | null) => void;
   publishToken: string | null;
@@ -799,16 +833,42 @@ function SettingsPanel({
         )}
         <LoreKitSetting token={loreToken} onChange={onLoreToken} />
         <PublishSetting token={publishToken} readToken={loreToken} onChange={onPublishToken} />
+        <div className="setting-group">
+          <h3>Privacy</h3>
+          <Toggle
+            label="Share usage statistics"
+            hint={usageStatsHint(usageStats)}
+            on={usageStats.on}
+            disabled={!usageStats.on && usageStats.reason !== 'user'}
+            onChange={onUsageStats}
+          />
+        </div>
       </div>
     </aside>
   );
 }
 
 /** Install the page as a desktop app (it ships a manifest and service worker). */
+function usageStatsHint(state: UsageStatsState): string {
+  if (state.on) return 'Sends which views and buttons you use, pseudonymously, so this page can get better. Never plugin, track or project names, searches or tokens. Turning it off stops events at once and everything else from the next page load.';
+  if (state.reason === 'browser') return 'Off: your browser asks sites not to track you (Global Privacy Control / Do Not Track).';
+  if (state.reason === 'demo') return 'Off in the demo.';
+  if (state.reason === 'unconfigured') return 'This build has no usage statistics destination.';
+  return 'Off. Turn it on to help improve this page: it sends which views and buttons you use, never names, searches or tokens.';
+}
+
+const SETTING_NAME: Record<SettingKey, Extract<TrackEvent, { name: 'setting_changed' }>['setting']> = {
+  cfg_paused: 'paused',
+  cfg_readonly: 'readonly',
+  cfg_open_on_start: 'open_on_start',
+  cfg_dev: 'dev',
+};
+
 function InstallSetting() {
   const state = useInstallState();
   const [showSteps, setShowSteps] = useState(false);
   const onInstall = () => {
+    track({ name: 'app_install_clicked', state });
     if (state === 'available') void promptInstall();
     else if (state === 'window') openInBrowserToInstall();
     else setShowSteps(true); // no prompt from the browser (Safari, Firefox, or already installed): say where it is
@@ -1268,6 +1328,7 @@ function Timeline({
 
   const choose = (key: RangeKey) => {
     if (key === rangeKey) return;
+    track({ name: 'timeline_range_changed', range: key });
     setRangeKey(key);
     save(RANGE_STORAGE_KEY, key);
     onSelect(null); // a selection is a span of the old range's bars
@@ -1294,7 +1355,9 @@ function Timeline({
     const span = spanOfBars(bars, drag.from, drag.to);
     setDrag(null);
     // Clicking the one selected bar again clears the selection
-    onSelect(selection && selection.start === span.start && selection.end === span.end ? null : span);
+    const next = selection && selection.start === span.start && selection.end === span.end ? null : span;
+    track({ name: 'timeline_span_selected', selected: next !== null });
+    onSelect(next);
   };
 
   const hb: TimeBar | undefined = hover === null || drag ? undefined : bars[hover];
@@ -1503,7 +1566,18 @@ function Log({
     document.querySelector('.row-selected')?.scrollIntoView({ block: 'nearest' });
   }, [selected]);
 
+  const chooseFilter = (f: 'all' | 'errors') => {
+    if (f !== filter) track({ name: 'log_filtered', filter: f });
+    setFilter(f);
+  };
+  // One event per search, when the box goes from empty to typed in; the text itself is never sent
+  const search = (q: string) => {
+    if (!query.trim() && q.trim()) track({ name: 'log_searched', view });
+    setQuery(q);
+  };
+
   const copy = async () => {
+    track({ name: 'log_copied', what: 'rows' });
     const text = rows
       .map((e) => `${new Date(e.t).toISOString()}  #${e.n}  ${e.ok ? 'ok ' : 'ERR'}  ${e.c}  ${e.ms}ms${e.s ? `  [${sessionName(sessionOf(e.s))}]` : ''}${e.e ? `  ${e.e}` : ''}`)
       .join('\n');
@@ -1535,10 +1609,10 @@ function Log({
         </div>
         {view === 'calls' && (
           <div className="seg" role="tablist" aria-label="Result">
-            <button role="tab" aria-selected={filter === 'all'} onClick={() => setFilter('all')}>
+            <button role="tab" aria-selected={filter === 'all'} onClick={() => chooseFilter('all')}>
               All <span className="count">{scoped.length}</span>
             </button>
-            <button role="tab" aria-selected={filter === 'errors'} onClick={() => setFilter('errors')}>
+            <button role="tab" aria-selected={filter === 'errors'} onClick={() => chooseFilter('errors')}>
               Errors <span className={`count ${errorCount ? 'count-bad' : ''}`}>{errorCount}</span>
             </button>
           </div>
@@ -1549,7 +1623,7 @@ function Log({
             <input
               ref={searchRef}
               value={query}
-              onChange={(ev) => setQuery(ev.target.value)}
+              onChange={(ev) => search(ev.target.value)}
               placeholder={view === 'tools' ? 'Filter tools' : view === 'plugins' ? 'Filter plugins or categories' : 'Filter commands or errors'}
               spellCheck={false}
             />
@@ -1567,6 +1641,7 @@ function Log({
             <button
               className="btn"
               onClick={() => {
+                track({ name: 'log_cleared' });
                 setSelected(null);
                 onClear();
               }}
@@ -1609,7 +1684,10 @@ function Log({
                 aria-selected={sessionFilter === id}
                 className="chip"
                 title={x.dir ?? id}
-                onClick={() => setSessionFilter(sessionFilter === id ? null : id)}
+                onClick={() => {
+                  if (sessionFilter !== id) track({ name: 'session_filtered' });
+                  setSessionFilter(sessionFilter === id ? null : id);
+                }}
               >
                 <i className={`sdot hue-${sessionHue(id)} ${isConnected(x, now) ? '' : 'sdot-off'}`} />
                 {sessionName(x)}
@@ -1623,9 +1701,15 @@ function Log({
       {view === 'plugins' && knowledge ? (
         <PluginsView feed={knowledge} query={query} now={now} onOpenSettings={onOpenSettings} />
       ) : view === 'tools' ? (
-        <ToolsView log={scoped} query={query} now={now} onPick={(tool, errors) => showCalls({ tool, errors })} />
+        <ToolsView log={scoped} query={query} now={now} onPick={(tool, errors) => {
+            track({ name: 'tool_picked', errors_only: errors });
+            showCalls({ tool, errors });
+          }} />
       ) : view === 'sessions' ? (
-        <SessionsView ids={sessionIds} sessionOf={sessionOf} log={log} now={now} onPick={(session) => showCalls({ session, tool: '' })} />
+        <SessionsView ids={sessionIds} sessionOf={sessionOf} log={log} now={now} onPick={(session) => {
+            track({ name: 'session_picked' });
+            showCalls({ session, tool: '' });
+          }} />
       ) : (
         <div className="rows" role="log" aria-live="off">
           {rows.length === 0 ? (
@@ -1644,7 +1728,10 @@ function Log({
                 now={now}
                 session={multiSession && !sessionFilter && e.s ? sessionOf(e.s) : null}
                 selected={selected?.n === e.n}
-                onSelect={() => setSelected(selected?.n === e.n ? null : e)}
+                onSelect={() => {
+                  if (selected?.n !== e.n) track({ name: 'log_entry_opened', ok: e.ok });
+                  setSelected(selected?.n === e.n ? null : e);
+                }}
               />
             ))
           )}
@@ -1705,7 +1792,10 @@ function ToolsView({
       <div className="tool-head" role="row">
         <span>Tool</span>
         {TOOL_SORTS.map((x) => (
-          <button key={x.key} className={`th ${sort === x.key ? 'th-on' : ''}`} onClick={() => setSort(x.key)} aria-pressed={sort === x.key}>
+          <button key={x.key} className={`th ${sort === x.key ? 'th-on' : ''}`} onClick={() => {
+            if (x.key !== sort) track({ name: 'tools_sorted', sort: x.key });
+            setSort(x.key);
+          }} aria-pressed={sort === x.key}>
             {x.label}
             {sort === x.key && ' ↓'}
           </button>
@@ -1871,7 +1961,8 @@ function Details({ entry: e, session, now, onClose }: { entry: CommandEntry; ses
   const speed = e.ms >= VERY_SLOW_MS ? 'Very slow' : e.ms >= SLOW_MS ? 'Slow' : 'Fast';
   const params = formatParams(e.p);
 
-  const copy = async (what: string, text: string) => {
+  const copy = async (what: 'error' | 'params' | 'json', text: string) => {
+    track({ name: 'log_copied', what });
     try {
       await navigator.clipboard.writeText(text);
       setCopied(what);

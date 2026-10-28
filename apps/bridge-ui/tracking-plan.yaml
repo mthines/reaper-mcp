@@ -1,0 +1,80 @@
+# Usage statistics of the bridge status page (mcp_bridge.html).
+# Source of truth for every event the page sends; src/analytics.ts (TrackEvent) must match it.
+# Sent through the Dash0 Web SDK to the server telemetry's destination (dataset reaper-mcp),
+# service.name reaper-mcp-bridge-ui. Consent and promises: TELEMETRY.md, "The bridge page".
+#
+# Naming: bridge_ui.<object>_<action>, past tense; attributes are bridge_ui.<snake_case>.
+# PII: no plugin, track, project or session names, no search text, tokens, paths, hosts or error text.
+
+service: reaper-mcp-bridge-ui
+identity: random install id per browser (localStorage mcp_bridge.install_id), sent as user.id
+signal_attributes:
+  bridge_ui.display_mode: [bridge_window, installed_app, browser_tab]
+automatic:
+  - browser.page_view       # page load, plus startView('/<view>') on Calls/Tools/Sessions/Plugins
+  - web vitals              # @dash0/web-vitals
+  - uncaught errors         # @dash0/error: the page's own errors (message and stack of bundled code)
+not_collected:
+  - fetch/xhr spans         # the page polls the bridge twice a second and calls LoreKit with a token
+
+events:
+  settings_opened: {}
+  setting_changed:
+    setting: [paused, readonly, open_on_start, dev, error_notifications, usage_stats]
+    enabled: boolean
+    source: [settings, notice]
+  app_install_clicked:
+    state: string            # install state shown at the click (available, window, installed, …)
+  lorekit_token_changed:
+    kind: [read, publish]
+    connected: boolean
+  timeline_range_changed:
+    range: string            # range key, e.g. 30m, 1d
+  timeline_span_selected:
+    selected: boolean
+  log_filtered:
+    filter: [all, errors]
+  log_searched:
+    view: [calls, tools, plugins]   # once per search; the text is never sent
+  log_paused:
+    paused: boolean
+  log_copied:
+    what: [rows, error, params, json]
+  log_cleared: {}
+  log_entry_opened:
+    ok: boolean
+  session_filtered: {}
+  tools_sorted:
+    sort: string
+  tool_picked:
+    errors_only: boolean
+  session_picked: {}
+  plugin_opened:
+    coverage: [learned, built-in, unknown]
+    in_project: boolean
+    formats: number
+  plugin_teach_copied:
+    scope: [one, many]
+    count: number
+  plugins_filtered:
+    filter: [all, learned, built-in, unknown]
+    in_project: boolean
+  plugins_grouped:
+    grouped: boolean
+  plugin_contribute_clicked:
+    count: number
+    prefilled: boolean
+  plugin_publish_completed:  # severity ERROR unless published
+    outcome: [published, refused, failed]
+    removed_copy: boolean
+    replaced: boolean
+  bridge_state_changed:      # while the page is open
+    state: [live, stale, offline]
+  knowledge_load_failed:     # LoreKit records couldn't be loaded
+    layer: [built-in, user]
+
+# What would turn red (regression signals, to set up in Dash0):
+# - bridge_ui.plugin_publish_completed with outcome != published, by outcome
+# - bridge_ui.knowledge_load_failed rate, by layer (LoreKit or token trouble)
+# - bridge_ui.bridge_state_changed to offline/stale, per session
+# - uncaught page errors by error.type after a release (service.version)

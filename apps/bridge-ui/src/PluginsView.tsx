@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { track } from './analytics.js';
 import { contributable, contribution } from './contribute.js';
 import { publishAll, type PublishOutcome } from './lorekit.js';
 import { Markdown } from './markdown.js';
@@ -74,6 +75,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
   const mine = useMemo(() => contributable(feed?.records ?? []), [feed]);
   const contribute = (records: PluginRecord[]) => {
     const c = contribution(records);
+    track({ name: 'plugin_contribute_clicked', count: records.length, prefilled: c.prefilled });
     copy(c.text, `contribute:${records.length}:${c.prefilled ? 'filled' : 'paste'}`);
     window.open(c.url, '_blank', 'noopener,noreferrer');
   };
@@ -130,7 +132,22 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
   const unknownShown = matching.filter((r) => r.coverage === 'unknown');
   const unknownInProject = usedRows.filter((r) => r.coverage === 'unknown');
 
+  const teach = (rows: PluginRow[], text: string, key: string) => {
+    track({ name: 'plugin_teach_copied', scope: rows.length === 1 ? 'one' : 'many', count: rows.length });
+    copy(text, key);
+  };
+  const openPlugin = (r: PluginRow) => {
+    if (open?.fx.name === r.fx.name) return setOpen(null);
+    track({ name: 'plugin_opened', coverage: r.coverage, in_project: r.used > 0, formats: r.variants.length });
+    setOpen(r);
+  };
+  const chooseFilter = (f: Filter, project = inProject) => {
+    track({ name: 'plugins_filtered', filter: f, in_project: project });
+    setFilter(f);
+    setInProject(project);
+  };
   const chooseGrouped = (on: boolean) => {
+    if (on !== grouped) track({ name: 'plugins_grouped', grouped: on });
     setGrouped(on);
     try {
       localStorage.setItem(GROUP_KEY, on ? '1' : '0');
@@ -151,7 +168,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
 
   const renderRow = (r: PluginRow) => (
     <div key={r.fx.name} data-fx={r.fx.name} className={`kn-row ${open?.fx.name === r.fx.name ? 'kn-row-open' : ''}`}>
-      <button className="kn-row-main" onClick={() => setOpen(open?.fx.name === r.fx.name ? null : r)}>
+      <button className="kn-row-main" onClick={() => openPlugin(r)}>
         <i className={`kdot cov-${r.coverage}`} />
         <span className="kn-name">
           <span className="kn-title">{r.label}</span>
@@ -177,7 +194,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
         )}
       </button>
       {r.coverage === 'unknown' && (
-        <button className={`kn-teach ${copied === r.fx.name ? 'kn-teach-done' : ''}`} onClick={() => copy(learnPrompt(r), r.fx.name)} title={`Copy: ${learnPrompt(r)}`}>
+        <button className={`kn-teach ${copied === r.fx.name ? 'kn-teach-done' : ''}`} onClick={() => teach([r], learnPrompt(r), r.fx.name)} title={`Copy: ${learnPrompt(r)}`}>
           {copied === r.fx.name ? 'Copied' : <><SparkIcon /> Teach</>}
         </button>
       )}
@@ -227,7 +244,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
               { key: 'project', label: 'in this project', rows: unknownInProject },
               { key: 'shown', label: filter === 'all' && !inProject && !q ? 'unknown' : 'shown', rows: unknownShown },
             ]}
-            onCopy={(key, list) => copy(learnAllPrompt(list), `all:${key}:${list.length}`)}
+            onCopy={(key, list) => teach(list, learnAllPrompt(list), `all:${key}:${list.length}`)}
           />
           </div>
         </div>
@@ -251,14 +268,14 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
         <div className="kn-controls">
           <div className="chips kn-chips" role="tablist" aria-label="Coverage">
             {(['all', 'learned', 'built-in', 'unknown'] as const).map((f) => (
-              <button key={f} role="tab" aria-selected={filter === f} className="chip" onClick={() => setFilter(f)}>
+              <button key={f} role="tab" aria-selected={filter === f} className="chip" onClick={() => chooseFilter(f)}>
                 {f !== 'all' && <i className={`kdot cov-${f}`} />}
                 {f === 'all' ? 'All' : COVERAGE_LABEL[f]}
                 <span className="count">{f === 'all' ? rows.length : count(f)}</span>
               </button>
             ))}
             {feed.used && (
-              <button className="chip chip-project" aria-pressed={inProject} onClick={() => setInProject((on) => !on)} title="Only plugins loaded in the open project">
+              <button className="chip chip-project" aria-pressed={inProject} onClick={() => chooseFilter(filter, !inProject)} title="Only plugins loaded in the open project">
                 In this project <span className="count">{usedRows.length}</span>
               </button>
             )}
@@ -295,7 +312,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
                   {unknown.length > 0 && (
                     <button
                       className={`kn-teach ${copied === `group:${g.creator}` ? 'kn-teach-done' : ''}`}
-                      onClick={() => copy(learnAllPrompt(unknown), `group:${g.creator}`)}
+                      onClick={() => teach(unknown, learnAllPrompt(unknown), `group:${g.creator}`)}
                       title={`Copy a prompt that teaches the ${unknown.length} unknown ${g.creator} plugin${unknown.length === 1 ? '' : 's'}`}
                     >
                       {copied === `group:${g.creator}` ? 'Copied' : <><SparkIcon /> Teach {unknown.length}</>}
@@ -545,9 +562,15 @@ function PublishRecord({ record, shadows, publish }: { record: PluginRecord; sha
   const run = async () => {
     setState({ step: 'busy' });
     try {
-      setState({ step: 'done', result: await publish(record, { removeCopy }) });
+      const result = await publish(record, { removeCopy });
+      track({ name: 'plugin_publish_completed', outcome: 'published', removed_copy: result.removedCopy, replaced: Boolean(shadows) });
+      setState({ step: 'done', result });
     } catch (e) {
-      setState({ step: 'error', message: e instanceof Error ? e.message : String(e) });
+      const message = e instanceof Error ? e.message : String(e);
+      // "refused" = LoreKit or the record checks said no; "failed" = network or server trouble
+      const refused = /refused|not allowed|must|needs/i.test(message);
+      track({ name: 'plugin_publish_completed', outcome: refused ? 'refused' : 'failed', removed_copy: false, replaced: Boolean(shadows) });
+      setState({ step: 'error', message });
     }
   };
 
