@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { createDemo } from './demo.js';
-import { manualInstallHint, promptInstall, useInstallState } from './install.js';
+import { manualInstallHint, openInBrowserToInstall, promptInstall, useInstallState } from './install.js';
 import { ResizeHandle, useDrawerWidth } from './ResizeHandle.js';
 import { PluginsView } from './PluginsView.js';
 import { loadLoreKitToken, saveLoreKitToken, useKnowledge } from './useKnowledge.js';
@@ -267,7 +267,8 @@ export function App() {
   };
   const [settings, setSetting] = useSettings(status);
   const [notify, setNotify] = useErrorNotifications(log, sessions);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // `?install`: opened from the bridge window's Install button, so show the install setting straight away
+  const [settingsOpen, setSettingsOpen] = useState(() => new URLSearchParams(location.search).has('install'));
   const [loreToken, setLoreToken] = useState(loadLoreKitToken);
   const chooseLoreToken = (token: string | null) => {
     setLoreToken(token);
@@ -564,6 +565,12 @@ function SettingsPanel({
 /** Install the page as a desktop app (it ships a manifest and service worker). */
 function InstallSetting() {
   const state = useInstallState();
+  const [showSteps, setShowSteps] = useState(false);
+  const onInstall = () => {
+    if (state === 'available') void promptInstall();
+    else if (state === 'window') openInBrowserToInstall();
+    else setShowSteps(true); // no prompt from the browser (Safari, Firefox, or already installed): say where it is
+  };
   return (
     <div className="install-row">
       <div className="install-text">
@@ -571,9 +578,11 @@ function InstallSetting() {
         <div className="toggle-hint">
           {state === 'installed'
             ? 'Running as the installed app.'
-            : state === 'available'
-              ? 'Install this page as an app with its own Dock / taskbar icon and window.'
-              : manualInstallHint(navigator.userAgent)}
+            : state === 'window'
+              ? 'This is the bridge’s browser window. Install opens the page in a browser tab, where you can install it as an app.'
+              : showSteps
+                ? manualInstallHint(navigator.userAgent)
+                : 'Install this page as an app with its own Dock / taskbar icon and window.'}
         </div>
       </div>
       {state === 'installed' ? (
@@ -581,11 +590,9 @@ function InstallSetting() {
           <i className="kdot cov-learned" /> Installed
         </span>
       ) : (
-        state === 'available' && (
-          <button className="btn btn-sm" onClick={() => void promptInstall()}>
-            Install app
-          </button>
-        )
+        <button className="btn btn-sm" onClick={onInstall}>
+          Install app
+        </button>
       )}
     </div>
   );

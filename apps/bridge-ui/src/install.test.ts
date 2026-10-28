@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { manualInstallHint } from './install.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { installState, manualInstallHint } from './install.js';
 
 describe('manualInstallHint', () => {
   const ua = {
@@ -13,5 +13,24 @@ describe('manualInstallHint', () => {
     expect(manualInstallHint(ua.edge)).toMatch(/Edge/);
     expect(manualInstallHint(ua.safari)).toMatch(/Add to Dock/);
     expect(manualInstallHint(ua.firefox)).toMatch(/can’t install/);
+  });
+});
+
+describe('installState', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const as = (search: string, standalone: boolean) => {
+    vi.stubGlobal('window', { matchMedia: (q: string) => ({ matches: standalone && q.includes('standalone') }) });
+    vi.stubGlobal('location', { search });
+    vi.stubGlobal('navigator', {});
+  };
+  it('tells the bridge’s --app window from the installed app', () => {
+    as('?app=window', true);
+    expect(installState()).toBe('window');
+    as('?app', true);
+    expect(installState()).toBe('installed');
+  });
+  it('is unavailable in a tab the browser gave no install prompt', () => {
+    as('', false);
+    expect(installState()).toBe('unavailable');
   });
 });

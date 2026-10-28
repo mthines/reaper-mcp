@@ -4962,7 +4962,7 @@ if not web_port then
   reaper.ShowConsoleMsg("MCP Bridge: running. For the status window, quit REAPER and run `reaper-mcp setup` "
     .. "(or enable Preferences > Control/OSC/Web > Web browser interface).\n")
 elseif open_on_start() and not ui_recently_seen() then
-  open_status_window("http://localhost:" .. web_port .. "/mcp_bridge.html?app")
+  open_status_window("http://localhost:" .. web_port .. "/mcp_bridge.html?app=window")
 end
 
 -- Write initial heartbeat
