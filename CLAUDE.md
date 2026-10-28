@@ -654,8 +654,10 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   1000-entry log in the browser, and renders entirely outside REAPER — no gfx/ImGui redraw on the main thread.
 - Persistence: every logged command is appended to `<bridge dir>/history_log.jsonl` and the timeline is saved to
   `history.json` (every 30s and on exit); both reload on start, pruned to 7 days and the newest 1000 entries, and
-  `n` continues across restarts. The saved log is ExtState `MCPBridge/log` (newest first, ≤ every 5s); the page reads
-  it on open, after a bridge restart, and when the 50-entry window skipped entries.
+  `n` continues across restarts (also saved in `history.json`). The saved log is published as ExtState `MCPBridge/log`
+  (newest first) only on request: the page writes `MCPBridge/log_want/<ts>` on open, after a bridge restart, and when
+  the 50-entry window skipped entries; the bridge answers once with `req` echoing it, and the page keeps only the answer
+  to its latest request.
 - Timeline: per-10s buckets for the last hour (sparse, `[id, total, errors, slow, sumMs]`) in ExtState
   `MCPBridge/history` (≤ 1 Hz), and 1m (24h) + 10m (7d) tiers in `MCPBridge/history_long` (≤ every 10s, polled every
   10s). The page draws each range (5m–7d, a listbox combo box) from the finest tier covering it (`timelineBars()`);

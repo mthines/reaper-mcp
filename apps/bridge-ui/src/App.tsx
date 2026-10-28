@@ -162,7 +162,8 @@ function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void } {
       } else {
         const now = Date.now();
         const wantLong = now - lastLongPoll >= LONG_HISTORY_POLL_MS;
-        const wantLog = needLogRef.current;
+        // Paused, the log is frozen: ask (again) once resumed
+        const wantLog = needLogRef.current && !pausedRef.current;
         // Ask once, then read until the answer arrives; ask again if it hasn't after 5s
         const ask = wantLog && (!logWantRef.current || now - logWantRef.current.at > 5000);
         if (ask) logWantRef.current = { req: now, at: now };
