@@ -4771,12 +4771,13 @@ local function load_history()
   history_dirty, history_long_dirty = true, true
 end
 
--- Command log: every logged command is appended to command_log.jsonl (like bridge_events.jsonl)
+-- Command log: every logged command is appended to history_log.jsonl (like bridge_events.jsonl)
 -- and reloaded on start, so the page's log survives a restart. Kept to the newest LOG_KEEP_MAX
 -- entries within the week the timeline covers; the file is compacted on start and whenever it
 -- has grown by LOG_KEEP_MAX lines. Published as ExtState `log` (newest first) at most every 5s;
 -- the page reads it when it opens, then follows `status.recent`.
-local LOG_FILE = bridge_dir .. "command_log.jsonl"
+-- Not "command_…": the directory scan treats those as incoming commands (and deletes what fails to parse)
+local LOG_FILE = bridge_dir .. "history_log.jsonl"
 local LOG_KEEP_MAX = 1000
 local LOG_KEEP_MS = HISTORY_TIERS[#HISTORY_TIERS].keep
 local LOG_PUBLISH_INTERVAL = 5

@@ -253,7 +253,7 @@ describe('persistent history', () => {
     await first.send('no_such_command', {}, A);
     await first.exit();
     const files = {
-      'command_log.jsonl': (await first.file('command_log.jsonl')) as string,
+      'history_log.jsonl': (await first.file('history_log.jsonl')) as string,
       'history.json': (await first.file('history.json')) as string,
     };
     engine?.global.close();
@@ -292,7 +292,7 @@ describe('persistent history', () => {
       ],
     };
     const bridge = await startBridge('', {
-      'command_log.jsonl': lines.map((l) => JSON.stringify(l)).join('\n') + '\n',
+      'history_log.jsonl': lines.map((l) => JSON.stringify(l)).join('\n') + '\n',
       'history.json': JSON.stringify(history),
     });
     await bridge.status();
@@ -302,7 +302,7 @@ describe('persistent history', () => {
     expect(log.entries[0].n).toBe(1201);
     expect(log.entries.every((e) => e.t > now - 7 * day)).toBe(true);
     // The file is compacted to what is kept
-    expect(((await bridge.file('command_log.jsonl')) as string).trim().split('\n')).toHaveLength(1000);
+    expect(((await bridge.file('history_log.jsonl')) as string).trim().split('\n')).toHaveLength(1000);
 
     expect(total((await json<History>(bridge, 'history')).b)).toBe(5);
     const long = await json<LongHistory>(bridge, 'history_long');

@@ -652,7 +652,7 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   when something changed, plus a 1s liveness tick. `_`-prefixed internal commands are excluded.
 - The page polls `/_/GET/EXTSTATE/MCPBridge/status` every 500 ms (paused while the tab is hidden), keeps a
   1000-entry log in the browser, and renders entirely outside REAPER — no gfx/ImGui redraw on the main thread.
-- Persistence: every logged command is appended to `<bridge dir>/command_log.jsonl` and the timeline is saved to
+- Persistence: every logged command is appended to `<bridge dir>/history_log.jsonl` and the timeline is saved to
   `history.json` (every 30s and on exit); both reload on start, pruned to 7 days and the newest 1000 entries, and
   `n` continues across restarts. The saved log is ExtState `MCPBridge/log` (newest first, ≤ every 5s); the page reads
   it on open, after a bridge restart, and when the 50-entry window skipped entries.
