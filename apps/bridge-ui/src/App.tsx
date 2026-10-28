@@ -2093,11 +2093,17 @@ function Offline({ reachable }: { reachable: boolean }) {
       ) : (
         <>
           <h2>Can’t reach REAPER</h2>
-          <p>This page talks to REAPER through its built-in web interface.</p>
+          <p>Open REAPER and start the bridge. This page connects on its own.</p>
           <ol>
-            <li>Make sure REAPER is open</li>
-            <li>Preferences → Control/OSC/Web → Add → Web browser interface</li>
-            <li>Open <code>http://localhost:&lt;port&gt;/mcp_bridge.html</code></li>
+            <li>Open REAPER</li>
+            <li>
+              Run <code>mcp_bridge.lua</code> from the action list (first time: Actions → Show action list → Load
+              ReaScript…)
+            </li>
+            <li>
+              Still unreachable? Close REAPER and run <code>reaper-mcp setup</code>. It turns on REAPER’s web
+              interface.
+            </li>
           </ol>
         </>
       )}
