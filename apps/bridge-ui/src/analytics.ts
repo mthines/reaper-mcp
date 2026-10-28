@@ -41,7 +41,8 @@ export type TrackEvent =
   | { name: 'plugin_contribute_clicked'; count: number; prefilled: boolean }
   | { name: 'plugin_publish_completed'; outcome: 'published' | 'refused' | 'failed'; removed_copy: boolean; replaced: boolean }
   | { name: 'bridge_state_changed'; state: Liveness }
-  | { name: 'knowledge_load_failed'; layer: 'built-in' | 'user' };
+  | { name: 'knowledge_load_failed'; layer: 'built-in' | 'user' }
+  | { name: 'page_error'; type: string };
 
 /** Why usage statistics are on or off, in words the Settings toggle can show. */
 export type UsageStatsState = { on: true } | { on: false; reason: 'user' | 'browser' | 'demo' | 'unconfigured' };
@@ -103,7 +104,7 @@ function installId(): string {
 }
 
 /** Start the SDK when usage statistics are on; a no-op otherwise. Safe to call more than once. */
-export function startAnalytics(demo: boolean): UsageStatsState {
+export function startAnalytics(demo: boolean, view?: string): UsageStatsState {
   const state = currentState(demo);
   enabled = state.on;
   if (!state.on || started) return state;
@@ -112,13 +113,19 @@ export function startAnalytics(demo: boolean): UsageStatsState {
     serviceName: SERVICE_NAME,
     serviceVersion: __VERSION__,
     endpoint: { url: __DASH0_ENDPOINT__, authToken: __DASH0_TOKEN__, dataset: __DASH0_DATASET__ },
-    // Not fetch/xhr: the page polls the bridge twice a second and calls LoreKit with the viewer's token
-    enabledInstrumentations: ['@dash0/navigation', '@dash0/web-vitals', '@dash0/error'],
+    // Web vitals only. Not fetch/xhr: the page polls the bridge twice a second and calls LoreKit with the
+    // viewer's token. Not navigation or error: their bodies and stacks carry the full page URL (host or LAN
+    // IP), which the URL scrubber can't reach; page views and errors are sent by trackView / page_error.
+    enabledInstrumentations: ['@dash0/web-vitals'],
     urlAttributeScrubber: scrubUrl,
     disableVcsDetection: true,
   });
   identify(installId());
   addSignalAttribute('bridge_ui.display_mode', displayMode());
+  // The kind of error only, never its message or stack (TELEMETRY.md)
+  window.addEventListener('error', (ev) => track({ name: 'page_error', type: errorType(ev.error) }));
+  window.addEventListener('unhandledrejection', (ev) => track({ name: 'page_error', type: errorType(ev.reason) }));
+  if (view) trackView(view);
   return state;
 }
 
@@ -140,7 +147,7 @@ export function track(event: TrackEvent): void {
   try {
     sendEvent(`bridge_ui.${event.name}`, {
       attributes: eventAttributes(event),
-      severity: event.name === 'plugin_publish_completed' && event.outcome !== 'published' ? 'ERROR' : undefined,
+      severity: event.name === 'page_error' || (event.name === 'plugin_publish_completed' && event.outcome !== 'published') ? 'ERROR' : undefined,
     });
   } catch {
     // usage statistics never break the page
@@ -155,6 +162,11 @@ export function trackView(view: string): void {
   } catch {
     // usage statistics never break the page
   }
+}
+
+/** `TypeError`, `RangeError`, … for errors; a fixed label for anything thrown that isn't one. */
+export function errorType(error: unknown): string {
+  return error instanceof Error && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : 'non_error';
 }
 
 /** Where the page runs: the bridge's app window, an installed app, or a browser tab. */

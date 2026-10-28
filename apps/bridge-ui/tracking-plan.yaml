@@ -11,11 +11,11 @@ identity: random install id per browser (localStorage mcp_bridge.install_id), se
 signal_attributes:
   bridge_ui.display_mode: [bridge_window, installed_app, browser_tab]
 automatic:
-  - browser.page_view       # page load, plus startView('/<view>') on Calls/Tools/Sessions/Plugins
-  - web vitals              # @dash0/web-vitals
-  - uncaught errors         # @dash0/error: the page's own errors (message and stack of bundled code)
+  - browser.page_view       # startView('/<view>'): the view on load, then each switch of Calls/Tools/Sessions/Plugins
+  - web vitals              # @dash0/web-vitals (LCP, CLS, INP)
 not_collected:
   - fetch/xhr spans         # the page polls the bridge twice a second and calls LoreKit with a token
+  - navigation timing, SDK error events  # their bodies/stacks carry the full page URL (host or LAN IP)
 
 events:
   settings_opened: {}
@@ -72,9 +72,11 @@ events:
     state: [live, stale, offline]
   knowledge_load_failed:     # LoreKit records couldn't be loaded
     layer: [built-in, user]
+  page_error:                # uncaught error or rejection in the page; severity ERROR
+    type: string             # TypeError, RangeError, …, or non_error; never the message or stack
 
 # What would turn red (regression signals, to set up in Dash0):
 # - bridge_ui.plugin_publish_completed with outcome != published, by outcome
 # - bridge_ui.knowledge_load_failed rate, by layer (LoreKit or token trouble)
 # - bridge_ui.bridge_state_changed to offline/stale, per session
-# - uncaught page errors by error.type after a release (service.version)
+# - bridge_ui.page_error by bridge_ui.type after a release (service.version)

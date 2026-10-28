@@ -345,7 +345,7 @@ export function App() {
     track({ name: 'setting_changed', setting: 'error_notifications', enabled: on, source: 'settings' });
     setNotifyState(on);
   };
-  const [usageStats, setUsageStatsState] = useState<UsageStatsState>(() => startAnalytics(Boolean(DEMO)));
+  const [usageStats, setUsageStatsState] = useState<UsageStatsState>(() => startAnalytics(Boolean(DEMO), view));
   const chooseUsageStats = (on: boolean) => setUsageStatsState(setUsageStats(on, Boolean(DEMO)));
   // `?install`: opened from the bridge window's Install button, so show the install setting straight away
   const request = useBridgeRequest(status);
@@ -367,10 +367,15 @@ export function App() {
   useEffect(() => {
     document.title = `${state === 'live' ? '●' : '○'} MCP Bridge`;
   }, [state]);
-  // The bridge as viewers see it: going stale or offline while the page is open
+  // The bridge as viewers see it: going stale or offline while the page is open. Only after it has been
+  // live once, so the page starting up (offline until the first status arrives) isn't counted.
   const lastState = useRef<Liveness | null>(null);
   useEffect(() => {
-    if (lastState.current !== null && lastState.current !== state) track({ name: 'bridge_state_changed', state });
+    if (lastState.current === null) {
+      if (state === 'live') lastState.current = state;
+      return;
+    }
+    if (lastState.current !== state) track({ name: 'bridge_state_changed', state });
     lastState.current = state;
   }, [state]);
   const openSettings = (toggle: boolean) => () => {

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const sdk = vi.hoisted(() => ({ init: vi.fn(), sendEvent: vi.fn(), startView: vi.fn(), identify: vi.fn(), addSignalAttribute: vi.fn() }));
 vi.mock('@dash0/sdk-web', () => sdk);
 
-import { eventAttributes, scrubUrl, usageStatsState } from './analytics.js';
+import { errorType, eventAttributes, scrubUrl, usageStatsState } from './analytics.js';
 
 describe('usageStatsState', () => {
   const base = { demo: false, stored: null, nav: {}, configured: true };
@@ -31,6 +31,12 @@ describe('event shape', () => {
     });
   });
 
+  it('reports only the kind of an error, never its message', () => {
+    expect(errorType(new TypeError('secret track name'))).toBe('TypeError');
+    expect(errorType('a thrown string')).toBe('non_error');
+    expect(errorType(Object.assign(new Error('x'), { name: 'has spaces and <html>' }))).toBe('non_error');
+  });
+
   it('drops host, port and query from the page URL', () => {
     expect(scrubUrl({ 'url.full': 'http://192.168.1.20:8099/mcp_bridge.html?install', 'url.domain': '192.168.1.20', 'url.query': 'install' })).toEqual({
       'url.full': '/mcp_bridge.html',
@@ -49,20 +55,21 @@ describe('sending', () => {
     vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) });
     vi.stubGlobal('navigator', {});
     vi.stubGlobal('location', { search: '' });
-    vi.stubGlobal('window', {});
+    vi.stubGlobal('window', { addEventListener: vi.fn() });
     vi.stubGlobal('__VERSION__', '0.0.0-test');
     vi.stubGlobal('__DASH0_ENDPOINT__', 'https://ingress.test');
     vi.stubGlobal('__DASH0_DATASET__', 'reaper-mcp');
     vi.stubGlobal('__DASH0_TOKEN__', 'auth_test');
   });
 
-  it('starts the SDK without fetch/xhr tracing and sends namespaced events', async () => {
+  it('starts the SDK with web vitals only, records the first view, and sends namespaced events', async () => {
     const a = await import('./analytics.js');
-    expect(a.startAnalytics(false)).toEqual({ on: true });
+    expect(a.startAnalytics(false, 'calls')).toEqual({ on: true });
     const opts = sdk.init.mock.calls[0][0];
     expect(opts).toMatchObject({ serviceName: 'reaper-mcp-bridge-ui', endpoint: { url: 'https://ingress.test', authToken: 'auth_test', dataset: 'reaper-mcp' } });
-    expect(opts.enabledInstrumentations).not.toContain('@dash0/fetch');
-    expect(opts.enabledInstrumentations).not.toContain('@dash0/xhr');
+    // fetch/xhr would trace the bridge polling; navigation and error bodies carry the full page URL
+    expect(opts.enabledInstrumentations).toEqual(['@dash0/web-vitals']);
+    expect(sdk.startView).toHaveBeenCalledWith('/calls');
     expect(sdk.identify).toHaveBeenCalledWith(store.get('mcp_bridge.install_id'));
 
     a.track({ name: 'log_filtered', filter: 'errors' });
