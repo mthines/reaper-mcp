@@ -1,4 +1,4 @@
-import { commandKind, type BridgeHistory, type BridgeSettings, type BridgeStatus, type CommandEntry, type Session, type SettingKey } from './status.js';
+import { LOG_MAX, commandKind, type BridgeHistory, type LongHistory, type BridgeSettings, type BridgeStatus, type CommandEntry, type Session, type SettingKey } from './status.js';
 
 import { DEMO_KNOWLEDGE } from './demo-plugins.js';
 
@@ -25,9 +25,15 @@ const ERRORS = [
 ];
 
 const BUCKET_MS = 10_000;
+/** The bridge's day and week tiers (1m and 10m buckets) */
+const LONG_SIZES = [60_000, 600_000];
+const DAY = 24 * 3_600_000;
+
+type Bucket = [number, number, number, number, number];
 
 export interface Demo {
-  tick(): { status: BridgeStatus; history: BridgeHistory };
+  /** `log` (the bridge's saved log) comes with the first tick only, as the page reads it on open */
+  tick(): { status: BridgeStatus; history: BridgeHistory; longHistory: LongHistory; log?: CommandEntry[] };
   set(key: SettingKey, on: boolean): void;
 }
 
@@ -36,7 +42,19 @@ export function createDemo(): Demo {
   let n = 0;
   let errors = 0;
   let recent: CommandEntry[] = [];
-  const buckets = new Map<number, [number, number, number, number, number]>();
+  let saved: CommandEntry[] = [];
+  let first = true;
+  const buckets = new Map<number, Bucket>();
+  const long = LONG_SIZES.map(() => new Map<number, Bucket>());
+  const count = (map: Map<number, Bucket>, size: number, t: number, total: number, errs: number, slow: number, ms: number) => {
+    const id = Math.floor(t / size);
+    const b = map.get(id) ?? [id, 0, 0, 0, 0];
+    b[1] += total;
+    b[2] += errs;
+    b[3] += slow;
+    b[4] += ms;
+    map.set(id, b);
+  };
   const settings: BridgeSettings = { paused: false, readonly: false, openOnStart: true };
   const sessions: Session[] = [
     { id: '4f1c2a9e-1b7d-4c55-9a51-7f0d3e2b8c10', dir: '/Users/you/Music/midnight-drive', client: 'claude-code', first: startedAt + 60_000, last: 0, commands: 0, errors: 0 },
@@ -64,17 +82,24 @@ export function createDemo(): Demo {
     const entry: CommandEntry = { n, t, c, ms, ok, s: session.id, p: JSON.stringify(params) };
     if (e) entry.e = e;
     recent = [entry, ...recent].slice(0, 50);
+    saved = [entry, ...saved].slice(0, LOG_MAX);
     session.last = t;
     session.commands += 1;
     if (!ok) session.errors += 1;
-    const id = Math.floor(t / BUCKET_MS);
-    const b = buckets.get(id) ?? [id, 0, 0, 0, 0];
-    b[1] += 1;
-    if (!ok) b[2] += 1;
-    if (ok && entry.ms >= 100) b[3] += 1;
-    b[4] += entry.ms;
-    buckets.set(id, b);
+    const slow = ok && entry.ms >= 100 ? 1 : 0;
+    count(buckets, BUCKET_MS, t, 1, ok ? 0 : 1, slow, entry.ms);
+    long.forEach((map, i) => count(map, LONG_SIZES[i], t, 1, ok ? 0 : 1, slow, entry.ms));
   };
+
+  // Earlier sessions this week, before this bridge run: only the day/week tiers know about them
+  for (let t = startedAt - 7 * DAY; t < startedAt; t += 60_000) {
+    const hour = new Date(t).getHours();
+    if (hour < 10 || hour > 22 || Math.sin(t / 7_200_000) < 0.2) continue;
+    const total = Math.round(Math.random() * 12);
+    if (total === 0) continue;
+    const errs = Math.random() < 0.15 ? 1 : 0;
+    long.forEach((map, i) => count(map, LONG_SIZES[i], t, total, errs, Math.random() < 0.2 ? 1 : 0, total * 6));
+  }
 
   // Seed the last 47 minutes with bursty agent sessions separated by quiet stretches
   for (let t = startedAt; t < Date.now(); t += 1000) {
@@ -88,6 +113,8 @@ export function createDemo(): Demo {
   return {
     tick() {
       if (Math.random() < 0.35) push(Date.now());
+      const log = first ? saved : undefined;
+      first = false;
       // Idle agents still ping every 20s
       sessions[1].last = Math.max(sessions[1].last, Date.now() - 8000);
       return {
@@ -108,6 +135,8 @@ export function createDemo(): Demo {
           knowledge: DEMO_KNOWLEDGE,
         },
         history: { v: 1, size: BUCKET_MS, b: [...buckets.values()].sort((a, b) => a[0] - b[0]) },
+        longHistory: { v: 1, tiers: long.map((map, i) => ({ size: LONG_SIZES[i], b: [...map.values()].sort((a, b) => a[0] - b[0]) })) },
+        ...(log ? { log } : {}),
       };
     },
     set(key, on) {

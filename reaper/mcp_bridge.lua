@@ -4671,50 +4671,168 @@ local function publish_used_fx(now)
   reaper.SetExtState(STATUS_SECTION, "used", json_encode({ v = 1, fx = rows }), false)
 end
 
--- Command timeline: per-10s buckets for the last hour, keyed by absolute bucket id
--- (epoch_ms // 10000). Only buckets with commands exist, so idle time costs nothing.
+-- Command timeline at three resolutions, keyed by absolute bucket id (epoch_ms // size).
+-- Only buckets with commands exist, so idle time costs nothing.
 -- Each bucket: { total, errors, slow (ok and >= HISTORY_SLOW_MS), summed handler ms }.
-local HISTORY_BUCKET_MS = 10000
-local HISTORY_BUCKETS = 360
+-- The 10s tier is published live in ExtState `history`; the 1m and 10m tiers (for the page's
+-- day and week ranges) in `history_long`, at most every 10s. All tiers persist in history.json,
+-- saved every 30s and on exit, so the timeline survives a bridge or REAPER restart.
+local HISTORY_TIERS = {
+  { size = 10000, keep = 3600 * 1000 },
+  { size = 60000, keep = 24 * 3600 * 1000 },
+  { size = 600000, keep = 7 * 24 * 3600 * 1000 },
+}
+for _, tier in ipairs(HISTORY_TIERS) do tier.b = {} end
 local HISTORY_SLOW_MS = 100
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
-local history = {}
-local history_dirty = false
-local last_history_publish = 0
+local HISTORY_LONG_PUBLISH_INTERVAL = 10
+local HISTORY_SAVE_INTERVAL = 30
+local HISTORY_FILE = bridge_dir .. "history.json"
+local history_dirty, history_long_dirty, history_unsaved = false, false, false
+-- Last command sequence number, saved with the timeline: the log alone forgets it after a week idle
+local saved_seq = 0
+local last_history_publish, last_history_long_publish, last_history_save =
+  -HISTORY_MIN_PUBLISH_INTERVAL, -HISTORY_LONG_PUBLISH_INTERVAL, 0
 
 local function record_history(handler_ms, ok)
-  local id = math.floor(now_ms() / HISTORY_BUCKET_MS)
-  local b = history[id]
-  if not b then
-    b = { 0, 0, 0, 0 }
-    history[id] = b
+  local t = now_ms()
+  for _, tier in ipairs(HISTORY_TIERS) do
+    local id = math.floor(t / tier.size)
+    local b = tier.b[id]
+    if not b then
+      b = { 0, 0, 0, 0 }
+      tier.b[id] = b
+    end
+    b[1] = b[1] + 1
+    if not ok then b[2] = b[2] + 1 end
+    if ok and handler_ms >= HISTORY_SLOW_MS then b[3] = b[3] + 1 end -- slow successes; errors counted apart
+    b[4] = b[4] + handler_ms
   end
-  b[1] = b[1] + 1
-  if not ok then b[2] = b[2] + 1 end
-  if ok and handler_ms >= HISTORY_SLOW_MS then b[3] = b[3] + 1 end -- slow successes; errors counted apart
-  b[4] = b[4] + handler_ms
-  history_dirty = true
+  history_dirty, history_long_dirty, history_unsaved = true, true, true
 end
 
-local function publish_history(now)
-  if not history_dirty or now - last_history_publish < HISTORY_MIN_PUBLISH_INTERVAL then return end
-  last_history_publish = now
-  history_dirty = false
-
-  local oldest = math.floor(now_ms() / HISTORY_BUCKET_MS) - HISTORY_BUCKETS + 1
+-- Rows `[bucketId, total, errors, slow, sumMs]`, oldest first; drops buckets older than the tier keeps
+local function tier_rows(tier)
+  local oldest = math.floor(now_ms() / tier.size) - tier.keep // tier.size + 1
   local ids = {}
-  for id in pairs(history) do
-    if id < oldest then history[id] = nil else ids[#ids + 1] = id end
+  for id in pairs(tier.b) do
+    if id < oldest then tier.b[id] = nil else ids[#ids + 1] = id end
   end
   table.sort(ids)
   local rows = {}
   for i, id in ipairs(ids) do
-    local b = history[id]
+    local b = tier.b[id]
     rows[i] = { id, b[1], b[2], b[3], math.floor(b[4] * 10 + 0.5) / 10 }
   end
-  -- b: [bucketId, total, errors, slow, sumMs]; bucket start = bucketId * size
-  reaper.SetExtState(STATUS_SECTION, "history", json_encode({ v = 1, size = HISTORY_BUCKET_MS, b = rows }), false)
+  return rows
 end
+
+local function publish_history(now)
+  if history_dirty and now - last_history_publish >= HISTORY_MIN_PUBLISH_INTERVAL then
+    last_history_publish = now
+    history_dirty = false
+    -- b: [bucketId, total, errors, slow, sumMs]; bucket start = bucketId * size
+    local tier = HISTORY_TIERS[1]
+    reaper.SetExtState(STATUS_SECTION, "history", json_encode({ v = 1, size = tier.size, b = tier_rows(tier) }), false)
+  end
+  if history_long_dirty and now - last_history_long_publish >= HISTORY_LONG_PUBLISH_INTERVAL then
+    last_history_long_publish = now
+    history_long_dirty = false
+    local tiers = {}
+    for i = 2, #HISTORY_TIERS do
+      tiers[#tiers + 1] = { size = HISTORY_TIERS[i].size, b = tier_rows(HISTORY_TIERS[i]) }
+    end
+    reaper.SetExtState(STATUS_SECTION, "history_long", json_encode({ v = 1, tiers = tiers }), false)
+  end
+end
+
+local function save_history(now, force)
+  if not history_unsaved or (not force and now - last_history_save < HISTORY_SAVE_INTERVAL) then return end
+  last_history_save = now
+  history_unsaved = false
+  local tiers = {}
+  for i, tier in ipairs(HISTORY_TIERS) do tiers[i] = { size = tier.size, b = tier_rows(tier) } end
+  write_file(HISTORY_FILE, json_encode({ v = 1, seq = status.seq, tiers = tiers }))
+end
+
+local function load_history()
+  local content = read_file(HISTORY_FILE)
+  if not content or not plan_lib_ok then return end
+  local ok, saved = pcall(plan_lib.json_decode, content)
+  if not ok or type(saved) ~= "table" or type(saved.tiers) ~= "table" then return end
+  if type(saved.seq) == "number" then saved_seq = saved.seq end
+  for _, st in ipairs(saved.tiers) do
+    for _, tier in ipairs(HISTORY_TIERS) do
+      if type(st) == "table" and st.size == tier.size and type(st.b) == "table" then
+        for _, r in ipairs(st.b) do
+          if type(r) == "table" and #r >= 5 then tier.b[r[1]] = { r[2], r[3], r[4], r[5] } end
+        end
+      end
+    end
+  end
+  for _, tier in ipairs(HISTORY_TIERS) do tier_rows(tier) end -- drop what aged out while we were stopped
+  history_dirty, history_long_dirty = true, true
+end
+
+-- Command log: every logged command is appended to history_log.jsonl (like bridge_events.jsonl)
+-- and reloaded on start, so the page's log survives a restart. Kept to the newest LOG_KEEP_MAX
+-- entries within the week the timeline covers; the file is compacted on start and whenever it
+-- has grown by LOG_KEEP_MAX lines. Published as ExtState `log` (newest first) only when the page
+-- asks by writing ExtState `log_want` (it does on open, after a restart and on a gap): encoding a
+-- thousand entries on every change would cost the main thread for a key that is rarely read.
+local LOG_FILE = bridge_dir .. "history_log.jsonl"
+local LOG_KEEP_MAX = 1000
+local LOG_KEEP_MS = HISTORY_TIERS[#HISTORY_TIERS].keep
+local saved_log = {} -- newest first
+local log_appends = 0
+local last_log_request = ""
+
+local function compact_log()
+  local lines = {}
+  for i = #saved_log, 1, -1 do lines[#lines + 1] = json_encode(saved_log[i]) end
+  write_file(LOG_FILE, #lines > 0 and table.concat(lines, "\n") .. "\n" or "")
+  log_appends = 0
+end
+
+local function load_log()
+  local content = read_file(LOG_FILE)
+  if not content or not plan_lib_ok then return end
+  local cutoff = now_ms() - LOG_KEEP_MS
+  local entries = {} -- oldest first, as written
+  for line in content:gmatch("[^\n]+") do
+    local ok, e = pcall(plan_lib.json_decode, line)
+    if ok and type(e) == "table" and type(e.n) == "number" and type(e.t) == "number" and e.t >= cutoff then
+      entries[#entries + 1] = e
+    end
+  end
+  for i = #entries, math.max(1, #entries - LOG_KEEP_MAX + 1), -1 do saved_log[#saved_log + 1] = entries[i] end
+  compact_log()
+end
+
+local function append_log(entry)
+  table.insert(saved_log, 1, entry)
+  saved_log[LOG_KEEP_MAX + 1] = nil
+  log_appends = log_appends + 1
+  if log_appends >= LOG_KEEP_MAX then return compact_log() end
+  local f = io.open(LOG_FILE, "a")
+  if not f then return end
+  f:write(json_encode(entry) .. "\n")
+  f:close()
+end
+
+local function publish_log()
+  local req = reaper.GetExtState(STATUS_SECTION, "log_want")
+  if req == "" or req == last_log_request then return end
+  last_log_request = req
+  -- req echoes the page's request so it can tell this answer from an older one
+  reaper.SetExtState(STATUS_SECTION, "log", json_encode({ v = 1, req = req, entries = saved_log }), false)
+end
+
+load_history()
+load_log()
+-- Sequence numbers continue across restarts so the page can merge the saved log with live entries
+status.seq = math.max(saved_seq, saved_log[1] and saved_log[1].n or 0)
+for i = 1, math.min(STATUS_RECENT_MAX, #saved_log) do status.recent[i] = saved_log[i] end
 
 local STATUS_PARAMS_MAX = 400
 
@@ -4728,8 +4846,9 @@ local function record_command(cmd, handler_ms, ok, err)
   end
   local session = touch_session(cmd, ok)
   status.commands = status.commands + 1
+  status.seq = status.seq + 1
   if not ok then status.errors = status.errors + 1 end
-  local entry = { n = status.commands, t = now_ms(), c = cmd_type, ms = math.floor(handler_ms * 100 + 0.5) / 100, ok = ok }
+  local entry = { n = status.seq, t = now_ms(), c = cmd_type, ms = math.floor(handler_ms * 100 + 0.5) / 100, ok = ok }
   if session then entry.s = session.id end
   if type(cmd.params) == "table" and next(cmd.params) ~= nil then
     entry.p = json_encode(cmd.params):sub(1, STATUS_PARAMS_MAX)
@@ -4741,6 +4860,7 @@ local function record_command(cmd, handler_ms, ok, err)
   status.recent[STATUS_RECENT_MAX + 1] = nil
   status_dirty = true
   record_history(handler_ms, ok)
+  append_log(entry)
 end
 
 -- cfg_open_on_start ("1"/"0") overrides OPEN_UI_ON_START once the user has chosen in the page
@@ -4908,6 +5028,8 @@ local function main_loop()
     publish_status(now, false)
   end
   publish_history(now)
+  save_history(now, false)
+  publish_log()
   check_health(now)
   publish_installed_fx(now)
   publish_used_fx(now)
@@ -4974,8 +5096,9 @@ log_event("bridge_start", { reaperVersion = reaper.GetAppVersion(), bridgeDir = 
 -- Register shutdown handler
 reaper.atexit(function()
   log_event("bridge_stop", {})
+  save_history(reaper.time_precise(), true)
   reaper.DeleteExtState(STATUS_SECTION, "status", false) -- UI flips to offline at once
-  reaper.DeleteExtState(STATUS_SECTION, "history", false)
+  for _, key in ipairs({ "history", "history_long", "log" }) do reaper.DeleteExtState(STATUS_SECTION, key, false) end
 end)
 
 -- Start the loop

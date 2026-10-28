@@ -651,9 +651,17 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   defer-loop timing, and the last 50 commands (`n` seq, type, handler ms, ok, error). Throttled to ≤5 Hz and only
   when something changed, plus a 1s liveness tick. `_`-prefixed internal commands are excluded.
 - The page polls `/_/GET/EXTSTATE/MCPBridge/status` every 500 ms (paused while the tab is hidden), keeps a
-  500-entry log in the browser, and renders entirely outside REAPER — no gfx/ImGui redraw on the main thread.
-- Timeline: the bridge also keeps per-10s command buckets for the last hour (sparse, `[id, total, errors, slow, sumMs]`)
-  in ExtState `MCPBridge/history`, republished at most 1 Hz when changed; the page groups them into bars for 5m–1h.
+  1000-entry log in the browser, and renders entirely outside REAPER — no gfx/ImGui redraw on the main thread.
+- Persistence: every logged command is appended to `<bridge dir>/history_log.jsonl` and the timeline is saved to
+  `history.json` (every 30s and on exit); both reload on start, pruned to 7 days and the newest 1000 entries, and
+  `n` continues across restarts (also saved in `history.json`). The saved log is published as ExtState `MCPBridge/log`
+  (newest first) only on request: the page writes `MCPBridge/log_want/<ts>` on open, after a bridge restart, and when
+  the 50-entry window skipped entries; the bridge answers once with `req` echoing it, and the page keeps only the answer
+  to its latest request.
+- Timeline: per-10s buckets for the last hour (sparse, `[id, total, errors, slow, sumMs]`) in ExtState
+  `MCPBridge/history` (≤ 1 Hz), and 1m (24h) + 10m (7d) tiers in `MCPBridge/history_long` (≤ every 10s, polled every
+  10s). The page draws each range (5m–7d, a listbox combo box) from the finest tier covering it (`timelineBars()`);
+  dragging across bars selects a span that filters the log views, leaving the range unchanged.
 - Installable PWA: `apps/bridge-ui/public/` (manifest, service worker, icons) is copied next to the page; every file is
   `mcp_bridge*` and the service worker is scoped to `/mcp_bridge` so REAPER's other web remotes are untouched.
 - Sessions: each `reaper-mcp serve` process tags every command with flat top-level `sessionId` / `sessionDir` /
@@ -688,8 +696,8 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   in the folder and removes them in one bot commit. Records too long for the URL open with a paste prompt
   (`PASTE_HERE` in `src/contribute.ts`) and are on the clipboard. Client: `src/lorekit.ts`,
   hook: `src/useKnowledge.ts`, matching: `src/plugins.ts`.
-- Payload shapes live in `apps/bridge-ui/src/status.ts` (`BridgeStatus`, `BridgeHistory`) and `publish_status()` /
-  `publish_history()` in `mcp_bridge.lua` — change both together.
+- Payload shapes live in `apps/bridge-ui/src/status.ts` (`BridgeStatus`, `BridgeHistory`, `LongHistory`) and
+  `publish_status()` / `publish_history()` / `publish_log()` in `mcp_bridge.lua` — change both together.
 
 ## Platform-Specific Paths
 

@@ -13,7 +13,10 @@ const SCRIPTS = '/reaper/Scripts/';
 const BRIDGE_DIR = `${SCRIPTS}mcp_bridge_data/`;
 const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua'];
 
-interface Entry { c: string; ok: boolean; s?: string; p?: string; e?: string }
+interface Entry { n: number; t: number; c: string; ok: boolean; s?: string; p?: string; e?: string }
+type Row = [number, number, number, number, number];
+interface History { v: number; size: number; b: Row[] }
+interface LongHistory { v: number; tiers: Array<{ size: number; b: Row[] }> }
 interface Session { id: string; dir?: string; client?: string; commands: number; errors: number; ended?: boolean }
 interface Status {
   commands: number;
@@ -29,11 +32,13 @@ afterEach(() => {
   engine = undefined;
 });
 
-async function startBridge(setup = '') {
+/** Files left in the bridge folder by an earlier run, keyed by name (the restart tests). */
+async function startBridge(setup = '', files: Record<string, string> = {}) {
   const factory = new LuaFactory();
   await factory.mountFile(`${SCRIPTS}mcp_bridge.lua`, readFileSync(join(REAPER_DIR, 'mcp_bridge.lua'), 'utf8'));
   for (const lib of LIBS) await factory.mountFile(SCRIPTS + lib, readFileSync(join(REAPER_DIR, lib), 'utf8'));
   await factory.mountFile(`${BRIDGE_DIR}.keep`, '');
+  for (const [name, content] of Object.entries(files)) await factory.mountFile(BRIDGE_DIR + name, content);
   const lua = await factory.createEngine();
   engine = lua;
   await lua.doString(FAKE_SRC);
@@ -49,6 +54,8 @@ async function startBridge(setup = '') {
     api.CF_GetSWSVersion = false -- no SWS installed
     api.GetExtState = function(s, k) return ext[s .. "/" .. k] or "" end
     api.SetExtState = function(s, k, v) ext[s .. "/" .. k] = v end
+    api.DeleteExtState = function(s, k) ext[s .. "/" .. k] = nil end
+    api.atexit = function(fn) on_exit = fn end
     ${setup}
     reaper = setmetatable(api, { __index = function() return function() end end })
     dofile("${SCRIPTS}mcp_bridge.lua")
@@ -82,6 +89,18 @@ async function startBridge(setup = '') {
     },
     async ext(key: string): Promise<string | null> {
       return (await lua.doString(`return ext["MCPBridge/${key}"]`)) ?? null;
+    },
+    /** REAPER quits (or the script stops): runs the bridge's atexit handler. */
+    async exit() {
+      await lua.doString('on_exit()');
+    },
+    async file(name: string): Promise<string | null> {
+      return (await lua.doString(`
+        local f = io.open("${BRIDGE_DIR}${name}", "r")
+        if not f then return nil end
+        local body = f:read("a"); f:close()
+        return body
+      `)) ?? null;
     },
   };
 }
@@ -219,5 +238,96 @@ describe('FX used in the project', () => {
         { n: 'VST: ReaComp (Cockos)', c: 1 },
       ],
     });
+  });
+});
+
+describe('persistent history', () => {
+  const json = async <T,>(bridge: Awaited<ReturnType<typeof startBridge>>, key: string) =>
+    JSON.parse((await bridge.ext(key)) as string) as T;
+  const total = (rows: Row[]) => rows.reduce((sum, r) => sum + r[1], 0);
+
+  it('survives a bridge restart', async () => {
+    const first = await startBridge();
+    await first.send('get_project_info', {}, A);
+    await first.send('list_tracks', {}, A);
+    await first.send('no_such_command', {}, A);
+    await first.exit();
+    const files = {
+      'history_log.jsonl': (await first.file('history_log.jsonl')) as string,
+      'history.json': (await first.file('history.json')) as string,
+    };
+    engine?.global.close();
+    engine = undefined;
+
+    const second = await startBridge('', files);
+    const { recent } = await second.status();
+    expect(recent.map((e) => [e.n, e.c, e.ok])).toEqual([
+      [3, 'no_such_command', false],
+      [2, 'list_tracks', true],
+      [1, 'get_project_info', true],
+    ]);
+    // The saved log is published when the page asks for it, echoing the request
+    await second.set('log_want', '111');
+    await second.status();
+    const log = await json<{ req: string; entries: Entry[] }>(second, 'log');
+    expect(log.req).toBe('111');
+    expect(log.entries.map((e) => e.n)).toEqual([3, 2, 1]);
+    expect(total((await json<History>(second, 'history')).b)).toBe(3);
+    const long = await json<LongHistory>(second, 'history_long');
+    expect(long.tiers.map((t) => [t.size, total(t.b)])).toEqual([[60000, 3], [600000, 3]]);
+
+    // Numbering continues, so the page can tell new entries from the saved ones
+    await second.send('list_tracks', {}, A);
+    expect((await second.status()).recent[0].n).toBe(4);
+  });
+
+  it('drops persisted history past retention and caps the saved log', async () => {
+    const now = Date.now();
+    const day = 24 * 3600 * 1000;
+    const old = { n: 1, t: now - 8 * day, c: 'list_tracks', ms: 1, ok: true };
+    const lines = [old, ...Array.from({ length: 1200 }, (_, i) => ({ n: i + 2, t: now - 60_000 + i, c: 'list_tracks', ms: 1, ok: true }))];
+    const bucket = (size: number, t: number): Row => [Math.floor(t / size), 5, 0, 0, 10];
+    const history = {
+      v: 1,
+      tiers: [
+        { size: 10000, b: [bucket(10000, now - 2 * 3600 * 1000), bucket(10000, now - 60_000)] },
+        { size: 60000, b: [bucket(60000, now - 2 * day), bucket(60000, now - 60_000)] },
+        { size: 600000, b: [bucket(600000, now - 8 * day), bucket(600000, now - 6 * day)] },
+      ],
+    };
+    const bridge = await startBridge('', {
+      'history_log.jsonl': lines.map((l) => JSON.stringify(l)).join('\n') + '\n',
+      'history.json': JSON.stringify(history),
+    });
+    await bridge.set('log_want', '1');
+    await bridge.status();
+
+    const log = await json<{ entries: Entry[] }>(bridge, 'log');
+    expect(log.entries).toHaveLength(1000);
+    expect(log.entries[0].n).toBe(1201);
+    expect(log.entries.every((e) => e.t > now - 7 * day)).toBe(true);
+    // The file is compacted to what is kept
+    expect(((await bridge.file('history_log.jsonl')) as string).trim().split('\n')).toHaveLength(1000);
+
+    expect(total((await json<History>(bridge, 'history')).b)).toBe(5);
+    const long = await json<LongHistory>(bridge, 'history_long');
+    expect(long.tiers.map((t) => [t.size, total(t.b)])).toEqual([[60000, 5], [600000, 5]]);
+  });
+
+  it('keeps numbering after a week without REAPER, when the saved log has expired', async () => {
+    const old = { n: 800, t: Date.now() - 8 * 24 * 3600 * 1000, c: 'list_tracks', ms: 1, ok: true };
+    const bridge = await startBridge('', {
+      'history_log.jsonl': JSON.stringify(old) + '\n',
+      'history.json': JSON.stringify({ v: 1, seq: 800, tiers: [] }),
+    });
+    await bridge.send('list_tracks', {}, A);
+    expect((await bridge.status()).recent.map((e) => e.n)).toEqual([801]);
+  });
+
+  it('publishes the saved log only when asked', async () => {
+    const bridge = await startBridge();
+    await bridge.send('list_tracks', {}, A);
+    await bridge.status();
+    expect(await bridge.ext('log')).toBeNull();
   });
 });

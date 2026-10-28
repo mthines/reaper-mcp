@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { Combobox } from './Combobox.js';
 import { createDemo } from './demo.js';
 import { manualInstallHint, openInBrowserToInstall, promptInstall, useInstallState } from './install.js';
 import { ResizeHandle, useDrawerWidth } from './ResizeHandle.js';
@@ -7,7 +8,7 @@ import { loadLoreKitToken, saveLoreKitToken, useKnowledge } from './useKnowledge
 import type { KnowledgeFeed } from './plugins.js';
 import {
   HISTORY_MAX,
-  bucketize,
+  LOG_MAX,
   commandsPerMinute,
   deriveSeries,
   formatAgo,
@@ -16,6 +17,8 @@ import {
   formatParams,
   groupByTool,
   hasToolCalls,
+  historyTiers,
+  inSpan,
   isConnected,
   labelSessions,
   latencyStats,
@@ -23,18 +26,26 @@ import {
   mergeLog,
   parseExtStateReply,
   parseHistoryReply,
+  parseLogReply,
+  parseLongHistoryReply,
+  restoreLog,
   sessionHue,
   sessionName,
   settingUrl,
+  spanOfBars,
   statusRequestUrl,
+  timelineBars,
   type BridgeHistory,
   type BridgeSettings,
   type BridgeStatus,
   type CommandEntry,
+  type LongHistory,
+  type SavedLog,
   type Sample,
   type Series,
   type Session,
   type SettingKey,
+  type Span,
   type Liveness,
   type TimeBar,
   type ToolSort,
@@ -70,6 +81,8 @@ function save(key: string, value: string): void {
 interface Feed {
   status: BridgeStatus | null;
   history: BridgeHistory | null;
+  /** The day and week timeline tiers, polled every 10s */
+  longHistory: LongHistory | null;
   /** Whether REAPER's web server answered at all */
   reachable: boolean;
   /** Local clock when status.ts last changed (liveness) */
@@ -77,32 +90,65 @@ interface Feed {
   log: CommandEntry[];
 }
 
+const LONG_HISTORY_POLL_MS = 10_000;
+const CLEARED_KEY = 'mcp-bridge-cleared-through';
+
 /** Poll the bridge's ExtState through REAPER's web interface; pauses while the tab is hidden. */
 function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void } {
-  const [feed, setFeed] = useState<Feed>({ status: null, history: null, reachable: true, lastChangeAt: 0, log: [] });
+  const [feed, setFeed] = useState<Feed>({ status: null, history: null, longHistory: null, reachable: true, lastChangeAt: 0, log: [] });
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
-  // Highest sequence number cleared by the user; the bridge keeps re-sending its last 50
-  const clearedThroughRef = useRef(0);
+  // Highest sequence number cleared by the user. Numbers continue across bridge restarts and the
+  // bridge keeps its log, so this is remembered too, or a reload would bring cleared entries back.
+  const clearedThroughRef = useRef(Number(load(CLEARED_KEY)) || 0);
+  // The bridge's saved log (ExtState `log`) is requested when the page opens, after a bridge
+  // restart, and when the live 50-entry window skipped entries (the page was hidden or paused).
+  // Only the answer to the latest request counts, so an older snapshot can't leave a hole.
+  const needLogRef = useRef(true);
+  const logWantRef = useRef<{ req: number; at: number } | null>(null);
 
   useEffect(() => {
     const demo = DEMO;
     let timer: ReturnType<typeof setTimeout>;
     let cancelled = false;
+    let lastLongPoll = -Infinity;
 
-    const apply = (status: BridgeStatus | null, history: BridgeHistory | null, reachable: boolean) =>
+    const apply = (
+      status: BridgeStatus | null,
+      history: BridgeHistory | null,
+      reachable: boolean,
+      longHistory?: LongHistory | null,
+      saved?: SavedLog | null,
+    ) =>
       setFeed((prev) => {
         const changed = status !== null && status.ts !== prev.status?.ts;
         const restarted = status !== null && prev.status !== null && status.startedAt !== prev.status.startedAt;
-        if (restarted) clearedThroughRef.current = 0;
-        const base = restarted ? [] : prev.log;
+        const newest = status?.recent[0]?.n;
+        // Numbering went backwards (the bridge's saved files were removed): start over
+        const renumbered = newest !== undefined && newest < Math.max(clearedThroughRef.current, restarted ? (prev.log[0]?.n ?? 0) : 0);
+        if (renumbered) {
+          clearedThroughRef.current = 0;
+          save(CLEARED_KEY, '0');
+        }
         const incoming = status ? status.recent.filter((e) => e.n > clearedThroughRef.current) : [];
+        let log = renumbered ? [] : prev.log;
+        if (saved && !pausedRef.current && saved.req === String(logWantRef.current?.req)) {
+          log = restoreLog(log, saved.entries, clearedThroughRef.current);
+          needLogRef.current = false;
+          logWantRef.current = null;
+        }
+        if (status && !pausedRef.current) {
+          const oldest = incoming[incoming.length - 1]?.n;
+          if (restarted || (oldest !== undefined && log.length > 0 && oldest > log[0].n + 1)) needLogRef.current = true;
+          log = mergeLog(log, incoming);
+        }
         return {
           status,
           history,
+          longHistory: longHistory === undefined ? prev.longHistory : longHistory,
           reachable,
           lastChangeAt: changed ? Date.now() : prev.lastChangeAt,
-          log: status && !pausedRef.current ? mergeLog(base, incoming) : base,
+          log,
         };
       });
 
@@ -110,13 +156,29 @@ function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void } {
       if (demo) {
         if (!document.hidden) {
           const d = demo.tick();
-          apply(d.status, d.history, true);
+          if (d.log) logWantRef.current = { req: 0, at: 0 };
+          apply(d.status, d.history, true, d.longHistory, d.log ? { req: '0', entries: d.log } : undefined);
         }
       } else {
+        const now = Date.now();
+        const wantLong = now - lastLongPoll >= LONG_HISTORY_POLL_MS;
+        // Paused, the log is frozen: ask (again) once resumed
+        const wantLog = needLogRef.current && !pausedRef.current;
+        // Ask once, then read until the answer arrives; ask again if it hasn't after 5s
+        const ask = wantLog && (!logWantRef.current || now - logWantRef.current.at > 5000);
+        if (ask) logWantRef.current = { req: now, at: now };
+        const extra = [...(wantLong ? ['history_long'] : []), ...(wantLog ? ['log'] : [])];
         try {
-          const res = await fetch(statusRequestUrl(Date.now()), { cache: 'no-store' });
+          const res = await fetch(statusRequestUrl(now, extra, ask ? now : undefined), { cache: 'no-store' });
           const body = await res.text();
-          apply(parseExtStateReply(body), parseHistoryReply(body), true);
+          if (wantLong) lastLongPoll = now;
+          apply(
+            parseExtStateReply(body),
+            parseHistoryReply(body),
+            true,
+            wantLong ? parseLongHistoryReply(body) : undefined,
+            wantLog ? parseLogReply(body) : undefined,
+          );
         } catch {
           apply(null, null, false);
         }
@@ -133,6 +195,7 @@ function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void } {
   const clearLog = () =>
     setFeed((prev) => {
       clearedThroughRef.current = Math.max(prev.log[0]?.n ?? 0, prev.status?.recent[0]?.n ?? 0);
+      save(CLEARED_KEY, String(clearedThroughRef.current));
       return { ...prev, log: [] };
     });
 
@@ -254,7 +317,10 @@ export function App() {
       window.resizeTo(980, 720);
     }
   }, []);
-  const { status, history, reachable, lastChangeAt, log, clearLog } = useBridgeFeed(paused);
+  const { status, history, longHistory, reachable, lastChangeAt, log, clearLog } = useBridgeFeed(paused);
+  // A span picked on the timeline filters the log views; the timeline's range stays as it is
+  const [selection, setSelection] = useState<Span | null>(null);
+  const shownLog = useMemo(() => inSpan(log, selection), [log, selection]);
   const now = useNow(1000);
   const state: Liveness = liveness(status, lastChangeAt, now);
   const samples = useHistory(status, now);
@@ -295,9 +361,12 @@ export function App() {
         <>
           <Notices status={status} settings={settings} onSet={setSetting} />
           <Stats status={status} log={log} now={now} series={series} />
-          <Timeline history={history} now={now} />
+          <Timeline history={history} longHistory={longHistory} now={now} selection={selection} onSelect={setSelection} />
           <Log
-            log={log}
+            log={shownLog}
+            selection={selection}
+            oldestKept={log[log.length - 1]?.t ?? null}
+            onClearSelection={() => setSelection(null)}
             sessions={sessions}
             knowledge={DEMO ? status.knowledge : liveKnowledge}
             onOpenSettings={settings ? () => setSettingsOpen(true) : undefined}
@@ -864,23 +933,33 @@ function Sparkline({
 /** Log-scaled so 1 ms and 500 ms both read. */
 const latencyScale = (ms: number) => Math.min(1, Math.max(0.06, Math.log10(1 + ms) / Math.log10(1 + VERY_SLOW_MS)));
 
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
 const RANGES = [
-  { key: '5m', ms: 5 * 60_000, bars: 30 },
-  { key: '10m', ms: 10 * 60_000, bars: 60 },
-  { key: '30m', ms: 30 * 60_000, bars: 60 },
-  { key: '1h', ms: 60 * 60_000, bars: 60 },
+  { key: '5m', label: 'Last 5 minutes', ms: 5 * MINUTE, bars: 30 },
+  { key: '10m', label: 'Last 10 minutes', ms: 10 * MINUTE, bars: 60 },
+  { key: '30m', label: 'Last 30 minutes', ms: 30 * MINUTE, bars: 60 },
+  { key: '1h', label: 'Last hour', ms: HOUR, bars: 60 },
+  { key: '6h', label: 'Last 6 hours', ms: 6 * HOUR, bars: 72 },
+  { key: '24h', label: 'Last 24 hours', ms: DAY, bars: 96 },
+  { key: '7d', label: 'Last 7 days', ms: 7 * DAY, bars: 168 },
 ] as const;
 type RangeKey = (typeof RANGES)[number]['key'];
 const RANGE_STORAGE_KEY = 'mcp-bridge-range';
 
+/** "10 s", "5 min", "1 h": one bar's width, for the option hints and the header */
+function barWidth(ms: number): string {
+  if (ms < MINUTE) return `${ms / 1000} s`;
+  if (ms < HOUR) return `${ms / MINUTE} min`;
+  return `${ms / HOUR} h`;
+}
+
+const RANGE_OPTIONS = RANGES.map((r) => ({ value: r.key, label: r.label, hint: `${barWidth(r.ms / r.bars)} per bar` }));
+
 function loadRange(): RangeKey {
-  try {
-    const saved = localStorage.getItem(RANGE_STORAGE_KEY);
-    if (RANGES.some((r) => r.key === saved)) return saved as RangeKey;
-  } catch {
-    // storage blocked: fall back to the default
-  }
-  return '30m';
+  const saved = load(RANGE_STORAGE_KEY);
+  return RANGES.some((r) => r.key === saved) ? (saved as RangeKey) : '30m';
 }
 
 /** Round up to a readable, even axis maximum with ~10% headroom, at least 4. */
@@ -893,27 +972,83 @@ function niceMax(v: number): number {
 const clock = (t: number, seconds = false) =>
   new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}), hour12: false });
 
-/** Commands per time slot over a fixed window (stacked ok / slow / error), from the bridge's 10s buckets. */
-function Timeline({ history, now }: { history: BridgeHistory | null; now: number }) {
+/** Clock time within a day, weekday + time beyond it */
+const stamp = (t: number, rangeMs: number, seconds = false) =>
+  rangeMs > DAY ? `${new Date(t).toLocaleDateString([], { weekday: 'short' })} ${clock(t)}` : clock(t, seconds);
+
+/** "Mon 14:02 – Mon 15:00", with the weekday only when the span leaves today */
+function spanLabel(span: Span): string {
+  const today = new Date().toDateString();
+  const fmt = (t: number) => (new Date(t).toDateString() === today ? clock(t) : `${new Date(t).toLocaleDateString([], { weekday: 'short' })} ${clock(t)}`);
+  return `${fmt(span.start)} – ${fmt(span.end)}`;
+}
+
+/** Which bar the pointer is over, clamped to the plot */
+function barAt(plot: HTMLElement, clientX: number, count: number): number {
+  const r = plot.getBoundingClientRect();
+  return Math.min(count - 1, Math.max(0, Math.floor(((clientX - r.left) / r.width) * count)));
+}
+
+/**
+ * Commands per time slot over a fixed window (stacked ok / slow / error). Drag across bars (or
+ * click one) to select a span: the log below filters to it, and the range stays as it is.
+ */
+function Timeline({
+  history,
+  longHistory,
+  now,
+  selection,
+  onSelect,
+}: {
+  history: BridgeHistory | null;
+  longHistory: LongHistory | null;
+  now: number;
+  selection: Span | null;
+  onSelect: (span: Span | null) => void;
+}) {
   const [rangeKey, setRangeKey] = useState<RangeKey>(loadRange);
   const [hover, setHover] = useState<number | null>(null);
+  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const range = RANGES.find((r) => r.key === rangeKey) ?? RANGES[2];
-  const bars = useMemo(() => bucketize(history, range.ms, range.bars, now), [history, range, now]);
+  const tiers = useMemo(() => historyTiers(history, longHistory), [history, longHistory]);
+  const bars = useMemo(() => timelineBars(tiers, range.ms, range.bars, now), [tiers, range, now]);
   const peak = Math.max(0, ...bars.map((b) => b.total));
   const yMax = niceMax(peak);
   const total = bars.reduce((sum, b) => sum + b.total, 0);
-  const barSeconds = range.ms / range.bars / 1000;
+  const barMs = range.ms / range.bars;
 
   const choose = (key: RangeKey) => {
+    if (key === rangeKey) return;
     setRangeKey(key);
-    try {
-      localStorage.setItem(RANGE_STORAGE_KEY, key);
-    } catch {
-      // per-viewer convenience only
-    }
+    save(RANGE_STORAGE_KEY, key);
+    onSelect(null); // a selection is a span of the old range's bars
   };
 
-  const hb: TimeBar | undefined = hover === null ? undefined : bars[hover];
+  // While dragging, the drag is the selection; otherwise bars inside the selected span
+  const picked = drag ? spanOfBars(bars, drag.from, drag.to) : selection;
+  const isPicked = (b: TimeBar) => picked !== null && b.start >= picked.start && b.end <= picked.end;
+  const pickedTotal = picked ? bars.filter(isPicked).reduce((sum, b) => sum + b.total, 0) : 0;
+
+  const onPointerDown = (ev: ReactPointerEvent<HTMLDivElement>) => {
+    if (ev.button !== 0) return;
+    ev.currentTarget.setPointerCapture(ev.pointerId);
+    const i = barAt(ev.currentTarget, ev.clientX, bars.length);
+    setDrag({ from: i, to: i });
+  };
+  const onPointerMove = (ev: ReactPointerEvent<HTMLDivElement>) => {
+    const i = barAt(ev.currentTarget, ev.clientX, bars.length);
+    setHover(i);
+    if (drag && i !== drag.to) setDrag({ ...drag, to: i });
+  };
+  const onPointerUp = () => {
+    if (!drag) return;
+    const span = spanOfBars(bars, drag.from, drag.to);
+    setDrag(null);
+    // Clicking the one selected bar again clears the selection
+    onSelect(selection && selection.start === span.start && selection.end === span.end ? null : span);
+  };
+
+  const hb: TimeBar | undefined = hover === null || drag ? undefined : bars[hover];
   const leftPct = hover === null ? 0 : ((hover + 0.5) / bars.length) * 100;
   const tipAlign = leftPct < 15 ? 'start' : leftPct > 85 ? 'end' : 'center';
 
@@ -921,7 +1056,10 @@ function Timeline({ history, now }: { history: BridgeHistory | null; now: number
     <section className="timeline" aria-label="Commands over time">
       <div className="timeline-head">
         <span className="timeline-title">
-          Commands <span className="timeline-sub">{total.toLocaleString()} in the last {rangeKey} · {barSeconds}s per bar</span>
+          Commands{' '}
+          <span className="timeline-sub">
+            {total.toLocaleString()} in the {range.label.toLowerCase()} · {barWidth(barMs)} per bar
+          </span>
         </span>
         <div className="timeline-controls">
           <span className="legend">
@@ -929,13 +1067,7 @@ function Timeline({ history, now }: { history: BridgeHistory | null; now: number
             <i className="lg lg-slow" /> ≥ {SLOW_MS} ms
             <i className="lg lg-err" /> error
           </span>
-          <div className="seg seg-sm" role="tablist" aria-label="Time range">
-            {RANGES.map((r) => (
-              <button key={r.key} role="tab" aria-selected={r.key === rangeKey} onClick={() => choose(r.key)}>
-                {r.key}
-              </button>
-            ))}
-          </div>
+          <Combobox label="Time range" value={rangeKey} options={RANGE_OPTIONS} onChange={choose} />
         </div>
       </div>
       <div className="timeline-chart">
@@ -944,12 +1076,20 @@ function Timeline({ history, now }: { history: BridgeHistory | null; now: number
           <span>{yMax / 2}</span>
           <span>0</span>
         </div>
-        <div className="plot" onMouseLeave={() => setHover(null)}>
+        <div
+          className={`plot ${picked ? 'plot-picking' : ''} ${bars.length > 100 ? 'plot-dense' : ''}`}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={() => setDrag(null)}
+          onMouseLeave={() => setHover(null)}
+          title="Drag to select a span; the log shows only its commands"
+        >
           <div className="grid" aria-hidden />
           {bars.map((b, i) => {
             const ok = Math.max(0, b.total - b.errors - b.slow);
             return (
-              <div key={b.start} className={`tbar ${hover === i ? 'tbar-hover' : ''}`} onMouseEnter={() => setHover(i)}>
+              <div key={b.start} className={`tbar ${hover === i && !drag ? 'tbar-hover' : ''} ${isPicked(b) ? 'tbar-picked' : ''}`}>
                 <div className="tstack" style={{ height: `${(b.total / yMax) * 100}%` }}>
                   {b.errors > 0 && <span className="seg-err" style={{ flexGrow: b.errors }} />}
                   {b.slow > 0 && <span className="seg-slow" style={{ flexGrow: b.slow }} />}
@@ -961,7 +1101,7 @@ function Timeline({ history, now }: { history: BridgeHistory | null; now: number
           {hb && (
             <div className={`ttip ttip-${tipAlign}`} style={{ left: `${leftPct}%` }}>
               <div className="ttip-time">
-                {clock(hb.start, barSeconds < 60)}–{clock(hb.end, barSeconds < 60)}
+                {stamp(hb.start, range.ms, barMs < MINUTE)}–{clock(hb.end, barMs < MINUTE)}
               </div>
               {hb.total === 0 ? (
                 <div className="ttip-row">No commands</div>
@@ -989,7 +1129,13 @@ function Timeline({ history, now }: { history: BridgeHistory | null; now: number
       </div>
       <div className="x-axis" aria-hidden>
         <span>−{rangeKey}</span>
-        <span>{clock(now - range.ms / 2)}</span>
+        {picked ? (
+          <span className="x-picked">
+            {stamp(picked.start, range.ms)}–{stamp(picked.end, range.ms)} · {pickedTotal.toLocaleString()} command{pickedTotal === 1 ? '' : 's'}
+          </span>
+        ) : (
+          <span>{stamp(now - range.ms / 2, range.ms)}</span>
+        )}
         <span>now</span>
       </div>
     </section>
@@ -1013,6 +1159,9 @@ function loadView(): View {
 
 function Log({
   log,
+  selection,
+  oldestKept,
+  onClearSelection,
   sessions,
   knowledge,
   view,
@@ -1024,6 +1173,11 @@ function Log({
   onOpenSettings,
 }: {
   log: CommandEntry[];
+  /** The timeline span the log is filtered to, if any */
+  selection: Span | null;
+  /** Time of the oldest entry the page holds, before the selection filter */
+  oldestKept: number | null;
+  onClearSelection: () => void;
   sessions: Map<string, Session>;
   knowledge?: KnowledgeFeed;
   onOpenSettings?: () => void;
@@ -1175,6 +1329,21 @@ function Log({
           </div>
         )}
       </div>
+
+      {selection && view !== 'plugins' && (
+        <div className="selection-bar" role="status">
+          <span>
+            Showing <b>{log.length.toLocaleString()}</b> command{log.length === 1 ? '' : 's'} from{' '}
+            <span className="mono">{spanLabel(selection)}</span>
+            {(oldestKept === null || selection.start < oldestKept) && (
+              <span className="selection-note"> · the log keeps the latest {LOG_MAX.toLocaleString()}; older commands are only counted in the chart</span>
+            )}
+          </span>
+          <button className="btn" onClick={onClearSelection}>
+            Clear selection
+          </button>
+        </div>
+      )}
 
       {multiSession && (view === 'calls' || view === 'tools') && (
         <div className="chips" role="tablist" aria-label="Agent session">
