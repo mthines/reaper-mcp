@@ -244,8 +244,10 @@ describe('persisted log', () => {
   it('restores the persisted log beyond the live window', () => {
     const saved = Array.from({ length: 120 }, (_, i) => e(120 - i)); // newest first
     const live = [e(122), e(121), e(120), e(119)];
-    const body = `EXTSTATE\tMCPBridge\tlog\t${JSON.stringify({ v: 1, entries: saved })}\n`;
-    const restored = restoreLog(live, parseLogReply(body) ?? []);
+    const body = `EXTSTATE\tMCPBridge\tlog\t${JSON.stringify({ v: 1, req: '42', entries: saved })}\n`;
+    const reply = parseLogReply(body);
+    expect(reply?.req).toBe('42');
+    const restored = restoreLog(live, reply?.entries ?? []);
     expect(restored).toHaveLength(122);
     expect(restored.slice(0, 3).map((x) => x.n)).toEqual([122, 121, 120]);
     expect(restored[121].n).toBe(1);

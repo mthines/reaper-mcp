@@ -4689,6 +4689,8 @@ local HISTORY_LONG_PUBLISH_INTERVAL = 10
 local HISTORY_SAVE_INTERVAL = 30
 local HISTORY_FILE = bridge_dir .. "history.json"
 local history_dirty, history_long_dirty, history_unsaved = false, false, false
+-- Last command sequence number, saved with the timeline: the log alone forgets it after a week idle
+local saved_seq = 0
 local last_history_publish, last_history_long_publish, last_history_save =
   -HISTORY_MIN_PUBLISH_INTERVAL, -HISTORY_LONG_PUBLISH_INTERVAL, 0
 
@@ -4750,7 +4752,7 @@ local function save_history(now, force)
   history_unsaved = false
   local tiers = {}
   for i, tier in ipairs(HISTORY_TIERS) do tiers[i] = { size = tier.size, b = tier_rows(tier) } end
-  write_file(HISTORY_FILE, json_encode({ v = 1, tiers = tiers }))
+  write_file(HISTORY_FILE, json_encode({ v = 1, seq = status.seq, tiers = tiers }))
 end
 
 local function load_history()
@@ -4758,6 +4760,7 @@ local function load_history()
   if not content or not plan_lib_ok then return end
   local ok, saved = pcall(plan_lib.json_decode, content)
   if not ok or type(saved) ~= "table" or type(saved.tiers) ~= "table" then return end
+  if type(saved.seq) == "number" then saved_seq = saved.seq end
   for _, st in ipairs(saved.tiers) do
     for _, tier in ipairs(HISTORY_TIERS) do
       if type(st) == "table" and st.size == tier.size and type(st.b) == "table" then
@@ -4774,15 +4777,15 @@ end
 -- Command log: every logged command is appended to history_log.jsonl (like bridge_events.jsonl)
 -- and reloaded on start, so the page's log survives a restart. Kept to the newest LOG_KEEP_MAX
 -- entries within the week the timeline covers; the file is compacted on start and whenever it
--- has grown by LOG_KEEP_MAX lines. Published as ExtState `log` (newest first) at most every 5s;
--- the page reads it when it opens, then follows `status.recent`.
--- Not "command_…": the directory scan treats those as incoming commands (and deletes what fails to parse)
+-- has grown by LOG_KEEP_MAX lines. Published as ExtState `log` (newest first) only when the page
+-- asks by writing ExtState `log_want` (it does on open, after a restart and on a gap): encoding a
+-- thousand entries on every change would cost the main thread for a key that is rarely read.
 local LOG_FILE = bridge_dir .. "history_log.jsonl"
 local LOG_KEEP_MAX = 1000
 local LOG_KEEP_MS = HISTORY_TIERS[#HISTORY_TIERS].keep
-local LOG_PUBLISH_INTERVAL = 5
 local saved_log = {} -- newest first
-local log_dirty, last_log_publish, log_appends = false, -LOG_PUBLISH_INTERVAL, 0
+local log_appends = 0
+local last_log_request = ""
 
 local function compact_log()
   local lines = {}
@@ -4804,13 +4807,11 @@ local function load_log()
   end
   for i = #entries, math.max(1, #entries - LOG_KEEP_MAX + 1), -1 do saved_log[#saved_log + 1] = entries[i] end
   compact_log()
-  log_dirty = true
 end
 
 local function append_log(entry)
   table.insert(saved_log, 1, entry)
   saved_log[LOG_KEEP_MAX + 1] = nil
-  log_dirty = true
   log_appends = log_appends + 1
   if log_appends >= LOG_KEEP_MAX then return compact_log() end
   local f = io.open(LOG_FILE, "a")
@@ -4819,17 +4820,18 @@ local function append_log(entry)
   f:close()
 end
 
-local function publish_log(now)
-  if not log_dirty or now - last_log_publish < LOG_PUBLISH_INTERVAL then return end
-  last_log_publish = now
-  log_dirty = false
-  reaper.SetExtState(STATUS_SECTION, "log", json_encode({ v = 1, entries = saved_log }), false)
+local function publish_log()
+  local req = reaper.GetExtState(STATUS_SECTION, "log_want")
+  if req == "" or req == last_log_request then return end
+  last_log_request = req
+  -- req echoes the page's request so it can tell this answer from an older one
+  reaper.SetExtState(STATUS_SECTION, "log", json_encode({ v = 1, req = req, entries = saved_log }), false)
 end
 
 load_history()
 load_log()
 -- Sequence numbers continue across restarts so the page can merge the saved log with live entries
-status.seq = saved_log[1] and saved_log[1].n or 0
+status.seq = math.max(saved_seq, saved_log[1] and saved_log[1].n or 0)
 for i = 1, math.min(STATUS_RECENT_MAX, #saved_log) do status.recent[i] = saved_log[i] end
 
 local STATUS_PARAMS_MAX = 400
@@ -5027,7 +5029,7 @@ local function main_loop()
   end
   publish_history(now)
   save_history(now, false)
-  publish_log(now)
+  publish_log()
   check_health(now)
   publish_installed_fx(now)
   publish_used_fx(now)

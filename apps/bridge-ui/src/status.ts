@@ -75,9 +75,11 @@ export interface BridgeStatus {
  * One web-interface request that pings `ui_seen` (the bridge checks it on start so it doesn't
  * open a second window while this page is open) and reads the status and timeline keys.
  */
-export function statusRequestUrl(now: number, extraKeys: string[] = []): string {
+export function statusRequestUrl(now: number, extraKeys: string[] = [], logWant?: number): string {
+  // log_want asks the bridge to publish its saved log; it answers on its next loop, echoing the value
+  const ask = logWant === undefined ? '' : `;SET/EXTSTATE/MCPBridge/log_want/${logWant}`;
   const extra = extraKeys.map((k) => `;GET/EXTSTATE/MCPBridge/${k}`).join('');
-  return `/_/SET/EXTSTATE/MCPBridge/ui_seen/${now};GET/EXTSTATE/MCPBridge/status;GET/EXTSTATE/MCPBridge/history${extra}`;
+  return `/_/SET/EXTSTATE/MCPBridge/ui_seen/${now}${ask};GET/EXTSTATE/MCPBridge/status;GET/EXTSTATE/MCPBridge/history${extra}`;
 }
 
 /**
@@ -131,10 +133,17 @@ export function parseLongHistoryReply(body: string): LongHistory | null {
   return parsed && typeof parsed === 'object' && Array.isArray(parsed.tiers) ? parsed : null;
 }
 
-/** The bridge's saved command log (ExtState `log`, newest first), kept across restarts. */
-export function parseLogReply(body: string): CommandEntry[] | null {
-  const parsed = parseExtStateKey(body, 'log') as { entries?: unknown } | null;
-  return parsed && Array.isArray(parsed.entries) ? (parsed.entries as CommandEntry[]) : null;
+/** The bridge's saved command log (ExtState `log`), kept across restarts. */
+export interface SavedLog {
+  /** The `log_want` request this answers */
+  req: string;
+  /** Newest first */
+  entries: CommandEntry[];
+}
+
+export function parseLogReply(body: string): SavedLog | null {
+  const parsed = parseExtStateKey(body, 'log') as { req?: unknown; entries?: unknown } | null;
+  return parsed && Array.isArray(parsed.entries) ? { req: String(parsed.req ?? ''), entries: parsed.entries as CommandEntry[] } : null;
 }
 
 /**

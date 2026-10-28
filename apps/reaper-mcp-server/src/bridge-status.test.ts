@@ -266,7 +266,11 @@ describe('persistent history', () => {
       [2, 'list_tracks', true],
       [1, 'get_project_info', true],
     ]);
-    const log = await json<{ entries: Entry[] }>(second, 'log');
+    // The saved log is published when the page asks for it, echoing the request
+    await second.set('log_want', '111');
+    await second.status();
+    const log = await json<{ req: string; entries: Entry[] }>(second, 'log');
+    expect(log.req).toBe('111');
     expect(log.entries.map((e) => e.n)).toEqual([3, 2, 1]);
     expect(total((await json<History>(second, 'history')).b)).toBe(3);
     const long = await json<LongHistory>(second, 'history_long');
@@ -295,6 +299,7 @@ describe('persistent history', () => {
       'history_log.jsonl': lines.map((l) => JSON.stringify(l)).join('\n') + '\n',
       'history.json': JSON.stringify(history),
     });
+    await bridge.set('log_want', '1');
     await bridge.status();
 
     const log = await json<{ entries: Entry[] }>(bridge, 'log');
@@ -307,5 +312,22 @@ describe('persistent history', () => {
     expect(total((await json<History>(bridge, 'history')).b)).toBe(5);
     const long = await json<LongHistory>(bridge, 'history_long');
     expect(long.tiers.map((t) => [t.size, total(t.b)])).toEqual([[60000, 5], [600000, 5]]);
+  });
+
+  it('keeps numbering after a week without REAPER, when the saved log has expired', async () => {
+    const old = { n: 800, t: Date.now() - 8 * 24 * 3600 * 1000, c: 'list_tracks', ms: 1, ok: true };
+    const bridge = await startBridge('', {
+      'history_log.jsonl': JSON.stringify(old) + '\n',
+      'history.json': JSON.stringify({ v: 1, seq: 800, tiers: [] }),
+    });
+    await bridge.send('list_tracks', {}, A);
+    expect((await bridge.status()).recent.map((e) => e.n)).toEqual([801]);
+  });
+
+  it('publishes the saved log only when asked', async () => {
+    const bridge = await startBridge();
+    await bridge.send('list_tracks', {}, A);
+    await bridge.status();
+    expect(await bridge.ext('log')).toBeNull();
   });
 });
