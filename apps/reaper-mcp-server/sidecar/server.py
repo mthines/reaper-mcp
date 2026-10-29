@@ -26,6 +26,11 @@ import sys
 import os
 from typing import Any
 
+import numpy as np
+
+# analysis.py is installed next to this file
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 # Minimum audio duration the model can process
 MIN_DURATION_SECONDS = 0.5
 MODEL_ID = "facebook/audiobox-aesthetics"
@@ -62,23 +67,14 @@ def _ensure_predictor() -> None:
 # ---------------------------------------------------------------------------
 
 def _load_clip(path: str, start_time: float, end_time: float) -> tuple[Any, int]:
-    """Decode [start_time, end_time) of a file as a (channels, frames) float tensor.
+    """Decode [start_time, end_time) of a file as a (channels, frames) float32 array.
 
     Uses soundfile, not torchaudio: torchaudio 2.9+ dropped info() and moved
     load() to torchcodec, which audiobox-aesthetics' own reader still calls.
     """
-    import soundfile as sf  # type: ignore
-    import torch  # type: ignore
+    import analysis
 
-    sample_rate = sf.info(path).samplerate
-    data, sample_rate = sf.read(
-        path,
-        start=int(start_time * sample_rate),
-        stop=int(end_time * sample_rate),
-        dtype="float32",
-        always_2d=True,
-    )
-    return torch.from_numpy(data.T.copy()), sample_rate
+    return analysis.load_audio(path, start_time, end_time)
 
 
 def _get_audio_duration(path: str) -> float:
@@ -101,8 +97,15 @@ def _get_audio_duration(path: str) -> float:
 # JSON-RPC helpers
 # ---------------------------------------------------------------------------
 
+def _json_default(value: Any) -> Any:
+    # numpy scalars (float32 survives arithmetic with Python floats in NumPy 2)
+    if isinstance(value, np.generic):
+        return value.item()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 def _ok(request_id: Any, result: dict) -> str:
-    return json.dumps({"jsonrpc": "2.0", "id": request_id, "result": result})
+    return json.dumps({"jsonrpc": "2.0", "id": request_id, "result": result}, default=_json_default)
 
 
 def _err(request_id: Any, code: int, message: str) -> str:
@@ -139,6 +142,8 @@ def handle_analyze(request_id: Any, params: dict) -> str:
 
     start_time = float(params.get("startTime", 0))
     end_time = float(params.get("endTime", duration))
+    normalize_lufs = params.get("normalizeLufs")
+    normalize_lufs = None if normalize_lufs is None else float(normalize_lufs)
 
     clip_duration = end_time - start_time
     if clip_duration < MIN_DURATION_SECONDS:
@@ -155,6 +160,16 @@ def handle_analyze(request_id: Any, params: dict) -> str:
 
     try:
         wav, sample_rate = _load_clip(path, start_time, end_time)
+        input_lufs = None
+        gain_db = 0.0
+        if normalize_lufs is not None:
+            import analysis
+
+            wav, input_lufs, gain_db = analysis.normalize_to_lufs(wav, sample_rate, normalize_lufs)
+        if isinstance(wav, np.ndarray):
+            import torch  # type: ignore
+
+            wav = torch.from_numpy(wav)
         # A tensor under "path" skips audiobox's own torchaudio.load
         results = _predictor.forward([{"path": wav, "sample_rate": sample_rate}])
         # audiobox-aesthetics returns a list of dicts with keys CE, CU, PC, PQ
@@ -166,15 +181,85 @@ def handle_analyze(request_id: Any, params: dict) -> str:
             "PQ": float(scores.get("PQ", 0)),
             "durationSeconds": clip_duration,
             "modelVersion": MODEL_ID,
+            "normalizeLufs": normalize_lufs,
+            "inputLufs": None if input_lufs is None else round(input_lufs, 2),
+            "gainDb": round(gain_db, 2),
         })
     except Exception as exc:  # noqa: BLE001
         return _err(request_id, -32000, f"Inference failed: {exc}")
+
+
+def _check_file(request_id: Any, params: dict, key: str) -> str | None:
+    """Return an error response when params[key] is missing or not a file."""
+    path = params.get(key)
+    if not path:
+        return _err(request_id, -32602, f"Missing required param: {key}")
+    if not os.path.exists(path):
+        return _err(request_id, -32000, f"Audio file not found: {path}")
+    return None
+
+
+def handle_analyze_audio(request_id: Any, params: dict) -> str:
+    """
+    Loudness (BS.1770 / EBU R128) and spectral analysis of a file, with an
+    optional reference file comparison. No model is loaded.
+
+    params: path, startTime?, endTime?, sectionSeconds?, referencePath?,
+            referenceStartTime?, referenceEndTime?
+    """
+    import analysis
+
+    for key in ("path", *(("referencePath",) if params.get("referencePath") else ())):
+        error = _check_file(request_id, params, key)
+        if error:
+            return error
+    try:
+        audio, sr = analysis.load_audio(params["path"], float(params.get("startTime", 0)),
+                                        params.get("endTime"))
+        if audio.shape[1] < int(0.4 * sr):
+            return _err(request_id, -32000, "Audio too short: need at least 0.4 s")
+        ref = None
+        if params.get("referencePath"):
+            ref = analysis.load_audio(params["referencePath"], float(params.get("referenceStartTime", 0)),
+                                      params.get("referenceEndTime"))
+        section = params.get("sectionSeconds")
+        result = analysis.analyze(audio, sr, float(section) if section else None, ref)
+        result["sampleRate"] = sr
+        result["channels"] = int(audio.shape[0])
+        return _ok(request_id, result)
+    except Exception as exc:  # noqa: BLE001
+        return _err(request_id, -32000, f"Analysis failed: {exc}")
+
+
+def handle_align(request_id: Any, params: dict) -> str:
+    """
+    Delay and polarity of `path` relative to `referencePath` (same length and
+    sample rate, e.g. two renders of the same time range).
+
+    params: referencePath, path, maxLagMs? (default 20)
+    """
+    import analysis
+
+    for key in ("referencePath", "path"):
+        error = _check_file(request_id, params, key)
+        if error:
+            return error
+    try:
+        ref, ref_sr = analysis.load_audio(params["referencePath"])
+        target, sr = analysis.load_audio(params["path"])
+        if ref_sr != sr:
+            return _err(request_id, -32000, f"Sample rates differ: {ref_sr} vs {sr}")
+        return _ok(request_id, analysis.alignment(ref, target, sr, float(params.get("maxLagMs", 20))))
+    except Exception as exc:  # noqa: BLE001
+        return _err(request_id, -32000, f"Alignment failed: {exc}")
 
 
 # JSON-RPC method names must stay in sync with the TypeScript client.
 # When adding a method here, also reference it from apps/reaper-mcp-server/src/sidecar.ts.
 METHODS = {
     "analyze": handle_analyze,
+    "analyze_audio": handle_analyze_audio,
+    "align": handle_align,
 }
 
 

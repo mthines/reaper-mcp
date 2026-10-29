@@ -264,3 +264,96 @@ def test_load_clip_slices_stereo_wav(tmp_path):
 
     assert sample_rate == 44100
     assert tuple(clip.shape) == (2, int(44100 * 1.5))
+
+
+# ---------------------------------------------------------------------------
+# normalizeLufs: the clip reaches the model at the target loudness
+# ---------------------------------------------------------------------------
+
+def _write_sine(path, dbfs: float, seconds: float = 3.0, sr: int = 44100, delay: int = 0, sign: float = 1.0):
+    import numpy as np
+    import soundfile as sf
+
+    t = np.arange(int(seconds * sr)) / sr
+    rng = np.random.default_rng(11)
+    wave = 10 ** (dbfs / 20) * (np.sin(2 * np.pi * 1000 * t) + 0.3 * rng.standard_normal(t.size))
+    wave = np.concatenate([np.zeros(delay), wave])[: t.size] * sign
+    sf.write(str(path), np.stack([wave, wave], axis=1).astype("float32"), sr)
+
+
+def test_analyze_normalize_scales_clip_before_scoring(tmp_path):
+    import analysis
+
+    wav = tmp_path / "quiet.wav"
+    _write_sine(wav, -30)
+    mock_pred = make_mock_predictor()
+    server._predictor = mock_pred
+
+    raw = server.dispatch(json.dumps({
+        "jsonrpc": "2.0", "id": 6, "method": "analyze",
+        "params": {"path": str(wav), "normalizeLufs": -18},
+    }))
+
+    result = parse_response(raw)["result"]
+    scored = mock_pred.forward.call_args[0][0][0]["path"].numpy()
+    assert abs(analysis.integrated_loudness(scored, 44100) - (-18.0)) < 0.2
+    assert result["normalizeLufs"] == -18.0
+    assert abs(result["gainDb"] - (-18.0 - result["inputLufs"])) < 0.01
+
+
+def test_analyze_without_normalize_keeps_level(tmp_path):
+    wav = tmp_path / "quiet.wav"
+    _write_sine(wav, -30)
+    mock_pred = make_mock_predictor()
+    server._predictor = mock_pred
+
+    result = parse_response(server.dispatch(json.dumps({
+        "jsonrpc": "2.0", "id": 7, "method": "analyze", "params": {"path": str(wav)},
+    })))["result"]
+
+    assert result["gainDb"] == 0.0 and result["inputLufs"] is None
+
+
+# ---------------------------------------------------------------------------
+# analyze_audio / align run end to end on real files, without the model
+# ---------------------------------------------------------------------------
+
+def test_analyze_audio_with_reference(tmp_path):
+    mix, ref = tmp_path / "mix.wav", tmp_path / "ref.wav"
+    _write_sine(mix, -14, seconds=6)
+    _write_sine(ref, -20, seconds=6)
+
+    resp = parse_response(server.dispatch(json.dumps({
+        "jsonrpc": "2.0", "id": 8, "method": "analyze_audio",
+        "params": {"path": str(mix), "referencePath": str(ref), "sectionSeconds": 3},
+    })))
+
+    result = resp["result"]
+    assert result["loudness"]["integratedLufs"] > -20
+    assert len(result["loudness"]["sections"]) == 2
+    assert abs(result["reference"]["loudnessDeltaLu"] - 6.0) < 0.5
+    assert server._predictor is None  # no model load for offline analysis
+
+
+def test_analyze_audio_missing_reference_is_an_error(tmp_path):
+    mix = tmp_path / "mix.wav"
+    _write_sine(mix, -14)
+    resp = parse_response(server.dispatch(json.dumps({
+        "jsonrpc": "2.0", "id": 9, "method": "analyze_audio",
+        "params": {"path": str(mix), "referencePath": "/nope/ref.wav"},
+    })))
+    assert "not found" in resp["error"]["message"]
+
+
+def test_align_method_reports_delay_and_polarity(tmp_path):
+    ref, late = tmp_path / "ref.wav", tmp_path / "late.wav"
+    _write_sine(ref, -12)
+    _write_sine(late, -12, delay=37, sign=-1.0)
+
+    result = parse_response(server.dispatch(json.dumps({
+        "jsonrpc": "2.0", "id": 10, "method": "align",
+        "params": {"referencePath": str(ref), "path": str(late), "maxLagMs": 5},
+    })))["result"]
+
+    assert result["delaySamples"] == 37
+    assert result["polarityInverted"] is True

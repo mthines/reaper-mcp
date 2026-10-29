@@ -26,11 +26,14 @@ vi.mock('node:fs', () => ({
 // ---------------------------------------------------------------------------
 
 import { exec as execCb } from 'node:child_process';
+import { existsSync, copyFileSync } from 'node:fs';
 import {
   parsePythonVersion,
   getPythonBin,
   checkPython,
+  copySidecarScript,
   downloadModelWeights,
+  SIDECAR_DIR,
   SIDECAR_VENV_PATH,
   MIN_PYTHON_MAJOR,
   MIN_PYTHON_MINOR,
@@ -178,5 +181,19 @@ describe('downloadModelWeights', () => {
     const script = cmd.slice(cmd.indexOf(' -c "') + 5, -1);
     expect(script).toContain('snapshot_download');
     expect(script).not.toContain('"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// copySidecarScript
+// ---------------------------------------------------------------------------
+
+describe('copySidecarScript', () => {
+  it('installs analysis.py next to server.py', () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    copySidecarScript('/fake/dist');
+    const dests = vi.mocked(copyFileSync).mock.calls.map((c) => String(c[1]));
+    expect(dests).toContain(`${SIDECAR_DIR}/server.py`);
+    expect(dests).toContain(`${SIDECAR_DIR}/analysis.py`);
   });
 });

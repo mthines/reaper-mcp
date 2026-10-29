@@ -6,7 +6,7 @@
  *   2. Create an isolated venv at ~/.reaper-mcp/sidecar-venv/
  *   3. Install pinned deps from sidecar/requirements.txt
  *   4. Pre-download Audiobox Aesthetics model weights
- *   5. Copy server.py to ~/.reaper-mcp/sidecar/server.py
+ *   5. Copy server.py (+ its analysis.py module) to ~/.reaper-mcp/sidecar/
  *
  * Usage: node dist/apps/reaper-mcp-server/main.js setup-sidecar
  */
@@ -42,6 +42,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export const SIDECAR_VENV_PATH = join(homedir(), '.reaper-mcp', 'sidecar-venv');
 export const SIDECAR_DIR = join(homedir(), '.reaper-mcp', 'sidecar');
 export const SIDECAR_SCRIPT_DEST = join(SIDECAR_DIR, 'server.py');
+/** Python modules server.py imports; installed next to it. */
+export const SIDECAR_MODULES = ['analysis.py'];
 export const MODEL_ID = 'facebook/audiobox-aesthetics';
 export const MIN_PYTHON_MAJOR = 3;
 export const MIN_PYTHON_MINOR = 10;
@@ -149,7 +151,7 @@ export async function downloadModelWeights(): Promise<void> {
   if (stderr) process.stderr.write(stderr);
 }
 
-/** Copy server.py from dist/sidecar/ to ~/.reaper-mcp/sidecar/server.py. */
+/** Copy server.py and its modules from dist/sidecar/ to ~/.reaper-mcp/sidecar/. */
 export function copySidecarScript(baseDir: string): void {
   const sidecarDir = resolveAssetDir(baseDir, 'sidecar');
   const src = join(sidecarDir, 'server.py');
@@ -161,6 +163,9 @@ export function copySidecarScript(baseDir: string): void {
   }
   mkdirSync(SIDECAR_DIR, { recursive: true });
   copyFileSync(src, SIDECAR_SCRIPT_DEST);
+  for (const module of SIDECAR_MODULES) {
+    copyFileSync(join(sidecarDir, module), join(SIDECAR_DIR, module));
+  }
 }
 
 // ---------------------------------------------------------------------------
