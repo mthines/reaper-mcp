@@ -113,3 +113,22 @@ def test_analyze_reports_sections_and_resonance():
     assert len(result["loudness"]["sections"]) == 2
     hzs = [r["hz"] for r in result["spectrum"]["resonances"]]
     assert any(abs(h - 3150) < 40 for h in hzs)
+
+
+def test_alignment_names_the_silent_signal():
+    ref = sine(1000, -20, 1, channels=1)
+    result = analysis.alignment(ref, np.zeros_like(ref), SR)
+    assert result["delaySamples"] is None
+    assert result["error"].startswith("The track is silent")
+
+
+def test_sibilance_reports_each_burst_once():
+    rng = np.random.default_rng(2)
+    audio = sine(200, -20, 6)
+    for start in (1.0, 3.0):  # two 0.3 s hiss bursts
+        i = int(start * SR)
+        audio[:, i:i + int(0.3 * SR)] += rng.standard_normal((2, int(0.3 * SR))).astype(np.float32) * 0.3
+    power, freqs = analysis._stft_power(audio, SR)
+    hint = analysis.sibilance_hint(power, freqs, 2048 / SR)
+    assert hint["spikeCount"] == 2
+    assert [round(t) for t in hint["spikeSeconds"]] == [1, 3]

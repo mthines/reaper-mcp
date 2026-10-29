@@ -22,6 +22,8 @@ import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
 
 /** Loudness every clip is scored at, so louder versions do not score higher for being louder. */
 export const DEFAULT_SCORING_LUFS = -18;
+/** Clip length: renders of a project vary slightly, and 30 s clips cut repeat noise ~10x vs 10 s (measured). */
+export const DEFAULT_CLIP_SECONDS = 30;
 
 const SIDECAR_NOT_INSTALLED_MSG =
   'Audio understanding sidecar not installed. ' +
@@ -30,7 +32,7 @@ const SIDECAR_NOT_INSTALLED_MSG =
 export function registerAestheticsTools(server: McpServer): void {
   server.tool(
     'analyze_track_aesthetics',
-    'Analyze the perceptual aesthetic quality of a track\'s audio using Meta\'s Audiobox Aesthetics model (CC-BY 4.0). Bounces the track to a temp WAV file (post-FX, post-fader) and runs 4-axis perceptual quality scoring: Production Quality (PQ), Production Complexity (PC), Content Enjoyment (CE), Content Usefulness (CU). Returns scores 0-10. The clip is normalized to normalizeLufs (default -18 LUFS) before scoring, so a louder version does not score higher just for being louder; compare versions only at matched loudness. PQ (and partly CU) judge mix changes; PC and CE mostly follow the arrangement. Differences under ~0.3 are noise. Requires the Python sidecar (run: node dist/apps/reaper-mcp-server/main.js setup-sidecar).',
+    'Analyze the perceptual aesthetic quality of a track\'s audio using Meta\'s Audiobox Aesthetics model (CC-BY 4.0). Bounces the track to a temp WAV file (post-FX, post-fader) and runs 4-axis perceptual quality scoring: Production Quality (PQ), Production Complexity (PC), Content Enjoyment (CE), Content Usefulness (CU). Returns scores 0-10. The clip is normalized to normalizeLufs (default -18 LUFS) before scoring, so level differences between versions do not bias the scores (CE rises with level; PQ barely moves). PQ (and partly CU) judge mix changes; PC and CE mostly follow the arrangement, so only compare the same time range. Measured noise: re-rendering the same 30 s clip moves PQ by ~0.05, a 10 s clip by ~0.4; treat smaller differences as no change. Requires the Python sidecar (run: node dist/apps/reaper-mcp-server/main.js setup-sidecar).',
     {
       trackIndex: z.coerce.number().int().min(-1)
         .describe('Zero-based track index (-1 = master: the whole mix)'),
@@ -38,8 +40,8 @@ export function registerAestheticsTools(server: McpServer): void {
         .describe('Start time in seconds (default: 0 or use REAPER time selection)'),
       endTime: z.coerce.number().min(0).optional()
         .describe('End time in seconds (default: startTime + durationSeconds)'),
-      durationSeconds: z.coerce.number().min(0.5).max(30).optional().default(5)
-        .describe('Duration to analyze in seconds (default 5, max 30). Ignored if endTime is provided.'),
+      durationSeconds: z.coerce.number().min(0.5).max(30).optional().default(DEFAULT_CLIP_SECONDS)
+        .describe('Duration to analyze in seconds (default and max 30 — shorter clips are noisier). Ignored if endTime is provided.'),
       normalizeLufs: z.union([z.literal(false), z.null(), z.coerce.number().min(-60).max(0)]).optional().default(DEFAULT_SCORING_LUFS)
         .describe('Scale the clip to this integrated loudness before scoring (default -18 LUFS); false or null scores it as rendered'),
     },
@@ -55,7 +57,7 @@ export function registerAestheticsTools(server: McpServer): void {
 
       // Resolve time bounds
       const resolvedStart = startTime ?? 0;
-      const resolvedEnd = endTime ?? (resolvedStart + (durationSeconds ?? 5));
+      const resolvedEnd = endTime ?? (resolvedStart + (durationSeconds ?? DEFAULT_CLIP_SECONDS));
 
       if (resolvedEnd <= resolvedStart) {
         return {

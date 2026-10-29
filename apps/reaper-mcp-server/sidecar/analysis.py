@@ -274,11 +274,16 @@ def sibilance_hint(power: np.ndarray, freqs: np.ndarray, frame_s: float) -> dict
     ratio_db = 10 * np.log10(power[band].sum(axis=0)[loud] / total[loud] + 1e-20)
     times = np.nonzero(loud)[0] * frame_s
     median = float(np.median(ratio_db))
-    spikes = times[ratio_db > median + 9.0]
+    # One entry per event: frames closer than 0.5 s belong to the same spike
+    events: list[float] = []
+    for t in times[ratio_db > median + 9.0]:
+        if not events or t - events[-1] >= 0.5:
+            events.append(float(t))
     return {
         "medianDb": round(median, 1),
         "peakDb": round(float(ratio_db.max()), 1),
-        "spikeSeconds": [round(float(t), 1) for t in spikes[:10]],
+        "spikeCount": len(events),
+        "spikeSeconds": [round(t, 1) for t in events[:10]],
     }
 
 
@@ -373,10 +378,12 @@ def alignment(reference: np.ndarray, target: np.ndarray, sample_rate: int, max_l
     b = target.mean(axis=0).astype(np.float64)
     n = min(a.size, b.size)
     a, b = a[:n] - a[:n].mean(), b[:n] - b[:n].mean()
-    norm = math.sqrt(float((a * a).sum() * (b * b).sum()))
-    if n == 0 or norm == 0:
+    silent = [name for name, x in (("reference", a), ("track", b)) if n == 0 or not np.any(x)]
+    if silent:
         return {"delaySamples": None, "delayMs": None, "correlation": None, "polarityInverted": None,
-                "error": "One of the signals is silent in this window"}
+                "error": f"The {' and '.join(silent)} {'is' if len(silent) == 1 else 'are'} silent in this window; "
+                         "pick a range where both tracks play"}
+    norm = math.sqrt(float((a * a).sum() * (b * b).sum()))
     size = 1 << (2 * n - 1).bit_length()
     xc = np.fft.irfft(np.fft.rfft(b, size) * np.conj(np.fft.rfft(a, size)), size)
     max_lag = max(1, int(sample_rate * max_lag_ms / 1000.0))

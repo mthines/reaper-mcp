@@ -16,3 +16,7 @@ tmp
 
 # local telemetry dump
 telemetry.jsonl
+
+# Python bytecode
+__pycache__/
+*.pyc

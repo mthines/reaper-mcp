@@ -250,7 +250,8 @@ describe('analyze_track_aesthetics', () => {
 
     const result = await getToolCallback('analyze_track_aesthetics')({ trackIndex: 2 });
 
-    expect(sidecar.analyze).toHaveBeenCalledWith(expect.any(String), 0, 5, { normalizeLufs: -18 });
+    // 30 s by default: shorter clips are too noisy to compare
+    expect(sidecar.analyze).toHaveBeenCalledWith(expect.any(String), 0, 30, { normalizeLufs: -18 });
     const data = JSON.parse(result.content[0].text);
     expect(data).toMatchObject({ normalizedToLufs: -18, inputLufs: -11.2, gainDb: -6.8 });
   });
