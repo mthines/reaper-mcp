@@ -30,6 +30,7 @@ import {
   parsePythonVersion,
   getPythonBin,
   checkPython,
+  downloadModelWeights,
   SIDECAR_VENV_PATH,
   MIN_PYTHON_MAJOR,
   MIN_PYTHON_MINOR,
@@ -160,5 +161,22 @@ describe('minimum Python version constants', () => {
 
   it('MIN_PYTHON_MINOR is 10', () => {
     expect(MIN_PYTHON_MINOR).toBe(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// downloadModelWeights
+// ---------------------------------------------------------------------------
+
+describe('downloadModelWeights', () => {
+  beforeEach(() => execMock.mockReset());
+
+  it('passes a -c script with no double quotes inside the double-quoted argument', async () => {
+    mockExecSuccess('');
+    await downloadModelWeights();
+    const cmd = execMock.mock.calls[0][0] as string;
+    const script = cmd.slice(cmd.indexOf(' -c "') + 5, -1);
+    expect(script).toContain('snapshot_download');
+    expect(script).not.toContain('"');
   });
 });

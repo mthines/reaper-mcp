@@ -136,11 +136,12 @@ export async function installDeps(requirementsPath: string): Promise<void> {
 /** Pre-download the Audiobox Aesthetics model weights. */
 export async function downloadModelWeights(): Promise<void> {
   const python = join(SIDECAR_VENV_PATH, VENV_BIN, VENV_PYTHON_NAME);
+  // Single quotes only: the script goes inside a double-quoted shell argument.
   const script = [
     'from huggingface_hub import snapshot_download',
-    `print("Downloading ${MODEL_ID} weights to ~/.cache/huggingface/hub/ ...")`,
-    `snapshot_download("${MODEL_ID}")`,
-    `print("Download complete.")`,
+    `print('Downloading ${MODEL_ID} weights to ~/.cache/huggingface/hub/ ...')`,
+    `snapshot_download('${MODEL_ID}')`,
+    `print('Download complete.')`,
   ].join('; ');
 
   const { stdout, stderr } = await exec(`"${python}" -c "${script}"`);
