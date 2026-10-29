@@ -88,14 +88,34 @@ def _k_weighting_coeffs(sample_rate: int) -> list[tuple[list[float], list[float]
     return [(shelf_b, shelf_a), (hp_b, hp_a)]
 
 
+# Long renders are processed in chunks so memory stays flat: a 900 s stereo
+# render filtered or oversampled in one piece peaked at ~7 GB.
+CHUNK_S = 30.0
+# The K-weighting filters settle in milliseconds; 1 s of preroll before each
+# chunk makes the chunked output match the one-piece output.
+K_PREROLL_S = 1.0
+# Resampler context on each side of a true-peak chunk.
+TP_PAD_S = 0.05
+
+
 def k_weight(audio: np.ndarray, sample_rate: int) -> np.ndarray:
     import torch  # type: ignore
     import torchaudio.functional as F  # type: ignore
 
-    x = torch.from_numpy(np.ascontiguousarray(audio, dtype=np.float64))
-    for b, a in _k_weighting_coeffs(sample_rate):
-        x = F.lfilter(x, torch.tensor(a, dtype=torch.float64), torch.tensor(b, dtype=torch.float64), clamp=False)
-    return x.numpy()
+    coeffs = [(torch.tensor(a, dtype=torch.float64), torch.tensor(b, dtype=torch.float64))
+              for b, a in _k_weighting_coeffs(sample_rate)]
+    frames = audio.shape[1]
+    chunk = int(CHUNK_S * sample_rate)
+    preroll = int(K_PREROLL_S * sample_rate)
+    out = np.empty(audio.shape, dtype=np.float64)
+    for start in range(0, frames, chunk):
+        lo = max(0, start - preroll)
+        hi = min(frames, start + chunk)
+        x = torch.from_numpy(np.ascontiguousarray(audio[:, lo:hi], dtype=np.float64))
+        for a, b in coeffs:
+            x = F.lfilter(x, a, b, clamp=False)
+        out[:, start:hi] = x.numpy()[:, start - lo:]
+    return out
 
 
 def _block_powers(weighted: np.ndarray, sample_rate: int, block_s: float, hop_s: float) -> np.ndarray:
@@ -105,12 +125,12 @@ def _block_powers(weighted: np.ndarray, sample_rate: int, block_s: float, hop_s:
     frames = weighted.shape[1]
     if frames < block:
         return np.zeros(0)
-    # Cumulative sums of squares make every window O(1)
-    csum = np.concatenate([np.zeros((weighted.shape[0], 1)), np.cumsum(weighted ** 2, axis=1)], axis=1)
+    # Channels are summed (G=1; the 1.41 surround weights do not apply to stereo
+    # renders), so sum the squares first; cumulative sums make every window O(1)
+    power = np.einsum("ij,ij->j", weighted, weighted)
+    csum = np.concatenate([[0.0], np.cumsum(power)])
     starts = np.arange(0, frames - block + 1, hop)
-    per_channel = (csum[:, starts + block] - csum[:, starts]) / block
-    # Surround weights (1.41 for Ls/Rs) do not apply to stereo renders
-    return per_channel.sum(axis=0)
+    return (csum[starts + block] - csum[starts]) / block
 
 
 # ---------------------------------------------------------------------------
@@ -154,9 +174,20 @@ def true_peak(audio: np.ndarray, sample_rate: int) -> float:
     import torch  # type: ignore
     import torchaudio.functional as F  # type: ignore
 
-    x = torch.from_numpy(np.ascontiguousarray(audio, dtype=np.float32))
-    up = F.resample(x, orig_freq=sample_rate, new_freq=sample_rate * 4)
-    return float(max(up.abs().max().item(), np.abs(audio).max(initial=0.0)))
+    frames = audio.shape[1]
+    chunk = int(CHUNK_S * sample_rate)
+    pad = int(TP_PAD_S * sample_rate)
+    peak = float(np.abs(audio).max(initial=0.0))
+    for start in range(0, frames, chunk):
+        lo = max(0, start - pad)
+        hi = min(frames, start + chunk + pad)
+        x = torch.from_numpy(np.ascontiguousarray(audio[:, lo:hi], dtype=np.float32))
+        up = F.resample(x, orig_freq=sample_rate, new_freq=sample_rate * 4)
+        # Keep only this chunk's own span; the padding is context for the filter
+        keep = up[:, (start - lo) * 4:(min(start + chunk, frames) - lo) * 4]
+        if keep.numel():
+            peak = max(peak, float(keep.abs().max().item()))
+    return peak
 
 
 def section_loudness(weighted: np.ndarray, sample_rate: int, section_s: float) -> list[dict[str, Any]]:

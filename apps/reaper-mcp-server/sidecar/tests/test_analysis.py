@@ -132,3 +132,13 @@ def test_sibilance_reports_each_burst_once():
     hint = analysis.sibilance_hint(power, freqs, 2048 / SR)
     assert hint["spikeCount"] == 2
     assert [round(t) for t in hint["spikeSeconds"]] == [1, 3]
+
+
+def test_chunked_k_weighting_and_true_peak_match_one_piece(monkeypatch):
+    rng = np.random.default_rng(11)
+    audio = (rng.standard_normal((2, SR * 7)) * 0.1).astype(np.float32)
+    whole_kw = analysis.k_weight(audio, SR)
+    whole_tp = analysis.true_peak(audio, SR)
+    monkeypatch.setattr(analysis, "CHUNK_S", 2.0)  # 4 chunks, the last one short
+    assert np.max(np.abs(analysis.k_weight(audio, SR) - whole_kw)) < 1e-9
+    assert abs(analysis.true_peak(audio, SR) - whole_tp) < 1e-3
