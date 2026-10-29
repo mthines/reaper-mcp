@@ -9,7 +9,7 @@ export function registerFxTools(server: McpServer): void {
     {
       trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       fxName: z.string().describe('FX plugin name (partial match supported)'),
-      position: z.coerce.number().int().optional().describe('Position in FX chain (-1 or omit for end)'),
+      position: z.coerce.number().int().optional().describe('0-based slot to insert at (0 = first); -1 or omit to append'),
     },
     async ({ trackIndex, fxName, position }) => {
       const res = await sendCommand('add_fx', { trackIndex, fxName, position: position ?? -1 });
