@@ -20,6 +20,10 @@ vi.mock('node:fs', () => ({
   existsSync: vi.fn(),
 }));
 
+vi.mock('./setup-sidecar.js', () => ({
+  copySidecarScript: vi.fn(),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports
 // ---------------------------------------------------------------------------
@@ -27,6 +31,7 @@ vi.mock('node:fs', () => ({
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { getSidecarClient, _resetSidecarClient } from './sidecar.js';
+import { copySidecarScript } from './setup-sidecar.js';
 
 const spawnMock = spawn as unknown as ReturnType<typeof vi.fn>;
 const existsMock = existsSync as unknown as ReturnType<typeof vi.fn>;
@@ -132,6 +137,15 @@ describe('analyze()', () => {
     expect(result.PC).toBe(2.15);
     expect(result.PQ).toBe(7.22);
     expect(result.modelVersion).toBe('facebook/audiobox-aesthetics');
+  });
+
+  it('refreshes the installed scripts from this build before spawning', async () => {
+    existsMock.mockReturnValue(true);
+    spawnMock.mockReturnValue(createMockProcess());
+    void getSidecarClient().analyze('/tmp/test.wav', 0, 5).catch(() => undefined);
+    await flushMicrotasks();
+    expect(copySidecarScript).toHaveBeenCalled();
+    expect(spawnMock).toHaveBeenCalled();
   });
 
   it('sends correct JSON-RPC request to stdin', async () => {

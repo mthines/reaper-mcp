@@ -601,6 +601,7 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 - **Loudness**: `analysis.py` implements ITU-R BS.1770-4 (K-weighting, 400 ms blocks, -70/-10 gates, channels summed) and EBU 3342 LRA; `tests/test_analysis.py` checks them against the EBU 3341/3342 reference signals.
 - **Lifecycle**: Sidecar receives SIGTERM when the MCP server receives SIGINT/SIGTERM. Managed via `getSidecarClient().shutdown()` in `main.ts`.
 - **Auto-restart**: If the sidecar crashes, one restart is attempted automatically. If restart fails, the tool returns a clear error.
+- **Script refresh**: every sidecar spawn first copies the build's `server.py` and modules over the installed ones, so an update (which never re-runs `setup-sidecar`) cannot leave an old `server.py` without the new methods.
 - **Install location**: Venv at `~/.reaper-mcp/sidecar-venv/`, scripts at `~/.reaper-mcp/sidecar/` (`server.py` plus `SIDECAR_MODULES` in `setup-sidecar.ts`, e.g. `analysis.py` — add a new module there).
 - **PYTHON_BIN env var**: Override the Python interpreter used by `setup-sidecar`.
 
@@ -618,7 +619,7 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 
 ### Render Pipeline
 
-The sidecar tools render a track segment to a temp WAV via the `render_track_to_wav` Lua bridge handler (trackIndex -1 renders the master: every solo is cleared for the render and restored after), then pass the path to the sidecar. The TS layer owns temp file cleanup (always deleted in `try/finally`).
+The sidecar tools render a track segment to a temp WAV via the `render_track_to_wav` Lua bridge handler (a track renders as a stem — render mode 2, which renders the *selected* tracks, so the target is soloed and made the only selected track; -1 renders the master mix, mode 0, with every solo cleared; solo and selection are restored after), then pass the path to the sidecar. The TS layer owns temp file cleanup (always deleted in `try/finally`).
 
 The `render_track_to_wav` Lua handler uses `Main_OnCommand(42230)` which is **synchronous** — it blocks the defer loop during render (~0.5-1s for a short clip; a 4-minute folder track took ~55 s, so `offline.ts` scales the timeout with the range). This is expected behavior documented in the handler.
 

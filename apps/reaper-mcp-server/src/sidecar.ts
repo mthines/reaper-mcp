@@ -10,10 +10,12 @@
 
 import { spawn, ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { getTracer, emitLog, getSidecarDurationHistogram, redactHome } from './telemetry.js';
+import { copySidecarScript } from './setup-sidecar.js';
 
 // ---------------------------------------------------------------------------
 // Paths (must match setup-sidecar.ts constants)
@@ -253,6 +255,13 @@ class SidecarClientImpl implements SidecarClient {
   }
 
   private async spawn(): Promise<void> {
+    // The installed scripts only change when setup-sidecar runs; refresh them from
+    // this build so an update never runs an old server.py without its new methods.
+    try {
+      copySidecarScript(dirname(fileURLToPath(import.meta.url)));
+    } catch {
+      // No bundled sidecar next to this build: keep the installed copy
+    }
     const child = spawn(VENV_PYTHON, [SIDECAR_SCRIPT_PATH], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
