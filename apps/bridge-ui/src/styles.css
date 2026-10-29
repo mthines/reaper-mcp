@@ -645,6 +645,21 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 }
 .drawer-title { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 13.5px; font-weight: 600; }
 .drawer-title .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawer-filter {
+  min-width: 0; padding: 2px 6px; margin-left: -6px; border-radius: 6px;
+  border: 1px solid transparent; background: none; color: inherit; font: inherit; cursor: pointer;
+}
+.drawer-filter:hover { background: var(--panel-2); border-color: var(--line-2); }
+.drawer-filter.active { border-color: var(--line-2); background: var(--panel-2); }
+.tip-anchor { position: relative; display: flex; min-width: 0; }
+.tip {
+  position: absolute; top: calc(100% + 6px); left: -6px; z-index: 1;
+  padding: 5px 8px; border-radius: 6px; white-space: nowrap;
+  font-size: 12px; font-weight: 500; color: var(--text);
+  background: var(--panel-2); border: 1px solid var(--line-2); box-shadow: 0 4px 12px rgb(0 0 0 / 0.25);
+  opacity: 0; pointer-events: none; transition: opacity 0.12s;
+}
+.tip-anchor:hover .tip, .tip-anchor:has(:focus-visible) .tip { opacity: 1; transition-delay: 0.3s; }
 .icon-btn {
   flex: none; width: 28px; height: 28px; border-radius: 7px;
   display: inline-flex; align-items: center; justify-content: center;

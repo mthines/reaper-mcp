@@ -1845,7 +1845,18 @@ function Log({
       )}
       {paused && view === 'calls' && <div className="paused-banner">Paused · new commands are still counted, the log is frozen</div>}
       {selected && (
-        <Details entry={selected} session={selected.s ? sessionOf(selected.s) : null} now={now} onClose={() => setSelected(null)} />
+        <Details
+          entry={selected}
+          session={selected.s ? sessionOf(selected.s) : null}
+          now={now}
+          filtered={query.trim() === selected.c}
+          onFilter={() => {
+            const off = query.trim() === selected.c;
+            if (!off && !query.trim()) track({ name: 'log_searched', view });
+            setQuery(off ? '' : selected.c);
+          }}
+          onClose={() => setSelected(null)}
+        />
       )}
     </section>
   );
@@ -2154,7 +2165,22 @@ const Row = memo(
 );
 
 /** Right-hand sidebar with everything known about one command. ↑/↓ move between rows, Esc closes. */
-function Details({ entry: e, session, now, onClose }: { entry: CommandEntry; session: Session | null; now: number; onClose: () => void }) {
+function Details({
+  entry: e,
+  session,
+  now,
+  filtered,
+  onFilter,
+  onClose,
+}: {
+  entry: CommandEntry;
+  session: Session | null;
+  now: number;
+  /** The log is already filtered to this command's tool */
+  filtered: boolean;
+  onFilter: () => void;
+  onClose: () => void;
+}) {
   const width = useDrawerWidth();
   const [copied, setCopied] = useState<string | null>(null);
   const time = new Date(e.t);
@@ -2178,7 +2204,19 @@ function Details({ entry: e, session, now, onClose }: { entry: CommandEntry; ses
       <div className="drawer-head">
         <div className="drawer-title">
           <span className={`status-dot ${e.ok ? 'ok' : 'err'}`} />
-          <span className="mono">{e.c}</span>
+          <span className="tip-anchor">
+            <button
+              className={`drawer-filter mono${filtered ? ' active' : ''}`}
+              onClick={onFilter}
+              aria-pressed={filtered}
+              aria-describedby="drawer-filter-tip"
+            >
+              {e.c}
+            </button>
+            <span id="drawer-filter-tip" role="tooltip" className="tip">
+              {filtered ? 'Click to show all commands again' : `Click to show only ${e.c} calls`}
+            </span>
+          </span>
         </div>
         <button className="icon-btn" onClick={onClose} aria-label="Close details" title="Close (Esc)">
           <CloseIcon />
