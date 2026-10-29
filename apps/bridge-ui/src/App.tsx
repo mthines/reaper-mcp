@@ -19,6 +19,9 @@ import {
   formatDuration,
   formatMs,
   formatParams,
+  SLOW_MS,
+  VERY_SLOW_MS,
+  speedOf,
   groupByTool,
   hasToolCalls,
   historyTiers,
@@ -50,6 +53,7 @@ import {
   type Session,
   type SettingKey,
   type Span,
+  type Speed,
   type Liveness,
   type TimeBar,
   type ToolSort,
@@ -61,8 +65,6 @@ declare const __VERSION__: string;
 const POLL_MS = 500;
 /** While hidden (minimized, or covered on macOS), keep pinging ui_seen slowly so the bridge knows we're open. */
 const HIDDEN_POLL_MS = 2000;
-const SLOW_MS = 100;
-const VERY_SLOW_MS = 500;
 
 const DEMO = new URLSearchParams(location.search).has('demo') ? createDemo() : null;
 
@@ -1334,6 +1336,9 @@ function Sparkline({
   );
 }
 
+const TOOL_TONE: Record<Speed, string> = { fast: '', slow: 'tone-warn', 'very-slow': 'tone-bad', long: '' };
+const SPEED_LABEL: Record<Speed, string> = { fast: 'Fast', slow: 'Slow', 'very-slow': 'Very slow', long: 'Long-running (expected)' };
+
 /** Log-scaled so 1 ms and 500 ms both read. */
 const latencyScale = (ms: number) => Math.min(1, Math.max(0.06, Math.log10(1 + ms) / Math.log10(1 + VERY_SLOW_MS)));
 
@@ -1925,7 +1930,7 @@ function ToolsView({
             >
               {g.errors ? `${g.errors} · ${Math.round((g.errors / g.count) * 100)}%` : '0'}
             </span>
-            <span className={`mono num ${g.p95 >= VERY_SLOW_MS ? 'tone-bad' : g.p95 >= SLOW_MS ? 'tone-warn' : ''}`}>{formatMs(g.p95)}</span>
+            <span className={`mono num ${TOOL_TONE[speedOf(g.c, g.p95)]}`}>{formatMs(g.p95)}</span>
             <span className="num muted">{formatAgo(now - g.last)}</span>
           </button>
         ))
@@ -2106,7 +2111,7 @@ const Row = memo(
     const time = new Date(e.t);
     const hhmmss = time.toLocaleTimeString([], { hour12: false });
     const ms = String(time.getMilliseconds()).padStart(3, '0');
-    const speed = e.ms >= VERY_SLOW_MS ? 'very-slow' : e.ms >= SLOW_MS ? 'slow' : '';
+    const speed = speedOf(e.c, e.ms);
     return (
       <div className={`row ${e.ok ? '' : 'row-err'} ${selected ? 'row-selected' : ''}`}>
         <button className="row-main" style={{ height: ROW_HEIGHT }} onClick={() => onSelect(e)} aria-pressed={selected}>
@@ -2126,7 +2131,7 @@ const Row = memo(
                 {sessionName(session)}
               </span>
             )}
-            <span className={`row-dur mono ${speed}`}>
+            <span className={`row-dur mono ${speed}`} title={speed === 'long' ? SPEED_LABEL.long : undefined}>
               <span className="dur-track" aria-hidden>
                 <span className="dur-fill" style={{ width: `${latencyScale(e.ms) * 100}%` }} />
               </span>
@@ -2153,7 +2158,7 @@ function Details({ entry: e, session, now, onClose }: { entry: CommandEntry; ses
   const width = useDrawerWidth();
   const [copied, setCopied] = useState<string | null>(null);
   const time = new Date(e.t);
-  const speed = e.ms >= VERY_SLOW_MS ? 'Very slow' : e.ms >= SLOW_MS ? 'Slow' : 'Fast';
+  const speed = SPEED_LABEL[speedOf(e.c, e.ms)];
   const params = formatParams(e.p);
 
   const copy = async (what: 'error' | 'params' | 'json', text: string) => {

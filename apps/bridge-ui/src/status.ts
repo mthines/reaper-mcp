@@ -443,6 +443,46 @@ export function commandKind(c: string): CommandKind {
   return 'write';
 }
 
+export const SLOW_MS = 100;
+export const VERY_SLOW_MS = 500;
+
+/**
+ * Commands whose duration is the work itself: renders, plugin instantiation (a sampler can take
+ * seconds to load), project/chunk IO, and proxies that run arbitrary work. Never rated slow.
+ * Mirrors LONG_RUNNING in mcp_bridge.lua, which keeps them out of the timeline's slow count.
+ */
+export const LONG_RUNNING = new Set([
+  'render_project',
+  'render_track_to_wav',
+  'run_plan',
+  'run_action',
+  'save_project',
+  'undo_project',
+  'redo_project',
+  'add_fx',
+  'add_take_fx',
+  'setup_fx_chain',
+  'copy_fx',
+  'move_fx',
+  'set_fx_offline',
+  'set_fx_preset',
+  'get_fx_preset_list',
+  'list_available_fx',
+  'load_fx_chain',
+  'insert_track_template',
+  'insert_audio_file',
+  'snapshot_save',
+  'snapshot_restore',
+]);
+
+export type Speed = 'fast' | 'slow' | 'very-slow' | 'long';
+
+/** How a duration reads for this command: long-running commands are expected to take time. */
+export function speedOf(c: string, ms: number): Speed {
+  if (LONG_RUNNING.has(c)) return 'long';
+  return ms >= VERY_SLOW_MS ? 'very-slow' : ms >= SLOW_MS ? 'slow' : 'fast';
+}
+
 export interface ToolGroup {
   c: string;
   kind: CommandKind;

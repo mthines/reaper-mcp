@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   formatDay,
@@ -19,6 +20,8 @@ import {
   parseHistoryReply,
   statusRequestUrl,
   commandKind,
+  LONG_RUNNING,
+  speedOf,
   formatParams,
   groupByTool,
   hasToolCalls,
@@ -205,6 +208,20 @@ describe('settings and params', () => {
     expect(commandKind('get_fx_parameters')).toBe('read');
     expect(commandKind('play')).toBe('transport');
     expect(commandKind('run_action')).toBe('write');
+  });
+
+  it('rates durations, never long-running commands', () => {
+    expect(speedOf('list_tracks', 5)).toBe('fast');
+    expect(speedOf('list_tracks', 100)).toBe('slow');
+    expect(speedOf('set_fx_parameter', 500)).toBe('very-slow');
+    expect(speedOf('render_track_to_wav', 4655)).toBe('long');
+    expect(speedOf('add_fx', 2)).toBe('long');
+  });
+
+  it('keeps the long-running list in step with the bridge', () => {
+    const lua = readFileSync(new URL('../../../reaper/mcp_bridge.lua', import.meta.url), 'utf8');
+    const block = lua.match(/for _, c in ipairs\(\{([^}]*)\}\) do LONG_RUNNING/)?.[1] ?? '';
+    expect(new Set(block.match(/"[a-z_]+"/g)?.map((q) => q.slice(1, -1)))).toEqual(LONG_RUNNING);
   });
 
   it('pretty-prints params and marks truncated ones', () => {

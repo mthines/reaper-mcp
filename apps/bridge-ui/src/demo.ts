@@ -1,4 +1,4 @@
-import { LOG_MAX, commandKind, type BridgeHistory, type LongHistory, type BridgeSettings, type BridgeStatus, type CommandEntry, type Session, type SettingKey } from './status.js';
+import { LOG_MAX, commandKind, speedOf, type BridgeHistory, type LongHistory, type BridgeSettings, type BridgeStatus, type CommandEntry, type Session, type SettingKey } from './status.js';
 
 import { DEMO_KNOWLEDGE } from './demo-plugins.js';
 
@@ -86,7 +86,7 @@ export function createDemo(): Demo {
     session.last = t;
     session.commands += 1;
     if (!ok) session.errors += 1;
-    const slow = ok && entry.ms >= 100 ? 1 : 0;
+    const slow = ok && !['fast', 'long'].includes(speedOf(c, entry.ms)) ? 1 : 0;
     count(buckets, BUCKET_MS, t, 1, ok ? 0 : 1, slow, entry.ms);
     long.forEach((map, i) => count(map, LONG_SIZES[i], t, 1, ok ? 0 : 1, slow, entry.ms));
   };

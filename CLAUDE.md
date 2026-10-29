@@ -662,6 +662,8 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   `MCPBridge/history` (≤ 1 Hz), and 1m (24h) + 10m (7d) tiers in `MCPBridge/history_long` (≤ every 10s, polled every
   10s). The page draws each range (5m–7d, a listbox combo box) from the finest tier covering it (`timelineBars()`);
   dragging across bars selects a span that filters the log views, leaving the range unchanged.
+- Slow (≥100 ms) / very slow (≥500 ms) marks skip commands that are slow by nature (renders, plugin loads, project
+  IO, `run_plan`/`run_action`): `LONG_RUNNING` in `status.ts` and `mcp_bridge.lua`, kept equal by `status.test.ts`.
 - Installable PWA: `apps/bridge-ui/public/` (manifest, service worker, icons) is copied next to the page; every file is
   `mcp_bridge*` and the service worker is scoped to `/mcp_bridge` so REAPER's other web remotes are untouched.
 - Sessions: each `reaper-mcp serve` process tags every command with flat top-level `sessionId` / `sessionDir` /

@@ -4865,7 +4865,7 @@ end
 
 -- Command timeline at three resolutions, keyed by absolute bucket id (epoch_ms // size).
 -- Only buckets with commands exist, so idle time costs nothing.
--- Each bucket: { total, errors, slow (ok and >= HISTORY_SLOW_MS), summed handler ms }.
+-- Each bucket: { total, errors, slow (ok, >= HISTORY_SLOW_MS, not LONG_RUNNING), summed handler ms }.
 -- The 10s tier is published live in ExtState `history`; the 1m and 10m tiers (for the page's
 -- day and week ranges) in `history_long`, at most every 10s. All tiers persist in history.json,
 -- saved every 30s and on exit, so the timeline survives a bridge or REAPER restart.
@@ -4876,6 +4876,15 @@ local HISTORY_TIERS = {
 }
 for _, tier in ipairs(HISTORY_TIERS) do tier.b = {} end
 local HISTORY_SLOW_MS = 100
+-- Commands whose duration is the work itself (renders, plugin loads, project IO, proxies that run
+-- arbitrary work): never counted as slow. Mirrors LONG_RUNNING in apps/bridge-ui/src/status.ts.
+local LONG_RUNNING = {}
+for _, c in ipairs({
+  "render_project", "render_track_to_wav", "run_plan", "run_action", "save_project", "undo_project",
+  "redo_project", "add_fx", "add_take_fx", "setup_fx_chain", "copy_fx", "move_fx", "set_fx_offline",
+  "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
+  "insert_audio_file", "snapshot_save", "snapshot_restore",
+}) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
 local HISTORY_LONG_PUBLISH_INTERVAL = 10
 local HISTORY_SAVE_INTERVAL = 30
@@ -4886,7 +4895,8 @@ local saved_seq = 0
 local last_history_publish, last_history_long_publish, last_history_save =
   -HISTORY_MIN_PUBLISH_INTERVAL, -HISTORY_LONG_PUBLISH_INTERVAL, 0
 
-local function record_history(handler_ms, ok)
+local function record_history(handler_ms, ok, cmd_type)
+  local slow = ok and handler_ms >= HISTORY_SLOW_MS and not LONG_RUNNING[cmd_type]
   local t = now_ms()
   for _, tier in ipairs(HISTORY_TIERS) do
     local id = math.floor(t / tier.size)
@@ -4897,7 +4907,7 @@ local function record_history(handler_ms, ok)
     end
     b[1] = b[1] + 1
     if not ok then b[2] = b[2] + 1 end
-    if ok and handler_ms >= HISTORY_SLOW_MS then b[3] = b[3] + 1 end -- slow successes; errors counted apart
+    if slow then b[3] = b[3] + 1 end -- slow successes; errors counted apart
     b[4] = b[4] + handler_ms
   end
   history_dirty, history_long_dirty, history_unsaved = true, true, true
@@ -5051,7 +5061,7 @@ local function record_command(cmd, handler_ms, ok, err)
   table.insert(status.recent, 1, entry)
   status.recent[STATUS_RECENT_MAX + 1] = nil
   status_dirty = true
-  record_history(handler_ms, ok)
+  record_history(handler_ms, ok, cmd_type)
   append_log(entry)
 end
 
