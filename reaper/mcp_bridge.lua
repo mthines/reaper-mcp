@@ -1862,10 +1862,6 @@ local function find_or_create_mcp_container(track)
   return idx
 end
 
--- Helper: find or auto-insert a named JSFX on a track.
--- Tries to place inside an "MCP Meters" FX Container (REAPER 7.06+).
--- Falls back to direct insertion on older REAPER versions.
--- Returns the FX index (possibly container-addressed) on success, or nil + error.
 -- remove_mcp_meters: delete the "MCP Meters" container and any loose MCP meter
 -- JSFX that the metering reads inserted. Leaves the MIDI emitter alone.
 -- params.trackIndices: list of track indices (-1 = master)
@@ -1897,6 +1893,10 @@ function handlers.remove_mcp_meters(params)
   return { tracks = removed }
 end
 
+-- Helper: find or auto-insert a named JSFX on a track.
+-- Tries to place inside an "MCP Meters" FX Container (REAPER 7.06+).
+-- Falls back to direct insertion on older REAPER versions.
+-- Returns the FX index (possibly container-addressed) on success, or nil + error.
 function ensure_jsfx_on_track(track, fx_name)
   -- Try container approach first (REAPER 7.06+)
   local container_idx = find_or_create_mcp_container(track)
@@ -4493,6 +4493,20 @@ function handlers.render_track_to_wav(params)
                 "First 4 bytes: " .. (magic and string.format("%q", magic) or "<empty>")
   end
 
+  -- The render includes the track's playback offset and polarity; report them so
+  -- measure_track_alignment can turn a measured delay into an absolute setting.
+  local play_offset_ms, phase_inverted = 0, false
+  if not is_master then
+    local flag = reaper.GetMediaTrackInfo_Value(track, "I_PLAY_OFFSET_FLAG")
+    if flag & 1 == 0 then
+      local v = reaper.GetMediaTrackInfo_Value(track, "D_PLAY_OFFSET")
+      local srate = reaper.GetSetProjectInfo(0, "PROJECT_SRATE", 0, false)
+      if not srate or srate <= 0 then srate = sample_rate end
+      play_offset_ms = (flag & 2 ~= 0) and (v / srate * 1000) or (v * 1000)
+    end
+    phase_inverted = reaper.GetMediaTrackInfo_Value(track, "B_PHASE") ~= 0
+  end
+
   local duration = end_time - start_time
   return {
     trackIndex     = track_index,
@@ -4501,6 +4515,8 @@ function handlers.render_track_to_wav(params)
     durationSeconds = duration,
     sampleRate     = sample_rate,
     channelCount   = 2,
+    playOffsetMs   = play_offset_ms,
+    phaseInverted  = phase_inverted,
   }
 end
 

@@ -130,8 +130,9 @@ loudness/limiting, defer to `/mastering`.
    zeros. Resonance hints are most meaningful on a single track; on a full mix
    they also catch sustained notes.
    For multi-mic sources (snare top/bottom, kick in/out, overheads vs close mics)
-   run `measure_track_alignment`, then set `playOffsetMs` (= `suggestedPlayOffsetMs`)
-   with `set_track_property`, and `phase` 1 if `polarityInverted`.
+   run `measure_track_alignment`, then `set_track_property` `playOffsetMs` =
+   `suggestedPlayOffsetMs` and `phase` = `suggestedPhase` (both absolute: they
+   already include the track's current offset and polarity).
 5. **Discover plugins** — `list_available_fx`; match against LoreKit plugin
    records by `category::` + `fx::` tags and pick the highest `preference::`
    (a `user::` record's preference overrides the built-in one).

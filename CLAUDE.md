@@ -323,7 +323,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `analyze_track_aesthetics` | `tools/aesthetics.ts` | Perceptual quality scores via Meta Audiobox Aesthetics (CC-BY 4.0): Production Quality, Production Complexity, Content Enjoyment, Content Usefulness (all 0-10). Bounces a 30 s clip (default) of a track or the master (-1), normalizes it to `normalizeLufs` (default -18, `false` = as rendered) so level doesn't skew the scores, calls Python sidecar. Noise floor: `knowledge/reference/aesthetics-scoring.md`. Requires `setup-sidecar`. |
 | `analyze_track_offline` | `tools/offline.ts` | Render a track or the master once (up to 900 s, no playback) and analyze it: integrated LUFS (BS.1770 gated), LRA (EBU 3342), true peak, sample peak, crest, per-section loudness, band balance, resonance and sibilance hints; with `referencePath`, loudness and tonal-balance deltas against that file |
 | `analyze_audio_file` | `tools/offline.ts` | The same analysis for an audio file on disk (reference song, bounce, stem); no REAPER involved |
-| `measure_track_alignment` | `tools/offline.ts` | Render two tracks over the same window (≤30 s) and cross-correlate: delay (ms, samples), polarity, correlation, and `suggestedPlayOffsetMs` for `set_track_property` |
+| `measure_track_alignment` | `tools/offline.ts` | Render two tracks over the same window (≤30 s) and cross-correlate: delay (ms, samples), polarity, correlation, and absolute `suggestedPlayOffsetMs` / `suggestedPhase` for `set_track_property` (include the track's current offset and polarity) |
 
 ### Plan Executor (1)
 

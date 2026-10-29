@@ -130,6 +130,21 @@ const FAKE_METERS = `
   }
 `;
 
+describe('render_track_to_wav offset report', () => {
+  it('reports the playback offset in ms (samples mode converted) and the polarity', async () => {
+    await run(FAKE_RENDER + `
+      local base = reaper.GetMediaTrackInfo_Value
+      local extra = { I_PLAY_OFFSET_FLAG = 2, D_PLAY_OFFSET = 441, B_PHASE = 1 }
+      reaper.GetMediaTrackInfo_Value = function(t, key) return extra[key] or base(t, key) end
+    `, 'render_track_to_wav', `
+      local r, err = handlers.render_track_to_wav({ trackIndex = 1, startTime = 0, endTime = 5, commandId = "abc" })
+      assert(r, err)
+      assert(math.abs(r.playOffsetMs - 10) < 1e-9, "441 samples at 44.1k = 10 ms, got " .. tostring(r.playOffsetMs))
+      assert(r.phaseInverted == true)
+    `);
+  });
+});
+
 describe('remove_mcp_meters', () => {
   it('deletes the MCP Meters container and loose meters, keeps other FX and the MIDI emitter', async () => {
     await run(FAKE_METERS, 'remove_mcp_meters', `

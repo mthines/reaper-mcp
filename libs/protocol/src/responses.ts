@@ -483,6 +483,8 @@ export interface RenderTrackToWavResult {
   durationSeconds: number;
   sampleRate: number;
   channelCount: number;
+  playOffsetMs?: number;  // the track's playback offset during the render (0 for the master)
+  phaseInverted?: boolean; // the track's polarity during the render
 }
 
 export interface AestheticsResult {

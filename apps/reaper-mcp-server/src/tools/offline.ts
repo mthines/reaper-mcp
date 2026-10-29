@@ -167,8 +167,10 @@ export function registerOfflineTools(server: McpServer): void {
     'measure_track_alignment',
     'Measure the time offset and polarity of one track against a reference track (e.g. snare bottom vs snare top, ' +
     'kick sub vs kick in, overheads vs snare) by rendering both over the same range and cross-correlating them. ' +
-    'A positive delayMs means the track arrives later than the reference. To align it, set_track_property ' +
-    'playOffsetMs = -delayMs on that track, and phase = 1 if polarityInverted. Renders are post-FX (plugin latency ' +
+    'A positive delayMs means the track arrives later than the reference, as both play now (the current playback ' +
+    'offset and polarity are included). To align it, set_track_property playOffsetMs = suggestedPlayOffsetMs and ' +
+    'phase = suggestedPhase (1 = inverted) on that track — absolute values that already account for the current ' +
+    'settings, so re-measuring an aligned track suggests what it already has. Renders are post-FX (plugin latency ' +
     'is compensated). Pick a range where both tracks play the same hits. Requires the Python sidecar.',
     {
       referenceTrack: z.coerce.number().int().min(0).describe('Zero-based index of the reference track'),
@@ -195,6 +197,8 @@ export function registerOfflineTools(server: McpServer): void {
           maxLagMs: maxLagMs ?? 20,
         });
         const delayMs = result['delayMs'] as number | null;
+        const currentPlayOffsetMs = rendered[1].playOffsetMs ?? 0;
+        const currentPhaseInverted = rendered[1].phaseInverted ?? false;
         return text({
           referenceTrack,
           referenceName: rendered[0].trackName,
@@ -203,8 +207,13 @@ export function registerOfflineTools(server: McpServer): void {
           startTime,
           endTime: end,
           ...result,
+          currentPlayOffsetMs,
+          currentPhaseInverted,
           ...(typeof delayMs === 'number'
-            ? { suggestedPlayOffsetMs: Math.round(-delayMs * 1000) / 1000 }
+            ? {
+              suggestedPlayOffsetMs: Math.round((currentPlayOffsetMs - delayMs) * 1000) / 1000,
+              suggestedPhase: currentPhaseInverted !== Boolean(result['polarityInverted']) ? 1 : 0,
+            }
             : {}),
         });
       } catch (err) {

@@ -129,9 +129,22 @@ describe('measure_track_alignment', () => {
     expect(renderCalls.map((p) => [p['trackIndex'], p['startTime'], p['endTime']])).toEqual([[30, 12, 17], [31, 12, 17]]);
     expect(client.align).toHaveBeenCalledWith({ referencePath: '/tmp/r0.wav', path: '/tmp/r1.wav', maxLagMs: 10 });
     const data = JSON.parse(result.content[0].text);
-    expect(data).toMatchObject({ delaySamples: 37, polarityInverted: true, suggestedPlayOffsetMs: -0.839, referenceName: 'T30', trackName: 'T31' });
+    expect(data).toMatchObject({ delaySamples: 37, polarityInverted: true, suggestedPlayOffsetMs: -0.839, suggestedPhase: 1, referenceName: 'T30', trackName: 'T31' });
     expect(unlinkMock).toHaveBeenCalledWith('/tmp/r0.wav');
     expect(unlinkMock).toHaveBeenCalledWith('/tmp/r1.wav');
+  });
+
+  it('suggests absolute settings that include the track\'s current offset and polarity', async () => {
+    const client = sidecar();
+    sendCommandMock
+      .mockResolvedValueOnce({ id: 'r', success: true, timestamp: 0, data: { trackName: 'Top', wavPath: '/tmp/a.wav' } })
+      .mockResolvedValueOnce({ id: 'r', success: true, timestamp: 0, data: { trackName: 'Bottom', wavPath: '/tmp/b.wav', playOffsetMs: 2, phaseInverted: true } });
+    client.align.mockResolvedValue({ delaySamples: 0, delayMs: 0, correlation: 0.97, polarityInverted: false });
+
+    const data = JSON.parse((await tool('measure_track_alignment')({ referenceTrack: 1, trackIndex: 2, startTime: 0 })).content[0].text);
+
+    // Already aligned: re-measuring keeps what the track has instead of resetting it
+    expect(data).toMatchObject({ currentPlayOffsetMs: 2, currentPhaseInverted: true, suggestedPlayOffsetMs: 2, suggestedPhase: 1 });
   });
 
   it('cleans up the first render when the second fails', async () => {
