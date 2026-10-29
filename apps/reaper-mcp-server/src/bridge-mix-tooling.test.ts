@@ -172,6 +172,15 @@ describe('remove_mcp_meters', () => {
       assert(r.tracks[2].found == false, "unknown track reported, not an error")
     `);
   });
+
+  it('accepts the JSON-string array the bridge parser delivers without CF_Json_Parse', async () => {
+    await run(FAKE_METERS, 'remove_mcp_meters', `
+      local r, err = handlers.remove_mcp_meters({ trackIndices = "[0, -1]" })
+      assert(r, err)
+      assert(r.tracks[1].trackIndex == 0 and r.tracks[1].removed == 2)
+      assert(r.tracks[2].trackIndex == -1)
+    `);
+  });
 });
 
 describe('MCP LUFS meter', () => {

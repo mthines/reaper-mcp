@@ -1867,6 +1867,12 @@ end
 -- params.trackIndices: list of track indices (-1 = master)
 function handlers.remove_mcp_meters(params)
   local indices = params.trackIndices
+  -- Without CF_Json_Parse the command parser hands arrays over as a JSON string
+  if type(indices) == "string" then
+    local list = {}
+    for n in indices:gmatch("%-?%d+") do list[#list + 1] = tonumber(n) end
+    indices = list
+  end
   if type(indices) ~= "table" or #indices == 0 then
     return nil, "trackIndices required"
   end
