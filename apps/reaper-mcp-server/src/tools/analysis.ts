@@ -70,7 +70,7 @@ export function registerAnalysisTools(server: McpServer): void {
 
   server.tool(
     'measure_tracks',
-    'Play audio and collect analysis measurements (LUFS, crest factor, correlation, spectrum) for one or more tracks in a single call. Handles playback start/stop automatically. LUFS supports multi-track; crest/correlation/spectrum use global gmem and are only reliable for single-track measurement. The meters it inserts are removed afterwards unless keepMeters. A meter that received no audio (muted, frozen or silent track, nothing in range) is reported under errors, not as numbers. For whole-song, folder or master numbers without playback, prefer analyze_track_offline.',
+    'Play audio and collect analysis measurements (LUFS, crest factor, correlation, spectrum) for one or more tracks in a single call. Handles playback start/stop automatically. LUFS supports multi-track; crest/correlation/spectrum use global gmem and are only reliable for single-track measurement. Afterwards it removes the MCP meters on the measured tracks (also ones an earlier call left) unless keepMeters. A meter that received no audio (muted, frozen or silent track, nothing in range) is reported under errors, not as numbers. For whole-song, folder or master numbers without playback, prefer analyze_track_offline.',
     {
       trackIndices: z.array(z.coerce.number().int().min(-1)).min(1).max(8)
         .describe('Track indices to measure (max 8; -1 = master track)'),

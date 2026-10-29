@@ -301,7 +301,7 @@ def sibilance_hint(power: np.ndarray, freqs: np.ndarray, frame_s: float) -> dict
     total = power[(freqs >= 20) & (freqs < 20000)].sum(axis=0)
     loud = total > total.max(initial=0) * 1e-3  # ignore near-silent frames
     if not loud.any():
-        return {"medianDb": None, "peakDb": None, "spikeSeconds": []}
+        return {"medianDb": None, "peakDb": None, "spikeCount": 0, "spikeSeconds": []}
     ratio_db = 10 * np.log10(power[band].sum(axis=0)[loud] / total[loud] + 1e-20)
     times = np.nonzero(loud)[0] * frame_s
     median = float(np.median(ratio_db))

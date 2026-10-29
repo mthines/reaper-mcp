@@ -122,6 +122,11 @@ def test_alignment_names_the_silent_signal():
     assert result["error"].startswith("The track is silent")
 
 
+def test_sibilance_on_silence_has_the_same_keys():
+    power, freqs = analysis._stft_power(np.zeros((2, SR * 2), dtype=np.float32), SR)
+    assert analysis.sibilance_hint(power, freqs, 2048 / SR)["spikeCount"] == 0
+
+
 def test_sibilance_reports_each_burst_once():
     rng = np.random.default_rng(2)
     audio = sine(200, -20, 6)
