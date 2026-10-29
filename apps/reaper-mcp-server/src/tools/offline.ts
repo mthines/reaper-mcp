@@ -28,6 +28,11 @@ const SIDECAR_NOT_INSTALLED_MSG =
 
 /** Max range analyze_track_offline renders in one call (seconds). */
 export const MAX_OFFLINE_SECONDS = 900;
+/** Default range analyze_track_offline renders when no endTime is given (seconds). */
+const DEFAULT_OFFLINE_SECONDS = 30;
+/** Default window and lag search of measure_track_alignment. */
+const DEFAULT_ALIGNMENT_SECONDS = 10;
+const DEFAULT_MAX_LAG_MS = 20;
 /** Max window measure_track_alignment renders per track (seconds). */
 export const MAX_ALIGNMENT_SECONDS = 30;
 /** Render is synchronous in REAPER: allow ~1 s per 3 s of audio plus slack. */
@@ -87,8 +92,8 @@ export function registerOfflineTools(server: McpServer): void {
       trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master: the whole mix)'),
       startTime: z.coerce.number().min(0).optional().describe('Start in seconds (default 0)'),
       endTime: z.coerce.number().min(0).optional().describe('End in seconds (default startTime + durationSeconds)'),
-      durationSeconds: z.coerce.number().min(1).max(MAX_OFFLINE_SECONDS).optional().default(30)
-        .describe(`Length in seconds when endTime is not given (default 30, max ${MAX_OFFLINE_SECONDS})`),
+      durationSeconds: z.coerce.number().min(1).max(MAX_OFFLINE_SECONDS).optional().default(DEFAULT_OFFLINE_SECONDS)
+        .describe(`Length in seconds when endTime is not given (default ${DEFAULT_OFFLINE_SECONDS}, max ${MAX_OFFLINE_SECONDS})`),
       sectionSeconds: z.coerce.number().min(1).max(120).optional()
         .describe('Also report loudness per consecutive section of this length (e.g. 10)'),
       ...referenceSchema,
@@ -98,7 +103,7 @@ export function registerOfflineTools(server: McpServer): void {
       if (!sidecar.isAvailable()) return error(SIDECAR_NOT_INSTALLED_MSG);
 
       const start = startTime ?? 0;
-      const end = endTime ?? start + (durationSeconds ?? 30);
+      const end = endTime ?? start + (durationSeconds ?? DEFAULT_OFFLINE_SECONDS);
       if (end <= start) return error('endTime must be greater than startTime');
       if (end - start > MAX_OFFLINE_SECONDS) return error(`Range too long: max ${MAX_OFFLINE_SECONDS} s per call`);
 
@@ -176,17 +181,17 @@ export function registerOfflineTools(server: McpServer): void {
       referenceTrack: z.coerce.number().int().min(0).describe('Zero-based index of the reference track'),
       trackIndex: z.coerce.number().int().min(0).describe('Zero-based index of the track to measure'),
       startTime: z.coerce.number().min(0).describe('Start of the range in seconds'),
-      durationSeconds: z.coerce.number().min(0.5).max(MAX_ALIGNMENT_SECONDS).optional().default(10)
-        .describe(`Length in seconds (default 10, max ${MAX_ALIGNMENT_SECONDS})`),
-      maxLagMs: z.coerce.number().min(0.1).max(100).optional().default(20)
-        .describe('Largest offset to search either way in ms (default 20; room mics may need 30-50)'),
+      durationSeconds: z.coerce.number().min(0.5).max(MAX_ALIGNMENT_SECONDS).optional().default(DEFAULT_ALIGNMENT_SECONDS)
+        .describe(`Length in seconds (default ${DEFAULT_ALIGNMENT_SECONDS}, max ${MAX_ALIGNMENT_SECONDS})`),
+      maxLagMs: z.coerce.number().min(0.1).max(100).optional().default(DEFAULT_MAX_LAG_MS)
+        .describe(`Largest offset to search either way in ms (default ${DEFAULT_MAX_LAG_MS}; room mics may need 30-50)`),
     },
     async ({ referenceTrack, trackIndex, startTime, durationSeconds, maxLagMs }) => {
       const sidecar = getSidecarClient();
       if (!sidecar.isAvailable()) return error(SIDECAR_NOT_INSTALLED_MSG);
       if (referenceTrack === trackIndex) return error('referenceTrack and trackIndex must differ');
 
-      const end = startTime + (durationSeconds ?? 10);
+      const end = startTime + (durationSeconds ?? DEFAULT_ALIGNMENT_SECONDS);
       const rendered: RenderTrackToWavResult[] = [];
       try {
         rendered.push(await render(referenceTrack, startTime, end));
@@ -194,7 +199,7 @@ export function registerOfflineTools(server: McpServer): void {
         const result = await sidecar.align({
           referencePath: rendered[0].wavPath,
           path: rendered[1].wavPath,
-          maxLagMs: maxLagMs ?? 20,
+          maxLagMs: maxLagMs ?? DEFAULT_MAX_LAG_MS,
         });
         const delayMs = result['delayMs'] as number | null;
         const currentPlayOffsetMs = rendered[1].playOffsetMs ?? 0;
