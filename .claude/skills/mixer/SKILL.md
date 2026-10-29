@@ -132,7 +132,9 @@ loudness/limiting, defer to `/mastering`.
    For multi-mic sources (snare top/bottom, kick in/out, overheads vs close mics)
    run `measure_track_alignment`, then `set_track_property` `playOffsetMs` =
    `suggestedPlayOffsetMs` and `phase` = `suggestedPhase` (both absolute: they
-   already include the track's current offset and polarity).
+   already include the track's current offset and polarity). With a `warning`
+   (correlation under 0.3) there is no suggestion: pick a range where both tracks
+   play the same hits and measure again.
 5. **Discover plugins** — `list_available_fx`; match against LoreKit plugin
    records by `category::` + `fx::` tags and pick the highest `preference::`
    (a `user::` record's preference overrides the built-in one).

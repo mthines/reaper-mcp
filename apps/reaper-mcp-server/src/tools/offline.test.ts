@@ -147,6 +147,16 @@ describe('measure_track_alignment', () => {
     expect(data).toMatchObject({ currentPlayOffsetMs: 2, currentPhaseInverted: true, suggestedPlayOffsetMs: 2, suggestedPhase: 1 });
   });
 
+  it('makes no suggestion when the tracks barely correlate', async () => {
+    const client = sidecar();
+    renderOk();
+    client.align.mockResolvedValue({ delaySamples: -434, delayMs: -9.841, correlation: 0.01, polarityInverted: false });
+    const data = JSON.parse((await tool('measure_track_alignment')({ referenceTrack: 1, trackIndex: 2, startTime: 0 })).content[0].text);
+    expect(data.suggestedPlayOffsetMs).toBeUndefined();
+    expect(data.suggestedPhase).toBeUndefined();
+    expect(data.warning).toContain('below 0.3');
+  });
+
   it('cleans up the first render when the second fails', async () => {
     sidecar();
     sendCommandMock

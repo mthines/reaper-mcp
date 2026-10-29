@@ -33,6 +33,8 @@ const DEFAULT_OFFLINE_SECONDS = 30;
 /** Default window and lag search of measure_track_alignment. */
 const DEFAULT_ALIGNMENT_SECONDS = 10;
 const DEFAULT_MAX_LAG_MS = 20;
+/** Below this correlation the two tracks share too little to trust the lag. */
+export const MIN_ALIGNMENT_CORRELATION = 0.3;
 /** Max window measure_track_alignment renders per track (seconds). */
 export const MAX_ALIGNMENT_SECONDS = 30;
 /** Render is synchronous in REAPER: allow ~1 s per 3 s of audio plus slack. */
@@ -176,7 +178,8 @@ export function registerOfflineTools(server: McpServer): void {
     'offset and polarity are included). To align it, set_track_property playOffsetMs = suggestedPlayOffsetMs and ' +
     'phase = suggestedPhase (1 = inverted) on that track — absolute values that already account for the current ' +
     'settings, so re-measuring an aligned track suggests what it already has. Renders are post-FX (plugin latency ' +
-    'is compensated). Pick a range where both tracks play the same hits. Requires the Python sidecar.',
+    'is compensated). Pick a range where both tracks play the same hits; below correlation ' +
+    `${MIN_ALIGNMENT_CORRELATION} no suggestion is made. Requires the Python sidecar.`,
     {
       referenceTrack: z.coerce.number().int().min(0).describe('Zero-based index of the reference track'),
       trackIndex: z.coerce.number().int().min(0).describe('Zero-based index of the track to measure'),
@@ -202,6 +205,8 @@ export function registerOfflineTools(server: McpServer): void {
           maxLagMs: maxLagMs ?? DEFAULT_MAX_LAG_MS,
         });
         const delayMs = result['delayMs'] as number | null;
+        const correlation = Math.abs(Number(result['correlation'] ?? 0));
+        const confident = typeof delayMs === 'number' && correlation >= MIN_ALIGNMENT_CORRELATION;
         const currentPlayOffsetMs = rendered[1].playOffsetMs ?? 0;
         const currentPhaseInverted = rendered[1].phaseInverted ?? false;
         return text({
@@ -214,7 +219,13 @@ export function registerOfflineTools(server: McpServer): void {
           ...result,
           currentPlayOffsetMs,
           currentPhaseInverted,
-          ...(typeof delayMs === 'number'
+          ...(typeof delayMs === 'number' && !confident
+            ? {
+              warning: `Correlation ${correlation.toFixed(2)} is below ${MIN_ALIGNMENT_CORRELATION}: the tracks share ` +
+                'too little in this range to trust the delay. Pick a range where both play the same hits.',
+            }
+            : {}),
+          ...(confident
             ? {
               suggestedPlayOffsetMs: Math.round((currentPlayOffsetMs - delayMs) * 1000) / 1000,
               suggestedPhase: currentPhaseInverted !== Boolean(result['polarityInverted']) ? 1 : 0,
