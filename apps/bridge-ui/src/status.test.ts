@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatDay,
   bucketize,
   historyTiers,
   inSpan,
@@ -309,5 +310,20 @@ describe('chart selection', () => {
     const log: CommandEntry[] = [5_000, 10_000, 25_000, 39_999, 40_000].map((t, i) => ({ n: i + 1, t, c: 'x', ms: 1, ok: true }));
     expect(inSpan(log, span).map((e) => e.t)).toEqual([10_000, 25_000, 39_999]);
     expect(inSpan(log, null)).toBe(log);
+  });
+});
+
+describe('formatDay', () => {
+  const now = new Date(2026, 9, 29, 9, 0).getTime();
+  it('names today and yesterday by calendar day, not 24h', () => {
+    expect(formatDay(new Date(2026, 9, 29, 0, 5).getTime(), now)).toBe('Today');
+    expect(formatDay(new Date(2026, 9, 28, 20, 56).getTime(), now)).toBe('Yesterday');
+    expect(formatDay(new Date(2026, 9, 28, 0, 1).getTime(), now)).toBe('Yesterday');
+  });
+  it('shows a date when older, with the year only when it differs', () => {
+    const older = formatDay(new Date(2026, 9, 27, 12).getTime(), now);
+    expect(older).toMatch(/27/);
+    expect(older).not.toMatch(/26/);
+    expect(formatDay(new Date(2025, 11, 31, 12).getTime(), now)).toMatch(/25/);
   });
 });

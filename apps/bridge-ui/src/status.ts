@@ -317,7 +317,25 @@ export function formatAgo(ms: number): string {
   if (ms < 1500) return 'now';
   if (ms < 60_000) return `${Math.floor(ms / 1000)}s ago`;
   if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
-  return `${Math.floor(ms / 3_600_000)}h ago`;
+  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
+  return `${Math.floor(ms / 86_400_000)}d ago`;
+}
+
+/** Calendar day of `t` relative to `now` (local time): "Today", "Yesterday", else a short date (year only when it differs). */
+export function formatDay(t: number, now: number): string {
+  const day = new Date(t);
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  const diff = Math.round((today.getTime() - start.getTime()) / 86_400_000);
+  if (diff <= 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return day.toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+    ...(day.getFullYear() !== today.getFullYear() ? { year: '2-digit' } : {}),
+  });
 }
 
 /** One per-second snapshot of the bridge's cumulative counters (taken by the page, not the bridge). */

@@ -460,6 +460,7 @@ kbd {
 .rows::-webkit-scrollbar { width: 10px; }
 .rows::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 10px; border: 3px solid var(--panel); }
 
+.rows-window { position: relative; }
 .row { border-left: 2px solid transparent; }
 .row:hover { background: rgba(255, 255, 255, 0.02); }
 .row-err { border-left-color: var(--bad); background: rgba(248, 113, 113, 0.04); }
@@ -469,11 +470,15 @@ kbd {
 .row-main {
   width: 100%;
   display: flex; align-items: center; gap: 12px;
-  padding: 6px 14px 6px 12px;
+  /* Height is set inline from ROW_HEIGHT (the list is windowed); keep content to one line */
+  padding: 0 14px 0 12px;
   border: 0; background: none; text-align: left;
+  overflow: hidden; white-space: nowrap;
 }
 .row-time { color: var(--faint); font-size: 12px; flex: none; }
 .row-ms { opacity: 0.55; }
+/* Fixed width so the times line up whether the day reads Today, Yesterday or a date */
+.row-day { display: inline-block; min-width: 9ch; margin-right: 1ch; opacity: 0.7; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 .status-dot.ok { background: var(--live); opacity: 0.75; }
 .status-dot.err { background: var(--bad); box-shadow: 0 0 8px rgba(248, 113, 113, 0.6); }
