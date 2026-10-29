@@ -9,5 +9,9 @@ torchaudio>=2.2.0
 # HuggingFace Hub for model weight management
 huggingface_hub>=0.23.0
 
+# audiobox_aesthetics.utils imports requests without declaring it, and
+# huggingface_hub 2.x no longer pulls it in
+requests>=2.31.0
+
 # soundfile for audio duration check (lightweight, no heavy deps)
 soundfile>=0.12.1

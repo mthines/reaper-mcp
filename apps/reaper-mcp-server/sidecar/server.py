@@ -61,6 +61,26 @@ def _ensure_predictor() -> None:
 # Duration check helper
 # ---------------------------------------------------------------------------
 
+def _load_clip(path: str, start_time: float, end_time: float) -> tuple[Any, int]:
+    """Decode [start_time, end_time) of a file as a (channels, frames) float tensor.
+
+    Uses soundfile, not torchaudio: torchaudio 2.9+ dropped info() and moved
+    load() to torchcodec, which audiobox-aesthetics' own reader still calls.
+    """
+    import soundfile as sf  # type: ignore
+    import torch  # type: ignore
+
+    sample_rate = sf.info(path).samplerate
+    data, sample_rate = sf.read(
+        path,
+        start=int(start_time * sample_rate),
+        stop=int(end_time * sample_rate),
+        dtype="float32",
+        always_2d=True,
+    )
+    return torch.from_numpy(data.T.copy()), sample_rate
+
+
 def _get_audio_duration(path: str) -> float:
     """Return audio duration in seconds. Raises RuntimeError if file unreadable."""
     try:
@@ -134,11 +154,9 @@ def handle_analyze(request_id: Any, params: dict) -> str:
         return _err(request_id, -32000, _predictor_error)
 
     try:
-        results = _predictor.forward([{
-            "path": path,
-            "start_time": start_time,
-            "end_time": end_time,
-        }])
+        wav, sample_rate = _load_clip(path, start_time, end_time)
+        # A tensor under "path" skips audiobox's own torchaudio.load
+        results = _predictor.forward([{"path": wav, "sample_rate": sample_rate}])
         # audiobox-aesthetics returns a list of dicts with keys CE, CU, PC, PQ
         scores = results[0]
         return _ok(request_id, {

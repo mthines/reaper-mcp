@@ -283,11 +283,11 @@ async function doctor(): Promise<void> {
   // Check (b): venv exists
   const venvExists = existsSync(sidecarVenvPath);
 
-  // Check (c): audiobox-aesthetics importable in venv
+  // Check (c): the module server.py loads is importable in venv
   let depsOk = false;
   if (venvExists && existsSync(venvPython)) {
     try {
-      await execAsync(`"${venvPython}" -c "import audiobox_aesthetics"`);
+      await execAsync(`"${venvPython}" -c "import audiobox_aesthetics.infer"`);
       depsOk = true;
     } catch {
       depsOk = false;

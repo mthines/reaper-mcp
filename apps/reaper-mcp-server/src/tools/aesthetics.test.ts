@@ -232,6 +232,7 @@ describe('analyze_track_aesthetics', () => {
       startTime: 10,
       endTime: 15,
     }));
-    expect(sidecar.analyze).toHaveBeenCalledWith(expect.any(String), 10, 15);
+    // The rendered WAV is just the 10–15 s segment: the sidecar reads all of it
+    expect(sidecar.analyze).toHaveBeenCalledWith(expect.any(String), 0, 5);
   });
 });

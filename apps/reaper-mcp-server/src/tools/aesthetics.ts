@@ -80,7 +80,8 @@ export function registerAestheticsTools(server: McpServer): void {
 
       // Call sidecar (with cleanup in finally)
       try {
-        const scores = await sidecar.analyze(wavPath, resolvedStart, resolvedEnd);
+        // The WAV holds only the rendered segment, so times are relative to it
+        const scores = await sidecar.analyze(wavPath, 0, resolvedEnd - resolvedStart);
 
         const result = {
           trackIndex,

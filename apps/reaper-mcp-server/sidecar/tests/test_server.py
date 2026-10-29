@@ -72,7 +72,8 @@ def test_analyze_success(tmp_path):
     # package to be installed for unit tests).
     server._predictor = mock_pred
 
-    with patch("server._get_audio_duration", return_value=5.0):
+    with patch("server._get_audio_duration", return_value=5.0), \
+         patch("server._load_clip", return_value=("WAV", 44100)):
 
         raw = server.dispatch(json.dumps({
             "jsonrpc": "2.0",
@@ -182,7 +183,8 @@ def test_start_end_time_passthrough(tmp_path):
     mock_pred = make_mock_predictor()
     server._predictor = mock_pred  # bypass import; see test_analyze_success
 
-    with patch("server._get_audio_duration", return_value=30.0):
+    with patch("server._get_audio_duration", return_value=30.0), \
+         patch("server._load_clip", return_value=("WAV", 44100)) as load_clip:
 
         raw = server.dispatch(json.dumps({
             "jsonrpc": "2.0",
@@ -194,10 +196,10 @@ def test_start_end_time_passthrough(tmp_path):
     resp = parse_response(raw)
     assert "result" in resp
 
-    # Verify predictor was called with the correct time bounds
+    # The clip is decoded here and handed to the predictor as a tensor
+    load_clip.assert_called_once_with(str(wav), 10.0, 15.0)
     call_args = mock_pred.forward.call_args[0][0]
-    assert call_args[0]["start_time"] == 10.0
-    assert call_args[0]["end_time"] == 15.0
+    assert call_args[0] == {"path": "WAV", "sample_rate": 44100}
     result = resp["result"]
     assert result["durationSeconds"] == 5.0  # 15.0 - 10.0
 
@@ -245,3 +247,20 @@ def test_missing_path_param():
     resp = parse_response(raw)
     assert "error" in resp
     assert "path" in resp["error"]["message"].lower()
+
+
+# ---------------------------------------------------------------------------
+# _load_clip decodes the requested slice without torchaudio
+# ---------------------------------------------------------------------------
+
+def test_load_clip_slices_stereo_wav(tmp_path):
+    import numpy as np
+    import soundfile as sf
+
+    wav = tmp_path / "stereo.wav"
+    sf.write(str(wav), np.zeros((44100 * 3, 2), dtype="float32"), 44100)
+
+    clip, sample_rate = server._load_clip(str(wav), 1.0, 2.5)
+
+    assert sample_rate == 44100
+    assert tuple(clip.shape) == (2, int(44100 * 1.5))
