@@ -684,10 +684,15 @@ function handlers.add_fx(params)
   local track = reaper.GetTrack(0, idx)
   if not track then return nil, "Track " .. idx .. " not found" end
 
-  local position = params.position or -1
+  -- TrackFX_AddByName's last argument is `instantiate`, not a slot: -1 appends, 0 only
+  -- looks up an existing instance (so a new FX is "not found"), -1000 - n inserts at slot n.
+  local instantiate = -1
+  if params.position ~= nil and params.position >= 0 then
+    instantiate = -1000 - math.floor(params.position)
+  end
 
   reaper.Undo_BeginBlock()
-  local fx_idx = reaper.TrackFX_AddByName(track, fx_name, false, position)
+  local fx_idx = reaper.TrackFX_AddByName(track, fx_name, false, instantiate)
   if fx_idx < 0 then
     reaper.Undo_EndBlock("MCP: Add FX (failed)", -1)
     return nil, "FX not found: " .. fx_name
@@ -4024,12 +4029,18 @@ function handlers.set_envelope_properties(params)
 
   if reaper.BR_EnvAlloc then
     -- SWS extension available: use BR_Env* functions
+    -- BR_EnvSetProperties needs active, visible, armed, inLane, laneHeight, defaultShape and
+    -- faderScaling; pass the current values back for everything not being changed.
     local br_env = reaper.BR_EnvAlloc(env, false)
-    local cur_active, cur_visible, cur_armed = reaper.BR_EnvGetProperties(br_env)
-    local new_active = params.active ~= nil and params.active or cur_active
-    local new_visible = params.visible ~= nil and params.visible or cur_visible
-    local new_armed = params.armed ~= nil and params.armed or cur_armed
-    reaper.BR_EnvSetProperties(br_env, new_active, new_visible, new_armed, false)
+    local cur = { reaper.BR_EnvGetProperties(br_env) }
+    local function pick(v, current) if v == nil then return current end return v end
+    local args = {
+      pick(params.active, cur[1]), pick(params.visible, cur[2]), pick(params.armed, cur[3]),
+      cur[4], cur[5], cur[6], cur[11],
+    }
+    local n = 7
+    if cur[12] ~= nil then n = 8; args[8] = cur[12] end -- automationItemsOptions (newer SWS)
+    reaper.BR_EnvSetProperties(br_env, table.unpack(args, 1, n))
     reaper.BR_EnvFree(br_env, true) -- commit=true
   else
     -- Fallback: modify envelope state chunk directly
