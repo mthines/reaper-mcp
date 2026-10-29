@@ -66,6 +66,59 @@ describe('track tools', () => {
     });
   });
 
+  describe('list_tracks filters', () => {
+    // MIX (0) > [INST (1) > [Kick (2), Snare (3)], VOX (4)]; VOX (5) at the top level
+    const session = [
+      { index: 0, name: 'MIX', parentIndex: -1, depth: 1, volume: 0, pan: 0, mute: false, solo: false, fxCount: 1, color: 1, volumeRaw: 1 },
+      { index: 1, name: 'INST', parentIndex: 0, depth: 1, volume: 0, pan: 0, mute: false, solo: false, fxCount: 0, color: 1, volumeRaw: 1 },
+      { index: 2, name: 'Kick', parentIndex: 1, depth: 0, volume: -6, pan: 0, mute: false, solo: false, fxCount: 2, color: 1, volumeRaw: 0.5 },
+      { index: 3, name: 'Snare', parentIndex: 1, depth: -1, volume: -8, pan: 0, mute: false, solo: false, fxCount: 1, color: 1, volumeRaw: 0.4 },
+      { index: 4, name: 'VOX', parentIndex: 0, depth: -1, volume: -3, pan: 0, mute: false, solo: false, fxCount: 3, color: 1, volumeRaw: 0.7 },
+      { index: 5, name: 'VOX', parentIndex: -1, depth: 0, volume: 0, pan: 0, mute: true, solo: false, fxCount: 0, color: 1, volumeRaw: 1 },
+    ];
+    const list = async (params: Record<string, unknown>) => {
+      mockedSendCommand.mockResolvedValue({ id: 't', success: true, data: session, timestamp: Date.now() });
+      const result = (await tools['list_tracks'].handler(params)) as { content: { text: string }[]; isError?: boolean };
+      return { result, body: result.isError ? null : JSON.parse(result.content[0].text) };
+    };
+
+    it('parent returns every track inside the folder, at any depth', async () => {
+      const { body } = await list({ parent: 0 });
+      expect(body.tracks.map((t: { index: number }) => t.index)).toEqual([1, 2, 3, 4]);
+      expect(body).toMatchObject({ total: 4, offset: 0, returned: 4, hasMore: false });
+    });
+
+    it('parent accepts a unique name and refuses an ambiguous one', async () => {
+      expect((await list({ parent: 'inst' })).body.tracks.map((t: { name: string }) => t.name)).toEqual(['Kick', 'Snare']);
+      const { result } = await list({ parent: 'VOX' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('4, 5');
+    });
+
+    it('nameContains matches case-insensitively and combines with parent', async () => {
+      expect((await list({ nameContains: 'vo' })).body.total).toBe(2);
+      expect((await list({ parent: 0, nameContains: 'vo' })).body.tracks.map((t: { index: number }) => t.index)).toEqual([4]);
+    });
+
+    it('compact keeps only the mixing fields', async () => {
+      const { body } = await list({ compact: true });
+      expect(Object.keys(body.tracks[0]).sort()).toEqual(
+        ['depth', 'fxCount', 'index', 'mute', 'name', 'pan', 'parentIndex', 'solo', 'volume'],
+      );
+    });
+
+    it('offset and limit page through the matches', async () => {
+      const { body } = await list({ offset: 2, limit: 2 });
+      expect(body.tracks.map((t: { index: number }) => t.index)).toEqual([2, 3]);
+      expect(body).toMatchObject({ total: 6, returned: 2, hasMore: true });
+    });
+
+    it('without params the output is the plain track array, unchanged', async () => {
+      const { result } = await list({});
+      expect(result.content[0].text).toBe(JSON.stringify(session, null, 2));
+    });
+  });
+
   describe('get_track_properties', () => {
     it('returns track properties with FX list', async () => {
       const trackProps = {

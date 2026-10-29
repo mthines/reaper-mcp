@@ -219,11 +219,12 @@ slider2:track_slot=0<0,4095,1>Track Slot
     mom_samples < 1 ? mom_samples = 1;
 
     // Mean square over each window
-    shortterm_mean = (shortterm_sum_l + shortterm_sum_r) / (buf_size * 2);
-    momentary_mean = (momentary_sum_l + momentary_sum_r) / (mom_samples * 2);
+    // BS.1770 sums the channels' mean squares (G = 1 for L/R); it does not average them
+    shortterm_mean = (shortterm_sum_l + shortterm_sum_r) / buf_size;
+    momentary_mean = (momentary_sum_l + momentary_sum_r) / mom_samples;
 
-    // Integrated mean square (two channels)
-    integrated_mean = integrated_count > 0 ? (integrated_sum / (integrated_count * 2)) : 0;
+    // Integrated: sum of the two channels' mean squares
+    integrated_mean = integrated_count > 0 ? (integrated_sum / integrated_count) : 0;
 
     // LUFS = -0.691 + 10 * log10(mean_square)
     shortterm_mean > 0 ? (

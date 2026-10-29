@@ -424,6 +424,12 @@ export interface TrackMeasurement {
   crest?: CrestFactorData;
   correlation?: CorrelationData;
   spectrum?: TrackSpectrum;
+  /** Metrics that returned no data, with why (e.g. the meter never received audio) */
+  errors?: string[];
+}
+
+export interface RemoveMcpMetersResult {
+  tracks: { trackIndex: number; removed: number; found: boolean }[];
 }
 
 export interface MeasureTracksResult {

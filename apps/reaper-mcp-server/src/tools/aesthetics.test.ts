@@ -233,6 +233,48 @@ describe('analyze_track_aesthetics', () => {
       endTime: 15,
     }));
     // The rendered WAV is just the 10–15 s segment: the sidecar reads all of it
-    expect(sidecar.analyze).toHaveBeenCalledWith(expect.any(String), 0, 5);
+    expect(sidecar.analyze).toHaveBeenCalledWith(expect.any(String), 0, 5, { normalizeLufs: -18 });
+  });
+
+  // -------------------------------------------------------------------------
+  // Level-matched scoring
+  // -------------------------------------------------------------------------
+
+  it('scores at -18 LUFS by default and reports the input loudness and gain', async () => {
+    const sidecar = makeMockSidecar(true, {
+      CE: 5, CU: 6, PC: 2, PQ: 7, durationSeconds: 5, modelVersion: 'facebook/audiobox-aesthetics',
+      normalizeLufs: -18, inputLufs: -11.2, gainDb: -6.8,
+    });
+    getSidecarClientMock.mockReturnValue(sidecar);
+    sendCommandMock.mockResolvedValue(makeRenderSuccess());
+
+    const result = await getToolCallback('analyze_track_aesthetics')({ trackIndex: 2 });
+
+    expect(sidecar.analyze).toHaveBeenCalledWith(expect.any(String), 0, 5, { normalizeLufs: -18 });
+    const data = JSON.parse(result.content[0].text);
+    expect(data).toMatchObject({ normalizedToLufs: -18, inputLufs: -11.2, gainDb: -6.8 });
+  });
+
+  it('passes a custom target, and false scores the clip as rendered', async () => {
+    const sidecar = makeMockSidecar(true);
+    getSidecarClientMock.mockReturnValue(sidecar);
+    sendCommandMock.mockResolvedValue(makeRenderSuccess());
+    const cb = getToolCallback('analyze_track_aesthetics');
+
+    await cb({ trackIndex: 2, normalizeLufs: -14 });
+    await cb({ trackIndex: 2, normalizeLufs: false });
+
+    expect(sidecar.analyze.mock.calls[0][3]).toEqual({ normalizeLufs: -14 });
+    expect(sidecar.analyze.mock.calls[1][3]).toEqual({ normalizeLufs: null });
+  });
+
+  it('accepts the master track (-1)', async () => {
+    const sidecar = makeMockSidecar(true);
+    getSidecarClientMock.mockReturnValue(sidecar);
+    sendCommandMock.mockResolvedValue(makeRenderSuccess());
+
+    await getToolCallback('analyze_track_aesthetics')({ trackIndex: -1 });
+
+    expect(sendCommandMock).toHaveBeenCalledWith('render_track_to_wav', expect.objectContaining({ trackIndex: -1 }));
   });
 });

@@ -665,6 +665,18 @@ function handlers.set_track_property(params)
     reaper.SetMediaTrackInfo_Value(track, "B_MUTE", value)
   elseif prop == "solo" then
     reaper.SetMediaTrackInfo_Value(track, "I_SOLO", value)
+  elseif prop == "recordArm" then
+    reaper.SetMediaTrackInfo_Value(track, "I_RECARM", value)
+  elseif prop == "phase" then
+    reaper.SetMediaTrackInfo_Value(track, "B_PHASE", value)
+  elseif prop == "input" then
+    reaper.SetMediaTrackInfo_Value(track, "I_RECINPUT", value)
+  elseif prop == "playOffsetMs" then
+    -- Track playback offset (REAPER 6.0+): D_PLAY_OFFSET is in seconds unless
+    -- flag &2 says samples; &1 bypasses it. Clear both so the value applies.
+    reaper.SetMediaTrackInfo_Value(track, "D_PLAY_OFFSET", value / 1000)
+    local flag = reaper.GetMediaTrackInfo_Value(track, "I_PLAY_OFFSET_FLAG")
+    reaper.SetMediaTrackInfo_Value(track, "I_PLAY_OFFSET_FLAG", flag & ~3)
   else
     reaper.Undo_EndBlock("MCP: Set track property", -1)
     return nil, "Unknown property: " .. tostring(prop)
@@ -1854,6 +1866,37 @@ end
 -- Tries to place inside an "MCP Meters" FX Container (REAPER 7.06+).
 -- Falls back to direct insertion on older REAPER versions.
 -- Returns the FX index (possibly container-addressed) on success, or nil + error.
+-- remove_mcp_meters: delete the "MCP Meters" container and any loose MCP meter
+-- JSFX that the metering reads inserted. Leaves the MIDI emitter alone.
+-- params.trackIndices: list of track indices (-1 = master)
+function handlers.remove_mcp_meters(params)
+  local indices = params.trackIndices
+  if type(indices) ~= "table" or #indices == 0 then
+    return nil, "trackIndices required"
+  end
+  local removed = {}
+  reaper.Undo_BeginBlock()
+  for _, idx in ipairs(indices) do
+    local track = reaper.GetTrack(0, idx)
+    local count = 0
+    if track then
+      for i = reaper.TrackFX_GetCount(track) - 1, 0, -1 do
+        local _, name = reaper.TrackFX_GetFXName(track, i)
+        local is_meter = name and (name == "MCP Meters"
+          or (name:find(MCP_FX_PREFIX, 1, true) and not name:find("MIDI Emitter", 1, true)))
+        if is_meter then
+          reaper.TrackFX_Delete(track, i)
+          count = count + 1
+        end
+      end
+      container_cache[tostring(track)] = nil
+    end
+    removed[#removed + 1] = { trackIndex = idx, removed = count, found = track ~= nil }
+  end
+  reaper.Undo_EndBlock("MCP: Remove meters", -1)
+  return { tracks = removed }
+end
+
 function ensure_jsfx_on_track(track, fx_name)
   -- Try container approach first (REAPER 7.06+)
   local container_idx = find_or_create_mcp_container(track)
@@ -4310,12 +4353,14 @@ function handlers.render_track_to_wav(params)
     return nil, "endTime must be greater than startTime"
   end
 
-  -- Get track
-  local track = reaper.GetTrack(0, track_index)
+  -- Get track (-1 = master: render the whole mix with every solo cleared)
+  local is_master = track_index == -1
+  local track = is_master and reaper.GetMasterTrack(0) or reaper.GetTrack(0, track_index)
   if not track then
     return nil, "Track " .. tostring(track_index) .. " not found"
   end
-  local track_name = ({reaper.GetSetMediaTrackInfo_String(track, "P_NAME", "", false)})[2] or ""
+  local track_name = is_master and "MASTER"
+    or ({reaper.GetSetMediaTrackInfo_String(track, "P_NAME", "", false)})[2] or ""
   if track_name == "" then track_name = "Track " .. (track_index + 1) end
 
   -- Render target is always 44100 Hz (WAV for sidecar inference).
@@ -4386,12 +4431,14 @@ function handlers.render_track_to_wav(params)
     reaper.GetSetProjectInfo(0, "RENDER_SRATE",    sample_rate, true)
     reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", 2,           true)
 
-    -- Unsolo all tracks, then solo only the target track
+    -- Unsolo all tracks, then solo only the target track (master: none)
     for i = 0, track_count - 1 do
       local t = reaper.GetTrack(0, i)
       reaper.SetMediaTrackInfo_Value(t, "I_SOLO", 0)
     end
-    reaper.SetMediaTrackInfo_Value(track, "I_SOLO", 1)
+    if not is_master then
+      reaper.SetMediaTrackInfo_Value(track, "I_SOLO", 1)
+    end
 
     -- Trigger render: action 42230 = "Render project, using the most recent render settings, auto-close render dialog"
     -- This call is synchronous — it blocks the defer loop until rendering completes.

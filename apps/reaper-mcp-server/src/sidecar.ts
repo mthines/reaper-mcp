@@ -38,6 +38,11 @@ const ANALYZE_TIMEOUT_MS = Number.isFinite(_rawTimeout) && _rawTimeout > 0 ? _ra
 // Types
 // ---------------------------------------------------------------------------
 
+export interface AnalyzeOptions {
+  /** Scale the clip to this integrated loudness (LUFS) before scoring; null/undefined = as rendered. */
+  normalizeLufs?: number | null;
+}
+
 export interface AestheticsRawResult {
   CE: number;
   CU: number;
@@ -45,26 +50,51 @@ export interface AestheticsRawResult {
   PQ: number;
   durationSeconds: number;
   modelVersion: string;
+  normalizeLufs?: number | null;
+  inputLufs?: number | null;
+  gainDb?: number;
+}
+
+/** Params of the sidecar's analyze_audio method (no model load). */
+export interface AnalyzeAudioParams {
+  path: string;
+  startTime?: number;
+  endTime?: number;
+  sectionSeconds?: number;
+  referencePath?: string;
+  referenceStartTime?: number;
+  referenceEndTime?: number;
+}
+
+/** Params of the sidecar's align method. */
+export interface AlignParams {
+  referencePath: string;
+  path: string;
+  maxLagMs?: number;
 }
 
 export interface SidecarClient {
   /** True if the sidecar is installed (script + venv exist). Does NOT guarantee it's running. */
   isAvailable(): boolean;
   /** Send an analyze request to the sidecar. Spawns the process if not already running. */
-  analyze(wavPath: string, startTime: number, endTime: number): Promise<AestheticsRawResult>;
+  analyze(wavPath: string, startTime: number, endTime: number, options?: AnalyzeOptions): Promise<AestheticsRawResult>;
+  /** Loudness, spectrum and optional reference comparison of a file (no model load). */
+  analyzeAudio(params: AnalyzeAudioParams): Promise<Record<string, unknown>>;
+  /** Delay and polarity of one file relative to another. */
+  align(params: AlignParams): Promise<Record<string, unknown>>;
   /** Terminate the sidecar process. Safe to call even if not running. */
   shutdown(): void;
 }
 
 interface PendingRequest {
-  resolve: (result: AestheticsRawResult) => void;
+  resolve: (result: unknown) => void;
   reject: (err: Error) => void;
 }
 
 interface JsonRpcResponse {
   jsonrpc: string;
   id: number;
-  result?: AestheticsRawResult;
+  result?: unknown;
   error?: { code: number; message: string };
 }
 
@@ -86,23 +116,38 @@ class SidecarClientImpl implements SidecarClient {
     return existsSync(SIDECAR_SCRIPT_PATH) && existsSync(VENV_PYTHON);
   }
 
+  analyze(wavPath: string, startTime: number, endTime: number, options: AnalyzeOptions = {}): Promise<AestheticsRawResult> {
+    const params: Record<string, unknown> = { path: wavPath, startTime, endTime };
+    if (options.normalizeLufs != null) params['normalizeLufs'] = options.normalizeLufs;
+    return this.call('analyze', params) as Promise<AestheticsRawResult>;
+  }
+
+  analyzeAudio(params: AnalyzeAudioParams): Promise<Record<string, unknown>> {
+    return this.call('analyze_audio', { ...params }) as Promise<Record<string, unknown>>;
+  }
+
+  align(params: AlignParams): Promise<Record<string, unknown>> {
+    return this.call('align', { ...params }) as Promise<Record<string, unknown>>;
+  }
+
   /**
-   * CLIENT span `sidecar/analyze` (JSON-RPC conventions) around the request,
+   * CLIENT span `sidecar/<method>` (JSON-RPC conventions) around the request,
    * plus `reaper.sidecar.request.duration` by `rpc.method` and `error.type`.
    */
-  analyze(wavPath: string, startTime: number, endTime: number): Promise<AestheticsRawResult> {
+  private call(method: string, params: Record<string, unknown>): Promise<unknown> {
     const startMs = Date.now();
     return getTracer().startActiveSpan(
-      'sidecar/analyze',
+      `sidecar/${method}`,
       {
         kind: SpanKind.CLIENT,
-        attributes: { 'rpc.system': 'jsonrpc', 'rpc.service': 'sidecar', 'rpc.method': 'analyze', 'peer.service': 'reaper-mcp-sidecar' },
+        attributes: { 'rpc.system': 'jsonrpc', 'rpc.service': 'sidecar', 'rpc.method': method, 'peer.service': 'reaper-mcp-sidecar' },
       },
       async (span) => {
-        const metricAttrs: Record<string, string> = { 'rpc.method': 'analyze' };
+        const metricAttrs: Record<string, string> = { 'rpc.method': method };
         try {
-          const result = await this.analyzeUntraced(wavPath, startTime, endTime);
-          span.setAttribute('reaper.sidecar.model.version', result.modelVersion);
+          const result = await this.callUntraced(method, params);
+          const modelVersion = (result as { modelVersion?: unknown } | null)?.modelVersion;
+          if (typeof modelVersion === 'string') span.setAttribute('reaper.sidecar.model.version', modelVersion);
           return result;
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -114,8 +159,8 @@ class SidecarClientImpl implements SidecarClient {
           metricAttrs['error.type'] = errorType;
           span.setAttribute('error.type', errorType);
           span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(message) });
-          emitLog(errorType === 'not_installed' ? 'warn' : 'error', `Sidecar analyze failed: ${message}`, {
-            'rpc.method': 'analyze',
+          emitLog(errorType === 'not_installed' ? 'warn' : 'error', `Sidecar ${method} failed: ${message}`, {
+            'rpc.method': method,
             'error.type': errorType,
           });
           throw err;
@@ -127,7 +172,7 @@ class SidecarClientImpl implements SidecarClient {
     );
   }
 
-  private async analyzeUntraced(wavPath: string, startTime: number, endTime: number): Promise<AestheticsRawResult> {
+  private async callUntraced(method: string, params: Record<string, unknown>): Promise<unknown> {
     if (!this.isAvailable()) {
       throw new Error(
         'Audio understanding sidecar not installed. ' +
@@ -137,22 +182,17 @@ class SidecarClientImpl implements SidecarClient {
 
     await this.ensureRunning();
 
-    return new Promise<AestheticsRawResult>((resolve, reject) => {
+    return new Promise<unknown>((resolve, reject) => {
       const id = this.nextId++;
-      // Method name 'analyze' must match a key in METHODS dict in sidecar/server.py.
-      const request = {
-        jsonrpc: '2.0',
-        id,
-        method: 'analyze',
-        params: { path: wavPath, startTime, endTime },
-      };
+      // Method names must match keys in the METHODS dict in sidecar/server.py.
+      const request = { jsonrpc: '2.0', id, method, params };
 
       // Timeout watchdog: a hung Python inference (OOM, model corruption,
       // deadlock) must not block the caller forever. On timeout, reject the
       // request and kill the process so the next call gets a fresh sidecar.
       const timer = setTimeout(() => {
         if (this.pending.delete(id)) {
-          emitLog('error', `Sidecar analyze() timed out after ${ANALYZE_TIMEOUT_MS}ms — killing process`, {
+          emitLog('error', `Sidecar ${method}() timed out after ${ANALYZE_TIMEOUT_MS}ms — killing process`, {
             'reaper.sidecar.timeout_ms': ANALYZE_TIMEOUT_MS,
           }, { eventName: 'reaper.sidecar.timeout' });
           if (this.process) {

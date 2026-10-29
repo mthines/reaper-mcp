@@ -7,6 +7,21 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Why a read returned no usable data, or null when it did. A meter that never
+ * processed audio leaves its gmem slot untouched: duration 0 and every value 0.
+ */
+export function noDataReason(metric: string, data: unknown): string | null {
+  const d = (data ?? {}) as Record<string, unknown>;
+  const numbers = Object.entries(d).filter(([k, v]) => typeof v === 'number' && k !== 'trackIndex').map(([, v]) => v as number);
+  const silentMeter = metric === 'lufs'
+    ? d['duration'] === 0 || d['measuring'] === false
+    : numbers.length > 0 && numbers.every((v) => v === 0);
+  return silentMeter
+    ? 'no data — the meter received no audio (track muted, frozen, silent or not processed in this range); try analyze_track_offline'
+    : null;
+}
+
 export function registerAnalysisTools(server: McpServer): void {
   server.tool(
     'read_track_lufs',
@@ -55,7 +70,7 @@ export function registerAnalysisTools(server: McpServer): void {
 
   server.tool(
     'measure_tracks',
-    'Play audio and collect analysis measurements (LUFS, crest factor, correlation, spectrum) for one or more tracks in a single call. Handles playback start/stop automatically. LUFS supports multi-track; crest/correlation/spectrum use global gmem and are only reliable for single-track measurement. First call may be slower due to JSFX meter auto-insertion.',
+    'Play audio and collect analysis measurements (LUFS, crest factor, correlation, spectrum) for one or more tracks in a single call. Handles playback start/stop automatically. LUFS supports multi-track; crest/correlation/spectrum use global gmem and are only reliable for single-track measurement. The meters it inserts are removed afterwards unless keepMeters. A meter that received no audio (muted, frozen or silent track, nothing in range) is reported under errors, not as numbers. For whole-song, folder or master numbers without playback, prefer analyze_track_offline.',
     {
       trackIndices: z.array(z.coerce.number().int().min(-1)).min(1).max(8)
         .describe('Track indices to measure (max 8; -1 = master track)'),
@@ -69,8 +84,10 @@ export function registerAnalysisTools(server: McpServer): void {
         .describe('FFT size for spectrum analysis'),
       stopWhenDone: z.boolean().optional().default(true)
         .describe('Stop playback after measuring'),
+      keepMeters: z.boolean().optional().default(false)
+        .describe('Leave the MCP meter JSFX on the tracks (default: remove them afterwards)'),
     },
-    async ({ trackIndices, metrics, durationSeconds, startPosition, fftSize, stopWhenDone }) => {
+    async ({ trackIndices, metrics, durationSeconds, startPosition, fftSize, stopWhenDone, keepMeters }) => {
       try {
         // One read command per track and metric
         const reads: Array<{ trackIndex: number; metric: string; commandType: string; params: Record<string, unknown> }> = [];
@@ -156,8 +173,12 @@ export function registerAnalysisTools(server: McpServer): void {
         }
 
         for (const { trackIndex, metric, result } of results) {
-          if (!result.success) continue;
           const measurement = trackMap.get(trackIndex)!;
+          const problem = !result.success ? result.error : noDataReason(metric, result.data);
+          if (problem) {
+            (measurement.errors ??= []).push(`${metric}: ${problem}`);
+            continue;
+          }
           switch (metric) {
             case 'lufs':
               measurement.lufs = result.data as TrackMeasurement['lufs'];
@@ -174,8 +195,16 @@ export function registerAnalysisTools(server: McpServer): void {
           }
         }
 
+        // Meters left behind clutter the user's chains and cost CPU
+        let metersRemoved: boolean | undefined;
+        if (!keepMeters) {
+          const removal = await sendCommand('remove_mcp_meters', { trackIndices });
+          metersRemoved = removal.success;
+        }
+
         const output = {
           tracks: Array.from(trackMap.values()),
+          ...(metersRemoved === false ? { warning: 'Could not remove the MCP meters; remove "MCP Meters" from these tracks by hand' } : {}),
           durationSeconds,
           startPosition: startPosition ?? 0,
           endPosition,

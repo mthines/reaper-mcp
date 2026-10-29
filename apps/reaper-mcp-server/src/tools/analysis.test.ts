@@ -6,7 +6,7 @@ vi.mock('../bridge.js', () => ({
 
 import { sendCommand } from '../bridge.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { registerAnalysisTools } from './analysis.js';
+import { registerAnalysisTools, noDataReason } from './analysis.js';
 
 const mockedSendCommand = vi.mocked(sendCommand);
 
@@ -273,6 +273,50 @@ describe('analysis tools', () => {
       expect(calls.slice(play)).toEqual(expect.arrayContaining([
         'read_track_lufs {"trackIndex":3}', 'read_track_lufs {"trackIndex":4}',
       ]));
+    });
+  });
+  describe('measure_tracks: dead meters and cleanup', () => {
+    const LIVE = { trackIndex: 3, integrated: -14.2, shortTerm: -13, momentary: -12, truePeakL: -1, truePeakR: -1.2, duration: 5, measuring: true };
+    const DEAD = { trackIndex: 4, integrated: 0, shortTerm: 0, momentary: 0, truePeakL: 0, truePeakR: 0, duration: 0, measuring: false };
+
+    async function measure(extra: Record<string, unknown> = {}) {
+      vi.useFakeTimers();
+      mockedSendCommand.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+        const data = type === 'read_track_lufs' ? (params?.['trackIndex'] === 3 ? LIVE : DEAD) : {};
+        return { id: 't', success: true, data, timestamp: Date.now() };
+      });
+      const run = tools['measure_tracks'].handler({
+        trackIndices: [3, 4], metrics: ['lufs'], durationSeconds: 1, fftSize: 4096, stopWhenDone: true, ...extra,
+      });
+      await vi.runAllTimersAsync();
+      const result = (await run) as { content: { text: string }[] };
+      vi.useRealTimers();
+      return JSON.parse(result.content[0].text);
+    }
+
+    it('reports a meter with duration 0 as no data, never as 0 LUFS', async () => {
+      const out = await measure();
+      const [live, dead] = out.tracks;
+      expect(live.lufs.integrated).toBe(-14.2);
+      expect(live.errors).toBeUndefined();
+      expect(dead.lufs).toBeUndefined();
+      expect(dead.errors[0]).toMatch(/^lufs: no data/);
+    });
+
+    it('removes the inserted meters afterwards (remove_mcp_meters) unless keepMeters', async () => {
+      await measure();
+      expect(mockedSendCommand).toHaveBeenCalledWith('remove_mcp_meters', { trackIndices: [3, 4] });
+      mockedSendCommand.mockClear();
+      await measure({ keepMeters: true });
+      expect(mockedSendCommand).not.toHaveBeenCalledWith('remove_mcp_meters', expect.anything());
+    });
+  });
+
+  describe('noDataReason', () => {
+    it('flags all-zero non-LUFS readings and passes real ones', () => {
+      expect(noDataReason('crest', { trackIndex: 2, crestFactor: 0, peakDb: 0, rmsDb: 0 })).toMatch(/no data/);
+      expect(noDataReason('crest', { trackIndex: 2, crestFactor: 12.1, peakDb: -1, rmsDb: -13 })).toBeNull();
+      expect(noDataReason('lufs', { integrated: -20, duration: 3, measuring: true })).toBeNull();
     });
   });
 });

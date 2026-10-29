@@ -300,11 +300,15 @@ export const MCP_TOOL_NAMES = [
   'disable_tool_category',
   // semantic audio analysis (requires Python sidecar — opt-in)
   'analyze_track_aesthetics',
+  'analyze_track_offline',
+  'analyze_audio_file',
+  'measure_track_alignment',
   // built-in mix knowledge (read-only LoreKit proxy)
   'list_builtin_knowledge',
   'get_builtin_knowledge',
-  // Note: 'render_track_to_wav' is an internal Lua bridge command, NOT a public MCP tool.
-  // It must NOT be listed here — MCP_TOOL_NAMES drives the Claude Code allowlist.
+  // Note: 'render_track_to_wav' and 'remove_mcp_meters' (measure_tracks cleanup) are internal
+  // Lua bridge commands, NOT public MCP tools.
+  // They must NOT be listed here — MCP_TOOL_NAMES drives the Claude Code allowlist.
 ] as const;
 
 /** Create or update .claude/settings.json with reaper MCP tool permissions */

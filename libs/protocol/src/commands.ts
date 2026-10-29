@@ -161,7 +161,9 @@ export type CommandType =
   | 'edit_marker'
   | 'edit_region'
   // Semantic audio analysis (requires Python sidecar)
-  | 'render_track_to_wav';
+  | 'render_track_to_wav'
+  // Removes the meters measure_tracks / read_track_* inserted
+  | 'remove_mcp_meters';
 
 // --- Per-command param types ---
 
@@ -175,8 +177,12 @@ export interface GetTrackPropertiesParams {
 
 export interface SetTrackPropertyParams {
   trackIndex: number;
-  property: 'volume' | 'pan' | 'mute' | 'solo';
+  property: 'volume' | 'pan' | 'mute' | 'solo' | 'recordArm' | 'phase' | 'input' | 'playOffsetMs';
   value: number;
+}
+
+export interface RemoveMcpMetersParams {
+  trackIndices: number[]; // -1 = master
 }
 
 export interface AddFxParams {
