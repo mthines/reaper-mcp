@@ -70,8 +70,11 @@ the user's own `user::` layer on top. Reads combine both; writes go to `user::` 
    EQ Pro-Q 3 > ReaEQ (linear phase for mastering), comp Pro-C 2 > ReaComp. Check
    the LoreKit plugin records (built-in + `user::`) for settings; bootstrap any
    unknown plugin first.
-3. **Assess the bus** — `read_track_meters` / `read_track_spectrum` /
-   `read_track_lufs` / `read_track_crest`. Peak should be -6 to -3 dBFS (reduce the
+3. **Assess the bus** — `analyze_track_offline { trackIndex: -1, startTime: 0,
+   endTime: <song end>, sectionSeconds: 10 }`: integrated LUFS over the whole
+   song (not a few seconds of meter), LRA, true peak, crest, loudest/quietest
+   sections and band balance. With a reference song, add `referencePath` for the
+   loudness and tonal-balance delta. Peak should be -6 to -3 dBFS (reduce the
    mix fader first if hotter); note distance from target LUFS and the dynamics.
 4. **Corrective EQ** — gentle only. Typical: steep HPF 20–30 Hz; low shelf -0.5 to
    -1 dB @ 80 Hz; low-mid dip -0.5 to -1 dB @ 250–350 Hz; +0.5 dB presence @
@@ -82,8 +85,12 @@ the user's own `user::` layer on top. Reads combine both; writes go to `user::` 
    30–80 ms, auto/200–500 ms release, **1–2 dB GR max**. More GR → fix the mix.
 6. **Limiter** (last in chain) — ceiling -1.0 dBTP (streaming) or -0.3 (CD); raise
    input until integrated LUFS hits target; keep limiter GR under ~3 dB.
-7. **Verify** — `read_track_lufs` (within 0.5 of target), true peak below ceiling,
-   crest genre-appropriate, correlation healthy (>0.3).
+7. **Verify** — `analyze_track_offline` on the master over the whole song:
+   integrated LUFS within 0.5 of target, true peak below the ceiling, LRA and
+   crest genre-appropriate; `read_track_correlation` healthy (>0.3). To compare
+   chain versions, `analyze_track_aesthetics` on the same 30 s range keeps the
+   default level match (-18 LUFS), so the louder master does not win by level;
+   PQ moves under ~0.1 are noise (`reference/aesthetics-scoring.md`).
 8. **Report** — first run the **end-of-session retrospective** (Memory) and write
    any lesson it surfaces; then `snapshot_save { name: "master-v1" }` and report
    target vs achieved LUFS, true peak, crest, the chain + settings, any

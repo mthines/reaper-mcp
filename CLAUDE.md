@@ -70,6 +70,7 @@ reaper-mcp/
         tempo.ts              # get_tempo_map, add/edit/delete_tempo_marker, set_project_tempo
         envelopes.ts          # get_track_envelopes, get_envelope_points, insert_envelope_point, delete_envelope_point
         aesthetics.ts         # analyze_track_aesthetics (requires Python sidecar)
+        offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment (sidecar, no model)
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
 
     sidecar/                  # Python sidecar for semantic audio analysis (opt-in)
@@ -137,18 +138,18 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (136 total)
+## MCP Tools (139 total)
 
-Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `analyze_track_aesthetics` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
+Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
 ### Project & Tracks (5)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `get_project_info` | `tools/project.ts` | Project name, tempo, time sig, sample rate, transport state |
-| `list_tracks` | `tools/tracks.ts` | All tracks with volume, pan, mute/solo, arm, phase, FX count, routing |
+| `list_tracks` | `tools/tracks.ts` | All tracks with volume, pan, mute/solo, arm, phase, FX count, routing; optional `parent` (folder index/name → its descendants), `nameContains`, `compact`, `offset`/`limit` (then returns `{total, hasMore, tracks}`) |
 | `get_track_properties` | `tools/tracks.ts` | Detailed single track info + full FX chain list |
-| `set_track_property` | `tools/tracks.ts` | Set volume (dB), pan, mute, solo, recordArm, phase, input |
+| `set_track_property` | `tools/tracks.ts` | Set volume (dB), pan, mute, solo, recordArm, phase, input, playOffsetMs (track playback offset, ±500 ms) |
 | `set_multiple_track_properties` | `tools/batch.ts` | **Batch** set properties on multiple tracks in one call |
 
 ### Track Structure (6)
@@ -313,13 +314,16 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `read_track_lufs` | `tools/analysis.ts` | Integrated/short-term/momentary LUFS + true peak |
 | `read_track_correlation` | `tools/analysis.ts` | Stereo correlation, width, mid/side levels |
 | `read_track_crest` | `tools/analysis.ts` | Crest factor (peak-to-RMS ratio) |
-| `measure_tracks` | `tools/analysis.ts` | Play, collect LUFS/crest/correlation/spectrum for 1–8 tracks in one call, stop (TS-composed, no own bridge command) |
+| `measure_tracks` | `tools/analysis.ts` | Play, collect LUFS/crest/correlation/spectrum for 1–8 tracks in one call, stop, then remove the meters it inserted (`keepMeters` keeps them). A metric that returned no data goes to the track's `errors` instead of zeros (TS-composed; cleanup via internal `remove_mcp_meters`) |
 
-### Perceptual Audio Analysis (1) — Requires Python Sidecar
+### Offline & Perceptual Audio Analysis (4) — Requires Python Sidecar
 
 | Tool | File | Description |
 |------|------|-------------|
-| `analyze_track_aesthetics` | `tools/aesthetics.ts` | Perceptual quality scores via Meta Audiobox Aesthetics (CC-BY 4.0): Production Quality, Production Complexity, Content Enjoyment, Content Usefulness (all 0-10). Bounces track to temp WAV, calls Python sidecar. Requires `setup-sidecar`. |
+| `analyze_track_aesthetics` | `tools/aesthetics.ts` | Perceptual quality scores via Meta Audiobox Aesthetics (CC-BY 4.0): Production Quality, Production Complexity, Content Enjoyment, Content Usefulness (all 0-10). Bounces a 30 s clip (default) of a track or the master (-1), normalizes it to `normalizeLufs` (default -18, `false` = as rendered) so level doesn't skew the scores, calls Python sidecar. Noise floor: `knowledge/reference/aesthetics-scoring.md`. Requires `setup-sidecar`. |
+| `analyze_track_offline` | `tools/offline.ts` | Render a track or the master once (up to 900 s, no playback) and analyze it: integrated LUFS (BS.1770 gated), LRA (EBU 3342), true peak, sample peak, crest, per-section loudness, band balance, resonance and sibilance hints; with `referencePath`, loudness and tonal-balance deltas against that file |
+| `analyze_audio_file` | `tools/offline.ts` | The same analysis for an audio file on disk (reference song, bounce, stem); no REAPER involved |
+| `measure_track_alignment` | `tools/offline.ts` | Render two tracks over the same window (≤30 s) and cross-correlate: delay (ms, samples), polarity, correlation, and `suggestedPlayOffsetMs` for `set_track_property` |
 
 ### Plan Executor (1)
 
@@ -395,7 +399,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 134 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 139 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
@@ -572,7 +576,7 @@ end
 
 ## Python Sidecar (Semantic Audio Analysis)
 
-An optional long-lived Python subprocess for AI-powered perceptual audio analysis. Introduced in Phase 1 to enable `analyze_track_aesthetics`.
+An optional long-lived Python subprocess for AI-powered perceptual audio analysis (`analyze_track_aesthetics`) and offline signal analysis (`analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment`).
 
 ### Sidecar Architecture
 
@@ -591,10 +595,13 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 ### Key Design Points
 
 - **Opt-in**: The sidecar is installed separately via `setup-sidecar`. `pnpm install` and `pnpm nx build` never touch Python.
-- **Lazy spawn**: The sidecar process spawns on the first `analyze_track_aesthetics` call, not at server startup.
+- **Lazy spawn**: The sidecar process spawns on the first sidecar tool call, not at server startup; the aesthetics model loads only on the first `analyze` request.
+- **JSON-RPC methods**: `analyze` (aesthetics, with optional `normalizeLufs`), `analyze_audio` (loudness/spectrum/reference, `sidecar/analysis.py`), `align` (cross-correlation delay + polarity).
+- **Audio loading**: always `soundfile` (`analysis.load_audio`). torchaudio 2.9+ removed `info()` and moved `load()` to torchcodec, so never call `torchaudio.load`/`torchaudio.info`; `torchaudio.functional` (filters, resampling) is fine.
+- **Loudness**: `analysis.py` implements ITU-R BS.1770-4 (K-weighting, 400 ms blocks, -70/-10 gates, channels summed) and EBU 3342 LRA; `tests/test_analysis.py` checks them against the EBU 3341/3342 reference signals.
 - **Lifecycle**: Sidecar receives SIGTERM when the MCP server receives SIGINT/SIGTERM. Managed via `getSidecarClient().shutdown()` in `main.ts`.
 - **Auto-restart**: If the sidecar crashes, one restart is attempted automatically. If restart fails, the tool returns a clear error.
-- **Install location**: Venv at `~/.reaper-mcp/sidecar-venv/`, script at `~/.reaper-mcp/sidecar/server.py`.
+- **Install location**: Venv at `~/.reaper-mcp/sidecar-venv/`, scripts at `~/.reaper-mcp/sidecar/` (`server.py` plus `SIDECAR_MODULES` in `setup-sidecar.ts`, e.g. `analysis.py` — add a new module there).
 - **PYTHON_BIN env var**: Override the Python interpreter used by `setup-sidecar`.
 
 ### Source Files
@@ -602,16 +609,18 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 | File | Purpose |
 |------|---------|
 | `apps/reaper-mcp-server/sidecar/server.py` | Python sidecar JSON-RPC server (source) |
+| `apps/reaper-mcp-server/sidecar/analysis.py` | Loudness (BS.1770, LRA, true peak), spectrum hints, reference comparison, alignment, normalization (numpy/torch only) |
 | `apps/reaper-mcp-server/sidecar/requirements.txt` | Pinned Python deps |
 | `apps/reaper-mcp-server/src/sidecar.ts` | Node.js subprocess lifecycle + JSON-RPC client |
 | `apps/reaper-mcp-server/src/setup-sidecar.ts` | `setup-sidecar` CLI command implementation |
 | `apps/reaper-mcp-server/src/tools/aesthetics.ts` | `analyze_track_aesthetics` tool registration |
+| `apps/reaper-mcp-server/src/tools/offline.ts` | `analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment` |
 
 ### Render Pipeline
 
-The `analyze_track_aesthetics` tool renders a track segment to a temp WAV via the `render_track_to_wav` Lua bridge handler, then passes the path to the sidecar. The TS layer owns temp file cleanup (always deleted in `try/finally`).
+The sidecar tools render a track segment to a temp WAV via the `render_track_to_wav` Lua bridge handler (trackIndex -1 renders the master: every solo is cleared for the render and restored after), then pass the path to the sidecar. The TS layer owns temp file cleanup (always deleted in `try/finally`).
 
-The `render_track_to_wav` Lua handler uses `Main_OnCommand(42230)` which is **synchronous** — it blocks the defer loop for ~0.5-1s during render. This is expected behavior documented in the handler.
+The `render_track_to_wav` Lua handler uses `Main_OnCommand(42230)` which is **synchronous** — it blocks the defer loop during render (~0.5-1s for a short clip; a 4-minute folder track took ~55 s, so `offline.ts` scales the timeout with the range). This is expected behavior documented in the handler.
 
 ### Future Phases
 

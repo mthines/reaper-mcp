@@ -106,7 +106,7 @@ Shipped baseline at the project `.claude/knowledge/` or `~/.claude/knowledge/`
 - `workflows/{task}.md` — step-by-step procedures; map the request to one:
   gain-staging · session-prep · vocal-chain · drum-bus · low-end · stereo-image ·
   master-bus · editing · stem-prep · delivery
-- `reference/*.md` — frequencies, compression, metering, perceived-loudness,
+- `reference/*.md` — frequencies, compression, metering, perceived-loudness, aesthetics-scoring,
   common-mistakes (read these instead of guessing).
 
 For analysis-only ("roast my mix"), defer to `/critique`. For final
@@ -117,14 +117,33 @@ loudness/limiting, defer to `/mastering`.
 1. **Recall** — read mixing lessons + relevant plugin memory (Memory above).
 2. **Understand** the request; load the matching `workflows/` + `genres/` docs.
 3. **Snapshot** — `snapshot_save { name: "before-{task}" }`.
-4. **Analyze** — `list_tracks`; `play` a representative section; read
-   `read_track_meters` / `read_track_spectrum` / `read_track_lufs` /
-   `read_track_correlation` / `read_track_crest` as relevant.
+4. **Analyze** — `list_tracks` (in a big session filter it: `parent` = a folder
+   index or name, `nameContains`, `compact: true`, `offset`/`limit`). Start with
+   `analyze_track_offline` on the master (-1) or the bus in question: it renders
+   once, needs no playback, works on folder tracks, and returns integrated LUFS,
+   LRA, true peak, crest, per-section loudness (`sectionSeconds`), band balance,
+   resonance and sibilance hints. Pass `referencePath` (or `analyze_audio_file`
+   on a reference song) for the tonal and loudness delta against a reference.
+   Use the real-time meters (`read_track_meters` / `read_track_spectrum` /
+   `read_track_correlation` / `measure_tracks`) for quick checks while playing;
+   `measure_tracks` reports a track that gave no data under `errors` instead of
+   zeros. Resonance hints are most meaningful on a single track; on a full mix
+   they also catch sustained notes.
+   For multi-mic sources (snare top/bottom, kick in/out, overheads vs close mics)
+   run `measure_track_alignment`, then set `playOffsetMs` (= `suggestedPlayOffsetMs`)
+   with `set_track_property`, and `phase` 1 if `polarityInverted`.
 5. **Discover plugins** — `list_available_fx`; match against LoreKit plugin
    records by `category::` + `fx::` tags and pick the highest `preference::`
    (a `user::` record's preference overrides the built-in one).
 6. **Execute** — make changes, explaining each in audio terms.
 7. **Verify** — re-read meters/spectrum; compare against targets; revert if worse.
+   For a judgement call (did this change make the mix better?), A/B level-matched:
+   `analyze_track_aesthetics` on the same 30 s range before and after (it
+   normalizes to -18 LUFS by default — `normalizeLufs` — so a louder version does
+   not score better just for being louder). Only Production Quality (PQ) and
+   Content Usefulness (CU) judge a mix change; Content Enjoyment and Production
+   Complexity follow the arrangement and level. Treat PQ differences under ~0.1
+   as no change (`reference/aesthetics-scoring.md`).
 8. **Capture** — write any durable plugin learnings / process lessons (Memory).
    Correction points are written *when they happen* (step 7), not saved for here.
 9. **Report** — first run the **end-of-session retrospective** (Memory) and write

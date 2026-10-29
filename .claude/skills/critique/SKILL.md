@@ -73,8 +73,12 @@ change the *mix* — it does **not** mean you don't learn:
    flat — the ear lifts 2–5 kHz.
 4. **Dynamics** — `read_track_crest` on the bus. <6 dB squashed · 8–12 healthy ·
    >15 may need control.
-5. **Loudness** — `read_track_lufs` on the bus vs genre/platform targets
-   (see `reference/metering.md`).
+5. **Loudness** — `analyze_track_offline` on the master (-1) over the whole
+   song with `sectionSeconds: 10`: integrated LUFS, LRA, true peak and the
+   loudest/quietest sections vs genre/platform targets (see
+   `reference/metering.md`). Add `referencePath` when the user names a reference
+   song; report its loudness and tonal-balance deltas. Its resonance and
+   sibilance hints back up the frequency findings in step 3.
 6. **Stereo image** — `read_track_correlation` on the bus. <0 phase cancellation
    (critical) · 0.0–0.3 may collapse in mono · >0.8 very narrow. Verify bass is mono.
 7. **FX chain audit** — `get_track_properties` per track: audio with 0 FX, 10+ FX
