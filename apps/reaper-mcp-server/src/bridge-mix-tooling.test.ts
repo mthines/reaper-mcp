@@ -71,22 +71,34 @@ describe('set_track_property', () => {
 
 const FAKE_RENDER = `
   solo = { [0] = 1, [1] = 0 }
+  selected = { T0 = true, T1 = false }
   rendered = false
   written = {}
+  render_settings = nil
+  selected_at_render = nil
   reaper = {
+    IsTrackSelected = function(t) return selected[t] end,
+    SetTrackSelected = function(t, v) selected[t] = v end,
+    SetOnlyTrackSelected = function(t) for k in pairs(selected) do selected[k] = (k == t) end end,
     GetTrack = function(_, i) if i == 0 or i == 1 then return "T" .. i end end,
     GetMasterTrack = function() return "MASTER" end,
     CountTracks = function() return 2 end,
     GetTempPath = function() return "/tmp" end,
     GetSetMediaTrackInfo_String = function() return true, "Kick" end,
     GetSetProjectInfo_String = function(_, key, v, set) return true, "" end,
-    GetSetProjectInfo = function() return 0 end,
+    GetSetProjectInfo = function(_, key, v, set)
+      if key == "RENDER_SETTINGS" and set and not rendered then render_settings = v end
+      return 0
+    end,
     GetMediaTrackInfo_Value = function(t) return solo[tonumber(t:sub(2))] or 0 end,
     SetMediaTrackInfo_Value = function(t, _, v)
       if not rendered then written[t] = v end
       if t ~= "MASTER" then solo[tonumber(t:sub(2))] = v end
     end,
-    Main_OnCommand = function() rendered = true end,
+    Main_OnCommand = function()
+      rendered = true
+      selected_at_render = { T0 = selected.T0, T1 = selected.T1 }
+    end,
     ShowConsoleMsg = function() end,
   }
   io = { open = function() return { read = function() return "RIFF" end, close = function() end } end }
@@ -102,6 +114,7 @@ describe('render_track_to_wav master', () => {
       assert(written.T0 == 0 and written.T1 == 0, "all solos cleared during the render")
       assert(written.MASTER == nil, "master is never soloed")
       assert(solo[0] == 1, "user's solo restored")
+      assert(render_settings == 0, "master mix, not stems of the selection: " .. tostring(render_settings))
     `);
   });
 
@@ -110,6 +123,9 @@ describe('render_track_to_wav master', () => {
       local r, err = handlers.render_track_to_wav({ trackIndex = 1, startTime = 0, endTime = 5, commandId = "abc" })
       assert(r, err)
       assert(written.T1 == 1, "target soloed")
+      assert(render_settings == 2, "stems only")
+      assert(selected_at_render.T1 == true and selected_at_render.T0 == false, "only the target selected for the stem render")
+      assert(selected.T0 == true and selected.T1 == false, "user's selection restored")
     `);
   });
 });

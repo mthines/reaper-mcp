@@ -4400,12 +4400,14 @@ function handlers.render_track_to_wav(params)
   local saved_srate    = reaper.GetSetProjectInfo(0, "RENDER_SRATE",      0, false)
   local saved_channels = reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   0, false)
 
-  -- Save solo states for all tracks
+  -- Save solo and selection states for all tracks
   local track_count = reaper.CountTracks(0)
   local saved_solo_states = {}
+  local saved_selected = {}
   for i = 0, track_count - 1 do
     local t = reaper.GetTrack(0, i)
     saved_solo_states[i] = reaper.GetMediaTrackInfo_Value(t, "I_SOLO")
+    saved_selected[i] = reaper.IsTrackSelected(t)
   end
 
   -- -------------------------------------------------------------------------
@@ -4421,8 +4423,9 @@ function handlers.render_track_to_wav(params)
     reaper.GetSetProjectInfo(0, "RENDER_STARTPOS", start_time, true)
     reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",   end_time,   true)
 
-    -- Set render mode: 2 = stems (selected tracks via master mix / solo)
-    reaper.GetSetProjectInfo(0, "RENDER_SETTINGS", 2, true)
+    -- Render mode: 0 = master mix (the master); 2 = stems only, which renders the
+    -- SELECTED tracks, so the target is made the only selected track below.
+    reaper.GetSetProjectInfo(0, "RENDER_SETTINGS", is_master and 0 or 2, true)
 
     -- Force WAV at 44100 Hz stereo so the sidecar always gets a known format,
     -- independent of whatever the user last rendered. Restored in finally.
@@ -4438,6 +4441,7 @@ function handlers.render_track_to_wav(params)
     end
     if not is_master then
       reaper.SetMediaTrackInfo_Value(track, "I_SOLO", 1)
+      reaper.SetOnlyTrackSelected(track)
     end
 
     -- Trigger render: action 42230 = "Render project, using the most recent render settings, auto-close render dialog"
@@ -4461,6 +4465,7 @@ function handlers.render_track_to_wav(params)
     for i = 0, track_count - 1 do
       local t = reaper.GetTrack(0, i)
       reaper.SetMediaTrackInfo_Value(t, "I_SOLO", saved_solo_states[i] or 0)
+      reaper.SetTrackSelected(t, saved_selected[i] or false)
     end
   end)
 
