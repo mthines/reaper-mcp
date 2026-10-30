@@ -43,6 +43,8 @@ export type TrackEvent =
   | { name: 'plugin_publish_completed'; outcome: 'published' | 'refused' | 'failed'; removed_copy: boolean; replaced: boolean }
   | { name: 'bridge_state_changed'; state: Liveness }
   | { name: 'knowledge_load_failed'; layer: 'built-in' | 'user' }
+  | { name: 'snapshot_restored'; outcome: 'ok' | 'refused' | 'lost'; warnings: boolean }
+  | { name: 'snapshot_saved'; outcome: 'ok' | 'refused' | 'lost'; described: boolean; replaced: boolean }
   | { name: 'page_error'; type: string };
 
 /** Why usage statistics are on or off, in words the Settings toggle can show. */

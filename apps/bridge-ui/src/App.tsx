@@ -6,6 +6,9 @@ import { manualInstallHint, openInBrowserToInstall, promptInstall, useInstallSta
 import { ResizeHandle, useDrawerWidth } from './ResizeHandle.js';
 import { setUsageStats, startAnalytics, track, trackView, type TrackEvent, type UsageStatsState } from './analytics.js';
 import { PluginsView } from './PluginsView.js';
+import { SnapshotsView } from './SnapshotsView.js';
+import { blockedBy } from './snapshots.js';
+import { useSnapshots, type SnapshotsHook } from './useSnapshots.js';
 import { EditViewSection } from './EditViews.js';
 import { MeasurementView } from './Measurement.js';
 import { galleryAllowed } from './gallery-stories.js';
@@ -413,6 +416,9 @@ export function App() {
     saveLoreKitToken(token, LOREKIT_PUBLISH_TOKEN_KEY);
   };
   const liveKnowledge = useKnowledge(!DEMO, loreToken, publishToken);
+  // The Snapshots tab: only a bridge that serves it (control.snapshots), read only while the view is open
+  const snapshotsServed = Boolean(DEMO) || status?.control?.snapshots === true;
+  const snapshots = useSnapshots(snapshotsServed && view === 'snapshots', status?.control?.token, Boolean(DEMO));
 
   useEffect(() => {
     document.title = `${state === 'live' ? '●' : '○'} MCP Bridge`;
@@ -473,6 +479,7 @@ export function App() {
             onClearSelection={() => setSelection(null)}
             sessions={sessions}
             knowledge={DEMO ? status.knowledge : liveKnowledge}
+            snapshots={snapshotsServed ? { ...snapshots, blocked: blockedBy(settings) } : undefined}
             onOpenSettings={settings ? openSettings(false) : undefined}
             view={view}
             onView={chooseView}
@@ -1650,13 +1657,14 @@ function Timeline({
 }
 
 type Filter = 'all' | 'errors';
-type View = 'calls' | 'tools' | 'sessions' | 'plugins';
+type View = 'calls' | 'tools' | 'sessions' | 'plugins' | 'snapshots';
 const VIEW_KEY = 'mcp-bridge-view';
 const VIEWS: Array<{ key: View; label: string }> = [
   { key: 'calls', label: 'Calls' },
   { key: 'tools', label: 'Tools' },
   { key: 'sessions', label: 'Sessions' },
   { key: 'plugins', label: 'Plugins' },
+  { key: 'snapshots', label: 'Snapshots' },
 ];
 
 const isView = (v: unknown): v is View => VIEWS.some((x) => x.key === v);
@@ -1678,6 +1686,7 @@ function Log({
   onClearSelection,
   sessions,
   knowledge,
+  snapshots,
   view,
   onView,
   paused,
@@ -1697,6 +1706,8 @@ function Log({
   onClearSelection: () => void;
   sessions: Map<string, Session>;
   knowledge?: KnowledgeFeed;
+  /** The Snapshots tab's feed, when the bridge serves it; `blocked` says why restore and save are off */
+  snapshots?: SnapshotsHook & { blocked: string | null };
   onOpenSettings?: () => void;
   view: View;
   onView: (v: View) => void;
@@ -1789,7 +1800,7 @@ function Log({
   // Esc clears the chart selection where its banner shows; true when there was one to clear
   const clearChartSelection = useRef((): boolean => false);
   clearChartSelection.current = () => {
-    if (!selection || view === 'plugins') return false;
+    if (!selection || view === 'plugins' || view === 'snapshots') return false;
     track({ name: 'timeline_span_selected', selected: false });
     onClearSelection();
     return true;
@@ -1844,7 +1855,7 @@ function Log({
     <section className="log">
       <div className="toolbar">
         <div className="seg" role="tablist" aria-label="View">
-          {VIEWS.filter((v) => v.key !== 'plugins' || knowledge).map((v) => (
+          {VIEWS.filter((v) => (v.key !== 'plugins' || knowledge) && (v.key !== 'snapshots' || snapshots)).map((v) => (
             <button key={v.key} role="tab" aria-selected={view === v.key} onClick={() => choose(v.key)}>
               {v.label}
             </button>
@@ -1867,7 +1878,15 @@ function Log({
               ref={searchRef}
               value={query}
               onChange={(ev) => search(ev.target.value)}
-              placeholder={view === 'tools' ? 'Filter tools' : view === 'plugins' ? 'Filter plugins or categories' : 'Filter commands or errors'}
+              placeholder={
+                view === 'tools'
+                  ? 'Filter tools'
+                  : view === 'plugins'
+                    ? 'Filter plugins or categories'
+                    : view === 'snapshots'
+                      ? 'Filter snapshots'
+                      : 'Filter commands or errors'
+              }
               spellCheck={false}
             />
             {!query && <kbd>/</kbd>}
@@ -1897,7 +1916,7 @@ function Log({
         )}
       </div>
 
-      {selection && view !== 'plugins' && (
+      {selection && view !== 'plugins' && view !== 'snapshots' && (
         <div className="selection-bar" role="status">
           <span>
             Showing <b>{log.length.toLocaleString()}</b> command{log.length === 1 ? '' : 's'} from{' '}
@@ -1943,6 +1962,8 @@ function Log({
 
       {view === 'plugins' && knowledge ? (
         <PluginsView feed={knowledge} query={query} now={now} onOpenSettings={onOpenSettings} />
+      ) : view === 'snapshots' && snapshots ? (
+        <SnapshotsView feed={snapshots.feed} request={snapshots.request} blocked={snapshots.blocked} query={query} now={now} onSend={snapshots.send} />
       ) : view === 'tools' ? (
         <ToolsView log={scoped} query={query} now={now} onPick={(tool, errors) => {
             track({ name: 'tool_picked', errors_only: errors });
@@ -2412,6 +2433,12 @@ export function Details({
                 </span>
                 <span className="mono muted session-sub">{session.id}</span>
               </dd>
+            </>
+          )}
+          {e.src === 'page' && (
+            <>
+              <dt>Sent from</dt>
+              <dd>This page (Snapshots)</dd>
             </>
           )}
           <dt className="fact-wide">Timestamp</dt>

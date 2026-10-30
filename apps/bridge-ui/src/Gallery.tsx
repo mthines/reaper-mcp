@@ -2,7 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { Details, Mark, Notice, Offline, Toggle } from './App.js';
 import { EditViewSection } from './EditViews.js';
 import { MeasurementView } from './Measurement.js';
-import { DRAWER_STORIES, EDIT_STORIES, GALLERY_NOW, MEASUREMENT_STORIES, type Story } from './gallery-stories.js';
+import { DRAWER_STORIES, EDIT_STORIES, GALLERY_NOW, MEASUREMENT_STORIES, SNAPSHOT_STORIES, type Story } from './gallery-stories.js';
+import { SaveFormPreview, SnapshotsView } from './SnapshotsView.js';
 import type { Session } from './status.js';
 
 /**
@@ -17,6 +18,7 @@ const SECTIONS = [
   { id: 'measurements', label: 'Measurements' },
   { id: 'edits', label: 'Edit views' },
   { id: 'drawer', label: 'Details drawer' },
+  { id: 'snapshots', label: 'Snapshots' },
   { id: 'notices', label: 'Notices' },
   { id: 'controls', label: 'Controls' },
   { id: 'brand', label: 'Logo & offline' },
@@ -106,6 +108,27 @@ export function Gallery() {
                 history={s.history}
                 onPick={pick(s)}
               />
+            </div>
+          </Card>
+        ))}
+      </Section>
+
+      <Section id="snapshots" title="Snapshots">
+        {SNAPSHOT_STORIES.map((s) => (
+          <Card key={s.title} title={s.title} note={s.note} wide={!s.narrow && !s.saveForm}>
+            <div className={s.narrow ? 'gallery-narrow' : undefined}>
+              {s.saveForm ? (
+                <SaveFormPreview snapshots={s.feed?.snapshots ?? []} name={s.saveForm.name} confirm={s.saveForm.confirm} />
+              ) : (
+                <SnapshotsView
+                  feed={s.feed}
+                  request={s.request}
+                  blocked={s.blocked}
+                  now={GALLERY_NOW}
+                  keys={false}
+                  onSend={(op, name) => console.info('[gallery]', op, name)}
+                />
+              )}
             </div>
           </Card>
         ))}

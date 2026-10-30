@@ -118,6 +118,7 @@ reaper-mcp/
     mcp_project_lib.lua       # Project ops, tempo map + marker editing (pure Lua, unit-tested via wasmoon)
     mcp_items_lib.lua         # Items, takes, take FX, FX move/copy/rename, FX chains, track templates (pure Lua, unit-tested via wasmoon)
     mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
+    mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
     mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
     mcp_snapshot_quick_save.lua # Action: quick save with auto-name
@@ -788,6 +789,19 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   (`.github/ISSUE_TEMPLATE/contributor-request.yml`). Logic: `publishRecord()` in `src/lorekit.ts`; `?demo` fakes it.
   One plugin installed in several formats (same title and vendor, e.g. `VST3i:`/`CLAPi:`/`VSTi: Vital (Vital Audio)`)
   is one row (`PluginRow.variants`, VST3 preferred for the Teach prompt), counting the instances of every format.
+- Snapshots tab (`view=snapshots`, shown when `status.control.snapshots`): lists the project's snapshots, loads one
+  with a click or `1`–`9` (A/B/C while listening) and saves the current mix (name + optional description; a name that
+  saves to an existing file asks to replace it). While the view is open the page pings ExtState `snap_seen/<ms>` and
+  reads `snapshots` once a second; the bridge re-reads the folder about once a second while pinged (a file is decoded
+  again only when its size changed) and rewrites `snapshots` only when the list, the current snapshot or a result
+  changed. Restore/save: `snap_req/<id>-<token>-<restore|save>-<hex name>[-<hex description>]` with the per-run
+  control token; the bridge runs it as an ordinary `snapshot_restore` / `snapshot_save` command through the dispatcher
+  (`run_command()`), so it is logged (entry `src: "page"`), one undo point, and refused while read-only or paused,
+  then answers in `snapshots.result` (echoing `id`). A successful restore from anywhere becomes `current`
+  (ExtState `MCP_Snapshots/current_name`, which the next/prev actions continue from). Logic:
+  `reaper/mcp_snapshots_ui_lib.lua`; page: `src/snapshots.ts`, `src/useSnapshots.ts`, `src/SnapshotsView.tsx`;
+  tests: `bridge-snapshots.test.ts` (wasmoon), `snapshots.test.ts`. `snapshot_save` writes metadata (name,
+  description, timestamp, trackCount, scoped, fullChunk) ahead of `mixerState`.
 - Usage statistics: `src/analytics.ts` is the only module that imports `@dash0/sdk-web` (pinned); components call
   `track()` / `trackView()` with a typed `TrackEvent`. Events are listed in `apps/bridge-ui/tracking-plan.yaml`; add an
   event there and in `TrackEvent` together, never with names, search text, tokens or paths. The destination is the

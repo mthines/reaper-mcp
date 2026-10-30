@@ -9,6 +9,7 @@ Files installed INTO the REAPER DAW by the `setup` command. These run inside REA
 | `mcp_bridge.lua` | Lua | Persistent bridge: polls for JSON commands, executes ReaScript API, writes responses |
 | `mcp_snapshot_manager.lua` | Lua | Standalone snapshot manager GUI (gfx-based, save/restore/delete snapshots) |
 | `mcp_snapshot_lib.lua` | Lua | Shared library for snapshot action scripts (path helpers, JSON, restore logic) |
+| `mcp_snapshots_ui_lib.lua` | Lua | Status page Snapshots view: lists the folder, runs page restore/save requests through the bridge's dispatcher |
 | `mcp_snapshot_next.lua` | Lua | Action: restore next snapshot (bind to key for A/B testing) |
 | `mcp_snapshot_prev.lua` | Lua | Action: restore previous snapshot (bind to key for A/B testing) |
 | `mcp_snapshot_quick_save.lua` | Lua | Action: save snapshot with auto-name, no dialog |
