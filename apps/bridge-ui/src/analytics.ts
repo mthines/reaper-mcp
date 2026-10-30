@@ -21,6 +21,7 @@ export type TrackEvent =
   | { name: 'settings_opened' }
   | { name: 'setting_changed'; setting: 'paused' | 'readonly' | 'open_on_start' | 'dev' | 'error_notifications' | 'usage_stats'; enabled: boolean; source: 'settings' | 'notice' }
   | { name: 'app_install_clicked'; state: string }
+  | { name: 'bridge_restart_clicked'; source: 'settings' }
   | { name: 'lorekit_token_changed'; kind: 'read' | 'publish'; connected: boolean }
   | { name: 'timeline_range_changed'; range: string }
   | { name: 'timeline_span_selected'; selected: boolean }

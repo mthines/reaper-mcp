@@ -498,6 +498,7 @@ export function App() {
               onPublishToken={choosePublishToken}
               onClose={() => setSettingsOpen(false)}
               canUpdate={status.control?.canUpdate === true}
+              onRestart={status.control?.canRestart ? () => request('restart') : undefined}
             />
           )}
           <footer className="footer">
@@ -820,6 +821,7 @@ function SettingsPanel({
   onPublishToken,
   onClose,
   canUpdate,
+  onRestart,
 }: {
   settings: BridgeSettings;
   onSet: (key: SettingKey, on: boolean) => void;
@@ -833,6 +835,8 @@ function SettingsPanel({
   onPublishToken: (token: string | null) => void;
   onClose: () => void;
   canUpdate: boolean;
+  /** Absent when the bridge can't relaunch itself (REAPER before 7.03, or the script has no action ID). */
+  onRestart?: () => void;
 }) {
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => ev.key === 'Escape' && onClose();
@@ -888,6 +892,32 @@ function SettingsPanel({
             onChange={onNotify}
           />
           <InstallSetting />
+        </div>
+        <div className="setting-group">
+          <h3>Bridge</h3>
+          <div className="install-row">
+            <div className="install-text">
+              <div className="toggle-label">Restart bridge</div>
+              <div className="toggle-hint">
+                {onRestart ? (
+                  'Stop mcp_bridge.lua and start it again, loading the installed copy.'
+                ) : (
+                  <>This REAPER can’t restart the bridge for you. Stop <code>mcp_bridge.lua</code> in the Actions list and run it again.</>
+                )}
+              </div>
+            </div>
+            {onRestart && (
+              <button
+                className="btn btn-sm"
+                onClick={() => {
+                  track({ name: 'bridge_restart_clicked', source: 'settings' });
+                  onRestart();
+                }}
+              >
+                Restart
+              </button>
+            )}
+          </div>
         </div>
         {canUpdate && (
           <div className="setting-group">
