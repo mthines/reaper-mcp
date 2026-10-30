@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { editViewOf, fittingLabels, listDiff, routeIds, timelineDiff, type Marker, type Route } from './edit-views.js';
+import { editViewOf, fittingLabels, listDiff, normalizedGains, routeIds, timelineDiff, type Marker, type Route } from './edit-views.js';
 import type { CommandEntry } from './status.js';
 
 const entry = (c: string, r: Record<string, unknown> | undefined, ok = true): CommandEntry => ({ n: 1, t: 0, c, ms: 1, ok, r });
@@ -139,6 +139,14 @@ describe('new edit views', () => {
       lanes: [{ t: 'Gtr', items: [[0, 4, 0, 0, 0, 0, 11]], was: [[0, 4, 0, 0, 0, 0, 'x']] }],
     }));
     expect(n).toMatchObject({ op: 'normalize', lanes: [{ items: [[0, 4, 0, 0, 0, 0, 11]], was: [[0, 4, 0, 0, 0, 0]] }] });
+  });
+
+  it('arrangement view: a normalize reports only the gains it changed, each with its before', () => {
+    const gains = normalizedGains([
+      { t: 'Gtr', items: [[0, 4, 0, 0, 0, 0, 11], [8, 4, 0, 0, 0, 0, 12], [16, 4, 0, 0, 0, 0, 5]], was: [[0, 4, 0, 0, 0, 0, 0], [8, 4, 0, 0, 0, 0, 12], [16, 4, 0, 0, 0, 0, -1]] },
+      { t: 'Bass', items: [[2, 2, 0, 0, 0, 0]], was: [[2, 2, 0, 0, 0, 0]] },
+    ]);
+    expect(gains).toEqual([[11, 0], [5, -1]]);
   });
 
   it('arrangement view: drops an unknown op and a malformed span', () => {

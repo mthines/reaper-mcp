@@ -13,6 +13,7 @@ import {
   listDiff,
   newPoints,
   routeIds,
+  normalizedGains,
   timelineDiff,
   type AutoItem,
   type ChangeRow,
@@ -1015,17 +1016,11 @@ const dbRange = (gains: number[]) => {
 function ArrangeReadouts({ v, added, removed }: { v: Extract<EditView, { kind: "timeline" }>; added: number; removed: number }) {
   const lanes = v.lanes ?? [];
   const tracks = lanes.map((l) => l.t).join(", ") + (v.moreTracks ? ` +${v.moreTracks}` : "");
-  // Normalize changes only gains, never positions: an item's before is the one at the same place
-  const normalized = lanes.flatMap((l) =>
-    l.items.flatMap((it) => {
-      const was = (l.was ?? []).find((w) => w[0] === it[0] && w[1] === it[1]);
-      return it[6] !== undefined && was?.[6] !== undefined && was[6] !== it[6] ? [[it[6], was[6]]] : [];
-    }),
-  );
+  const normalized = normalizedGains(lanes);
   const range = v.to ?? v.span;
   return (
     <div className="measure-readouts">
-      <Readout label="Edit" value={ARRANGE_LABEL[v.op!]} />
+      <Readout label="Edit" value={v.op ? ARRANGE_LABEL[v.op] : "–"} />
       {v.op === "normalize" ? (
         <>
           <Readout label="Gain" value={dbRange(normalized.map(([g]) => g))} unit="dB" />
@@ -1054,6 +1049,8 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
   const bpms = [...v.tempo, ...tempos.removed].map((t) => t[1]);
   const varies = new Set(bpms).size > 1;
   const first = v.tempo[0];
+  // The hatched band: the time opened or cut, else where a copy landed
+  const band = v.op === "insert" || v.op === "remove" ? v.span : v.to;
   const sig = first && first[2] > 0 ? `${first[2]}/${first[3]}` : "–";
   const changed = regions.added.size + markers.added.size + tempos.added.size;
   const removed =
@@ -1145,16 +1142,13 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
             title={`Source ${clock(v.span[0], 1)}–${clock(v.span[1], 1)}`}
           />
         )}
-        {(v.op === "insert" || v.op === "remove" ? v.span : v.to) && (() => {
-          const band = (v.op === "insert" || v.op === "remove" ? v.span : v.to)!;
-          return (
-            <span
-              className={`ev-span ${v.op === "remove" ? "ev-span-cut" : ""}`}
-              style={{ left: at(band[0]), width: `${pct(band[1], 0, len) - pct(band[0], 0, len)}%` }}
-              title={`${SPAN_LABEL[v.op!]} ${clock(band[0], 1)}–${clock(band[1], 1)}`}
-            />
-          );
-        })()}
+        {band && (
+          <span
+            className={`ev-span ${v.op === "remove" ? "ev-span-cut" : ""}`}
+            style={{ left: at(band[0]), width: `${pct(band[1], 0, len) - pct(band[0], 0, len)}%` }}
+            title={`${v.op ? SPAN_LABEL[v.op] : ""} ${clock(band[0], 1)}–${clock(band[1], 1)}`}
+          />
+        )}
         {v.wasSel && (
           <span
             className="ev-sel ev-sel-was"
