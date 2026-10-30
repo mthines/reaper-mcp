@@ -68,6 +68,7 @@ import {
   type Liveness,
   type TimeBar,
   type ToolSort,
+  webSocketLevel,
 } from './status.js';
 
 const REPO_URL = 'https://github.com/mthines/reaper-mcp';
@@ -728,6 +729,15 @@ function Notices({
       >
         <b>A newer bridge is installed.</b>{' '}
         {control?.canRestart ? 'Restart it to load it.' : <>Stop <code>mcp_bridge.lua</code> and run it again to load it.</>}
+      </Notice>,
+    );
+  }
+  const webLevel = webSocketLevel(status.web);
+  if (status.web && webLevel !== 'ok') {
+    notices.push(
+      <Notice key="web" tone={webLevel === 'full' ? 'bad' : 'warn'}>
+        <b>REAPER’s web server is filling up.</b> It holds {status.web.stuck} of about {status.web.limit} connections
+        that browsers closed and it never freed, and stops answering at the limit. Restart REAPER to clear them.
       </Notice>,
     );
   }

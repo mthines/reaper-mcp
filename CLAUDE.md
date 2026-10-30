@@ -660,6 +660,12 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
 
 - Dedupe: every page poll is `SET/EXTSTATE/MCPBridge/ui_seen/<ms>;GET/EXTSTATE/MCPBridge/status`; the bridge skips
   opening a window when `ui_seen` is under 6s old (the page keeps pinging every 2s while hidden).
+- Stuck sockets: REAPER's web server never frees a socket whose client hung up first (curl, Chrome dropping an idle
+  connection); it stays in CLOSE_WAIT/CLOSED, and near 100 the server stops answering until REAPER restarts. The
+  bridge counts them every 30 s (`web_watch` in `mcp_bridge.lua`: `lsof` in the background into
+  `mcp_bridge_data/web_sockets`, macOS/Linux) and publishes `status.web = { stuck, limit }`; the page warns from 50%
+  (`webSocketLevel()` in `status.ts`) and the bridge prints one console line at 90%. Test scripts that hit the web
+  server reuse one connection (one `curl` with several URLs), or each request leaks a socket.
 
 - The bridge publishes JSON to **non-persistent ExtState** `MCPBridge/status` (in memory, no disk IO): counters,
   defer-loop timing, and the last 50 commands (`n` seq, type, handler ms, ok, error). Throttled to ≤5 Hz and only

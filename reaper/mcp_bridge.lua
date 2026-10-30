@@ -5251,6 +5251,43 @@ local function open_on_start()
   return v == "1"
 end
 
+-- REAPER loads only csurf_0 … csurf_<cnt-1>; an HTTP line past the count is a leftover it ignores
+local function find_web_port()
+  local ini = read_file(reaper.get_ini_file())
+  if not ini then return nil end
+  local active = tonumber(ini:match("\ncsurf_cnt=(%d+)")) or 0
+  for i, port in ini:gmatch("\ncsurf_(%d+)=HTTP %S+ (%d+)") do
+    if tonumber(i) < active then return port end
+  end
+end
+
+-- REAPER's web server never frees a socket whose client hung up first: it stays in CLOSE_WAIT or CLOSED, and
+-- at about 100 the server stops answering until REAPER restarts. Count them every 30 s so the page can warn
+-- before that, with lsof (~50 ms) in the background so the defer loop never waits. macOS and Linux only.
+local web_watch = { interval = 30, limit = 100, last = -30, file = bridge_dir .. "web_sockets" }
+os.remove(web_watch.file) -- a count left by an earlier REAPER run describes a server that is gone
+
+function web_watch.check(now)
+  if is_windows or now - web_watch.last < web_watch.interval then return end
+  web_watch.last = now
+  web_watch.port = web_watch.port or find_web_port()
+  if not web_watch.port then return end
+  local stuck = tonumber((read_file(web_watch.file) or ""):match("%d+"))
+  if stuck and stuck ~= (web_watch.status and web_watch.status.stuck) then
+    web_watch.status = { stuck = stuck, limit = web_watch.limit }
+    status_dirty = true
+    if stuck >= web_watch.limit * 0.9 and not web_watch.warned then
+      web_watch.warned = true
+      reaper.ShowConsoleMsg(string.format("MCP Bridge: REAPER's web server holds %d of about %d connections it never "
+        .. "freed, so the status page will stop loading. Restart REAPER to clear them.\n", stuck, web_watch.limit))
+    end
+  end
+  local tmp = shell_quote(web_watch.file .. ".tmp")
+  os.execute("(lsof -nP -iTCP:" .. web_watch.port .. " -sTCP:CLOSE_WAIT,CLOSED 2>/dev/null"
+    .. " | awk 'NR > 1 && tolower($1) == \"reaper\"' | wc -l > " .. tmp
+    .. " && mv " .. tmp .. " " .. shell_quote(web_watch.file) .. ") >/dev/null 2>&1 &")
+end
+
 local function publish_status(now, force)
   if not force and (not status_dirty or now - last_status_publish < STATUS_MIN_PUBLISH_INTERVAL) then
     return
@@ -5275,6 +5312,7 @@ local function publish_status(now, force)
     sessions = session_list(),
     settings = { paused = cfg("cfg_paused"), readonly = cfg("cfg_readonly"), openOnStart = open_on_start(), dev = dev_mode() },
     health = health,
+    web = web_watch.status,
     control = control_status(),
   }), false)
 end
@@ -5418,6 +5456,7 @@ local function main_loop()
   save_history(now, false)
   publish_log()
   check_health(now)
+  web_watch.check(now)
   check_control(now)
   check_source_changes(now)
   publish_installed_fx(now)
@@ -5431,11 +5470,6 @@ end
 -- =============================================================================
 
 -- Find the REAPER web interface port (reaper.ini: csurf_N=HTTP <flags> <port> ...)
-local function find_web_port()
-  local ini = read_file(reaper.get_ini_file())
-  return ini and ini:match("\ncsurf_%d+=HTTP %S+ (%d+)")
-end
-
 -- The page pings ExtState ui_seen on every poll; a recent ping means it's already open
 local function ui_recently_seen()
   local seen = tonumber(reaper.GetExtState(STATUS_SECTION, "ui_seen"))
