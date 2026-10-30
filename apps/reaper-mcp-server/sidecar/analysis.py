@@ -431,3 +431,188 @@ def alignment(reference: np.ndarray, target: np.ndarray, sample_rate: int, max_l
         "sampleRate": sample_rate,
         "maxLagMs": max_lag_ms,
     }
+
+
+# ---------------------------------------------------------------------------
+# Transients (onsets)
+# ---------------------------------------------------------------------------
+
+# Bands transients are detected in (Hz). low ~ kick/bass, mid ~ snare/vocal/keys
+# body, high ~ hats/cymbals/clicks. "full" is the whole spectrum.
+TRANSIENT_BANDS: dict[str, tuple[float, float]] = {
+    "low": (20.0, 150.0),
+    "mid": (150.0, 4000.0),
+    "high": (4000.0, 16000.0),
+    "full": (20.0, 16000.0),
+}
+ONSET_FFT = 1024
+ONSET_HOP = 256
+# Frames back the rise is measured against (~12 ms): catches softer attacks
+ONSET_LAG = 2
+# Frames per STFT chunk: bounds memory on long renders (15 min at 44.1 kHz)
+ONSET_CHUNK_FRAMES = 8192
+
+
+def _band_flux(mono: np.ndarray, sample_rate: int) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], float]:
+    """Onset strength per band, one value per hop.
+
+    Returns (envelopes, rises, frame seconds): envelopes drive detection, rises
+    (mean log-magnitude rise per bin, unscaled) say which band a hit is in.
+
+    Frames are centred (the signal is padded by half a window), so frame t sits at
+    t * hop / sample_rate. mid/high are log-magnitude spectral flux (the rise
+    against ONSET_LAG frames back, summed over the band's bins); low, which
+    spans only a few bins, is the rise of the band's log energy, which beating
+    bass notes disturb less. Each band is scaled to its own 99th percentile and
+    "full" is their mean, so a kick counts as much as a broadband hat.
+    """
+    pad = ONSET_FFT // 2
+    x = np.pad(mono.astype(np.float32), (pad, pad))
+    n_frames = max(1, 1 + (x.size - ONSET_FFT) // ONSET_HOP)
+    window = np.hanning(ONSET_FFT).astype(np.float32)
+    freqs = np.fft.rfftfreq(ONSET_FFT, 1.0 / sample_rate)
+    bands = [name for name in TRANSIENT_BANDS if name != "full"]
+    masks = {name: (freqs >= TRANSIENT_BANDS[name][0]) & (freqs < TRANSIENT_BANDS[name][1]) for name in bands}
+    flux = {name: np.zeros(n_frames, dtype=np.float32) for name in bands}
+    rises = {name: np.zeros(n_frames, dtype=np.float32) for name in bands}
+    tail: np.ndarray | None = None  # last ONSET_LAG frames of the previous chunk
+    for start in range(0, n_frames, ONSET_CHUNK_FRAMES):
+        stop = min(n_frames, start + ONSET_CHUNK_FRAMES)
+        idx = (np.arange(start, stop)[:, None] * ONSET_HOP) + np.arange(ONSET_FFT)[None, :]
+        mag = np.abs(np.fft.rfft(x[idx] * window, axis=1)).astype(np.float32)
+        low_energy = np.log1p(100.0 * (mag[:, masks["low"]] ** 2).sum(axis=1, keepdims=True))
+        feats = np.hstack([np.log1p(100.0 * mag), low_energy])
+        head = np.repeat(feats[:1], ONSET_LAG, axis=0) if tail is None else tail
+        before = np.vstack([head, feats])[: feats.shape[0]]
+        rise = np.maximum(feats - before, 0.0)
+        flux["low"][start:stop] = rise[:, -1]
+        for name in bands:
+            if name != "low":
+                flux[name][start:stop] = rise[:, :-1][:, masks[name]].sum(axis=1)
+            rises[name][start:stop] = rise[:, :-1][:, masks[name]].mean(axis=1)
+        tail = feats[-ONSET_LAG:]
+    for name in bands:
+        scale = float(np.percentile(flux[name], 99))
+        if scale > 0:
+            flux[name] /= scale
+    flux["full"] = np.mean([flux[name] for name in bands], axis=0).astype(np.float32)
+    return flux, rises, ONSET_HOP / sample_rate
+
+
+def _pick_peaks(env: np.ndarray, frame_s: float, sensitivity: float, min_gap_s: float) -> np.ndarray:
+    """Frames that are local maxima above an adaptive threshold (moving median + delta)."""
+    if env.size < 3 or not np.any(env > 0):
+        return np.zeros(0, dtype=int)
+    # Moving median over ~0.4 s around each frame tracks the local busyness
+    half = max(1, int(0.2 / frame_s))
+    padded = np.pad(env, (half, half), mode="edge")
+    windows = np.lib.stride_tricks.sliding_window_view(padded, 2 * half + 1)
+    local = np.median(windows, axis=1)
+    scale = float(np.percentile(env, 99)) or float(env.max())
+    # sensitivity 0..1: 0 keeps only the biggest hits, 1 nearly every bump
+    delta = scale * (0.6 - 0.55 * sensitivity)
+    floor = scale * (0.2 - 0.18 * sensitivity)
+    above = (env > local + delta) & (env > floor)
+    # Local maximum within +-~30 ms
+    w = max(1, int(0.03 / frame_s))
+    padded_max = np.pad(env, (w, w), mode="constant")
+    local_max = np.lib.stride_tricks.sliding_window_view(padded_max, 2 * w + 1).max(axis=1)
+    candidates = np.flatnonzero(above & (env >= local_max))
+    # Enforce the minimum gap, keeping the stronger of two close peaks
+    gap = max(1, int(round(min_gap_s / frame_s)))
+    kept: list[int] = []
+    for c in candidates:
+        if kept and c - kept[-1] < gap:
+            if env[c] > env[kept[-1]]:
+                kept[-1] = int(c)
+            continue
+        kept.append(int(c))
+    return np.asarray(kept, dtype=int)
+
+
+def _refine_onset(mono: np.ndarray, sample_rate: int, centre: int) -> int:
+    """Sample where the amplitude rises fastest within a window around a flux peak."""
+    lo = max(0, centre - ONSET_FFT // 2)
+    hi = min(mono.size, centre + ONSET_FFT // 4)
+    seg = np.abs(mono[lo:hi])
+    if seg.size < 16:
+        return centre
+    # 1 ms smoothed envelope, then its steepest rise
+    k = max(1, sample_rate // 1000)
+    env = np.convolve(seg, np.ones(k, dtype=np.float32) / k, mode="same")
+    rise = np.diff(env)
+    return lo + int(np.argmax(rise)) if rise.size else centre
+
+
+def estimate_tempo(env: np.ndarray, frame_s: float) -> dict[str, float | None]:
+    """BPM from the autocorrelation of the onset envelope (60-200 BPM)."""
+    x = env.astype(np.float64) - env.mean()
+    if x.size < int(4.0 / frame_s) or not np.any(x):
+        return {"bpm": None, "confidence": None}
+    size = 1 << (2 * x.size - 1).bit_length()
+    spec = np.fft.rfft(x, size)
+    ac = np.fft.irfft(spec * np.conj(spec), size)[: x.size]
+    ac /= ac[0]
+    lo, hi = int(60.0 / 200.0 / frame_s), int(60.0 / 60.0 / frame_s)
+    if hi >= ac.size:
+        return {"bpm": None, "confidence": None}
+    # Weight towards ~120 BPM so a half/double tempo does not win on noise
+    lags = np.arange(lo, hi + 1)
+    bpms = 60.0 / (lags * frame_s)
+    weight = np.exp(-0.5 * (np.log2(bpms / 120.0) / 1.0) ** 2)
+    best = int(np.argmax(ac[lo:hi + 1] * weight))
+    lag = lo + best
+    # Parabolic interpolation for a sub-frame lag
+    if lo < lag < hi:
+        a, b, c = ac[lag - 1], ac[lag], ac[lag + 1]
+        denom = a - 2 * b + c
+        lag_f = lag + (0.5 * (a - c) / denom if denom else 0.0)
+    else:
+        lag_f = float(lag)
+    return {"bpm": _round(60.0 / (lag_f * frame_s), 1), "confidence": _round(max(0.0, float(ac[lag])), 2)}
+
+
+def transients(audio: np.ndarray, sample_rate: int, band: str = "full", sensitivity: float = 0.5,
+               min_gap_ms: float = 50.0) -> dict[str, Any]:
+    """Transient (onset) times with a 0..1 strength and the band that dominates each.
+
+    band: "full" (default), "low", "mid", "high" — the band the onsets are picked in.
+    sensitivity: 0..1, higher finds softer hits. min_gap_ms: closest two onsets may be.
+    Times are seconds from the start of `audio`.
+    """
+    if band not in TRANSIENT_BANDS:
+        raise ValueError(f"band must be one of {', '.join(TRANSIENT_BANDS)}")
+    sensitivity = min(1.0, max(0.0, float(sensitivity)))
+    mono = audio.mean(axis=0).astype(np.float32)
+    duration = mono.size / sample_rate
+    flux, rises, frame_s = _band_flux(mono, sample_rate)
+    env = flux[band]
+    peaks = _pick_peaks(env, frame_s, sensitivity, max(0.005, min_gap_ms / 1000.0))
+    # Strength: flux relative to the loudest hits of this band (99th pct of peaks)
+    ref = float(np.percentile(env[peaks], 95)) if peaks.size else 1.0
+    peak_abs = float(np.abs(mono).max()) or 1.0
+    items: list[dict[str, Any]] = []
+    for p in peaks:
+        onset = _refine_onset(mono, sample_rate, int(p * ONSET_HOP))
+        seg = mono[onset: onset + int(0.05 * sample_rate)]
+        level = float(np.abs(seg).max()) if seg.size else 0.0
+        # Dominant band: the largest rise per bin within +-1 frame of the peak
+        near = slice(max(0, p - 1), p + 2)
+        shares = {name: float(r[near].max()) for name, r in rises.items()}
+        items.append({
+            "time": round(onset / sample_rate, 4),
+            "strength": round(min(1.0, float(env[p]) / ref), 3) if ref > 0 else 0.0,
+            "band": max(shares, key=shares.get),
+            "peakDb": _round(_db(level / peak_abs), 1),
+        })
+    counts = {name: sum(1 for t in items if t["band"] == name) for name in rises}
+    return {
+        "durationSeconds": round(duration, 3),
+        "band": band,
+        "sensitivity": sensitivity,
+        "minGapMs": min_gap_ms,
+        "count": len(items),
+        "bandCounts": counts,
+        "tempo": estimate_tempo(flux["full"], frame_s),
+        "transients": items,
+    }

@@ -147,3 +147,54 @@ def test_chunked_k_weighting_and_true_peak_match_one_piece(monkeypatch):
     monkeypatch.setattr(analysis, "CHUNK_S", 2.0)  # 4 chunks, the last one short
     assert np.max(np.abs(analysis.k_weight(audio, SR) - whole_kw)) < 1e-9
     assert abs(analysis.true_peak(audio, SR) - whole_tp) < 1e-3
+
+
+def drum_loop(seconds: float = 8.0, sr: int = SR) -> tuple[np.ndarray, list[float], list[float]]:
+    """A 60 Hz kick on every beat at 120 BPM and a hi-hat (high-passed noise) on every off-beat."""
+    rng = np.random.default_rng(0)
+    x = rng.normal(0, 0.002, int(seconds * sr)).astype(np.float32)
+    kicks, hats = [], []
+    for k in range(int((seconds - 0.5) / 0.5)):
+        s = int((0.25 + 0.5 * k) * sr)
+        t = np.arange(int(0.2 * sr)) / sr
+        x[s:s + t.size] += (0.8 * np.sin(2 * np.pi * 60 * t) * np.exp(-t * 25)).astype(np.float32)
+        h = s + int(0.25 * sr)
+        n = int(0.03 * sr)
+        hat = np.diff(rng.normal(0, 1, n + 3), 3) / 8  # third difference: energy above ~5 kHz
+        x[h:h + n] += (0.3 * hat * np.exp(-np.arange(n) / sr * 150)).astype(np.float32)
+        kicks.append(s / sr)
+        hats.append(h / sr)
+    return np.vstack([x, x]), kicks, hats
+
+
+def test_transients_finds_kicks_and_hats_with_their_bands_and_tempo():
+    audio, kicks, hats = drum_loop()
+    result = analysis.transients(audio, SR)
+
+    found = result["transients"]
+    assert result["count"] == len(kicks) + len(hats)
+    for expected, band in [*((t, "low") for t in kicks), *((t, "high") for t in hats)]:
+        nearest = min(found, key=lambda f: abs(f["time"] - expected))
+        assert abs(nearest["time"] - expected) < 0.005
+        assert nearest["band"] == band
+        assert 0 < nearest["strength"] <= 1
+    assert abs(result["tempo"]["bpm"] - 120) < 1
+
+
+def test_transients_in_one_band_skip_the_other_instruments():
+    audio, kicks, _ = drum_loop()
+    low = analysis.transients(audio, SR, band="low")
+    assert low["count"] == len(kicks)
+
+
+def test_transients_lower_sensitivity_never_finds_more():
+    audio, _, _ = drum_loop()
+    loose = analysis.transients(audio, SR, sensitivity=0.9)["count"]
+    strict = analysis.transients(audio, SR, sensitivity=0.1)["count"]
+    assert strict <= loose
+
+
+def test_transients_of_silence_is_empty():
+    result = analysis.transients(np.zeros((2, SR * 2), dtype=np.float32), SR)
+    assert result["count"] == 0
+    assert result["tempo"]["bpm"] is None

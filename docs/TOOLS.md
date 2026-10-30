@@ -108,6 +108,16 @@ Give `db` on volume envelopes: REAPER stores 0 dB as 716.2 on its own Volume env
 | `read_track_correlation` | Stereo correlation, width, mid/side levels |
 | `read_track_crest` | Crest factor (peak-to-RMS ratio) |
 
+### Transients & Lighting (Python sidecar)
+
+| Tool | Description |
+|------|-------------|
+| `detect_transients` | The hits in a track (rendered post-FX) or an audio file: time, strength, band (kick/snare/hats), tempo guess, hits per section |
+| `create_transient_automation` | Turn the hits into flash pulses on an envelope, e.g. a lighting plugin's brightness that follows the kick and snare |
+
+A file is read as-is; for a song warped onto the click with stretch markers, analyze its track.
+Workflow: [knowledge/workflows/transient-lighting.md](../knowledge/workflows/transient-lighting.md).
+
 ### MIDI Editing (14 tools)
 
 | Tool | Description |

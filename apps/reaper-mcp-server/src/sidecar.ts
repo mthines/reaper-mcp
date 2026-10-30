@@ -75,6 +75,16 @@ export interface AlignParams {
   maxLagMs?: number;
 }
 
+/** Params of the sidecar's transients method. */
+export interface TransientsParams {
+  path: string;
+  startTime?: number;
+  endTime?: number;
+  band?: 'full' | 'low' | 'mid' | 'high';
+  sensitivity?: number;
+  minGapMs?: number;
+}
+
 export interface SidecarClient {
   /** True if the sidecar is installed (script + venv exist). Does NOT guarantee it's running. */
   isAvailable(): boolean;
@@ -84,6 +94,8 @@ export interface SidecarClient {
   analyzeAudio(params: AnalyzeAudioParams): Promise<Record<string, unknown>>;
   /** Delay and polarity of one file relative to another. */
   align(params: AlignParams): Promise<Record<string, unknown>>;
+  /** Transient (onset) times with strength, dominant band and a tempo estimate. */
+  transients(params: TransientsParams): Promise<Record<string, unknown>>;
   /** Terminate the sidecar process. Safe to call even if not running. */
   shutdown(): void;
 }
@@ -130,6 +142,10 @@ class SidecarClientImpl implements SidecarClient {
 
   align(params: AlignParams): Promise<Record<string, unknown>> {
     return this.call('align', { ...params }) as Promise<Record<string, unknown>>;
+  }
+
+  transients(params: TransientsParams): Promise<Record<string, unknown>> {
+    return this.call('transients', { ...params }) as Promise<Record<string, unknown>>;
   }
 
   /**

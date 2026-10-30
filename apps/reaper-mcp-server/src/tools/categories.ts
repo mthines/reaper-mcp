@@ -92,8 +92,8 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   analysis: {
     name: 'analysis',
-    description: 'Audio metering and analysis: peak/RMS meters, FFT spectrum, LUFS loudness, stereo correlation, crest factor, one-call multi-metric measurement (measure_tracks), perceptual aesthetics scores, offline render-based loudness/LRA/true-peak/spectrum with reference comparison, multi-mic time alignment (the last four need the Python sidecar)',
-    tools: ['read_track_meters', 'read_track_spectrum', 'read_track_lufs', 'read_track_correlation', 'read_track_crest', 'measure_tracks', 'analyze_track_aesthetics', 'analyze_track_offline', 'analyze_audio_file', 'measure_track_alignment'],
+    description: 'Audio metering and analysis: peak/RMS meters, FFT spectrum, LUFS loudness, stereo correlation, crest factor, one-call multi-metric measurement (measure_tracks), perceptual aesthetics scores, offline render-based loudness/LRA/true-peak/spectrum with reference comparison, multi-mic time alignment, transient detection and transient-driven automation e.g. for lighting (the last six need the Python sidecar)',
+    tools: ['read_track_meters', 'read_track_spectrum', 'read_track_lufs', 'read_track_correlation', 'read_track_crest', 'measure_tracks', 'analyze_track_aesthetics', 'analyze_track_offline', 'analyze_audio_file', 'measure_track_alignment', 'detect_transients', 'create_transient_automation'],
   },
   discovery: {
     name: 'discovery',

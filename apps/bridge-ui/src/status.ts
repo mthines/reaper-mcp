@@ -604,6 +604,8 @@ export const LONG_RUNNING = new Set([
   'analyze_track_offline',
   'analyze_audio_file',
   'measure_track_alignment',
+  'detect_transients',
+  'create_transient_automation',
   'analyze_track_aesthetics',
   'render_project',
   'render_track_to_wav',

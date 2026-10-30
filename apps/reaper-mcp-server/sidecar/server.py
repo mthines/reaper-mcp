@@ -254,12 +254,43 @@ def handle_align(request_id: Any, params: dict) -> str:
         return _err(request_id, -32000, f"Alignment failed: {exc}")
 
 
+def handle_transients(request_id: Any, params: dict) -> str:
+    """
+    Transient (onset) times of a file with strength, dominant band and tempo.
+
+    params: path, startTime?, endTime?, band? (full|low|mid|high), sensitivity? (0..1),
+            minGapMs? (default 50)
+    """
+    import analysis
+
+    error = _check_file(request_id, params, "path")
+    if error:
+        return error
+    try:
+        start = float(params.get("startTime", 0))
+        audio, sr = analysis.load_audio(params["path"], start, params.get("endTime"))
+        if audio.shape[1] < int(0.1 * sr):
+            return _err(request_id, -32000, "Audio too short: need at least 0.1 s")
+        result = analysis.transients(audio, sr, str(params.get("band", "full")),
+                                     float(params.get("sensitivity", 0.5)), float(params.get("minGapMs", 50)))
+        if start:
+            for item in result["transients"]:
+                item["time"] = round(item["time"] + start, 4)
+        result["sampleRate"] = sr
+        return _ok(request_id, result)
+    except ValueError as exc:
+        return _err(request_id, -32602, str(exc))
+    except Exception as exc:  # noqa: BLE001
+        return _err(request_id, -32000, f"Transient detection failed: {exc}")
+
+
 # JSON-RPC method names must stay in sync with the TypeScript client.
 # When adding a method here, also reference it from apps/reaper-mcp-server/src/sidecar.ts.
 METHODS = {
     "analyze": handle_analyze,
     "analyze_audio": handle_analyze_audio,
     "align": handle_align,
+    "transients": handle_transients,
 }
 
 

@@ -71,6 +71,7 @@ reaper-mcp/
         envelopes.ts          # envelope points (read/insert/edit/delete, dB on volume envelopes) + automation items (logic in reaper/mcp_envelopes_lib.lua)
         aesthetics.ts         # analyze_track_aesthetics (requires Python sidecar)
         offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment (sidecar, no model)
+        transients.ts         # detect_transients, create_transient_automation (sidecar onsets → envelope pulses, e.g. lighting)
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
 
     sidecar/                  # Python sidecar for semantic audio analysis (opt-in)
@@ -148,7 +149,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (145 total)
+## MCP Tools (147 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -334,7 +335,7 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `read_track_crest` | `tools/analysis.ts` | Crest factor (peak-to-RMS ratio) |
 | `measure_tracks` | `tools/analysis.ts` | Play, collect LUFS/crest/correlation/spectrum for 1–8 tracks in one call, stop, then remove the meters it inserted (`keepMeters` keeps them). A metric that returned no data goes to the track's `errors` instead of zeros (TS-composed; cleanup via internal `remove_mcp_meters`) |
 
-### Offline & Perceptual Audio Analysis (4) — Requires Python Sidecar
+### Offline & Perceptual Audio Analysis (6) — Requires Python Sidecar
 
 | Tool | File | Description |
 |------|------|-------------|
@@ -342,6 +343,8 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `analyze_track_offline` | `tools/offline.ts` | Render a track or the master once (up to 900 s, no playback) and analyze it: integrated LUFS (BS.1770 gated), LRA (EBU 3342), true peak, sample peak, crest, per-section loudness, band balance, resonance and sibilance hints; with `referencePath`, loudness and tonal-balance deltas against that file |
 | `analyze_audio_file` | `tools/offline.ts` | The same analysis for an audio file on disk (reference song, bounce, stem); no REAPER involved |
 | `measure_track_alignment` | `tools/offline.ts` | Render two tracks over the same window (≤30 s) and cross-correlate: delay (ms, samples), polarity, correlation, and absolute `suggestedPlayOffsetMs` / `suggestedPhase` for `set_track_property` (include the track's current offset and polarity) |
+| `detect_transients` | `tools/transients.ts` | Hits in a track (rendered, ≤900 s) or an audio file (MP3 too; `filePosition` maps it to project time): time, strength 0..1, dominant band (low/mid/high), peakDb, plus tempo, per-band counts and per-section density; filter by `band`/`bands`/`sensitivity`/`minGapMs`/`minStrength`, paginated |
+| `create_transient_automation` | `tools/transients.ts` | Detect, then write one pulse per hit (attack, hold, exponential/linear decay, scaled by strength) onto an existing envelope — e.g. lighting that flashes on the kicks. Replaces the range's points (REAPER keeps an envelope's last point on a range delete; it becomes the first pulse point), `dryRun` returns the points. TS-composed over `remove_envelope_points` / `insert_envelope_points` |
 
 ### Plan Executor (1)
 
@@ -417,7 +420,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 145 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 147 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
@@ -484,6 +487,7 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 - **Envelope values**: give `db` on volume envelopes (Volume, Trim Volume, Send Volume). REAPER's own Volume envelope is fader-scaled (716.2 = 0 dB, not 1.0); `db` is converted with the envelope's scaling mode (`ScaleToEnvelopeMode`). Raw `value`: Pan -1.0 to 1.0, Mute 0 or 1, FX parameters 0..1.
 - **Automation items**: instances of one pool share their points, so editing one edits every instance; pool ids are project-wide, so pools reach across tracks. Point calls use the item index with `0x10000000` (one loop iteration = the pool's own points), except `SetEnvelopePointEx`, which ignores a flagged index (REAPER 7.40) and takes the plain one. A new pool's `D_POOL_QNLEN` is set to the item's length, since REAPER can make it shorter and drops pool points past it without an error; a point at the item end is kept 1 ms inside, and points outside an item are refused.
 - **Section levels** (opinionated): pooled automation items on the Volume envelope, one pool per section type, never item gain (`knowledge/workflows/section-levels.md`).
+- **Transient-driven automation** (lighting): `create_transient_automation` from a track render (a warped item's file is read without its stretch markers), onto a new muted track's plugin envelope (`knowledge/workflows/transient-lighting.md`).
 - **Point shapes**: 0=linear, 1=square, 2=slow start/end, 3=fast start, 4=fast end, 5=bezier
 - **Workflow**: `create_track_envelope` → `insert_envelope_point`/`insert_envelope_points` → optionally `set_envelope_properties` to arm for writing
 - **Batch operations** (`insert_envelope_points`): Pass a JSON array of point objects for efficient multi-point automation curves
@@ -617,7 +621,7 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 
 - **Opt-in**: The sidecar is installed separately via `setup-sidecar`. `pnpm install` and `pnpm nx build` never touch Python.
 - **Lazy spawn**: The sidecar process spawns on the first sidecar tool call, not at server startup; the aesthetics model loads only on the first `analyze` request.
-- **JSON-RPC methods**: `analyze` (aesthetics, with optional `normalizeLufs`), `analyze_audio` (loudness/spectrum/reference, `sidecar/analysis.py`), `align` (cross-correlation delay + polarity).
+- **JSON-RPC methods**: `analyze` (aesthetics, with optional `normalizeLufs`), `analyze_audio` (loudness/spectrum/reference, `sidecar/analysis.py`), `align` (cross-correlation delay + polarity), `transients` (per-band spectral-flux onsets: low <150 Hz, mid, high >4 kHz, each band scaled to its own 99th percentile so a kick counts as much as a hat; dominant band by mean per-bin log rise; tempo from the onset autocorrelation).
 - **Audio loading**: always `soundfile` (`analysis.load_audio`). torchaudio 2.9+ removed `info()` and moved `load()` to torchcodec, so never call `torchaudio.load`/`torchaudio.info`; `torchaudio.functional` (filters, resampling) is fine.
 - **Loudness**: `analysis.py` implements ITU-R BS.1770-4 (K-weighting, 400 ms blocks, -70/-10 gates, channels summed) and EBU 3342 LRA; `tests/test_analysis.py` checks them against the EBU 3341/3342 reference signals.
 - **Lifecycle**: Sidecar receives SIGTERM when the MCP server receives SIGINT/SIGTERM. Managed via `getSidecarClient().shutdown()` in `main.ts`.
@@ -637,6 +641,7 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 | `apps/reaper-mcp-server/src/setup-sidecar.ts` | `setup-sidecar` CLI command implementation |
 | `apps/reaper-mcp-server/src/tools/aesthetics.ts` | `analyze_track_aesthetics` tool registration |
 | `apps/reaper-mcp-server/src/tools/offline.ts` | `analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment` |
+| `apps/reaper-mcp-server/src/tools/transients.ts` | `detect_transients`, `create_transient_automation` (pulse generation in `pulsePoints()`) |
 
 ### Render Pipeline
 

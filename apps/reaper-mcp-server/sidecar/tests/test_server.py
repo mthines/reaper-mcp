@@ -255,6 +255,7 @@ def test_missing_path_param():
 
 def test_load_clip_slices_stereo_wav(tmp_path):
     import numpy as np
+    import numpy as np
     import soundfile as sf
 
     wav = tmp_path / "stereo.wav"
@@ -271,6 +272,7 @@ def test_load_clip_slices_stereo_wav(tmp_path):
 # ---------------------------------------------------------------------------
 
 def _write_sine(path, dbfs: float, seconds: float = 3.0, sr: int = 44100, delay: int = 0, sign: float = 1.0):
+    import numpy as np
     import numpy as np
     import soundfile as sf
 
@@ -357,3 +359,35 @@ def test_align_method_reports_delay_and_polarity(tmp_path):
 
     assert result["delaySamples"] == 37
     assert result["polarityInverted"] is True
+
+
+def test_transients_method_reports_onsets_in_file_time(tmp_path):
+    import numpy as np
+    import soundfile as sf
+
+    sr = 44100
+    x = np.zeros(sr * 4, dtype=np.float32)
+    for t in (1.0, 2.0, 3.0):
+        n = int(0.05 * sr)
+        x[int(t * sr):int(t * sr) + n] = 0.5 * np.exp(-np.arange(n) / sr * 80) * np.sign(np.sin(np.arange(n) * 0.3))
+    path = tmp_path / "clicks.wav"
+    sf.write(str(path), x, sr)
+
+    result = parse_response(server.dispatch(json.dumps({
+        "jsonrpc": "2.0", "id": 11, "method": "transients",
+        "params": {"path": str(path), "startTime": 1.5},
+    })))["result"]
+
+    times = [t["time"] for t in result["transients"]]
+    assert len(times) == 2
+    assert abs(times[0] - 2.0) < 0.005 and abs(times[1] - 3.0) < 0.005
+
+
+def test_transients_method_refuses_an_unknown_band(tmp_path):
+    path = tmp_path / "tone.wav"
+    _write_sine(path, -12)
+    resp = parse_response(server.dispatch(json.dumps({
+        "jsonrpc": "2.0", "id": 12, "method": "transients",
+        "params": {"path": str(path), "band": "treble"},
+    })))
+    assert "band must be one of" in resp["error"]["message"]

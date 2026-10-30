@@ -341,6 +341,8 @@ export const MCP_TOOL_NAMES = [
   'analyze_track_offline',
   'analyze_audio_file',
   'measure_track_alignment',
+  'detect_transients',
+  'create_transient_automation',
   // built-in mix knowledge (read-only LoreKit proxy)
   'list_builtin_knowledge',
   'get_builtin_knowledge',
