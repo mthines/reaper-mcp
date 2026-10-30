@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { GALLERY_NOW, SNAPSHOT_STORIES } from './gallery-stories.js';
 import { SnapshotsView } from './SnapshotsView.js';
@@ -10,7 +10,7 @@ describe('the snapshots tab', () => {
   it('scrolls inside the log panel, in every state', () => {
     for (const s of SNAPSHOT_STORIES) {
       const html = renderToStaticMarkup(
-        <SnapshotsView feed={s.feed} request={s.request} blocked={s.blocked} now={GALLERY_NOW} onSend={() => {}} keys={false} />,
+        <SnapshotsView feed={s.feed} request={s.request} blocked={s.blocked} now={GALLERY_NOW} onSend={vi.fn()} keys={false} />,
       );
       expect(rootClasses(html), s.title).toContain('rows');
     }
