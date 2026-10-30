@@ -257,7 +257,7 @@ namespace belongs to the official MCP conventions). Durations are in seconds.
 | `reaper.bridge.handler.duration` | s | `rpc.method`, `error.type` — time inside the Lua handler |
 | `reaper.bridge.pickup.duration` | s | — time until the defer loop picked the command up |
 | `reaper.sidecar.request.duration` | s | `rpc.method`, `error.type` |
-| `reaper.midi.notes_changed` | {note} | `gen_ai.tool.name` — notes one `quantize_midi` / `transform_midi` / `import_midi_file` changed or created (also on the span as `reaper.midi.notes_changed`; `detect_key` spans carry `reaper.key.source` and `reaper.key.confidence`) |
+| `reaper.midi.notes_changed` | {note} | `gen_ai.tool.name` — notes one call rewrote: the notes `quantize_midi` moved, every note `transform_midi` was given, the notes `import_midi_file` created (also on the span as `reaper.midi.notes_changed`; `detect_key` spans carry `reaper.key.source` and `reaper.key.confidence`) |
 | `reaper.bridge.up` | 1 | gauge: 1 while REAPER's heartbeat is fresh, 0 when the bridge is down |
 | `reaper.bridge.defer.interval`, `reaper.bridge.scan.duration` | s | `reaper.statistic` (p50/p95, avg/max) |
 
