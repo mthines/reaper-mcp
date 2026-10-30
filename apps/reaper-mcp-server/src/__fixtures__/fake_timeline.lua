@@ -180,7 +180,9 @@ function new_timeline(spec)
       for _, tr in ipairs(tracks) do
         for _, it in ipairs(tr.items) do if it.selected then it.take.reversed = not it.take.reversed end end
       end
-    elseif id == 41588 then
+    elseif id == 40362 or id == 41588 then
+      -- 41588 glues only inside a time selection (api.time_selection = { start, end }); 40362 ignores it
+      local ts = id == 41588 and api.time_selection
       for _, tr in ipairs(tracks) do
         local first, last, keep = math.huge, -math.huge, {}
         for _, it in ipairs(tr.items) do
@@ -193,6 +195,7 @@ function new_timeline(spec)
           end
         end
         if first < math.huge then
+          if ts then first, last = math.max(first, ts[1]), math.min(last, ts[2]) end
           local glued = new_item(tr, { pos = first, len = last - first, name = "glued" })
           glued.selected = true
           keep[#keep + 1] = glued

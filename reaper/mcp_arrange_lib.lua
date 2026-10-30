@@ -19,7 +19,7 @@ M.MAX_REPEAT = 64
 M.MAX_SPAN = 3600       -- seconds one insert/remove/copy may span
 M.MAX_LISTED = 64       -- items listed in a response; the rest are counted
 M.REVERSE = 41051       -- Item properties: Toggle take reverse
-M.GLUE = 41588          -- Item: Glue items
+M.GLUE = 40362          -- Item: Glue items, ignoring time selection (41588 glues only inside it)
 M.DELETE_AUTOMATION_ITEMS = 42086
 -- CalculateNormalization modes
 M.NORMALIZE_MODES = { lufs_i = 0, rms = 1, peak = 2, true_peak = 3, lufs_m_max = 4, lufs_s_max = 5 }
@@ -847,6 +847,12 @@ local function apply_process(api, c)
         end
       end
       r.items = describe_all(api, glued)
+      -- A selected source passes its selection on to the item that replaced it
+      local was_selected = false
+      for _, s in ipairs(c.items) do
+        for _, it in ipairs(sel) do if it == s.item then was_selected = true end end
+      end
+      if was_selected then for _, it in ipairs(glued) do sel[#sel + 1] = it end end
     end
   end)
   restore_item_selection(api, sel)

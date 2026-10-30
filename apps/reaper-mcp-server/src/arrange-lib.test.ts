@@ -493,6 +493,16 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('process items: glue joins the whole items whatever the time selection, and a selected source leaves the glued item selected', async () => {
+    await runLua(`${SONG}
+      api.time_selection = { 2, 4 }
+      api.tracks[1].items[1].selected = true
+      local g = assert(arrange.process_items(api, { operation = "glue", items = { { trackIndex = 0, itemIndex = 0 }, { trackIndex = 0, itemIndex = 1 } } }))
+      assert(g.items[1].position == 0 and g.items[1].length == 12, g.items[1].position .. " " .. g.items[1].length)
+      assert(api.tracks[1].items[1].selected, "the glued item takes over the source's selection")
+    `);
+  });
+
   it('plan ops: check_op refuses without writing, apply_op runs and raises on a refusal', async () => {
     await runLua(`${SONG}
       assert(arrange.PLAN_OPS.copy_items and arrange.PLAN_OPS.insert_time and arrange.PLAN_OPS.remove_time)
