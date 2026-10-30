@@ -296,6 +296,31 @@ describe('queued requests', () => {
       vi.useRealTimers();
     }
   });
+
+  it('refuses a request as busy once it has waited five minutes behind a separation, and the separation carries on', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      existsMock.mockReturnValue(true);
+      const proc = createMockProcess();
+      spawnMock.mockReturnValue(proc);
+      const client = getSidecarClient();
+
+      const separation = client.separate({ path: '/tmp/song.wav' } as never, 1_800_000);
+      await flushMicrotasks();
+      const queued = client.analyzeAudio({ path: '/tmp/ref.wav' } as never);
+      const refused = expect(queued).rejects.toThrow(/Sidecar busy: waited 300 s behind separate/);
+      await flushMicrotasks();
+
+      vi.advanceTimersByTime(300_001);
+      await refused;
+      expect(proc.kill).not.toHaveBeenCalled();
+
+      emitResponse(proc, { jsonrpc: '2.0', id: 1, result: { stems: [] } });
+      await expect(separation).resolves.toEqual({ stems: [] });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('shutdown()', () => {

@@ -35,6 +35,8 @@ const VENV_PYTHON = join(SIDECAR_VENV_PATH, VENV_BIN, VENV_PYTHON_NAME);
  * Values ≤ 0 or non-numeric are ignored and the default is used. */
 const _rawTimeout = Number(process.env['REAPER_MCP_SIDECAR_TIMEOUT_MS']);
 const ANALYZE_TIMEOUT_MS = Number.isFinite(_rawTimeout) && _rawTimeout > 0 ? _rawTimeout : 60_000;
+/** Longest a request waits behind earlier ones (a long separation) before it is refused as busy. */
+export const QUEUE_WAIT_MS = 5 * 60_000;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -169,8 +171,10 @@ class SidecarClientImpl implements SidecarClient {
   /**
    * The sidecar answers one request at a time, so requests are sent one at a time too:
    * a request's timeout then counts its own work, never a long separation queued ahead of it.
+   * Waiting is capped by QUEUE_WAIT_MS, so a quick call never hangs for a whole separation.
    */
   private queue: Promise<unknown> = Promise.resolve();
+  private activeMethod = '';
 
   isAvailable(): boolean {
     return existsSync(SIDECAR_SCRIPT_PATH) && existsSync(VENV_PYTHON);
@@ -233,13 +237,15 @@ class SidecarClientImpl implements SidecarClient {
           const message = err instanceof Error ? err.message : String(err);
           const errorType = message.startsWith('Sidecar timeout')
             ? 'timeout'
-            : message.startsWith('Audio understanding sidecar not installed')
+            : message.startsWith('Sidecar busy')
+              ? 'busy'
+              : message.startsWith('Audio understanding sidecar not installed')
               ? 'not_installed'
               : 'sidecar_error';
           metricAttrs['error.type'] = errorType;
           span.setAttribute('error.type', errorType);
           span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(message) });
-          emitLog(errorType === 'not_installed' ? 'warn' : 'error', `Sidecar ${method} failed: ${message}`, {
+          emitLog(errorType === 'not_installed' || errorType === 'busy' ? 'warn' : 'error', `Sidecar ${method} failed: ${message}`, {
             'rpc.method': method,
             'error.type': errorType,
           });
@@ -253,9 +259,23 @@ class SidecarClientImpl implements SidecarClient {
   }
 
   private callUntraced(method: string, params: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
-    const run = this.queue.then(() => this.send(method, params, timeoutMs));
+    let gaveUp = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const busy = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        gaveUp = true;
+        reject(new Error(`Sidecar busy: waited ${QUEUE_WAIT_MS / 1000} s behind ${this.activeMethod || 'an earlier request'} — retry when it finishes`));
+      }, QUEUE_WAIT_MS);
+      timer.unref?.();
+    });
+    const run = this.queue.then(async () => {
+      clearTimeout(timer);
+      if (gaveUp) return undefined;
+      this.activeMethod = method;
+      return this.send(method, params, timeoutMs);
+    });
     this.queue = run.catch(() => undefined);
-    return run;
+    return Promise.race([run, busy]);
   }
 
   private async send(method: string, params: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
