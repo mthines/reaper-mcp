@@ -1497,8 +1497,9 @@ function Render({ v }: { v: Extract<EditView, { kind: "render" }> }) {
   const tpZone = (db: number) => (!measured(db) ? "ok" : db > 0 ? "over" : v.lim !== undefined ? (db > v.lim + 0.05 ? "hot" : "ok") : db > -1 ? "hot" : "ok");
   const row = (f: RenderFile, key: string) => {
     const [name, dur, lufs, tp, peak, hi, lo] = f;
+    const label = `${name} · ${dur >= 0 ? clock(dur, 1) : "length unknown"}${measured(lufs) ? ` · ${fmt(lufs)} LUFS-I` : ""}${measured(tp) ? ` · true peak ${fmt(tp)} dBTP` : ""}${measured(peak) ? ` · sample peak ${fmt(peak)} dBFS` : ""}`;
     return (
-      <div className="ev-render-row" key={key} title={`${name} · ${dur >= 0 ? clock(dur, 1) : "length unknown"}${measured(lufs) ? ` · ${fmt(lufs)} LUFS-I` : ""}${measured(tp) ? ` · true peak ${fmt(tp)} dBTP` : ""}${measured(peak) ? ` · sample peak ${fmt(peak)} dBFS` : ""}`}>
+      <div className="ev-render-row" key={key} role="group" aria-label={label} title={label}>
         <span className="ev-render-name">{name}</span>
         <RenderWave hi={hi} lo={lo} />
         <span className={`ev-render-v ev-render-lufs mono zone-${lufsZone(lufs)}`}>{measured(lufs) ? fmt(lufs) : "–"}</span>
@@ -1521,8 +1522,8 @@ function Render({ v }: { v: Extract<EditView, { kind: "render" }> }) {
           {v.lim !== undefined && <span className="ev-render-tag">Limit {fmt(v.lim)} {v.tp ? "dBTP" : "dBFS"}</span>}
         </div>
       )}
-      <div className="ev-render" role="table" aria-label="Rendered files">
-        <div className="ev-render-row ev-render-head" role="row">
+      <div className="ev-render" role="group" aria-label="Rendered files">
+        <div className="ev-render-row ev-render-head" aria-hidden="true">
           <span>File</span>
           <span className="ev-render-wave-h">Waveform</span>
           <span className="ev-render-v">LUFS-I</span>
