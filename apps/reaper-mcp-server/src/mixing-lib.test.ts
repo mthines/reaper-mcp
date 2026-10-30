@@ -101,6 +101,20 @@ describe('mcp_mixing_lib.lua: FX parameter modulation', () => {
     `);
   });
 
+  it('a modulation REAPER refuses half way is undone, not left half applied', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { fx = { {} } } } }
+      local set = api.TrackFX_SetNamedConfigParm
+      api.TrackFX_SetNamedConfigParm = function(tr, i, key, v)
+        if key:find("lfo.speed") then return false end
+        return set(tr, i, key, v)
+      end
+      local ok, err = pcall(mix.set_modulation, api, { trackIndex = 0, fxIndex = 0, paramIndex = 0 }, { lfo = { shape = "sine", speed = 2 } })
+      assert(not ok and tostring(err):find("the edit was undone"), tostring(err))
+      assert(next(api.tracks[1].fx[1].cfg) == nil, "no modulation key left behind")
+    `);
+  });
+
   it('turns modulation off again', async () => {
     await runLua(`
       local api = new_fake{ tracks = { { fx = { {} } } } }

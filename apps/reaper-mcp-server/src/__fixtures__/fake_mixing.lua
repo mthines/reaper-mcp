@@ -60,8 +60,28 @@ function new_fake(spec)
   end
 
   -- Undo: every block is an undo point, labelled
-  function api.Undo_BeginBlock() api.depth = api.depth + 1 end
+  -- Undo restores every FX's named config (what a modulation edit changes) to the block's start
+  local function cfg_copy()
+    local out = {}
+    for _, tr in ipairs(api.tracks) do
+      for _, fx in ipairs(tr.fx) do
+        local c = {}
+        for k, v in pairs(fx.cfg) do c[k] = v end
+        out[fx] = c
+      end
+    end
+    return out
+  end
+  local saved = {}
+  function api.Undo_BeginBlock() api.depth = api.depth + 1; saved[#api.undo + 1] = cfg_copy() end
   function api.Undo_EndBlock(label) api.depth = api.depth - 1; api.undo[#api.undo + 1] = label end
+  function api.Undo_CanUndo2() return api.undo[#api.undo] end
+  function api.Undo_DoUndo2()
+    local n = #api.undo
+    for fx, c in pairs(saved[n] or {}) do fx.cfg = c end
+    api.undone = table.remove(api.undo)
+    return 1
+  end
 
   -- FX (index 0x1000000 + i on the master = monitoring FX)
   local function fx_of(tr, i)

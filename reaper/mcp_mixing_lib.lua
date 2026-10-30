@@ -43,7 +43,10 @@ local function with_undo(api, label, flags, fn)
   local ok, res, err = pcall(fn)
   if not ok then
     api.Undo_EndBlock(label, flags)
-    error(res, 0)
+    -- A write REAPER refused half way leaves no partial edit: undo the block, but only when the top entry is ours
+    local undone = api.Undo_CanUndo2 and api.Undo_CanUndo2(0) == label
+    if undone then api.Undo_DoUndo2(0) end
+    error(tostring(res) .. (undone and " — the edit was undone" or ""), 0)
   end
   api.Undo_EndBlock(label, flags)
   return res, err
