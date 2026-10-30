@@ -365,6 +365,36 @@ describe('edit views in the log', () => {
     expect((row[6] as number[])[0]).toBe(-0.25);
   });
 
+  it('render view in the log: peaks built only for the waveform are not left beside the rendered file', async () => {
+    const setup = `
+      api.project.strings.RENDER_FILE = "/out"
+      api.project.strings.RENDER_PATTERN = "mix"
+      local render = api.Main_OnCommand
+      api.Main_OnCommand = function(id, flag)
+        render(id, flag)
+        if id == 42230 then for path in pairs(api.rendered) do local f = io.open(path, "w"); f:write("RIFF"); f:close() end end
+      end
+      api.new_array = function() return {} end
+      api.GetMediaSourceNumChannels = function() return 2 end
+      local create = api.PCM_Source_CreateFromFile
+      api.PCM_Source_CreateFromFile = function(path) peaks_for = path; return create and create(path) or { path = path } end
+      api.GetPeakFileName = function(path) return path .. ".reapeaks" end
+      api.PCM_Source_BuildPeaks = function(_, mode)
+        if mode == 2 then local f = io.open(peaks_for .. ".reapeaks", "w"); f:write("RPKN"); f:close() end
+        return mode == 0 and 1 or 0
+      end
+      api.PCM_Source_GetPeaks = function(src, rate, start, ch, n, extra, buf)
+        for i = 0, n * ch * 2 do buf[i] = 0.5 end
+        return n
+      end
+    `;
+    const bridge = await startBridge(setup, { '/out/.keep': '' });
+    expect((await bridge.send('render_project', {})).error ?? 'ok').toBe('ok');
+    const row = ((await bridge.status()).recent[0].r as { groups: Array<{ f: unknown[][] }> }).groups[0].f[0];
+    expect((row[5] as number[]).length).toBe(60);
+    expect(await bridge.eval('(function() local f = io.open("/out/mix.wav.reapeaks", "rb"); if f then f:close() end; return f ~= nil end)()')).toBe(false);
+  });
+
   it('render view in the log: versions are grouped, each with its muted tracks', async () => {
     const setup = `
       api.tracks[2] = { name = "Vocals", guid = "{v}", vals = {}, fx = {}, sends = {}, chunk = "" }

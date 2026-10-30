@@ -801,10 +801,26 @@ end
 local RENDER_MAX_FILES = 8
 local RENDER_SLICES = 60
 
+-- The .reapeaks file REAPER would build for path (nil when it cannot say)
+local function peak_file(path)
+  if not api.GetPeakFileName then return nil end
+  local a, b = api.GetPeakFileName(path, "")
+  local name = type(b) == "string" and b ~= "" and b or a
+  return type(name) == "string" and name ~= "" and name or nil
+end
+local function exists(path)
+  local f = path and io.open(path, "rb")
+  if f then f:close() end
+  return f ~= nil
+end
+
 local function file_peaks(path)
   if not (api.PCM_Source_CreateFromFile and api.PCM_Source_GetPeaks and api.new_array) then return nil end
   local src = api.PCM_Source_CreateFromFile(path)
   if not src then return nil end
+  -- Peaks built only for this view are removed again, so no .reapeaks lands beside a delivered file
+  local pk = peak_file(path)
+  local had_peaks = exists(pk)
   local ok, hi, lo = pcall(function()
     local len = api.GetMediaSourceLength(src)
     if type(len) ~= "number" or len <= 0 then return nil end
@@ -832,6 +848,7 @@ local function file_peaks(path)
     return hi, lo
   end)
   api.PCM_Source_Destroy(src)
+  if pk and not had_peaks and exists(pk) then os.remove(pk) end
   if ok and hi then return hi, lo end
 end
 
