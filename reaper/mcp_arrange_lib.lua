@@ -826,33 +826,35 @@ local function apply_process(api, c)
       r.items = {}
       for _, s in ipairs(c.items) do r.items[#r.items + 1] = describe(api, s.item) end
     else
-      -- The glued items replace the sources: report what now covers their span on each track
-      local spans = {}
+      -- The glued items are the ones that did not exist before, on the tracks the sources are on
+      -- (or a source still there afterwards, should REAPER reuse it for the result)
+      local existed, tracks, selected_on, source = {}, {}, {}, {}
+      local was_sel = {}
+      for _, it in ipairs(sel) do was_sel[it] = true end
       for _, s in ipairs(c.items) do
-        local sp = spans[s.track] or { s.pos, s.pos + s.len }
-        sp[1], sp[2] = math.min(sp[1], s.pos), math.max(sp[2], s.pos + s.len)
-        spans[s.track] = sp
+        if not tracks[s.track] then
+          tracks[s.track] = true
+          for i = 0, api.CountTrackMediaItems(s.track) - 1 do existed[api.GetTrackMediaItem(s.track, i)] = true end
+        end
+        source[s.item] = true
+        if was_sel[s.item] then selected_on[s.track] = true end
       end
       api.Main_OnCommand(M.GLUE, 0)
       local glued = {}
       for t = 0, api.CountTracks(0) - 1 do
         local tr = api.GetTrack(0, t)
-        local sp = spans[tr]
-        if sp then
+        if tracks[tr] then
           for i = 0, api.CountTrackMediaItems(tr) - 1 do
             local it = api.GetTrackMediaItem(tr, i)
-            local pos = item_pos(api, it)
-            if pos >= sp[1] - EPS and pos < sp[2] - EPS then glued[#glued + 1] = it end
+            if not existed[it] or source[it] then
+              glued[#glued + 1] = it
+              -- A selected source passes its selection on to the item that replaced it on its track
+              if selected_on[tr] then sel[#sel + 1] = it end
+            end
           end
         end
       end
       r.items = describe_all(api, glued)
-      -- A selected source passes its selection on to the item that replaced it
-      local was_selected = false
-      for _, s in ipairs(c.items) do
-        for _, it in ipairs(sel) do if it == s.item then was_selected = true end end
-      end
-      if was_selected then for _, it in ipairs(glued) do sel[#sel + 1] = it end end
     end
   end)
   restore_item_selection(api, sel)

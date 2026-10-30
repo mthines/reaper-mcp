@@ -468,7 +468,6 @@ local ITEM_COMMANDS = {
   list_midi_items = true,
 }
 
--- Up to four tracks an item command touches, by index
 -- The first four tracks the items are on (one lane each), and how many tracks that is in all
 local function item_tracks(params)
   local out, seen, n = {}, {}, 0

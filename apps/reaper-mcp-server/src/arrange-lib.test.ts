@@ -503,6 +503,23 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('process items: glue reports and selects only the items it made, per track', async () => {
+    await runLua(`
+      local api = new_timeline{ tracks = {
+        { name = "Gtr", items = { { pos = 0, len = 2, name = "A" }, { pos = 3, len = 1, name = "Mid" }, { pos = 6, len = 2, name = "B" } } },
+        { name = "Bass", items = { { pos = 0, len = 2, name = "C" }, { pos = 6, len = 2, name = "D" } } } } }
+      api.tracks[1].items[1].selected = true
+      local g = assert(arrange.process_items(api, { operation = "glue", items = {
+        { trackIndex = 0, itemIndex = 0 }, { trackIndex = 0, itemIndex = 2 }, { trackIndex = 1, itemIndex = 0 }, { trackIndex = 1, itemIndex = 1 } } }))
+      assert(#g.items == 2, "one glued item per track, not the item between: " .. #g.items)
+      for _, it in ipairs(api.tracks[1].items) do
+        if it.name == "Mid" then assert(not it.selected, "the item between stays unselected") end
+        if it.name == "glued" then assert(it.selected, "the guitar result is selected") end
+      end
+      for _, it in ipairs(api.tracks[2].items) do assert(not it.selected, "the bass result had no selected source") end
+    `);
+  });
+
   it('plan ops: check_op refuses without writing, apply_op runs and raises on a refusal', async () => {
     await runLua(`${SONG}
       assert(arrange.PLAN_OPS.copy_items and arrange.PLAN_OPS.insert_time and arrange.PLAN_OPS.remove_time)
