@@ -111,7 +111,6 @@ reaper-mcp/
   reaper/                     # Files installed INTO REAPER (copied by setup command)
     mcp_tracks_lib.lua        # Pure track-structure + routing logic (wasmoon-tested), loaded by the bridge
     mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 131 handlers)
-    mcp_snapshot_manager.lua  # Standalone snapshot manager GUI (gfx-based, no extensions required)
     mcp_snapshot_lib.lua      # Shared library for snapshot action scripts
     mcp_plan_lib.lua          # run_plan executor (pure Lua, takes the API as an argument; unit-tested via wasmoon)
     mcp_actions_lib.lua       # Action proxy + selection setters (pure Lua, unit-tested via wasmoon)

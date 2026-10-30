@@ -71,7 +71,6 @@ automatically when you work inside the repo.
 
 **What `setup` installs** into your REAPER resource folder:
 - `mcp_bridge.lua` — persistent Lua bridge script, plus the Lua libraries it loads (`mcp_*_lib.lua`)
-- `mcp_snapshot_manager.lua` — snapshot manager GUI (save/restore/delete from REAPER)
 - `mcp_snapshot_next.lua`, `mcp_snapshot_prev.lua`, `mcp_snapshot_quick_save.lua` — A/B action scripts
 - `reaper_www_root/mcp_bridge.html` — the bridge status page
 - `mcp_analyzer.jsfx` — FFT spectrum analyzer
@@ -172,7 +171,7 @@ Every change is bracketed by snapshots:
 1. The skill saves a "Before" snapshot automatically
 2. Makes all changes
 3. Saves an "After" snapshot
-4. You can restore either with `snapshot_restore` to A/B compare, or use the Snapshot Manager GUI in REAPER
+4. You can restore either with `snapshot_restore` to A/B compare, or switch them on the bridge status page's Snapshots tab
 
 ## Plugin knowledge
 
@@ -322,7 +321,6 @@ reaper-mcp/
 ├── reaper/                       # Files installed into REAPER
 │   ├── mcp_bridge.lua            # Persistent Lua bridge
 │   ├── mcp_*_lib.lua             # Lua libraries the bridge loads (plan, actions, tracks, project, items, snapshots)
-│   ├── mcp_snapshot_manager.lua  # Snapshot manager GUI (save/restore/delete)
 │   ├── mcp_snapshot_*.lua        # Snapshot action scripts (next/prev/quick-save + shared lib)
 │   ├── mcp_analyzer.jsfx         # FFT spectrum analyzer
 │   ├── mcp_lufs_meter.jsfx       # LUFS meter (BS.1770)

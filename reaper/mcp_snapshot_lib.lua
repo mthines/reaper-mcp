@@ -1,10 +1,9 @@
 -- =============================================================================
--- MCP Snapshot Library — shared helpers for snapshot action scripts + GUI
+-- MCP Snapshot Library — shared helpers for snapshot action scripts
 -- =============================================================================
 -- Single source of truth for path resolution, JSON encode/decode, listing,
 -- mixer-state capture, full restore, and save. Loaded via dofile() by the
--- snapshot action scripts (next/prev/quick-save) and the Snapshot Manager GUI,
--- so all of them share ONE save/restore implementation (no drift).
+-- snapshot action scripts (next/prev/quick-save), so all of them share ONE save/restore implementation (no drift).
 --
 -- Uses only built-in REAPER APIs (no ReaImGui, no SWS required). CF_Json_Parse
 -- is used opportunistically when present, but a pure-Lua decoder is the

@@ -89,7 +89,6 @@ export const REAPER_ASSETS = [
   'mcp_crest_factor.jsfx',
   'mcp_midi_emitter.jsfx',
   'mcp_gain_trace.jsfx',
-  'mcp_snapshot_manager.lua',
   'mcp_snapshot_lib.lua',
   'mcp_plan_lib.lua',
   'mcp_actions_lib.lua',
@@ -102,6 +101,9 @@ export const REAPER_ASSETS = [
   'mcp_snapshot_prev.lua',
   'mcp_snapshot_quick_save.lua',
 ] as const;
+
+/** Files earlier versions installed into REAPER's Scripts/ that setup now deletes */
+export const RETIRED_ASSETS = ['mcp_snapshot_manager.lua'] as const;
 
 /** Bridge status UI installed into REAPER's reaper_www_root/ (built by apps/bridge-ui) */
 export const BRIDGE_UI_FILE = 'mcp_bridge.html';

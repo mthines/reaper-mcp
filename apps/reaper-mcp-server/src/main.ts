@@ -5,13 +5,13 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createServer } from './server.js';
 import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, readBridgeEvents, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
 import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges, emitLog, exceptionAttributes, readServiceVersion } from './telemetry.js';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
 import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureClaudeSettings, REAPER_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
 import { setupSidecar } from './setup-sidecar.js';
 import { firstRunTelemetryNotice, resolveTelemetry, writeTelemetryConfig, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
@@ -34,8 +34,8 @@ async function setup(): Promise<void> {
   const reaperDir = resolveAssetDir(__dirname, 'reaper');
 
   console.log('Installing Lua scripts...');
-  // Install every Lua asset (bridge, snapshot manager GUI, the shared snapshot
-  // library it dofile()s at runtime, and the A/B action scripts). REAPER_ASSETS
+  // Install every Lua asset (bridge, its libraries, the shared snapshot library
+  // and the A/B action scripts). REAPER_ASSETS
   // is the single source of truth — a hardcoded subset previously omitted the
   // snapshot library and action scripts, leaving stale copies in REAPER.
   for (const asset of REAPER_ASSETS) {
@@ -46,6 +46,14 @@ async function setup(): Promise<void> {
       console.log(`  Installed: ${asset}`);
     } else {
       console.log(`  Not found: ${src}`);
+    }
+  }
+
+  for (const asset of RETIRED_ASSETS) {
+    const dest = join(scriptsDir, asset);
+    if (existsSync(dest)) {
+      rmSync(dest);
+      console.log(`  Removed: ${asset} (retired)`);
     }
   }
 
