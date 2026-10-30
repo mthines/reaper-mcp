@@ -715,11 +715,14 @@ local function audio_take(api, p)
            offs = api.GetMediaItemTakeInfo_Value(take, "D_STARTOFFS"), rate = api.GetMediaItemTakeInfo_Value(take, "D_PLAYRATE") }
 end
 
-local function read_markers(api, take)
+-- A stretch marker's pos is take time at play rate 1 (seen live, REAPER 7.40: a marker added
+-- at pos 0.4 on a 2x item with offset 0.5 reads source 0.9). The tools speak item seconds,
+-- so positions are item seconds x play rate on the way in and / play rate on the way out.
+local function read_markers(api, t)
   local out = {}
-  for i = 0, api.GetTakeNumStretchMarkers(take) - 1 do
-    local _, pos, src = api.GetTakeStretchMarker(take, i)
-    out[#out + 1] = { position = round(pos, 4), sourcePosition = round(src, 4) }
+  for i = 0, api.GetTakeNumStretchMarkers(t.take) - 1 do
+    local _, pos, src = api.GetTakeStretchMarker(t.take, i)
+    out[#out + 1] = { position = round(pos / t.rate, 4), sourcePosition = round(src, 4) }
   end
   return out
 end
@@ -741,15 +744,16 @@ function M.add_stretch_markers(api, p, markers)
       return nil, "marker " .. i .. ": sourcePosition must be a number — nothing changed"
     end
   end
-  local before = read_markers(api, t.take)
+  local before = read_markers(api, t)
   return with_undo(api, "MCP: Add stretch markers", 4, function()
     for _, m in ipairs(markers) do
-      if m.sourcePosition ~= nil then api.SetTakeStretchMarker(t.take, -1, tonumber(m.position), tonumber(m.sourcePosition))
-      else api.SetTakeStretchMarker(t.take, -1, tonumber(m.position)) end
+      local pos = tonumber(m.position) * t.rate
+      if m.sourcePosition ~= nil then api.SetTakeStretchMarker(t.take, -1, pos, tonumber(m.sourcePosition))
+      else api.SetTakeStretchMarker(t.take, -1, pos) end
     end
     api.UpdateItemInProject(t.item)
     return { trackIndex = int(p.trackIndex), itemIndex = int(p.itemIndex), length = round(t.len, 4),
-             added = #markers, markers = read_markers(api, t.take), before = before }
+             added = #markers, markers = read_markers(api, t), before = before }
   end)
 end
 
@@ -795,8 +799,10 @@ function M.quantize_stretch(api, p, hits)
     end
   end
   table.sort(list, function(a, b) return a.pos < b.pos end)
+  -- No hit to place: replacing the markers would only wipe the ones the item has
+  if #list == 0 then return nil, "No hits inside the item — nothing changed" end
 
-  local before = read_markers(api, t.take)
+  local before = read_markers(api, t)
   local reach = window * grid / 2
   local placed, last_pos, last_line = {}, edge, nil
   local moved, skipped, err_before, err_after = 0, 0, {}, {}
@@ -831,8 +837,8 @@ function M.quantize_stretch(api, p, hits)
     for i = api.GetTakeNumStretchMarkers(t.take) - 1, 0, -1 do api.DeleteTakeStretchMarkers(t.take, i) end
     -- Anchors at both ends keep the item's length and the audio outside the hits in place
     api.SetTakeStretchMarker(t.take, -1, 0, t.offs)
-    for _, m in ipairs(placed) do api.SetTakeStretchMarker(t.take, -1, m.pos, m.src) end
-    api.SetTakeStretchMarker(t.take, -1, t.len, t.offs + t.len * t.rate)
+    for _, m in ipairs(placed) do api.SetTakeStretchMarker(t.take, -1, m.pos * t.rate, m.src) end
+    api.SetTakeStretchMarker(t.take, -1, t.len * t.rate, t.offs + t.len * t.rate)
     api.UpdateItemInProject(t.item)
     local hits_out = {}
     for i = 1, math.min(#placed, 256) do hits_out[i] = { round(placed[i].from, 4), round(placed[i].pos, 4) } end

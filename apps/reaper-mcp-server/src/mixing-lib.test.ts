@@ -300,6 +300,35 @@ describe('mcp_mixing_lib.lua: stretch markers', () => {
     `);
   });
 
+  it('refuses a quantize with no hit inside the item and keeps the markers the item has', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { items = { { pos = 0, len = 4 } } } } }
+      mix.add_stretch_markers(api, { trackIndex = 0, itemIndex = 0 }, { { position = 2 } })
+      local writes = api.writes
+      local r, err = mix.quantize_stretch(api, { trackIndex = 0, itemIndex = 0, grid = 1 }, { 5, 6 })
+      assert(r == nil and err:find("No hits inside the item", 1, true), tostring(err))
+      assert(api.writes == writes and #api.tracks[1].items[1].takes[1].sm == 1, "the existing marker stays")
+    `);
+  });
+
+  it('places markers in take time on an item at another play rate, and reports item seconds', async () => {
+    await runLua(`
+      -- 2x play rate: source second 1.04 plays at item second 0.52 and snaps to the 8th at 0.5;
+      -- REAPER keeps marker positions at rate 1, so that marker sits at 1.0 with its source 1.04
+      local api = new_fake{ tracks = { { items = { { pos = 0, len = 2, rate = 2 } } } } }
+      local r, err = mix.quantize_stretch(api, { trackIndex = 0, itemIndex = 0, grid = 0.5 }, { 1.04 })
+      assert(r, tostring(err))
+      local sm = api.tracks[1].items[1].takes[1].sm
+      assert(math.abs(sm[2][1] - 1.0) < 1e-9 and sm[2][2] == 1.04, "hit marker: " .. sm[2][1] .. " " .. sm[2][2])
+      assert(sm[3][1] == 4 and sm[3][2] == 4, "end anchor at the item end in take time")
+      assert(r.moves[1][1] == 0.52 and r.moves[1][2] == 0.5, "moves are item seconds")
+
+      local api2 = new_fake{ tracks = { { items = { { pos = 0, len = 2, rate = 2 } } } } }
+      local a = assert(mix.add_stretch_markers(api2, { trackIndex = 0, itemIndex = 0 }, { { position = 1 } }))
+      assert(api2.tracks[1].items[1].takes[1].sm[1][1] == 2 and a.markers[1].position == 1)
+    `);
+  });
+
   it('refuses a bad grid, strength or a MIDI item and changes nothing', async () => {
     await runLua(`
       local api = new_fake{ tracks = { { items = { { len = 4 }, { midi = true } } } } }

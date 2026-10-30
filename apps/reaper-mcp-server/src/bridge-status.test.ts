@@ -338,6 +338,24 @@ describe('edit views in the log', () => {
     expect(r).toMatchObject({ rows: [{ t: 'Kick', at: 'read', bt: 'latch' }] });
   });
 
+  it('shows a global automation override change as a change, and an untouched one as no change', async () => {
+    const bridge = await startBridge(`
+      local override = -1
+      api.GetGlobalAutomationOverride = function() return override end
+      api.SetGlobalAutomationOverride = function(v) override = v end
+    `);
+    await bridge.send('set_automation_mode', { globalOverride: 'bypass' });
+    const changed = (await bridge.status()).recent[0].r as { rows: { p: string; a: number; b: number; at: string; bt: string }[] };
+    const row = changed.rows.find((x) => x.p === 'Global override');
+    expect(row).toMatchObject({ at: 'none', bt: 'bypass' });
+    expect(row?.a).not.toBe(row?.b);
+
+    await bridge.send('set_automation_mode', { globalOverride: 'bypass' });
+    const same = (await bridge.status()).recent[0].r as { rows: { p: string; a: number; b: number }[] };
+    const again = same.rows.find((x) => x.p === 'Global override');
+    expect(again?.a).toBe(again?.b);
+  });
+
   it('shows a track change as before and after, in dB', async () => {
     const bridge = await startBridge('api.tracks[1].vals.D_VOL = 1');
     await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -6 });

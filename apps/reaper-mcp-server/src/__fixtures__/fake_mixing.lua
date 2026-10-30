@@ -162,7 +162,7 @@ function new_fake(spec)
   function api.GetTakeStretchMarker(take, i) local m = take.sm[i + 1]; return i, m[1], m[2] end
   function api.SetTakeStretchMarker(take, i, pos, src)
     w()
-    src = src or (take.offs + pos * take.rate)
+    src = src or (take.offs + pos) -- pos is take time at rate 1, as REAPER
     if i < 0 then
       take.sm[#take.sm + 1] = { pos, src }
       table.sort(take.sm, function(a, b) return a[1] < b[1] end)

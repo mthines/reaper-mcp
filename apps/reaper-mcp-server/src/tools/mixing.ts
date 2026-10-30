@@ -266,6 +266,10 @@ export function registerMixingTools(server: McpServer): void {
       const all = (detected['transients'] as { time: number; strength: number }[] | undefined) ?? [];
       // The sidecar's times are seconds into the file (startTime only limits the window)
       const hits = all.filter((t) => t.strength >= (minStrength ?? 0.2)).map((t) => t.time);
+      if (hits.length === 0) {
+        return error(`No hits to quantize (${all.length} detected, none with strength >= ${minStrength ?? 0.2}) — ` +
+          'nothing changed. Lower minStrength or raise sensitivity.');
+      }
 
       const res = await run('quantize_audio', { trackIndex: ti, itemIndex, grid, strength, window, swing, hits: JSON.stringify(hits) }, 60_000);
       if (!res.data) return res;

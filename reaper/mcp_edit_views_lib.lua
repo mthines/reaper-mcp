@@ -810,7 +810,7 @@ function MIX.automation(data)
   end
   if data.globalOverrideBefore then
     rows[#rows + 1] = { t = "All tracks", p = "Global override", s = "bool",
-      a = data.globalOverrideBefore == data.globalOverride and 0 or 1, b = 1,
+      a = data.globalOverrideBefore == data.globalOverride and 1 or 0, b = 1,
       at = data.globalOverrideBefore, bt = data.globalOverride }
   end
   return { rows = rows }

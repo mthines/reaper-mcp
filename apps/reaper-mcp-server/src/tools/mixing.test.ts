@@ -80,6 +80,15 @@ describe('quantize_audio', () => {
     expect(json(res)).toMatchObject({ placed: 2, moved: 2, detected: 3, used: 2, offsetAfter: { avgMs: 0 } });
   });
 
+  it('refuses before touching REAPER when no hit is strong enough, saying how to find more', async () => {
+    sidecar([{ time: 1.52, strength: 0.1 }]);
+    sendCommandMock.mockResolvedValueOnce(ok(ITEM));
+    const res = await tool('quantize_audio')({ trackIndex: 0, itemIndex: 0, grid: 1, minStrength: 0.5 });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain('No hits to quantize (1 detected');
+    expect(res.content[0].text).toContain('Lower minStrength');
+  });
+
   it('refuses a MIDI item and says to use quantize_midi', async () => {
     sidecar([]);
     sendCommandMock.mockResolvedValueOnce(ok({ ...ITEM, isMidi: true }));
