@@ -1490,7 +1490,8 @@ function RenderWave({ hi, lo }: { hi: number[]; lo: number[] }) {
 function Render({ v }: { v: Extract<EditView, { kind: "render" }> }) {
   const files = v.groups.reduce((n, g) => n + g.f.length, 0) + (v.more ?? 0);
   const [normName, normUnit] = (v.norm && NORM_LABEL[v.norm]) || ["", ""];
-  const lufsTarget = v.norm?.startsWith("lufs") && v.nt !== undefined ? v.nt : undefined;
+  // Only an integrated target grades a file's integrated loudness; a momentary or short-term max target does not
+  const lufsTarget = v.norm === "lufs_i" && v.nt !== undefined ? v.nt : undefined;
   const encoding = [v.fmt.toUpperCase() || "–", v.bd ?? (v.kbps ? String(v.kbps) : "")].filter(Boolean).join(" ");
   /** On target within 1 LU (accent), off target (amber); plain without a LUFS target */
   const lufsZone = (db: number) => (lufsTarget === undefined || !measured(db) ? "ok" : Math.abs(db - lufsTarget) <= 1 ? "ok" : "hot");
