@@ -116,6 +116,16 @@ of the `reaper-mcp` org sees.
    (curated records are permanent).
 4. `memory.read` the built-in key to confirm, then `memory.delete` the `user::`
    key (never the built-in key).
+5. **Plugin records only: update the built-in plugin list** (`docs/PLUGINS.md` in
+   the reaper-mcp clone). Find the clone: the current directory when it has
+   `scripts/plugin-list.mjs`, else the directory this skill is symlinked from
+   (`readlink ~/.claude/skills/mix-memory` → `<clone>/.claude/skills/mix-memory`).
+   Run `node <clone>/scripts/plugin-list.mjs`; it rebuilds the table from the
+   built-in layer, so it also picks up anything published earlier. Show the
+   changed rows and tell the maintainer to commit `docs/PLUGINS.md` (the
+   bridge's one-click Update refuses while the clone has local changes). No
+   clone found, or the script fails: say so; the daily **Plugin list** workflow
+   updates the list on `main` anyway.
 
 ---
 

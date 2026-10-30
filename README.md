@@ -138,9 +138,13 @@ what turns a remote control into an engineer that gets better every session.
   layer on top. When the two disagree, yours wins, so your taste never gets
   overwritten. The built-in set comes with the server, read-only, and needs no
   LoreKit account. Connect your own LoreKit to start your layer.
+- 📚 **A built-in plugin library.** FabFilter, Soundtoys, Valhalla, iZotope, Melodyne, the
+  REAPER stock plugins and more: see the **[built-in plugin list](docs/PLUGINS.md)**, and how
+  to add yours.
 - 🤝 **Share what you taught it.** Press **Contribute** in the bridge page's Plugins tab
   and your plugin records become a pull request. Once the maintainer approves it, they're
-  built in for every reaper-mcp user ([how it works](knowledge/contributions/README.md)).
+  built in for every reaper-mcp user and added to the
+  [plugin list](docs/PLUGINS.md) ([how it works](knowledge/contributions/README.md)).
   Regular contributors can publish straight to built-in, no pull request: ask on
   [Discord](https://discord.gg/Eg8tznuXp4).
 - 🌍 **It follows you.** The memory isn't tied to one project folder. Whatever song
@@ -349,7 +353,8 @@ big session never hurts.
 <summary><b>Which plugins does it work with?</b></summary>
 <br>
 Any plugin REAPER can load (VST, VST3, AU, CLAP, JS). It finds what you have installed
-and reaches for the best tool for each job. When it meets a plugin it doesn't know, it
+and reaches for the best tool for each job. The ones it already knows are in the
+<a href="docs/PLUGINS.md">built-in plugin list</a>. When it meets a plugin it doesn't know, it
 researches it, inspects its controls live and saves what it learns to LoreKit. You can
 also teach it one up front with <code>/learn-plugin</code>.
 </details>

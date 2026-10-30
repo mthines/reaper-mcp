@@ -19,6 +19,12 @@ The mixing skills use the same agent to bootstrap plugins they don't know. To
 recall or tidy memory, use `/mix-memory`. If the `memory.*` tools are not
 connected, say so and stop.
 
+Every learned plugin should end up in the **built-in plugin list**
+(`docs/PLUGINS.md`). A **publisher** (writing member of the `reaper-mcp` LoreKit
+org, e.g. the maintainer) publishes the record and updates the list in their
+clone (Step 5). Everyone else gets it there through a contribution PR, and the
+list updates when the maintainer publishes it.
+
 ## Trigger
 
 The user types `/learn-plugin [plugin]`, or asks Claude to "learn about a
@@ -36,6 +42,11 @@ separated). If there are none, ask a single question:
 If the user already said something about one (what they use it for, how they
 set it up), keep it as caller context for that plugin in Step 2. Don't ask for
 anything else yet.
+
+Also check, once, whether the user is a **publisher**: `org.list`, and look for
+the `reaper-mcp` org with a writing role (member, admin or owner). Remember the
+answer for Steps 3 and 5. No `org.list` tool, or no such membership: not a
+publisher.
 
 ### Step 2: Dispatch the researchers, all at once
 
@@ -82,6 +93,12 @@ another `/learn-plugin`.
 
 No open questions besides preference? Ask only the preference confirmation.
 
+**Publishers only:** add one question per plugin, in the same call: "Publish
+**[Plugin]** to built-in for every reaper-mcp user?" with "Publish (adds it to
+the built-in plugin list)" first and "Keep it in my layer" second. It counts
+toward the 4; with several plugins, one question "Publish all N to built-in?"
+is enough.
+
 **Several plugins:** start asking once most reports are in, without waiting for
 a slow last one. `AskUserQuestion` takes 4 questions per call, so batch across
 plugins and name the plugin in every question:
@@ -116,7 +133,25 @@ single subagent for several records that only change the preference. Give each
 one the key, the exact changes, and the rule to keep everything else word for
 word.
 
-### Step 5: Confirm
+### Step 5: Add it to the built-in plugin list
+
+**Publisher who chose Publish:** run `/mix-memory publish` for each plugin's
+`user::plugins::…` key (it merges with any built-in record, checks privacy,
+writes the built-in key and removes the `user::` copy). Its last step rebuilds
+`docs/PLUGINS.md` in the clone with `scripts/plugin-list.mjs`; with several
+plugins, run the script once at the end. Say which rows were added and that
+`docs/PLUGINS.md` needs a commit.
+
+**Everyone else (or "Keep it in my layer"):** don't edit `docs/PLUGINS.md`; it
+lists only built-in records, and a local edit blocks the bridge's one-click
+Update. Tell the user, in two lines, how to get it listed:
+
+> To share **[Plugin]** with every reaper-mcp user: open the bridge window's
+> **Plugins** tab and press **Contribute**. That opens a pull request with your
+> record; once the maintainer publishes it, it's added to the built-in plugin
+> list (`docs/PLUGINS.md`).
+
+### Step 6: Confirm
 
 > "Done! **[Plugin Name]** is saved to LoreKit as
 > `user::plugins::{vendor}/{plugin}` (preference n/100, [category]).
@@ -126,13 +161,17 @@ word.
 > highest-preference installed plugin, and will add to its learned notes as they
 > work with it."
 
+Published in Step 5? Say "is now built in as `plugins::{vendor}/{plugin}`"
+instead, and add the `docs/PLUGINS.md` row to commit.
+
 If the report said the scratch track couldn't be removed, say that first and
 name the track.
 
 **Several plugins:** one table instead (plugin, key, preference, category,
-verified live), then the Step 6 overviews, shortened to a few lines each.
+verified live, published or how to contribute), then the Step 7 overviews,
+shortened to a few lines each.
 
-### Step 6: Show how it works
+### Step 7: Show how it works
 
 Always end with the overview from the report's **How it works** section, under
 the heading **"How [Plugin Name] works"**. Update it with the user's answers
