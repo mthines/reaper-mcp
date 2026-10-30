@@ -373,7 +373,6 @@ function editStories(): Story[] {
       { v: 'Instrumental', m: ['Lead Vox', 'Vox Dbl', 'Backing Vox'], f: [renderFile('song-Instrumental.mp3', 214.6, -14.2, -1.05, -1.3, 0.7)] },
       { v: 'TV', m: ['Lead Vox'], f: [renderFile('song-TV.mp3', 214.6, -13.9, -1.2, -1.5, 0.72)] },
     ],
-    more: 3,
   });
   return [
     story('Track volume', volume, 'One track, before → after'),
