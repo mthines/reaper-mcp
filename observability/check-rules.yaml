@@ -63,3 +63,17 @@ spec:
             severity: info
           annotations:
             summary: reaper-mcp-server logged an ERROR (handler crash, server crash, or bridge timeout).
+
+        - alert: ReaperMcpQuantizeOffGrid
+          # quantize_audio records each call's average hit distance from the grid before
+          # and after; after is ~0 at strength 1 (a softer strength leaves some offset
+          # by design, hence info). A rise means hit detection or marker placement regressed.
+          expr: >-
+            histogram_quantile(0.5, sum(rate(
+              {otel_metric_name="reaper.audio.quantize.offset", reaper_quantize_stage="after"}[1h])))
+            > 0.005
+          for: 1h
+          labels:
+            severity: info
+          annotations:
+            summary: Median off-grid offset after quantize_audio is above 5 ms — audio quantize stopped landing hits on the grid.

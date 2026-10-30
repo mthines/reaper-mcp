@@ -77,6 +77,21 @@ export type CommandType =
   | 'insert_automation_item'
   | 'set_automation_item'
   | 'delete_automation_item'
+  // Mixing depth
+  | 'set_automation_mode'
+  | 'get_fx_param_modulation'
+  | 'set_fx_param_modulation'
+  | 'get_fx_pins'
+  | 'set_fx_pins'
+  | 'list_monitoring_fx'
+  | 'add_monitoring_fx'
+  | 'set_monitoring_fx'
+  | 'remove_monitoring_fx'
+  | 'freeze_tracks'
+  | 'unfreeze_tracks'
+  | 'apply_fx_to_items'
+  | 'add_stretch_markers'
+  | 'quantize_audio'
   // MIDI editing
   | 'create_midi_item'
   | 'list_midi_items'
@@ -520,6 +535,7 @@ export interface CreateTrackEnvelopeParams {
   envelopeName?: string;    // Built-in: "Volume", "Pan", "Mute", "Width", "Trim Volume"
   fxIndex?: number;         // For FX parameter envelopes
   paramIndex?: number;      // For FX parameter envelopes (required if fxIndex provided)
+  sendIndex?: number;       // A send's envelope (envelopeName Volume, Pan or Mute)
 }
 
 export interface SetEnvelopePropertiesParams {
@@ -1070,4 +1086,89 @@ export interface InsertTrackTemplateParams {
   name: string;
   /** 0-based insert position; defaults to the end. */
   index?: number;
+}
+
+// --- Mixing depth -----------------------------------------------------------
+// Nested values travel as JSON strings: the bridge decodes only the top level.
+
+export type AutomationMode = 'trim' | 'read' | 'touch' | 'write' | 'latch' | 'latch_preview';
+
+export interface SetAutomationModeParams {
+  /** JSON array of track refs (index, name, "{GUID}", "master") */
+  tracks?: string;
+  mode?: AutomationMode;
+  globalOverride?: AutomationMode | 'none' | 'bypass';
+}
+
+export interface FxParamRef {
+  trackIndex: number;
+  fxIndex: number;
+  paramIndex?: number;
+}
+
+export interface SetFxParamModulationParams extends FxParamRef {
+  paramIndex: number;
+  /** false turns all modulation of the parameter off */
+  enabled?: boolean;
+  /** 0..1, the value the modulation moves around */
+  baseline?: number;
+  /** JSON: { enabled?, shape?, speed?, strength?, phase?, tempoSync?, direction? } */
+  lfo?: string;
+  /** JSON: { enabled?, attackMs?, releaseMs?, minDb?, maxDb?, strength?, channel?, direction? } */
+  audio?: string;
+  /** JSON: { enabled?, fxIndex, paramIndex, scale?, offset? } */
+  link?: string;
+}
+
+export interface SetFxPinsParams {
+  trackIndex: number;
+  fxIndex: number;
+  /** JSON: channel lists by pin ([[1],[2]]) or [{ pin, channels }] */
+  inputs?: string;
+  outputs?: string;
+  trackChannels?: number;
+}
+
+export interface AddMonitoringFxParams {
+  fxName: string;
+  /** JSON: [{ paramIndex, value 0..1 }] */
+  params?: string;
+}
+
+export interface SetMonitoringFxParams {
+  fxIndex: number;
+  enabled?: boolean;
+  offline?: boolean;
+  params?: string;
+}
+
+export interface FreezeTracksParams {
+  /** JSON array of track refs */
+  tracks: string;
+  mode?: 'stereo' | 'mono' | 'multichannel';
+}
+
+export interface ApplyFxToItemsParams {
+  /** JSON: [{ trackIndex, itemIndex }] */
+  items: string;
+  mode?: 'stereo' | 'mono' | 'multichannel';
+}
+
+export interface AddStretchMarkersParams {
+  trackIndex: number;
+  itemIndex: number;
+  /** JSON: [{ position (s from the item start), sourcePosition? }] */
+  markers: string;
+}
+
+export interface QuantizeAudioParams {
+  trackIndex: number;
+  itemIndex: number;
+  /** JSON: hit times in seconds of the item's source file */
+  hits: string;
+  /** Grid in quarter notes */
+  grid: number;
+  strength?: number;
+  swing?: number;
+  window?: number;
 }

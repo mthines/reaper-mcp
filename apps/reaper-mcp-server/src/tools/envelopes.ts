@@ -114,10 +114,11 @@ export function registerEnvelopeTools(server: McpServer): void {
 
   server.tool(
     'create_track_envelope',
-    'Create/show an automation envelope on a track. Use envelopeName for built-in envelopes (Volume, Pan, Mute, Width, Trim Volume) or fxIndex+paramIndex for FX parameter envelopes. The envelope is made visible and active; an existing one is only shown (`created: false`). The track selection is left as it was.',
+    'Create/show an automation envelope on a track. Use envelopeName for built-in envelopes (Volume, Pan, Mute, Width, Trim Volume), sendIndex + envelopeName (Volume, Pan, Mute) for a send\'s envelope (it appears on the track as "Send Volume" etc. and starts at the send\'s current value), or fxIndex+paramIndex for FX parameter envelopes. The envelope is made visible and active; an existing one is only shown (`created: false`). The track selection is left as it was.',
     {
       trackIndex,
-      envelopeName: z.string().optional().describe('Built-in envelope name: "Volume", "Pan", "Mute", "Width", "Trim Volume"'),
+      envelopeName: z.string().optional().describe('Built-in envelope name: "Volume", "Pan", "Mute", "Width", "Trim Volume" (with sendIndex: "Volume", "Pan" or "Mute")'),
+      sendIndex: z.coerce.number().int().min(0).optional().describe('A send\'s envelope instead: 0-based send index (from get_track_routing); it starts at the send\'s current level'),
       fxIndex: z.coerce.number().int().min(0).optional().describe('FX chain index (for FX parameter envelopes)'),
       paramIndex: z.coerce.number().int().min(0).optional().describe('FX parameter index (required if fxIndex provided)'),
     },

@@ -82,7 +82,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 
 | Tool | Description |
 |------|-------------|
-| `create_track_envelope` | Create or show an envelope: Volume, Pan, Mute, Width, Trim Volume, or an FX parameter |
+| `create_track_envelope` | Create or show an envelope: Volume, Pan, Mute, Width, Trim Volume, an FX parameter, or a send's Volume/Pan/Mute (`sendIndex`) |
 | `get_track_envelopes` | List envelopes on a track (name, point and automation item counts, active/visible/armed; which send a send envelope belongs to) |
 | `get_envelope_points` | Get automation points with pagination (`db` on volume envelopes) |
 | `insert_envelope_point` / `insert_envelope_points` | Insert one or many points (time, `value` or `db`, shape, tension) |
@@ -186,6 +186,25 @@ For quick A/B testing, bind these action scripts to keyboard shortcuts in REAPER
 | `set_send` | Edit a send, receive or hardware output by index |
 | `remove_send` | Remove a send, receive or hardware output by index |
 | `add_hardware_output` | Route a track to an audio interface output (stereo or mono) |
+
+### Mixing Depth
+
+| Tool | Description |
+|------|-------------|
+| `set_automation_mode` | Set tracks' automation mode (trim, read, touch, write, latch, latch_preview) and/or the global override |
+| `get_fx_param_modulation` | Read an FX parameter's modulation (LFO, audio follower, parameter link), or every modulated parameter |
+| `set_fx_param_modulation` | Modulate an FX parameter with an LFO, an audio control signal (e.g. a sidechain on 3/4) and/or a link |
+| `get_fx_pins` | An FX's pin-to-channel mappings and the track's channel count |
+| `set_fx_pins` | Connect FX pins to track channels; widens the track when needed |
+| `list_monitoring_fx` | The monitoring FX chain (heard in the monitors, never rendered) |
+| `add_monitoring_fx` | Add a monitoring FX (room correction, a reference meter, a mono check) |
+| `set_monitoring_fx` | Bypass, offline or set parameters of a monitoring FX |
+| `remove_monitoring_fx` | Remove a monitoring FX |
+| `freeze_tracks` | Freeze tracks (stereo, mono or multichannel) to free CPU |
+| `unfreeze_tracks` | Restore one freeze layer |
+| `apply_fx_to_items` | Render in place: apply track and take FX to items as a new active take |
+| `add_stretch_markers` | Add many stretch markers to an audio item in one call |
+| `quantize_audio` | Quantize an audio item to the grid with stretch markers placed on detected hits (Python sidecar) |
 
 ### Plan Executor
 

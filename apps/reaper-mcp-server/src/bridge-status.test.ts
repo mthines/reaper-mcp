@@ -11,7 +11,7 @@ const REAPER_DIR = join(__dirname, '../../../reaper');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
 const SCRIPTS = '/reaper/Scripts/';
 const BRIDGE_DIR = `${SCRIPTS}mcp_bridge_data/`;
-const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua'];
+const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_mixing_lib.lua', 'mcp_edit_views_lib.lua'];
 
 interface Entry { n: number; t: number; c: string; ok: boolean; s?: string; p?: string; e?: string; r?: Record<string, unknown> }
 type Row = [number, number, number, number, number];
@@ -329,6 +329,13 @@ describe('edit views in the log', () => {
       ai: 1,
       wasAis: [[10, 4, 7, 'Vox Chorus']],
     });
+  });
+
+  it('shows an automation mode change per track, from the old mode to the new one', async () => {
+    const bridge = await startBridge('api.tracks[1].vals.I_AUTOMODE = 1');
+    await bridge.send('set_automation_mode', { tracks: '[0]', mode: 'latch' });
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({ rows: [{ t: 'Kick', at: 'read', bt: 'latch' }] });
   });
 
   it('shows a track change as before and after, in dB', async () => {

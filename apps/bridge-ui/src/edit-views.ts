@@ -39,6 +39,20 @@ export type Route = ['s' | 'r' | 'h', string, number, number, string];
 /** One track's items for an item edit; `was` is the lane before it */
 export interface ItemLane { t: string; items: Item[]; was?: Item[] }
 
+/**
+ * One modulated FX parameter: name, baseline and value 0..1, and its sources —
+ * lfo [shape, speed, strength, phase, direction −1/0/1, 1 = tempo sync],
+ * acs (audio control signal) [attack ms, release ms, min dB, max dB, strength, channel, direction],
+ * link [source "FX / param", scale, offset]. `off` = modulation turned off; `was` = before a write (false = none).
+ */
+export interface ModRow {
+  p: string; base: number; v: number; off?: number;
+  lfo?: [string, number, number, number, number, number];
+  acs?: [number, number, number, number, number, number, number];
+  link?: [string, number, number];
+  was?: ModRow | false;
+}
+
 export type EditView =
   | { kind: 'changes'; rows: ChangeRow[]; more?: number }
   | {
@@ -60,11 +74,22 @@ export type EditView =
   | { kind: 'mixer'; tracks: MixRow[]; total: number; from?: number; master?: MixRow; ids?: string[]; was?: { tracks: MixRow[]; ids: string[] } }
   | { kind: 'fxChain'; chains: FxChain[] }
   | { kind: 'routing'; t: string; routes: Route[]; was?: Route[] }
-  | { kind: 'plan'; ops: [string, string][]; total: number; dryRun?: boolean };
+  | { kind: 'plan'; ops: [string, string][]; total: number; dryRun?: boolean }
+  | { kind: 'modulation'; fx: string; rows: ModRow[]; total?: number }
+  /** FX pins: the track channels (1-based) each input / output pin connects to, now and before a write */
+  | { kind: 'pins'; fx: string; ch: number; in: number[][]; out: number[][]; names?: string[]; chWas?: number; inWas?: number[][]; outWas?: number[][] }
+  /**
+   * Stretch markers on an item, seconds from its start: quantize moves [from, to] over the grid lines with the
+   * average offset from the grid before/after (ms); a batch add shows the markers now and before
+   */
+  | { kind: 'stretch'; len: number; moves?: [number, number][]; more?: number; grid?: number[]; off?: [number, number]; marks?: number[]; was?: number[] };
 
 const KIND_OF: Record<string, EditView['kind']> = {};
 const kinds: Array<[EditView['kind'], string[]]> = [
-  ['changes', ['set_track_property', 'set_multiple_track_properties', 'set_fx_parameter', 'set_multiple_fx_parameters', 'get_fx_parameters']],
+  ['changes', [
+    'set_track_property', 'set_multiple_track_properties', 'set_fx_parameter', 'set_multiple_fx_parameters', 'get_fx_parameters',
+    'set_automation_mode', 'freeze_tracks', 'unfreeze_tracks', 'apply_fx_to_items',
+  ]],
   ['envelope', [
     'insert_envelope_point', 'insert_envelope_points', 'edit_envelope_points', 'delete_envelope_point', 'remove_envelope_points', 'clear_envelope', 'get_envelope_points',
     'list_automation_items', 'insert_automation_item', 'set_automation_item', 'delete_automation_item',
@@ -84,9 +109,13 @@ const kinds: Array<[EditView['kind'], string[]]> = [
   ['fxChain', [
     'add_fx', 'remove_fx', 'move_fx', 'copy_fx', 'set_fx_enabled', 'set_fx_offline', 'setup_fx_chain', 'load_fx_chain',
     'rename_fx', 'set_fx_preset', 'get_track_properties',
+    'list_monitoring_fx', 'add_monitoring_fx', 'set_monitoring_fx', 'remove_monitoring_fx',
   ]],
   ['routing', ['get_track_routing', 'add_send', 'set_send', 'remove_send', 'add_hardware_output']],
   ['plan', ['run_plan']],
+  ['modulation', ['get_fx_param_modulation', 'set_fx_param_modulation']],
+  ['pins', ['get_fx_pins', 'set_fx_pins']],
+  ['stretch', ['add_stretch_markers', 'quantize_audio']],
 ];
 for (const [kind, commands] of kinds) for (const c of commands) KIND_OF[c] = kind;
 
@@ -117,6 +146,20 @@ const ITEM = [num, num, num, num, num, num];
 const FX_SLOT = [str, str, str, str];
 const ROUTE = [(v: unknown) => v === 's' || v === 'r' || v === 'h', str, num, num, str];
 const pair = (v: unknown): v is [number, number] => Array.isArray(v) && v.length === 2 && num(v[0]) && num(v[1]);
+const nums = (v: unknown): v is number[] => Array.isArray(v) && v.every(num);
+const channelLists = (v: unknown): number[][] => (Array.isArray(v) ? v.map((p) => (nums(p) ? p : [])) : []);
+function modRow(v: unknown, depth = 0): ModRow | null {
+  if (!v || typeof v !== 'object') return null;
+  const r = v as Record<string, unknown>;
+  if (!str(r.p)) return null;
+  const row: ModRow = { p: r.p, base: num(r.base) ? r.base : 0, v: num(r.v) ? r.v : 0 };
+  if (r.off === 1) row.off = 1;
+  if (Array.isArray(r.lfo) && str(r.lfo[0]) && r.lfo.slice(1, 6).every(num)) row.lfo = r.lfo.slice(0, 6) as ModRow['lfo'];
+  if (Array.isArray(r.acs) && r.acs.length >= 7 && r.acs.every(num)) row.acs = r.acs.slice(0, 7) as ModRow['acs'];
+  if (Array.isArray(r.link) && str(r.link[0]) && num(r.link[1]) && num(r.link[2])) row.link = [r.link[0], r.link[1], r.link[2]];
+  if (depth === 0 && r.was !== undefined) row.was = r.was === false ? false : (modRow(r.was, 1) ?? false);
+  return row;
+}
 const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(str);
 
 function timelineState(r: Record<string, unknown>): TimelineState {
@@ -225,6 +268,31 @@ export function editViewOf(e: CommandEntry): EditView | null {
       const ops = tuples<[string, string]>(r.ops, [str, str]);
       if (!ops.length) return null;
       return { kind, ops, total: num(r.total) ? r.total : ops.length, ...(r.dryRun === true ? { dryRun: true } : {}) };
+    }
+    case 'modulation': {
+      const rows = Array.isArray(r.rows) ? (r.rows as unknown[]).map((x) => modRow(x)).filter((x): x is ModRow => !!x) : [];
+      return { kind, fx: str(r.fx) ? r.fx : '', rows, ...(num(r.total) ? { total: r.total } : {}) };
+    }
+    case 'pins': {
+      if (!num(r.ch) || !Array.isArray(r.in)) return null;
+      return {
+        kind, fx: str(r.fx) ? r.fx : '', ch: r.ch, in: channelLists(r.in), out: channelLists(r.out),
+        ...(strings(r.names) ? { names: r.names } : {}),
+        ...(num(r.chWas) ? { chWas: r.chWas } : {}),
+        ...(Array.isArray(r.inWas) ? { inWas: channelLists(r.inWas), outWas: channelLists(r.outWas) } : {}),
+      };
+    }
+    case 'stretch': {
+      if (!num(r.len) || r.len <= 0) return null;
+      return {
+        kind, len: r.len,
+        ...(Array.isArray(r.moves) ? { moves: (r.moves as unknown[]).filter(pair) } : {}),
+        ...(num(r.more) && r.more > 0 ? { more: r.more } : {}),
+        ...(nums(r.grid) ? { grid: r.grid } : {}),
+        ...(pair(r.off) ? { off: r.off } : {}),
+        ...(nums(r.marks) ? { marks: r.marks } : {}),
+        ...(nums(r.was) ? { was: r.was } : {}),
+      };
     }
   }
 }

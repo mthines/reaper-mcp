@@ -248,6 +248,10 @@ namespace belongs to the official MCP conventions). Durations are in seconds.
 | `sidecar/analyze` | CLIENT | `rpc.system=jsonrpc`, `rpc.method`, `error.type` |
 | `reaper-mcp startup`, `poll bridge diagnostics` | INTERNAL | root spans for headless work |
 
+Mixing tools add attributes to their `tools/call` span: `reaper.quantize.hits` / `.moved` / `.skipped`
+(`quantize_audio`), `reaper.freeze.mode` / `reaper.freeze.track_count` (`freeze_tracks`), `reaper.fx.pins.widened`
+(`set_fx_pins`) and `reaper.fx.modulation.kind` (`set_fx_param_modulation`, e.g. `lfo,link`).
+
 **Metrics** — error rate is each histogram's count filtered on `error.type`:
 
 | Metric | Unit | Attributes |
@@ -259,6 +263,7 @@ namespace belongs to the official MCP conventions). Durations are in seconds.
 | `reaper.sidecar.request.duration` | s | `rpc.method`, `error.type` |
 | `reaper.bridge.up` | 1 | gauge: 1 while REAPER's heartbeat is fresh, 0 when the bridge is down |
 | `reaper.bridge.defer.interval`, `reaper.bridge.scan.duration` | s | `reaper.statistic` (p50/p95, avg/max) |
+| `reaper.audio.quantize.offset` | s | `reaper.quantize.stage` (`before`/`after`) — a `quantize_audio` call's average hit distance from the grid |
 
 **Logs** — trace-correlated OTLP log records (also mirrored as JSON lines on stderr), with event names:
 
@@ -282,6 +287,8 @@ resource (`service.instance.id`, `deployment.environment.name`). Count them per 
 - p95 of `reaper.bridge.command.duration` > 0.5 s — the defer loop is starved (heavy project, blocking render).
 - `mcp.server.operation.duration{error.type!=""}` / total > 5 % per `gen_ai.tool.name` — a tool regressed.
 - Any `reaper.bridge.handler_error` or `reaper.server.crash` log — a bug, not a user error.
+- p50 of `reaper.audio.quantize.offset{reaper.quantize.stage="after"}` > 5 ms — `quantize_audio` stopped landing hits on the grid
+  (detection or marker placement regressed); compare with the `before` stage, which stays at the material's own looseness.
 
 These are ready to apply as check rules in [`observability/check-rules.yaml`](observability/check-rules.yaml).
 

@@ -4010,6 +4010,56 @@ function handlers.delete_envelope_point(params) return env_ext.run("delete_point
 
 function handlers.create_track_envelope(params) return env_ext.run("create", params) end
 
+-- Mixing depth (mcp_mixing_lib.lua): automation modes, FX parameter modulation, pins,
+-- monitoring FX, freeze / render in place, stretch markers. Nested params arrive as JSON strings.
+local mix_ext = {}
+mix_ext.ok, mix_ext.lib = pcall(dofile, script_dir .. "mcp_mixing_lib.lua")
+
+function mix_ext.decode(v)
+  if type(v) ~= "string" then return v end
+  local ok, res = pcall(plan_lib.json_decode, v)
+  if ok then return res end
+  return nil
+end
+
+function mix_ext.run(name, ...)
+  if not mix_ext.ok then
+    return nil, "mcp_mixing_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(mix_ext.lib) .. ")"
+  end
+  local ok, res, err = pcall(mix_ext.lib[name], reaper, ...)
+  if not ok then return nil, "Handler error: " .. tostring(res) end
+  return res, err
+end
+
+function mix_ext.tracks(params)
+  params.tracks = mix_ext.decode(params.tracks)
+  return params
+end
+
+function handlers.set_automation_mode(params)
+  return mix_ext.run("set_automation_mode", plan_lib.resolve_track, mix_ext.tracks(params))
+end
+function handlers.get_fx_param_modulation(params) return mix_ext.run("get_modulation", params) end
+function handlers.set_fx_param_modulation(params)
+  return mix_ext.run("set_modulation", params, {
+    enabled = params.enabled, baseline = params.baseline,
+    lfo = mix_ext.decode(params.lfo), audio = mix_ext.decode(params.audio), link = mix_ext.decode(params.link),
+  })
+end
+function handlers.get_fx_pins(params) return mix_ext.run("get_pins", params) end
+function handlers.set_fx_pins(params)
+  return mix_ext.run("set_pins", params, mix_ext.decode(params.inputs), mix_ext.decode(params.outputs))
+end
+function handlers.list_monitoring_fx() return mix_ext.run("list_monitoring_fx") end
+function handlers.add_monitoring_fx(params) return mix_ext.run("add_monitoring_fx", params, mix_ext.decode(params.params)) end
+function handlers.set_monitoring_fx(params) return mix_ext.run("set_monitoring_fx", params, mix_ext.decode(params.params)) end
+function handlers.remove_monitoring_fx(params) return mix_ext.run("remove_monitoring_fx", params) end
+function handlers.freeze_tracks(params) return mix_ext.run("freeze_tracks", plan_lib.resolve_track, mix_ext.tracks(params)) end
+function handlers.unfreeze_tracks(params) return mix_ext.run("unfreeze_tracks", plan_lib.resolve_track, mix_ext.tracks(params)) end
+function handlers.apply_fx_to_items(params) return mix_ext.run("apply_fx_to_items", params, mix_ext.decode(params.items)) end
+function handlers.add_stretch_markers(params) return mix_ext.run("add_stretch_markers", params, mix_ext.decode(params.markers)) end
+function handlers.quantize_audio(params) return mix_ext.run("quantize_stretch", params, mix_ext.decode(params.hits)) end
+
 function handlers.set_envelope_properties(params)
   local track = reaper.GetTrack(0, params.trackIndex)
   if not track then return nil, "Track " .. params.trackIndex .. " not found" end
@@ -4861,6 +4911,7 @@ for _, c in ipairs({
   "insert_audio_file", "snapshot_save", "snapshot_restore", "snapshot_edit",
   "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
   "detect_transients", "create_transient_automation",
+  "freeze_tracks", "unfreeze_tracks", "apply_fx_to_items", "quantize_audio",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
 local HISTORY_LONG_PUBLISH_INTERVAL = 10

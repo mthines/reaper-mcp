@@ -25,6 +25,7 @@ import {
   type SlotChange,
   type Marker,
   type MixRow,
+  type ModRow,
   type Note,
   type Region,
   type Tempo,
@@ -108,6 +109,9 @@ const LISTINGS = new Set([
   "get_track_routing",
   "get_time_selection",
   "get_fx_parameters",
+  "get_fx_param_modulation",
+  "get_fx_pins",
+  "list_monitoring_fx",
 ]);
 
 function render(v: EditView): ReactNode {
@@ -130,6 +134,12 @@ function render(v: EditView): ReactNode {
       return <FxChains v={v} />;
     case "routing":
       return <Routing v={v} />;
+    case "modulation":
+      return <Modulation v={v} />;
+    case "pins":
+      return <Pins v={v} />;
+    case "stretch":
+      return <Stretch v={v} />;
   }
 }
 
@@ -178,6 +188,7 @@ const BOOL_WORDS: Record<string, [string, string]> = {
   solo: ["off", "soloed"],
   recordArm: ["off", "armed"],
   phase: ["normal", "inverted"],
+  Freeze: ["live", "frozen"],
 };
 const PROP_LABEL: Record<string, string> = {
   volume: "Volume",
@@ -204,7 +215,7 @@ function valueText(
     case "pan":
       return panText(v);
     case "bool":
-      return (BOOL_WORDS[r.p] ?? ["off", "on"])[v ? 1 : 0];
+      return text || (BOOL_WORDS[r.p] ?? ["off", "on"])[v ? 1 : 0];
     case "norm":
       return text || `${Math.round(v * 100)}%`;
   }
@@ -1446,6 +1457,8 @@ function Plan({ v }: { v: Extract<EditView, { kind: "plan" }> }) {
 /** "VST3: Pro-Q 3 (FabFilter)" → "Pro-Q 3"; the full name stays in the tooltip */
 const fxShort = (name: string) =>
   name.replace(/^[A-Z0-9]+i?:\s*/, "").replace(/\s*\([^()]*\)$/, "") || name;
+/** 0.25 → "0.25", -42 → "−42": no forced sign, at most two decimals */
+const plain = (n: number) => String(+n.toFixed(2)).replace("-", "−");
 const sameSlot = (a: FxSlot, b: FxSlot) =>
   a[0] === b[0] && a[1] === b[1] && a[3] === b[3];
 
@@ -1679,5 +1692,236 @@ function ItemsLane({
         )}
       </div>
     </div>
+  );
+}
+
+// ── FX parameter modulation ─────────────────────────────────────────────────
+
+const MW = 400;
+const MH = 64;
+const LFO_SHAPE: Record<string, (x: number) => number> = {
+  sine: (x) => Math.sin(x * 2 * Math.PI),
+  square: (x) => (x % 1 < 0.5 ? 1 : -1),
+  saw_down: (x) => 1 - 2 * (x % 1),
+  saw_up: (x) => 2 * (x % 1) - 1,
+  triangle: (x) => 1 - 4 * Math.abs((x % 1) - 0.5),
+  // Random steps, the same every render
+  random: (x) => Math.sin(Math.floor(x * 8) * 12.9898) * 0.9,
+};
+
+/** Two LFO cycles around the baseline: direction 1 moves up from it, -1 down, 0 around it */
+function lfoPath(row: ModRow): string {
+  if (!row.lfo) return "";
+  const [shape, , strength, phase, dir] = row.lfo;
+  const f = LFO_SHAPE[shape] ?? LFO_SHAPE.sine;
+  const pts: string[] = [];
+  for (let i = 0; i <= 120; i++) {
+    const x = (i / 120) * 2 + phase;
+    const w = f(x);
+    const v = dir > 0 ? row.base + strength * (w + 1) / 2 : dir < 0 ? row.base - strength * (w + 1) / 2 : row.base + strength * w / 2;
+    const y = MH - Math.min(1, Math.max(0, v)) * MH;
+    pts.push(`${i === 0 ? "M" : "L"}${((i / 120) * MW).toFixed(1)},${y.toFixed(1)}`);
+  }
+  return pts.join("");
+}
+
+/** The range an audio control signal can move the value over */
+function acsBand(row: ModRow): [number, number] | null {
+  if (!row.acs) return null;
+  const strength = row.acs[4];
+  const dir = row.acs[6];
+  const lo = dir > 0 ? row.base : dir < 0 ? row.base - strength : row.base - strength / 2;
+  return [Math.max(0, lo), Math.min(1, lo + strength)];
+}
+
+const sourcesText = (r: ModRow) =>
+  [r.lfo && "LFO", r.acs && "audio", r.link && "link"].filter(Boolean).join(" + ") || "baseline only";
+
+function Modulation({ v }: { v: Extract<EditView, { kind: "modulation" }> }) {
+  const write = v.rows.some((r) => r.was !== undefined);
+  return (
+    <>
+      <div className="measure-readouts">
+        <Readout label="FX" value={v.fx ? fxShort(v.fx) : "–"} />
+        {!write && <Readout label="Modulated" value={String(v.total ?? v.rows.length)} unit="params" />}
+      </div>
+      {v.rows.length === 0 ? (
+        <div className="ev-more">No parameter of this FX is modulated</div>
+      ) : (
+        <div className="ev-mods">
+          {v.rows.map((r, i) => (
+            <ModulationRow key={i} r={r} />
+          ))}
+        </div>
+      )}
+      {write && (
+        <Legend
+          items={[
+            ["lg-was", "Before"],
+            ["lg-tick", "After"],
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
+function ModulationRow({ r }: { r: ModRow }) {
+  const was = r.was || null;
+  const band = acsBand(r);
+  const y = (val: number) => MH - Math.min(1, Math.max(0, val)) * MH;
+  const label = r.off ? "Modulation off" : sourcesText(r);
+  return (
+    <div className="ev-mod">
+      <div className="ev-mod-head">
+        <span className="ev-mod-name" title={r.p}>{r.p}</span>
+        <span className="ev-mod-src mono">
+          {was ? <>{sourcesText(was)} → <b>{label}</b></> : <b>{label}</b>}
+        </span>
+      </div>
+      {!r.off && (
+        <svg viewBox={`0 0 ${MW} ${MH}`} preserveAspectRatio="none" className="ev-mod-svg" role="img"
+          aria-label={`${r.p}: ${label}, baseline ${Math.round(r.base * 100)}%`}>
+          {band && <rect className="ev-mod-band" x={0} width={MW} y={y(band[1])} height={Math.max(1, y(band[0]) - y(band[1]))} />}
+          {was?.lfo && <path className="ev-mod-was" d={lfoPath(was)} vectorEffect="non-scaling-stroke" />}
+          {was && !was.off && <line className="ev-mod-was" x1={0} x2={MW} y1={y(was.base)} y2={y(was.base)} vectorEffect="non-scaling-stroke" />}
+          <line className="ev-mod-base" x1={0} x2={MW} y1={y(r.base)} y2={y(r.base)} vectorEffect="non-scaling-stroke" />
+          {r.lfo && <path className="ev-mod-lfo" d={lfoPath(r)} vectorEffect="non-scaling-stroke" />}
+        </svg>
+      )}
+      <div className="ev-mod-facts mono">
+        {!r.off && <span>base {Math.round(r.base * 100)}%</span>}
+        {r.lfo && (
+          <>
+            <span>{r.lfo[0].replace("_", " ")}</span>
+            <span>{plain(r.lfo[1])} {r.lfo[5] ? "QN" : "Hz"}</span>
+            <span>depth {Math.round(r.lfo[2] * 100)}%</span>
+          </>
+        )}
+        {r.acs && (
+          <>
+            <span>follows ch {r.acs[5]}</span>
+            <span>{plain(r.acs[2])}…{plain(r.acs[3])} dB</span>
+            <span>{plain(r.acs[0])}/{plain(r.acs[1])} ms</span>
+          </>
+        )}
+        {r.link && (
+          <span title={`Linked to ${r.link[0]}`}>
+            ← {r.link[0]} × {plain(r.link[1])}{r.link[2] ? ` ${r.link[2] > 0 ? "+" : "−"} ${plain(Math.abs(r.link[2]))}` : ""}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── FX pins ─────────────────────────────────────────────────────────────────
+
+function Pins({ v }: { v: Extract<EditView, { kind: "pins" }> }) {
+  const used = [...v.in, ...v.out, ...(v.inWas ?? []), ...(v.outWas ?? [])].flat();
+  const cols = Math.min(64, Math.max(v.ch, v.chWas ?? 0, ...used, 2));
+  const chans = Array.from({ length: cols }, (_, i) => i + 1);
+  const write = v.inWas !== undefined;
+  const changed = write && (v.chWas !== undefined || JSON.stringify(v.in) !== JSON.stringify(v.inWas) || JSON.stringify(v.out) !== JSON.stringify(v.outWas));
+  const side = (title: string, now: number[][], was: number[][] | undefined, names?: string[]) => (
+    <>
+      <div className="ev-pins-side">{title}</div>
+      {now.map((pin, p) => (
+        <div key={`${title}${p}`} className="ev-pins-row">
+          <span className="ev-pins-name mono" title={names?.[p] || `${title} pin ${p + 1}`}>{names?.[p] || `${p + 1}`}</span>
+          {chans.map((c) => {
+            const on = pin.includes(c);
+            const before = was ? (was[p] ?? []).includes(c) : on;
+            const cls = on && !before ? "ev-pin ev-pin-new" : !on && before ? "ev-pin ev-pin-gone" : on ? "ev-pin ev-pin-on" : "ev-pin";
+            return (
+              <span key={c} className={`${cls} ${c > v.ch ? "ev-pin-out" : ""}`}
+                title={`${title} pin ${p + 1} · channel ${c}${on ? " · connected" : ""}${on !== before ? (on ? " (new)" : " (removed)") : ""}`} />
+            );
+          })}
+        </div>
+      ))}
+    </>
+  );
+  return (
+    <>
+      <div className="measure-readouts">
+        <Readout label="FX" value={v.fx ? fxShort(v.fx) : "–"} />
+        <Readout label="Track channels" value={v.chWas !== undefined && v.chWas !== v.ch ? `${v.chWas} → ${v.ch}` : String(v.ch)} />
+      </div>
+      <div className="ev-pins" style={{ "--cols": cols } as CSSProperties} role="table" aria-label="Pin matrix: pins by track channel">
+        <div className="ev-pins-row ev-pins-chans">
+          <span className="ev-pins-name" />
+          {chans.map((c) => (
+            <span key={c} className="ev-pin-ch mono">{c}</span>
+          ))}
+        </div>
+        {side("In", v.in, v.inWas, v.names)}
+        {side("Out", v.out, v.outWas)}
+      </div>
+      {changed && (
+        <Legend
+          items={[
+            ["lg-new", "Connected now"],
+            ["lg-was", "Disconnected"],
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
+// ── Stretch markers ─────────────────────────────────────────────────────────
+
+const SW = 400;
+const SH = 56;
+
+/** A marker at t in the list (within half a millisecond) */
+const near = (list: number[] | undefined, t: number) => (list ?? []).some((m) => Math.abs(m - t) < 0.0005);
+
+function Stretch({ v }: { v: Extract<EditView, { kind: "stretch" }> }) {
+  const x = (t: number) => (Math.min(v.len, Math.max(0, t)) / v.len) * SW;
+  const moves = v.moves ?? [];
+  const moved = moves.filter(([a, b]) => Math.abs(a - b) > 0.0005).length;
+  return (
+    <>
+      <div className="measure-readouts">
+        {v.off ? (
+          <>
+            <Readout label="Hits moved" value={`${moved}/${moves.length + (v.more ?? 0)}`} />
+            <Readout label="Off the grid" value={`${Math.round(v.off[0])} → ${Math.round(v.off[1])}`} unit="ms avg" zone={v.off[1] > 10 ? "hot" : "ok"} />
+          </>
+        ) : (
+          <Readout label="Markers" value={v.was ? `${v.was.length} → ${(v.marks ?? []).length}` : String((v.marks ?? []).length)} />
+        )}
+        <Readout label="Item" value={clock(v.len, 2)} />
+      </div>
+      <svg viewBox={`0 0 ${SW} ${SH}`} preserveAspectRatio="none" className="ev-stretch" role="img"
+        aria-label={v.off ? `${moved} hits moved toward the grid` : `${(v.marks ?? []).length} stretch markers`}>
+        <rect className="ev-stretch-item" x={0} y={8} width={SW} height={SH - 16} rx={3} />
+        {(v.grid ?? []).map((g, i) => (
+          <line key={`g${i}`} className="ev-stretch-grid" x1={x(g)} x2={x(g)} y1={8} y2={SH - 8} vectorEffect="non-scaling-stroke" />
+        ))}
+        {(v.was ?? []).filter((t) => !near(v.marks, t)).map((t, i) => (
+          <line key={`w${i}`} className="ev-stretch-was" x1={x(t)} x2={x(t)} y1={4} y2={SH - 4} vectorEffect="non-scaling-stroke" />
+        ))}
+        {moves.map(([from, to], i) => (
+          <g key={`m${i}`}>
+            {Math.abs(from - to) > 0.0005 && <line className="ev-stretch-was" x1={x(from)} x2={x(from)} y1={4} y2={SH - 4} vectorEffect="non-scaling-stroke" />}
+            {Math.abs(from - to) > 0.0005 && <line className="ev-stretch-move" x1={x(from)} x2={x(to)} y1={SH / 2} y2={SH / 2} vectorEffect="non-scaling-stroke" />}
+            <line className="ev-stretch-mark" x1={x(to)} x2={x(to)} y1={4} y2={SH - 4} vectorEffect="non-scaling-stroke" />
+          </g>
+        ))}
+        {(v.marks ?? []).map((t, i) => (
+          <line key={`k${i}`} className={v.was && near(v.was, t) ? "ev-stretch-kept" : "ev-stretch-mark"} x1={x(t)} x2={x(t)} y1={4} y2={SH - 4} vectorEffect="non-scaling-stroke" />
+        ))}
+      </svg>
+      {(v.more ?? 0) > 0 && <div className="ev-more">+{plural(v.more ?? 0, "more marker")} not drawn</div>}
+      <Legend
+        items={[
+          ...(v.grid ? ([["lg-grid", "Grid"]] as Array<[string, string]>) : []),
+          ...(v.marks && v.was ? ([["lg-kept", "Kept"], ["lg-tick", "Added"], ...(v.was.some((t) => !near(v.marks, t)) ? [["lg-was", "Removed"]] : [])] as Array<[string, string]>) : ([["lg-was", "Before"], ["lg-tick", "After"]] as Array<[string, string]>)),
+        ]}
+      />
+    </>
   );
 }

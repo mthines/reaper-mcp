@@ -1491,3 +1491,46 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
   .toolbar { flex-wrap: nowrap; padding: 6px; }
   .search { min-width: 0; }
 }
+
+/* FX parameter modulation: the baseline, the LFO's swing around it, an audio follower's band */
+.ev-mods { display: flex; flex-direction: column; gap: 10px; }
+.ev-mod-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; min-width: 0; }
+.ev-mod-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ev-mod-src { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.ev-mod-src b { color: var(--text); font-weight: 500; }
+.ev-mod-svg { display: block; width: 100%; height: 64px; margin-top: 4px; background: var(--panel-2); border-radius: 4px; }
+.ev-mod-base { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.ev-mod-lfo { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; }
+.ev-mod-was { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.8; }
+.ev-mod-band { fill: var(--h2); fill-opacity: 0.16; }
+.ev-mod-facts { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; font-size: 11px; color: var(--muted); }
+.ev-mod-facts span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
+/* FX pins: one row per pin, one column per track channel */
+.ev-pins { overflow-x: auto; padding-bottom: 2px; }
+.ev-pins-row { display: grid; grid-template-columns: 64px repeat(var(--cols), minmax(14px, 1fr)); align-items: center; gap: 2px; min-height: 18px; }
+.ev-pins-name { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-pins-side { color: var(--faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; margin: 6px 0 2px; }
+.ev-pin-ch { color: var(--faint); font-size: 10px; text-align: center; }
+.ev-pin { justify-self: center; width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--line-2); }
+.ev-pin-on { background: var(--text); border-color: var(--text); }
+.ev-pin-new { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+.ev-pin-gone { border: 1px dashed var(--muted); background: transparent; }
+.ev-pin-out { opacity: 0.4; }
+
+/* Stretch markers: grid lines, the hits before (dashed) and where they moved to */
+.ev-stretch { display: block; width: 100%; height: 56px; }
+.ev-stretch-item { fill: var(--panel-2); stroke: var(--line-2); stroke-width: 1; }
+.ev-stretch-grid { stroke: var(--line-2); stroke-width: 1; }
+.ev-stretch-was { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 2; }
+.ev-stretch-move { stroke: var(--accent); stroke-width: 1; opacity: 0.6; }
+.ev-stretch-mark { stroke: var(--accent); stroke-width: 1.6; }
+.ev-stretch-kept { stroke: var(--muted); stroke-width: 1.4; }
+.lg-grid { width: 2px; height: 10px; background: var(--line-2); }
+.lg-kept { width: 2px; height: 10px; background: var(--muted); }
+
+@container (max-width: 300px) {
+  .ev-mod-head { flex-direction: column; align-items: flex-start; gap: 0; }
+  .ev-mod-src { white-space: normal; }
+  .ev-pins-row { grid-template-columns: 36px repeat(var(--cols), minmax(12px, 1fr)); }
+}
