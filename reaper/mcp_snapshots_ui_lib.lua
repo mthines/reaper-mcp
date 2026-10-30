@@ -114,8 +114,11 @@ function M.after_command(cmd, response)
   if cmd.type == "snapshot_restore" and response.success and type(cmd.params) == "table" and type(cmd.params.name) == "string" then
     ctx.api.SetExtState(CURRENT_SECTION, CURRENT_KEY, cmd.params.name, false)
   end
-  if cmd.type == "snapshot_save" or cmd.type == "snapshot_delete" then
-    cache = {} -- an agent's save can replace a file with one of the same size
+  -- A save (page or agent) can replace a file with one of the same size: read that file again.
+  -- Deleted files drop out of the cache on the next list().
+  local data = type(response.data) == "table" and response.data or {}
+  if cmd.type == "snapshot_save" and type(data.path) == "string" then
+    cache[data.path] = nil
   end
   if cmd.type == "snapshot_save" or cmd.type == "snapshot_delete" or cmd.type == "snapshot_restore" then
     last_scan = -math.huge -- re-read on the next watched tick
@@ -145,7 +148,6 @@ local function handle(req)
     id = id, op = op, name = name, ok = response.success == true,
     error = response.error, warnings = data.warnings, tracksRestored = data.tracksRestored,
   }
-  cache = {} -- a save can replace a file with one of the same size
   return true
 end
 
