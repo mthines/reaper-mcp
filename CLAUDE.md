@@ -68,7 +68,7 @@ reaper-mcp/
         fx-housekeeping.ts    # move/copy/rename_fx, .RfxChain save/load, track templates (logic in reaper/mcp_items_lib.lua)
         markers.ts            # list_markers, list_regions, add_marker, add_region, delete_marker, delete_region, edit_marker, edit_region
         tempo.ts              # get_tempo_map, add/edit/delete_tempo_marker, set_project_tempo
-        envelopes.ts          # get_track_envelopes, get_envelope_points, insert_envelope_point, delete_envelope_point
+        envelopes.ts          # envelope points (read/insert/edit/delete, dB on volume envelopes) + automation items (logic in reaper/mcp_envelopes_lib.lua)
         aesthetics.ts         # analyze_track_aesthetics (requires Python sidecar)
         offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment (sidecar, no model)
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
@@ -118,6 +118,7 @@ reaper-mcp/
     mcp_plan_lib.lua          # run_plan executor (pure Lua, takes the API as an argument; unit-tested via wasmoon)
     mcp_actions_lib.lua       # Action proxy + selection setters (pure Lua, unit-tested via wasmoon)
     mcp_project_lib.lua       # Project ops, tempo map + marker editing (pure Lua, unit-tested via wasmoon)
+    mcp_envelopes_lib.lua     # Envelopes, points (dB through the envelope's scaling) and pooled automation items (pure Lua, unit-tested via wasmoon)
     mcp_items_lib.lua         # Items, takes, take FX, FX move/copy/rename, FX chains, track templates (pure Lua, unit-tested via wasmoon)
     mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
     mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
@@ -147,7 +148,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (140 total)
+## MCP Tools (145 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -272,19 +273,26 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `delete_tempo_marker` | `tools/tempo.ts` | Delete a tempo marker by index |
 | `set_project_tempo` | `tools/tempo.ts` | Set the tempo at the project start: project BPM with no markers, else the marker at 0 (added when the first marker is later) |
 
-### Envelope / Automation Tools (9)
+### Envelope / Automation Tools (14)
+
+Every point tool takes an optional `automationItemIndex` to work on one automation item's (pool's) points instead of the underlying envelope.
 
 | Tool | File | Description |
 |------|------|-------------|
-| `create_track_envelope` | `tools/envelopes.ts` | Create/show an envelope on a track (Volume, Pan, Mute, Width, Trim Volume, or FX parameter) |
-| `get_track_envelopes` | `tools/envelopes.ts` | List envelopes on a track (name, point count, active/visible/armed) |
-| `get_envelope_points` | `tools/envelopes.ts` | Get automation points with pagination (time, value, shape, tension) |
-| `insert_envelope_point` | `tools/envelopes.ts` | Insert an automation point with shape/tension |
+| `create_track_envelope` | `tools/envelopes.ts` | Create/show an envelope on a track (Volume, Pan, Mute, Width, Trim Volume via native actions, selection kept; or FX parameter); `created: false` when it existed |
+| `get_track_envelopes` | `tools/envelopes.ts` | List envelopes on a track (name, point and automation item counts, active/visible/armed); send envelopes carry `send` (index, destination track) |
+| `get_envelope_points` | `tools/envelopes.ts` | Get automation points with pagination (time, raw value, `db` on volume envelopes, shape, tension) |
+| `insert_envelope_point` | `tools/envelopes.ts` | Insert an automation point (`value` or `db`) with shape/tension |
 | `insert_envelope_points` | `tools/envelopes.ts` | Batch insert multiple automation points (JSON array) |
-| `delete_envelope_point` | `tools/envelopes.ts` | Delete an automation point by index |
-| `clear_envelope` | `tools/envelopes.ts` | Delete ALL points from an envelope |
+| `edit_envelope_points` | `tools/envelopes.ts` | Edit points by index (time, value/db, shape, tension); all validated before any write |
+| `delete_envelope_point` | `tools/envelopes.ts` | Delete an automation point by index; returns the deleted point |
+| `clear_envelope` | `tools/envelopes.ts` | Delete ALL points from an envelope (or an item's pool) |
 | `remove_envelope_points` | `tools/envelopes.ts` | Delete automation points in a time range |
 | `set_envelope_properties` | `tools/envelopes.ts` | Set envelope active/visible/armed state |
+| `list_automation_items` | `tools/envelopes.ts` | Automation items on an envelope: index, poolId, pool name, position, length, loop, point count |
+| `insert_automation_item` | `tools/envelopes.ts` | New pool from `points` (seconds from the item start), a pooled instance of `poolId` (any track), or `captureEnvelope`; returns `pooledWith` |
+| `set_automation_item` | `tools/envelopes.ts` | Move/resize an item; start offset, play rate, baseline, amplitude, loop, pool name |
+| `delete_automation_item` | `tools/envelopes.ts` | Delete one item (`preservePoints` keeps them on the envelope); other selections kept |
 
 ### FX Discovery & Presets (4)
 
@@ -409,7 +417,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 140 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 145 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
@@ -472,7 +480,10 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 ### Envelope / Automation Concepts
 
 - **Creating envelopes**: Use `create_track_envelope` before adding points. Built-in envelopes use `envelopeName` ("Volume", "Pan", "Mute", "Width", "Trim Volume"). FX parameter envelopes use `fxIndex` + `paramIndex`.
-- **Envelope values**: Scale depends on envelope type. Volume envelopes use linear scale (1.0 = 0 dB), Pan uses -1.0 to 1.0, Mute uses 0 or 1.
+- **Logic lives in `reaper/mcp_envelopes_lib.lua`** (pure Lua over an injected API, unit-tested via wasmoon in `envelopes-lib.test.ts`); the bridge handlers only pass `reaper` in.
+- **Envelope values**: give `db` on volume envelopes (Volume, Trim Volume, Send Volume). REAPER's own Volume envelope is fader-scaled (716.2 = 0 dB, not 1.0); `db` is converted with the envelope's scaling mode (`ScaleToEnvelopeMode`). Raw `value`: Pan -1.0 to 1.0, Mute 0 or 1, FX parameters 0..1.
+- **Automation items**: instances of one pool share their points, so editing one edits every instance; pool ids are project-wide, so pools reach across tracks. Point calls use the item index with `0x10000000` (one loop iteration = the pool's own points), except `SetEnvelopePointEx`, which ignores a flagged index (REAPER 7.40) and takes the plain one. A new pool's `D_POOL_QNLEN` is set to the item's length, since REAPER can make it shorter and drops pool points past it without an error; a point at the item end is kept 1 ms inside, and points outside an item are refused.
+- **Section levels** (opinionated): pooled automation items on the Volume envelope, one pool per section type, never item gain (`knowledge/workflows/section-levels.md`).
 - **Point shapes**: 0=linear, 1=square, 2=slow start/end, 3=fast start, 4=fast end, 5=bezier
 - **Workflow**: `create_track_envelope` → `insert_envelope_point`/`insert_envelope_points` → optionally `set_envelope_properties` to arm for writing
 - **Batch operations** (`insert_envelope_points`): Pass a JSON array of point objects for efficient multi-point automation curves

@@ -10,6 +10,10 @@ import type { CommandEntry } from './status.js';
 export interface ChangeRow { t: string; p: string; s: 'db' | 'pan' | 'bool' | 'norm'; a?: number; b?: number; at?: string; bt?: string }
 /** Envelope point: [time s, value in the envelope's unit, shape] */
 export type EnvPoint = [number, number, number];
+/** Automation item: [position s, length s, pool id, pool name] */
+export type AutoItem = [number, number, number, string];
+/** One pool's points, times from the item start: [pool id, points] */
+export type Pool = [number, EnvPoint[]];
 /** MIDI note: [pitch, start beats, length beats, velocity, 1 = new or changed by this call] */
 export type Note = [number, number, number, number, number];
 /** Per-pitch velocity stats: [pitch, count, min, max, average, longest machine-gun run (0 = none)] */
@@ -41,6 +45,8 @@ export type EditView =
       kind: 'envelope'; env: string; unit: 'dB' | 'pan' | 'mute' | 'cc' | 'raw'; from: number; to: number; pts: EnvPoint[]; was?: EnvPoint[]; count: number;
       /** MIDI CC lanes: times are beats from the item start, and how many other controllers the item has */
       beats?: boolean; otherCcs?: number;
+      /** Automation items on the envelope, each pool's points once, the item this call touched, and both before a write */
+      ais?: AutoItem[]; pools?: Pool[]; ai?: number; aisMore?: number; wasAis?: AutoItem[]; wasPools?: Pool[];
     }
   | { kind: 'midi'; total: number; beats?: number; ts?: [number, number]; notes: Note[]; more: number; gone?: Note[] }
   | { kind: 'midiStats'; total?: number; beats?: number; pitches: PitchStats[]; hist?: number[] }
@@ -60,7 +66,8 @@ const KIND_OF: Record<string, EditView['kind']> = {};
 const kinds: Array<[EditView['kind'], string[]]> = [
   ['changes', ['set_track_property', 'set_multiple_track_properties', 'set_fx_parameter', 'set_multiple_fx_parameters', 'get_fx_parameters']],
   ['envelope', [
-    'insert_envelope_point', 'insert_envelope_points', 'delete_envelope_point', 'remove_envelope_points', 'clear_envelope', 'get_envelope_points',
+    'insert_envelope_point', 'insert_envelope_points', 'edit_envelope_points', 'delete_envelope_point', 'remove_envelope_points', 'clear_envelope', 'get_envelope_points',
+    'list_automation_items', 'insert_automation_item', 'set_automation_item', 'delete_automation_item',
     'get_midi_cc', 'insert_midi_cc', 'delete_midi_cc',
   ]],
   ['midi', ['insert_midi_note', 'insert_midi_notes', 'edit_midi_note', 'edit_midi_notes', 'delete_midi_note', 'get_midi_notes']],
@@ -96,6 +103,11 @@ function tuples<T>(v: unknown, shape: Array<(x: unknown) => boolean>): T[] {
   return v.filter((t) => Array.isArray(t) && t.length >= shape.length && shape.every((ok, i) => ok(t[i]))) as T[];
 }
 const ENV_POINT = [num, num, num];
+const AUTO_ITEM = [num, num, num, str];
+function pools(v: unknown): Pool[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((p): Pool[] => (Array.isArray(p) && num(p[0]) ? [[p[0], tuples<EnvPoint>(p[1], ENV_POINT)]] : []));
+}
 const NOTE = [num, num, num, num];
 const REGION = [num, num, str, str];
 const MARKER = [num, str, str];
@@ -138,6 +150,10 @@ export function editViewOf(e: CommandEntry): EditView | null {
         count: num(r.count) ? r.count : (r.pts as unknown[]).length,
         ...(r.beats === 1 || r.beats === true ? { beats: true } : {}),
         ...(num(r.otherCcs) && r.otherCcs > 0 ? { otherCcs: r.otherCcs } : {}),
+        ...(Array.isArray(r.ais) ? { ais: tuples<AutoItem>(r.ais, AUTO_ITEM), pools: pools(r.pools) } : {}),
+        ...(num(r.ai) ? { ai: r.ai } : {}),
+        ...(num(r.aisMore) && r.aisMore > 0 ? { aisMore: r.aisMore } : {}),
+        ...(Array.isArray(r.wasAis) ? { wasAis: tuples<AutoItem>(r.wasAis, AUTO_ITEM), wasPools: pools(r.wasPools) } : {}),
       };
     }
     case 'midi': {

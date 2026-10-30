@@ -50,11 +50,12 @@ describe('envelope tools', () => {
     tools = captureTools();
   });
 
-  it('registers all 9 envelope tools', () => {
+  it('registers all 14 envelope tools', () => {
     const expected = [
       'get_track_envelopes', 'get_envelope_points', 'insert_envelope_point', 'delete_envelope_point',
       'create_track_envelope', 'set_envelope_properties', 'clear_envelope', 'remove_envelope_points',
-      'insert_envelope_points',
+      'insert_envelope_points', 'edit_envelope_points', 'list_automation_items', 'insert_automation_item',
+      'set_automation_item', 'delete_automation_item',
     ];
     for (const name of expected) {
       expect(tools[name]).toBeDefined();
@@ -175,7 +176,8 @@ describe('envelope tools', () => {
 
   describe('delete_envelope_point', () => {
     it('deletes point', async () => {
-      mockedSendCommand.mockResolvedValue(successResponse({ success: true, totalPoints: 4 }));
+      const data = { success: true, totalPoints: 4, deleted: { index: 2, time: 10, value: 1 } };
+      mockedSendCommand.mockResolvedValue(successResponse(data));
 
       const result = await tools['delete_envelope_point'].handler({
         trackIndex: 0, envelopeIndex: 0, pointIndex: 2,
@@ -184,7 +186,7 @@ describe('envelope tools', () => {
         trackIndex: 0, envelopeIndex: 0, pointIndex: 2,
       });
       expect(result).toEqual({
-        content: [{ type: 'text', text: 'Deleted envelope point 2' }],
+        content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
       });
     });
 
@@ -350,6 +352,35 @@ describe('envelope tools', () => {
         trackIndex: 0, envelopeIndex: 5, points: '[]',
       });
       expectError(result, 'Envelope index 5 out of range');
+    });
+  });
+
+  describe('dB values and automation items', () => {
+    it('passes db and automationItemIndex through to the bridge', async () => {
+      mockedSendCommand.mockResolvedValue(successResponse({ insertedPoints: 1, totalPoints: 3 }));
+      await tools['insert_envelope_point'].handler({ trackIndex: 79, envelopeIndex: 0, automationItemIndex: 1, time: 5, db: -1 });
+      expect(mockedSendCommand).toHaveBeenCalledWith('insert_envelope_point', {
+        trackIndex: 79, envelopeIndex: 0, automationItemIndex: 1, time: 5, db: -1,
+      });
+    });
+
+    it('edits points by index', async () => {
+      mockedSendCommand.mockResolvedValue(successResponse({ editedPoints: 1, totalPoints: 3 }));
+      const points = JSON.stringify([{ index: 1, db: -2 }]);
+      const result = await tools['edit_envelope_points'].handler({ trackIndex: 0, envelopeIndex: 0, points });
+      expect(mockedSendCommand).toHaveBeenCalledWith('edit_envelope_points', { trackIndex: 0, envelopeIndex: 0, points });
+      expect(result).toEqual({ content: [{ type: 'text', text: JSON.stringify({ editedPoints: 1, totalPoints: 3 }, null, 2) }] });
+    });
+
+    it('inserts a pooled automation item and reports bridge refusals', async () => {
+      mockedSendCommand.mockResolvedValue(successResponse({ automationItem: { index: 1, poolId: 0 }, pooledWith: 1 }));
+      await tools['insert_automation_item'].handler({ trackIndex: 0, envelopeIndex: 0, position: 120, length: 32, poolId: 0 });
+      expect(mockedSendCommand).toHaveBeenCalledWith('insert_automation_item', {
+        trackIndex: 0, envelopeIndex: 0, position: 120, length: 32, poolId: 0,
+      });
+      mockedSendCommand.mockResolvedValue(errorResponse('Automation item 4 out of range (envelope has 2)'));
+      const result = await tools['delete_automation_item'].handler({ trackIndex: 0, envelopeIndex: 0, automationItemIndex: 4 });
+      expectError(result, 'Automation item 4 out of range (envelope has 2)');
     });
   });
 });

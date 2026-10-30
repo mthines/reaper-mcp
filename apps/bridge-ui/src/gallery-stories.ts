@@ -179,6 +179,28 @@ function editStories(): Story[] {
   const removed = call('remove_envelope_points', track(4, { envelopeIndex: 0, timeStart: 12, timeEnd: 18 }), {
     env: 'Volume', unit: 'dB', from: 9, to: 21, count: 4, pts: [[8, 0, 0], [24, -1.5, 2]], was: VOLUME_AFTER.slice(1, 7),
   });
+  // A song's lead vocal: one pool per section type, so every chorus shares one level curve
+  const VERSE: [number, number, number][] = [[0, -1, 0], [64, -1, 0]];
+  const CHORUS: [number, number, number][] = [[0, 0.5, 0], [30, 0.5, 2], [32, 1.5, 0]];
+  const sections = [
+    [56, 64, 1, 'Vox Verse'], [120, 32, 2, 'Vox Chorus'], [152, 52, 1, 'Vox Verse'], [204, 32, 2, 'Vox Chorus'],
+    [236, 16, 3, 'Vox C'], [292, 32, 2, 'Vox Chorus'],
+  ];
+  const pooled = call('insert_automation_item', track(79, { envelopeIndex: 0, position: 292, length: 32, poolId: 2 }), {
+    env: 'Volume', unit: 'dB', from: 20, to: 360, count: 1, pts: [[0, 0, 0]], was: [[0, 0, 0]], ai: 5,
+    ais: sections, pools: [[1, VERSE], [2, CHORUS], [3, [[0, -2, 0], [16, -2, 0]]]],
+    wasAis: sections.slice(0, 5), wasPools: [[1, VERSE], [2, CHORUS], [3, [[0, -2, 0], [16, -2, 0]]]],
+  });
+  const poolEdit = call('edit_envelope_points', track(79, { envelopeIndex: 0, automationItemIndex: 1, points: '[…]' }), {
+    env: 'Volume', unit: 'dB', from: 100, to: 256, count: 1, pts: [[0, 0, 0]], was: [[0, 0, 0]], ai: 1,
+    ais: sections, pools: [[1, VERSE], [2, CHORUS.map(([t, d, sh]) => [t, d - 1, sh])], [3, [[0, -2, 0], [16, -2, 0]]]],
+    wasAis: sections, wasPools: [[1, VERSE], [2, CHORUS], [3, [[0, -2, 0], [16, -2, 0]]]],
+  });
+  const aiGone = call('delete_automation_item', track(79, { envelopeIndex: 0, automationItemIndex: 4 }), {
+    env: 'Volume', unit: 'dB', from: 220, to: 268, count: 1, pts: [[0, 0, 0]], was: [[0, 0, 0]],
+    ais: sections.filter((_, i) => i !== 4), pools: [[1, VERSE], [2, CHORUS]],
+    wasAis: sections, wasPools: [[1, VERSE], [2, CHORUS], [3, [[0, -2, 0], [16, -2, 0]]]],
+  });
   const melody = call('insert_midi_notes', { trackIndex: 7, itemIndex: 0, notes: '[…]' }, {
     total: CHORDS.length + MELODY.length, beats: 16, ts: [4, 4], more: 0, gone: [], notes: [...CHORDS, ...MELODY],
   });
@@ -309,6 +331,9 @@ function editStories(): Story[] {
     story('Automation added', envelope, 'New points over the curve before'),
     story('Automation listed', pan, 'Pan envelope, no before'),
     story('Automation removed', removed, 'A range cleared: removed points dashed'),
+    story('Automation items pooled', pooled, 'One pool per section type; the new chorus instance outlined'),
+    story('Pool edited', poolEdit, 'One chorus edited, every chorus follows; the old curve dashed'),
+    story('Automation item deleted', aiGone, 'The C section’s item gone, its place dashed'),
     story('Notes added', melody, 'A melody over the chords it kept'),
     story('Note deleted', deleted, 'The removed note dashed'),
     story('Large MIDI item', big, 'First 256 of 2044 notes'),

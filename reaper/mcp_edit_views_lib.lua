@@ -153,6 +153,43 @@ local function env_points(env)
   return pts
 end
 
+-- Automation items as blocks [position, length, pool id, pool name] plus each pool's points
+-- ([time from the item start, value, shape]) once, so pooled items draw the same curve.
+local EDIT_MAX_ITEMS = 32
+local AUTOMATION_ITEM_COMMANDS = {
+  list_automation_items = true, insert_automation_item = true, set_automation_item = true, delete_automation_item = true,
+}
+local POOL_POINTS = 0x10000000
+local function env_items(env)
+  if not api.CountAutomationItems then return nil end
+  local n = tonumber((api.CountAutomationItems(env))) or 0
+  if n == 0 then return nil end
+  local _, unit = env_unit(env)
+  local mode = api.GetEnvelopeScalingMode and api.GetEnvelopeScalingMode(env) or 0
+  local blocks, pools, seen = {}, {}, {}
+  for i = 0, math.min(n, EDIT_MAX_ITEMS) - 1 do
+    local function info(parm) return api.GetSetAutomationItemInfo(env, i, parm, 0, false) end
+    local pos, pool = info("D_POSITION"), math.floor(info("D_POOL_ID") + 0.5)
+    local _, name = api.GetSetAutomationItemInfo_String(env, i, "P_POOL_NAME", "", false)
+    blocks[#blocks + 1] = { round3(pos) or 0, round3(info("D_LENGTH")) or 0, pool, name or "" }
+    if not seen[pool] then
+      seen[pool] = true
+      local pts = {}
+      for k = 0, math.min(api.CountEnvelopePointsEx(env, i | POOL_POINTS), EDIT_MAX_POINTS) - 1 do
+        local _, time, value, shape = api.GetEnvelopePointEx(env, i | POOL_POINTS, k)
+        local v = value
+        if unit == "dB" then
+          local amp = api.ScaleFromEnvelopeMode and api.ScaleFromEnvelopeMode(mode, value) or value
+          v = amp > 0 and 20 * math.log(amp, 10) or -150
+        end
+        pts[#pts + 1] = { round3(time - pos) or 0, round2(v) or 0, shape or 0 }
+      end
+      pools[#pools + 1] = { pool, pts }
+    end
+  end
+  return { items = blocks, pools = pools, more = math.max(0, n - EDIT_MAX_ITEMS) }
+end
+
 -- The points inside [from, to] plus one on each side, so the curve reaches the edges
 local function points_in(pts, from, to)
   local first, last
@@ -183,10 +220,27 @@ local function envelope_view(cmd_type, params, data, before)
     for _, p in ipairs(decode_param_list(params.points) or {}) do span(tonumber(p.time)) end
   elseif cmd_type == "remove_envelope_points" then span(tonumber(params.timeStart)); span(tonumber(params.timeEnd))
   elseif cmd_type == "delete_envelope_point" then
+    -- The handler returns the point it deleted (also one inside an automation item)
+    local gone = type(data) == "table" and type(data.deleted) == "table" and data.deleted.time
     local p = before and before[(tonumber(params.pointIndex) or -1) + 1]
-    span(p and p[1])
+    span(tonumber(gone) or (p and p[1]))
   elseif type(data) == "table" and type(data.points) == "table" then
     for _, p in ipairs(data.points) do span(p.time) end
+  end
+  -- Automation items: the item a call touched (before and after a move), or every item for a listing
+  local items = env_items(env)
+  local was_items = type(before) == "table" and before.items or nil
+  local touched = tonumber(params.automationItemIndex)
+  if type(data) == "table" and type(data.automationItem) == "table" then touched = data.automationItem.index end
+  if cmd_type == "delete_automation_item" then touched = nil end
+  local function span_block(b) if b then span(b[1]); span(b[1] + b[2]) end end
+  if AUTOMATION_ITEM_COMMANDS[cmd_type] or touched then
+    if touched and items then span_block(items.items[touched + 1]) end
+    if was_items and params.automationItemIndex ~= nil then span_block(was_items.items[(tonumber(params.automationItemIndex) or -1) + 1]) end
+    if not from then
+      for _, b in ipairs(items and items.items or {}) do span_block(b) end
+      for _, b in ipairs(was_items and was_items.items or {}) do span_block(b) end
+    end
   end
   if not from then
     for _, p in ipairs(after) do span(p[1]) end
@@ -197,6 +251,12 @@ local function envelope_view(cmd_type, params, data, before)
   from, to = math.max(0, from - pad), to + pad
   local r = { env = name, unit = unit, from = round2(from), to = round2(to), pts = points_in(after, from, to), count = #after }
   if before then r.was = points_in(before, from, to) end
+  if items then
+    r.ais, r.pools = items.items, items.pools
+    if items.more > 0 then r.aisMore = items.more end
+    if touched then r.ai = touched end
+  end
+  if was_items and cmd_type ~= "list_automation_items" then r.wasAis, r.wasPools = was_items.items, was_items.pools end
   return r
 end
 
@@ -644,7 +704,7 @@ local TIMELINE_WRITES = {
 }
 local ENVELOPE_WRITES = {
   insert_envelope_point = true, insert_envelope_points = true, delete_envelope_point = true,
-  remove_envelope_points = true, clear_envelope = true,
+  remove_envelope_points = true, clear_envelope = true, edit_envelope_points = true,
 }
 local MIDI_WRITES = { insert_midi_note = true, insert_midi_notes = true, edit_midi_note = true, edit_midi_notes = true, delete_midi_note = true }
 
@@ -742,9 +802,12 @@ function M.before(cmd_type, params)
     return read_track_values(track_targets(params, cmd_type))
   elseif cmd_type == "set_fx_parameter" or cmd_type == "set_multiple_fx_parameters" then
     return read_fx_values(fx_targets(params, cmd_type))
-  elseif ENVELOPE_WRITES[cmd_type] then
+  elseif ENVELOPE_WRITES[cmd_type] or (AUTOMATION_ITEM_COMMANDS[cmd_type] and cmd_type ~= "list_automation_items") then
     local env = env_of(params)
-    return env and env_points(env)
+    if not env then return nil end
+    local pts = env_points(env)
+    pts.items = env_items(env)
+    return pts
   elseif MIDI_WRITES[cmd_type] then
     return midi_notes(params)
   elseif CC_COMMANDS[cmd_type] and cmd_type ~= "get_midi_cc" then
@@ -772,7 +835,7 @@ function M.summary(cmd_type, params, data, before)
     return change_rows(before, read_track_values(track_targets(params, cmd_type)))
   elseif cmd_type == "set_fx_parameter" or cmd_type == "set_multiple_fx_parameters" then
     return change_rows(before, read_fx_values(fx_targets(params, cmd_type)))
-  elseif ENVELOPE_WRITES[cmd_type] or cmd_type == "get_envelope_points" then
+  elseif ENVELOPE_WRITES[cmd_type] or AUTOMATION_ITEM_COMMANDS[cmd_type] or cmd_type == "get_envelope_points" then
     return envelope_view(cmd_type, params, data, before)
   elseif MIDI_WRITES[cmd_type] or cmd_type == "get_midi_notes" then
     return midi_view(params, before)

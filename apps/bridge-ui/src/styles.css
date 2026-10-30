@@ -1169,6 +1169,18 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 .ev-env svg { display: block; width: 100%; height: 110px; }
 .ev-env-area { fill: var(--accent); fill-opacity: 0.08; }
 .ev-env-line { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; }
+/* Automation items: they override the envelope where they sit, so each covers it; tint and curve take the pool's colour */
+.ev-ai-cover { fill: var(--panel); fill-opacity: 0.85; }
+.ev-ai { fill-opacity: 0.12; stroke-opacity: 0.55; stroke-width: 1; }
+.ev-ai-touched { fill-opacity: 0.2; stroke-opacity: 1; stroke-width: 2; }
+.ev-ai-gone { fill: none; stroke-width: 1; stroke-dasharray: 3 3; stroke-opacity: 0.7; }
+.ev-ai-line { fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+.ev-ai-label {
+  position: absolute; top: 2px; padding: 0 4px; box-sizing: border-box;
+  font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ev-ai-label-touched { color: var(--text); }
+.lg-ai { width: 12px; height: 8px; border: 1px solid var(--h0); background: color-mix(in srgb, var(--h0) 15%, transparent); }
 .ev-gutter { padding-left: 30px; }
 .ev-plot { position: relative; }
 .ev-y { position: absolute; left: 0; transform: translateY(-50%); font-size: 10px; color: var(--faint); pointer-events: none; }

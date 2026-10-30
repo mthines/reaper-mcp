@@ -13,7 +13,7 @@ const REAPER_DIR = join(__dirname, '../../../reaper');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
 const SCRIPTS = '/reaper/Scripts/';
 const BRIDGE_DIR = `${SCRIPTS}mcp_bridge_data/`;
-const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_edit_views_lib.lua'];
+const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua'];
 
 interface BridgeResponse {
   id: string;
@@ -240,8 +240,9 @@ describe('mcp_bridge.lua over file IPC', () => {
         local env = { points = {} }
         reaper.CountTrackEnvelopes = function() return 1 end
         reaper.GetTrackEnvelope = function() return env end
-        reaper.InsertEnvelopePoint = function(e, t, v) e.points[#e.points + 1] = { t, v } end
-        reaper.CountEnvelopePoints = function(e) return #e.points end
+        reaper.GetEnvelopeName = function() return true, "Pan" end
+        reaper.InsertEnvelopePointEx = function(e, ai, t, v) e.points[#e.points + 1] = { t, v } end
+        reaper.CountEnvelopePointsEx = function(e) return #e.points end
       `);
       const res = await bridge.send('insert_envelope_points', {
         trackIndex: 0,
