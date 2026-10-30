@@ -110,7 +110,8 @@ export function registerArrangeTools(server: McpServer): void {
   server.tool(
     'remove_time',
     'Cut a time range out of the whole project and close the gap: items, markers, tempo markers, envelope points and ' +
-      'automation items inside it are deleted, items (and automation items starting inside it) crossing its end are trimmed, regions shrink, and everything after moves ' +
+      'automation items inside it are deleted, items and automation items crossing an edge lose the part inside it ' +
+      '(an automation item spanning the whole cut stays, counted as automationItemsKept), regions shrink, and everything after moves ' +
       'earlier. The tempo in force at the end of the cut is kept. One undo point; returns what was deleted, trimmed and moved.',
     {
       start: seconds('Start of the range in seconds'),
@@ -141,7 +142,8 @@ export function registerArrangeTools(server: McpServer): void {
     'process_items',
     'Process audio items: `normalize` sets item gain so each item hits `target` dB (mode peak by default, or true_peak, ' +
       'lufs_i, rms, lufs_m_max, lufs_s_max; non-peak modes need a target), measured over what the item plays; ' +
-      '`reverse` reverses the active takes; `glue` joins the items on each track into one new item. ' +
+      '`reverse` toggles each active take\'s direction (a take already reversed plays forward again); `glue` joins the ' +
+      'whole items on each track into one new item, whatever the time selection. ' +
       'MIDI items are refused for normalize/reverse. The selection is kept. One undo point; normalize returns each ' +
       'item\'s level and gain before and after.',
     {

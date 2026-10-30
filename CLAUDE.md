@@ -251,7 +251,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `insert_time` | `tools/arrange.ts` | Open time across the project: items, markers, regions, tempo, envelope points and automation items after it move; spanning items split |
 | `remove_time` | `tools/arrange.ts` | Cut a range out of the project and close the gap; crossing items trimmed, regions shrink, the tempo after the cut kept |
 | `copy_section` | `tools/arrange.ts` | Copy a region (or start/end) to a position: items trimmed to it plus automation (points, and pooled copies of automation items inside it), optional `insert` and `tracks` |
-| `process_items` | `tools/arrange.ts` | `normalize` (item gain to a peak/true-peak/LUFS/RMS target), `reverse`, `glue`; selection kept |
+| `process_items` | `tools/arrange.ts` | `normalize` (item gain to a peak/true-peak/LUFS/RMS target), `reverse` (toggles), `glue` (whole items); selection kept |
 
 ### Selection & Navigation Tools (5)
 
@@ -461,7 +461,7 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, 
 - **Logic lives in `reaper/mcp_arrange_lib.lua`** (pure Lua over an injected API, unit-tested via wasmoon in `arrange-lib.test.ts` against `__fixtures__/fake_timeline.lua`); the bridge handlers decode `items`/`tracks` (JSON strings) and pass `reaper` in.
 - **Time edits are done by hand, not with REAPER's ripple actions**, so the result never depends on the user's ripple or "move envelope points with items" options. Tempo markers change first; markers, envelopes and items are then set from absolute times read before any change (a beat-timebase item would otherwise follow the tempo edit on its own).
 - **remove_time keeps the tempo after the cut**: the last tempo marker inside the range moves to the cut's start (unless one sits on its end). Automation items fully inside are deleted (selected alone and removed with action 42086, the user's other selected items kept); ones crossing an edge are trimmed like media items (`automationItemsTrimmed`: the part after the cut moves to its start with a later start offset, a tail inside the cut is dropped); one spanning the whole cut cannot lose its middle, so it stays and is counted (`automationItemsKept`).
-- **Normalize** measures what the item plays (`CalculateNormalization` over its take's start offset and length) and sets item gain (`D_VOL`), so the take gain and source stay untouched. Reverse (41051) and glue (41588) run on the named items only, then put the user's selection back.
+- **Normalize** measures what the item plays (`CalculateNormalization` over its take's start offset and length) and sets item gain (`D_VOL`), so the take gain and source stay untouched. Reverse (41051, a toggle: a reversed take plays forward again) and glue (40362, ignoring the time selection; 41588 would glue only inside it) run on the named items only, then put the user's selection back; a glued item is selected when one of its sources was.
 - **run_plan ops** `copy_items`, `insert_time`, `remove_time`: `copy_items` names items by index in the project as it is before the plan, so it is refused after an op that adds tracks or moves items (`add_track`, `copy_items`, `insert_time`, `remove_time`).
 
 ### Plan Executor Concepts (`run_plan`)
