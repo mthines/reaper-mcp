@@ -6,7 +6,7 @@ import type { CommandEntry } from '../lib/commands.js';
  * Snapshots state the page can draw. Add an example here with every new component state.
  */
 
-export interface Story {
+export interface Example {
   title: string;
   /** What state this shows, in a few words */
   note?: string;
@@ -29,7 +29,7 @@ function earlier(e: CommandEntry, r: Record<string, unknown>): CommandEntry {
   return { ...e, n: e.n - 50, t: e.t - 120_000, r };
 }
 
-const story = (title: string, entry: CommandEntry, note?: string, previous?: CommandEntry): Story => ({
+const example = (title: string, entry: CommandEntry, note?: string, previous?: CommandEntry): Example => ({
   title,
   note,
   entry,
@@ -58,7 +58,7 @@ function waveform(top: number, bed = 0.03) {
 
 const track = (trackIndex: number, extra: Record<string, unknown> = {}) => ({ trackIndex, ...extra });
 
-function measurementStories(): Story[] {
+function measurementExamples(): Example[] {
   const meters = call('read_track_meters', track(0), { peakL: -9.4, peakR: -10.1, rmsL: -21.3, rmsR: -22 });
   const metersHot = call('read_track_meters', track(1), { peakL: -2.6, peakR: -4.1, rmsL: -14.2, rmsR: -15 });
   const metersOver = call('read_track_meters', track(2), { peakL: 1.2, peakR: 0.4, rmsL: -8.1, rmsR: -8.6 });
@@ -107,32 +107,32 @@ function measurementStories(): Story[] {
   }, { ms: 6_400 });
 
   return [
-    story('Meters', meters, 'Comfortable levels'),
-    story('Meters · hot', metersHot, 'Peaks above −6 dB turn amber, previous call ghosted', earlier(metersHot, { peakL: -6.8, peakR: -7.4, rmsL: -18.2, rmsR: -18.9 })),
-    story('Meters · over', metersOver, 'Peaks over 0 dB turn red'),
-    story('Loudness · on target', lufs, 'Within ±1 LU of the agent’s target', earlier(lufs, { integrated: -16.1, shortTerm: -15.2, momentary: -14.8, truePeakL: -3, truePeakR: -3.2, duration: 30 })),
-    story('Loudness · over target', lufsOver, 'Louder than the target, true peak over 0'),
-    story('Loudness · no target', lufsBare, 'The agent gave no target'),
-    story('Correlation', corr, 'Mostly mono-compatible', earlier(corr, { correlation: 0.64, stereoWidth: 1.3, midLevel: -14.5, sideLevel: -21.9 })),
-    story('Correlation · phase', corrPhase, 'Negative correlation is out of phase'),
-    story('Crest', crest, 'Dynamic', earlier(crest, { crestFactor: 9.8, peakLevel: -4.1, rmsLevel: -13.9 })),
-    story('Crest · squashed', crestHot, 'Little crest, peak near 0'),
-    story('Spectrum', spectrum, 'Previous call dashed; hover for values', earlier(spectrum, { ...spec, peakDb: -9.1, rmsDb: -19.9, bands: bands(-3, 1) })),
-    story('Spectrum · hot', spectrumHot, 'Bands near 0 dB turn amber, then red'),
-    story('Waveform', wave, 'A render’s waveform on a dB scale; hover for values', earlier(wave, { ...waveform(0.45), rmsDb: -21.2, clipped: 0 })),
-    story('Waveform · clipped', waveClipped, 'Clipped samples counted and named'),
-    story('Waveform · quiet', waveQuiet, 'Quiet material still fills the height'),
-    story('Offline analysis', offline, 'Sections, band balance, resonances; previous call ghosted', earlier(offline, { ...offlineR, lufs: -11.6 })),
-    story('Offline · against a reference', offlineRef, 'Loudness and band balance against a reference file'),
-    story('Audio file', audioFile, 'A reference on disk, no REAPER involved', earlier(audioFile, { ...offlineR, lufs: -8.6 })),
-    story('Alignment', align, 'Bottom mic 0.84 ms late and inverted; the fix', earlier(align, { ref: 'Snare Top', name: 'Snare Btm', delayMs: 0.02, samples: 1, corr: 0.95, inv: 0, cur: -0.84, offset: -0.84, phase: 1 })),
-    story('Alignment · unsure', alignUnsure, 'Low correlation: no fix suggested'),
-    story('Aesthetics', aesthetics, 'Four scores on 0–10; previous call ghosted', earlier(aesthetics, { name: 'Master', pq: 7.18, pc: 5.9, ce: 6.4, cu: 6.95, lufs: -18, dur: 30 })),
+    example('Meters', meters, 'Comfortable levels'),
+    example('Meters · hot', metersHot, 'Peaks above −6 dB turn amber, previous call ghosted', earlier(metersHot, { peakL: -6.8, peakR: -7.4, rmsL: -18.2, rmsR: -18.9 })),
+    example('Meters · over', metersOver, 'Peaks over 0 dB turn red'),
+    example('Loudness · on target', lufs, 'Within ±1 LU of the agent’s target', earlier(lufs, { integrated: -16.1, shortTerm: -15.2, momentary: -14.8, truePeakL: -3, truePeakR: -3.2, duration: 30 })),
+    example('Loudness · over target', lufsOver, 'Louder than the target, true peak over 0'),
+    example('Loudness · no target', lufsBare, 'The agent gave no target'),
+    example('Correlation', corr, 'Mostly mono-compatible', earlier(corr, { correlation: 0.64, stereoWidth: 1.3, midLevel: -14.5, sideLevel: -21.9 })),
+    example('Correlation · phase', corrPhase, 'Negative correlation is out of phase'),
+    example('Crest', crest, 'Dynamic', earlier(crest, { crestFactor: 9.8, peakLevel: -4.1, rmsLevel: -13.9 })),
+    example('Crest · squashed', crestHot, 'Little crest, peak near 0'),
+    example('Spectrum', spectrum, 'Previous call dashed; hover for values', earlier(spectrum, { ...spec, peakDb: -9.1, rmsDb: -19.9, bands: bands(-3, 1) })),
+    example('Spectrum · hot', spectrumHot, 'Bands near 0 dB turn amber, then red'),
+    example('Waveform', wave, 'A render’s waveform on a dB scale; hover for values', earlier(wave, { ...waveform(0.45), rmsDb: -21.2, clipped: 0 })),
+    example('Waveform · clipped', waveClipped, 'Clipped samples counted and named'),
+    example('Waveform · quiet', waveQuiet, 'Quiet material still fills the height'),
+    example('Offline analysis', offline, 'Sections, band balance, resonances; previous call ghosted', earlier(offline, { ...offlineR, lufs: -11.6 })),
+    example('Offline · against a reference', offlineRef, 'Loudness and band balance against a reference file'),
+    example('Audio file', audioFile, 'A reference on disk, no REAPER involved', earlier(audioFile, { ...offlineR, lufs: -8.6 })),
+    example('Alignment', align, 'Bottom mic 0.84 ms late and inverted; the fix', earlier(align, { ref: 'Snare Top', name: 'Snare Btm', delayMs: 0.02, samples: 1, corr: 0.95, inv: 0, cur: -0.84, offset: -0.84, phase: 1 })),
+    example('Alignment · unsure', alignUnsure, 'Low correlation: no fix suggested'),
+    example('Aesthetics', aesthetics, 'Four scores on 0–10; previous call ghosted', earlier(aesthetics, { name: 'Master', pq: 7.18, pc: 5.9, ce: 6.4, cu: 6.95, lufs: -18, dur: 30 })),
   ];
 }
 
 /** Every measuring command in its states */
-export const MEASUREMENT_STORIES: Story[] = measurementStories();
+export const MEASUREMENT_EXAMPLES: Example[] = measurementExamples();
 
 /** Volume automation: a dip at 12–17 s added over a flat line */
 const VOLUME_BEFORE = [[0, 0, 0], [32, 0, 0]];
@@ -146,7 +146,7 @@ const SONG_REGIONS = [[0, 16, 'Intro', '', 1], [16, 48, 'Verse 1', '#7cc4ff', 2]
 const SONG_MARKERS = [[18, 'Vox in', '', 1], [140, 'Fill', '', 3]];
 const SONG_TEMPO = [[0, 92, 4, 4, 0]];
 
-function editStories(): Story[] {
+function editExamples(): Example[] {
   const volume = call('set_track_property', track(0, { property: 'volume', value: -4.5 }), { rows: [{ t: 'Kick', p: 'volume', s: 'db', a: -6, b: -4.5 }] });
   const batch = call('set_multiple_track_properties', { tracks: '[…]' }, {
     rows: [
@@ -320,48 +320,48 @@ function editStories(): Story[] {
     ops: [['add_track', 'Vox Bus'], ['add_fx', '$bus · VST3: Pro-C 2'], ['add_send', 'Vox → $bus'], ['set_track', 'Vox']],
   });
   return [
-    story('Track volume', volume, 'One track, before → after'),
-    story('Several tracks', batch, 'Volume above 0, pan, mute'),
-    story('FX parameters', fx, 'The plugin’s own readout; unchanged rows fade'),
-    story('Automation added', envelope, 'New points over the curve before'),
-    story('Automation listed', pan, 'Pan envelope, no before'),
-    story('Automation removed', removed, 'A range cleared: removed points dashed'),
-    story('Automation items pooled', pooled, 'One pool per section type; the new chorus instance outlined'),
-    story('Pool edited', poolEdit, 'One chorus edited, every chorus follows; the old curve dashed'),
-    story('Automation item deleted', aiGone, 'The C section’s item gone, its place dashed'),
-    story('Notes added', melody, 'A melody over the chords it kept'),
-    story('Note deleted', deleted, 'The removed note dashed'),
-    story('Large MIDI item', big, 'First 256 of 2044 notes'),
-    story('MIDI analysis', drums, 'Velocity per pitch, machine gun on the hi-hat'),
-    story('Markers listed', markers, 'Regions and markers'),
-    story('Markers · dense', dense, 'Labels that would collide show on hover'),
-    story('Marker added', added, 'The new marker underlined'),
-    story('Tempo change', tempo, 'A 3/4 bridge at 88 BPM'),
-    story('Items listed', items, 'Fades, a muted item, a MIDI item'),
-    story('Mixer', mixer, 'Folders, mute, solo, arm, a hot fader'),
-    story('Tracks changed', structure, 'Added, moved and removed tracks marked'),
-    story('FX bypassed', fxBypass, 'The chain after, the bypassed slot marked'),
-    story('FX added', fxAdded, 'Inserted mid-chain; the removed one struck through'),
-    story('FX moved to another track', fxMoved, 'Both chains, before → after'),
-    story('FX chain listed', fxListed, 'Presets, a bypassed and offline slot'),
-    story('Send added', routing, 'New, changed and removed routes; was-level ghosted'),
-    story('Routing listed', routingListed, 'A bus and its receives'),
-    story('Item moved', itemMoved, 'From one track to another; where it was dashed'),
-    story('Item split', itemSplit, 'One item became two'),
-    story('MIDI items listed', midiItems, 'One lane, a muted item'),
-    story('Time selection', selection, 'Selection and cursor, where they were dashed'),
-    story('FX parameters listed', fxParams, 'The plugin’s readout, first parameters only'),
-    story('MIDI CC inserted', cc, 'A controller lane in beats, held between events'),
-    story('Plan', plan, 'A dry run'),
+    example('Track volume', volume, 'One track, before → after'),
+    example('Several tracks', batch, 'Volume above 0, pan, mute'),
+    example('FX parameters', fx, 'The plugin’s own readout; unchanged rows fade'),
+    example('Automation added', envelope, 'New points over the curve before'),
+    example('Automation listed', pan, 'Pan envelope, no before'),
+    example('Automation removed', removed, 'A range cleared: removed points dashed'),
+    example('Automation items pooled', pooled, 'One pool per section type; the new chorus instance outlined'),
+    example('Pool edited', poolEdit, 'One chorus edited, every chorus follows; the old curve dashed'),
+    example('Automation item deleted', aiGone, 'The C section’s item gone, its place dashed'),
+    example('Notes added', melody, 'A melody over the chords it kept'),
+    example('Note deleted', deleted, 'The removed note dashed'),
+    example('Large MIDI item', big, 'First 256 of 2044 notes'),
+    example('MIDI analysis', drums, 'Velocity per pitch, machine gun on the hi-hat'),
+    example('Markers listed', markers, 'Regions and markers'),
+    example('Markers · dense', dense, 'Labels that would collide show on hover'),
+    example('Marker added', added, 'The new marker underlined'),
+    example('Tempo change', tempo, 'A 3/4 bridge at 88 BPM'),
+    example('Items listed', items, 'Fades, a muted item, a MIDI item'),
+    example('Mixer', mixer, 'Folders, mute, solo, arm, a hot fader'),
+    example('Tracks changed', structure, 'Added, moved and removed tracks marked'),
+    example('FX bypassed', fxBypass, 'The chain after, the bypassed slot marked'),
+    example('FX added', fxAdded, 'Inserted mid-chain; the removed one struck through'),
+    example('FX moved to another track', fxMoved, 'Both chains, before → after'),
+    example('FX chain listed', fxListed, 'Presets, a bypassed and offline slot'),
+    example('Send added', routing, 'New, changed and removed routes; was-level ghosted'),
+    example('Routing listed', routingListed, 'A bus and its receives'),
+    example('Item moved', itemMoved, 'From one track to another; where it was dashed'),
+    example('Item split', itemSplit, 'One item became two'),
+    example('MIDI items listed', midiItems, 'One lane, a muted item'),
+    example('Time selection', selection, 'Selection and cursor, where they were dashed'),
+    example('FX parameters listed', fxParams, 'The plugin’s readout, first parameters only'),
+    example('MIDI CC inserted', cc, 'A controller lane in beats, held between events'),
+    example('Plan', plan, 'A dry run'),
   ];
 }
 
 /** Every edit view in its states */
-export const EDIT_STORIES: Story[] = editStories();
+export const EDIT_EXAMPLES: Example[] = editExamples();
 
 /** The details drawer for the kinds of call it shows differently */
-export const DRAWER_STORIES: Story[] = (() => {
-  const measured = MEASUREMENT_STORIES[3];
+export const DRAWER_EXAMPLES: Example[] = (() => {
+  const measured = MEASUREMENT_EXAMPLES[3];
   const refused = call('add_fx', { trackIndex: 3, fxName: 'VST3: Pro-Q 4' }, undefined, {
     ok: false,
     e: 'FX "VST3: Pro-Q 4" not found on track 3. Installed match candidates: Pro-Q 3',
@@ -377,17 +377,17 @@ export const DRAWER_STORIES: Story[] = (() => {
   const bare = call('list_tracks', {}, undefined, { p: undefined, ms: 3.1 });
   return [
     { ...measured, title: 'With a result', note: 'A measurement, its params and the previous call' },
-    story('Refused', refused, 'An expected rejection: a warning, not counted as an error'),
-    story('Error', failed, 'A system error: counted, and notified when enabled'),
-    story('Long-running', long, 'Slow by nature, so not marked slow'),
-    story('Very slow', slow, 'Over 500 ms'),
-    story('No params', bare),
-    story('From this page', call('snapshot_restore', { name: 'mix-B' }, undefined, { s: undefined, src: 'page', ms: 38.2 }), 'A snapshot loaded from the Snapshots view'),
+    example('Refused', refused, 'An expected rejection: a warning, not counted as an error'),
+    example('Error', failed, 'A system error: counted, and notified when enabled'),
+    example('Long-running', long, 'Slow by nature, so not marked slow'),
+    example('Very slow', slow, 'Over 500 ms'),
+    example('No params', bare),
+    example('From this page', call('snapshot_restore', { name: 'mix-B' }, undefined, { s: undefined, src: 'page', ms: 38.2 }), 'A snapshot loaded from the Snapshots view'),
   ];
 })();
 
 /** The Snapshots view in one state: the list A/B/C is played from, a request in each state, the save form */
-export interface SnapshotStory {
+export interface SnapshotExample {
   title: string;
   note?: string;
   feed: SnapshotsFeed | null;
@@ -401,7 +401,7 @@ export interface SnapshotStory {
   narrow?: boolean;
 }
 
-export const SNAPSHOT_STORIES: SnapshotStory[] = (() => {
+export const SNAPSHOT_EXAMPLES: SnapshotExample[] = (() => {
   const feed = demoSnapshots(EXAMPLE_NOW);
   const req = (op: SnapshotOp, name: string) => ({ id: '17618', op, name, at: EXAMPLE_NOW - 2_000 });
   const readonlyError = "Read-only mode is on in the MCP Bridge window: 'snapshot_restore' would change the project. Ask the user to turn read-only off.";

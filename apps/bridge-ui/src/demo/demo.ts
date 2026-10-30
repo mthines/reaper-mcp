@@ -1,13 +1,29 @@
 import type { BridgeSettings, BridgeStatus, SettingKey } from '../lib/status.js';
 
 import { DEMO_KNOWLEDGE } from './demo-plugins.js';
-import { EDIT_STORIES } from './examples.js';
+import { EDIT_EXAMPLES } from './examples.js';
 import { LOG_MAX } from '../lib/log.js';
 import { commandKind, speedOf, type CommandEntry } from '../lib/commands.js';
 import type { BridgeHistory, LongHistory } from '../lib/timeline.js';
 import type { Session } from '../lib/sessions.js';
 
 // Fake bridge for `mcp_bridge.html?demo` — lets the UI be previewed without REAPER.
+
+// The clock and dice the fake bridge runs on: the real ones for ?demo, fixed ones for stories (createDemo's options)
+let now = Date.now;
+let random = Math.random;
+
+/** A seeded random number generator (mulberry32): the same sequence on every run */
+export function seededRandom(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 const COMMANDS: Array<[string, number, Record<string, unknown>]> = [
   ['list_tracks', 3, {}],
@@ -32,7 +48,7 @@ const COMMANDS: Array<[string, number, Record<string, unknown>]> = [
   ['run_plan', 14, { ops: '[…]', dryRun: true }],
 ];
 
-const jitter = (v: number, by: number) => Math.round((v + (Math.random() - 0.5) * by) * 100) / 100;
+const jitter = (v: number, by: number) => Math.round((v + (random() - 0.5) * by) * 100) / 100;
 
 /** What the bridge keeps of a measuring command's result (`r`), roughly like a mix bus reads */
 function fakeResult(c: string): Record<string, unknown> | undefined {
@@ -59,21 +75,21 @@ function fakeResult(c: string): Record<string, unknown> | undefined {
     }
     case 'render_track_to_wav': {
       // A beat at 120 BPM: a hit every half second decaying under a sustained bed, sometimes hitting full scale
-      const loud = 0.8 + Math.random() * 0.25;
+      const loud = 0.8 + random() * 0.25;
       const hi = Array.from({ length: 120 }, (_, i) => {
         const sinceHit = (i % 12) / 12;
-        return Math.round(Math.min(1, 0.03 + loud * Math.exp(-sinceHit * 9) + Math.random() * 0.02) * 100) / 100;
+        return Math.round(Math.min(1, 0.03 + loud * Math.exp(-sinceHit * 9) + random() * 0.02) * 100) / 100;
       });
-      const lo = hi.map((v) => -Math.round((v * (0.9 + Math.random() * 0.1)) * 100) / 100);
+      const lo = hi.map((v) => -Math.round((v * (0.9 + random() * 0.1)) * 100) / 100);
       const top = Math.max(...hi);
       return {
         durationSeconds: 5, sampleRate: 44100, channels: 2, hi, lo,
-        peakDb: Math.round(20 * Math.log10(top) * 100) / 100, rmsDb: jitter(-15, 2), clipped: top >= 1 ? Math.round(Math.random() * 40) + 1 : 0,
+        peakDb: Math.round(20 * Math.log10(top) * 100) / 100, rmsDb: jitter(-15, 2), clipped: top >= 1 ? Math.round(random() * 40) + 1 : 0,
       };
     }
   }
   // Edit views: the gallery's example for the same command
-  return EDIT_STORIES.find((st) => st.entry.c === c)?.entry.r;
+  return EDIT_EXAMPLES.find((st) => st.entry.c === c)?.entry.r;
 }
 
 const ERRORS = [
@@ -95,8 +111,10 @@ export interface Demo {
   set(key: SettingKey, on: boolean): void;
 }
 
-export function createDemo(): Demo {
-  const startedAt = Date.now() - 47 * 60_000;
+export function createDemo(options: { now?: () => number; random?: () => number } = {}): Demo {
+  now = options.now ?? Date.now;
+  random = options.random ?? Math.random;
+  const startedAt = now() - 47 * 60_000;
   let n = 0;
   let errors = 0;
   let recent: CommandEntry[] = [];
@@ -121,12 +139,12 @@ export function createDemo(): Demo {
   ];
 
   const push = (t: number) => {
-    const [c, base, params] = COMMANDS[Math.floor(Math.random() * COMMANDS.length)];
+    const [c, base, params] = COMMANDS[Math.floor(random() * COMMANDS.length)];
     // The first session does most of the work; the third went quiet after ~25 minutes
-    const r = Math.random();
+    const r = random();
     const session = t - startedAt > 25 * 60_000 && r > 0.75 ? sessions[1] : r > 0.9 && t - startedAt < 25 * 60_000 ? sessions[2] : sessions[0];
-    let ok = Math.random() > 0.06;
-    let e = ok ? undefined : ERRORS[Math.floor(Math.random() * ERRORS.length)];
+    let ok = random() > 0.06;
+    let e = ok ? undefined : ERRORS[Math.floor(random() * ERRORS.length)];
     if (settings.paused) {
       ok = false;
       e = 'Paused by user in the MCP Bridge window. Ask the user to resume agent control.';
@@ -136,7 +154,7 @@ export function createDemo(): Demo {
     }
     n += 1;
     if (!ok) errors += 1;
-    const ms = ok || !settings.paused ? Math.round(base * (0.5 + Math.random() * 1.5) * 100) / 100 : 0.01;
+    const ms = ok || !settings.paused ? Math.round(base * (0.5 + random() * 1.5) * 100) / 100 : 0.01;
     const entry: CommandEntry = { n, t, c, ms, ok, s: session.id, p: JSON.stringify(params) };
     const result = ok ? fakeResult(c) : undefined;
     if (result) entry.r = result;
@@ -155,43 +173,43 @@ export function createDemo(): Demo {
   for (let t = startedAt - 7 * DAY; t < startedAt; t += 60_000) {
     const hour = new Date(t).getHours();
     if (hour < 10 || hour > 22 || Math.sin(t / 7_200_000) < 0.2) continue;
-    const total = Math.round(Math.random() * 12);
+    const total = Math.round(random() * 12);
     if (total === 0) continue;
-    const errs = Math.random() < 0.15 ? 1 : 0;
-    long.forEach((map, i) => count(map, LONG_SIZES[i], t, total, errs, Math.random() < 0.2 ? 1 : 0, total * 6));
+    const errs = random() < 0.15 ? 1 : 0;
+    long.forEach((map, i) => count(map, LONG_SIZES[i], t, total, errs, random() < 0.2 ? 1 : 0, total * 6));
   }
 
   // Seed the last 47 minutes with bursty agent sessions separated by quiet stretches
-  for (let t = startedAt; t < Date.now(); t += 1000) {
+  for (let t = startedAt; t < now(); t += 1000) {
     const minute = Math.floor((t - startedAt) / 60_000);
     const busy = minute % 9 < 4 || minute > 40;
     const rate = busy ? 0.25 + 0.45 * Math.abs(Math.sin(minute)) : 0.02;
-    if (Math.random() < rate) push(t);
+    if (random() < rate) push(t);
   }
   sessions[2].ended = true;
 
   return {
     tick() {
-      if (Math.random() < 0.35) push(Date.now());
+      if (random() < 0.35) push(now());
       const log = first ? saved : undefined;
       first = false;
       // Idle agents still ping every 20s
-      sessions[1].last = Math.max(sessions[1].last, Date.now() - 8000);
+      sessions[1].last = Math.max(sessions[1].last, now() - 8000);
       return {
         status: {
           v: 1,
-          ts: Date.now(),
+          ts: now(),
           startedAt,
           reaperVersion: '7.27/macOS-arm64',
           project: '/Users/you/Music/Projects/Midnight Drive/Midnight Drive — mix v3.rpp',
           bridgeDir: '/Users/you/Library/Application Support/REAPER/Scripts/mcp_bridge_data/',
           commands: n,
           errors,
-          deferMs: 33 + Math.random() * 2,
+          deferMs: 33 + random() * 2,
           recent,
           sessions: [...sessions].sort((a, b) => b.last - a.last),
           settings: { ...settings },
-          health: { sws: true, jsfx: true, outdated: new URLSearchParams(location.search).has('outdated') },
+          health: { sws: true, jsfx: true, outdated: typeof location !== 'undefined' && new URLSearchParams(location.search).has('outdated') },
           knowledge: DEMO_KNOWLEDGE,
         },
         history: { v: 1, size: BUCKET_MS, b: [...buckets.values()].sort((a, b) => a[0] - b[0]) },

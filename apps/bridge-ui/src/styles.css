@@ -1334,35 +1334,6 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
   .ev-plan li { grid-template-columns: 14px minmax(0, auto) minmax(0, 1fr); gap: 6px; }
 }
 
-/* Component gallery (?gallery, developer mode): the real components side by side ------------------- */
-.gallery {
-  max-width: 1400px; padding: 24px 20px 64px;
-  padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px));
-  display: flex; flex-direction: column; gap: 28px;
-}
-.gallery-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
-.gallery-head h1 { margin: 0; font-size: 20px; }
-.gallery-nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0; background: var(--bg); border-bottom: 1px solid var(--line); }
-.gallery-nav a { padding: 4px 10px; border-radius: 6px; color: var(--muted); text-decoration: none; font-size: 12px; }
-.gallery-nav a:hover { color: var(--text); background: var(--panel-2); }
-.gallery-section { display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 56px; }
-.gallery-section h2 { margin: 0; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 16px; align-items: start; }
-.gallery-card { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.gallery-card-wide { grid-column: span 2; }
-@media (max-width: 820px) { .gallery-card-wide { grid-column: auto; } }
-.gallery-card figcaption { display: flex; flex-direction: column; gap: 1px; font-size: 12px; }
-.gallery-card figcaption span { color: var(--faint); font-size: 11.5px; }
-.gallery-stage { padding: 14px; border: 1px dashed var(--line-2); border-radius: 10px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; }
-.gallery-measure { font: 11px var(--mono); color: var(--faint); }
-.gallery-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.gallery-stack { display: flex; flex-direction: column; gap: 8px; }
-/* The drawer is fixed to the window on the page; here it sits in its card */
-.gallery-drawer { height: 640px; display: flex; }
-.gallery-drawer .drawer { position: relative; inset: auto; z-index: auto; width: 100% !important; animation: none; box-shadow: none; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
-.gallery-drawer .resize-handle { display: none; }
-.gallery-stage .offline { margin: 0; }
-
 /* Sidecar analysis results: sections, band balance, alignment axis */
 .off-block { display: flex; flex-direction: column; gap: 6px; }
 .off-title { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
@@ -1438,7 +1409,6 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
   .snap-state { grid-row: 1 / span 2; grid-column: 2; }
   .snap-desc { white-space: normal; }
 }
-.gallery-narrow { max-width: 340px; }
 
 /* Short windows ------------------------------------------------------------ */
 
