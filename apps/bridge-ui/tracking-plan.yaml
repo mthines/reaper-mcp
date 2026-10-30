@@ -11,7 +11,7 @@ identity: random install id per browser (localStorage mcp_bridge.install_id), se
 signal_attributes:
   bridge_ui.display_mode: [bridge_window, installed_app, browser_tab]
 automatic:
-  - browser.page_view       # startView('/<view>'): the view on load, then each switch of Calls/Tools/Sessions/Plugins
+  - browser.page_view       # startView('/<view>'): the view on load, then each switch of Calls/Tools/Sessions/Plugins/Snapshots
   - web vitals              # @dash0/web-vitals (LCP, CLS, INP)
 not_collected:
   - fetch/xhr spans         # the page polls the bridge twice a second and calls LoreKit with a token
@@ -35,7 +35,7 @@ events:
   log_filtered:
     filter: [all, errors]
   log_searched:
-    view: [calls, tools, plugins]   # once per search; the text is never sent
+    view: [calls, tools, plugins, snapshots]   # once per search; the text is never sent
   log_paused:
     paused: boolean
   log_copied:
@@ -72,6 +72,13 @@ events:
     state: [live, stale, offline]
   knowledge_load_failed:     # LoreKit records couldn't be loaded
     layer: [built-in, user]
+  snapshot_restored:         # the bridge answered a restore from the Snapshots view (or never did: lost)
+    outcome: [ok, refused, lost]
+    warnings: boolean        # restored with warnings (a track renamed, a plugin changed)
+  snapshot_saved:            # the bridge answered a save from the Snapshots view; never the name or description
+    outcome: [ok, refused, lost]
+    described: boolean
+    replaced: boolean        # it replaced a snapshot of the same name
   page_error:                # uncaught error or rejection in the page; severity ERROR
     type: string             # TypeError, RangeError, …, or non_error; never the message or stack
 

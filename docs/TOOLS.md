@@ -135,7 +135,7 @@ Pass `trackIndices` to `snapshot_save` to capture only some tracks; restoring th
 | `snapshot_list` | List all saved snapshots with metadata |
 | `snapshot_delete` | Delete a saved snapshot by name |
 
-You can also manage snapshots directly in REAPER using the **Snapshot Manager** GUI (`mcp_snapshot_manager.lua`) — load it as a ReaScript action for a visual list with save/restore/delete buttons.
+You can also list, restore and save snapshots on the bridge status page's **Snapshots** tab (click a snapshot or press 1–9 to switch while playing).
 
 For quick A/B testing, bind these action scripts to keyboard shortcuts in REAPER:
 

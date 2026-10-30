@@ -44,6 +44,8 @@ local project_lib_ok, project_lib = pcall(dofile, script_dir .. "mcp_project_lib
 local items_lib_ok, items_lib = pcall(dofile, script_dir .. "mcp_items_lib.lua")
 -- What a write changed and what a listing showed, for the status page's drawer (same install rules).
 local edit_lib_ok, edit_lib = pcall(dofile, script_dir .. "mcp_edit_views_lib.lua")
+-- Snapshot list, restore and save from the status page (same install rules).
+local snaps_lib_ok, snaps_lib = pcall(dofile, script_dir .. "mcp_snapshots_ui_lib.lua")
 
 local last_poll = 0
 local last_heartbeat = 0
@@ -1482,15 +1484,20 @@ function handlers.snapshot_save(params)
     trackIndices = params.trackIndices,
     fullChunk = params.fullChunk,
   })
-  local snapshot = {
-    name = name,
-    description = params.description or "",
-    timestamp = timestamp,
-    mixerState = mixer_state,
-  }
+  -- Metadata first, mixerState last: a lister can read name/description/trackCount from the
+  -- head of the file (mcp_snapshot_lib.lua's read_snapshot_meta reads only that prefix)
+  local content = "{" .. table.concat({
+    '"name":' .. json_encode(name),
+    '"description":' .. json_encode(params.description or ""),
+    '"timestamp":' .. json_encode(timestamp),
+    '"trackCount":' .. #mixer_state.tracks,
+    '"scoped":' .. tostring(mixer_state.scoped == true),
+    '"fullChunk":' .. tostring(mixer_state.fullChunk == true),
+    '"mixerState":' .. json_encode(mixer_state),
+  }, ",") .. "}"
 
   local path = snapshot_path(name)
-  local ok = write_file(path, json_encode(snapshot))
+  local ok = write_file(path, content)
   if not ok then
     return nil, "Failed to write snapshot file: " .. path
   end
@@ -4895,6 +4902,8 @@ local function control_status()
     -- Developer mode: source changed since the last install, so Rebuild & reload has something to do
     changed = source_changed,
     update = update,
+    -- The page may list, restore and save snapshots (mcp_snapshots_ui_lib.lua)
+    snapshots = snaps_lib_ok,
   }
 end
 
@@ -5233,6 +5242,8 @@ local function record_command(cmd, handler_ms, ok, err, data, before)
   if err then
     entry.e = tostring(err):gsub("%c", " "):sub(1, 300)
   end
+  -- Sent from the status page (a snapshot restore or save), not by an agent
+  if cmd.source == "page" then entry.src = "page" end
   if ok and edit_lib_ok then
     local got, r = pcall(edit_lib.summary, cmd_type, cmd.params or {}, data, before)
     entry.r = got and r or nil
@@ -5283,19 +5294,8 @@ end
 -- Command dispatcher
 -- =============================================================================
 
-local function process_command(filename)
-  local pickup_time = reaper.time_precise()
-  local path = bridge_dir .. filename
-  local content = read_file(path)
-  if not content then return end
-
-  local cmd = json_decode(content)
-  if not cmd or not cmd.id or not cmd.type then
-    -- Invalid command, remove file
-    os.remove(path)
-    return
-  end
-
+-- Runs one command (from a command file, or a status-page request) and logs it; returns the response
+local function run_command(cmd)
   -- Dispatch to handler
   local handler = handlers[cmd.type]
   local response = {}
@@ -5348,6 +5348,24 @@ local function process_command(filename)
   response._handlerMs = math.floor(handler_ms * 1000 + 0.5) / 1000
 
   record_command(cmd, handler_ms, response.success, response.error, response.data, before)
+  if snaps_lib_ok then snaps_lib.after_command(cmd, response) end
+  return response
+end
+
+local function process_command(filename)
+  local pickup_time = reaper.time_precise()
+  local path = bridge_dir .. filename
+  local content = read_file(path)
+  if not content then return end
+
+  local cmd = json_decode(content)
+  if not cmd or not cmd.id or not cmd.type then
+    -- Invalid command, remove file
+    os.remove(path)
+    return
+  end
+
+  local response = run_command(cmd)
 
   -- Add pickup timing to response for profiling
   if cmd.timestamp then
@@ -5362,6 +5380,14 @@ local function process_command(filename)
 
   -- Remove command file
   os.remove(path)
+end
+
+if snaps_lib_ok then
+  snaps_lib.init({
+    api = reaper, section = STATUS_SECTION, dir = get_snapshot_dir, storage = get_snapshot_storage_location,
+    decode = plan_lib_ok and plan_lib.json_decode or json_decode, encode = json_encode, read_file = read_file,
+    token = function() return control_token end, run = run_command,
+  })
 end
 
 -- =============================================================================
@@ -5422,6 +5448,7 @@ local function main_loop()
   check_source_changes(now)
   publish_installed_fx(now)
   publish_used_fx(now)
+  if snaps_lib_ok then snaps_lib.poll(now) end
 
   reaper.defer(main_loop)
 end

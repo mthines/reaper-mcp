@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DRAWER_STORIES, EDIT_STORIES, MEASUREMENT_STORIES, galleryAllowed } from './gallery-stories.js';
+import { DRAWER_STORIES, EDIT_STORIES, MEASUREMENT_STORIES, SNAPSHOT_STORIES, galleryAllowed } from './gallery-stories.js';
 import { editKindOf, editViewOf } from './edit-views.js';
 import { MEASURED_COMMANDS, measurementOf } from './status.js';
 
@@ -33,6 +33,15 @@ describe('gallery stories', () => {
     const drawn = new Set(EDIT_STORIES.filter((s) => editViewOf(s.entry) !== null).map((s) => editKindOf(s.entry.c)));
     expect([...drawn].sort()).toEqual(['changes', 'envelope', 'fxChain', 'midi', 'midiStats', 'mixer', 'plan', 'routing', 'timeline']);
     expect(EDIT_STORIES.every((s) => editViewOf(s.entry) !== null)).toBe(true);
+  });
+
+  it('show the Snapshots view in every request state, blocked, empty and before the list arrives', () => {
+    const states = new Set(SNAPSHOT_STORIES.map((s) => (s.request ? (s.request.state === 'done' ? `done-${s.request.result.ok}` : s.request.state) : 'none')));
+    expect([...states].sort()).toEqual(['done-false', 'done-true', 'lost', 'none', 'pending']);
+    expect(SNAPSHOT_STORIES.some((s) => s.blocked)).toBe(true);
+    expect(SNAPSHOT_STORIES.some((s) => s.feed?.snapshots.length === 0)).toBe(true);
+    expect(SNAPSHOT_STORIES.some((s) => s.feed === null)).toBe(true);
+    expect(SNAPSHOT_STORIES.some((s) => s.saveForm?.confirm)).toBe(true);
   });
 
   it('show the drawer for a failed call and a successful one', () => {

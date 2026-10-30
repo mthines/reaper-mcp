@@ -15,6 +15,8 @@ export interface CommandEntry {
   e?: string;
   /** Session id of the agent that sent it */
   s?: string;
+  /** Sent from this page (a snapshot restore or save), not by an agent */
+  src?: 'page';
   /** Request params as JSON, truncated by the bridge (may not parse) */
   p?: string;
   /** Compact result of a measuring command (meters, LUFS, correlation, crest, spectrum bands, a render's waveform) */
@@ -182,6 +184,8 @@ export interface BridgeControl {
   /** Developer mode: the clone has source files newer than the last install */
   changed?: boolean;
   update?: BridgeUpdate;
+  /** The bridge lists, restores and saves snapshots for the page (ExtState snap_seen / snap_req / snapshots) */
+  snapshots?: boolean;
 }
 
 /** Shape published by mcp_bridge.lua to ExtState MCPBridge/status. */

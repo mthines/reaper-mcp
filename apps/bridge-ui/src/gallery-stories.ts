@@ -1,3 +1,4 @@
+import { demoSnapshots, type RequestState, type SnapshotOp, type SnapshotsFeed } from './snapshots.js';
 import type { CommandEntry } from './status.js';
 
 /**
@@ -361,5 +362,55 @@ export const DRAWER_STORIES: Story[] = (() => {
     story('Long-running', long, 'Slow by nature, so not marked slow'),
     story('Very slow', slow, 'Over 500 ms'),
     story('No params', bare),
+    story('From this page', call('snapshot_restore', { name: 'mix-B' }, undefined, { s: undefined, src: 'page', ms: 38.2 }), 'A snapshot loaded from the Snapshots view'),
+  ];
+})();
+
+/** The Snapshots view in one state: the list A/B/C is played from, a request in each state, the save form */
+export interface SnapshotStory {
+  title: string;
+  note?: string;
+  feed: SnapshotsFeed | null;
+  request: RequestState | null;
+  blocked: string | null;
+  /** Show only the save form, with this name typed (and the replace prompt open) */
+  saveForm?: { name: string; confirm?: boolean };
+  /** Drawn in a narrow column */
+  narrow?: boolean;
+}
+
+export const SNAPSHOT_STORIES: SnapshotStory[] = (() => {
+  const feed = demoSnapshots(GALLERY_NOW);
+  const req = (op: SnapshotOp, name: string) => ({ id: '17618', op, name, at: GALLERY_NOW - 2_000 });
+  const readonlyError = "Read-only mode is on in the MCP Bridge window: 'snapshot_restore' would change the project. Ask the user to turn read-only off.";
+  return [
+    { title: 'List', note: 'mix-B loaded; 1–9 load from the keyboard', feed, request: null, blocked: null },
+    { title: 'Loading', note: 'Waiting for the bridge', feed, request: { ...req('restore', 'mix-C'), state: 'pending' }, blocked: null },
+    {
+      title: 'Loaded with warnings',
+      note: 'A track renamed since the save',
+      feed: { ...feed, current: 'mix-A' },
+      request: {
+        ...req('restore', 'mix-A'),
+        state: 'done',
+        result: { id: '17618', op: 'restore', name: 'mix-A', ok: true, tracksRestored: 24, warnings: ["Track 4: is now 'Gtr L' (saved as 'Guitar L')"] },
+      },
+      blocked: null,
+    },
+    { title: 'Saved', feed, request: { ...req('save', 'mix-C'), state: 'done', result: { id: '17618', op: 'save', name: 'mix-C', ok: true } }, blocked: null },
+    {
+      title: 'Refused',
+      note: 'Read-only was switched on meanwhile',
+      feed,
+      request: { ...req('restore', 'mix-A'), state: 'done', result: { id: '17618', op: 'restore', name: 'mix-A', ok: false, error: readonlyError } },
+      blocked: null,
+    },
+    { title: 'No answer', note: 'The bridge script stopped', feed, request: { ...req('save', 'mix-D'), state: 'lost' }, blocked: null },
+    { title: 'Read-only', note: 'Restore and save off', feed, request: null, blocked: 'Read-only: turn it off in Settings to restore or save snapshots' },
+    { title: 'Empty', note: 'Unsaved project', feed: { v: 1, storage: 'global', snapshots: [] }, request: null, blocked: null },
+    { title: 'Waiting for the list', feed: null, request: null, blocked: null },
+    { title: 'Save · replaces', note: 'A name already saved', feed, request: null, blocked: null, saveForm: { name: 'mix-B' } },
+    { title: 'Save · confirm replace', feed, request: null, blocked: null, saveForm: { name: 'mix-B', confirm: true } },
+    { title: 'Narrow', note: 'Under ~420px', feed, request: { ...req('restore', 'mix-B'), state: 'pending' }, blocked: null, narrow: true },
   ];
 })();

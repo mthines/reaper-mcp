@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureWebInterface, findCloneRoot, isDevClone, updateConfigText, REAPER_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureWebInterface, findCloneRoot, isDevClone, updateConfigText, REAPER_ASSETS, RETIRED_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `reaper-mcp-test-${randomUUID()}`);
@@ -153,7 +153,6 @@ describe('cli helpers', () => {
       expect(REAPER_ASSETS).toContain('mcp_correlation_meter.jsfx');
       expect(REAPER_ASSETS).toContain('mcp_crest_factor.jsfx');
       expect(REAPER_ASSETS).toContain('mcp_midi_emitter.jsfx');
-      expect(REAPER_ASSETS).toContain('mcp_snapshot_manager.lua');
       expect(REAPER_ASSETS).toContain('mcp_snapshot_lib.lua');
       expect(REAPER_ASSETS).toContain('mcp_snapshot_next.lua');
       expect(REAPER_ASSETS).toContain('mcp_snapshot_prev.lua');
@@ -164,8 +163,14 @@ describe('cli helpers', () => {
       expect(REAPER_ASSETS).toContain('mcp_project_lib.lua');
       expect(REAPER_ASSETS).toContain('mcp_items_lib.lua');
       expect(REAPER_ASSETS).toContain('mcp_edit_views_lib.lua');
+      expect(REAPER_ASSETS).toContain('mcp_snapshots_ui_lib.lua');
       expect(REAPER_ASSETS).toContain('mcp_gain_trace.jsfx');
       expect(REAPER_ASSETS.length).toBe(18);
+    });
+
+    it('retires the gfx snapshot manager (replaced by the status page Snapshots tab)', () => {
+      expect(REAPER_ASSETS).not.toContain('mcp_snapshot_manager.lua');
+      expect(RETIRED_ASSETS).toContain('mcp_snapshot_manager.lua');
     });
 
     it('KNOWLEDGE_DIRS includes all expected subdirectories', () => {
