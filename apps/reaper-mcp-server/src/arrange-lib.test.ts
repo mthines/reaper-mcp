@@ -313,6 +313,19 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('insert and remove time: a square envelope stays square across the edit', async () => {
+    await runLua(`
+      local function mute() return new_timeline{ tracks = { { envs = { { pts = { { 0, 0, 1 }, { 100, 1, 1 } } } } } } } end
+      local function at(api, t) local _, v = api.Envelope_Evaluate(api.tracks[1].envs[1], t) return v end
+      local api = mute()
+      assert(arrange.insert_time(api, { position = 50, length = 10 }))
+      assert(at(api, 80) == 0 and at(api, 109) == 0 and at(api, 110) == 1, at(api, 80) .. " " .. at(api, 109))
+      api = mute()
+      assert(arrange.remove_time(api, { start = 40, ["end"] = 60 }))
+      assert(at(api, 30) == 0 and at(api, 70) == 0 and at(api, 80) == 1, at(api, 30) .. " " .. at(api, 70))
+    `);
+  });
+
   it('copy section: refuses an overlap, an unknown region and a bad track, changing nothing', async () => {
     await runLua(`${SONG}
       local cases = {

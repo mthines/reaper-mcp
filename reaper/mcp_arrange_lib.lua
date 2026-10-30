@@ -284,6 +284,15 @@ end
 local function has_from(pts, t)
   return pts[#pts] ~= nil and pts[#pts].t >= t - EPS
 end
+-- Shape and tension of the segment running through t: the last point before it (linear when none)
+local function shape_through(pts, t)
+  local shape, tension = 0, 0
+  for _, pt in ipairs(pts) do
+    if pt.t < t - EPS then shape, tension = pt.shape, pt.tension end
+  end
+  return shape, tension
+end
+
 local function has_at(pts, t)
   for _, pt in ipairs(pts) do if math.abs(pt.t - t) <= EPS then return true end end
   return false
@@ -338,7 +347,11 @@ local function apply_insert(api, c)
     if e.hold then
       api.InsertEnvelopePoint(e.env, at, e.hold, 0, 0, false, true)
       -- A point that sat on the position now ends the opened time itself
-      if not has_at(e.pts, at) then api.InsertEnvelopePoint(e.env, at + len, e.hold, 0, 0, false, true) end
+      -- and carries on with the shape of the segment it split (a square Mute envelope stays square)
+      if not has_at(e.pts, at) then
+        local shape, tension = shape_through(e.pts, at)
+        api.InsertEnvelopePoint(e.env, at + len, e.hold, shape, tension, false, true)
+      end
     end
     if moved then api.Envelope_SortPoints(e.env) end
     for i, ai in ipairs(e.ais) do
@@ -491,7 +504,10 @@ local function apply_remove(api, c)
       end
     end
     if x.left then api.InsertEnvelopePoint(x.env, s - PIN, x.left, 0, 0, false, true) end
-    if x.right then api.InsertEnvelopePoint(x.env, s, x.right, 0, 0, false, true) end
+    if x.right then
+      local shape, tension = shape_through(x.pts, e)
+      api.InsertEnvelopePoint(x.env, s, x.right, shape, tension, false, true)
+    end
     if moved or x.left then api.Envelope_SortPoints(x.env) end
     for i, ai in ipairs(x.ais) do
       if ai.pos >= s - EPS and ai.pos + ai.len <= e + EPS then doomed[#doomed + 1] = { x.env, i - 1 } end

@@ -36,7 +36,7 @@ function new_timeline(spec)
   end
   local function new_env(x)
     local env = { name = x.name or "Volume", pts = {}, ais = {} }
-    for _, p in ipairs(x.pts or {}) do env.pts[#env.pts + 1] = { t = p[1], v = p[2], shape = 0, tension = 0, sel = false } end
+    for _, p in ipairs(x.pts or {}) do env.pts[#env.pts + 1] = { t = p[1], v = p[2], shape = p[3] or 0, tension = 0, sel = false } end
     for _, a in ipairs(x.ais or {}) do env.ais[#env.ais + 1] = { D_POSITION = a.pos, D_LENGTH = a.len, D_UISEL = a.sel and 1 or 0 } end
     return env
   end
@@ -256,6 +256,7 @@ function new_timeline(spec)
     if t <= pts[1].t then return 0, pts[1].v end
     for i = 1, #pts - 1 do
       local a, b = pts[i], pts[i + 1]
+      if t < b.t and a.shape == 1 then return 0, a.v end -- square: holds until the next point
       if t <= b.t then return 0, a.v + (b.v - a.v) * (t - a.t) / (b.t - a.t) end
     end
     return 0, pts[#pts].v
