@@ -249,14 +249,16 @@ def _stft_power(audio: np.ndarray, sample_rate: int, n_fft: int = 4096) -> tuple
     return power, freqs
 
 
-CHROMA_LOW_HZ, CHROMA_HIGH_HZ = 55.0, 4200.0
+# Below ~110 Hz an 8192-point bin (5.4 Hz at 44.1 kHz) is wider than a semitone and lands on the
+# wrong pitch class; a bass note still counts through its harmonics above the floor.
+CHROMA_LOW_HZ, CHROMA_HIGH_HZ = 110.0, 4200.0
 
 
 def chroma(audio: np.ndarray, sample_rate: int, n_fft: int = 8192) -> dict:
     """
     Pitch-class energy (C first), for key detection.
 
-    Each STFT bin from 55 Hz to 4.2 kHz adds its magnitude to the pitch class nearest its
+    Each STFT bin from 110 Hz to 4.2 kHz adds its magnitude to the pitch class nearest its
     frequency; every frame is normalized to its own largest class so loud passages do not
     outweigh quiet ones, frames more than 60 dB under the loudest are skipped as silence,
     and the average is scaled so the largest class is 1.

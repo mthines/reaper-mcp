@@ -217,6 +217,18 @@ def test_chroma_of_a_c_major_triad_peaks_on_c_e_g():
     assert all(c[i] < 0.5 for i in range(12) if i not in (0, 4, 7))
 
 
+def test_chroma_puts_no_weight_on_the_wrong_class_for_a_low_bass_note():
+    # A1 and B1 with their first harmonics: down there a bin is wider than a semitone, so the
+    # fundamental must not add weight to the neighbouring classes (B flat, C)
+    c = analysis.chroma(*_tones([55.0, 110.0, 165.0]))["chroma"]
+    assert c[10] < 0.3
+    c = analysis.chroma(*_tones([61.74, 123.47, 185.2]))["chroma"]
+    assert c[10] < 0.5 and c[0] < 0.5
+    # B minor (B3, D4, F#4) over a B1 bass with its octave: the triad's classes stay on top
+    c = analysis.chroma(*_tones([61.74, 123.47, 246.94, 293.66, 369.99]))["chroma"]
+    assert sorted(sorted(range(12), key=lambda i: -c[i])[:3]) == [2, 6, 11]
+
+
 def test_chroma_skips_silence_and_returns_zeros_for_it():
     audio = np.zeros((2, 44100 * 2), dtype=np.float32)
     result = analysis.chroma(audio, 44100)
