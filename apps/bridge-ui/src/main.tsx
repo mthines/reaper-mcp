@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import { Gallery } from './Gallery.js';
-import { galleryAllowed } from './gallery-stories.js';
+import { developerMode, galleryAllowed } from './gallery-stories.js';
 import { parseExtStateReply } from './status.js';
 import './styles.css';
 
@@ -18,10 +18,10 @@ async function start() {
       const res = await fetch('/_/GET/EXTSTATE/MCPBridge/status', { cache: 'no-store' });
       dev = parseExtStateReply(await res.text())?.settings?.dev;
     } catch {
-      // REAPER unreachable: no developer mode to check, so the normal page
+      // REAPER unreachable: the developer mode it last reported decides
     }
   }
-  root.render(galleryAllowed(search, location.protocol, dev) ? <Gallery /> : <App />);
+  root.render(galleryAllowed(search, location.protocol, developerMode(dev)) ? <Gallery /> : <App />);
 }
 void start();
 

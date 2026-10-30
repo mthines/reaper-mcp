@@ -763,6 +763,10 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   `get_fx_parameters` as readout bars. List diffs share `listDiff()` in `edit-views.ts`. Lists are capped so
   an entry stays a few KB. Add a command in `M.summary`, `KIND_OF` (`edit-views.ts`) and a gallery story together;
   behaviour tests run the real bridge in wasmoon (`bridge-status.test.ts`, "edit views in the log").
+- Short windows (≤ 640px tall, an app window docked beside REAPER): the log is the page. Stats, timeline and footer
+  hide; the header's Rebuild & reload, Settings and GitHub fold into a ⋯ menu (`HeaderMenu`, dotted when a rebuild
+  is available) with a **Stats & timeline** toggle (`mcp-bridge-overview` in localStorage). The log's toolbar is one row: a grouped combo box
+  (`GroupedCombobox` in `Combobox.tsx`, LoreKit's Combobox in headed groups: View, Show, Agent, Actions) and the search box. CSS switches it: `@media (max-height: 640px)`.
 - Narrow drawer: the drawer is resizable, so its content answers to its own width with container queries
   (`.drawer-body` and `.measure` are `inline-size` containers), never `@media`. Under ~300px readouts go two a row,
   the mixer drops its pan column, and what gives way stays reachable (the ISO timestamp is the When row's tooltip,
@@ -773,7 +777,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   ~300px in the gallery.
 - Component gallery (`?gallery`, like Storybook): the page's real components from fixed example data, every
   state side by side (`src/Gallery.tsx`, stories in `src/gallery-stories.ts`). Opens only from a local build
-  (`file://`) or when the bridge runs in developer mode (`galleryAllowed()`); otherwise the page opens as usual.
+  (`file://`) or when the bridge runs in developer mode (`galleryAllowed()`; while REAPER is unreachable, the mode it last reported, `developerMode()`); otherwise the page opens as usual.
   Shift-click the logo to get there. Add a story with every new component or state; `gallery-stories.test.ts`
   fails when a measuring command or an edit view kind has no story.
 - Slow (≥100 ms) / very slow (≥500 ms) marks skip commands that are slow by nature (renders, plugin loads, project

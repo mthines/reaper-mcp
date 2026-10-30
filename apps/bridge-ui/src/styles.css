@@ -1439,3 +1439,55 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
   .snap-desc { white-space: normal; }
 }
 .gallery-narrow { max-width: 340px; }
+
+/* Short windows ------------------------------------------------------------ */
+
+/* A small app window docked beside REAPER: the log is the page. Stats, timeline and the footer are opt-in
+   (header menu, .overview-on), and the header's actions fold into that menu. */
+.header-menu { position: relative; display: none; }
+.header-menu-flag { position: relative; }
+.header-menu-flag::after {
+  content: ''; position: absolute; top: 5px; right: 5px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--bg);
+}
+.menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
+  min-width: 180px; padding: 4px;
+  display: flex; flex-direction: column;
+  border: 1px solid var(--line-2); border-radius: 10px;
+  background: var(--panel-2); box-shadow: 0 8px 24px rgb(0 0 0 / 0.3);
+}
+.menu > a, .menu > button {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 10px; border: 0; border-radius: 6px;
+  background: none; color: var(--text); font: inherit; font-size: 12.5px;
+  text-align: left; text-decoration: none; cursor: pointer;
+}
+.menu > a:hover, .menu > button:hover, .menu > a:focus-visible, .menu > button:focus-visible { background: var(--panel); outline: none; }
+.menu-accent { color: var(--accent) !important; font-weight: 600; }
+.menu-check { width: 12px; flex: none; color: var(--accent); }
+.menu > a, .menu > button:not(:has(.menu-check)) { padding-left: 28px; }
+@media (max-height: 640px) {
+  .shell { padding: 10px 12px 8px; gap: 10px; }
+  .shell:not(.overview-on) > .stats, .shell:not(.overview-on) > .timeline, .footer { display: none; }
+  .header-actions > .icon-link, .header-actions > .btn-rebuild { display: none; }
+  .header-menu { display: block; }
+  .log { min-height: 160px; }
+}
+.log-menu { display: none; flex: none; min-width: 0; }
+.log-menu .combo-trigger { height: 30px; max-width: 220px; padding: 0 10px; font-size: 12.5px; }
+.combo-trigger-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combo-list-fixed { position: fixed; right: auto; max-height: none; min-width: 200px; }
+.combo-group + .combo-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
+.combo-heading { padding: 4px 8px 2px 24px; font-size: 10.5px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; }
+.combo-option-off { cursor: default; opacity: 0.45; }
+.combo-label .sdot { margin-right: 6px; }
+.combo-label .count { margin-left: 6px; }
+@media (max-height: 640px) {
+  /* The log's toolbar is one row: the grouped menu and the search box */
+  .log-menu { display: block; }
+  .toolbar > .seg, .toolbar > .actions, .log > .chips { display: none; }
+  .toolbar { flex-wrap: nowrap; padding: 6px; }
+  .search { min-width: 0; }
+}

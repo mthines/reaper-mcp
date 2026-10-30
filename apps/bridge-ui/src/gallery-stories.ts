@@ -11,6 +11,25 @@ export function galleryAllowed(search: string, protocol: string, dev: boolean | 
   return protocol === 'file:' || dev === true;
 }
 
+const DEV_KEY = 'mcp_bridge_dev';
+
+/**
+ * Developer mode as the bridge last reported it: the reported value (remembered), else the remembered one, so
+ * a developer still reaches the gallery while REAPER is unreachable. Storage may be blocked; then only `reported`.
+ */
+export function developerMode(reported: boolean | undefined): boolean | undefined {
+  try {
+    if (reported !== undefined) {
+      localStorage.setItem(DEV_KEY, reported ? '1' : '0');
+      return reported;
+    }
+    const saved = localStorage.getItem(DEV_KEY);
+    return saved === null ? undefined : saved === '1';
+  } catch {
+    return reported;
+  }
+}
+
 export interface Story {
   title: string;
   /** What state this shows, in a few words */

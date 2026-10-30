@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { DRAWER_STORIES, EDIT_STORIES, MEASUREMENT_STORIES, SNAPSHOT_STORIES, galleryAllowed } from './gallery-stories.js';
+import { describe, expect, it, vi } from 'vitest';
+import { DRAWER_STORIES, EDIT_STORIES, MEASUREMENT_STORIES, SNAPSHOT_STORIES, developerMode, galleryAllowed } from './gallery-stories.js';
 import { editKindOf, editViewOf } from './edit-views.js';
 import { MEASURED_COMMANDS, measurementOf } from './status.js';
 
@@ -13,6 +13,20 @@ describe('who sees the component gallery', () => {
     expect(galleryAllowed('?gallery', 'http:', false)).toBe(false);
     expect(galleryAllowed('?gallery', 'http:', undefined)).toBe(false); // older bridge, or REAPER unreachable
     expect(galleryAllowed('?demo', 'file:', true)).toBe(false);
+  });
+
+  it('still opens for a developer while REAPER is unreachable, from the mode the bridge last reported', () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) });
+    try {
+      expect(galleryAllowed('?gallery', 'http:', developerMode(undefined))).toBe(false); // never connected
+      developerMode(true);
+      expect(galleryAllowed('?gallery', 'http:', developerMode(undefined))).toBe(true);
+      developerMode(false);
+      expect(galleryAllowed('?gallery', 'http:', developerMode(undefined))).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

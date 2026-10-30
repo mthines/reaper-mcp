@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { Combobox } from './Combobox.js';
+import { Combobox, GroupedCombobox } from './Combobox.js';
 import { createDemo } from './demo.js';
 import { compareVersions, controlUrl, updateLog, useLatestRelease, type BridgeAction } from './update.js';
 import { manualInstallHint, openInBrowserToInstall, promptInstall, useInstallState } from './install.js';
@@ -11,7 +11,7 @@ import { blockedBy } from './snapshots.js';
 import { useSnapshots, type SnapshotsHook } from './useSnapshots.js';
 import { EditViewSection } from './EditViews.js';
 import { MeasurementView } from './Measurement.js';
-import { galleryAllowed } from './gallery-stories.js';
+import { developerMode, galleryAllowed } from './gallery-stories.js';
 import { prependedCount, scrollToRow, visibleRows } from './virtual-list.js';
 import { isBoolean, isNumberOrNull, isString, isStringOrNull, useUrlState } from './url-state.js';
 import { LOREKIT_PUBLISH_TOKEN_KEY, loadLoreKitToken, saveLoreKitToken, useKnowledge } from './useKnowledge.js';
@@ -291,6 +291,7 @@ function useSettings(status: BridgeStatus | null): [BridgeSettings | null, (key:
 }
 
 const NOTIFY_KEY = 'mcp-bridge-notify';
+const OVERVIEW_KEY = 'mcp-bridge-overview';
 
 // A refused request ("Track 9 not found") is a warning, a system error is an error
 const ROW_CLASS: Record<Outcome, string> = { ok: '', error: 'row-err', refused: 'row-warn' };
@@ -435,6 +436,12 @@ export function App() {
     if (lastState.current !== state) track({ name: 'bridge_state_changed', state });
     lastState.current = state;
   }, [state]);
+  // Short windows show only the log; the stats and timeline are opt-in from the header menu
+  const [overview, setOverview] = useState(() => load(OVERVIEW_KEY) === '1');
+  const toggleOverview = () => {
+    save(OVERVIEW_KEY, overview ? '0' : '1');
+    setOverview(!overview);
+  };
   const openSettings = (toggle: boolean) => () => {
     const next = toggle ? !settingsOpen : true;
     if (next && !settingsOpen) track({ name: 'settings_opened' });
@@ -442,7 +449,7 @@ export function App() {
   };
 
   return (
-    <div className="shell">
+    <div className={`shell ${overview ? 'overview-on' : ''}`}>
       <Header
         status={status}
         state={state}
@@ -451,6 +458,8 @@ export function App() {
         sessions={sessions}
         onShowAgents={() => chooseView('sessions')}
         onOpenSettings={settings ? openSettings(true) : undefined}
+        overview={overview}
+        onToggleOverview={status ? toggleOverview : undefined}
         onRebuild={
           settings?.dev && status?.control?.canUpdate && status.control.changed && status.control.update?.state !== 'running'
             ? () => request('rebuild')
@@ -538,6 +547,8 @@ function Header({
   onShowAgents,
   onOpenSettings,
   onRebuild,
+  overview,
+  onToggleOverview,
 }: {
   status: BridgeStatus | null;
   state: Liveness;
@@ -547,6 +558,8 @@ function Header({
   onShowAgents: () => void;
   onOpenSettings?: () => void;
   onRebuild?: () => void;
+  overview: boolean;
+  onToggleOverview?: () => void;
 }) {
   const label = state === 'live' ? 'Live' : state === 'stale' ? 'Not responding' : reachable ? 'Bridge stopped' : 'REAPER unreachable';
   const connected = [...sessions.values()].filter((x) => isConnected(x, now) && hasToolCalls(x));
@@ -555,7 +568,7 @@ function Header({
       <div className="brand">
         <Mark
           active={state === 'live'}
-          onShiftClick={galleryAllowed('?gallery', location.protocol, status?.settings?.dev) ? () => location.assign(`${location.pathname}?gallery`) : undefined}
+          onShiftClick={galleryAllowed('?gallery', location.protocol, developerMode(status?.settings?.dev)) ? () => location.assign(`${location.pathname}?gallery`) : undefined}
         />
         <div className="brand-text">
           <h1>MCP Bridge</h1>
@@ -596,7 +609,7 @@ function Header({
         )}
         {onRebuild && (
           <button
-            className="btn btn-sm"
+            className="btn btn-sm btn-rebuild"
             onClick={onRebuild}
             title="Developer mode: your working tree changed since the last install. Build it, install it into REAPER, restart the bridge and reload"
           >
@@ -611,12 +624,95 @@ function Header({
         <a className="icon-link" href={REPO_URL} target="_blank" rel="noreferrer" title="reaper-mcp on GitHub" aria-label="reaper-mcp on GitHub">
           <GitHubIcon />
         </a>
+        <HeaderMenu overview={overview} onToggleOverview={onToggleOverview} onRebuild={onRebuild} onOpenSettings={onOpenSettings} />
         <span className={`pill pill-${state}`}>
           <span className="pill-dot" />
           {label}
         </span>
       </div>
     </header>
+  );
+}
+
+/** A popup that closes on a click outside `ref` or on Escape */
+function usePopover() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (ev: PointerEvent) => {
+      if (!ref.current?.contains(ev.target as Node)) setOpen(false);
+    };
+    const onKey = (ev: KeyboardEvent) => ev.key === 'Escape' && setOpen(false);
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+  return { open, setOpen, ref };
+}
+
+/** Short windows (CSS): the header's actions and the stats/timeline toggle, folded into one menu */
+function HeaderMenu({
+  overview,
+  onToggleOverview,
+  onRebuild,
+  onOpenSettings,
+}: {
+  overview: boolean;
+  onToggleOverview?: () => void;
+  onRebuild?: () => void;
+  onOpenSettings?: () => void;
+}) {
+  const { open, setOpen, ref } = usePopover();
+  const pick = (fn: () => void) => () => {
+    setOpen(false);
+    fn();
+  };
+  return (
+    <div className="header-menu" ref={ref}>
+      <button
+        className={`icon-link ${onRebuild ? 'header-menu-flag' : ''}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={onRebuild ? 'More (rebuild available)' : 'More'}
+        title={onRebuild ? 'More: your working tree changed, rebuild available' : 'More'}
+        onClick={() => setOpen(!open)}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+          <circle cx="3.5" cy="8" r="1.3" fill="currentColor" />
+          <circle cx="8" cy="8" r="1.3" fill="currentColor" />
+          <circle cx="12.5" cy="8" r="1.3" fill="currentColor" />
+        </svg>
+      </button>
+      {open && (
+        <div className="menu" role="menu">
+          {onRebuild && (
+            <button role="menuitem" className="menu-accent" onClick={pick(onRebuild)}>
+              Rebuild &amp; reload
+            </button>
+          )}
+          {onToggleOverview && (
+            <button role="menuitemcheckbox" aria-checked={overview} onClick={pick(onToggleOverview)}>
+              <span className="menu-check" aria-hidden>
+                {overview ? '✓' : ''}
+              </span>
+              Stats &amp; timeline
+            </button>
+          )}
+          {onOpenSettings && (
+            <button role="menuitem" onClick={pick(onOpenSettings)}>
+              Settings
+            </button>
+          )}
+          <a role="menuitem" href={REPO_URL} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>
+            reaper-mcp on GitHub
+          </a>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1877,6 +1973,18 @@ function Log({
     }
   };
 
+  const clear = () => {
+    track({ name: 'log_cleared' });
+    setSelected(null);
+    onClear();
+  };
+  const chooseSession = (id: string | null) => {
+    if (id !== null && sessionFilter !== id) track({ name: 'session_filtered' });
+    setSessionFilter(id);
+  };
+  const shownViews = VIEWS.filter((v) => (v.key !== 'plugins' || knowledge) && (v.key !== 'snapshots' || snapshots));
+  const agentsShown = multiSession && (view === 'calls' || view === 'tools');
+
   const showCalls = (opts: { tool?: string; session?: string; errors?: boolean }) => {
     if (opts.tool !== undefined) setQuery(opts.tool);
     if (opts.session !== undefined) setSessionFilter(opts.session);
@@ -1887,8 +1995,69 @@ function Log({
   return (
     <section className="log">
       <div className="toolbar">
+        <GroupedCombobox
+          className="log-menu"
+          label="View, filters and actions"
+          triggerLabel={[
+            VIEWS.find((v) => v.key === view)?.label,
+            view === 'calls' && filter === 'errors' ? 'Errors' : null,
+            agentsShown && sessionFilter ? sessionName(sessionOf(sessionFilter)) : null,
+            view === 'calls' && paused ? 'Paused' : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          groups={[
+            { label: 'View', items: shownViews.map((v) => ({ key: v.key, label: v.label, selected: view === v.key, onPick: () => choose(v.key) })) },
+            {
+              label: 'Show',
+              items:
+                view === 'calls'
+                  ? [
+                      { key: 'all', label: <>All <span className="count">{scoped.length}</span></>, selected: filter === 'all', onPick: () => chooseFilter('all') },
+                      {
+                        key: 'errors',
+                        label: <>Errors <span className={`count ${errorCount ? 'count-bad' : ''}`}>{errorCount}</span></>,
+                        selected: filter === 'errors',
+                        onPick: () => chooseFilter('errors'),
+                      },
+                    ]
+                  : [],
+            },
+            {
+              label: 'Agent',
+              items: agentsShown
+                ? [
+                    { key: '', label: 'All agents', selected: sessionFilter === null, onPick: () => chooseSession(null) },
+                    ...sessionIds.map((id) => ({
+                      key: id,
+                      label: (
+                        <>
+                          <i className={`sdot hue-${sessionHue(id)} ${isConnected(sessionOf(id), now) ? '' : 'sdot-off'}`} />
+                          {sessionName(sessionOf(id))}
+                          <span className="count">{windowed.filter((e) => e.s === id).length}</span>
+                        </>
+                      ),
+                      selected: sessionFilter === id,
+                      onPick: () => chooseSession(id),
+                    })),
+                  ]
+                : [],
+            },
+            {
+              label: 'Actions',
+              items:
+                view === 'calls'
+                  ? [
+                      { key: 'pause', label: paused ? 'Resume' : 'Pause', hint: paused ? undefined : 'Freeze the log to read it', onPick: onTogglePause },
+                      { key: 'copy', label: 'Copy visible rows', disabled: rows.length === 0, onPick: () => void copy() },
+                      { key: 'clear', label: 'Clear', hint: 'The bridge keeps its history', disabled: log.length === 0, onPick: clear },
+                    ]
+                  : [],
+            },
+          ]}
+        />
         <div className="seg" role="tablist" aria-label="View">
-          {VIEWS.filter((v) => (v.key !== 'plugins' || knowledge) && (v.key !== 'snapshots' || snapshots)).map((v) => (
+          {shownViews.map((v) => (
             <button key={v.key} role="tab" aria-selected={view === v.key} onClick={() => choose(v.key)}>
               {v.label}
             </button>
@@ -1935,11 +2104,7 @@ function Log({
             </button>
             <button
               className="btn"
-              onClick={() => {
-                track({ name: 'log_cleared' });
-                setSelected(null);
-                onClear();
-              }}
+              onClick={clear}
               disabled={log.length === 0}
               title="Clear the log and the chart in this window (the bridge keeps its history and the counters)"
             >
@@ -1964,9 +2129,9 @@ function Log({
         </div>
       )}
 
-      {multiSession && (view === 'calls' || view === 'tools') && (
+      {agentsShown && (
         <div className="chips" role="tablist" aria-label="Agent session">
-          <button role="tab" aria-selected={sessionFilter === null} className="chip" onClick={() => setSessionFilter(null)}>
+          <button role="tab" aria-selected={sessionFilter === null} className="chip" onClick={() => chooseSession(null)}>
             All agents
           </button>
           {sessionIds.map((id) => {
@@ -1979,10 +2144,7 @@ function Log({
                 aria-selected={sessionFilter === id}
                 className="chip"
                 title={x.dir ?? id}
-                onClick={() => {
-                  if (sessionFilter !== id) track({ name: 'session_filtered' });
-                  setSessionFilter(sessionFilter === id ? null : id);
-                }}
+                onClick={() => chooseSession(sessionFilter === id ? null : id)}
               >
                 <i className={`sdot hue-${sessionHue(id)} ${isConnected(x, now) ? '' : 'sdot-off'}`} />
                 {sessionName(x)}
