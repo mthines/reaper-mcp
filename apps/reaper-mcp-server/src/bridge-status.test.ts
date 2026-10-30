@@ -542,15 +542,18 @@ describe('restart and update requests from the page', () => {
     const { control } = await bridge.status();
     expect(control).toMatchObject({ canRestart: true, canUpdate: false });
     expect(control.token).toMatch(/^[0-9a-f]{16}$/);
-    expect(await bridge.eval('action_options')).toBe(3);
+    expect(await bridge.eval('action_options')).toBe(1); // re-running the script stops it
 
     await bridge.set('request', 'restart-0123456789abcdef');
     await bridge.status();
     expect(await bridge.eval('ran_command')).toBeNull();
     expect(await bridge.ext('request')).toBeNull(); // consumed either way
 
+    expect(await bridge.eval('action_options')).toBe(1);
+
     await bridge.set('request', `restart-${control.token}`);
     await bridge.status();
+    expect(await bridge.eval('action_options')).toBe(3); // this re-run starts the installed copy again
     expect(await bridge.eval('ran_command')).toBe(55555);
   });
 

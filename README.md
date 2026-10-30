@@ -188,6 +188,7 @@ download takes about a minute.</sub>
 
 In REAPER: **Actions → Show action list → Load ReaScript…**, pick **`mcp_bridge.lua`**
 and click **Run**. A small status window opens, showing the bridge is live. 🟢
+Running it again stops the bridge.
 
 **Now open Claude Code in any folder (your song folder is perfect) and start mixing:**
 
@@ -225,8 +226,9 @@ breakdown is in [docs/REFERENCE.md](docs/REFERENCE.md#installation).
   `mcp_bridge.lua` again from REAPER's action list.
 - **Claude Code doesn't see REAPER?** Install Claude Code first, then run
   `./scripts/install.sh` again. It registers REAPER with Claude Code.
-- **Newer tools time out after an update?** Run `./scripts/install.sh` again, then stop and
-  re-run `mcp_bridge.lua` in REAPER.
+- **Newer tools time out after an update?** Run `./scripts/install.sh` again, then click
+  **Restart** in the status window's Settings, or run `mcp_bridge.lua` twice (once to stop it,
+  once to start the new copy).
 
 </details>
 
