@@ -50,3 +50,24 @@ def test_writes_only_the_asked_stems_as_float_wavs_at_the_model_rate(tmp_path):
     assert abs(info.duration - 8.0) < 0.01
     bass = next(s for s in r["stems"] if s["stem"] == "bass")
     assert bass["lufs"] is not None and bass["lufs"] > -40, "the bass line lands in the bass stem"
+
+
+@pytest.mark.skipif(not separation.is_installed(), reason="demucs not installed (setup-sidecar --with-separation)")
+def test_an_accelerator_failure_reruns_on_cpu_and_says_so(tmp_path, monkeypatch):
+    import demucs.apply
+
+    real = demucs.apply.apply_model
+
+    def accelerator_lacks_an_op(*args, **kw):
+        # Demucs calls apply_model recursively with positional arguments: only the device keyword matters.
+        if kw.get("device") == "mps":
+            raise RuntimeError("op not implemented for 'mps'")
+        return real(*args, **kw)
+
+    monkeypatch.setattr(separation, "_device", lambda: "mps")
+    monkeypatch.setattr(demucs.apply, "apply_model", accelerator_lacks_an_op)
+    _mix(tmp_path / "mix.wav", seconds=3.0)
+    r = separation.separate(str(tmp_path / "mix.wav"), str(tmp_path / "stems"), stems=["bass"])
+    assert r["device"] == "cpu_fallback" and r["fallbackFrom"] == "mps"
+    assert "not implemented" in r["fallbackError"]
+    assert [s["stem"] for s in r["stems"]] == ["bass"]

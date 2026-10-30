@@ -74,3 +74,14 @@ spec:
             severity: info
           annotations:
             summary: Stem separation on an accelerator runs slower than real time — it likely fell back to CPU.
+
+        - alert: ReaperMcpSeparationFellBack
+          # The accelerator raised and the separation re-ran on CPU (device label cpu_fallback);
+          # the warning log carries the error.
+          expr: >-
+            sum(histogram_count(increase(
+              {otel_metric_name="reaper.audio.separation.speed", reaper_separation_device="cpu_fallback"}[1d]))) > 0
+          labels:
+            severity: info
+          annotations:
+            summary: Stem separation fell back to CPU after the accelerator failed — see the separate_stems warning log.

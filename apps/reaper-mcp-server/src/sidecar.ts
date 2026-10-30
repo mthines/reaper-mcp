@@ -166,6 +166,11 @@ class SidecarClientImpl implements SidecarClient {
   private restartAttempted = false;
   /** Cached spawn promise — prevents double-spawn on concurrent cold-start calls. */
   private spawnPromise: Promise<void> | null = null;
+  /**
+   * The sidecar answers one request at a time, so requests are sent one at a time too:
+   * a request's timeout then counts its own work, never a long separation queued ahead of it.
+   */
+  private queue: Promise<unknown> = Promise.resolve();
 
   isAvailable(): boolean {
     return existsSync(SIDECAR_SCRIPT_PATH) && existsSync(VENV_PYTHON);
@@ -247,7 +252,13 @@ class SidecarClientImpl implements SidecarClient {
     );
   }
 
-  private async callUntraced(method: string, params: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
+  private callUntraced(method: string, params: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
+    const run = this.queue.then(() => this.send(method, params, timeoutMs));
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async send(method: string, params: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
     if (!this.isAvailable()) {
       throw new Error(
         'Audio understanding sidecar not installed. ' +

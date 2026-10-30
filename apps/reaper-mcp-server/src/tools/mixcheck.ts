@@ -24,7 +24,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ProjectInfo, RenderTrackToWavResult } from '@reaper-mcp/protocol';
 import { sendCommand } from '../bridge.js';
 import { getSidecarClient } from '../sidecar.js';
-import { getSeparationSpeedHistogram } from '../telemetry.js';
+import { emitLog, getSeparationSpeedHistogram, redactHome } from '../telemetry.js';
 import { curveSummary, logToolResult, maskingSummary, stemsSummary, stereoBandsSummary } from '../tool-log.js';
 import { MAX_OFFLINE_SECONDS } from './offline.js';
 
@@ -341,6 +341,11 @@ export function registerMixcheckTools(server: McpServer): void {
           getSeparationSpeedHistogram().record(audio / processing, {
             'reaper.separation.device': String(result['device'] ?? 'unknown'),
             'reaper.separation.model': args.model ?? 'htdemucs',
+          });
+        }
+        if (typeof result['fallbackFrom'] === 'string') {
+          emitLog('warn', `separate_stems: ${result['fallbackFrom']} failed, ran on CPU: ${redactHome(String(result['fallbackError'] ?? ''))}`, {
+            'reaper.separation.device': 'cpu_fallback',
           });
         }
         const span = trace.getActiveSpan();

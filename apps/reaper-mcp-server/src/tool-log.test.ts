@@ -33,13 +33,13 @@ describe('tool results for the status page', () => {
 
   it('keeps the short-term curve, headline numbers and spans of a loudness curve, capped at 240 points', () => {
     const r = curveSummary('Master', {
-      integratedLufs: -9.5, truePeakDbtp: -0.6, loudnessRangeLu: 4.2, plrDb: 8.9, maxMomentaryLufs: -6.1, targetLufs: -14, startTime: 60,
+      integratedLufs: -9.5, truePeakDbtp: -0.6, loudnessRangeLu: 4.2, plrDb: 8.9, maxMomentaryLufs: -6.1, targetLufs: -14, overTargetSeconds: 3.5, startTime: 60,
       shortTerm: { step: 1, lufs: Array.from({ length: 300 }, (_, i) => -20 + (i % 10)) },
       momentary: { step: 0.25, lufs: [-1] },
       loudest: { start: 62, end: 65, lufs: -8 }, quietest: { start: 60, end: 63, lufs: -14 },
       overTarget: [{ start: 61.5, end: 66, maxLufs: -8 }],
     });
-    expect(r).toMatchObject({ name: 'Master', lufs: -9.5, tp: -0.6, lra: 4.2, plr: 8.9, maxM: -6.1, target: -14, start: 60, step: 1, term: 's',
+    expect(r).toMatchObject({ name: 'Master', lufs: -9.5, tp: -0.6, lra: 4.2, plr: 8.9, maxM: -6.1, target: -14, overS: 3.5, start: 60, step: 1, term: 's',
       loud: [62, 65, -8], quiet: [60, 63, -14], over: [[61.5, 66, -8]] });
     expect((r['curve'] as number[]).length).toBe(240);
   });

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 import os
+import sys
 import time
 from typing import Any
 
@@ -87,8 +88,8 @@ def separate(path: str, out_dir: str, model_name: str = "htdemucs", stems: list[
         raise ValueError("Audio too short: need at least 1 s")
     if max_seconds and audio.shape[1] / sr > max_seconds + 0.5:
         raise ValueError(f"Audio is {audio.shape[1] / sr:.0f} s: max {max_seconds:.0f} s per call (pass startTime/endTime)")
-    started = time.time()
     model = _model(model_name)
+    started = time.time()  # after the model load: the speed is the separation's own
     wav = torch.from_numpy(audio)
     if wav.shape[0] == 1:
         wav = wav.repeat(2, 1)
@@ -103,15 +104,20 @@ def separate(path: str, out_dir: str, model_name: str = "htdemucs", stems: list[
     wav = (wav - mean) / std
 
     device = _device()
+    fallback: dict[str, str] = {}
     try:
         with torch.no_grad():
             sources = apply_model(model, wav[None], device=device, split=True, overlap=0.25, progress=False)[0]
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         if device == "cpu":
             raise
-        device = "cpu"  # an op the accelerator lacks: CPU always works
+        # An op the accelerator lacks: CPU always works. Labelled apart from a plain CPU run,
+        # so the fallback shows in the speed metric and the answer.
+        fallback = {"fallbackFrom": device, "fallbackError": str(exc)[:300]}
+        print(f"separate: {device} failed, falling back to CPU: {exc}", file=sys.stderr, flush=True)
+        device = "cpu_fallback"
         with torch.no_grad():
-            sources = apply_model(model, wav[None], device=device, split=True, overlap=0.25, progress=False)[0]
+            sources = apply_model(model, wav[None], device="cpu", split=True, overlap=0.25, progress=False)[0]
     sources = sources * std + mean
 
     os.makedirs(out_dir, exist_ok=True)
@@ -132,5 +138,5 @@ def separate(path: str, out_dir: str, model_name: str = "htdemucs", stems: list[
     return {
         "model": model_name, "sampleRate": int(model.samplerate), "device": device,
         "seconds": round(audio.shape[1] / sr, 2), "processingSeconds": round(time.time() - started, 1),
-        "stems": written, "outDir": out_dir,
+        "stems": written, "outDir": out_dir, **fallback,
     }

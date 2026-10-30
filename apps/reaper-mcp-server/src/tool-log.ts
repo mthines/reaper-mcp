@@ -102,6 +102,7 @@ export function curveSummary(name: string, data: Obj): Obj {
     plr: num(data['plrDb']),
     maxM: num(data['maxMomentaryLufs']),
     target: num(data['targetLufs']),
+    overS: num(data['overTargetSeconds']),
     start: num(data['startTime']) ?? 0,
     step: num(curve['step']),
     term: data['shortTerm'] ? 's' : 'm',

@@ -675,7 +675,8 @@ function Curve({ m, was }: { m: Extract<Measurement, { kind: 'curve' }>; was: Ex
     const r = ev.currentTarget.getBoundingClientRect();
     setHover(Math.min(n - 1, Math.max(0, Math.round(((ev.clientX - r.left) / r.width) * n - 0.5))));
   };
-  const overSecs = m.over.reduce((a, [s0, s1]) => a + (s1 - s0), 0);
+  // The tool's own count; entries from before it was kept fall back to the drawn spans
+  const overSecs = m.overS ?? m.over.reduce((a, [s0, s1]) => a + (s1 - s0), 0);
   const hx = hover === null ? 0 : x(m.start + hover * step);
   // Grid on 6 dB steps, at most three lines
   const gridStep = (top - floor) > 24 ? 12 : 6;
@@ -754,7 +755,7 @@ function StereoBands({ m, was }: { m: Extract<Measurement, { kind: 'stereo' }>; 
         {m.bands.map(([band, c, worst, neg, side]) => {
           const [label, range] = STEREO_BANDS[band] ?? [band, ''];
           const phase = c !== null && c < 0;
-          const wide = !phase && band === 'low' && c !== null && c < 0.7;
+          const wide = !phase && band === 'low' && c !== null && c < 0.5; // the tool's own flag threshold (mixcheck.py)
           const w = was?.bands.find((b) => b[0] === band)?.[1] ?? null;
           return (
             <div key={band} className={`ev-row ${phase ? 'ev-bad' : wide ? 'ev-hot' : ''}`}
@@ -849,7 +850,7 @@ function Stems({ m }: { m: Extract<Measurement, { kind: 'stems' }> }) {
     <>
       <div className="measure-readouts">
         <Readout label="Model" value={m.model ?? '–'} />
-        <Readout label="Device" value={m.device ?? '–'} />
+        <Readout label="Device" value={m.device === 'cpu_fallback' ? 'CPU (fallback)' : (m.device ?? '–')} />
         <Readout label="Speed" value={speed === undefined ? '–' : speed.toFixed(1)} unit="× real time" title={m.secs !== undefined && m.proc !== undefined ? `${m.secs} s of audio in ${m.proc} s` : undefined} />
       </div>
       <div className="ev-rows">

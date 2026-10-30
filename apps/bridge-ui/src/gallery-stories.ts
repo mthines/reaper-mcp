@@ -133,7 +133,7 @@ function measurementStories(): Story[] {
   const song = (lift: number) => SONG_SECTIONS.flatMap(([, , l], i) =>
     Array.from({ length: 15 }, (_, k) => Math.round((l + lift + Math.sin((i * 15 + k) / 2.3) * 0.9 - (k < 2 && i > 0 ? 1.5 : 0)) * 10) / 10));
   const curveR = {
-    name: 'Master', lufs: -10.4, tp: -0.6, lra: 6.8, plr: 9.8, maxM: -6.9, target: -14, start: 0, step: 1, term: 's',
+    name: 'Master', lufs: -10.4, tp: -0.6, lra: 6.8, plr: 9.8, maxM: -6.9, target: -14, overS: 86, start: 0, step: 1, term: 's',
     curve: song(0), loud: [124, 127, -7.8], quiet: [176, 179, -19.3],
     over: [[30, 76, -8.6], [105, 150, -7.8]],
   };

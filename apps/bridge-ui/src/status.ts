@@ -46,6 +46,8 @@ export type Measurement =
    *  spans [start, end, LUFS] of the loudest / quietest window and of every stretch over `target` */
   | {
       kind: 'curve'; name?: string; lufs?: number; tp?: number; lra?: number; plr?: number; maxM?: number; target?: number;
+      /** Seconds the short-term loudness spent over the target, as the tool counts them */
+      overS?: number;
       start: number; step?: number; term?: string; curve: number[];
       loud: [number, number, number | null] | null; quiet: [number, number, number | null] | null; over: [number, number, number | null][];
     }
@@ -69,7 +71,7 @@ const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[]
   analyze_audio_file: { kind: 'offline', fields: ['lufs', 'lra', 'tp', 'peak', 'crest', 'dur', 'sib'] },
   measure_track_alignment: { kind: 'alignment', fields: ['delayMs', 'samples', 'corr', 'inv', 'cur', 'offset', 'phase', 'warn'] },
   analyze_track_aesthetics: { kind: 'aesthetics', fields: ['pq', 'pc', 'ce', 'cu', 'lufs', 'dur'] },
-  analyze_loudness_curve: { kind: 'curve', fields: ['lufs', 'tp', 'lra', 'plr', 'maxM', 'target', 'start', 'step'] },
+  analyze_loudness_curve: { kind: 'curve', fields: ['lufs', 'tp', 'lra', 'plr', 'maxM', 'target', 'overS', 'start', 'step'] },
   analyze_stereo_bands: { kind: 'stereo', fields: ['dur'] },
   measure_masking: { kind: 'masking', fields: [] },
   separate_stems: { kind: 'stems', fields: ['secs', 'proc', 'inserted'] },
