@@ -860,7 +860,7 @@ function Stems({ m }: { m: Extract<Measurement, { kind: 'stems' }> }) {
             <div key={stem} className={`ev-row ${over ? 'ev-hot' : ''}`} title={`${STEM_LABEL(stem)}: ${lufs === null ? 'silent' : `${fmt(lufs)} LUFS`}${peak !== null ? `, peak ${fmt(peak)} dBFS` : ''}`}>
               <span className="ev-name">{STEM_LABEL(stem)}</span>
               <span className="ev-val mono">
-                <b>{lufs === null ? 'silent' : fmt(lufs)}</b> LUFS
+                {lufs === null ? <b>silent</b> : <><b>{fmt(lufs)}</b> LUFS</>}
                 {peak !== null && <span className={over ? 'ev-word' : ''}> · peak {fmt(peak)}</span>}
               </span>
               <span className="ev-bar">
