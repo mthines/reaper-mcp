@@ -42,7 +42,7 @@ async function run(command: Parameters<typeof sendCommand>[0], params: Record<st
 export function registerEnvelopeTools(server: McpServer): void {
   server.tool(
     'get_track_envelopes',
-    'List all automation envelopes on a track (volume, pan, mute, FX params, etc.) with point and automation item counts',
+    'List all automation envelopes on a track (volume, pan, mute, FX params, sends, etc.) with point and automation item counts. Send envelopes (all named "Send Volume", "Send Pan", ...) carry `send`: the send index and destination track.',
     { trackIndex },
     async (params) => run('get_track_envelopes', params),
   );

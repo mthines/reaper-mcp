@@ -280,7 +280,7 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | Tool | File | Description |
 |------|------|-------------|
 | `create_track_envelope` | `tools/envelopes.ts` | Create/show an envelope on a track (Volume, Pan, Mute, Width, Trim Volume via native actions, selection kept; or FX parameter); `created: false` when it existed |
-| `get_track_envelopes` | `tools/envelopes.ts` | List envelopes on a track (name, point and automation item counts, active/visible/armed) |
+| `get_track_envelopes` | `tools/envelopes.ts` | List envelopes on a track (name, point and automation item counts, active/visible/armed); send envelopes carry `send` (index, destination track) |
 | `get_envelope_points` | `tools/envelopes.ts` | Get automation points with pagination (time, raw value, `db` on volume envelopes, shape, tension) |
 | `insert_envelope_point` | `tools/envelopes.ts` | Insert an automation point (`value` or `db`) with shape/tension |
 | `insert_envelope_points` | `tools/envelopes.ts` | Batch insert multiple automation points (JSON array) |

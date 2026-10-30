@@ -196,6 +196,48 @@ local function target(p, ai)
   return t
 end
 
+-- The send a send envelope belongs to (every one is named "Send Volume", "Send Pan", ...);
+-- nil for any other envelope. I_SEND_IDX is 1-based, 0 when not a send.
+local function send_of(api, env)
+  if not api.GetEnvelopeInfo_Value then return nil end
+  local idx = math.floor((tonumber((api.GetEnvelopeInfo_Value(env, "I_SEND_IDX"))) or 0) + 0.5)
+  if idx <= 0 then return nil end
+  local send = { index = idx - 1 }
+  local dest = api.GetEnvelopeInfo_Value(env, "P_DESTTRACK")
+  if type(dest) == "userdata" or type(dest) == "table" then
+    local _, name = api.GetTrackName(dest)
+    send.destTrackName = name
+    local n = math.floor(api.GetMediaTrackInfo_Value(dest, "IP_TRACKNUMBER") + 0.5)
+    send.destTrackIndex = n == -1 and -1 or n - 1
+  end
+  return send
+end
+
+function M.list_envelopes(api, p)
+  local tr, err = get_track(api, p)
+  if not tr then return nil, err end
+  local count = api.CountTrackEnvelopes(tr)
+  local envelopes = {}
+  for i = 0, count - 1 do
+    local env = api.GetTrackEnvelope(tr, i)
+    local _, name = api.GetEnvelopeName(env)
+    -- SWS reads the active/visible/armed state; without it these are defaults
+    local active, visible, armed = true, true, false
+    if api.BR_EnvAlloc then
+      local br = api.BR_EnvAlloc(env, false)
+      active, visible, armed = api.BR_EnvGetProperties(br)
+      api.BR_EnvFree(br, false)
+    end
+    envelopes[#envelopes + 1] = {
+      index = i, name = name, pointCount = api.CountEnvelopePoints(env),
+      active = active, visible = visible, armed = armed,
+      automationItems = api.CountAutomationItems and api.CountAutomationItems(env) or 0,
+      send = send_of(api, env),
+    }
+  end
+  return { trackIndex = int(p.trackIndex), envelopes = envelopes, count = count }
+end
+
 -- -----------------------------------------------------------------------------
 -- Points
 -- -----------------------------------------------------------------------------

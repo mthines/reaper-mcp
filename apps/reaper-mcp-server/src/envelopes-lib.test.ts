@@ -25,7 +25,7 @@ function new_fake(spec)
   local function track(name, envs, chunk)
     local tr = { name = name, envs = {}, selected = false, chunk = chunk or "<TRACK\\nNAME x\\n>" }
     for _, e in ipairs(envs or {}) do
-      tr.envs[#tr.envs + 1] = { name = e.name, mode = e.mode or 0, points = e.points or {}, ais = e.ais or {},
+      tr.envs[#tr.envs + 1] = { name = e.name, send = e.send, dest = e.dest, mode = e.mode or 0, points = e.points or {}, ais = e.ais or {},
         chunk = "<ENV\\nACT " .. (e.act or 1) .. " -1\\nVIS " .. (e.vis or 1) .. " 1 1\\n>", track = tr }
     end
     return tr
@@ -46,6 +46,17 @@ function new_fake(spec)
     for _, e in ipairs(tr.envs) do if e.name == name then return e end end
   end
   function api.GetEnvelopeName(env) return true, env.name end
+  function api.GetEnvelopeInfo_Value(env, parm)
+    if parm == "I_SEND_IDX" then return env.send and env.send + 1 or 0 end
+    if parm == "P_DESTTRACK" then return env.dest and api.tracks[env.dest + 1] or 0 end
+  end
+  function api.GetTrackName(tr) return true, tr.name end
+  function api.GetMediaTrackInfo_Value(tr, parm)
+    assert(parm == "IP_TRACKNUMBER")
+    if tr == api.master then return -1 end
+    for i, t in ipairs(api.tracks) do if t == tr then return i end end
+    return 0
+  end
   function api.GetEnvelopeScalingMode(env) return env.mode end
   function api.ScaleToEnvelopeMode(mode, v) return to_mode(mode, v) end
   function api.ScaleFromEnvelopeMode(mode, v) return from_mode(mode, v) end
@@ -367,6 +378,24 @@ describe('mcp_envelopes_lib.lua (wasmoon)', () => {
       _, err = env.edit_points(api, p, { { index = 0, time = 50 } })
       assert(err and err:find("outside"), tostring(err))
       assert(api.writes == writes and env.get_points(api, p).total == 4, "a refused request changes nothing")
+    `);
+  });
+
+  it('lists envelopes with the send each send envelope belongs to, on the master too', async () => {
+    await runLua(`
+      local api = new_fake{
+        tracks = { { name = "Backing", envs = { { name = "Send Volume", send = 0, dest = 1 }, { name = "Send Volume", send = 1, dest = 2 },
+          { name = "Volume", mode = 1, points = { { time = 0, value = 716.2 } } } } }, { name = "Delay" }, { name = "Verb" } },
+        masterEnvs = { { name = "Volume", mode = 1 } },
+      }
+      local r = assert(env.list_envelopes(api, { trackIndex = 0 }))
+      assert(r.count == 3)
+      local a, b, v = r.envelopes[1], r.envelopes[2], r.envelopes[3]
+      assert(a.send.index == 0 and a.send.destTrackName == "Delay" and a.send.destTrackIndex == 1, "first send")
+      assert(b.send.index == 1 and b.send.destTrackName == "Verb" and b.send.destTrackIndex == 2, "second send")
+      assert(v.send == nil and v.pointCount == 1, "a track envelope has no send")
+      local m = assert(env.list_envelopes(api, { trackIndex = -1 }))
+      assert(m.count == 1 and m.envelopes[1].name == "Volume", "master")
     `);
   });
 

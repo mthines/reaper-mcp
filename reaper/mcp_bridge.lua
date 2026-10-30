@@ -3963,35 +3963,6 @@ end
 -- Envelopes / Automation
 -- =============================================================================
 
-function handlers.get_track_envelopes(params)
-  local track = reaper.GetTrack(0, params.trackIndex)
-  if not track then return nil, "Track " .. params.trackIndex .. " not found" end
-  local count = reaper.CountTrackEnvelopes(track)
-  local envelopes = {}
-  for i = 0, count - 1 do
-    local env = reaper.GetTrackEnvelope(track, i)
-    local _, name = reaper.GetEnvelopeName(env)
-    local point_count = reaper.CountEnvelopePoints(env)
-    -- Get envelope state info (SWS extension provides BR_Env*, fallback if unavailable)
-    local active, visible, armed = true, true, false
-    if reaper.BR_EnvAlloc then
-      local br_env = reaper.BR_EnvAlloc(env, false)
-      active, visible, armed = reaper.BR_EnvGetProperties(br_env)
-      reaper.BR_EnvFree(br_env, false)
-    end
-    envelopes[#envelopes + 1] = {
-      index = i,
-      name = name,
-      pointCount = point_count,
-      active = active,
-      visible = visible,
-      armed = armed,
-      automationItems = reaper.CountAutomationItems and reaper.CountAutomationItems(env) or 0,
-    }
-  end
-  return { trackIndex = params.trackIndex, envelopes = envelopes, count = count }
-end
-
 -- Points, creation and automation items: logic in mcp_envelopes_lib.lua. One table, not
 -- separate locals: the bridge's main chunk is at Lua's 200-locals limit.
 local env_ext = {}
@@ -4012,6 +3983,8 @@ function env_ext.list(v)
   if type(v) ~= "string" then return nil end
   return json_decode_array(v)
 end
+
+function handlers.get_track_envelopes(params) return env_ext.run("list_envelopes", params) end
 
 function handlers.get_envelope_points(params) return env_ext.run("get_points", params) end
 
