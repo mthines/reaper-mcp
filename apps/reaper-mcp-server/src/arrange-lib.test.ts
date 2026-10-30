@@ -313,6 +313,18 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('copy section: automation items inside the section get pooled copies; one crossing an edge is counted', async () => {
+    await runLua(`
+      local api = new_timeline{ tracks = { { envs = { { pts = { { 0, 1 } },
+        ais = { { pos = 2, len = 4, pool = 7 }, { pos = 9, len = 3, pool = 8 } } } } } } }
+      local r = assert(arrange.copy_section(api, { start = 0, ["end"] = 10, position = 20 }))
+      local ais = api.tracks[1].envs[1].ais
+      assert(r.automationItems == 1 and r.automationItemsCrossing == 1, r.automationItems .. " " .. r.automationItemsCrossing)
+      local copy = ais[#ais]
+      assert(copy.D_POSITION == 22 and copy.D_LENGTH == 4 and copy.D_POOL_ID == 7, "pooled with the source: " .. copy.D_POSITION .. " " .. copy.D_POOL_ID)
+    `);
+  });
+
   it('insert and remove time: a square envelope stays square across the edit', async () => {
     await runLua(`
       local function mute() return new_timeline{ tracks = { { envs = { { pts = { { 0, 0, 1 }, { 100, 1, 1 } } } } } } } end

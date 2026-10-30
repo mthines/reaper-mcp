@@ -614,6 +614,31 @@ local function check_section(api, p)
     envelopes = p.envelopes ~= false, all_tracks = p.tracks == nil }
 end
 
+-- Automation items wholly inside [s, e) get a pooled instance at the destination, so a section level
+-- (one pool per section type) keeps editing as one; items crossing an edge are counted, not cut
+local AI_KEYS = { "D_STARTOFFS", "D_PLAYRATE", "D_BASELINE", "D_AMPLITUDE", "D_LOOPSRC" }
+local function copy_automation_items(api, env, s, e, offset, r)
+  local inside = {}
+  for i = 0, api.CountAutomationItems(env) - 1 do
+    local pos = api.GetSetAutomationItemInfo(env, i, "D_POSITION", 0, false)
+    local len = api.GetSetAutomationItemInfo(env, i, "D_LENGTH", 0, false)
+    if pos >= s - EPS and pos + len <= e + EPS then
+      local props = {}
+      for _, k in ipairs(AI_KEYS) do props[k] = api.GetSetAutomationItemInfo(env, i, k, 0, false) end
+      inside[#inside + 1] = { pool = math.floor(api.GetSetAutomationItemInfo(env, i, "D_POOL_ID", 0, false) + 0.5), pos = pos, len = len, props = props }
+    elseif pos < e - EPS and pos + len > s + EPS then
+      r.automationItemsCrossing = r.automationItemsCrossing + 1
+    end
+  end
+  for _, ai in ipairs(inside) do
+    local idx = api.InsertAutomationItem(env, ai.pool, ai.pos + offset, ai.len)
+    if idx and idx >= 0 then
+      for k, v in pairs(ai.props) do api.GetSetAutomationItemInfo(env, idx, k, v, true) end
+      r.automationItems = r.automationItems + 1
+    end
+  end
+end
+
 local function apply_section(api, c)
   local s, e, len, dest = c.s, c.e, c.len, c.dest
   local r = { start = r3(s), ["end"] = r3(e), position = r3(dest), length = r3(len), region = c.name }
@@ -649,6 +674,7 @@ local function apply_section(api, c)
   r.items = describe_all(api, made)
   r.itemCount = #made
   r.envelopePoints = 0
+  r.automationItems, r.automationItemsCrossing = 0, 0
   if c.envelopes then
     local wanted = {}
     for _, tr in ipairs(c.tracks) do wanted[tr] = true end
@@ -659,6 +685,7 @@ local function apply_section(api, c)
         local pt = point(api, env, i)
         if pt.t >= s - EPS and pt.t < e - EPS then pts[#pts + 1] = pt end
       end
+      copy_automation_items(api, env, s, e, offset, r)
       if #pts == 0 then return end
       -- Values at the section's edges, so the copy starts and ends where the source does
       local _, v_start = api.Envelope_Evaluate(env, s, 0, 0)

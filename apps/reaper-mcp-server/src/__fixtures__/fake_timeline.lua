@@ -37,7 +37,7 @@ function new_timeline(spec)
   local function new_env(x)
     local env = { name = x.name or "Volume", pts = {}, ais = {} }
     for _, p in ipairs(x.pts or {}) do env.pts[#env.pts + 1] = { t = p[1], v = p[2], shape = p[3] or 0, tension = 0, sel = false } end
-    for _, a in ipairs(x.ais or {}) do env.ais[#env.ais + 1] = { D_POSITION = a.pos, D_LENGTH = a.len, D_UISEL = a.sel and 1 or 0 } end
+    for _, a in ipairs(x.ais or {}) do env.ais[#env.ais + 1] = { D_POSITION = a.pos, D_LENGTH = a.len, D_UISEL = a.sel and 1 or 0, D_POOL_ID = a.pool or 0, D_PLAYRATE = 1, D_AMPLITUDE = 1 } end
     return env
   end
   for k, t in ipairs(spec.tracks or {}) do
@@ -262,6 +262,11 @@ function new_timeline(spec)
     return 0, pts[#pts].v
   end
   api.CountAutomationItems = function(env) return #env.ais end
+  api.InsertAutomationItem = function(env, pool, pos, len)
+    env.ais[#env.ais + 1] = { D_POSITION = pos, D_LENGTH = len, D_UISEL = 0, D_POOL_ID = pool, D_PLAYRATE = 1, D_AMPLITUDE = 1 }
+    write()
+    return #env.ais - 1
+  end
   api.GetSetAutomationItemInfo = function(env, i, k, v, set)
     local ai = env.ais[i + 1]
     if set then ai[k] = v; write() end

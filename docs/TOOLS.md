@@ -152,7 +152,7 @@ Each is one bridge call and one undo point; a refused request changes nothing. T
 | `copy_media_items` | Copy or repeat items, keeping their spacing (`times`, `position`, `trackIndex`, `pooled`) |
 | `insert_time` | Open time at a position; spanning items split, spanning regions grow |
 | `remove_time` | Cut a range and close the gap; the tempo after the cut is kept |
-| `copy_section` | Copy a region (or start/end) to a position, items trimmed to it plus automation; `insert` opens time first |
+| `copy_section` | Copy a region (or start/end) to a position, items trimmed to it plus automation (points and pooled automation items); `insert` opens time first |
 | `process_items` | `normalize` (peak, true peak, LUFS, RMS target via item gain), `reverse`, `glue` |
 
 ### Snapshots (A/B Testing)

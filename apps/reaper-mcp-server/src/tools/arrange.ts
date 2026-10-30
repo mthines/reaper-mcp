@@ -121,7 +121,8 @@ export function registerArrangeTools(server: McpServer): void {
   server.tool(
     'copy_section',
     'Copy a section of the song (a region by list_regions index, or start/end) to another position: the items in it ' +
-      '(trimmed to the section) and, by default, its automation, on every track or the given tracks. With `insert`, ' +
+      '(trimmed to the section) and, by default, its automation (envelope points, plus a pooled copy of each automation item ' +
+      'wholly inside the section; items crossing an edge are counted in automationItemsCrossing, not copied), on every track or the given tracks. With `insert`, ' +
       'time is opened at the position first so nothing there is overwritten (e.g. repeat a chorus). One undo point.',
     {
       regionIndex: z.coerce.number().int().min(0).optional().describe('Region to copy (list_regions index)'),

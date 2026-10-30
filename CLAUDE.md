@@ -250,7 +250,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `copy_media_items` | `tools/arrange.ts` | Copy/repeat items keeping their spacing (`times`, `position`, `trackIndex`); fresh GUIDs, MIDI unpooled unless `pooled` |
 | `insert_time` | `tools/arrange.ts` | Open time across the project: items, markers, regions, tempo, envelope points and automation items after it move; spanning items split |
 | `remove_time` | `tools/arrange.ts` | Cut a range out of the project and close the gap; crossing items trimmed, regions shrink, the tempo after the cut kept |
-| `copy_section` | `tools/arrange.ts` | Copy a region (or start/end) to a position: items trimmed to it plus automation, optional `insert` and `tracks` |
+| `copy_section` | `tools/arrange.ts` | Copy a region (or start/end) to a position: items trimmed to it plus automation (points, and pooled copies of automation items inside it), optional `insert` and `tracks` |
 | `process_items` | `tools/arrange.ts` | `normalize` (item gain to a peak/true-peak/LUFS/RMS target), `reverse`, `glue`; selection kept |
 
 ### Selection & Navigation Tools (5)
