@@ -286,7 +286,7 @@ resource (`service.instance.id`, `deployment.environment.name`). Count them per 
 - p95 of `reaper.bridge.handler.duration{rpc.method=~"insert_time|remove_time|copy_section"}` rising while
   `reaper.arrange.items_changed` stays flat — the whole-project walk got slower per item. Any
   `error.type="timeout"` on them matters more than elsewhere: REAPER may still finish the edit, and a retry applies it twice
-  (`ReaperMcpArrangeTimeout`).
+  (`ReaperMcpArrangeTimeout`). The p95 trend is a dashboard panel, not a rule: it has no fixed threshold.
 
 These are ready to apply as check rules in [`observability/check-rules.yaml`](observability/check-rules.yaml).
 
