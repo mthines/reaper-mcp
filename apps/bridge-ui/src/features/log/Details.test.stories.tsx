@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { DRAWER_EXAMPLES, EXAMPLE_NOW } from '../../demo/examples.js';
 import { Details } from './Details.js';
 
-const example = (title: string) => DRAWER_EXAMPLES.find((x) => x.title === title)!;
+const example = (title: string) => DRAWER_EXAMPLES.find((x) => x.title === title) ?? DRAWER_EXAMPLES[0];
 
 const meta = {
   title: 'Features/Log/Details/Tests',

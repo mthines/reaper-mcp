@@ -6,16 +6,18 @@ import { afterEach, describe, it } from 'vitest';
 import preview from '../../.storybook/preview.js';
 
 setProjectAnnotations(preview);
-// jsdom has no layout or pointer capture: scrolling, capturing and observing sizes do nothing
-Element.prototype.scrollIntoView = () => undefined;
-Element.prototype.setPointerCapture = () => undefined;
-Element.prototype.releasePointerCapture = () => undefined;
+// jsdom has no layout or pointer capture: scrolling, capturing, media queries and size observers do nothing
+const nothing = () => undefined;
+Element.prototype.scrollIntoView = nothing;
+Element.prototype.setPointerCapture = nothing;
+Element.prototype.releasePointerCapture = nothing;
 Element.prototype.hasPointerCapture = () => false;
-window.matchMedia ??= (query: string) => ({ matches: false, media: query, onchange: null, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => false });
+window.matchMedia ??= (query: string) =>
+  ({ matches: false, media: query, onchange: null, addListener: nothing, removeListener: nothing, addEventListener: nothing, removeEventListener: nothing, dispatchEvent: () => false }) as MediaQueryList;
 globalThis.ResizeObserver ??= class {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
+  observe = nothing;
+  unobserve = nothing;
+  disconnect = nothing;
 };
 
 type StoryModule = Parameters<typeof composeStories>[0];

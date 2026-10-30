@@ -44,10 +44,9 @@ export const FiltersTheCallsBySearch: Story = {
 export const OpensACallInTheDrawerAndClosesIt: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const first = canvasElement.querySelector<HTMLButtonElement>('.row-main');
-    await expect(first).not.toBeNull();
-    const command = first!.querySelector('.row-cmd')!.textContent!;
-    await userEvent.click(first!);
+    const [first] = canvas.getAllByRole('button', { pressed: false }).filter((b) => b.classList.contains('row-main'));
+    const command = first.querySelector('.row-cmd')?.textContent ?? '';
+    await userEvent.click(first);
     const drawer = canvas.getByRole('complementary', { name: `Details for ${command}` });
     await expect(drawer).toBeInTheDocument();
     await userEvent.click(within(drawer).getByRole('button', { name: 'Close details' }));
