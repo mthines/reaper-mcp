@@ -469,16 +469,21 @@ local ITEM_COMMANDS = {
 }
 
 -- Up to four tracks an item command touches, by index
+-- The first four tracks the items are on (one lane each), and how many tracks that is in all
 local function item_tracks(params)
-  local out, seen = {}, {}
+  local out, seen, n = {}, {}, 0
   local function add(idx)
     idx = tonumber(idx)
-    if idx and not seen[idx] and #out < 4 and api.GetTrack(0, idx) then seen[idx] = true; out[#out + 1] = idx end
+    if idx and not seen[idx] and api.GetTrack(0, idx) then
+      seen[idx] = true
+      n = n + 1
+      if #out < 4 then out[#out + 1] = idx end
+    end
   end
   add(params.trackIndex)
   add(params.newTrackIndex)
   for _, it in ipairs(decode_param_list(params.items) or {}) do if type(it) == "table" then add(it.trackIndex) end end
-  return out
+  return out, n
 end
 
 local function item_lanes(params)
@@ -631,8 +636,7 @@ end
 -- Track indexes for the lanes (at most four) and how many tracks the edit touches
 function ARRANGE.tracks(cmd_type, params)
   if cmd_type == "copy_media_items" or cmd_type == "process_items" then
-    local idx = item_tracks(params)
-    return idx, #idx
+    return item_tracks(params)
   end
   local only = cmd_type == "copy_section" and decode_param_list(params.tracks)
   local s, e

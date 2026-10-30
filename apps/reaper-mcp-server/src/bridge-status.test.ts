@@ -686,6 +686,32 @@ describe('arrangement view in the log', () => {
     });
   });
 
+  it('arrangement view in the log: processing items on six tracks draws four lanes and counts the other two', async () => {
+    const bridge = await startBridge(`
+      for t = 1, 6 do
+        api.tracks[t] = api.tracks[t] or { name = "T" .. t, guid = "{T" .. t .. "}", vals = {}, fx = {}, sends = {}, chunk = "" }
+        api.tracks[t].items = { { vals = { D_POSITION = t, D_LENGTH = 1 }, takes = {} } }
+      end
+      api.Main_OnCommand = function() end
+      local function all() local l = {} for _, tr in ipairs(api.tracks) do for _, it in ipairs(tr.items or {}) do l[#l + 1] = it end end return l end
+      api.CountMediaItems = function() return #all() end
+      api.GetMediaItem = function(_, i) return all()[i + 1] end
+      api.IsMediaItemSelected = function(it) return it.selected == true end
+      api.SetMediaItemSelected = function(it, on) it.selected = on end
+      api.SelectAllMediaItems = function(_, on) for _, it in ipairs(all()) do it.selected = on end end
+      api.ValidatePtr2 = api.ValidatePtr2 or function() return true end
+      api.GetMediaItem_Track = function(it)
+        for _, tr in ipairs(api.tracks) do for _, x in ipairs(tr.items or {}) do if x == it then return tr end end end
+      end
+    `);
+    const items = [0, 1, 2, 3, 4, 5].map((t) => ({ trackIndex: t, itemIndex: 0 }));
+    const res = await bridge.send('process_items', { operation: 'glue', items: JSON.stringify(items) });
+    expect(res.success, res.error).toBe(true);
+    const r = (await bridge.status()).recent[0].r;
+    expect(r.lanes).toHaveLength(4);
+    expect(r.moreTracks).toBe(2);
+  });
+
   it('arrangement view in the log: a refused edit keeps no view', async () => {
     const bridge = await startBridge(SONG);
     const res = await bridge.send('remove_time', { start: 5, end: 1 });
