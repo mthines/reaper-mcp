@@ -70,6 +70,17 @@ class Reader {
   ascii(n: number): string { return String.fromCharCode(...this.bytes(n)); }
 }
 
+/** A meta text: UTF-8 when it is valid UTF-8, else Latin-1 (older files); NUL padding dropped. */
+function text(body: Uint8Array): string {
+  let s: string;
+  try {
+    s = new TextDecoder('utf-8', { fatal: true }).decode(body);
+  } catch {
+    s = String.fromCharCode(...body);
+  }
+  return s.replaceAll('\u0000', '').trim();
+}
+
 /** Parse an SMF; throws an Error that says what is wrong with the file. */
 export function parseSmf(data: Uint8Array): SmfFile {
   const r = new Reader(data);
@@ -125,7 +136,7 @@ export function parseSmf(data: Uint8Array): SmfFile {
       if (b === 0xff) {
         const type = tr.byte();
         const body = tr.bytes(tr.varlen());
-        if (type === 0x03 && !track.name) track.name = String.fromCharCode(...body).trim();
+        if (type === 0x03 && !track.name) track.name = text(body);
         else if (type === 0x51 && body.length === 3) {
           tempoChanges++;
           if (tempo === null) tempo = Math.round(60_000_000 / ((body[0] << 16) | (body[1] << 8) | body[2]) * 1000) / 1000;

@@ -46,6 +46,15 @@ describe('parseSmf', () => {
     expect(() => parseSmf(smf([[[0, 0x90, 60, 100]]], { format: 2 }))).toThrow(/format 2/);
   });
 
+  it('reads UTF-8 track names, and Latin-1 ones from older files, without NUL padding', () => {
+    const utf8 = [...new TextEncoder().encode('Café')];
+    const file = parseSmf(smf([
+      [[0, 0xff, 0x03, utf8.length + 1, ...utf8, 0], [0, 0x90, 60, 100], [480, 0x80, 60, 0]],
+      [[0, 0xff, 0x03, 4, 0x43, 0x61, 0x66, 0xe9], [0, 0x90, 62, 100], [480, 0x80, 62, 0]],
+    ]));
+    expect(file.tracks.map((t) => t.name)).toEqual(['Café', 'Café']);
+  });
+
   it('refuses a truncated track', () => {
     const file = smf([[[0, 0x90, 60, 100], [480, 0x80, 60, 0]]]);
     expect(() => parseSmf(file.subarray(0, file.length - 6))).toThrow(/unexpected end/);

@@ -240,6 +240,7 @@ export function registerCompositionTools(server: McpServer): void {
         if ((trackIndex == null) === (path == null)) return fail('Give exactly one of trackIndex or path');
         const start = args.startTime ?? 0;
         if (args.endTime != null && args.endTime <= start) return fail('endTime must be greater than startTime');
+        if (trackIndex === -1 && args.source === 'midi') return fail('The master track holds no MIDI notes: give a track index, or source "audio"');
         let profile: number[] | null = null;
         let source: 'midi' | 'audio' | 'file';
         let name: string | undefined;

@@ -123,11 +123,15 @@ end
 
 local function apply_quantize(api, c)
   local changed, shifts, max_shift = {}, 0, 0
+  -- With swing the lines are up to (1 + swing) steps apart, so window 1 still reaches every note
+  local reach = c.window * (1 + c.swing) * c.grid / 2 + EPS
   for _, n in ipairs(c.notes) do
     local line = snap(n.qs, c.grid, c.swing)
+    -- Never before the item start, where REAPER would not play the note
+    while line < c.t.startQN - EPS do line = line + c.grid end
     local off = line - n.qs
     -- Notes further from a line than the window are left where they are
-    if math.abs(off) <= c.window * c.grid / 2 + EPS and math.abs(off) > EPS then
+    if math.abs(off) <= reach then
       -- Blend, so a full-strength note lands exactly on the line
       n.nqs = line * c.strength + n.qs * (1 - c.strength)
       if c.lengths == "quantize" then
@@ -137,9 +141,12 @@ local function apply_quantize(api, c)
       else
         n.nqe = n.qe + (n.nqs - n.qs)
       end
-      changed[#changed + 1] = n
-      shifts = shifts + math.abs(off)
-      if math.abs(off) > max_shift then max_shift = math.abs(off) end
+      -- A note already on the grid still counts when its end snapped
+      if math.abs(n.nqs - n.qs) > EPS or math.abs(n.nqe - n.qe) > EPS then
+        changed[#changed + 1] = n
+        shifts = shifts + math.abs(off)
+        if math.abs(off) > max_shift then max_shift = math.abs(off) end
+      end
     end
   end
   write_notes(api, c.t, changed)
@@ -210,15 +217,20 @@ local function apply_transform(api, c)
   local rand = rng(c.h.seed or 1)
   local v, h, l = c.v, c.h, c.l
   local clamped, vel_before, vel_after = 0, 0, 0
-  -- Legato: each note runs to the next picked note's start (on the same channel)
+  -- Starts first (humanize moves them), so legato ends meet the notes where they end up
+  for _, n in ipairs(c.notes) do
+    n.nqs = n.qs
+    if h.timingBeats and h.timingBeats > 0 then n.nqs = math.max(c.t.startQN, n.qs + rand() * h.timingBeats) end
+  end
+  -- Legato: each note runs to the next picked note's start on the same channel
   local next_start = {}
   if l.legato then
     local order = {}
     for _, n in ipairs(c.notes) do order[#order + 1] = n end
-    table.sort(order, function(a, b) return a.qs < b.qs end)
+    table.sort(order, function(a, b) return a.nqs < b.nqs end)
     for k, n in ipairs(order) do
       for j = k + 1, #order do
-        if order[j].chan == n.chan and order[j].qs > n.qs + EPS then next_start[n] = order[j].qs; break end
+        if order[j].chan == n.chan and order[j].nqs > n.nqs + EPS then next_start[n] = order[j].nqs; break end
       end
     end
   end
@@ -237,10 +249,8 @@ local function apply_transform(api, c)
     local len = n.qe - n.qs
     if l.set then len = l.set end
     if l.scale then len = len * l.scale end
-    local qs = n.qs
-    if h.timingBeats and h.timingBeats > 0 then qs = math.max(c.t.startQN, qs + rand() * h.timingBeats) end
-    if l.legato and next_start[n] then len = next_start[n] - qs end
-    n.nqs, n.nqe = qs, qs + math.max(len, 1 / 960)
+    if l.legato and next_start[n] then len = next_start[n] - n.nqs end
+    n.nqe = n.nqs + math.max(len, 1 / 960)
   end
   write_notes(api, c.t, c.notes)
   local n = #c.notes
@@ -263,7 +273,7 @@ end
 local function check_import(api, p)
   if not num(p.position) or p.position < 0 then return nil, "position must be 0 or more seconds" end
   if type(p.tracks) ~= "table" or #p.tracks == 0 then return nil, "the file holds no notes or controllers" end
-  if #p.tracks > M.MAX_IMPORT_TRACKS then return nil, "the file has " .. #p.tracks .. " tracks with notes; at most " .. M.MAX_IMPORT_TRACKS end
+  if p.newTracks and #p.tracks > M.MAX_IMPORT_TRACKS then return nil, "the file has " .. #p.tracks .. " tracks with notes; at most " .. M.MAX_IMPORT_TRACKS end
   if not num(p.lengthQN) or p.lengthQN <= 0 then return nil, "lengthQN must be more than 0" end
   local n_tracks = api.CountTracks(0)
   if not int(p.trackIndex) or p.trackIndex < 0 then return nil, "trackIndex must be 0 or more" end
@@ -366,11 +376,15 @@ function M.pitch_profile(api, p)
     if take and api.GetMediaItemInfo_Value(item, "B_MUTE") == 0 then
       if api.TakeIsMIDI(take) then
         midi_items = midi_items + 1
+        -- Only what the item shows: notes past a trimmed edge are not heard (a loop's repeats count once)
+        local pos = api.GetMediaItemInfo_Value(item, "D_POSITION")
+        local i0 = math.max(q0, api.TimeMap2_timeToQN(0, pos))
+        local i1 = math.min(q1, api.TimeMap2_timeToQN(0, pos + api.GetMediaItemInfo_Value(item, "D_LENGTH")))
         local _, count = api.MIDI_CountEvts(take)
         for n = 0, count - 1 do
           local _, _, muted, s, e, chan, pitch, vel = api.MIDI_GetNote(take, n)
-          local qs = math.max(api.MIDI_GetProjQNFromPPQPos(take, s), q0)
-          local qe = math.min(api.MIDI_GetProjQNFromPPQPos(take, e), q1)
+          local qs = math.max(api.MIDI_GetProjQNFromPPQPos(take, s), i0)
+          local qe = math.min(api.MIDI_GetProjQNFromPPQPos(take, e), i1)
           -- Drums (GM channel 10) carry no key
           if not muted and chan ~= 9 and qe > qs then
             chroma[pitch % 12 + 1] = chroma[pitch % 12 + 1] + (qe - qs) * vel / 127

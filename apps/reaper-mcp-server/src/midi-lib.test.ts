@@ -90,6 +90,34 @@ describe('mcp_midi_lib.lua quantize', () => {
     `);
   });
 
+  it('reaches every note at window 1 even with swing, the swung off-beat included', async () => {
+    await runLua(`
+      -- 8ths with swing 0.5: lines at 0, 0.75, 1, 1.75 … — a note at 0.37 is 0.37 from 0 and 0.38 from 0.75
+      local api = keys({ { s = 0.37, e = 0.45, pitch = 60 } })
+      local r = midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 0.5, swing = 0.5 })
+      assert(r.moved == 1 and api.notes_of(0, 0) == "60@0-0.08:100", api.notes_of(0, 0))
+    `);
+  });
+
+  it('snaps the end of a note whose start is already on the grid', async () => {
+    await runLua(`
+      local api = keys({ { s = 0, e = 0.9, pitch = 60 } })
+      local r = midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 1, lengths = "quantize" })
+      assert(r.moved == 1 and api.notes_of(0, 0) == "60@0-1:100", api.notes_of(0, 0))
+    `);
+  });
+
+  it('never moves a note before the item start', async () => {
+    await runLua(`
+      -- The item starts at beat 0.4. A note on its start is nearest beat 0, outside the item: it stays.
+      -- A note at beat 0.6 is also nearest beat 0 (0.4 from beat 1 is no closer): beat 1 is the first line inside
+      local api = new_midi_fake{ tracks = { { items = { { pos = 0.2, len = 2, notes = {
+        { s = 0, e = 0.5, pitch = 60 }, { s = 0.2, e = 0.4, pitch = 62 } } } } } } }
+      midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 1 })
+      assert(api.notes_of(0, 0) == "60@0-0.5:100 62@0.6-0.8:100", api.notes_of(0, 0))
+    `);
+  });
+
   it('quantizes only the chosen notes: by index, by pitch range, by channel', async () => {
     await runLua(`
       local api = keys({ { s = 0.1, e = 0.5, pitch = 36, chan = 9 }, { s = 0.1, e = 0.5, pitch = 60 }, { s = 1.1, e = 1.5, pitch = 72 } })
@@ -159,6 +187,17 @@ describe('mcp_midi_lib.lua transform', () => {
     `);
   });
 
+  it('makes humanized notes legato to where the next note ends up, never overlapping', async () => {
+    await runLua(`
+      local api = keys({ { s = 0, e = 0.5, pitch = 60 }, { s = 1, e = 1.5, pitch = 62 }, { s = 2, e = 2.5, pitch = 64 } })
+      midi.transform(api, { trackIndex = 0, itemIndex = 0, length = { legato = true }, humanize = { timingBeats = 0.25, seed = 7 } })
+      local notes = api.tracks[1].items[1].take.notes
+      for k = 1, #notes - 1 do
+        assert(math.abs(notes[k].e - notes[k + 1].s) < 1e-6, "note " .. k .. " ends where the next starts: " .. api.notes_of(0, 0))
+      end
+    `);
+  });
+
   it('sets lengths and makes notes legato on the same channel', async () => {
     await runLua(`
       local api = keys({ { s = 0, e = 0.25, pitch = 60 }, { s = 1, e = 1.25, pitch = 62 }, { s = 3, e = 3.5, pitch = 64 } })
@@ -199,6 +238,18 @@ describe('mcp_midi_lib.lua import', () => {
     `);
   });
 
+  it('merges a file with more tracks than may become new tracks', async () => {
+    await runLua(`
+      local api = new_midi_fake{ tracks = { { name = "A" } } }
+      local tracks = {}
+      for i = 1, midi.MAX_IMPORT_TRACKS + 1 do tracks[i] = { name = "T" .. i, notes = { { 0, 1, 0, 60, 100 } } } end
+      local r, err = midi.import(api, { trackIndex = 0, position = 0, lengthQN = 4, tracks = tracks })
+      assert(r and r.items[1].notes == midi.MAX_IMPORT_TRACKS + 1, tostring(err))
+      api.writes = 0
+      refused(api, "at most", midi.import(api, { trackIndex = 0, newTracks = true, position = 0, lengthQN = 4, tracks = tracks }))
+    `);
+  });
+
   it('refuses a malformed note, too many notes or a missing track and changes nothing', async () => {
     await runLua(`
       local api = new_midi_fake{ tracks = { { name = "A" } } }
@@ -226,6 +277,10 @@ describe('mcp_midi_lib.lua pitch_profile', () => {
       assert(r.notes == 2 and r.midiItems == 1 and r.audioItems == 1)
       local window = midi.pitch_profile(api, { trackIndex = 0, startTime = 0.25, endTime = 0.75 })
       assert(window.chroma[1] == 1 and window.chroma[8] == 0.5, "clipped to the time window")
+      -- Trim the item to its first beat: the rest of the C and the G past it are not heard
+      api.tracks[1].items[1].len = 0.5
+      local trimmed = midi.pitch_profile(api, { trackIndex = 0 })
+      assert(trimmed.chroma[1] == 1 and trimmed.chroma[8] == 1, "clipped to the item: " .. table.concat(trimmed.chroma, ","))
     `);
   });
 });

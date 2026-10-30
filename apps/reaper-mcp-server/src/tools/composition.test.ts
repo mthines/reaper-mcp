@@ -123,6 +123,7 @@ describe('detect_key', () => {
 
   it('says what is missing: a source, the sidecar for audio, or pitched content', async () => {
     expect((await tool('detect_key')({})).content[0].text).toMatch(/exactly one of trackIndex or path/);
+    expect((await tool('detect_key')({ trackIndex: -1, source: 'midi' })).content[0].text).toMatch(/master track holds no MIDI/);
     vi.mocked(getSidecarClient).mockReturnValue({ isAvailable: () => false } as never);
     sendCommandMock.mockResolvedValue(ok({ chroma: new Array(12).fill(0), notes: 0, midiItems: 0, audioItems: 1 }));
     expect((await tool('detect_key')({ trackIndex: 0 })).content[0].text).toMatch(/sidecar/);
