@@ -137,6 +137,8 @@ export interface SidecarClient {
   stereoBands(params: StereoBandsParams): Promise<Record<string, unknown>>;
   /** Where tracks compete for the same third-octave bands. */
   masking(params: MaskingParams): Promise<Record<string, unknown>>;
+  /** Whether Demucs is installed (setup-sidecar --with-separation), with the install hint. */
+  separationStatus(): Promise<{ installed: boolean; message: string }>;
   /** Split a file into stems (Demucs). Runs for minutes on long audio: pass a timeout. */
   separate(params: SeparateParams, timeoutMs: number): Promise<Record<string, unknown>>;
   /** Terminate the sidecar process. Safe to call even if not running. */
@@ -208,6 +210,10 @@ class SidecarClientImpl implements SidecarClient {
 
   masking(params: MaskingParams): Promise<Record<string, unknown>> {
     return this.call('masking', { ...params }) as Promise<Record<string, unknown>>;
+  }
+
+  separationStatus(): Promise<{ installed: boolean; message: string }> {
+    return this.call('separation_status', {}) as Promise<{ installed: boolean; message: string }>;
   }
 
   separate(params: SeparateParams, timeoutMs: number): Promise<Record<string, unknown>> {

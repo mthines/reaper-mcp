@@ -34,6 +34,8 @@ const SIDECAR_NOT_INSTALLED_MSG =
 
 /** Range rendered from a track when no endTime is given (seconds). */
 const DEFAULT_TRACK_SECONDS = 180;
+/** separate_stems renders less by default: Demucs runs about real time on a CPU. */
+const SEPARATION_TRACK_SECONDS = 60;
 /** measure_masking renders every track: keep the window short. */
 export const MAX_MASKING_SECONDS = 60;
 const DEFAULT_MASKING_SECONDS = 20;
@@ -304,6 +306,8 @@ export function registerMixcheckTools(server: McpServer): void {
     `silicon or CUDA (max ${MAX_SEPARATION_SECONDS} s per call). Needs \`reaper-mcp setup-sidecar --with-separation\`.`,
     {
       ...sourceSchema,
+      endTime: z.coerce.number().min(0).optional()
+        .describe(`End in seconds (track default: startTime + ${SEPARATION_TRACK_SECONDS}; file default: its end)`),
       model: z.enum(['htdemucs', 'htdemucs_6s']).optional().default('htdemucs')
         .describe('htdemucs (4 stems, default) or htdemucs_6s (adds guitar and piano)'),
       stems: z.array(z.enum(['drums', 'bass', 'other', 'vocals', 'guitar', 'piano'])).min(1).optional()
@@ -321,9 +325,16 @@ export function registerMixcheckTools(server: McpServer): void {
       if (args.model === 'htdemucs' && args.stems?.some((s) => s === 'guitar' || s === 'piano')) {
         return error('htdemucs has no guitar or piano stem: use model htdemucs_6s');
       }
+      // Before the render, which blocks REAPER: Demucs is a separate, opt-in install
+      try {
+        const status = await sidecar.separationStatus();
+        if (!status.installed) return error(status.message);
+      } catch (err) {
+        return error(messageOf(err));
+      }
       let src: Source | string;
       try {
-        src = await resolveSource(args, MAX_SEPARATION_SECONDS, 60);
+        src = await resolveSource(args, MAX_SEPARATION_SECONDS, SEPARATION_TRACK_SECONDS);
       } catch (err) {
         return error(messageOf(err));
       }

@@ -445,6 +445,15 @@ def test_separate_method_refuses_an_unknown_stem_before_loading_anything(tmp_pat
     assert not (tmp_path / "out").exists()
 
 
+def test_separation_status_reports_a_missing_demucs_with_how_to_install(monkeypatch):
+    import separation
+
+    monkeypatch.setattr(separation, "is_installed", lambda: False)
+    resp = _call("separation_status", {})
+    assert resp["result"]["installed"] is False
+    assert "setup-sidecar --with-separation" in resp["result"]["message"]
+
+
 def test_separate_method_says_how_to_install_when_demucs_is_missing(tmp_path, monkeypatch):
     import separation
 

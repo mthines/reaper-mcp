@@ -19,10 +19,12 @@ import { registerMixcheckTools, MAX_MASKING_SECONDS } from './mixcheck.js';
 type ToolResult = { content: { type: string; text: string }[]; isError?: boolean };
 type ToolCallback = (params: Record<string, unknown>) => Promise<ToolResult>;
 
+const schemas: Record<string, Record<string, { description?: string }>> = {};
+
 function tool(name: string): ToolCallback {
   const tools: Record<string, ToolCallback> = {};
   registerMixcheckTools({
-    tool: (n: string, _d: string, _s: unknown, cb: ToolCallback) => { tools[n] = cb; },
+    tool: (n: string, _d: string, s: Record<string, { description?: string }>, cb: ToolCallback) => { tools[n] = cb; schemas[n] = s; },
   } as unknown as McpServer);
   return tools[name];
 }
@@ -30,7 +32,7 @@ function tool(name: string): ToolCallback {
 const json = (r: ToolResult) => JSON.parse(r.content[0].text);
 
 /** What the fake REAPER holds: track names, rendered files still on disk, inserted tracks. */
-let reaper: { names: string[]; rendered: string[]; onDisk: Set<string>; inserted: { name: string; position: number }[]; insertFails: boolean };
+let reaper: { names: string[]; rendered: string[]; ranges: [number, number][]; onDisk: Set<string>; inserted: { name: string; position: number }[]; insertFails: boolean };
 
 function fakeBridge() {
   vi.mocked(sendCommand).mockImplementation(async (type: string, params: Record<string, unknown> = {}) => {
@@ -38,6 +40,7 @@ function fakeBridge() {
     if (type === 'render_track_to_wav') {
       const path = `/tmp/render${reaper.rendered.length}.wav`;
       reaper.rendered.push(path);
+      reaper.ranges.push([params['startTime'] as number, params['endTime'] as number]);
       reaper.onDisk.add(path);
       const i = params['trackIndex'] as number;
       return ok({ trackIndex: i, trackName: i === -1 ? 'Master' : reaper.names[i], wavPath: path });
@@ -76,6 +79,7 @@ function sidecar(overrides: Record<string, unknown> = {}) {
       ],
       conflicts: [{ a: tracks[0].name, b: tracks[1].name, hz: 100, score: 0.9, suggestion: `cut ${tracks[1].name} around 100 Hz` }],
     }),
+    separationStatus: async () => ({ installed: true, message: '' }),
     separate: async (p: { outDir: string; stems?: string[] }) => ({
       model: 'htdemucs', sampleRate: 44100, device: 'mps', seconds: 20, processingSeconds: 8,
       outDir: p.outDir,
@@ -88,7 +92,7 @@ function sidecar(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  reaper = { names: ['Kick', 'Bass', 'Keys', 'Bass'], rendered: [], onDisk: new Set(), inserted: [], insertFails: false };
+  reaper = { names: ['Kick', 'Bass', 'Keys', 'Bass'], rendered: [], ranges: [], onDisk: new Set(), inserted: [], insertFails: false };
   vi.mocked(unlink).mockImplementation(async (p) => { reaper.onDisk.delete(String(p)); });
   fakeBridge();
   sidecar();
@@ -221,10 +225,17 @@ describe('separate_stems', () => {
     expect(data.warning).toMatch(/inserting them failed: file not found/);
   });
 
-  it('passes the not-installed message on when Demucs is missing', async () => {
-    sidecar({ separate: async () => { throw new Error('Stem separation is not installed. Run: reaper-mcp setup-sidecar --with-separation'); } });
+  it('says how to install Demucs when it is missing, before rendering anything', async () => {
+    sidecar({ separationStatus: async () => ({ installed: false, message: 'Stem separation is not installed. Run: reaper-mcp setup-sidecar --with-separation' }) });
     const r = await tool('separate_stems')({ trackIndex: 0 });
+    expect(r.isError).toBe(true);
     expect(r.content[0].text).toMatch(/--with-separation/);
-    expect(reaper.onDisk.size).toBe(0);
+    expect(reaper.rendered).toEqual([]);
+  });
+
+  it('splits the first 60 s of a track when no endTime is given, as its schema says', async () => {
+    await tool('separate_stems')({ trackIndex: 0, startTime: 10 });
+    expect(schemas['separate_stems']['endTime'].description).toContain('startTime + 60');
+    expect(reaper.ranges).toEqual([[10, 70]]);
   });
 });

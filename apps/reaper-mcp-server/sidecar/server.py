@@ -412,6 +412,13 @@ def handle_separate(request_id: Any, params: dict) -> str:
         return _err(request_id, -32000, f"Separation failed: {exc}")
 
 
+def handle_separation_status(request_id: Any, params: dict) -> str:
+    """Whether Demucs is installed, so a caller can refuse before rendering anything."""
+    import separation
+
+    return _ok(request_id, {"installed": separation.is_installed(), "message": separation.NOT_INSTALLED})
+
+
 # JSON-RPC method names must stay in sync with the TypeScript client.
 # When adding a method here, also reference it from apps/reaper-mcp-server/src/sidecar.ts.
 METHODS = {
@@ -423,6 +430,7 @@ METHODS = {
     "stereo_bands": handle_stereo_bands,
     "masking": handle_masking,
     "separate": handle_separate,
+    "separation_status": handle_separation_status,
 }
 
 
