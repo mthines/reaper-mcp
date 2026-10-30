@@ -257,6 +257,7 @@ namespace belongs to the official MCP conventions). Durations are in seconds.
 | `reaper.bridge.handler.duration` | s | `rpc.method`, `error.type` — time inside the Lua handler |
 | `reaper.bridge.pickup.duration` | s | — time until the defer loop picked the command up |
 | `reaper.sidecar.request.duration` | s | `rpc.method`, `error.type` |
+| `reaper.arrange.items_changed` | {item} | `gen_ai.tool.name`, `reaper.arrange.operation` (copy/insert/remove/section/normalize/reverse/glue) — items one arrangement edit moved, split, trimmed, deleted, copied or processed; also on the tool span with `reaper.arrange.length_s` |
 | `reaper.bridge.up` | 1 | gauge: 1 while REAPER's heartbeat is fresh, 0 when the bridge is down |
 | `reaper.bridge.defer.interval`, `reaper.bridge.scan.duration` | s | `reaper.statistic` (p50/p95, avg/max) |
 
@@ -282,6 +283,9 @@ resource (`service.instance.id`, `deployment.environment.name`). Count them per 
 - p95 of `reaper.bridge.command.duration` > 0.5 s — the defer loop is starved (heavy project, blocking render).
 - `mcp.server.operation.duration{error.type!=""}` / total > 5 % per `gen_ai.tool.name` — a tool regressed.
 - Any `reaper.bridge.handler_error` or `reaper.server.crash` log — a bug, not a user error.
+- p95 of `reaper.bridge.handler.duration{rpc.method=~"insert_time|remove_time|copy_section"}` rising while
+  `reaper.arrange.items_changed` stays flat — the whole-project walk got slower per item. Any
+  `error.type="timeout"` on them matters more than elsewhere: REAPER may still finish the edit, and a retry applies it twice.
 
 These are ready to apply as check rules in [`observability/check-rules.yaml`](observability/check-rules.yaml).
 

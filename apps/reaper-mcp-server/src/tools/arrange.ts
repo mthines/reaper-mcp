@@ -1,6 +1,8 @@
 import { z } from 'zod/v4';
+import { trace } from '@opentelemetry/api';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sendCommand } from '../bridge.js';
+import { getArrangeItemsHistogram } from '../telemetry.js';
 import { reply } from './items.js';
 
 /**
@@ -20,13 +22,59 @@ export const itemRefs = z
 
 const seconds = (what: string) => z.coerce.number().min(0).describe(what);
 
+type ArrangeCommand = 'copy_media_items' | 'insert_time' | 'remove_time' | 'copy_section' | 'process_items';
+
+const OPERATION: Record<Exclude<ArrangeCommand, 'process_items'>, string> = {
+  copy_media_items: 'copy',
+  insert_time: 'insert',
+  remove_time: 'remove',
+  copy_section: 'section',
+};
+
+/** Items an edit touched, from the counts the bridge returns. */
+function itemsChanged(command: ArrangeCommand, args: Record<string, unknown>, data: Record<string, unknown>): number {
+  const n = (d: Record<string, unknown> | undefined, ...keys: string[]) =>
+    keys.reduce((sum, k) => sum + (typeof d?.[k] === 'number' ? (d[k] as number) : 0), 0);
+  switch (command) {
+    case 'copy_media_items': return n(data, 'count');
+    case 'insert_time': return n(data, 'itemsMoved', 'itemsSplit');
+    case 'remove_time': return n(data, 'itemsMoved', 'itemsDeleted', 'itemsTrimmed');
+    case 'copy_section': return n(data, 'itemCount') + n(data['inserted'] as Record<string, unknown> | undefined, 'itemsMoved', 'itemsSplit');
+    case 'process_items': return Array.isArray(args['items']) ? args['items'].length : 0;
+  }
+}
+
+/**
+ * Put the size of a successful edit on the tool's span and the items-changed
+ * histogram. Duration, errors and refusals are already traced per tool and per
+ * bridge command; this adds what explains a slow one.
+ */
+function recordEdit(command: ArrangeCommand, args: Record<string, unknown>, data: unknown): void {
+  const d = (data ?? {}) as Record<string, unknown>;
+  const operation = command === 'process_items' ? String(args['operation']) : OPERATION[command];
+  const items = itemsChanged(command, args, d);
+  const num = (k: string) => (typeof d[k] === 'number' ? (d[k] as number) : undefined);
+  const start = num('start');
+  const end = num('end');
+  // Seconds of song the edit covers: inserted/copied length, the copied group's span, or the cut
+  const length = num('length') ?? num('span') ?? (start !== undefined && end !== undefined ? end - start : undefined);
+  trace.getActiveSpan()?.setAttributes({
+    'reaper.arrange.operation': operation,
+    'reaper.arrange.items_changed': items,
+    ...(length !== undefined && { 'reaper.arrange.length_s': length }),
+  });
+  getArrangeItemsHistogram().record(items, { 'gen_ai.tool.name': command, 'reaper.arrange.operation': operation });
+}
+
 // Nested arrays travel as JSON strings: the bridge decodes only the top level
-function send(command: 'copy_media_items' | 'insert_time' | 'remove_time' | 'copy_section' | 'process_items', args: Record<string, unknown>) {
+async function send(command: ArrangeCommand, args: Record<string, unknown>) {
   const params: Record<string, unknown> = { ...args };
   for (const key of ['items', 'tracks']) {
     if (params[key] !== undefined) params[key] = JSON.stringify(params[key]);
   }
-  return sendCommand(command, params, ARRANGE_TIMEOUT_MS).then(reply);
+  const res = await sendCommand(command, params, ARRANGE_TIMEOUT_MS);
+  if (res.success) recordEdit(command, args, res.data);
+  return reply(res);
 }
 
 export function registerArrangeTools(server: McpServer): void {
