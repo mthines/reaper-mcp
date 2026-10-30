@@ -64,6 +64,7 @@ describe('mix-check telemetry', () => {
     }));
     vi.mocked(getSidecarClient).mockReturnValue({
       isAvailable: () => true,
+      separationStatus: async () => ({ installed: true, message: '' }),
       separate: async () => ({ model: 'htdemucs', device: 'mps', seconds: 20, processingSeconds: 8, stems: [{ stem: 'drums', path: '/o/drums.wav' }] }),
       masking: async () => ({ bandsHz: [100], tracks: ['A', 'B'], pairs: [], conflicts: [{ a: 'A', b: 'B', hz: 100, score: 0.9 }] }),
       stereoBands: async () => ({ bands: [], flags: ['low end wide'] }),
@@ -83,6 +84,7 @@ describe('mix-check telemetry', () => {
   it('records no speed when the separation fails', async () => {
     vi.mocked(getSidecarClient).mockReturnValue({
       isAvailable: () => true,
+      separationStatus: async () => ({ installed: true, message: '' }),
       separate: async () => { throw new Error('Stem separation is not installed'); },
     } as unknown as ReturnType<typeof getSidecarClient>);
     const res = await tools()['separate_stems']({ trackIndex: 0, outDir: '/o' }, {});
