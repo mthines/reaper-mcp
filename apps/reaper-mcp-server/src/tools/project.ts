@@ -66,21 +66,21 @@ function registerProjectOpsTools(server: McpServer): void {
 
   server.tool(
     'get_render_settings',
-    'Get the project render settings: output directory, file name pattern, format, secondary format, bounds (custom/project/time_selection/…), custom start/end, sample rate (0 = project rate), channels, and the target files a render would write.',
+    'Get the project render settings: output directory, file name pattern, format with its bit depth or MP3 bitrate, secondary format, source (master, stems, selected items, region matrix with its rows), bounds (custom/project/time_selection/…), custom start/end, sample rate (0 = project rate), channels, dither and noise shaping, loudness normalization and limiter, embedded metadata, and the target files a render would write.',
     {},
     async () => reply(await sendCommand('get_render_settings')),
   );
 
   server.tool(
     'set_render_settings',
-    'Set any of the project render settings; returns them as read back. All fields are validated before any is written, so an invalid request changes nothing. Covers what is rendered (source: master, stems of the selected tracks, master + stems, selected tracks via the master, the region render matrix), the encoding (bit depth, MP3 bitrate, dither), loudness normalization with a limiter, and embedded metadata.',
+    'Set any of the project render settings; returns them as read back. All fields are validated before any is written, so an invalid request changes nothing. Covers what is rendered (source: master, stems of the selected tracks, master + stems, selected tracks via the master, the selected media items alone or through the master, the region render matrix), the encoding (bit depth, MP3 bitrate, dither), loudness normalization with a limiter, and embedded metadata.',
     {
       outputDirectory: z.string().optional().describe('Absolute output directory'),
       filePattern: z.string().optional().describe('File name pattern without extension; REAPER wildcards like $project, $track, $region allowed'),
       format: z.enum(['wav', 'aiff', 'flac', 'mp3', 'ogg', 'opus']).optional().describe('Output format'),
       secondaryFormat: z.enum(['none', 'wav', 'aiff', 'flac', 'mp3', 'ogg', 'opus']).optional().describe('Second file written by the same render; none disables it'),
       source: z.enum(['master', 'stems', 'master_and_stems', 'selected_via_master', 'region_matrix', 'selected_items', 'selected_items_via_master']).optional()
-        .describe('What is rendered: master mix; stems = one file per selected track (pick them with render_project tracks); master_and_stems; selected_via_master = the selected tracks through the master; region_matrix = the tracks set per region in regionMatrix (needs bounds all_regions or selected_regions)'),
+        .describe('What is rendered: master mix; stems = one file per selected track (pick them with render_project tracks); master_and_stems; selected_via_master = the selected tracks through the master; region_matrix = the tracks set per region in regionMatrix (needs bounds all_regions or selected_regions); selected_items = one file per selected media item; selected_items_via_master = the selected items through the master (select them with set_selected_items)'),
       regionMatrix: z.array(z.object({
         regionIndex: z.coerce.number().int().describe('Region number as list_regions reports it'),
         tracks: z.array(trackRef).describe('Tracks this region renders: index, name, "{GUID}" or "master"; replaces the row'),
