@@ -143,6 +143,12 @@ Watch the GR meter on the limiter:
 - Average 0.5–2 dB GR: Good — the mix is being lightly limited
 - Average 4+ dB GR: The mix is too loud before the limiter; reduce compressor stage or fix upstream
 
+If guitars and bass audibly dip on each drum hit in the full mix (but the drums sound fine soloed), the limiter is pumping:
+
+1. **Find keyed ducking first.** Any dynamic EQ/comp band with an external sidechain ducks on its key. Follow each key with `get_track_routing` (receives). Kick→bass ducking deeper than about −3 dB is audible pumping.
+2. **Clip before the limiter** instead of turning the drive down. Use a clipper (Free Clip 2, Event Horizon) with its ceiling ~1–1.5 dB under the peak level arriving there. Measured on a metal bus: pumping std 1.35 → 1.06 dB, and +0.25 LU louder. Lowering the drive 1.5 dB only got to 1.51 → 1.35 dB and cost 0.4 LU.
+3. **Measure during playback** with an `mcp_gain_trace` pre/post pair (Verification below).
+
 ### Step 6: Check mono compatibility
 
 ```
@@ -193,12 +199,18 @@ Optionally before the compressor:
 3. Export a 30-second clip and check on headphones, phone speaker, and car audio
 4. Verify LUFS integrated reading matches the target platform
 5. Check that transients are still felt (kick punch, snare snap) despite limiting
+6. Measure pumping during playback, no render needed:
+   - Add `JS: reaper-mcp/mcp_gain_trace` at the start of the bus chain (Mode pre) and again at the end (Mode post, same Slot).
+   - Play the loud section, then read the post instance: p5 / p1 are how deep the level dips go, relative to the median gain; std is how much the gain moves.
+   - Compare variants with each other on the same section. About 1.0–1.3 dB std is clean on a loud metal bus; 1.5 dB and above is audible pumping.
 
 ## Common Pitfalls
 
 - **Master bus too loud before the chain**: If peaks are above -3 dBFS before the limiter, the limiter is doing too much work. Fix the mix upstream.
 - **Heavy glue compression + heavy limiting**: Double processing. If the compressor is doing 4+ dB GR and the limiter is doing 4+ dB GR, the mix is being over-squashed. Choose one.
 - **Linear phase EQ artifacts**: Linear phase EQ adds pre-ringing at low frequencies with heavy processing. Keep EQ moves subtle on the master bus.
-- **Chasing loud**: Increasing the limiter's Input Gain to match a loud reference track can destroy the dynamics and make the mix sound flat. Trust the LUFS target.
+- **Chasing loud**: Increasing the limiter's Input Gain to match a loud reference track can destroy the dynamics and make the mix sound flat. Trust the LUFS target. Streaming turns loud masters down to about −14 LUFS, so the extra limiting only costs punch there. In a live A/B/C of a metal chorus, the user picked the −8.3 LUFS version over −7.8 and −6.9 as "most clear".
+- **Trusting a reference's loudness blindly**: Check the reference with `analyze_audio_file` first. A mono file at −18 LUFS peaking at −7 dBTP is a rip or a pre-master, not a release, so use it for tone only.
+- **Rendering to verify while the user works**: A render's progress window takes focus. Verify by measuring during playback and render only the final deliverable.
 - **Exporting without checking LUFS**: Integrated LUFS requires measuring the entire song. A 30-second check is not sufficient for integrated measurement. Play the full song with the LUFS meter running.
 - **Not saving a pre-master snapshot**: Always save a snapshot before adding master bus processing. The user may want to A/B compare.

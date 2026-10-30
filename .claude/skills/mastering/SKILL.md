@@ -89,12 +89,29 @@ the user's own `user::` layer on top. Reads combine both; writes go to `user::` 
    30–80 ms, auto/200–500 ms release, **1–2 dB GR max**. More GR → fix the mix.
 6. **Limiter** (last in chain) — ceiling -1.0 dBTP (streaming) or -0.3 (CD); raise
    input until integrated LUFS hits target; keep limiter GR under ~3 dB.
+   If the limiter pumps (guitars/bass dip on every drum hit), **clip before
+   it** rather than lowering drive or limiting harder. Put a clipper (e.g.
+   Free Clip 2) just before the limiter, with a ceiling ~1–1.5 dB under the
+   level that *arrives at it* (an upstream limiter's ceiling, not 0 dBFS).
+   The clipper only alters the peak samples, while the limiter's gain change
+   pulls the whole mix down for its release time. Seen live: master pumping
+   std 1.35 → 1.06 dB at +0.25 LU. Keep it to ≤1.5 dB (lesson
+   drum-bus-clip-buries-attack).
+   **Dynamics over loudness:** streaming turns everything down to about -14
+   LUFS, so a hotter master only loses punch there. Don't chase a loud
+   reference's LUFS. Offer louder as an option the user picks by ear.
 7. **Verify** — `analyze_track_offline` on the master over the whole song:
    integrated LUFS within 0.5 of target, true peak below the ceiling, LRA and
    crest genre-appropriate; `read_track_correlation` healthy (>0.3). To compare
    chain versions, `analyze_track_aesthetics` on the same 30 s range keeps the
    default level match (-18 LUFS), so the louder master does not win by level;
    PQ moves under ~0.1 are noise (`reference/aesthetics-scoring.md`).
+   While the user is working in REAPER, verify during playback instead of
+   rendering (a render window takes focus). Use `measure_tracks` on the bus for
+   LUFS + true peak over the loud section, or the stock Loudness Meter in
+   true-peak mode. For a final choice, build 2–3 variants and switch them live
+   with `run_plan` (mixer skill, step 7). Render the deliverable once, when the
+   user asks.
 8. **Report** — first run the **end-of-session retrospective** (Memory) and write
    any lesson it surfaces; then `snapshot_save { name: "master-v1" }` and report
    target vs achieved LUFS, true peak, crest, the chain + settings, any

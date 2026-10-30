@@ -16,6 +16,7 @@ Files installed INTO the REAPER DAW by the `setup` command. These run inside REA
 | `mcp_lufs_meter.jsfx` | JSFX/EEL2 | LUFS loudness metering |
 | `mcp_correlation_meter.jsfx` | JSFX/EEL2 | Stereo correlation and width analysis |
 | `mcp_crest_factor.jsfx` | JSFX/EEL2 | Crest factor (peak-to-RMS) measurement |
+| `mcp_gain_trace.jsfx` | JSFX/EEL2 | Pre/post gain trace for pumping/ducking: pair it around a chain (Mode pre/post, same Slot), read p5/p1/std after playback. No `1e9`-style literals (EEL2 rejects them; `jsfx-lint.test.ts` checks) |
 | `install.sh` | Shell | Manual install helper |
 
 ## Lua Bridge (`mcp_bridge.lua`)

@@ -157,6 +157,27 @@ loudness/limiting, defer to `/mastering`.
    arrangement and level. Treat PQ differences under ~0.1 as no change
    (`reference/aesthetics-scoring.md`). Then ask the user to listen: their ear
    has the final say.
+   - **Measure during playback, not by rendering**, while the user is in the
+     session: a render's progress window (and `open -a REAPER script.lua`)
+     takes focus from them. `measure_tracks`, the meters and the gain-trace
+     pair below need only playback; render the final deliverable when the user
+     says so.
+   - **Offer 2–3 variants for a judgement call** (e.g. drive/clipping/drum
+     level): save each as a snapshot, then switch between them *live* with one
+     `run_plan` that sets only the parameters that differ. A full-chunk
+     `snapshot_restore` reloads the plugins and can drop out mid-playback.
+     State each variant's LUFS, since the louder one wins a quick A/B by level
+     alone.
+   - **"It ducks with the full mix but not soloed"** is pumping. Measure it
+     with two `JS: reaper-mcp/mcp_gain_trace` instances: mode pre at the
+     start of the chain, mode post at the end, and the same slot on both. Read
+     the post instance's p5/p1/std after playback (std ≈1.0–1.3 dB is clean
+     on a loud metal bus, 1.5+ pumps). Check every external-sidechain
+     dynamic EQ/comp band and follow its key with `get_track_routing`
+     (receives). Kick→bass ducking deeper than about −3 dB pumps. A key from
+     the vocal can't cause ducking on drum hits.
+     `measure_tracks` removes these instances when it cleans up its own meters,
+     so read the trace before calling it.
 8. **Capture** — write any durable plugin learnings / process lessons (Memory).
    Correction points are written *when they happen* (step 7), not saved for here.
 9. **Report** — first run the **end-of-session retrospective** (Memory) and write

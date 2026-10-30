@@ -123,6 +123,7 @@ reaper-mcp/
     mcp_snapshot_quick_save.lua # Action: quick save with auto-name
     mcp_analyzer.jsfx         # Real-time FFT analyzer (JSFX, writes to gmem[])
     mcp_midi_emitter.jsfx     # Real-time MIDI emitter (JSFX, reads from gmem[] ring buffer)
+    mcp_gain_trace.jsfx       # Live pre/post gain trace (pumping/ducking meter: p5/p1/std as params, gmem MCPGainTrace)
     install.sh                # Manual install helper script
 ```
 
