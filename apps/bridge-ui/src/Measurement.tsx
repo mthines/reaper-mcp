@@ -84,6 +84,14 @@ function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | un
       return <Alignment m={m} />;
     case 'aesthetics':
       return <Aesthetics m={m} was={same('aesthetics', previous)} />;
+    case 'curve':
+      return <Curve m={m} was={same('curve', previous)} />;
+    case 'stereo':
+      return <StereoBands m={m} was={same('stereo', previous)} />;
+    case 'masking':
+      return <Masking m={m} />;
+    case 'stems':
+      return <Stems m={m} />;
     case 'correlation': {
       const c = m.correlation;
       const wc = same('correlation', previous)?.correlation;
@@ -340,6 +348,16 @@ function headline(m: Measurement): { value: number; label: string; unit: string;
       return v(m.delayMs, 'Delay', 'ms');
     case 'aesthetics':
       return v(m.pq, 'Quality', '/ 10', true);
+    case 'curve':
+      return v(m.lufs, 'Integrated', 'LUFS');
+    case 'stereo': {
+      const low = m.bands.find((b) => b[0] === 'low')?.[1];
+      return v(low ?? undefined, 'Low-end correlation', '', true);
+    }
+    case 'masking':
+      return v(m.pairs[0]?.[2], 'Worst pair', '', true);
+    case 'stems':
+      return m.secs && m.proc ? v(m.secs / m.proc, 'Speed', '× real time', true) : null;
   }
 }
 
@@ -629,6 +647,234 @@ function Aesthetics({ m, was }: { m: Extract<Measurement, { kind: 'aesthetics' }
           {m.dur !== undefined ? `, ${Math.round(m.dur)} s` : ''}
           {m.lufs !== undefined ? `, scored at ${fmt(m.lufs, 0)} LUFS` : ', scored as rendered'}
           .{m.dur !== undefined && ` Differences under ~${m.dur >= 30 ? '0.1' : '0.4'} are render noise at this length.`}
+        </span>
+      </div>
+    </>
+  );
+}
+
+// ── Mix checks: loudness over time, stereo per band, masking, stems ───────────
+
+const CW = 600;
+const CH = 120;
+
+/** Short-term loudness over time against the target, loudest and quietest windows marked; hover for values */
+function Curve({ m, was }: { m: Extract<Measurement, { kind: 'curve' }>; was: Extract<Measurement, { kind: 'curve' }> | null }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const n = m.curve.length;
+  const step = m.step ?? 1;
+  const dur = n * step;
+  const audible = [...m.curve, ...(was?.curve ?? [])].filter((v) => v > -69);
+  const top = Math.min(0, Math.ceil(Math.max(m.target ?? -60, ...audible, -30) / 6) * 6 + 3);
+  const floor = Math.max(-60, Math.floor(Math.min(top - 18, ...audible) / 6) * 6);
+  const y = (v: number) => ((top - Math.min(top, Math.max(floor, v))) / (top - floor)) * CH;
+  const x = (t: number) => ((t - m.start) / dur) * CW;
+  const path = (vals: number[], s = step, start = m.start) =>
+    `M${vals.map((v, i) => `${((((start + i * s) - m.start) / dur) * CW).toFixed(1)},${y(v).toFixed(1)}`).join('L')}`;
+  const onMove = (ev: PointerEvent<SVGSVGElement>) => {
+    const r = ev.currentTarget.getBoundingClientRect();
+    setHover(Math.min(n - 1, Math.max(0, Math.round(((ev.clientX - r.left) / r.width) * n - 0.5))));
+  };
+  const overSecs = m.over.reduce((a, [s0, s1]) => a + (s1 - s0), 0);
+  const hx = hover === null ? 0 : x(m.start + hover * step);
+  // Grid on 6 dB steps, at most three lines
+  const gridStep = (top - floor) > 24 ? 12 : 6;
+  const grid = Array.from({ length: 8 }, (_, i) => Math.floor(top / gridStep) * gridStep - i * gridStep).filter((d) => d < top - 1 && d > floor + 1).slice(0, 3);
+  return (
+    <>
+      <div className="lufs-big">
+        <b className="mono">{fmt(m.lufs)}</b>
+        <small>LUFS integrated{m.name ? ` · ${m.name}` : ''}</small>
+        {m.target !== undefined && (
+          <span className={`lufs-delta mono ${overSecs === 0 ? 'lufs-on' : ''}`}>
+            {overSecs === 0 ? `never over ${fmt(m.target, 0)} LUFS` : `${Math.round(overSecs)} s over ${fmt(m.target, 0)} LUFS`}
+          </span>
+        )}
+      </div>
+      <div className="measure-readouts">
+        <Readout label="True peak" value={fmt(m.tp)} unit="dBTP" zone={tpZone(m.tp)} word={m.tp !== undefined && m.tp > 0 ? 'over 0' : ''} title={tpWord(m.tp) ? `True peak ${tpWord(m.tp)} dBTP` : undefined} />
+        <Readout label="Range (LRA)" value={m.lra === undefined ? '–' : m.lra.toFixed(1)} unit="LU" />
+        <Readout label="PLR" value={m.plr === undefined ? '–' : m.plr.toFixed(1)} unit="dB" title="True peak minus integrated loudness: how much dynamic headroom is left" />
+      </div>
+      <div className="spectrum curve">
+        <svg viewBox={`0 0 ${CW} ${CH}`} preserveAspectRatio="none" onPointerMove={onMove} onPointerLeave={() => setHover(null)} role="img"
+          aria-label={`${m.term === 'm' ? 'Momentary' : 'Short-term'} loudness over ${Math.round(dur)} s${m.loud ? `, loudest ${fmt(m.loud[2] ?? undefined)} LUFS at ${secs(m.loud[0])}` : ''}`}>
+          {grid.map((d) => <line key={d} className="spectrum-grid" x1={0} x2={CW} y1={y(d)} y2={y(d)} vectorEffect="non-scaling-stroke" />)}
+          {m.over.map(([a, b], i) => <rect key={i} className="curve-over" x={x(a)} width={Math.max(1, x(b) - x(a))} y={0} height={CH} />)}
+          {m.loud && <rect className="curve-loud" x={x(m.loud[0])} width={Math.max(1, x(m.loud[1]) - x(m.loud[0]))} y={0} height={CH} />}
+          {m.quiet && <rect className="curve-quiet" x={x(m.quiet[0])} width={Math.max(1, x(m.quiet[1]) - x(m.quiet[0]))} y={0} height={CH} />}
+          {m.target !== undefined && <line className="curve-target" x1={0} x2={CW} y1={y(m.target)} y2={y(m.target)} vectorEffect="non-scaling-stroke" />}
+          {m.lufs !== undefined && <line className="curve-integrated" x1={0} x2={CW} y1={y(m.lufs)} y2={y(m.lufs)} vectorEffect="non-scaling-stroke" />}
+          {was && was.curve.length > 1 && <path className="spectrum-previous" d={path(was.curve, was.step ?? step, was.start)} vectorEffect="non-scaling-stroke" />}
+          <path className="spectrum-line curve-line" d={path(m.curve)} vectorEffect="non-scaling-stroke" />
+          {hover !== null && <line className="spectrum-cursor" x1={hx} x2={hx} y1={0} y2={CH} vectorEffect="non-scaling-stroke" />}
+        </svg>
+        {hover !== null && (
+          <div className="spectrum-tip mono" style={{ left: `${Math.min(80, Math.max(20, (hx / CW) * 100))}%` }}>
+            {secs(m.start + hover * step)} · <span className={m.target !== undefined && m.curve[hover] > m.target ? 'zone-hot' : ''}>{fmt(m.curve[hover])} LUFS</span>
+          </div>
+        )}
+        {grid.map((d) => <span key={d} className="spectrum-y mono" style={{ top: `${(y(d) / CH) * 100}%` }}>{fmt(d, 0)}</span>)}
+      </div>
+      <div className="measure-scale-words mono">
+        <span>{secs(m.start)}</span>
+        <span>{secs(m.start + dur)}</span>
+      </div>
+      <div className="measure-legend">
+        <span><i className="lg-line" /> {m.term === 'm' ? 'Momentary' : 'Short-term'}</span>
+        {m.target !== undefined && <span><i className="lg-target" /> Target</span>}
+        {m.over.length > 0 && <span><i className="lg-over" /> Over target</span>}
+        {m.loud && <span><i className="lg-loud" /> Loudest 3 s</span>}
+        {was && <span><i className="lg-previous" /> Previous call</span>}
+      </div>
+      {(m.loud || m.quiet) && (
+        <div className="off-hints">
+          {m.loud && <span>Loudest <span className="mono">{secs(m.loud[0])}–{secs(m.loud[1])} · {fmt(m.loud[2] ?? undefined)} LUFS</span></span>}
+          {m.quiet && <span>Quietest <span className="mono">{secs(m.quiet[0])}–{secs(m.quiet[1])} · {fmt(m.quiet[2] ?? undefined)} LUFS</span></span>}
+        </div>
+      )}
+    </>
+  );
+}
+
+const STEREO_BANDS: Record<string, [string, string]> = {
+  low: ['Low', '< 120 Hz'],
+  lowMid: ['Low mid', '120–500 Hz'],
+  mid: ['Mid', '500 Hz–2 kHz'],
+  high: ['High', '2–8 kHz'],
+  air: ['Air', '> 8 kHz'],
+};
+
+/** Correlation per band on a −1…+1 axis: below 0 cancels in mono (red), a wide low end amber */
+function StereoBands({ m, was }: { m: Extract<Measurement, { kind: 'stereo' }>; was: Extract<Measurement, { kind: 'stereo' }> | null }) {
+  const at = (c: number) => pct(c, -1, 1);
+  return (
+    <>
+      <div className="ev-rows">
+        {m.bands.map(([band, c, worst, neg, side]) => {
+          const [label, range] = STEREO_BANDS[band] ?? [band, ''];
+          const phase = c !== null && c < 0;
+          const wide = !phase && band === 'low' && c !== null && c < 0.7;
+          const w = was?.bands.find((b) => b[0] === band)?.[1] ?? null;
+          return (
+            <div key={band} className={`ev-row ${phase ? 'ev-bad' : wide ? 'ev-hot' : ''}`}
+              title={`${label} (${range}): correlation ${c === null ? 'silent' : c.toFixed(2)}${worst !== null ? `, worst ${worst.toFixed(2)}` : ''}${neg !== null ? `, out of phase ${Math.round(neg * 100)}% of the time` : ''}${side !== null ? `, side ${fmt(side)} dB against mid` : ''}`}>
+              <span className="ev-name">{label}<small>{range}</small></span>
+              <span className="ev-val mono">
+                <b>{c === null ? 'silent' : fmt(c, 2)}</b>
+                {phase && <span className="ev-word-bad"> · phase</span>}
+                {wide && <span className="ev-word"> · wide</span>}
+              </span>
+              <span className="ev-bar">
+                <span className="ev-zero" style={{ left: '50%' }} />
+                {c !== null && <span className="ev-fill" style={{ left: `${Math.min(50, at(c))}%`, width: `${Math.abs(at(c) - 50)}%` }} />}
+                {worst !== null && c !== null && worst < c && <span className="ev-tick" style={{ left: `${at(worst)}%` }} />}
+                {w !== null && <span className="ev-was" style={{ left: `${Math.min(99, Math.max(1, at(w)))}%` }} />}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="measure-scale-words">
+        <span>−1 phase</span>
+        <span>0 wide</span>
+        <span>+1 mono</span>
+      </div>
+      <div className="measure-legend">
+        <span><i className="lg-range" /> Correlation</span>
+        <span><i className="lg-tick" /> Worst moment</span>
+        {was && <span><i className="lg-was" /> Previous call</span>}
+      </div>
+      {m.flags.length > 0 && (
+        <div className="off-hints">
+          {m.flags.map((f) => <span key={f} className="ev-word">{f}</span>)}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Pairs × third-octave bands: the darker a cell, the more the two tracks fight there; the conflicts in words */
+function Masking({ m }: { m: Extract<Measurement, { kind: 'masking' }> }) {
+  const marks = m.hz.map((hz, i) => ({ hz, i })).filter(({ hz }) => [63, 250, 1000, 4000, 16000].includes(hz));
+  return (
+    <>
+      {m.pairs.length > 0 && (
+        <div className="mask" role="img" aria-label={`Masking between ${m.tracks.length} tracks across ${m.hz.length} bands`}>
+          {m.pairs.map(([a, b, overall, scores]) => (
+            <div key={`${a}|${b}`} className="mask-row">
+              <span className="mask-name" title={`${a} × ${b}: overall ${overall.toFixed(2)}`}>{a} × {b}</span>
+              <span className="mask-cells" style={{ gridTemplateColumns: `repeat(${scores.length}, 1fr)` }}>
+                {scores.map((s, k) => (
+                  <span key={k} className={s >= 0.6 ? 'mask-hot' : ''} style={{ opacity: s <= 0 ? 0.06 : 0.15 + 0.85 * Math.min(1, s) }}
+                    title={`${a} × ${b} at ${hzLabel(m.hz[k])} Hz: ${s.toFixed(2)}`} />
+                ))}
+              </span>
+              <span className="mask-score mono">{overall.toFixed(2)}</span>
+            </div>
+          ))}
+          <div className="mask-row mask-axis">
+            <span className="mask-name" />
+            <span className="mask-marks">
+              {marks.map(({ hz, i }) => (i === m.hz.length - 1
+                ? <span key={hz} className="mask-mark-end">{hzLabel(hz)}</span>
+                : <span key={hz} style={{ left: `${((i + 0.5) / m.hz.length) * 100}%` }}>{hzLabel(hz)}</span>))}
+            </span>
+            <span className="mask-score" />
+          </div>
+        </div>
+      )}
+      <div className="off-hints">
+        {m.conflicts.length === 0 ? (
+          <span>No band where two of these tracks are both loud and within a few dB: nothing masks.</span>
+        ) : (
+          m.conflicts.map(([a, b, hz, score, suggestion]) => (
+            <span key={`${a}|${b}|${hz}`}>
+              <span className="mono">{a} × {b} · {hz === null ? '–' : `${hzLabel(hz)} Hz`} · {score?.toFixed(2) ?? '–'}</span>
+              {suggestion && <> — {suggestion}</>}
+            </span>
+          ))
+        )}
+      </div>
+    </>
+  );
+}
+
+const STEM_LABEL = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Each stem's loudness, how fast the split ran, and the tracks it added */
+function Stems({ m }: { m: Extract<Measurement, { kind: 'stems' }> }) {
+  const speed = m.secs && m.proc ? m.secs / m.proc : undefined;
+  return (
+    <>
+      <div className="measure-readouts">
+        <Readout label="Model" value={m.model ?? '–'} />
+        <Readout label="Device" value={m.device ?? '–'} />
+        <Readout label="Speed" value={speed === undefined ? '–' : speed.toFixed(1)} unit="× real time" title={m.secs !== undefined && m.proc !== undefined ? `${m.secs} s of audio in ${m.proc} s` : undefined} />
+      </div>
+      <div className="ev-rows">
+        {m.stems.map(([stem, lufs, peak]) => {
+          const over = peak !== null && peak > 0;
+          return (
+            <div key={stem} className={`ev-row ${over ? 'ev-hot' : ''}`} title={`${STEM_LABEL(stem)}: ${lufs === null ? 'silent' : `${fmt(lufs)} LUFS`}${peak !== null ? `, peak ${fmt(peak)} dBFS` : ''}`}>
+              <span className="ev-name">{STEM_LABEL(stem)}</span>
+              <span className="ev-val mono">
+                <b>{lufs === null ? 'silent' : fmt(lufs)}</b> LUFS
+                {peak !== null && <span className={over ? 'ev-word' : ''}> · peak {fmt(peak)}</span>}
+              </span>
+              <span className="ev-bar">
+                <span className="ev-fill" style={{ left: 0, width: `${lufs === null ? 0 : lufsPct(lufs)}%` }} />
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="off-hints">
+        <span>
+          {m.name ?? 'Source'}
+          {m.secs !== undefined ? `, ${Math.round(m.secs)} s` : ''}
+          {m.inserted ? ` · ${m.inserted} tracks added under “${m.folder ?? 'Stems'}”` : ' · written to disk, not added to the project'}
+          {m.stems.some(([, , p]) => p !== null && p > 0) && '. A stem peaking over 0 is kept unclipped (32-bit float).'}
         </span>
       </div>
     </>

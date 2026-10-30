@@ -239,6 +239,21 @@ describe('settings and params', () => {
     expect(measurementOf({ ...base, c: 'list_tracks', r: { peakL: -6 } })).toBeNull();
   });
 
+  it('types the mix checks, keeping valid rows and dropping a result without its data', () => {
+    const base = { n: 1, t: 0, ms: 1, ok: true };
+    expect(measurementOf({ ...base, c: 'analyze_loudness_curve', r: { name: 'Master', lufs: -10, start: 30, step: 1, term: 's', curve: [-12, -9], loud: [31, 34, -9], quiet: null, over: [[30, 32, -9], 'x'] } }))
+      .toEqual({ kind: 'curve', name: 'Master', term: 's', lufs: -10, start: 30, step: 1, curve: [-12, -9], loud: [31, 34, -9], quiet: null, over: [[30, 32, -9]] });
+    expect(measurementOf({ ...base, c: 'analyze_loudness_curve', r: { lufs: -10 } })).toBeNull();
+    expect(measurementOf({ ...base, c: 'analyze_stereo_bands', r: { bands: [['low', -0.6, -0.9, 0.8, 'x'], [3]], flags: ['low end', 4] } }))
+      .toEqual({ kind: 'stereo', bands: [['low', -0.6, -0.9, 0.8, null]], flags: ['low end'] });
+    expect(measurementOf({ ...base, c: 'measure_masking', r: { tracks: ['A', 'B'], hz: [100, 125], pairs: [['A', 'B', 0.4, [0.9, 'x']]], conflicts: [['A', 'B', 100, 0.9, 'cut B']] } }))
+      .toEqual({ kind: 'masking', tracks: ['A', 'B'], hz: [100, 125], pairs: [['A', 'B', 0.4, [0.9, 0]]], conflicts: [['A', 'B', 100, 0.9, 'cut B']] });
+    expect(measurementOf({ ...base, c: 'measure_masking', r: { tracks: ['A'] } })).toBeNull();
+    expect(measurementOf({ ...base, c: 'separate_stems', r: { model: 'htdemucs', secs: 20, proc: 8, stems: [['drums', -14, null]] } }))
+      .toEqual({ kind: 'stems', model: 'htdemucs', secs: 20, proc: 8, stems: [['drums', -14, null]] });
+    expect(measurementOf({ ...base, c: 'separate_stems', r: { stems: [] } })).toBeNull();
+  });
+
   it('finds the same measurement on the same track for the history', () => {
     const m = (n: number, c: string, track: number, ok = true): CommandEntry => ({ n, t: n, c, ms: 1, ok, p: JSON.stringify({ trackIndex: track }), r: { integrated: -14 } });
     const log = [m(6, 'read_track_lufs', 1), m(5, 'read_track_lufs', 2), m(4, 'read_track_crest', 1), m(3, 'read_track_lufs', 1, false), m(2, 'read_track_lufs', 1), m(1, 'read_track_lufs', 1)];

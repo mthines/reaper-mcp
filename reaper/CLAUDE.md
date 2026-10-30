@@ -11,7 +11,7 @@ Files installed INTO the REAPER DAW by the `setup` command. These run inside REA
 | `mcp_plan_lib.lua` | Lua | `run_plan` executor, JSON decoder, chunk helpers |
 | `mcp_actions_lib.lua` | Lua | Action search/run proxy, selection setters |
 | `mcp_project_lib.lua` | Lua | Project ops, render settings, tempo map, markers |
-| `mcp_items_lib.lua` | Lua | Items, takes, take FX, FX chains, track templates |
+| `mcp_items_lib.lua` | Lua | Items, takes, take FX, FX chains, track templates, stem tracks (`insert_stems`) |
 | `mcp_envelopes_lib.lua` | Lua | Envelopes, points (dB through the envelope's scaling), pooled automation items |
 | `mcp_edit_views_lib.lua` | Lua | Status page results and before/after edit views |
 | `mcp_snapshot_lib.lua` | Lua | Shared library for snapshot action scripts (path helpers, JSON, restore logic) |

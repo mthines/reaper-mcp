@@ -1491,3 +1491,38 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
   .toolbar { flex-wrap: nowrap; padding: 6px; }
   .search { min-width: 0; }
 }
+
+/* Mix checks: loudness over time, stereo per band, masking heat map */
+.curve-line { stroke: var(--accent); }
+.curve-target { stroke: var(--target); stroke-width: 1; stroke-dasharray: 4 3; }
+.curve-integrated { stroke: var(--hold); stroke-width: 1; stroke-dasharray: 1 3; }
+.curve-over { fill: var(--warn); fill-opacity: 0.14; }
+.curve-loud { fill: var(--accent); fill-opacity: 0.1; }
+.curve-quiet { fill: var(--muted); fill-opacity: 0.08; }
+.lg-target { width: 12px; height: 0; border-top: 1px dashed var(--target); }
+.lg-over { width: 10px; height: 8px; background: color-mix(in srgb, var(--warn) 30%, transparent); }
+.lg-loud { width: 10px; height: 8px; background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.lg-tick { width: 2px; height: 9px; background: var(--hold); }
+.ev-bad .ev-val b { color: var(--bad); }
+.ev-bad .ev-fill { background: var(--bad); }
+.ev-word-bad { color: var(--bad); }
+.mask { display: flex; flex-direction: column; gap: 3px; }
+.mask-row { display: grid; grid-template-columns: minmax(64px, 30%) minmax(0, 1fr) 32px; gap: 8px; align-items: center; }
+.mask-name { font-size: 11.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mask-cells { display: grid; gap: 1px; height: 14px; }
+.mask-cells > span { border-radius: 1px; background: var(--accent); }
+.mask-cells > span.mask-hot { background: var(--warn); }
+.mask-score { font-size: 11px; color: var(--muted); text-align: right; }
+.mask-axis { height: 14px; }
+.mask-marks { position: relative; height: 14px; }
+.mask-marks > span { position: absolute; transform: translateX(-50%); font: 10px var(--mono); color: var(--faint); }
+@container (max-width: 300px) {
+  .mask-row { grid-template-columns: minmax(0, 1fr) 30px; }
+  .mask-name { grid-column: 1 / -1; }
+  .mask-axis .mask-name { display: none; }
+}
+.mask-marks > span.mask-mark-end { right: 0; transform: none; }
+@container (max-width: 300px) {
+  .mask { gap: 8px; }
+  .mask-row { row-gap: 2px; }
+}

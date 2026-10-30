@@ -182,6 +182,68 @@ function M.insert_audio_file(api, p, ctx)
   end)
 end
 
+-- Stems from separate_stems: a folder track holding one track per stem, each with its
+-- file at `position`, inserted after `afterTrack` (default: at the end) in one undo point.
+-- Every file is checked before anything is written.
+function M.insert_stems(api, p, ctx)
+  local files = p.files
+  if type(files) ~= "table" or #files == 0 then return nil, "files required: a list of {name, path}" end
+  local position = tonumber(p.position or 0)
+  if not position or position < 0 then return nil, "position must be a number >= 0" end
+  local count = api.CountTracks(0)
+  local at = count
+  if p.afterTrack ~= nil then
+    local after = int(p.afterTrack)
+    if not after or after < -1 or after >= count then return nil, "afterTrack " .. tostring(p.afterTrack) .. " not found" end
+    -- After a folder parent means after its last child, so the stems never land inside that folder
+    local last, depth = after, after >= 0 and api.GetMediaTrackInfo_Value(api.GetTrack(0, after), "I_FOLDERDEPTH") or 0
+    while depth > 0 and last + 1 < count do
+      last = last + 1
+      depth = depth + api.GetMediaTrackInfo_Value(api.GetTrack(0, last), "I_FOLDERDEPTH")
+    end
+    at = last + 1
+  end
+  local sources = {}
+  for i, f in ipairs(files) do
+    if type(f) ~= "table" or type(f.path) ~= "string" or f.path == "" then return nil, "files[" .. i .. "] needs a path" end
+    if not ctx.fs.exists(f.path) then return nil, "file not found: " .. f.path end
+    local src = api.PCM_Source_CreateFromFile(f.path)
+    local length, in_beats = 0, false
+    if src then length, in_beats = api.GetMediaSourceLength(src) end
+    if not src or not length or length <= 0 or in_beats then
+      for _, s in ipairs(sources) do if api.PCM_Source_Destroy then api.PCM_Source_Destroy(s.src) end end
+      if src and api.PCM_Source_Destroy then api.PCM_Source_Destroy(src) end
+      return nil, "REAPER cannot read '" .. f.path .. "' as audio"
+    end
+    sources[i] = { src = src, length = length, name = f.name or basename(f.path) }
+  end
+  local folder_name = p.folderName or "Stems"
+
+  return with_undo(api, "MCP: Insert stems (" .. #sources .. ")", function()
+    api.InsertTrackAtIndex(at, true)
+    local folder = api.GetTrack(0, at)
+    api.GetSetMediaTrackInfo_String(folder, "P_NAME", folder_name, true)
+    api.SetMediaTrackInfo_Value(folder, "I_FOLDERDEPTH", 1)
+    local tracks = {}
+    for i, s in ipairs(sources) do
+      local idx = at + i
+      api.InsertTrackAtIndex(idx, true)
+      local tr = api.GetTrack(0, idx)
+      api.GetSetMediaTrackInfo_String(tr, "P_NAME", s.name, true)
+      local item = api.AddMediaItemToTrack(tr)
+      local take = api.AddTakeToMediaItem(item)
+      api.SetMediaItemTake_Source(take, s.src)
+      api.SetMediaItemInfo_Value(item, "D_POSITION", position)
+      api.SetMediaItemInfo_Value(item, "D_LENGTH", s.length)
+      api.GetSetMediaItemTakeInfo_String(take, "P_NAME", s.name, true)
+      if api.UpdateItemInProject then api.UpdateItemInProject(item) end
+      if i == #sources then api.SetMediaTrackInfo_Value(tr, "I_FOLDERDEPTH", -1) end
+      tracks[#tracks + 1] = { trackIndex = idx, name = s.name, position = position, length = s.length }
+    end
+    return { folderIndex = at, folderName = folder_name, tracks = tracks }
+  end)
+end
+
 -- -----------------------------------------------------------------------------
 -- Takes
 -- -----------------------------------------------------------------------------

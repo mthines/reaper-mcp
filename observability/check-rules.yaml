@@ -63,3 +63,14 @@ spec:
             severity: info
           annotations:
             summary: reaper-mcp-server logged an ERROR (handler crash, server crash, or bridge timeout).
+
+        - alert: ReaperMcpSeparationSlow
+          # Demucs runs several times faster than real time on MPS/CUDA; under 1x there means it
+          # silently fell back to CPU (an upgrade broke the accelerator path).
+          expr: >-
+            histogram_quantile(0.5, sum(increase(
+              {otel_metric_name="reaper.audio.separation.speed", reaper_separation_device!="cpu"}[1d]))) < 1
+          labels:
+            severity: info
+          annotations:
+            summary: Stem separation on an accelerator runs slower than real time — it likely fell back to CPU.

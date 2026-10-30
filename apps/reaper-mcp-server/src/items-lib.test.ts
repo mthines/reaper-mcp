@@ -64,6 +64,50 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('stems: inserts a folder of stem tracks after a track, each with its file, in one undo point', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { name = "Mix" }, { name = "Keys" } }, audio = { ["/st/drums.wav"] = 30, ["/st/bass.wav"] = 30 } }
+      local r, err = items.insert_stems(api, { afterTrack = 0, position = 12, folderName = "Mix stems",
+        files = { { name = "drums", path = "/st/drums.wav" }, { name = "bass", path = "/st/bass.wav" } } }, ctx(api))
+      assert(r, tostring(err))
+      local n = {}
+      for _, t in ipairs(api.tracks) do n[#n + 1] = t.name end
+      assert(names(n) == "Mix,Mix stems,drums,bass,Keys", names(n))
+      assert(api.tracks[2].vals.I_FOLDERDEPTH == 1 and api.tracks[4].vals.I_FOLDERDEPTH == -1, "drums and bass inside the folder")
+      local item = api.tracks[3].items[1]
+      assert(item.vals.D_POSITION == 12 and item.vals.D_LENGTH == 30 and item.takes[1].src.path == "/st/drums.wav")
+      assert(r.folderIndex == 1 and r.tracks[2].trackIndex == 3 and r.tracks[2].name == "bass")
+      assert(#api.undo == 1 and api.undo[1] == "MCP: Insert stems (2)")
+    `);
+  });
+
+  it('stems: after a folder track, the stems folder goes after its last child, not inside it', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { name = "Drums" }, { name = "Kick" }, { name = "Snare" }, { name = "Bass" } }, audio = { ["/st/drums.wav"] = 30 } }
+      api.tracks[1].vals.I_FOLDERDEPTH = 1
+      api.tracks[3].vals.I_FOLDERDEPTH = -1
+      local r, err = items.insert_stems(api, { afterTrack = 0, files = { { name = "drums", path = "/st/drums.wav" } } }, ctx(api))
+      assert(r, tostring(err))
+      local n = {}
+      for _, t in ipairs(api.tracks) do n[#n + 1] = t.name end
+      assert(names(n) == "Drums,Kick,Snare,Stems,drums,Bass", names(n))
+      assert(r.folderIndex == 3)
+    `);
+  });
+
+  it('stems: refuses a missing or unreadable file, or an unknown afterTrack, and changes nothing', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { name = "Mix" } }, audio = { ["/st/drums.wav"] = 30 }, files = { ["/st/notes.txt"] = "x" } }
+      local s = snapshot(api)
+      local function refused(what, msg, r, err) assert(r == nil and err:find(msg, 1, true), what .. ": " .. tostring(err)) end
+      refused("missing", "file not found", items.insert_stems(api, { files = { { name = "drums", path = "/st/drums.wav" }, { name = "bass", path = "/st/nope.wav" } } }, ctx(api)))
+      refused("not audio", "cannot read", items.insert_stems(api, { files = { { name = "x", path = "/st/notes.txt" } } }, ctx(api)))
+      refused("afterTrack", "afterTrack 5 not found", items.insert_stems(api, { afterTrack = 5, files = { { name = "drums", path = "/st/drums.wav" } } }, ctx(api)))
+      refused("no files", "files required", items.insert_stems(api, { files = {} }, ctx(api)))
+      assert(unchanged(api, s) and #api.tracks == 1)
+    `);
+  });
+
   it('items: takes and active take', async () => {
     await runLua(`
       local api = new_fake{ tracks = { { name = "Vox", items = 1 } }, takes = { [1] = { [1] = { "Comp A", "Comp B", "Comp C" } } } }

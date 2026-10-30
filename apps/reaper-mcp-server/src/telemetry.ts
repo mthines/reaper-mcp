@@ -405,6 +405,18 @@ export function getSidecarDurationHistogram(): Histogram {
   return _sidecarDuration;
 }
 
+let _separationSpeed: Histogram | null = null;
+
+/** Seconds of audio separate_stems splits per second of processing (`reaper.separation.device`, `reaper.separation.model`). */
+export function getSeparationSpeedHistogram(): Histogram {
+  _separationSpeed ??= getMeter().createHistogram('reaper.audio.separation.speed', {
+    description: 'Seconds of audio one separate_stems call split per second of processing',
+    unit: '1',
+    advice: { explicitBucketBoundaries: [0.1, 0.25, 0.5, 1, 2, 3, 5, 10, 20] },
+  });
+  return _separationSpeed;
+}
+
 // ---------------------------------------------------------------------------
 // Bridge health gauges
 // ---------------------------------------------------------------------------

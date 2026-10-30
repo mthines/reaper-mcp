@@ -343,6 +343,12 @@ export const MCP_TOOL_NAMES = [
   'measure_track_alignment',
   'detect_transients',
   'create_transient_automation',
+  'analyze_loudness_curve',
+  'analyze_stereo_bands',
+  'measure_masking',
+  'separate_stems',
+  // bridge command behind the insertTracks option of separate_stems (no tool of its own)
+  'insert_stem_tracks',
   // built-in mix knowledge (read-only LoreKit proxy)
   'list_builtin_knowledge',
   'get_builtin_knowledge',

@@ -118,6 +118,15 @@ Give `db` on volume envelopes: REAPER stores 0 dB as 716.2 on its own Volume env
 A file is read as-is; for a song warped onto the click with stretch markers, analyze its track.
 Workflow: [knowledge/workflows/transient-lighting.md](../knowledge/workflows/transient-lighting.md).
 
+### Mix Checks (Python sidecar)
+
+| Tool | Description |
+|------|-------------|
+| `analyze_loudness_curve` | Loudness over time of a track, the master or a file: the short-term curve, loudest and quietest moments, and where it goes over a target such as −14 LUFS |
+| `analyze_stereo_bands` | Stereo correlation per frequency band: a wide or out-of-phase low end, a band that cancels in mono |
+| `measure_masking` | Where 2–8 tracks fight for the same frequencies, and which one to cut where |
+| `separate_stems` | Split a track or a file into drums, bass, other and vocals (or 6 stems) with Demucs, optionally as new tracks under a folder. Needs `reaper-mcp setup-sidecar --with-separation` |
+
 ### MIDI Editing (14 tools)
 
 | Tool | Description |
