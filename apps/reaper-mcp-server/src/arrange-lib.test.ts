@@ -303,6 +303,18 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('process items: normalize counts a polarity-flipped take at its real level', async () => {
+    await runLua(`
+      local api = new_timeline{ tracks = { { items = { { pos = 0, len = 4, name = "F", level = -12, take_vol = -0.5 } } } } }
+      local r = assert(arrange.process_items(api, { operation = "normalize", items = { { trackIndex = 0, itemIndex = 0 } }, target = -1 }))
+      local flip = 20 * math.log(0.5, 10)
+      assert(math.abs(r.items[1].levelBefore - (-12 + flip)) < 0.001, tostring(r.items[1].levelBefore))
+      -- Item gain times the take's magnitude lands the item on the target
+      local out = 20 * math.log(api.tracks[1].items[1].vals.D_VOL * 0.5, 10) - 12
+      assert(math.abs(out - (-1)) < 1e-6, tostring(out))
+    `);
+  });
+
   it('process items: normalize to LUFS needs a target; MIDI and silent items are refused, changing nothing', async () => {
     await runLua(`
       local api = new_timeline{ tracks = { { items = { { pos = 0, len = 1 }, { pos = 2, len = 1, midi = true }, { pos = 4, len = 1, level = -200 } } } } }

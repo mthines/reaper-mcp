@@ -696,8 +696,9 @@ local function apply_process(api, c)
     r.mode, r.target, r.items = c.mode_name, c.target, {}
     for _, s in ipairs(c.items) do
       local before = api.GetMediaItemInfo_Value(s.item, "D_VOL")
-      local take_vol = api.GetMediaItemTakeInfo_Value(s.take, "D_VOL")
-      if take_vol <= 0 then take_vol = 1 end
+      -- A negative take volume is a polarity flip: its level is the magnitude
+      local take_vol = math.abs(api.GetMediaItemTakeInfo_Value(s.take, "D_VOL"))
+      if take_vol == 0 then take_vol = 1 end
       local gain = 10 ^ ((c.target - s.level) / 20) / take_vol
       api.SetMediaItemInfo_Value(s.item, "D_VOL", gain)
       local d = describe(api, s.item)
