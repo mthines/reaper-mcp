@@ -4310,6 +4310,9 @@ function handlers.render_track_to_wav(params)
   local saved_end      = reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     0, false)
   local saved_srate    = reaper.GetSetProjectInfo(0, "RENDER_SRATE",      0, false)
   local saved_channels = reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   0, false)
+  -- Delivery processing set_render_settings stores in the project: an analysis render must hear the raw mix
+  local saved_normalize = reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE", 0, false)
+  local saved_dither    = reaper.GetSetProjectInfo(0, "RENDER_DITHER",    0, false)
 
   -- Save solo and selection states for all tracks
   local track_count = reaper.CountTracks(0)
@@ -4346,6 +4349,8 @@ function handlers.render_track_to_wav(params)
     reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT", "evaw", true)
     reaper.GetSetProjectInfo(0, "RENDER_SRATE",    sample_rate, true)
     reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", 2,           true)
+    reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE", 0, true)
+    reaper.GetSetProjectInfo(0, "RENDER_DITHER",    0, true)
 
     -- Unsolo all tracks, then solo only the target track (master: none)
     for i = 0, track_count - 1 do
@@ -4375,6 +4380,8 @@ function handlers.render_track_to_wav(params)
     reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     saved_end,      true)
     reaper.GetSetProjectInfo(0, "RENDER_SRATE",      saved_srate,    true)
     reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   saved_channels, true)
+    reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE",  saved_normalize, true)
+    reaper.GetSetProjectInfo(0, "RENDER_DITHER",     saved_dither,    true)
     for i = 0, track_count - 1 do
       local t = reaper.GetTrack(0, i)
       reaper.SetMediaTrackInfo_Value(t, "I_SOLO", saved_solo_states[i] or 0)
