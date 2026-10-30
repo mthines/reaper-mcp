@@ -347,6 +347,18 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('remove time: the level after the cut stays when the last envelope point is inside the cut', async () => {
+    await runLua(`
+      local function at(api, t) local _, v = api.Envelope_Evaluate(api.tracks[1].envs[1], t) return v end
+      local api = new_timeline{ tracks = { { envs = { { pts = { { 0, 0 }, { 5, 1 } } } } } } }
+      assert(arrange.remove_time(api, { start = 4, ["end"] = 6 }))
+      assert(near(at(api, 4), 1) and near(at(api, 8), 1), at(api, 4) .. " " .. at(api, 8))
+      api = new_timeline{ tracks = { { envs = { { pts = { { 5, 0.7 } } } } } } }
+      assert(arrange.remove_time(api, { start = 4, ["end"] = 6 }))
+      assert(#api.tracks[1].envs[1].pts == 1 and near(at(api, 8), 0.7), at(api, 8))
+    `);
+  });
+
   it('copy section: refuses an overlap, an unknown region and a bad track, changing nothing', async () => {
     await runLua(`${SONG}
       local cases = {

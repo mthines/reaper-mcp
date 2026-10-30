@@ -430,7 +430,8 @@ local function apply_remove(api, c)
   -- The values either side of the cut, kept at its edges so the automation outside it keeps its shape
   for _, x in ipairs(snap.envs) do
     if has_before(x.pts, s) and s - PIN >= 0 then x.left = value_at(api, x.env, s - PIN) end
-    if has_from(x.pts, e) and not has_at(x.pts, e) then x.right = value_at(api, x.env, e) end
+    -- Also when the last point is inside the cut: it is deleted, and its value is what plays after the cut
+    if has_from(x.pts, s) and not has_at(x.pts, e) then x.right = value_at(api, x.env, e) end
   end
 
   -- Tempo: markers inside go, except the last one, which moves to the cut so the tempo after
@@ -511,7 +512,7 @@ local function apply_remove(api, c)
       local shape, tension = shape_through(x.pts, e)
       api.InsertEnvelopePoint(x.env, s, x.right, shape, tension, false, true)
     end
-    if moved or x.left then api.Envelope_SortPoints(x.env) end
+    if moved or x.left or x.right then api.Envelope_SortPoints(x.env) end
     for i, ai in ipairs(x.ais) do
       if ai.pos >= s - EPS and ai.pos + ai.len <= e + EPS then doomed[#doomed + 1] = { x.env, i - 1 } end
     end
