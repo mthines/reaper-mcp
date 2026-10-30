@@ -351,8 +351,8 @@ describe('edit views in the log', () => {
     `);
     expect((await bridge.send('get_record_setup', {})).success).toBe(true);
     const { r } = (await bridge.status()).recent[0];
-    expect(r.rows).toHaveLength(32);
-    expect(r.more).toBe(8);
+    expect(r).toMatchObject({ more: 8 });
+    expect((r as { rows: unknown[] }).rows).toHaveLength(32);
   });
 
   it('shows the lanes of a track with what played before a lane switch', async () => {
