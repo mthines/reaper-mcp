@@ -1719,15 +1719,15 @@ function Record({ v }: { v: Extract<EditView, { kind: "record" }> }) {
   return (
     <>
       <div className="measure-readouts">
-        <Readout label="Mode" value={RECORD_MODE[v.mode] ?? v.mode} word={modeChanged ? "changed" : ""}
+        <Readout label="Mode" value={RECORD_MODE[v.mode] ?? v.mode} word={modeChanged ? "new" : ""}
           title={[PUNCH_ON[v.mode] && `Auto-punch on the ${PUNCH_ON[v.mode]}`, modeChanged && was && `Was ${RECORD_MODE[was.mode] ?? was.mode}`].filter(Boolean).join(" · ") || undefined} />
         {(v.mode === "time_selection" || v.punch) && (
-          <Readout label="Punch" value={punchText(v.punch)} word={punchChanged ? "changed" : !v.punch ? "none" : ""}
+          <Readout label="Punch" value={punchText(v.punch)} word={punchChanged ? "new" : !v.punch ? "none" : ""}
             zone={!v.punch ? "hot" : "ok"}
             title={punchChanged ? `Was ${punchText(was?.punch)}` : !v.punch ? "No time selection: nothing records" : undefined} />
         )}
         {v.path !== undefined && (
-          <Readout label="Path" value={v.path || "project folder"} word={pathChanged ? "changed" : ""}
+          <Readout label="Path" value={v.path || "project folder"} word={pathChanged ? "new" : ""}
             title={pathChanged ? `Was ${was?.path || "project folder"}` : undefined} />
         )}
       </div>
@@ -1749,7 +1749,7 @@ function RecordTrack({ r, was }: { r: RecordRow; was?: RecordRow }) {
   const field = (i: 2 | 3 | 4, text: string, cls: string, wasText: (w: RecordRow) => string) => {
     const old = was && was[i] !== r[i] ? wasText(was) : null;
     return (
-      <span className={`ev-rec-f ${cls} ${old !== null ? "ev-rec-changed" : ""}`} title={old !== null ? `Was ${old}` : undefined}>
+      <span className={`ev-rec-f ${cls} ${old !== null ? "ev-rec-changed" : ""}`} title={old !== null ? `${text} · was ${old}` : text}>
         <span className="ev-rec-now">{text}</span>
         {old !== null && <s className="ev-rec-was">{old}</s>}
       </span>
