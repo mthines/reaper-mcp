@@ -4468,9 +4468,11 @@ function handlers.render_track_to_wav(params)
     reaper.GetSetProjectInfo(0, "RENDER_STARTPOS", start_time, true)
     reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",   end_time,   true)
 
-    -- Render mode: 0 = master mix (the master); 2 = stems only, which renders the
-    -- SELECTED tracks, so the target is made the only selected track below.
-    reaper.GetSetProjectInfo(0, "RENDER_SETTINGS", is_master and 0 or 2, true)
+    -- Render mode: 0 = master mix (the master); 3 = stems of the SELECTED tracks only,
+    -- so the target is made the only selected track below. 2 lists no target in
+    -- REAPER 7 and silently renders the master mix instead (the soloed track through
+    -- the master: silence for anything that reaches it only through sends).
+    reaper.GetSetProjectInfo(0, "RENDER_SETTINGS", is_master and 0 or 3, true)
 
     -- Force WAV at 44100 Hz stereo so the sidecar always gets a known format,
     -- independent of whatever the user last rendered. Restored in finally.
@@ -4578,6 +4580,12 @@ end
 -- is recorded from the command's top-level fields in record_command
 handlers["_session"] = function(params)
   return { ok = true }
+end
+
+-- A sidecar tool's result for the status page; recorded by record_command (record_tool_result)
+handlers["_log_result"] = function(params)
+  if type(params.command) ~= "string" then return nil, "command required" end
+  return { logged = true }
 end
 
 handlers["_bridge_diagnostics"] = function(params)
@@ -4997,6 +5005,7 @@ for _, c in ipairs({
   "redo_project", "add_fx", "add_take_fx", "setup_fx_chain", "copy_fx", "move_fx", "set_fx_offline",
   "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
   "insert_audio_file", "snapshot_save", "snapshot_restore",
+  "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
 local HISTORY_LONG_PUBLISH_INTERVAL = 10
@@ -5157,7 +5166,37 @@ if edit_lib_ok then
   edit_lib.init({
     api = reaper, to_db = to_db, json_decode = plan_lib_ok and plan_lib.json_decode or nil, json_decode_array = json_decode_array,
     get_midi_notes = function(p) return handlers.get_midi_notes(p) end, get_midi_take = get_midi_take,
+    get_midi_cc = function(p) return handlers.get_midi_cc(p) end,
+    resolve_track = function(ref)
+      local res = plan_lib_ok and plan_lib.resolve_track(reaper, ref, {}) or nil
+      return res and res.track or nil
+    end,
   })
+end
+
+-- Results of tools the server composes itself (sidecar analysis), sent as `_log_result` so the page shows them
+-- like any command: c = the tool, its own duration, and `r` (a JSON string) for the measurement views.
+local STATUS_RESULT_MAX = 6000
+local function record_tool_result(cmd, session)
+  local p = cmd.params
+  local entry = {
+    n = status.seq + 1, t = now_ms(), c = p.command:sub(1, 64), ms = math.floor((tonumber(p.ms) or 0) * 100 + 0.5) / 100,
+    ok = p.ok ~= 0 and p.ok ~= false,
+  }
+  if session then entry.s = session.id end
+  if type(p.p) == "string" and p.p ~= "" and p.p ~= "{}" then entry.p = p.p:sub(1, STATUS_PARAMS_MAX) end
+  if type(p.e) == "string" then entry.e = p.e:gsub("%c", " "):sub(1, 300) end
+  if type(p.r) == "string" and #p.r <= STATUS_RESULT_MAX and plan_lib_ok then
+    local got, r = pcall(plan_lib.json_decode, p.r)
+    if got and type(r) == "table" then entry.r = r end
+  end
+  status.commands = status.commands + 1
+  status.seq = status.seq + 1
+  table.insert(status.recent, 1, entry)
+  status.recent[STATUS_RECENT_MAX + 1] = nil
+  status_dirty = true
+  record_history(entry.ms, entry.ok, entry.c, false)
+  append_log(entry)
 end
 
 local function record_command(cmd, handler_ms, ok, err, data, before)
@@ -5166,6 +5205,9 @@ local function record_command(cmd, handler_ms, ok, err, data, before)
   if type(cmd_type) ~= "string" or cmd_type:sub(1, 1) == "_" then
     local s = touch_session(cmd, nil)
     if s and cmd_type == "_session" and type(cmd.params) == "table" and cmd.params.ended then s.ended = true end
+    if cmd_type == "_log_result" and ok and type(cmd.params) == "table" and type(cmd.params.command) == "string" then
+      record_tool_result(cmd, s)
+    end
     return
   end
   -- Only system errors count as errors. A refused request ("Track 9 not found") is a

@@ -50,10 +50,12 @@ interface BridgeResponse<T = unknown> {
   error?: string;
 }
 
+// The server's own default (bridge.ts): live suites share the bridge with the stress suite, and the
+// first send inserts a JSFX container, which can take seconds while the bridge is flooded
 async function sendCommand<T = unknown>(
   type: string,
   params: Record<string, unknown>,
-  timeoutMs = 3000,
+  timeoutMs = 10_000,
 ): Promise<BridgeResponse<T>> {
   const id = randomUUID();
   const cmdPath = join(BRIDGE_DIR, `command_${id}.json`);
@@ -120,7 +122,7 @@ if (!liveBridge) {
 const describeLive = liveBridge && trackCount > 0 ? describe : describe.skip;
 const describeBridgeOnly = liveBridge ? describe : describe.skip;
 
-describeBridgeOnly('MIDI tools — live bridge sanity', () => {
+describeBridgeOnly('MIDI tools — live bridge sanity', { timeout: 15_000 }, () => {
   it('bridge responds to get_project_info', async () => {
     const res = await sendCommand<{ tempo: number }>('get_project_info', {});
     expect(res.success).toBe(true);
@@ -139,7 +141,7 @@ describeBridgeOnly('MIDI tools — live bridge sanity', () => {
   });
 });
 
-describeLive('MIDI tools — live emission (requires a track)', () => {
+describeLive('MIDI tools — live emission (requires a track)', { timeout: 15_000 }, () => {
   afterAll(async () => {
     const containerIdx = await findMcpContainerIndex(TEST_TRACK_INDEX);
     if (containerIdx !== null) {

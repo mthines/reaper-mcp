@@ -76,12 +76,12 @@ export function registerFxTools(server: McpServer): void {
 
   server.tool(
     'set_fx_parameter',
-    'Set a specific FX parameter value (normalized 0.0–1.0)',
+    'Set a specific FX parameter value (normalized 0.0–1.0 for most plugins; use the parameter maxValue from get_fx_parameters when it is above 1)',
     {
       trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
       fxIndex: z.coerce.number().int().min(0).describe('Zero-based FX index in the chain'),
       paramIndex: z.coerce.number().int().min(0).describe('Zero-based parameter index'),
-      value: z.coerce.number().min(0).max(1).describe('Normalized parameter value 0.0–1.0'),
+      value: z.coerce.number().describe('Parameter value: normalized 0.0–1.0 for most plugins; a few use their own range (ReaComp Threshold/Wet/Dry 0–2 linear gain, JSFX raw slider values). Check minValue/maxValue from get_fx_parameters'),
     },
     async ({ trackIndex, fxIndex, paramIndex, value }) => {
       const res = await sendCommand('set_fx_parameter', { trackIndex, fxIndex, paramIndex, value });

@@ -621,7 +621,7 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 
 ### Render Pipeline
 
-The sidecar tools render a track segment to a temp WAV via the `render_track_to_wav` Lua bridge handler (a track renders as a stem — render mode 2, which renders the *selected* tracks, so the target is soloed and made the only selected track; -1 renders the master mix, mode 0, with every solo cleared; solo and selection are restored after), then pass the path to the sidecar. The TS layer owns temp file cleanup (always deleted in `try/finally`).
+The sidecar tools render a track segment to a temp WAV via the `render_track_to_wav` Lua bridge handler (a track renders as a stem — render mode 3, stems of the *selected* tracks only, so the target is soloed and made the only selected track; mode 2 lists no target in REAPER 7 and falls back to the master mix, which renders silence for a track that reaches the master only through sends; -1 renders the master mix, mode 0, with every solo cleared; solo and selection are restored after), then pass the path to the sidecar. The TS layer owns temp file cleanup (always deleted in `try/finally`).
 
 The `render_track_to_wav` Lua handler uses `Main_OnCommand(42230)` which is **synchronous** — it blocks the defer loop during render (~0.5-1s for a short clip; a 4-minute folder track took ~55 s, so `offline.ts` scales the timeout with the range). This is expected behavior documented in the handler.
 
@@ -698,14 +698,32 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
   colored by value (amber from −6 dB, red at 0), with the previous call on the same track ghosted (dashed/hollow) and
   its headline value and change in a "Previous call" line. Add a measuring command in `RESULT_FIELDS`, `MEASUREMENTS`
   (`status.ts`) and a `Measurement` kind together.
+  Sidecar tools the server composes itself (`analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment`,
+  `analyze_track_aesthetics`) never pass through a bridge handler, so the server logs each result with the internal
+  `_log_result` command (`src/tool-log.ts`, fire-and-forget; `r` travels as a JSON string), which the bridge records as
+  an entry for that tool (`record_tool_result()`). Their compact `r` is built by `offlineSummary()` /
+  `alignmentSummary()` / `aestheticsSummary()` and drawn as the `offline` / `alignment` / `aesthetics` measurements.
 - Edit views: writes and listings also keep an `r` (`M.summary` in `mcp_edit_views_lib.lua`), drawn by
   `EditViews.tsx` from `editViewOf()` (`src/edit-views.ts`). A write reads the state it touches before its handler
   runs (`M.before`) and again after, so the drawer shows before → after: track and FX parameter changes (the
   plugin's own readout), the automation window an edit touched (padded 25%, at least 4 s), MIDI notes as a piano
   roll (first 256, `more` counts the rest; added notes solid, removed dashed), `analyze_midi` velocity per pitch,
-  markers/regions/tempo/items on one timeline, `list_tracks` as a mixer, and `run_plan`'s ops. Lists are capped so
+  markers/regions/tempo/items on one timeline, `list_tracks` as a mixer, and `run_plan`'s ops; also FX chains
+  (add/remove/move/copy/bypass/offline/rename/preset, `get_track_properties`: slots marked added/moved/changed/removed by
+  FX GUID), item edits as one lane per touched track with the items before dashed, track structure edits on the mixer
+  (tracks diffed by GUID), routing (sends/receives/hardware outs with level bars, the old level ghosted), the time
+  selection and edit cursor, MIDI CC as a stepped lane in beats (the automation view, unit `cc`), and
+  `get_fx_parameters` as readout bars. List diffs share `listDiff()` in `edit-views.ts`. Lists are capped so
   an entry stays a few KB. Add a command in `M.summary`, `KIND_OF` (`edit-views.ts`) and a gallery story together;
   behaviour tests run the real bridge in wasmoon (`bridge-status.test.ts`, "edit views in the log").
+- Narrow drawer: the drawer is resizable, so its content answers to its own width with container queries
+  (`.drawer-body` and `.measure` are `inline-size` containers), never `@media`. Under ~300px readouts go two a row,
+  the mixer drops its pan column, and what gives way stays reachable (the ISO timestamp is the When row's tooltip,
+  marker labels that would collide — `fittingLabels()` in `edit-views.ts` — show on hover; on item and selection
+  views, where markers are only context, every marker name waits for hover). Under ~460px mixer and
+  route rows drop their added/moved/changed word for a coloured edge plus one legend (`ChangeLegend`), so names stay
+  readable. Structure edits in a big project draw a 64-row window around the change (`from`). Check new views at
+  ~300px in the gallery.
 - Component gallery (`?gallery`, like Storybook): the page's real components from fixed example data, every
   state side by side (`src/Gallery.tsx`, stories in `src/gallery-stories.ts`). Opens only from a local build
   (`file://`) or when the bridge runs in developer mode (`galleryAllowed()`); otherwise the page opens as usual.

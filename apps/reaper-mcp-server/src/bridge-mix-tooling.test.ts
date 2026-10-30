@@ -130,7 +130,7 @@ describe('render_track_to_wav master', () => {
       local r, err = handlers.render_track_to_wav({ trackIndex = 1, startTime = 0, endTime = 5, commandId = "abc" })
       assert(r, err)
       assert(written.T1 == 1, "target soloed")
-      assert(render_settings == 2, "stems only")
+      assert(render_settings == 3, "stems of the selected tracks only (2 renders the master mix in REAPER 7)")
       assert(selected_at_render.T1 == true and selected_at_render.T0 == false, "only the target selected for the stem render")
       assert(selected.T0 == true and selected.T1 == false, "user's selection restored")
     `);

@@ -6,7 +6,7 @@ local M = {}
 
 local api, ctx
 
---- ctx: { api, to_db, json_decode, json_decode_array, get_midi_notes, get_midi_take }
+--- ctx: { api, to_db, json_decode, json_decode_array, get_midi_notes, get_midi_take, get_midi_cc, resolve_track }
 function M.init(c)
   ctx = c
   api = c.api
@@ -245,6 +245,55 @@ local function midi_view(params, before)
   return r
 end
 
+-- MIDI CC as an automation lane: one controller's values (0-127) over the item, in beats, held until the next event.
+-- The controller is the call's ccNumber, the deleted event's, or the item's busiest one.
+local CC_NAMES = { [1] = "Mod wheel", [2] = "Breath", [4] = "Foot", [7] = "Volume", [10] = "Pan", [11] = "Expression", [64] = "Sustain", [74] = "Brightness" }
+local CC_COMMANDS = { get_midi_cc = true, insert_midi_cc = true, delete_midi_cc = true }
+
+local function cc_events(params)
+  if not ctx.get_midi_cc then return nil end
+  local ok, data = pcall(ctx.get_midi_cc, { trackIndex = params.trackIndex, itemIndex = params.itemIndex })
+  if not ok or type(data) ~= "table" or type(data.events) ~= "table" then return nil end
+  return data.events
+end
+
+local function cc_view(cmd_type, params, before)
+  local events = cc_events(params) or {}
+  local cc = tonumber(params.ccNumber)
+  if not cc and cmd_type == "delete_midi_cc" then
+    for _, e in ipairs(before or {}) do if e.ccIndex == tonumber(params.ccIndex) then cc = e.ccNumber end end
+  end
+  if not cc then
+    local counts, best = {}, 0
+    for _, e in ipairs(events) do
+      counts[e.ccNumber] = (counts[e.ccNumber] or 0) + 1
+      if counts[e.ccNumber] > best then best, cc = counts[e.ccNumber], e.ccNumber end
+    end
+  end
+  if not cc then return nil end
+  local function lane(list)
+    local pts = {}
+    for _, e in ipairs(list or {}) do
+      if e.ccNumber == cc and #pts < EDIT_MAX_POINTS then pts[#pts + 1] = { round3(e.position) or 0, e.value, 1 } end
+    end
+    table.sort(pts, function(a, b) return a[1] < b[1] end)
+    return pts
+  end
+  local pts, was = lane(events), before and lane(before) or nil
+  local from, to = 0, 4
+  for _, p in ipairs(pts) do to = math.max(to, p[1]) end
+  for _, p in ipairs(was or {}) do to = math.max(to, p[1]) end
+  local name = "CC " .. cc .. (CC_NAMES[cc] and (" · " .. CC_NAMES[cc]) or "")
+  local others = {}
+  for _, e in ipairs(events) do if e.ccNumber ~= cc then others[e.ccNumber] = true end end
+  local more = 0
+  for _ in pairs(others) do more = more + 1 end
+  local r = { env = name, unit = "cc", beats = 1, from = 0, to = round2(math.ceil(to + 1)), pts = pts, count = #pts }
+  if more > 0 then r.otherCcs = more end
+  if before then r.was = was end
+  return r
+end
+
 local function midi_stats_view(data)
   if type(data) ~= "table" or type(data.pitchStats) ~= "table" then return nil end
   local gun = {}
@@ -264,6 +313,171 @@ local function hex_color(native)
   if native == 0 or not api.ColorFromNative then return "" end
   local r, g, b = api.ColorFromNative(native & 0xFFFFFF)
   return string.format("#%02x%02x%02x", r or 0, g or 0, b or 0)
+end
+
+-- A track from an index, "master", a name or "{GUID}" (the same resolution the structure tools use)
+local function track_ref(ref)
+  if ref == nil then return nil end
+  if type(ref) == "number" or (type(ref) == "string" and ref:match("^%-?%d+$")) then
+    local tr = track_named(ref)
+    if tr then return tr end
+  end
+  return ctx.resolve_track and ctx.resolve_track(ref) or nil
+end
+
+local function name_of(tr)
+  if not tr then return nil end
+  if api.GetMasterTrack and tr == api.GetMasterTrack(0) then return "Master" end
+  local _, name = api.GetTrackName(tr)
+  return name or "Track"
+end
+
+-- A stable short id for diffing before and after (GUIDs survive moves and renames)
+local function short_id(guid)
+  return type(guid) == "string" and guid:gsub("[{}]", ""):sub(1, 8) or ""
+end
+
+-- FX chain: [name, flags (B bypassed, O offline), id, preset]
+local function fx_chain(tr)
+  local out = {}
+  for i = 0, math.min(api.TrackFX_GetCount(tr) or 0, EDIT_MAX_ROWS) - 1 do
+    local _, name = api.TrackFX_GetFXName(tr, i)
+    local enabled = not api.TrackFX_GetEnabled or api.TrackFX_GetEnabled(tr, i) ~= false
+    local offline = api.TrackFX_GetOffline and api.TrackFX_GetOffline(tr, i) == true
+    local preset = ""
+    if api.TrackFX_GetPreset then
+      local _, p = api.TrackFX_GetPreset(tr, i)
+      preset = type(p) == "string" and p or ""
+    end
+    out[#out + 1] = { name or ("FX " .. (i + 1)), (enabled and "" or "B") .. (offline and "O" or ""), short_id(api.TrackFX_GetFXGUID(tr, i)), preset }
+  end
+  return out
+end
+
+local FX_CHAIN_COMMANDS = {
+  add_fx = true, remove_fx = true, move_fx = true, copy_fx = true, set_fx_enabled = true, set_fx_offline = true,
+  setup_fx_chain = true, load_fx_chain = true, rename_fx = true, set_fx_preset = true, get_track_properties = true,
+}
+
+-- The tracks an FX command touches: its track, and the other track of a move/copy
+local function fx_tracks(params)
+  local out = {}
+  for _, ref in ipairs({ params.trackIndex, params.toTrackIndex }) do
+    local tr = track_ref(ref)
+    if tr and #out < 2 and (out[1] == nil or out[1] ~= tr) then out[#out + 1] = tr end
+  end
+  return out
+end
+
+local function fx_chains(params)
+  local out = {}
+  for i, tr in ipairs(fx_tracks(params)) do out[i] = fx_chain(tr) end
+  return out
+end
+
+local function fx_chain_view(params, before)
+  local chains = {}
+  for i, tr in ipairs(fx_tracks(params)) do
+    chains[i] = { t = name_of(tr), fx = fx_chain(tr), was = before and before[i] or nil }
+  end
+  return #chains > 0 and { chains = chains } or nil
+end
+
+-- Media items of a track, in the timeline's item shape
+local function track_items(tr)
+  local out = {}
+  for i = 0, math.min(api.CountTrackMediaItems(tr) or 0, EDIT_MAX_MARKS) - 1 do
+    local it = api.GetTrackMediaItem(tr, i)
+    local take = api.GetActiveTake and api.GetActiveTake(it)
+    out[#out + 1] = {
+      round2(api.GetMediaItemInfo_Value(it, "D_POSITION")) or 0, round2(api.GetMediaItemInfo_Value(it, "D_LENGTH")) or 0,
+      round2(api.GetMediaItemInfo_Value(it, "D_FADEINLEN")) or 0, round2(api.GetMediaItemInfo_Value(it, "D_FADEOUTLEN")) or 0,
+      (take and api.TakeIsMIDI and api.TakeIsMIDI(take)) and 1 or 0, api.GetMediaItemInfo_Value(it, "B_MUTE") ~= 0 and 1 or 0,
+    }
+  end
+  return out
+end
+
+local ITEM_COMMANDS = {
+  move_media_item = true, split_media_item = true, trim_media_item = true, delete_media_item = true,
+  set_media_item_properties = true, set_media_items_properties = true, set_item_fades = true, insert_audio_file = true,
+  list_midi_items = true,
+}
+
+-- Up to four tracks an item command touches, by index
+local function item_tracks(params)
+  local out, seen = {}, {}
+  local function add(idx)
+    idx = tonumber(idx)
+    if idx and not seen[idx] and #out < 4 and api.GetTrack(0, idx) then seen[idx] = true; out[#out + 1] = idx end
+  end
+  add(params.trackIndex)
+  add(params.newTrackIndex)
+  for _, it in ipairs(decode_param_list(params.items) or {}) do if type(it) == "table" then add(it.trackIndex) end end
+  return out
+end
+
+local function item_lanes(params)
+  local out = {}
+  for i, idx in ipairs(item_tracks(params)) do out[i] = track_items(api.GetTrack(0, idx)) end
+  return out
+end
+
+-- Time selection [start, end] (nil when empty) and edit cursor
+local function time_state()
+  local s, e = api.GetSet_LoopTimeRange(false, false, 0, 0, false)
+  local sel = (type(s) == "number" and type(e) == "number" and e > s) and { round2(s), round2(e) } or nil
+  return { sel = sel, cur = round2(api.GetCursorPosition and api.GetCursorPosition() or 0) or 0 }
+end
+local TIME_COMMANDS = { set_time_selection = true, get_time_selection = true, set_cursor_position = true }
+
+-- Routing: [kind (s send, r receive, h hardware), other end, volume dB, pan, flags (M muted)]
+local function routes_of(tr)
+  local out = {}
+  for _, cat in ipairs({ { 0, "s" }, { -1, "r" }, { 1, "h" } }) do
+    for i = 0, (api.GetTrackNumSends(tr, cat[1]) or 0) - 1 do
+      if #out < EDIT_MAX_ROWS then
+        local other
+        if cat[2] == "h" then
+          local dst = math.floor(api.GetTrackSendInfo_Value(tr, 1, i, "I_DSTCHAN") or 0)
+          local ch = (dst & 0x3FF) + 1
+          other = (dst & 1024) ~= 0 and ("Out " .. ch) or ("Out " .. ch .. "/" .. (ch + 1))
+        else
+          other = name_of(api.GetTrackSendInfo_Value(tr, cat[1], i, cat[2] == "s" and "P_DESTTRACK" or "P_SRCTRACK")) or "?"
+        end
+        out[#out + 1] = {
+          cat[2], other, round2(ctx.to_db(api.GetTrackSendInfo_Value(tr, cat[1], i, "D_VOL"))) or -150,
+          round2(api.GetTrackSendInfo_Value(tr, cat[1], i, "D_PAN")) or 0,
+          api.GetTrackSendInfo_Value(tr, cat[1], i, "B_MUTE") ~= 0 and "M" or "",
+        }
+      end
+    end
+  end
+  return out
+end
+
+local ROUTING_COMMANDS = { get_track_routing = true, add_send = true, set_send = true, remove_send = true, add_hardware_output = true }
+local function routing_track(params)
+  return track_ref(params.trackIndex) or track_ref(params.track) or track_ref(params.from)
+end
+
+-- Structure edits redraw the mixer with the ids before and after, so the page can mark added, removed and moved tracks
+local STRUCTURE_COMMANDS = { add_track = true, delete_track = true, move_track = true, set_track_folder = true, set_track_info = true }
+
+-- get_fx_parameters: the first parameters of the FX as bars with the plugin's readout
+local function fx_param_rows(params)
+  local tr = track_ref(params.trackIndex)
+  local fx = tonumber(params.fxIndex)
+  if not tr or not fx or not api.TrackFX_GetNumParams then return nil end
+  local n = api.TrackFX_GetNumParams(tr, fx) or 0
+  local _, fx_name = api.TrackFX_GetFXName(tr, fx)
+  local rows = {}
+  for p = 0, math.min(n, EDIT_MAX_ROWS) - 1 do
+    local _, p_name = api.TrackFX_GetParamName(tr, fx, p)
+    local _, text = api.TrackFX_GetFormattedParamValue(tr, fx, p)
+    rows[#rows + 1] = { t = fx_name or ("FX " .. (fx + 1)), p = p_name or ("Param " .. (p + 1)), s = "norm", b = round3(api.TrackFX_GetParamNormalized(tr, fx, p)), bt = text }
+  end
+  return { rows = rows, more = math.max(0, n - #rows) }
 end
 
 local function timeline_snapshot()
@@ -318,6 +532,34 @@ local function timeline_view(cmd_type, data, before)
   return r
 end
 
+-- Item edits: the timeline with one lane per touched track, each with its items before the edit
+local function item_view(params, before)
+  local r = timeline_snapshot()
+  r.lanes = {}
+  local all = {}
+  for i, idx in ipairs(item_tracks(params)) do
+    local tr = api.GetTrack(0, idx)
+    local lane = { t = name_of(tr), items = track_items(tr), was = before and before[i] or nil }
+    r.lanes[i] = lane
+    for _, it in ipairs(lane.items) do all[#all + 1] = it end
+    for _, it in ipairs(lane.was or {}) do all[#all + 1] = it end
+  end
+  r.len = project_length(r, all)
+  return r
+end
+
+-- Time selection and cursor on the timeline, with where they were before a write
+local function time_view(before)
+  local r = timeline_snapshot()
+  local now = time_state()
+  r.sel, r.cur = now.sel, now.cur
+  if before then r.wasSel, r.wasCur = before.sel, before.cur end
+  local len = project_length(r)
+  for _, v in ipairs({ r.cur, r.wasCur, r.sel and r.sel[2], r.wasSel and r.wasSel[2] }) do len = math.max(len, v or 0) end
+  r.len = round2(len) or 0
+  return r
+end
+
 -- Mixer: [name, indent, color, volume dB, pan, flags]; flags M mute, S solo, R armed, F folder
 local function mixer_row(tr, name, indent)
   local flags = (api.GetMediaTrackInfo_Value(tr, "B_MUTE") ~= 0 and "M" or "")
@@ -331,19 +573,50 @@ local function mixer_row(tr, name, indent)
   }
 end
 
-local function mixer_view()
-  local tracks, level = {}, 0
-  local n = api.CountTracks(0)
-  for i = 0, n - 1 do
+-- Every track's row and id, with folder indent (structure edits diff the whole project)
+local function mixer_all()
+  local rows, ids, level = {}, {}, 0
+  for i = 0, api.CountTracks(0) - 1 do
     local tr = api.GetTrack(0, i)
     local _, name = api.GetTrackName(tr)
-    if #tracks < EDIT_MAX_MARKS then tracks[#tracks + 1] = mixer_row(tr, name or ("Track " .. (i + 1)), level) end
-    local depth = api.GetMediaTrackInfo_Value(tr, "I_FOLDERDEPTH") or 0
-    level = math.max(0, level + depth)
+    rows[#rows + 1] = mixer_row(tr, name or ("Track " .. (i + 1)), level)
+    ids[#ids + 1] = short_id(api.GetTrackGUID(tr))
+    level = math.max(0, level + (api.GetMediaTrackInfo_Value(tr, "I_FOLDERDEPTH") or 0))
   end
-  local r = { tracks = tracks, total = n }
+  return rows, ids
+end
+
+local function same_row(a, b)
+  if not a or not b or #a ~= #b then return false end
+  for k = 1, #a do if a[k] ~= b[k] then return false end end
+  return true
+end
+
+local function slice(list, from, count)
+  local out = {}
+  for k = from + 1, math.min(#list, from + count) do out[#out + 1] = list[k] end
+  return out
+end
+
+local function mixer_view(before)
+  local rows, ids = mixer_all()
+  local r = { total = #rows }
   local master = api.GetMasterTrack(0)
   if master then r.master = mixer_row(master, "Master", 0) end
+  local from = 0
+  if before then
+    -- A big project only fits a window of rows: start it just above the first row that differs
+    local first = 1
+    while first <= math.max(#ids, #before.ids)
+      and ids[first] == before.ids[first] and same_row(rows[first], before.tracks[first]) do
+      first = first + 1
+    end
+    if math.max(#rows, #before.tracks) > EDIT_MAX_MARKS then from = math.max(0, first - 1 - 4) end
+    r.ids = slice(ids, from, EDIT_MAX_MARKS)
+    r.was = { tracks = slice(before.tracks, from, EDIT_MAX_MARKS), ids = slice(before.ids, from, EDIT_MAX_MARKS) }
+    if from > 0 then r.from = from end
+  end
+  r.tracks = slice(rows, from, EDIT_MAX_MARKS)
   return r
 end
 
@@ -474,8 +747,22 @@ function M.before(cmd_type, params)
     return env and env_points(env)
   elseif MIDI_WRITES[cmd_type] then
     return midi_notes(params)
+  elseif CC_COMMANDS[cmd_type] and cmd_type ~= "get_midi_cc" then
+    return cc_events(params)
   elseif TIMELINE_WRITES[cmd_type] then
     return timeline_snapshot()
+  elseif FX_CHAIN_COMMANDS[cmd_type] and cmd_type ~= "get_track_properties" then
+    return fx_chains(params)
+  elseif ITEM_COMMANDS[cmd_type] and cmd_type ~= "list_midi_items" then
+    return item_lanes(params)
+  elseif cmd_type == "set_time_selection" or cmd_type == "set_cursor_position" then
+    return time_state()
+  elseif ROUTING_COMMANDS[cmd_type] and cmd_type ~= "get_track_routing" then
+    local tr = routing_track(params)
+    return tr and { track = tr, routes = routes_of(tr) }
+  elseif STRUCTURE_COMMANDS[cmd_type] then
+    local rows, ids = mixer_all()
+    return { tracks = rows, ids = ids }
   end
 end
 
@@ -491,11 +778,26 @@ function M.summary(cmd_type, params, data, before)
     return midi_view(params, before)
   elseif cmd_type == "analyze_midi" then
     return midi_stats_view(data)
+  elseif CC_COMMANDS[cmd_type] then
+    return cc_view(cmd_type, params, before)
   elseif TIMELINE_WRITES[cmd_type] or cmd_type == "list_markers" or cmd_type == "list_regions"
       or cmd_type == "get_tempo_map" or cmd_type == "list_media_items" then
     return timeline_view(cmd_type, data, before)
-  elseif cmd_type == "list_tracks" then
-    return mixer_view()
+  elseif cmd_type == "list_tracks" or STRUCTURE_COMMANDS[cmd_type] then
+    return mixer_view(before)
+  elseif FX_CHAIN_COMMANDS[cmd_type] then
+    return fx_chain_view(params, before)
+  elseif ITEM_COMMANDS[cmd_type] then
+    return item_view(params, before)
+  elseif TIME_COMMANDS[cmd_type] then
+    return time_view(before)
+  elseif ROUTING_COMMANDS[cmd_type] then
+    -- A write reads the same track it read before (remove_send can leave nothing to resolve by index)
+    local tr = before and before.track or routing_track(params)
+    if not tr then return nil end
+    return { t = name_of(tr), routes = routes_of(tr), was = before and before.routes or nil }
+  elseif cmd_type == "get_fx_parameters" then
+    return fx_param_rows(params)
   elseif cmd_type == "run_plan" then
     return plan_view(params, data)
   end

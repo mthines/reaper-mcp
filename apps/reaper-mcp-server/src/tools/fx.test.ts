@@ -4,6 +4,7 @@ vi.mock('../bridge.js', () => ({
   sendCommand: vi.fn(),
 }));
 
+import { z } from 'zod/v4';
 import { sendCommand } from '../bridge.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerFxTools } from './fx.js';
@@ -11,10 +12,10 @@ import { registerFxTools } from './fx.js';
 const mockedSendCommand = vi.mocked(sendCommand);
 
 function captureTools() {
-  const tools: Record<string, { handler: (...args: unknown[]) => unknown }> = {};
+  const tools: Record<string, { schema: z.ZodRawShape; handler: (...args: unknown[]) => unknown }> = {};
   const mockServer = {
-    tool: vi.fn((name: string, _desc: string, _schema: unknown, handler: (...args: unknown[]) => unknown) => {
-      tools[name] = { handler };
+    tool: vi.fn((name: string, _desc: string, schema: z.ZodRawShape, handler: (...args: unknown[]) => unknown) => {
+      tools[name] = { schema, handler };
     }),
   } as unknown as McpServer;
   registerFxTools(mockServer);
@@ -238,6 +239,13 @@ describe('fx tools', () => {
   });
 
   describe('set_fx_parameter', () => {
+    it('accepts values above 1 for plugins with their own range (ReaComp Wet +2 dB = 1.2589)', () => {
+      const parsed = z.object(tools['set_fx_parameter'].schema).parse({
+        trackIndex: '2', fxIndex: '2', paramIndex: '11', value: '1.2589',
+      });
+      expect(parsed.value).toBe(1.2589);
+    });
+
     it('sends correct params', async () => {
       mockedSendCommand.mockResolvedValue({
         id: 'test',

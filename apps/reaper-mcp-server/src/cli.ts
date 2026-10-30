@@ -88,6 +88,7 @@ export const REAPER_ASSETS = [
   'mcp_correlation_meter.jsfx',
   'mcp_crest_factor.jsfx',
   'mcp_midi_emitter.jsfx',
+  'mcp_gain_trace.jsfx',
   'mcp_snapshot_manager.lua',
   'mcp_snapshot_lib.lua',
   'mcp_plan_lib.lua',

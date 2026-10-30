@@ -31,7 +31,7 @@ describe('gallery stories', () => {
 
   it('show every kind of edit view, each drawn', () => {
     const drawn = new Set(EDIT_STORIES.filter((s) => editViewOf(s.entry) !== null).map((s) => editKindOf(s.entry.c)));
-    expect([...drawn].sort()).toEqual(['changes', 'envelope', 'midi', 'midiStats', 'mixer', 'plan', 'timeline']);
+    expect([...drawn].sort()).toEqual(['changes', 'envelope', 'fxChain', 'midi', 'midiStats', 'mixer', 'plan', 'routing', 'timeline']);
     expect(EDIT_STORIES.every((s) => editViewOf(s.entry) !== null)).toBe(true);
   });
 

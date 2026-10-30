@@ -178,7 +178,7 @@ describe('measurement results in the log', () => {
   it('keeps meter readings, rounded, and nothing for other commands', async () => {
     const bridge = await startBridge('api.Track_GetPeakInfo = function(_, ch) return ch == 0 and 0.5 or 0.25 end');
     await bridge.send('read_track_meters', { trackIndex: 0 });
-    await bridge.send('get_track_properties', { trackIndex: 0 });
+    await bridge.send('get_project_info', {});
     const { recent } = await bridge.status();
     expect(recent[1].r).toEqual({ peakL: -6.02, peakR: -12.04, rmsL: -9.03, rmsR: -15.05 });
     expect(recent[0].r).toBeUndefined();
@@ -393,6 +393,106 @@ describe('edit views in the log', () => {
     expect((await bridge.send('run_plan', { ops: JSON.stringify(ops), dryRun: true })).error).toBeUndefined();
     const r = (await bridge.status()).recent[0].r;
     expect(r).toMatchObject({ ops: [['add_track', 'Bass'], ['add_fx', '$bass · ReaComp']], total: 2, dryRun: true });
+  });
+
+  it('shows an FX chain before and after a bypass, and after a removal', async () => {
+    const bridge = await startBridge(`
+      api.tracks[1].fx = { { name = "ReaEQ", guid = "{eq111111}", params = {} }, { name = "ReaComp", guid = "{comp2222}", params = {} } }
+      api.TrackFX_GetEnabled = function(tr, i) return tr.fx[i + 1].enabled ~= false end
+    `);
+    await bridge.send('set_fx_enabled', { trackIndex: 0, fxIndex: 1, enabled: 0 });
+    let r = (await bridge.status()).recent[0].r;
+    expect(r).toEqual({
+      chains: [{
+        t: 'Kick',
+        fx: [['ReaEQ', '', 'eq111111', ''], ['ReaComp', 'B', 'comp2222', '']],
+        was: [['ReaEQ', '', 'eq111111', ''], ['ReaComp', '', 'comp2222', '']],
+      }],
+    });
+
+    await bridge.send('remove_fx', { trackIndex: 0, fxIndex: 0 });
+    r = (await bridge.status()).recent[0].r;
+    expect(r).toMatchObject({ chains: [{ fx: [['ReaComp', 'B', 'comp2222', '']], was: [['ReaEQ', '', 'eq111111', ''], ['ReaComp', 'B', 'comp2222', '']] }] });
+  });
+
+  it('shows the FX chain a track listing reads, without a before', async () => {
+    const bridge = await startBridge('api.tracks[1].fx = { { name = "ReaEQ", guid = "{eq111111}", params = {} } }');
+    await bridge.send('get_track_properties', { trackIndex: 0 });
+    expect((await bridge.status()).recent[0].r).toEqual({ chains: [{ t: 'Kick', fx: [['ReaEQ', '', 'eq111111', '']] }] });
+  });
+
+  it('draws a moved item on its track lane, with where it was', async () => {
+    const bridge = await startBridge(`
+      api.tracks[1].items = { { vals = { D_POSITION = 2, D_LENGTH = 4, D_FADEINLEN = 0.5 }, takes = {} } }
+    `);
+    await bridge.send('move_media_item', { trackIndex: 0, itemIndex: 0, newPosition: 10 });
+    const r = (await bridge.status()).recent[0].r;
+    expect(r).toMatchObject({
+      lanes: [{ t: 'Kick', items: [[10, 4, 0.5, 0, 0, 0]], was: [[2, 4, 0.5, 0, 0, 0]] }],
+      len: 14,
+    });
+  });
+
+  it('lists a track’s sends before and after one is added', async () => {
+    const bridge = await startBridge(`
+      api.tracks[2] = { name = "Verb", guid = "{verb}", vals = {}, fx = {}, sends = {}, chunk = "" }
+    `);
+    await bridge.send('add_send', { from: 0, to: 'Verb', volume: -12 });
+    const r = (await bridge.status()).recent[0].r;
+    expect(r).toEqual({ t: 'Kick', routes: [['s', 'Verb', -12, 0, '']], was: [] });
+  });
+
+  it('marks the track a structure edit added, with the mixer before', async () => {
+    const bridge = await startBridge();
+    await bridge.send('add_track', { name: 'Bass' });
+    const r = (await bridge.status()).recent[0].r as { tracks: unknown[][]; ids: string[]; was: { tracks: unknown[][]; ids: string[] } };
+    expect(r.tracks.map((t) => t[0])).toEqual(['Kick', 'Bass']);
+    expect(r.was.tracks.map((t) => t[0])).toEqual(['Kick']);
+    expect(r.ids).toHaveLength(2);
+    expect(r.ids).toContain(r.was.ids[0]);
+  });
+
+  it('shows the rows around a structure edit in a project too big to draw whole', async () => {
+    const bridge = await startBridge(`
+      for i = 2, 100 do api.tracks[i] = { name = "T" .. i, guid = "{t" .. i .. "}", vals = {}, fx = {}, sends = {}, chunk = "" } end
+    `);
+    await bridge.send('add_track', { name: 'Scratch' });
+    const r = (await bridge.status()).recent[0].r as { tracks: unknown[][]; ids: string[]; total: number; from: number; was: { tracks: unknown[][] } };
+    expect(r.total).toBe(101);
+    expect(r.tracks.at(-1)?.[0]).toBe('Scratch'); // the new last track is drawn…
+    expect(r.from).toBeGreaterThan(0); // …because the window starts near it, not at the first track
+    expect(r.tracks.length).toBe(r.was.tracks.length + 1);
+  });
+
+  it('draws a MIDI CC as a lane of held values, with the lane before an insert', async () => {
+    const bridge = await startBridge(`${MIDI_ITEM}
+      ccs = { { 0, 7, 100 }, { 1920, 7, 80 }, { 960, 1, 20 } }
+      api.MIDI_CountEvts = function() return true, #notes, #ccs, 0 end
+      api.MIDI_GetCC = function(_, i) local c = ccs[i + 1] return true, false, false, c[1], 176, 0, c[2], c[3] end
+      api.MIDI_InsertCC = function(_, _, _, ppq, _, _, n, v) ccs[#ccs + 1] = { ppq, n, v } end
+    `);
+    await bridge.send('insert_midi_cc', { trackIndex: 0, itemIndex: 0, ccNumber: 7, value: 64, position: 3 });
+    const r = (await bridge.status()).recent[0].r as { env: string; unit: string; pts: number[][]; was: number[][]; otherCcs: number };
+    expect(r).toMatchObject({ env: 'CC 7 · Volume', unit: 'cc', beats: 1, otherCcs: 1 });
+    expect(r.pts.map((p) => p[1])).toEqual([100, 80, 64]);
+    expect(r.was.map((p) => p[1])).toEqual([100, 80]);
+  });
+
+  it('logs a sidecar tool’s result as that tool’s entry, with its result', async () => {
+    const bridge = await startBridge();
+    const r = { name: 'Mix', lufs: -9.8, sections: [[0, 10, -10.2]] };
+    await bridge.send('_log_result', { command: 'analyze_track_offline', ms: 2400, ok: 1, p: '{"trackIndex":-1}', r: JSON.stringify(r) });
+    const { recent, commands } = await bridge.status();
+    expect(recent[0]).toMatchObject({ c: 'analyze_track_offline', ms: 2400, ok: true, p: '{"trackIndex":-1}', r });
+    expect(commands).toBe(1);
+  });
+
+  it('shows the time selection and edit cursor with where they were', async () => {
+    const bridge = await startBridge();
+    await bridge.send('set_time_selection', { start: 4, end: 12 });
+    await bridge.send('set_time_selection', { start: 8, end: 16 });
+    const r = (await bridge.status()).recent[0].r;
+    expect(r).toMatchObject({ sel: [8, 16], wasSel: [4, 12], cur: 0, len: 16 });
   });
 });
 

@@ -70,13 +70,20 @@ function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | un
           <div className="measure-readouts">
             <Readout label="Peak L" value={fmt(m.peakL)} unit="dB" zone={zoneOf(m.peakL)} />
             <Readout label="Peak R" value={fmt(m.peakR)} unit="dB" zone={zoneOf(m.peakR)} />
-            <Readout label="RMS L / R" value={`${fmt(m.rmsL)} / ${fmt(m.rmsR)}`} unit="dB" />
+            <Readout label="RMS L" value={fmt(m.rmsL)} unit="dB" />
+            <Readout label="RMS R" value={fmt(m.rmsR)} unit="dB" />
           </div>
         </>
       );
     }
     case 'lufs':
       return <Loudness m={m} target={targetOf(entry)} was={same('lufs', previous)?.integrated} />;
+    case 'offline':
+      return <Offline m={m} was={same('offline', previous)?.lufs} />;
+    case 'alignment':
+      return <Alignment m={m} />;
+    case 'aesthetics':
+      return <Aesthetics m={m} was={same('aesthetics', previous)} />;
     case 'correlation': {
       const c = m.correlation;
       const wc = same('correlation', previous)?.correlation;
@@ -135,10 +142,10 @@ function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | un
 }
 
 /** Label over value; a zone other than ok colors the value and names the problem beside the label */
-export function Readout({ label, value, unit, zone = 'ok', word }: { label: string; value: string; unit?: string; zone?: Zone; word?: string }) {
+export function Readout({ label, value, unit, zone = 'ok', word, title }: { label: string; value: string; unit?: string; zone?: Zone; word?: string; title?: string }) {
   const w = word ?? ZONE_WORD[zone];
   return (
-    <div className={`measure-ro zone-${zone}`}>
+    <div className={`measure-ro zone-${zone}`} title={title}>
       <span className="measure-ro-label">
         {label}
         {w && <span className="measure-ro-word"> · {w}</span>}
@@ -312,8 +319,8 @@ function Spectrum({ m, previous }: { m: Extract<Measurement, { kind: 'spectrum' 
 }
 
 /** The one number each measurement is judged by, compared against the previous call */
-function headline(m: Measurement): { value: number; label: string; unit: string } | null {
-  const v = (x: number | undefined, label: string, unit: string) => (x === undefined || x <= -149 ? null : { value: x, label, unit });
+function headline(m: Measurement): { value: number; label: string; unit: string; plain: boolean } | null {
+  const v = (x: number | undefined, label: string, unit: string, plain = false) => (x === undefined || x <= -149 ? null : { value: x, label, unit, plain });
   switch (m.kind) {
     case 'lufs':
       return v(m.integrated, 'Integrated', 'LUFS');
@@ -327,6 +334,12 @@ function headline(m: Measurement): { value: number; label: string; unit: string 
       return v(m.rmsDb, 'RMS', 'dB');
     case 'waveform':
       return v(m.peakDb, 'Peak', 'dB');
+    case 'offline':
+      return v(m.lufs, 'Integrated', 'LUFS');
+    case 'alignment':
+      return v(m.delayMs, 'Delay', 'ms');
+    case 'aesthetics':
+      return v(m.pq, 'Quality', '/ 10', true);
   }
 }
 
@@ -343,7 +356,7 @@ function Previous({ m, previous, now, onPick }: { m: Measurement; previous: Comm
     <button className="measure-previous" onClick={() => onPick(previous)} title="Open the previous call (↓)">
       <span>Previous call · {formatAgo(now - previous.t)}</span>
       <span className="mono">
-        {was.label} {fmt(was.value, digits)} {was.unit}
+        {was.label} {was.plain ? was.value.toFixed(digits) : fmt(was.value, digits)} {was.unit}
         {delta !== null && <b className="measure-previous-delta"> {flat ? 'no change' : `${delta > 0 ? '+' : '−'}${Math.abs(delta).toFixed(digits)}`}</b>}
       </span>
     </button>
@@ -440,6 +453,184 @@ function Waveform({ m, entry, previous }: { m: Extract<Measurement, { kind: 'wav
         <span>{end.toFixed(1)} s</span>
       </div>
       {previous && <PreviousLegend />}
+    </>
+  );
+}
+
+// ── Sidecar analysis (logged by the server with `_log_result`) ─────────────────
+
+const BAND_NAMES = ['Sub', 'Bass', 'Low mid', 'Mid', 'Upper mid', 'Presence', 'Brilliance'];
+const BAND_RANGES = ['20–60 Hz', '60–250 Hz', '250–500 Hz', '500 Hz–2 kHz', '2–4 kHz', '4–6 kHz', '6–20 kHz'];
+const secs = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+/** Offline loudness of a render or a file: the integrated number first, then how it moves and where the energy sits */
+function Offline({ m, was }: { m: Extract<Measurement, { kind: 'offline' }>; was?: number }) {
+  const delta = m.ref?.delta;
+  const lo = Math.min(-40, ...m.sections.map((s) => s[2]));
+  const hasRef = !!m.ref && m.ref.bands.some((b) => b !== null);
+  return (
+    <>
+      <div className="lufs-big">
+        <b className="mono">{fmt(m.lufs)}</b>
+        <small>LUFS integrated{m.name ? ` · ${m.name}` : ''}</small>
+        {delta !== undefined && (
+          <span className={`lufs-delta mono ${Math.abs(delta) <= 1 ? 'lufs-on' : ''}`}>
+            {Math.abs(delta) < 0.05 ? 'as loud as the reference' : `${Math.abs(delta).toFixed(1)} LU ${delta > 0 ? 'louder' : 'quieter'} than the reference`}
+          </span>
+        )}
+      </div>
+      <div className="lufs-track" role="img" aria-label={`Integrated ${fmt(m.lufs)} LUFS`}>
+        {m.ref?.lufs !== undefined && <span className="lufs-was off-ref" style={{ left: `${lufsPct(m.ref.lufs)}%` }} title={`Reference ${fmt(m.ref.lufs)} LUFS`} />}
+        {was !== undefined && was > -149 && <span className="lufs-was" style={{ left: `${lufsPct(was)}%` }} title={`Previous call ${fmt(was)} LUFS`} />}
+        {m.lufs !== undefined && <span className="lufs-needle" style={{ left: `${lufsPct(m.lufs)}%` }} />}
+      </div>
+      <Scale ticks={[-40, -30, -20, -10, 0]} min={-40} max={0} />
+      <div className="measure-readouts">
+        <Readout label="Range (LRA)" value={m.lra === undefined ? '–' : m.lra.toFixed(1)} unit="LU" />
+        <Readout label="True peak" value={fmt(m.tp)} unit="dBTP" zone={tpZone(m.tp)} word={tpWord(m.tp)} />
+        <Readout label="Crest" value={m.crest === undefined ? '–' : m.crest.toFixed(1)} unit="dB" />
+      </div>
+      {m.sections.length > 1 && (
+        <div className="off-block">
+          <div className="off-title">Loudness per section</div>
+          <div className="off-sections" role="img" aria-label={`Loudness of ${m.sections.length} sections, ${fmt(Math.min(...m.sections.map((s) => s[2])))} to ${fmt(Math.max(...m.sections.map((s) => s[2])))} LUFS`}>
+            {m.lufs !== undefined && <span className="off-integrated" style={{ bottom: `${pct(m.lufs, lo, 0)}%` }} />}
+            {m.sections.map(([a, b, l], i) => (
+              <span key={i} className={l > (m.lufs ?? 0) + 3 ? 'off-loud' : ''} style={{ height: `${Math.max(2, pct(l, lo, 0))}%` }} title={`${secs(a)}–${secs(b)} · ${fmt(l)} LUFS`} />
+            ))}
+          </div>
+          <div className="measure-scale-words mono">
+            <span>{secs(m.sections[0][0])}</span>
+            <span>{secs(m.sections[m.sections.length - 1][1])}</span>
+          </div>
+        </div>
+      )}
+      {m.bands.some((b) => b !== null) && (
+        <div className="off-block">
+          <div className="off-title">Band balance · share of energy, dB{hasRef ? ' · against the reference' : ''}</div>
+          <div className="ev-rows">
+            {m.bands.map((b, i) => {
+              const d = m.ref?.bands[i] ?? null;
+              const off = d !== null && Math.abs(d) >= 3;
+              return (
+                <div key={i} className={`ev-row ${off ? 'ev-hot' : ''}`} title={`${BAND_NAMES[i]} (${BAND_RANGES[i]}): ${b === null ? 'silent' : `${fmt(b)} dB of the energy`}${d !== null ? `, ${fmt(d)} dB against the reference` : ''}`}>
+                  <span className="ev-name">{BAND_NAMES[i]}</span>
+                  <span className="ev-val mono">
+                    <b>{b === null ? '–' : fmt(b)}</b>
+                    {d !== null && <span className={off ? 'ev-word' : ''}> · {fmt(d)} vs ref</span>}
+                  </span>
+                  <span className="ev-bar">
+                    <span className="ev-fill" style={{ left: 0, width: `${b === null ? 0 : pct(b, -40, 0)}%` }} />
+                    {d !== null && b !== null && <span className="ev-was" style={{ left: `${pct(b - d, -40, 0)}%` }} />}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          {hasRef && (
+            <div className="measure-legend">
+              <span><i className="lg-line" /> This audio</span>
+              <span><i className="lg-was" /> Reference</span>
+            </div>
+          )}
+        </div>
+      )}
+      {(m.res.length > 0 || (m.sib ?? 0) > 0) && (
+        <div className="off-hints">
+          {m.res.length > 0 && (
+            <span>
+              Resonances <span className="mono">{m.res.map(([hz, db]) => `${hz >= 1000 ? `${(hz / 1000).toFixed(1)} kHz` : `${hz} Hz`} +${db.toFixed(1)}`).join(' · ')}</span>
+            </span>
+          )}
+          {(m.sib ?? 0) > 0 && <span>Sibilance <span className="mono">{m.sib} spikes</span></span>}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** How far a track sits behind (or ahead of) its reference, on a ms axis with the reference at 0 */
+function Alignment({ m }: { m: Extract<Measurement, { kind: 'alignment' }> }) {
+  const d = m.delayMs ?? 0;
+  const span = Math.max(1, Math.ceil(Math.abs(d) * 1.5));
+  const at = (ms: number) => pct(ms, -span, span);
+  const unsure = m.warn === 1;
+  return (
+    <>
+      <div className="measure-readouts">
+        <Readout label="Delay" value={m.delayMs === undefined ? '–' : `${d > 0 ? '+' : ''}${d.toFixed(2)}`} unit="ms" title={m.samples !== undefined ? `${m.samples} samples` : undefined} />
+        <Readout label="Polarity" value={m.inv ? 'inverted' : 'normal'} zone={m.inv ? 'hot' : 'ok'} word="" />
+        <Readout label="Correlation" value={m.corr === undefined ? '–' : m.corr.toFixed(2)} zone={unsure ? 'hot' : 'ok'} word="" />
+      </div>
+      <div className="off-align" role="img" aria-label={`${m.name ?? 'Track'} ${Math.abs(d).toFixed(2)} ms ${d >= 0 ? 'after' : 'before'} ${m.ref ?? 'the reference'}`}>
+        <span className="off-align-ref" style={{ left: `${at(0)}%` }}><b>{m.ref ?? 'Reference'}</b></span>
+        {m.delayMs !== undefined && (
+          <>
+            <span className="ev-fill" style={{ left: `${Math.min(at(0), at(d))}%`, width: `${Math.abs(at(d) - at(0))}%` }} />
+            <span className={`off-align-trk ${m.inv ? 'off-inv' : ''}`} style={{ left: `${at(d)}%` }}><b>{m.name ?? 'Track'}</b></span>
+          </>
+        )}
+      </div>
+      <div className="measure-scale-words mono">
+        <span>−{span} ms (earlier)</span>
+        <span>0</span>
+        <span>+{span} ms (later)</span>
+      </div>
+      {unsure ? (
+        <div className="off-hints"><span className="ev-word">Too little in common in this range to trust the delay; no fix suggested.</span></div>
+      ) : (
+        m.offset !== undefined && (
+          <div className="off-hints">
+            <span>
+              Fix <span className="mono">playOffsetMs {fmt(m.offset, 2)}{m.phase !== undefined ? ` · phase ${m.phase ? 'inverted' : 'normal'}` : ''}</span>
+              {m.cur !== undefined && m.cur !== 0 && <span className="mono"> (now {fmt(m.cur, 2)})</span>}
+            </span>
+          </div>
+        )
+      )}
+    </>
+  );
+}
+
+const AESTHETICS: Array<[keyof Extract<Measurement, { kind: 'aesthetics' }>, string, string]> = [
+  ['pq', 'Production quality', 'How clean and well produced it sounds'],
+  ['pc', 'Production complexity', 'How much is going on'],
+  ['ce', 'Content enjoyment', 'How enjoyable it is'],
+  ['cu', 'Content usefulness', 'How usable it is as material'],
+];
+
+/** The four Audiobox Aesthetics scores on 0–10, the previous call ghosted */
+function Aesthetics({ m, was }: { m: Extract<Measurement, { kind: 'aesthetics' }>; was: Extract<Measurement, { kind: 'aesthetics' }> | null }) {
+  return (
+    <>
+      <div className="ev-rows">
+        {AESTHETICS.map(([k, label, hint]) => {
+          const v = m[k] as number | undefined;
+          const w = was?.[k] as number | undefined;
+          return (
+            <div key={k} className="ev-row" title={hint}>
+              <span className="ev-name">{label}</span>
+              <span className="ev-val mono">
+                <b>{v === undefined ? '–' : v.toFixed(1)}</b> / 10
+                {w !== undefined && v !== undefined && Math.abs(v - w) >= 0.05 && <span> · {v > w ? '+' : '−'}{Math.abs(v - w).toFixed(1)}</span>}
+              </span>
+              <span className="ev-bar">
+                <span className="ev-fill" style={{ left: 0, width: `${v === undefined ? 0 : pct(v, 0, 10)}%` }} />
+                {w !== undefined && <span className="ev-was" style={{ left: `${pct(w, 0, 10)}%` }} />}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {was && <PreviousLegend />}
+      <div className="off-hints">
+        <span>
+          {m.name ?? 'Clip'}
+          {m.dur !== undefined ? `, ${Math.round(m.dur)} s` : ''}
+          {m.lufs !== undefined ? `, scored at ${fmt(m.lufs, 0)} LUFS` : ', scored as rendered'}
+          .{m.dur !== undefined && ` Differences under ~${m.dur >= 30 ? '0.1' : '0.4'} are render noise at this length.`}
+        </span>
+      </div>
     </>
   );
 }

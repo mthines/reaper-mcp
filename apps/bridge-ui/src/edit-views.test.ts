@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { editViewOf, timelineDiff, type Marker } from './edit-views.js';
+import { editViewOf, fittingLabels, listDiff, routeIds, timelineDiff, type Marker, type Route } from './edit-views.js';
 import type { CommandEntry } from './status.js';
 
 const entry = (c: string, r: Record<string, unknown> | undefined, ok = true): CommandEntry => ({ n: 1, t: 0, c, ms: 1, ok, r });
@@ -46,5 +46,84 @@ describe('what a timeline write changed', () => {
     const { added, removed } = timelineDiff<Marker>([[0, 'Intro', '', 1]], undefined);
     expect(added.size).toBe(0);
     expect(removed).toEqual([]);
+  });
+});
+
+describe('fittingLabels', () => {
+  it('keeps every label when they have room', () => {
+    expect(fittingLabels([[0, 'Intro'], [0.5, 'Verse']], 400)).toEqual(new Set([0, 1]));
+  });
+
+  it('leaves out a label that would run into the one before it', () => {
+    // 'Verse' needs ~38px; the next marker is 10px along on a 200px lane
+    expect(fittingLabels([[0, 'Verse'], [0.05, 'Chorus'], [0.5, 'Bridge']], 200)).toEqual(new Set([0, 2]));
+  });
+
+  it('gives changed markers their label first', () => {
+    expect(fittingLabels([[0, 'Verse'], [0.05, 'Drop']], 200, new Set([1]))).toEqual(new Set([1]));
+  });
+
+  it('shows more labels on a wider lane', () => {
+    const marks: Array<[number, string]> = Array.from({ length: 12 }, (_, i) => [i / 12, `Mark ${i}`]);
+    expect(fittingLabels(marks, 260).size).toBeLessThan(fittingLabels(marks, 900).size);
+  });
+});
+
+describe('listDiff', () => {
+  const id = (t: [string, string]) => t[0];
+  const same = (a: [string, string], b: [string, string]) => a[1] === b[1];
+
+  it('marks what a call added, changed in place and removed', () => {
+    const { change, removed } = listDiff<[string, string]>(
+      [['eq', ''], ['comp', 'B'], ['sat', '']],
+      [['eq', ''], ['comp', ''], ['deess', '']],
+      id, same,
+    );
+    expect([...change]).toEqual([[1, 'changed'], [2, 'new']]);
+    expect(removed).toEqual([[2, ['deess', '']]]);
+  });
+
+  it('marks only the entry that moved, not the ones it passed', () => {
+    const { change } = listDiff<[string, string]>([['c', ''], ['a', ''], ['b', '']], [['a', ''], ['b', ''], ['c', '']], id, same);
+    expect([...change]).toEqual([[0, 'moved']]);
+  });
+
+  it('marks nothing without a before', () => {
+    expect(listDiff<[string, string]>([['a', '']], undefined, id, same)).toEqual({ change: new Map(), removed: [] });
+  });
+});
+
+describe('new edit views', () => {
+  it('reads an FX chain before and after, dropping malformed slots', () => {
+    const v = editViewOf(entry('set_fx_enabled', { chains: [{ t: 'Vox', fx: [['ReaEQ', 'B', 'a1', ''], ['bad']], was: [['ReaEQ', '', 'a1', '']] }] }));
+    expect(v).toEqual({ kind: 'fxChain', chains: [{ t: 'Vox', fx: [['ReaEQ', 'B', 'a1', '']], was: [['ReaEQ', '', 'a1', '']] }] });
+  });
+
+  it('reads routes and keeps two sends to the same place apart', () => {
+    const routes: Route[] = [['s', 'Verb', -12, 0, ''], ['s', 'Verb', -6, 0, '']];
+    expect(editViewOf(entry('get_track_routing', { t: 'Vox', routes }))).toEqual({ kind: 'routing', t: 'Vox', routes });
+    expect(routeIds(routes)).toEqual(['s:Verb#1', 's:Verb#2']);
+  });
+
+  it('reads item lanes and the time selection on the timeline', () => {
+    const v = editViewOf(entry('move_media_item', { tempo: [[0, 120, 4, 4, 0]], len: 20, lanes: [{ t: 'Gtr', items: [[4, 2, 0, 0, 0, 0]], was: [[0, 2, 0, 0, 0, 0]] }] }));
+    expect(v).toMatchObject({ kind: 'timeline', lanes: [{ t: 'Gtr', items: [[4, 2, 0, 0, 0, 0]], was: [[0, 2, 0, 0, 0, 0]] }] });
+    const t = editViewOf(entry('set_cursor_position', { tempo: [[0, 120, 4, 4, 0]], len: 20, cur: 8, wasCur: 2 }));
+    expect(t).toMatchObject({ cur: 8, wasCur: 2, wasSel: null });
+  });
+
+  it('diffs a structure edit only when ids match the tracks', () => {
+    const row = ['Kick', 0, '', 0, 0, ''];
+    const ok = editViewOf(entry('add_track', { tracks: [row, row], total: 2, ids: ['a', 'b'], was: { tracks: [row], ids: ['a'] } }));
+    expect(ok).toMatchObject({ ids: ['a', 'b'], was: { ids: ['a'] } });
+    const short = editViewOf(entry('add_track', { tracks: [row, row], total: 2, ids: ['a'], was: { tracks: [row], ids: ['a'] } }));
+    expect(short).not.toHaveProperty('was');
+  });
+
+  it('keeps where a windowed mixer starts in a big project', () => {
+    const row = ['Kick', 0, '', 0, 0, ''];
+    const windowed = editViewOf(entry('add_track', { tracks: [row, row], total: 123, from: 117, ids: ['a', 'b'], was: { tracks: [row], ids: ['a'] } }));
+    expect(windowed).toMatchObject({ from: 117, total: 123 });
+    expect(editViewOf(entry('list_tracks', { tracks: [row], total: 1 }))).not.toHaveProperty('from');
   });
 });

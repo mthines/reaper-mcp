@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sendCommand } from '../bridge.js';
 import { getSidecarClient } from '../sidecar.js';
+import { aestheticsSummary, logToolResult } from '../tool-log.js';
 import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
 
 /** Loudness every clip is scored at, so louder versions do not score higher for being louder. */
@@ -45,7 +46,9 @@ export function registerAestheticsTools(server: McpServer): void {
       normalizeLufs: z.union([z.literal(false), z.null(), z.coerce.number().min(-60).max(0)]).optional().default(DEFAULT_SCORING_LUFS)
         .describe('Scale the clip to this integrated loudness before scoring (default -18 LUFS); false or null scores it as rendered'),
     },
-    async ({ trackIndex, startTime, endTime, durationSeconds, normalizeLufs }) => {
+    async (args) => {
+      const { trackIndex, startTime, endTime, durationSeconds, normalizeLufs } = args;
+      const startedAt = Date.now();
       // Check 1: is sidecar installed?
       const sidecar = getSidecarClient();
       if (!sidecar.isAvailable()) {
@@ -110,12 +113,15 @@ export function registerAestheticsTools(server: McpServer): void {
           modelVersion: scores.modelVersion,
         };
 
+        logToolResult('analyze_track_aesthetics', args, startedAt, aestheticsSummary(result));
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logToolResult('analyze_track_aesthetics', args, startedAt, null, message);
         return {
           content: [{
             type: 'text',
-            text: err instanceof Error ? err.message : String(err),
+            text: message,
           }],
           isError: true,
         };

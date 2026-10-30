@@ -2397,7 +2397,7 @@ export function Details({
             <span className="mono">{e.ms} ms</span> <span className="muted">· {speed}</span>
           </dd>
           <dt>When</dt>
-          <dd>
+          <dd title={time.toISOString()}>
             {formatDay(e.t, now)} {time.toLocaleTimeString([], { hour12: false })}.{String(time.getMilliseconds()).padStart(3, '0')}{' '}
             <span className="muted">· {formatAgo(now - e.t)}</span>
           </dd>
@@ -2405,17 +2405,17 @@ export function Details({
             <>
               <dt>Session</dt>
               <dd>
-                <span className="session-inline">
+                <span className="session-inline session-fact" title={[sessionName(session), session.client].filter(Boolean).join(' · ')}>
                   <i className={`sdot hue-${sessionHue(session.id)}`} />
-                  {sessionName(session)}
-                  {session.client && <span className="muted"> · {session.client}</span>}
+                  <span className="session-fact-name">{sessionName(session)}</span>
+                  {session.client && <span className="muted session-fact-client"> · {session.client}</span>}
                 </span>
                 <span className="mono muted session-sub">{session.id}</span>
               </dd>
             </>
           )}
-          <dt>Timestamp</dt>
-          <dd className="mono">{time.toISOString()}</dd>
+          <dt className="fact-wide">Timestamp</dt>
+          <dd className="mono fact-wide">{time.toISOString()}</dd>
           <dt>Sequence</dt>
           <dd className="mono">#{e.n}</dd>
         </dl>

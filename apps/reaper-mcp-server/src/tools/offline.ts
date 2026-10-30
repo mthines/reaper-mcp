@@ -17,10 +17,12 @@
 import { z } from 'zod/v4';
 import { randomUUID } from 'node:crypto';
 import { unlink } from 'node:fs/promises';
+import { basename } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
 import { sendCommand } from '../bridge.js';
 import { getSidecarClient } from '../sidecar.js';
+import { alignmentSummary, logToolResult, offlineSummary } from '../tool-log.js';
 
 const SIDECAR_NOT_INSTALLED_MSG =
   'Audio understanding sidecar not installed. ' +
@@ -100,7 +102,9 @@ export function registerOfflineTools(server: McpServer): void {
         .describe('Also report loudness per consecutive section of this length (e.g. 10)'),
       ...referenceSchema,
     },
-    async ({ trackIndex, startTime, endTime, durationSeconds, sectionSeconds, referencePath, referenceStartTime, referenceEndTime }) => {
+    async (args) => {
+      const { trackIndex, startTime, endTime, durationSeconds, sectionSeconds, referencePath, referenceStartTime, referenceEndTime } = args;
+      const startedAt = Date.now();
       const sidecar = getSidecarClient();
       if (!sidecar.isAvailable()) return error(SIDECAR_NOT_INSTALLED_MSG);
 
@@ -121,15 +125,19 @@ export function registerOfflineTools(server: McpServer): void {
           ...(sectionSeconds ? { sectionSeconds } : {}),
           ...(referencePath ? { referencePath, referenceStartTime, referenceEndTime } : {}),
         });
+        const data = toProjectTime(result, start);
+        logToolResult('analyze_track_offline', args, startedAt, offlineSummary(wav.trackName ?? `Track ${trackIndex + 1}`, data));
         return text({
           trackIndex,
           trackName: wav.trackName,
           startTime: start,
           endTime: end,
-          ...toProjectTime(result, start),
+          ...data,
         });
       } catch (err) {
-        return error(err instanceof Error ? err.message : String(err));
+        const message = err instanceof Error ? err.message : String(err);
+        logToolResult('analyze_track_offline', args, startedAt, null, message);
+        return error(message);
       } finally {
         await removeQuietly(wav.wavPath);
       }
@@ -149,7 +157,9 @@ export function registerOfflineTools(server: McpServer): void {
         .describe('Also report loudness per consecutive section of this length'),
       ...referenceSchema,
     },
-    async ({ path, startTime, endTime, sectionSeconds, referencePath, referenceStartTime, referenceEndTime }) => {
+    async (args) => {
+      const { path, startTime, endTime, sectionSeconds, referencePath, referenceStartTime, referenceEndTime } = args;
+      const startedAt = Date.now();
       const sidecar = getSidecarClient();
       if (!sidecar.isAvailable()) return error(SIDECAR_NOT_INSTALLED_MSG);
       if (startTime != null && endTime != null && endTime <= startTime) {
@@ -163,9 +173,13 @@ export function registerOfflineTools(server: McpServer): void {
           ...(sectionSeconds ? { sectionSeconds } : {}),
           ...(referencePath ? { referencePath, referenceStartTime, referenceEndTime } : {}),
         });
-        return text({ path, ...toProjectTime(result, startTime ?? 0) });
+        const data = toProjectTime(result, startTime ?? 0);
+        logToolResult('analyze_audio_file', args, startedAt, offlineSummary(basename(path), data));
+        return text({ path, ...data });
       } catch (err) {
-        return error(err instanceof Error ? err.message : String(err));
+        const message = err instanceof Error ? err.message : String(err);
+        logToolResult('analyze_audio_file', args, startedAt, null, message);
+        return error(message);
       }
     },
   );
@@ -189,7 +203,9 @@ export function registerOfflineTools(server: McpServer): void {
       maxLagMs: z.coerce.number().min(0.1).max(100).optional().default(DEFAULT_MAX_LAG_MS)
         .describe(`Largest offset to search either way in ms (default ${DEFAULT_MAX_LAG_MS}; room mics may need 30-50)`),
     },
-    async ({ referenceTrack, trackIndex, startTime, durationSeconds, maxLagMs }) => {
+    async (args) => {
+      const { referenceTrack, trackIndex, startTime, durationSeconds, maxLagMs } = args;
+      const startedAt = Date.now();
       const sidecar = getSidecarClient();
       if (!sidecar.isAvailable()) return error(SIDECAR_NOT_INSTALLED_MSG);
       if (referenceTrack === trackIndex) return error('referenceTrack and trackIndex must differ');
@@ -209,7 +225,7 @@ export function registerOfflineTools(server: McpServer): void {
         const confident = typeof delayMs === 'number' && correlation >= MIN_ALIGNMENT_CORRELATION;
         const currentPlayOffsetMs = rendered[1].playOffsetMs ?? 0;
         const currentPhaseInverted = rendered[1].phaseInverted ?? false;
-        return text({
+        const data = {
           referenceTrack,
           referenceName: rendered[0].trackName,
           trackIndex,
@@ -231,9 +247,15 @@ export function registerOfflineTools(server: McpServer): void {
               suggestedPhase: currentPhaseInverted !== Boolean(result['polarityInverted']) ? 1 : 0,
             }
             : {}),
-        });
+        };
+        // A window the sidecar could not measure (silence) logs as a refused call with its reason
+        const reason = typeof result['error'] === 'string' ? result['error'] : undefined;
+        logToolResult('measure_track_alignment', args, startedAt, reason ? null : alignmentSummary(data), reason);
+        return text(data);
       } catch (err) {
-        return error(err instanceof Error ? err.message : String(err));
+        const message = err instanceof Error ? err.message : String(err);
+        logToolResult('measure_track_alignment', args, startedAt, null, message);
+        return error(message);
       } finally {
         await Promise.all(rendered.map((r) => removeQuietly(r.wavPath)));
       }

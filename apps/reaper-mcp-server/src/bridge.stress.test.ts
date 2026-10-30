@@ -257,8 +257,14 @@ describe('bridge stress tests (requires REAPER)', () => {
     }
     const bridgeDir = join(resourcePath, 'Scripts', 'mcp_bridge_data');
 
-    const files = await readdir(bridgeDir);
-    const stale = files.filter((f) => f.startsWith('command_') || f.startsWith('response_'));
+    // Other servers on this bridge (every Claude session pings `_session` every 20s, live suites
+    // run in parallel) have files in flight at any moment; an orphan is one still there 2s later
+    const ipcFiles = async () =>
+      (await readdir(bridgeDir)).filter((f) => f.startsWith('command_') || f.startsWith('response_'));
+    const first = await ipcFiles();
+    await new Promise((r) => setTimeout(r, 2000));
+    const second = new Set(await ipcFiles());
+    const stale = first.filter((f) => second.has(f));
 
     if (stale.length > 0) {
       console.log(`    found ${stale.length} orphaned files: ${stale.slice(0, 5).join(', ')}`);
