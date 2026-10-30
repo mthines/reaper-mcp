@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sendCommand } from '../bridge.js';
+import { trackRef } from './structure.js';
 
 export function registerProjectTools(server: McpServer): void {
   server.tool(
@@ -82,7 +83,7 @@ function registerProjectOpsTools(server: McpServer): void {
         .describe('What is rendered: master mix; stems = one file per selected track (pick them with render_project tracks); master_and_stems; selected_via_master = the selected tracks through the master; region_matrix = the tracks set per region in regionMatrix (needs bounds all_regions or selected_regions)'),
       regionMatrix: z.array(z.object({
         regionIndex: z.coerce.number().int().describe('Region number as list_regions reports it'),
-        tracks: z.array(z.union([z.coerce.number(), z.string()])).describe('Tracks this region renders: index, name, "{GUID}" or "master"; replaces the row'),
+        tracks: z.array(trackRef).describe('Tracks this region renders: index, name, "{GUID}" or "master"; replaces the row'),
       })).optional().describe('Region render matrix rows (source region_matrix); each listed region renders exactly these tracks'),
       bounds: z.enum(['custom', 'project', 'time_selection', 'all_regions', 'selected_items', 'selected_regions']).optional().describe('What to render'),
       startTime: z.coerce.number().min(0).optional().describe('Custom bounds start (seconds)'),
@@ -115,7 +116,7 @@ function registerProjectOpsTools(server: McpServer): void {
     'Render the project with its current render settings (set them with set_render_settings) and return the files written, each measured: duration, integrated LUFS, true peak and sample peak. Synchronous: REAPER is busy until the render finishes, so keep renders short. Refused when a target file already exists (REAPER would ask) unless overwrite is true, when bounds is time_selection with no time selection, and when the format or secondary format is an encoder outside wav/aiff/flac/mp3/ogg/opus (they can open a dialog).',
     {
       overwrite: z.boolean().optional().describe('Delete existing target files before rendering'),
-      tracks: z.array(z.union([z.coerce.number(), z.string()])).optional()
+      tracks: z.array(trackRef).optional()
         .describe('For source stems / master_and_stems / selected_via_master: the tracks to render (index, name or "{GUID}"), selected for this render only'),
       analyze: z.boolean().optional().describe('Measure each file written (default true; up to 16 files)'),
     },
@@ -129,7 +130,7 @@ function registerProjectOpsTools(server: McpServer): void {
     {
       versions: z.array(z.object({
         name: z.string().describe('Version name, used in the file name: letters, digits, space, - _ .'),
-        mute: z.array(z.union([z.coerce.number(), z.string()])).optional().describe('Tracks muted in this version (index, name, "{GUID}")'),
+        mute: z.array(trackRef).optional().describe('Tracks muted in this version (index, name, "{GUID}")'),
         filePattern: z.string().optional().describe('File pattern for this version instead of "<pattern>-<name>"'),
       })).min(1).max(16).describe('The versions to render, in order'),
       overwrite: z.boolean().optional().describe('Replace existing target files'),

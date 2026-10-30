@@ -6,6 +6,7 @@ vi.mock('../bridge.js', () => ({
 
 import { sendCommand } from '../bridge.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod/v4';
 import { registerProjectTools } from './project.js';
 
 const mockedSendCommand = vi.mocked(sendCommand);
@@ -149,5 +150,13 @@ describe('render tools', () => {
     mockedSendCommand.mockResolvedValue({ id: 't', success: false, error: "versions[1].mute: track 'Nope' not found — nothing rendered", timestamp: 0 });
     const refused = await tools['render_versions'].handler({ versions: [{ name: 'X', mute: ['Nope'] }] });
     expect(refused).toEqual({ content: [{ type: 'text', text: "Error: versions[1].mute: track 'Nope' not found — nothing rendered" }], isError: true });
+  });
+
+  it('keeps a track named with digits as a name, so the bridge resolves it name-first', () => {
+    const schemas: Record<string, z.ZodObject> = {};
+    registerProjectTools({ tool: (name: string, _d: string, shape: z.ZodRawShape) => { schemas[name] = z.object(shape); } } as unknown as McpServer);
+    const versions = schemas['render_versions'].parse({ versions: [{ name: 'No 808', mute: ['808', 'Lead Vox', 3] }] });
+    expect((versions as { versions: { mute: unknown[] }[] }).versions[0].mute).toEqual(['808', 'Lead Vox', 3]);
+    expect(schemas['render_project'].parse({ tracks: ['2024'] }).tracks).toEqual(['2024']);
   });
 });
