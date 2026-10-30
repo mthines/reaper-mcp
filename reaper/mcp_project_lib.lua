@@ -753,7 +753,11 @@ function M.set_render(api, p, resolve)
     if p.outputDirectory ~= nil then api.GetSetProjectInfo_String(0, "RENDER_FILE", p.outputDirectory, true) end
     if p.filePattern ~= nil then api.GetSetProjectInfo_String(0, "RENDER_PATTERN", p.filePattern, true) end
     if blob then api.GetSetProjectInfo_String(0, "RENDER_FORMAT", blob, true)
-    elseif fourcc then api.GetSetProjectInfo_String(0, "RENDER_FORMAT", fourcc, true) end
+    elseif fourcc and fourcc ~= M.FORMATS[cur.format] then
+      -- The bare fourcc means the format's defaults: write it only on a real change, or a restated
+      -- format would drop the bit depth or bitrate already set
+      api.GetSetProjectInfo_String(0, "RENDER_FORMAT", fourcc, true)
+    end
     if fourcc2 then api.GetSetProjectInfo_String(0, "RENDER_FORMAT2", fourcc2, true) end
     if p.bounds ~= nil then api.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", M.BOUNDS[p.bounds], true) end
     if p.startTime ~= nil then api.GetSetProjectInfo(0, "RENDER_STARTPOS", p.startTime, true) end

@@ -349,6 +349,8 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
       r = assert(project.set_render(api, { format = "mp3", mp3Bitrate = 320 }))
       assert(r.mp3Bitrate == 320, "mp3 bitrate read back")
       assert(string.unpack("<i4", blob(), 5) == 320 and string.unpack("<i4", blob(), 25) == 320, "kbps at bytes 4 and 24")
+      r = assert(project.set_render(api, { format = "mp3", dither = true }))
+      assert(r.mp3Bitrate == 320, "restating the format keeps the bitrate: " .. tostring(r.mp3Bitrate))
       r = assert(project.set_render(api, { mp3Bitrate = 192 }))
       assert(r.mp3Bitrate == 192 and string.unpack("<i4", blob(), 25) == 192, "a second change keeps the rest of the config")
       r = assert(project.set_render(api, { dither = true, noiseShaping = true }))
