@@ -869,11 +869,20 @@ ESLint enforces dependency rules via `@nx/enforce-module-boundaries`:
 - **Framework**: Vitest with `globals: true`, `environment: 'node'`
 - **Server tests**: `apps/reaper-mcp-server/vitest.config.ts` (has `@reaper-mcp/protocol` alias)
 - **Protocol tests**: `libs/protocol/vitest.config.ts`
-- **Test approach**: Mock `sendCommand()` to test tool registration, parameter passing, success/error handling without REAPER running
-- **Test files**: `tools/midi.test.ts` (MIDI tools), `tools/media.test.ts` (media tools), and others in `tools/`
-- All tests verify: tool registration, correct command dispatch, success response formatting, error propagation
-- The Lua bridge cannot be unit tested outside REAPER -- test manually with the MCP Inspector
-- **Validate changes with tests**: Always write small, simple, and effective tests to validate your changes. Prefer focused unit tests that test one thing well over large integration tests. If modifying existing code, add or update tests to cover the change before considering it complete.
+- **Test behaviour, never implementation**: every test asserts what a caller can observe — the tool's response
+  to the agent, the error it returns, the state REAPER ends up in (through the fake API), the status feed, what the
+  page renders. Never assert private helpers, internal call order, how many times a function ran, or the exact
+  shape of intermediate data. A test should survive a refactor that keeps the behaviour and fail when the behaviour
+  breaks; if a rename or restructure breaks it, it was testing implementation.
+  - Drive the code through its public entry point (a registered tool, a bridge command, an exported pure function)
+    with real inputs, and assert the outcome.
+  - Mock only at the boundary you can't run (REAPER, the file system, network, the sidecar). Mocking `sendCommand()`
+    is for feeding the tool a bridge response, not for asserting it was called with particular arguments — assert
+    what the tool returned instead.
+  - Name tests after the behaviour (`"refuses an unknown marker index and changes nothing"`), not the function.
+- **Test files**: `tools/*.test.ts` (tool responses with `sendCommand()` stubbed), `*-lib.test.ts` and
+  `bridge-*.test.ts` (the real Lua libraries and bridge running in wasmoon against a fake `reaper` API)
+- **Validate changes with tests**: Always write small, simple, and effective tests to validate your changes. Prefer focused tests that check one behaviour well. If modifying existing code, add or update tests to cover the change before considering it complete.
 
 ## Running the MCP Server
 
