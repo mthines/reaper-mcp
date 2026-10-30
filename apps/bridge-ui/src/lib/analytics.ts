@@ -7,10 +7,6 @@ import type { Liveness } from './status.js';
 // same promises as the server's telemetry (TELEMETRY.md): no plugin, track or project names, no
 // search text, tokens, paths or host names. The events are listed in tracking-plan.yaml.
 
-declare const __VERSION__: string;
-declare const __DASH0_ENDPOINT__: string;
-declare const __DASH0_TOKEN__: string;
-declare const __DASH0_DATASET__: string;
 
 export const USAGE_STATS_KEY = 'mcp_bridge.usage_stats';
 const INSTALL_ID_KEY = 'mcp_bridge.install_id';

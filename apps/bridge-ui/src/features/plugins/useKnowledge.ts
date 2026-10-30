@@ -4,8 +4,6 @@ import { fetchRecords, parseInstalled, parseUsed, publishRecord } from './loreki
 import type { InstalledFx, KnowledgeFeed, PluginRecord, UsedFx } from './plugins.js';
 import { parseExtStateKey } from '../../lib/status.js';
 
-declare const __LOREKIT_TOKEN__: string;
-declare const __LOREKIT_API__: string;
 
 // The project's FX change while mixing; the installed list only when plugins are (re)scanned
 const USED_POLL_MS = 5_000;
