@@ -17,7 +17,7 @@ export function toastText(copied: string): string {
   return `Prompt copied${paste}`;
 }
 
-interface TeachOption {
+export interface TeachOption {
   key: string;
   label: string;
   rows: PluginRow[];

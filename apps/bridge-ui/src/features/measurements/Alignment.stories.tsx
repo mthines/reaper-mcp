@@ -1,0 +1,31 @@
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { measuredExamples } from '../../demo/examples.js';
+import { StoryCard } from '../../demo/StoryCard.js';
+import { Alignment } from './Alignment.js';
+
+const examples = measuredExamples('alignment');
+const [first] = examples;
+
+const meta = {
+  title: 'Features/Measurements/Alignment',
+  component: Alignment,
+  args: { m: first.m },
+} satisfies Meta<typeof Alignment>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {
+  render: () => (
+    <div className="story-stack">
+      {examples.map((x) => (
+        <StoryCard key={x.title} title={x.title} note={x.note}>
+          <div className="measure">
+            <Alignment m={x.m} />
+          </div>
+        </StoryCard>
+      ))}
+    </div>
+  ),
+};
+
+export const Playground: Story = {};

@@ -21,7 +21,7 @@ import { matchesQuery, parseQuery } from '../../lib/search.js';
 import { hasToolCalls, isConnected, sessionHue, sessionName, type Session } from '../../lib/sessions.js';
 import type { Span } from '../../lib/timeline.js';
 
-export type Filter = 'all' | 'errors';
+type Filter = 'all' | 'errors';
 export type View = 'calls' | 'tools' | 'sessions' | 'plugins' | 'snapshots';
 export const VIEW_KEY = 'mcp-bridge-view';
 const VIEWS: Array<{ key: View; label: string }> = [

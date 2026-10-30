@@ -1,5 +1,6 @@
 import { demoSnapshots, type RequestState, type RowMode, type SnapshotOp, type SnapshotsFeed } from '../features/snapshots/snapshots.js';
-import type { CommandEntry } from '../lib/commands.js';
+import { editViewOf, type EditView } from '../features/edit-views/edit-views.js';
+import { measurementOf, type CommandEntry, type Measurement } from '../lib/commands.js';
 
 /**
  * Fixed example data for the Storybook stories (and `?demo`): every measurement, edit view, drawer and
@@ -58,7 +59,7 @@ function waveform(top: number, bed = 0.03) {
 
 const track = (trackIndex: number, extra: Record<string, unknown> = {}) => ({ trackIndex, ...extra });
 
-function measurementExamples(): Example[] {
+function measurementExampleList(): Example[] {
   const meters = call('read_track_meters', track(0), { peakL: -9.4, peakR: -10.1, rmsL: -21.3, rmsR: -22 });
   const metersHot = call('read_track_meters', track(1), { peakL: -2.6, peakR: -4.1, rmsL: -14.2, rmsR: -15 });
   const metersOver = call('read_track_meters', track(2), { peakL: 1.2, peakR: 0.4, rmsL: -8.1, rmsR: -8.6 });
@@ -132,7 +133,7 @@ function measurementExamples(): Example[] {
 }
 
 /** Every measuring command in its states */
-export const MEASUREMENT_EXAMPLES: Example[] = measurementExamples();
+export const MEASUREMENT_EXAMPLES: Example[] = measurementExampleList();
 
 /** Volume automation: a dip at 12–17 s added over a flat line */
 const VOLUME_BEFORE = [[0, 0, 0], [32, 0, 0]];
@@ -146,7 +147,7 @@ const SONG_REGIONS = [[0, 16, 'Intro', '', 1], [16, 48, 'Verse 1', '#7cc4ff', 2]
 const SONG_MARKERS = [[18, 'Vox in', '', 1], [140, 'Fill', '', 3]];
 const SONG_TEMPO = [[0, 92, 4, 4, 0]];
 
-function editExamples(): Example[] {
+function editExampleList(): Example[] {
   const volume = call('set_track_property', track(0, { property: 'volume', value: -4.5 }), { rows: [{ t: 'Kick', p: 'volume', s: 'db', a: -6, b: -4.5 }] });
   const batch = call('set_multiple_track_properties', { tracks: '[…]' }, {
     rows: [
@@ -357,7 +358,7 @@ function editExamples(): Example[] {
 }
 
 /** Every edit view in its states */
-export const EDIT_EXAMPLES: Example[] = editExamples();
+export const EDIT_EXAMPLES: Example[] = editExampleList();
 
 /** The details drawer for the kinds of call it shows differently */
 export const DRAWER_EXAMPLES: Example[] = (() => {
@@ -439,3 +440,24 @@ export const SNAPSHOT_EXAMPLES: SnapshotExample[] = (() => {
     { title: 'Narrow', note: 'Under ~420px', feed, request: { ...req('restore', 'mix-B'), state: 'pending' }, blocked: null, narrow: true },
   ];
 })();
+
+type MeasurementOf<K extends Measurement['kind']> = Extract<Measurement, { kind: K }>;
+
+/** The measurement examples of one kind as the drawer reads them, with the previous call's reading (or null) */
+export function measuredExamples<K extends Measurement['kind']>(kind: K) {
+  return MEASUREMENT_EXAMPLES.flatMap((x) => {
+    const m = measurementOf(x.entry);
+    if (m?.kind !== kind) return [];
+    const previous = x.history.find((h) => h.n < x.entry.n);
+    const was = previous ? measurementOf(previous) : null;
+    return [{ ...x, previous, m: m as MeasurementOf<K>, was: was?.kind === kind ? (was as MeasurementOf<K>) : null }];
+  });
+}
+
+/** The edit view examples of one kind, as the drawer reads them */
+export function editExamples<K extends EditView['kind']>(kind: K) {
+  return EDIT_EXAMPLES.flatMap((x) => {
+    const v = editViewOf(x.entry);
+    return v?.kind === kind ? [{ ...x, v: v as Extract<EditView, { kind: K }> }] : [];
+  });
+}

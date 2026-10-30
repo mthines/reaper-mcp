@@ -47,7 +47,7 @@ export const PreviousLegend = () => (
   </div>
 );
 
-export function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | undefined): ReactNode {
+function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | undefined): ReactNode {
   switch (m.kind) {
     case 'meters': {
       const was = same('meters', previous);
@@ -157,7 +157,7 @@ function headline(m: Measurement): { value: number; label: string; unit: string;
 }
 
 /** The previous call on the same track: its headline value and how far this call moved from it */
-export function Previous({ m, previous, now, onPick }: { m: Measurement; previous: CommandEntry; now: number; onPick: (e: CommandEntry) => void }) {
+function Previous({ m, previous, now, onPick }: { m: Measurement; previous: CommandEntry; now: number; onPick: (e: CommandEntry) => void }) {
   const p = measurementOf(previous);
   const cur = headline(m);
   const was = p && headline(p);

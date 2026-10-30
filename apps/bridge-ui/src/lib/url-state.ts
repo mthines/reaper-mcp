@@ -25,12 +25,12 @@ export const isStringOrNull = (v: unknown): v is string | null => v === null || 
 export const isNumberOrNull = (v: unknown): v is number | null => v === null || typeof v === 'number';
 
 /** JSON-serialise a value to a URL param string. */
-export function serialise<T>(value: T): string {
+function serialise<T>(value: T): string {
   return JSON.stringify(value);
 }
 
 /** JSON-deserialise a URL param string, returning `fallback` on null or parse error. */
-export function deserialise<T>(raw: string | null, fallback: T): T {
+function deserialise<T>(raw: string | null, fallback: T): T {
   if (raw === null) return fallback;
   try {
     return JSON.parse(raw) as T;
@@ -40,7 +40,7 @@ export function deserialise<T>(raw: string | null, fallback: T): T {
 }
 
 /** The URL after setting one param; a value equal to the default removes it, to keep URLs clean. */
-export function buildUrl<T>(pathname: string, search: string, key: string, next: T, defaultValue: T, hash = ''): string {
+function buildUrl<T>(pathname: string, search: string, key: string, next: T, defaultValue: T, hash = ''): string {
   const params = new URLSearchParams(search);
   if (serialise(next) === serialise(defaultValue)) params.delete(key);
   else params.set(key, serialise(next));

@@ -20,3 +20,7 @@ telemetry.jsonl
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Storybook
+storybook-static/
+debug-storybook.log
