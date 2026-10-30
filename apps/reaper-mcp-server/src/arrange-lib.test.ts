@@ -359,6 +359,18 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('copy section: a held segment around the copy and into its first point stays held', async () => {
+    await runLua(`
+      local api = new_timeline{ tracks = { { name = "T", items = { { pos = 2, len = 2, name = "S" } },
+        envs = { { pts = { { 0, 0.5, 1 }, { 3, 0.8, 1 }, { 4, 0.5, 1 }, { 20, 1, 0 } } } } } } }
+      local function at(t) local _, v = api.Envelope_Evaluate(api.tracks[1].envs[1], t) return v end
+      assert(arrange.copy_section(api, { start = 2, ["end"] = 4, position = 10 }))
+      -- After the copy the destination holds 0.5 until 20; inside it, 0.5 until the copied jump at 11
+      assert(near(at(15), 0.5) and near(at(19), 0.5), at(15) .. " " .. at(19))
+      assert(near(at(10.5), 0.5) and near(at(11.5), 0.8), at(10.5) .. " " .. at(11.5))
+    `);
+  });
+
   it('copy section: refuses an overlap, an unknown region and a bad track, changing nothing', async () => {
     await runLua(`${SONG}
       local cases = {

@@ -684,9 +684,10 @@ local function apply_section(api, c)
     for _, tr in ipairs(c.tracks) do wanted[tr] = true end
     each_envelope(api, function(env, tr)
       if not (wanted[tr] or (c.all_tracks and tr == api.GetMasterTrack(0))) then return end
-      local pts = {}
+      local all, pts = {}, {}
       for i = 0, api.CountEnvelopePoints(env) - 1 do
         local pt = point(api, env, i)
+        all[#all + 1] = pt
         if pt.t >= s - EPS and pt.t < e - EPS then pts[#pts + 1] = pt end
       end
       copy_automation_items(api, env, s, e, offset, r)
@@ -701,8 +702,13 @@ local function apply_section(api, c)
       -- Also with insert: the opened time's hold points would double the copy's own edge points
       api.DeleteEnvelopePointRange(env, dest - EPS, dest + len + EPS)
       if before >= 0 then api.InsertEnvelopePoint(env, before, v_before, 0, 0, false, true) end
-      api.InsertEnvelopePoint(env, after, v_after, 0, 0, false, true)
-      if math.abs(pts[1].t - s) > EPS then api.InsertEnvelopePoint(env, dest, v_start, 0, 0, false, true) end
+      -- The edge points carry the shape of the segment they sit in, so a held or curved segment stays one
+      local after_shape, after_tension = shape_through(all, after)
+      api.InsertEnvelopePoint(env, after, v_after, after_shape, after_tension, false, true)
+      if math.abs(pts[1].t - s) > EPS then
+        local start_shape, start_tension = shape_through(all, s)
+        api.InsertEnvelopePoint(env, dest, v_start, start_shape, start_tension, false, true)
+      end
       for _, pt in ipairs(pts) do
         api.InsertEnvelopePoint(env, pt.t + offset, pt.v, pt.shape, pt.tension, false, true)
       end
