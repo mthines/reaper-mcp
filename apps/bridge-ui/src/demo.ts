@@ -179,7 +179,7 @@ export function createDemo(): Demo {
           ts: Date.now(),
           startedAt,
           reaperVersion: '7.27/macOS-arm64',
-          project: 'Midnight Drive — mix v3.rpp',
+          project: '/Users/you/Music/Projects/Midnight Drive/Midnight Drive — mix v3.rpp',
           bridgeDir: '/Users/you/Library/Application Support/REAPER/Scripts/mcp_bridge_data/',
           commands: n,
           errors,

@@ -557,14 +557,17 @@ function Header({
           active={state === 'live'}
           onShiftClick={galleryAllowed('?gallery', location.protocol, status?.settings?.dev) ? () => location.assign(`${location.pathname}?gallery`) : undefined}
         />
-        <div>
+        <div className="brand-text">
           <h1>MCP Bridge</h1>
           <p className="sub">
             {status ? (
               <>
-                {status.project || 'Unsaved project'}
+                {/* Long paths lose their start, so the file name stays readable */}
+                <span className="sub-project" title={status.project || undefined}>
+                  <bdi dir="ltr">{status.project || 'Unsaved project'}</bdi>
+                </span>
                 <span className="dot-sep" />
-                REAPER {status.reaperVersion.split('/')[0]}
+                <span className="sub-version">REAPER {status.reaperVersion.split('/')[0]}</span>
               </>
             ) : (
               'reaper-mcp'
@@ -1288,11 +1291,31 @@ export function Mark({ active, onShiftClick }: { active: boolean; onShiftClick?:
   );
 }
 
+const STATS_OPEN_KEY = 'mcp-bridge-stats-open';
+
+/** On narrow screens the stats fold into one compact row (label + value); the toggle shows hints and sparklines. */
 function Stats({ status, log, now, series }: { status: BridgeStatus; log: CommandEntry[]; now: number; series: Series }) {
   const lat = latencyStats(status.recent);
   const errorRate = status.commands > 0 ? (status.errors / status.commands) * 100 : 0;
+  const [open, setOpen] = useState(() => load(STATS_OPEN_KEY) === '1');
+  const toggle = () => {
+    save(STATS_OPEN_KEY, open ? '0' : '1');
+    setOpen(!open);
+  };
   return (
-    <section className="stats">
+    <section className={`stats ${open ? '' : 'stats-folded'}`}>
+      <button
+        type="button"
+        className="stats-toggle"
+        aria-expanded={open}
+        aria-label={open ? 'Show fewer stats' : 'Show stat details'}
+        title={open ? 'Show fewer stats' : 'Show stat details'}
+        onClick={toggle}
+      >
+        <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+          <path d={open ? 'M3 7.5 6 4.5 9 7.5' : 'M3 4.5 6 7.5 9 4.5'} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
       <Stat
         label="Uptime"
         value={formatDuration(now - status.startedAt)}

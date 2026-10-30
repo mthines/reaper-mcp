@@ -73,7 +73,10 @@ code {
 .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .brand h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.brand-text { min-width: 0; }
 .sub {
+  display: flex;
+  align-items: center;
   margin: 1px 0 0;
   color: var(--muted);
   font-size: 12px;
@@ -81,7 +84,9 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.dot-sep { display: inline-block; width: 3px; height: 3px; border-radius: 50%; background: var(--faint); margin: 0 8px; vertical-align: middle; }
+.sub-project { min-width: 0; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.sub-version { flex: none; }
+.dot-sep { flex: none; display: inline-block; width: 3px; height: 3px; border-radius: 50%; background: var(--faint); margin: 0 8px; vertical-align: middle; }
 
 /* Logo: grey dot when the bridge is down; while live the orange dot is an eye that blinks now and then. */
 .mark { width: 34px; height: 34px; flex: none; display: block; }
@@ -134,7 +139,7 @@ code {
 .pill-offline { color: var(--muted); }
 @keyframes ping { 70% { box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); } 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); } }
 
-.header-actions { display: flex; align-items: center; gap: 8px; }
+.header-actions { flex: none; display: flex; align-items: center; gap: 8px; }
 .icon-link {
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 30px; border-radius: 8px;
@@ -198,6 +203,7 @@ button.agents:hover { color: var(--text); background: var(--panel-2); border-col
 /* Stats ------------------------------------------------------------------- */
 
 .stats {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   border: 1px solid var(--line);
@@ -210,6 +216,7 @@ button.agents:hover { color: var(--text); background: var(--panel-2); border-col
 .stat-value { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .stat-hint { font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
 .stat-spark { margin-top: 8px; height: 24px; }
+.stats-toggle { display: none; }
 .spark-wrap { position: relative; height: 100%; cursor: crosshair; }
 .spark { display: block; width: 100%; height: 100%; overflow: visible; }
 .spark-base { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
@@ -855,12 +862,28 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 
 @media (max-width: 720px) {
   .shell { padding: 14px 16px 10px; }
-  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .stat + .stat { border-left: 0; }
-  .stat { border-top: 1px solid var(--line); }
-  .stat:nth-child(-n + 2) { border-top: 0; }
-  .stat:nth-child(even) { border-left: 1px solid var(--line); }
-  .stat:last-child:nth-child(odd) { grid-column: span 2; }
+  /* Open: two columns; the toggle button is the first child, so count stats by type (div) */
+  .stats:not(.stats-folded) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats:not(.stats-folded) .stat + .stat { border-left: 0; }
+  .stats:not(.stats-folded) .stat { border-top: 1px solid var(--line); }
+  .stats:not(.stats-folded) .stat:nth-of-type(-n + 2) { border-top: 0; }
+  .stats:not(.stats-folded) .stat:nth-of-type(even) { border-left: 1px solid var(--line); }
+  .stats:not(.stats-folded) .stat:last-of-type:nth-of-type(odd) { grid-column: span 2; }
+  .stats-toggle {
+    position: absolute; top: 6px; right: 6px; z-index: 1;
+    display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+    border: 0; border-radius: 6px; background: transparent; color: var(--faint); cursor: pointer;
+  }
+  .stats-toggle:hover { color: var(--text); background: var(--line); }
+  .stats-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* Folded: one row of label + value, about a fifth of the open height */
+  .stats-folded { grid-template-columns: repeat(5, minmax(0, 1fr)); padding-right: 30px; }
+  .stats-folded .stat { padding: 8px 10px; }
+  .stats-folded .stat-label { font-size: 10px; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stats-folded .stat-value { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stats-folded .stat-hint, .stats-folded .stat-spark { display: none; }
+  .stats-folded .stats-toggle { top: 50%; transform: translateY(-50%); }
+  .timeline-chart { height: 56px; }
   .row-err-inline, .dur-track { display: none; }
   .timeline-sub { display: none; }
   .row-dur { min-width: 0; }
