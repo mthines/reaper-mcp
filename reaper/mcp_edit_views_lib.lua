@@ -799,14 +799,17 @@ end
 -- Recording: the global mode and one row per track [name, armed 0/1, input, monitor, mode]
 local RECORD_COMMANDS = { get_record_setup = true, set_track_record = true, set_record_mode = true }
 
+-- Rows for the first EDIT_MAX_ROWS states, and how many states did not fit
 local function record_rows(states)
-  local rows = {}
+  local rows, dropped = {}, 0
   for _, s in ipairs(states or {}) do
     if #rows < EDIT_MAX_ROWS then
       rows[#rows + 1] = { s.name or "", s.armed and 1 or 0, (s.input and s.input.label) or "", tostring(s.monitor or ""), tostring(s.mode or "") }
+    else
+      dropped = dropped + 1
     end
   end
-  return rows
+  return rows, dropped
 end
 
 local function record_global()
@@ -825,12 +828,14 @@ end
 
 local function record_view(cmd_type, params, data, before)
   local r = record_global()
+  local dropped = 0
   if cmd_type == "get_record_setup" then
-    r.rows = record_rows(type(data) == "table" and data.tracks or nil)
-    r.more = type(data) == "table" and tonumber(data.tracksMore) or nil
+    r.rows, dropped = record_rows(type(data) == "table" and data.tracks or nil)
+    dropped = dropped + (type(data) == "table" and tonumber(data.tracksMore) or 0)
   elseif cmd_type == "set_track_record" then
-    r.rows = record_rows(type(data) == "table" and data.tracks or record_tracks(params))
+    r.rows, dropped = record_rows(type(data) == "table" and data.tracks or record_tracks(params))
   end
+  if dropped > 0 then r.more = dropped end
   if before then
     r.was = { mode = before.mode, path = before.path, punch = before.punch, rows = before.rows }
   end

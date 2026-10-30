@@ -338,6 +338,23 @@ describe('edit views in the log', () => {
     });
   });
 
+  it('says how many armed tracks the record view leaves out, also between 33 and 64', async () => {
+    const bridge = await startBridge(`
+      api.GetNumAudioInputs = function() return 8 end
+      api.GetInputChannelName = function(i) return "Input " .. (i + 1) end
+      api.GetNumMIDIInputs = function() return 0 end
+      api.GetMIDIInputName = function() return false, "" end
+      api.tracks[1].vals.I_RECARM = 1
+      for i = 2, 40 do
+        api.tracks[i] = { name = "T" .. i, guid = string.format("{T%d}", i), vals = { I_RECARM = 1 }, fx = {}, sends = {}, chunk = "<TRACK>" }
+      end
+    `);
+    expect((await bridge.send('get_record_setup', {})).success).toBe(true);
+    const { r } = (await bridge.status()).recent[0];
+    expect(r.rows).toHaveLength(32);
+    expect(r.more).toBe(8);
+  });
+
   it('shows the lanes of a track with what played before a lane switch', async () => {
     const bridge = await startBridge(`
       local tr = api.tracks[1]
