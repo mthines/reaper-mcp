@@ -149,7 +149,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (147 total)
+## MCP Tools (148 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -374,16 +374,17 @@ other tenancy it does, and the owning account must keep nothing private in that 
 | `get_action` | `tools/actions.ts` | One action's details; a `Custom:` macro's steps by name, or a script's path (from `reaper-kb.ini`) |
 | `run_action` | `tools/actions.ts` | Run an action by id, named id or exact name in an undo block; returns the toggle state after. Dialog actions need `allowDialog`; quit/close/open project are always refused |
 
-### Project Operations (8)
+### Project Operations (9)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `undo_project` | `tools/project.ts` | Undo the last undo point; reports its label and the next undo/redo labels |
 | `redo_project` | `tools/project.ts` | Redo the last undone point; reports its label |
 | `save_project` | `tools/project.ts` | Save in place, or write a copy to an absolute `.rpp` `path` (the open project keeps its path; `savedAsCopy`). Never opens a dialog: a never-saved project without `path` is refused |
-| `get_render_settings` | `tools/project.ts` | Output dir, file pattern, format, bounds, start/end, sample rate, channels, and the resolved target files |
-| `set_render_settings` | `tools/project.ts` | Set any render setting (format and secondaryFormat: wav/aiff/flac/mp3/ogg/opus, secondary also none); all validated before any write |
-| `render_project` | `tools/project.ts` | Render with the current settings (synchronous action 42230); refuses to overwrite existing targets unless `overwrite` |
+| `get_render_settings` | `tools/project.ts` | Output dir, file pattern, format + bit depth/bitrate, source, bounds, normalize/limit, dither, metadata, region matrix, and the resolved target files |
+| `set_render_settings` | `tools/project.ts` | Set any render setting: format/secondaryFormat (wav/aiff/flac/mp3/ogg/opus, secondary also none), `source` (master, stems, master_and_stems, selected_via_master, selected_items, selected_items_via_master, region_matrix + `regionMatrix`), `bitDepth`/`mp3Bitrate`, dither, normalize/limit, `metadata`; all validated before any write, one undo point |
+| `render_project` | `tools/project.ts` | Render with the current settings (synchronous action 42230), optionally for `tracks` (selected for the render, selection restored); returns each file's length, LUFS-I, true peak and peak; refuses to overwrite existing targets unless `overwrite` |
+| `render_versions` | `tools/project.ts` | Render up to 16 versions in one call (e.g. full, instrumental, TV): each mutes its tracks, renders to `<pattern>-<name>`, and mutes and pattern are restored even when one fails; all targets checked before the first render |
 | `get_project_settings` | `tools/project.ts` | Sample rate (+ forced flag), title, author, notes, repeat, metronome |
 | `set_project_settings` | `tools/project.ts` | Set any of those; metronome is a global REAPER option (not undoable, not stored in the project) |
 
@@ -420,7 +421,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 147 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 148 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
@@ -465,7 +466,11 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 ### Project Operations Concepts
 
 - **No dialogs**: `save_project` without `path` on a never-saved project is refused (REAPER would open Save As) — the same rule `run_action` applies to `File: Save…`. `render_project` refuses when a target file exists (REAPER would ask to overwrite) unless `overwrite: true`, which deletes those files first, and when `bounds` is `time_selection` with no time selection.
-- **Render formats**: `format` and `secondaryFormat` (a second file from the same render; `none` disables it) take wav/aiff/flac/mp3/ogg/opus with REAPER's default options. `render_project` refuses when either is another encoder (seen live: a template's video secondary format left a modal dialog open) — set `secondaryFormat: "none"`.
+- **Render formats**: `format` and `secondaryFormat` (a second file from the same render; `none` disables it) take wav/aiff/flac/mp3/ogg/opus, with REAPER's default options except the bit depth or MP3 bitrate `bitDepth` / `mp3Bitrate` set. `render_project` refuses when either is another encoder (seen live: a template's video secondary format left a modal dialog open) — set `secondaryFormat: "none"`.
+- **Render source and encodings** (probed in REAPER 7.40): `source` maps to `RENDER_SETTINGS` (master 0, master_and_stems 1, stems 3 = stems of the *selected* tracks, selected_via_master 128, region_matrix 8, which needs region bounds, selected_items 32, selected_items_via_master 64; 2 renders nothing in REAPER 7). Bit depth lives in the `RENDER_FORMAT` blob (wav `evaw`+int16 bits, 32-bit int is 0x21 and float 0x20; aiff `ffia`; flac `calf`+int32 bits+compression), MP3 bitrate at bytes 4 and 24 of `l3pm`. Normalize target and limit ceiling are given in dB and stored linear (`RENDER_NORMALIZE_TARGET`, `RENDER_BRICKWALL`); REAPER hits both exactly.
+- **Render analysis**: each rendered file (up to 16) is measured with `CalculateNormalization` (target 0 dB, so the gain is the level): LUFS-I, true peak, sample peak; `analyze: false` skips it.
+- **Render metadata**: `metadata` fields (title, artist, album, genre, year, isrc, comment, description) write the matching ID3/INFO/VORBIS/AXML/BWF keys of `RENDER_METADATA`; `metadataRaw` sets any `SCHEME:KEY`; an empty value removes the key. Setting metadata turns on embedding (`RENDER_SETTINGS` &512) unless `embedMetadata: false`.
+- **Render versions**: `render_versions` mutes each version's tracks on top of the current mutes and renders to the version's pattern; mutes and the pattern are always restored (the selection is never touched). Use it for instrumental / a cappella / TV mixes instead of muting by hand.
 - **Render is synchronous**: action 42230 blocks REAPER (and the bridge) until the render finishes. Keep renders short (a time selection or custom bounds). `targets` in `get_render_settings` are the files REAPER will write (`RENDER_TARGETS`).
 - **Undo**: every edit by these tools is one undo point labelled `MCP: …`, so `undo_project` reverts exactly that edit. Repeat and metronome changes are not undoable in REAPER.
 - **Validation first**: invalid input (unknown marker/region/tempo index, BPM <= 0, unsupported format, end <= start) is refused before anything is written.
@@ -765,7 +770,9 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   FX GUID), item edits as one lane per touched track with the items before dashed, track structure edits on the mixer
   (tracks diffed by GUID), routing (sends/receives/hardware outs with level bars, the old level ghosted), the time
   selection and edit cursor, MIDI CC as a stepped lane in beats (the automation view, unit `cc`), and
-  `get_fx_parameters` as readout bars. List diffs share `listDiff()` in `edit-views.ts`. Lists are capped so
+  `get_fx_parameters` as readout bars; `render_project` / `render_versions` as a render result (one row per file,
+  ≤8: mini waveform from `PCM_Source_GetPeaks`, LUFS-I against the normalize target, true peak against the limit
+  ceiling, length; versions grouped with their muted tracks; format, source and target as readouts). List diffs share `listDiff()` in `edit-views.ts`. Lists are capped so
   an entry stays a few KB. Add a command in `M.summary`, `KIND_OF` (`edit-views.ts`) and a gallery story together;
   behaviour tests run the real bridge in wasmoon (`bridge-status.test.ts`, "edit views in the log").
 - Short windows (≤ 640px tall, an app window docked beside REAPER): the log is the page. Stats, timeline and footer

@@ -609,6 +609,7 @@ export const LONG_RUNNING = new Set([
   'analyze_track_aesthetics',
   'render_project',
   'render_track_to_wav',
+  'render_versions',
   'run_plan',
   'run_action',
   'save_project',

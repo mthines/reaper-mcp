@@ -80,6 +80,14 @@ function waveform(top: number, bed = 0.03) {
   return { hi, lo, peakDb: Math.round(20 * Math.log10(peak) * 100) / 100, durationSeconds: 5, sampleRate: 44100, channels: 2 };
 }
 
+/** A rendered file row: name, length, LUFS-I, true peak, sample peak and 60 waveform slices peaking at `top` */
+function renderFile(name: string, dur: number, lufs: number, tp: number, peak: number, top: number): unknown[] {
+  // A song's shape on the dB scale: quiet intro, verses, louder choruses, a breakdown and a fade, with slice-to-slice jitter
+  const section = (i: number) => (i < 6 ? 0.06 + i * 0.03 : i < 18 ? 0.45 : i < 26 ? 0.95 : i < 36 ? 0.5 : i < 42 ? 0.15 : i < 54 ? 1 : (60 - i) / 6);
+  const hi = Array.from({ length: 60 }, (_, i) => Math.round(Math.min(1, top * section(i) * (0.82 + 0.18 * Math.abs(Math.sin(i * 2.3)))) * 100) / 100);
+  return [name, dur, lufs, tp, peak, hi, hi.map((v) => -Math.round(v * 0.94 * 100) / 100)];
+}
+
 const track = (trackIndex: number, extra: Record<string, unknown> = {}) => ({ trackIndex, ...extra });
 
 function measurementStories(): Story[] {
@@ -343,6 +351,29 @@ function editStories(): Story[] {
     total: 4, dryRun: true,
     ops: [['add_track', 'Vox Bus'], ['add_fx', '$bus · VST3: Pro-C 2'], ['add_send', 'Vox → $bus'], ['set_track', 'Vox']],
   });
+  const renderMaster = call('render_project', { overwrite: true }, {
+    fmt: 'wav', bd: '24', src: 'master', norm: 'lufs_i', nt: -14, lim: -1, tp: true,
+    groups: [{ v: '', m: [], f: [renderFile('Night Drive (Master).wav', 214.6, -14.1, -1.02, -1.4, 0.8)] }],
+  });
+  const renderOver = call('render_project', {}, {
+    fmt: 'flac', bd: '16', src: 'master', norm: 'lufs_i', nt: -14,
+    groups: [{ v: '', m: [], f: [renderFile('Night Drive (Loud).flac', 214.6, -9.8, 0.4, 0.1, 1)] }],
+  });
+  const renderStems = call('render_project', { tracks: '["Drums","Bass","Keys","Vocals"]' }, {
+    fmt: 'wav', bd: '32f', src: 'stems',
+    groups: [{ v: '', m: [], f: [
+      renderFile('Drums.wav', 214.6, -17.2, -2.1, -2.6, 0.75), renderFile('Bass.wav', 214.6, -19.8, -5.3, -5.9, 0.5),
+      renderFile('Keys.wav', 214.6, -24.5, -9.1, -9.6, 0.3), renderFile('Lead Vocal Double (Harmony).wav', 214.6, -21.3, -0.6, -0.9, 0.85),
+    ] }],
+  });
+  const renderVersions = call('render_versions', { versions: '[…]' }, {
+    fmt: 'mp3', kbps: 320, src: 'master', norm: 'lufs_i', nt: -14, lim: -1, tp: true,
+    groups: [
+      { v: 'Full', m: [], f: [renderFile('song-Full.mp3', 214.6, -14, -1.1, -1.3, 0.8)] },
+      { v: 'Instrumental', m: ['Lead Vox', 'Vox Dbl', 'Backing Vox'], f: [renderFile('song-Instrumental.mp3', 214.6, -14.2, -1.05, -1.3, 0.7)] },
+      { v: 'TV', m: ['Lead Vox'], f: [renderFile('song-TV.mp3', 214.6, -13.9, -1.2, -1.5, 0.72)] },
+    ],
+  });
   return [
     story('Track volume', volume, 'One track, before → after'),
     story('Several tracks', batch, 'Volume above 0, pan, mute'),
@@ -377,6 +408,10 @@ function editStories(): Story[] {
     story('FX parameters listed', fxParams, 'The plugin’s readout, first parameters only'),
     story('MIDI CC inserted', cc, 'A controller lane in beats, held between events'),
     story('Plan', plan, 'A dry run'),
+    story('Render · on target', renderMaster, 'Normalized to −14 LUFS, true-peak limited at −1'),
+    story('Render · off target', renderOver, 'Louder than the target, true peak over 0'),
+    story('Render · stems', renderStems, 'One file per selected track, 32-bit float, no target'),
+    story('Render · versions', renderVersions, 'Full, instrumental and TV mix in one call; muted tracks named'),
   ];
 }
 
