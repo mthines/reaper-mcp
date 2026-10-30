@@ -297,6 +297,22 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('copy section: with insert, the copied automation has one point per edge and reads like the source', async () => {
+    await runLua(`
+      local api = new_timeline{ tracks = { { envs = { { pts = { { 0, 0 }, { 15, 0.15 }, { 100, 1 } } } } } } }
+      local function at(t) local _, v = api.Envelope_Evaluate(api.tracks[1].envs[1], t) return v end
+      local src = { at(11), at(15), at(19) }
+      assert(arrange.copy_section(api, { start = 10, ["end"] = 20, position = 50, insert = true }))
+      local seen = {}
+      for _, p in ipairs(api.tracks[1].envs[1].pts) do
+        local key = string.format("%.4f", p.t)
+        assert(not seen[key], "two points at " .. key)
+        seen[key] = true
+      end
+      assert(near(at(51), src[1]) and near(at(55), src[2]) and near(at(59), src[3]), at(51) .. " " .. at(55) .. " " .. at(59))
+    `);
+  });
+
   it('copy section: refuses an overlap, an unknown region and a bad track, changing nothing', async () => {
     await runLua(`${SONG}
       local cases = {

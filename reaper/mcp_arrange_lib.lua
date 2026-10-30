@@ -651,7 +651,8 @@ local function apply_section(api, c)
       local before, after = dest - PIN, dest + len + PIN
       local _, v_before = api.Envelope_Evaluate(env, before, 0, 0)
       local _, v_after = api.Envelope_Evaluate(env, after, 0, 0)
-      if not c.insert then api.DeleteEnvelopePointRange(env, dest - EPS, dest + len + EPS) end
+      -- Also with insert: the opened time's hold points would double the copy's own edge points
+      api.DeleteEnvelopePointRange(env, dest - EPS, dest + len + EPS)
       if before >= 0 then api.InsertEnvelopePoint(env, before, v_before, 0, 0, false, true) end
       api.InsertEnvelopePoint(env, after, v_after, 0, 0, false, true)
       if math.abs(pts[1].t - s) > EPS then api.InsertEnvelopePoint(env, dest, v_start, 0, 0, false, true) end
