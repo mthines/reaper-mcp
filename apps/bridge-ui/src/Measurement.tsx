@@ -343,7 +343,7 @@ function headline(m: Measurement): { value: number; label: string; unit: string;
     case 'aesthetics':
       return v(m.pq, 'Quality', '/ 10', true);
     case 'key':
-      return v(m.conf, 'Confidence', '', true);
+      return v(m.conf === undefined ? undefined : m.conf * 100, 'Confidence', '%', true);
   }
 }
 
@@ -353,9 +353,9 @@ function Previous({ m, previous, now, onPick }: { m: Measurement; previous: Comm
   const cur = headline(m);
   const was = p && headline(p);
   if (!was) return null;
-  const digits = was.unit ? 1 : 2;
+  const digits = was.unit === '%' ? 0 : was.unit ? 1 : 2;
   const delta = cur ? cur.value - was.value : null;
-  const flat = delta === null || Math.abs(delta) < (digits === 1 ? 0.05 : 0.005);
+  const flat = delta === null || Math.abs(delta) < 0.5 / 10 ** digits;
   return (
     <button className="measure-previous" onClick={() => onPick(previous)} title="Open the previous call (↓)">
       <span>Previous call · {formatAgo(now - previous.t)}</span>
