@@ -8,6 +8,7 @@
     "build": "nx build reaper-mcp-server",
     "dev": "nx dev reaper-mcp-server",
     "dev:debug": "nx dev:debug reaper-mcp-server",
+    "dev:bridge": "node apps/bridge-ui/dev.mjs",
     "test": "nx run-many --target=test",
     "test:install": "scripts/test-install.sh",
     "test:stress": "pnpm vitest run apps/reaper-mcp-server/src/bridge.stress.test.ts",

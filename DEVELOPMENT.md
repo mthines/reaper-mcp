@@ -180,9 +180,30 @@ pnpm lint                           # Lint everything
 pnpm nx lint reaper-mcp-server      # Lint server only
 ```
 
+## Developing the bridge and its status page
+
+Run the bridge dev server while you work on `reaper/` or `apps/bridge-ui/`:
+
+```bash
+pnpm dev:bridge        # → http://localhost:8098/mcp_bridge.html
+```
+
+- **Status page:** rebuilt on every save, and every open tab reloads. Open this URL, not REAPER's own
+  `http://localhost:8099/mcp_bridge.html`.
+- **Lua scripts:** a saved file in `reaper/` that setup installs is copied into REAPER's `Scripts/` folder, and the
+  running bridge is asked to restart into it.
+- **JSFX:** copied into `Effects/reaper-mcp/`; remove and re-add the plugin to load the new code.
+- **REAPER's `/_/` API** is proxied over one connection. REAPER's web server never frees a socket whose client hung
+  up first, and near 100 of them it stops answering until REAPER restarts. Reloads and devtools hang up all the time,
+  so the page talks to the dev server and REAPER sees one connection for the session. Stopping the dev server leaves
+  one stuck socket.
+
+`BRIDGE_DEV_PORT`, `REAPER_WEB_PORT`, and `REAPER_RESOURCE_PATH` override the defaults. The MCP server itself is
+`pnpm dev`.
+
 ## Installing bridge files into REAPER
 
-After making changes to files in `reaper/` (Lua bridge, JSFX analyzers), reinstall them:
+After making changes to files in `reaper/` (Lua bridge, JSFX analyzers) without `pnpm dev:bridge`, reinstall them:
 
 ```bash
 pnpm build && node dist/apps/reaper-mcp-server/main.js setup
