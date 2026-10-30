@@ -7,6 +7,13 @@ Files installed INTO the REAPER DAW by the `setup` command. These run inside REA
 | File | Language | Purpose |
 |------|----------|---------|
 | `mcp_bridge.lua` | Lua | Persistent bridge: polls for JSON commands, executes ReaScript API, writes responses |
+| `mcp_tracks_lib.lua` | Lua | Track structure and routing |
+| `mcp_plan_lib.lua` | Lua | `run_plan` executor, JSON decoder, chunk helpers |
+| `mcp_actions_lib.lua` | Lua | Action search/run proxy, selection setters |
+| `mcp_project_lib.lua` | Lua | Project ops, render settings, tempo map, markers |
+| `mcp_items_lib.lua` | Lua | Items, takes, take FX, FX chains, track templates |
+| `mcp_envelopes_lib.lua` | Lua | Envelopes, points (dB through the envelope's scaling), pooled automation items |
+| `mcp_edit_views_lib.lua` | Lua | Status page results and before/after edit views |
 | `mcp_snapshot_lib.lua` | Lua | Shared library for snapshot action scripts (path helpers, JSON, restore logic) |
 | `mcp_snapshots_ui_lib.lua` | Lua | Status page Snapshots view: lists the folder, runs page restore/save requests through the bridge's dispatcher |
 | `mcp_snapshot_next.lua` | Lua | Action: restore next snapshot (bind to key for A/B testing) |
@@ -56,9 +63,12 @@ The command type string must exactly match `CommandType` in `libs/protocol/src/c
 
 ## Testing
 
-- **No automated tests possible** — REAPER's Lua/JSFX environment cannot be unit tested outside REAPER
-- Test manually: install bridge, run MCP Inspector, exercise commands
-- Server-side tests mock `sendCommand()` in `bridge.ts`
+- **Lua runs in tests through wasmoon** (Lua 5.4 in WebAssembly) against a fake `reaper` API: the `*_lib.lua`
+  files are pure (they take the API as an argument) and are tested in `*-lib.test.ts`; the whole bridge runs in
+  `bridge-*.test.ts`. Put new logic in a lib, not in `mcp_bridge.lua` (its main chunk is at Lua's 200-locals limit)
+- Check REAPER's real behaviour live before trusting the fake: some calls ignore arguments without an error
+  (e.g. `SetEnvelopePointEx` with a flagged automation item index), and the fake should model what you saw
+- Server-side tests stub `sendCommand()` in `bridge.ts`
 
 ## Installation
 

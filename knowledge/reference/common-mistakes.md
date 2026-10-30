@@ -282,7 +282,7 @@ Each mistake is listed with:
 - Read mix bus meters across the song: if chorus and verse peak levels are within 1–2 dB of each other, there's no dynamic contrast
 - The arrangement may be densely filled throughout
 
-**Fix**: Mix engineers create dynamics through level automation, FX density (more reverb in chorus, less in verse), and arrangement guidance (ask the producer if this is intentional). Verse averages 3–6 dB quieter than chorus is a starting point. Adjust automation on the mix bus or main buses to create contrast.
+**Fix**: Mix engineers create dynamics through level automation, FX density (more reverb in chorus, less in verse), and arrangement guidance (ask the producer if this is intentional). Verse averages 3–6 dB quieter than chorus is a starting point. Adjust automation on the mix bus or main buses to create contrast. For one element per section (a vocal, a guitar bus), use pooled automation items on its Volume envelope, one pool per section type, never item gain: see `workflows/section-levels.md`.
 
 ---
 

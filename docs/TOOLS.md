@@ -82,10 +82,21 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 
 | Tool | Description |
 |------|-------------|
-| `get_track_envelopes` | List envelopes on a track (name, point count, active/visible/armed) |
-| `get_envelope_points` | Get automation points with pagination |
-| `insert_envelope_point` | Insert automation point (time, value, shape, tension) |
+| `create_track_envelope` | Create or show an envelope: Volume, Pan, Mute, Width, Trim Volume, or an FX parameter |
+| `get_track_envelopes` | List envelopes on a track (name, point and automation item counts, active/visible/armed; which send a send envelope belongs to) |
+| `get_envelope_points` | Get automation points with pagination (`db` on volume envelopes) |
+| `insert_envelope_point` / `insert_envelope_points` | Insert one or many points (time, `value` or `db`, shape, tension) |
+| `edit_envelope_points` | Move points or change their level, shape or tension by index |
 | `delete_envelope_point` | Delete an automation point by index |
+| `remove_envelope_points` / `clear_envelope` | Delete the points in a time range, or all of them |
+| `set_envelope_properties` | Active, visible, armed |
+| `list_automation_items` | Automation items on an envelope: pool, name, position, length, loop |
+| `insert_automation_item` | A new pool from points, or another instance of an existing pool (on any track) |
+| `set_automation_item` / `delete_automation_item` | Move, resize, rename or delete an automation item |
+
+Every point tool takes `automationItemIndex` to edit the points inside an automation item.
+Instances of one pool share their points, so changing one chorus changes every chorus.
+Give `db` on volume envelopes: REAPER stores 0 dB as 716.2 on its own Volume envelope.
 
 ### Metering & Analysis
 
