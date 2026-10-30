@@ -120,6 +120,16 @@ async function startBridge(files: Record<string, string> = {}) {
     ext,
     set,
     status,
+    /** An agent's command, through the command file the MCP server writes */
+    async send(type: string, params: Record<string, unknown>) {
+      const id = `a${++reqs}`;
+      lua.global.set('CMD', JSON.stringify({ id, type, params }));
+      await lua.doString(`
+        local f = assert(io.open("${SCRIPTS}mcp_bridge_data/command_${id}.json", "w")); f:write(CMD); f:close()
+        f = assert(io.open("${SCRIPTS}mcp_bridge_data/_notify", "w")); f:write("${id}\\n"); f:close()
+      `);
+      await tick();
+    },
     /** The page has the Snapshots view open: it pings on every poll */
     async ping(seconds = 0.5) {
       await set('MCPBridge/snap_seen', String(++pings));
@@ -179,6 +189,20 @@ describe('snapshot list for the status page', () => {
     await engine?.doString(`local f = io.open("${SNAP_DIR}mix-B.json", "w"); f:write(${JSON.stringify(PARAMS_B)}); f:close()`);
     await bridge.ping(2);
     expect((await bridge.published())?.snapshots.map((s) => s.name)).toEqual(['mix-B', 'mix-A']);
+  });
+});
+
+describe('snapshot list after an agent saves', () => {
+  it('shows an agent re-saving a snapshot even when the new file is the same size', async () => {
+    const bridge = await startBridge();
+    await bridge.ping();
+    await bridge.send('snapshot_save', { name: 'mix-C', description: 'aaaa' });
+    await bridge.ping(2);
+    expect((await bridge.published())?.snapshots.map((s) => s.description)).toEqual(['aaaa']);
+
+    await bridge.send('snapshot_save', { name: 'mix-C', description: 'bbbb' });
+    await bridge.ping(2);
+    expect((await bridge.published())?.snapshots.map((s) => s.description)).toEqual(['bbbb']);
   });
 });
 

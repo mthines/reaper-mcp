@@ -45,7 +45,8 @@ export function SnapshotsView({
     if (!keys) return;
     const onKey = (ev: KeyboardEvent) => {
       const el = document.activeElement;
-      if (ev.metaKey || ev.ctrlKey || ev.altKey || (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'))) return;
+      // A held key auto-repeats: load once, not once per repeat (each load is an undo point)
+      if (ev.repeat || ev.metaKey || ev.ctrlKey || ev.altKey || (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'))) return;
       const n = Number(ev.key);
       const snap = Number.isInteger(n) && n >= 1 ? shownRef.current[n - 1] : undefined;
       if (!snap) return;

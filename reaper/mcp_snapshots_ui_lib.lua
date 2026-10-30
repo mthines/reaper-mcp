@@ -114,6 +114,9 @@ function M.after_command(cmd, response)
   if cmd.type == "snapshot_restore" and response.success and type(cmd.params) == "table" and type(cmd.params.name) == "string" then
     ctx.api.SetExtState(CURRENT_SECTION, CURRENT_KEY, cmd.params.name, false)
   end
+  if cmd.type == "snapshot_save" or cmd.type == "snapshot_delete" then
+    cache = {} -- an agent's save can replace a file with one of the same size
+  end
   if cmd.type == "snapshot_save" or cmd.type == "snapshot_delete" or cmd.type == "snapshot_restore" then
     last_scan = -math.huge -- re-read on the next watched tick
   end
