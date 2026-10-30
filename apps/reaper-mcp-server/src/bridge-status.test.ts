@@ -708,8 +708,8 @@ describe('arrangement view in the log', () => {
     const res = await bridge.send('process_items', { operation: 'glue', items: JSON.stringify(items) });
     expect(res.success, res.error).toBe(true);
     const r = (await bridge.status()).recent[0].r;
-    expect(r.lanes).toHaveLength(4);
-    expect(r.moreTracks).toBe(2);
+    expect(r).toMatchObject({ moreTracks: 2 });
+    expect(r?.lanes).toHaveLength(4);
   });
 
   it('arrangement view in the log: a refused edit keeps no view', async () => {
