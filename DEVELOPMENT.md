@@ -246,11 +246,11 @@ namespace belongs to the official MCP conventions). Durations are in seconds.
 | `tools/call {tool}` | SERVER | `mcp.method.name`, `gen_ai.tool.name`, `gen_ai.operation.name=execute_tool`, `jsonrpc.request.id`, `error.type` (`tool_error` when the result has `isError`) |
 | `reaper.Bridge/{command}` | CLIENT | `rpc.system=reaper_bridge`, `rpc.method`, `peer.service=reaper`, `reaper.bridge.command.id`, `reaper.bridge.handler_ms` / `pickup_ms`, `error.type` |
 | `sidecar/analyze` | CLIENT | `rpc.system=jsonrpc`, `rpc.method`, `error.type` |
+| `reaper-mcp startup`, `poll bridge diagnostics` | INTERNAL | root spans for headless work |
 
 Mix-check tool spans add: `reaper.masking.track_count` / `conflict_count` (`measure_masking`), `reaper.stereo.flag_count`
 (`analyze_stereo_bands`), `reaper.loudness.over_target_seconds` (`analyze_loudness_curve`), `reaper.separation.stem_count`
 / `device` (`separate_stems`).
-| `reaper-mcp startup`, `poll bridge diagnostics` | INTERNAL | root spans for headless work |
 
 **Metrics** — error rate is each histogram's count filtered on `error.type`:
 
@@ -260,8 +260,8 @@ Mix-check tool spans add: `reaper.masking.track_count` / `conflict_count` (`meas
 | `reaper.bridge.command.duration` | s | `rpc.method`, `error.type` (`timeout`, `handler_crash`, `unknown_command`, `internal_error`, `command_failed`) |
 | `reaper.bridge.handler.duration` | s | `rpc.method`, `error.type` — time inside the Lua handler |
 | `reaper.bridge.pickup.duration` | s | — time until the defer loop picked the command up |
-| `reaper.sidecar.request.duration` | s | `rpc.method`, `error.type` |
-| `reaper.audio.separation.speed` | 1 | `reaper.separation.device` (cuda/mps/cpu), `reaper.separation.model` — seconds of audio one `separate_stems` call split per second of processing |
+| `reaper.sidecar.request.duration` | s | `rpc.method`, `error.type` (`timeout`, `busy` = waited 5 min behind an earlier request, `not_installed`, `sidecar_error`); includes time queued behind earlier requests |
+| `reaper.audio.separation.speed` | 1 | `reaper.separation.device` (cuda/mps/cpu, `cpu_fallback` when the accelerator raised and the split re-ran on CPU), `reaper.separation.model` — seconds of audio one `separate_stems` call split per second of processing |
 | `reaper.bridge.up` | 1 | gauge: 1 while REAPER's heartbeat is fresh, 0 when the bridge is down |
 | `reaper.bridge.defer.interval`, `reaper.bridge.scan.duration` | s | `reaper.statistic` (p50/p95, avg/max) |
 
@@ -289,6 +289,8 @@ resource (`service.instance.id`, `deployment.environment.name`). Count them per 
 - Any `reaper.bridge.handler_error` or `reaper.server.crash` log — a bug, not a user error.
 - p50 of `reaper.audio.separation.speed{reaper.separation.device!="cpu"}` < 1 — separation on an accelerator fell
   back to CPU speed (a torch/Demucs upgrade broke MPS or CUDA), so long songs start timing out.
+- Any `reaper.audio.separation.speed{reaper.separation.device="cpu_fallback"}` — the accelerator raised and the
+  split re-ran on CPU (`ReaperMcpSeparationFellBack`).
 
 These are ready to apply as check rules in [`observability/check-rules.yaml`](observability/check-rules.yaml).
 
