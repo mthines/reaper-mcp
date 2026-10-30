@@ -90,7 +90,7 @@ export function registerCompositionTools(server: McpServer): void {
     'quantize_midi',
     'Quantize the notes of a MIDI item to the project grid (beats, not the item start): grid in beats (1 = quarter, ' +
     '0.5 = 8th, 0.25 = 16th, 1/3 = 8th triplet), strength 0..1 (partial moves keep feel), swing 0..0.9 (pushes every ' +
-    'second grid line later), window 0..1 (only notes within that fraction of half a grid step move), lengths ' +
+    'second grid line later), window 0..1 (only notes within that fraction of half the gap to the next line move; with swing the gaps are uneven, so the reach is (1 + swing) times half a step), lengths ' +
     '"keep" (default, notes move whole) or "quantize" (ends snap too). Acts on all notes or a selection (indexes, ' +
     'pitch range, channel). One undo point; a refused call changes nothing. Returns how many notes moved and the ' +
     'average and largest shift in beats.',
@@ -99,7 +99,7 @@ export function registerCompositionTools(server: McpServer): void {
       grid: z.coerce.number().positive().max(16).describe('Grid in beats: 1 = quarter, 0.5 = 8th, 0.25 = 16th, 0.333 = 8th triplet'),
       strength: z.coerce.number().min(0).max(1).optional().describe('How far notes move toward the grid, 0..1 (default 1)'),
       swing: z.coerce.number().min(0).max(0.9).optional().describe('Off-beat delay as a fraction of a grid step, 0..0.9 (default 0)'),
-      window: z.coerce.number().gt(0).max(1).optional().describe('Only move notes within this fraction of half a grid step of a line (default 1 = all)'),
+      window: z.coerce.number().gt(0).max(1).optional().describe('Only move notes within this fraction of half the gap between lines, (1 + swing) half steps with swing (default 1 = all)'),
       lengths: z.enum(['keep', 'quantize']).optional().describe('keep (default): notes keep their length; quantize: note ends snap too'),
     },
     async (args) => {
@@ -114,8 +114,8 @@ export function registerCompositionTools(server: McpServer): void {
     'transform_midi',
     'Transform the notes of a MIDI item in one undo point: transpose (semitones, refused if any note would leave ' +
     '0-127), velocity (set, scale, add, then clamp to min/max), humanize (random timing in beats and velocity, ' +
-    'reproducible with seed), length (set in beats, scale, or legato = each note runs to the next note on its ' +
-    'channel). Acts on all notes or a selection (indexes, pitch range, channel). Returns the notes changed, ' +
+    'reproducible with seed), length (set in beats, scale, or legato = each note runs to the next selected note on its ' +
+    'channel). Acts on all notes or a selection (indexes, pitch range, channel). Returns how many notes it acted on, ' +
     'velocities before/after and the humanize seed.',
     {
       ...selectionSchema,
@@ -135,7 +135,7 @@ export function registerCompositionTools(server: McpServer): void {
       length: z.object({
         set: z.coerce.number().positive().max(64).optional().describe('Every note this many beats long'),
         scale: z.coerce.number().positive().max(8).optional().describe('Multiply lengths (0.5 = staccato)'),
-        legato: z.boolean().optional().describe('Each note runs to the start of the next note on its channel'),
+        legato: z.boolean().optional().describe('Each note runs to the start of the next selected note on its channel (unselected notes are not counted)'),
       }).optional(),
     },
     async (args) => {
