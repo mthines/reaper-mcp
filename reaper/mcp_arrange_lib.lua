@@ -271,6 +271,24 @@ local function retime(api)
   if api.UpdateTimeline then api.UpdateTimeline() end
 end
 
+-- Value of an envelope at t, read before anything changes it
+local function value_at(api, env, t)
+  local _, v = api.Envelope_Evaluate(env, t, 0, 0)
+  return v
+end
+
+-- True when an envelope has a point before t / at or after t
+local function has_before(pts, t)
+  return pts[1] ~= nil and pts[1].t < t - EPS
+end
+local function has_from(pts, t)
+  return pts[#pts] ~= nil and pts[#pts].t >= t - EPS
+end
+local function has_at(pts, t)
+  for _, pt in ipairs(pts) do if math.abs(pt.t - t) <= EPS then return true end end
+  return false
+end
+
 local function check_insert(api, p)
   if not num(p.position) or p.position < 0 then return nil, "position must be 0 or more seconds" end
   if not num(p.length) or p.length <= 0 or p.length > M.MAX_SPAN then return nil, "length must be more than 0 and at most " .. M.MAX_SPAN .. " seconds" end
@@ -283,6 +301,10 @@ local function apply_insert(api, c)
   local r = { position = r3(at), length = r3(len), itemsMoved = 0, itemsSplit = 0, markersMoved = 0, regionsExtended = 0,
     tempoMarkersMoved = 0, envelopePointsMoved = 0, automationItemsMoved = 0, automationItemsSpanning = 0 }
   local snap = snapshot(api)
+  -- The value at the position, held across the opened time so the segment spanning it is not stretched
+  for _, e in ipairs(snap.envs) do
+    if has_before(e.pts, at) and has_from(e.pts, at) then e.hold = value_at(api, e.env, at) end
+  end
 
   local tempo = tempo_markers(api)
   for i = #tempo, 1, -1 do
@@ -312,6 +334,11 @@ local function apply_insert(api, c)
         r.envelopePointsMoved = r.envelopePointsMoved + 1
         moved = true
       end
+    end
+    if e.hold then
+      api.InsertEnvelopePoint(e.env, at, e.hold, 0, 0, false, true)
+      -- A point that sat on the position now ends the opened time itself
+      if not has_at(e.pts, at) then api.InsertEnvelopePoint(e.env, at + len, e.hold, 0, 0, false, true) end
     end
     if moved then api.Envelope_SortPoints(e.env) end
     for i, ai in ipairs(e.ais) do
@@ -384,6 +411,11 @@ local function apply_remove(api, c)
     envelopePointsDeleted = 0, envelopePointsMoved = 0, automationItemsDeleted = 0, automationItemsMoved = 0,
     automationItemsKept = 0 }
   local snap = snapshot(api)
+  -- The values either side of the cut, kept at its edges so the automation outside it keeps its shape
+  for _, x in ipairs(snap.envs) do
+    if has_before(x.pts, s) and s - PIN >= 0 then x.left = value_at(api, x.env, s - PIN) end
+    if has_from(x.pts, e) and not has_at(x.pts, e) then x.right = value_at(api, x.env, e) end
+  end
 
   -- Tempo: markers inside go, except the last one, which moves to the cut so the tempo after
   -- the cut stays what it was (unless a marker sits on the cut's end already)
@@ -458,7 +490,9 @@ local function apply_remove(api, c)
         moved = true
       end
     end
-    if moved then api.Envelope_SortPoints(x.env) end
+    if x.left then api.InsertEnvelopePoint(x.env, s - PIN, x.left, 0, 0, false, true) end
+    if x.right then api.InsertEnvelopePoint(x.env, s, x.right, 0, 0, false, true) end
+    if moved or x.left then api.Envelope_SortPoints(x.env) end
     for i, ai in ipairs(x.ais) do
       if ai.pos >= s - EPS and ai.pos + ai.len <= e + EPS then doomed[#doomed + 1] = { x.env, i - 1 } end
     end

@@ -112,9 +112,12 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
       assert(r.markersMoved == 1)
       -- Tempo at 10 moves to 12
       assert(api.tempo[2].t == 12 and r.tempoMarkersMoved == 1)
-      -- Envelope points at 6 and 12 move to 8 and 14; the automation item at 9 to 11
+      -- Envelope points at 6 and 12 move to 8 and 14, the value at 6 held across the opened time;
+      -- the automation item at 9 moves to 11
       local env = api.tracks[1].envs[1]
-      assert(env.pts[2].t == 8 and env.pts[3].t == 14, env.pts[2].t .. " " .. env.pts[3].t)
+      local got = {}
+      for _, p in ipairs(env.pts) do got[#got + 1] = p.t .. "=" .. p.v end
+      assert(table.concat(got, " ") == "0=1 6=0.5 8=0.5 14=1", table.concat(got, " "))
       assert(env.ais[1].D_POSITION == 11 and r.automationItemsMoved == 1)
       assert(r.envelopePointsMoved == 2)
       assert(#api.undo_labels == 1 and api.undo_labels[1] == "MCP: Insert time")
@@ -171,9 +174,13 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
       assert(r.markersDeleted == 1 and r.regionsTrimmed == 1)
       -- Tempo at 10 moves to 4; the start marker stays
       assert(#api.tempo == 2 and api.tempo[2].t == 4 and api.tempo[2].bpm == 90)
-      -- Point at 6 deleted, 12 → 6; automation item 9-11 → 3-5
+      -- Point at 6 deleted, 12 → 6, with the values either side of the cut kept at its edge
+      -- (1 → 0.5 over 0-6 reads 0.75 at 9); automation item 9-11 → 3-5
       local env = api.tracks[1].envs[1]
-      assert(#env.pts == 2 and env.pts[2].t == 6 and r.envelopePointsDeleted == 1)
+      local got = {}
+      for _, p in ipairs(env.pts) do got[#got + 1] = string.format("%g=%.4f", p.t, p.v) end
+      assert(table.concat(got, " ") == "0=1.0000 2.999=0.7501 3=0.7500 6=1.0000", table.concat(got, " "))
+      assert(r.envelopePointsDeleted == 1)
       assert(env.ais[1].D_POSITION == 3 and r.automationItemsMoved == 1)
       assert(#api.undo_labels == 1 and api.undo_labels[1] == "MCP: Remove time")
     `);
@@ -270,6 +277,23 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
       local v49, v61 = at(49), at(61)
       assert(arrange.copy_section(api, { start = 10, ["end"] = 20, position = 50 }))
       assert(near(at(49), v49) and near(at(61), v61), at(49) .. " " .. at(61))
+    `);
+  });
+
+  it('insert and remove time: automation outside the edit keeps its shape', async () => {
+    await runLua(`
+      local function ramp() return new_timeline{ tracks = { { envs = { { pts = { { 0, 0 }, { 100, 1 } } } } } } } end
+      local function at(api, t) local _, v = api.Envelope_Evaluate(api.tracks[1].envs[1], t) return v end
+      local api = ramp()
+      assert(arrange.insert_time(api, { position = 50, length = 10 }))
+      assert(near(at(api, 25), 0.25) and near(at(api, 49), 0.49) and near(at(api, 55), 0.5) and near(at(api, 70), 0.6),
+        at(api, 25) .. " " .. at(api, 49) .. " " .. at(api, 55) .. " " .. at(api, 70))
+      api = ramp()
+      assert(arrange.remove_time(api, { start = 50, ["end"] = 60 }))
+      assert(near(at(api, 25), 0.25) and near(at(api, 51), 0.61), at(api, 25) .. " " .. at(api, 51))
+      api = ramp()
+      assert(arrange.copy_section(api, { start = 10, ["end"] = 20, position = 50, insert = true }))
+      assert(near(at(api, 49), 0.49) and near(at(api, 61), 0.51), at(api, 49) .. " " .. at(api, 61))
     `);
   });
 
