@@ -325,6 +325,18 @@ describe('mcp_mixing_lib.lua: stretch markers', () => {
     `);
   });
 
+  it('refuses a quantize whose every hit is skipped and keeps the markers the item has', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { items = { { pos = 0, len = 4 } } } } }
+      mix.add_stretch_markers(api, { trackIndex = 0, itemIndex = 0 }, { { position = 1 }, { position = 2 }, { position = 3 } })
+      local writes = api.writes
+      -- 20 ms in, the grid line at 0 would pull the hit onto the left edge
+      local r, err = mix.quantize_stretch(api, { trackIndex = 0, itemIndex = 0, grid = 1 }, { 0.02 })
+      assert(r == nil and err:find("No hit could be placed", 1, true), tostring(err))
+      assert(api.writes == writes and #api.tracks[1].items[1].takes[1].sm == 3, "the three markers stay")
+    `);
+  });
+
   it('places markers in take time on an item at another play rate, and reports item seconds', async () => {
     await runLua(`
       -- 2x play rate: source second 1.04 plays at item second 0.52 and snaps to the 8th at 0.5;

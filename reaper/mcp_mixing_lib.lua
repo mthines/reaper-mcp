@@ -828,6 +828,7 @@ function M.quantize_stretch(api, p, hits)
       if dist <= reach then last_line = line_time end
     end
   end
+  if #placed == 0 then return nil, "No hit could be placed (each would fold time or reach an item edge) — nothing changed" end
 
   local function stats(list_ms)
     if #list_ms == 0 then return { avgMs = 0, maxMs = 0 } end
