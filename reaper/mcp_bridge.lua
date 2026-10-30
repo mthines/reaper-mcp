@@ -4852,7 +4852,7 @@ local HISTORY_TIERS = {
 for _, tier in ipairs(HISTORY_TIERS) do tier.b = {} end
 local HISTORY_SLOW_MS = 100
 -- Commands whose duration is the work itself (renders, plugin loads, project IO, proxies that run
--- arbitrary work): never counted as slow. Mirrors LONG_RUNNING in apps/bridge-ui/src/lib/status.ts.
+-- arbitrary work): never counted as slow. Mirrors LONG_RUNNING in apps/bridge-ui/src/lib/commands.ts.
 local LONG_RUNNING = {}
 for _, c in ipairs({
   "render_project", "render_track_to_wav", "run_plan", "run_action", "save_project", "undo_project",

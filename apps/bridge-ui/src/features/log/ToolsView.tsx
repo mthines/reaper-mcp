@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import { track } from '../../lib/analytics.js';
 import { useUrlState } from '../../lib/url-state.js';
-import { formatAgo, formatMs, matchesQuery, parseQuery, speedOf, groupByTool, type CommandEntry, type ToolSort } from '../../lib/status.js';
 import { TOOL_TONE } from './speed.js';
+import { formatAgo, formatMs } from '../../lib/format.js';
+import { matchesQuery, parseQuery } from '../../lib/search.js';
+import { speedOf, groupByTool, type CommandEntry, type ToolSort } from '../../lib/commands.js';
 
 const isToolSort = (v: unknown): v is ToolSort => TOOL_SORTS.some((x) => x.key === v);
 

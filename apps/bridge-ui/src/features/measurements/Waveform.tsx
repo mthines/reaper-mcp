@@ -1,8 +1,8 @@
 import { useId, useState, type PointerEvent } from 'react';
-import { parseParams, type CommandEntry, type Measurement } from '../../lib/status.js';
 import { PreviousLegend } from './Measurement.js';
 import { Readout } from './Readout.js';
 import { fmt, zoneOf } from './format.js';
+import { parseParams, type CommandEntry, type Measurement } from '../../lib/commands.js';
 
 const WW = 320;
 const WH = 84;

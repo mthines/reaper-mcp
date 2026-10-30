@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { mergeLog, parseExtStateReply, parseHistoryReply, parseLogReply, parseLongHistoryReply, restoreLog, statusRequestUrl, type BridgeHistory, type BridgeStatus, type CommandEntry, type LongHistory, type SavedLog } from '../lib/status.js';
+import { parseExtStateReply, parseHistoryReply, parseLogReply, parseLongHistoryReply, statusRequestUrl, type BridgeStatus } from '../lib/status.js';
 import { DEMO } from './demo-mode.js';
 import { load, save } from '../lib/storage.js';
+import { mergeLog, restoreLog, type SavedLog } from '../lib/log.js';
+import type { BridgeHistory, LongHistory } from '../lib/timeline.js';
+import type { CommandEntry } from '../lib/commands.js';
 
 const POLL_MS = 500;
 /** While hidden (minimized, or covered on macOS), keep pinging ui_seen slowly so the bridge knows we're open. */

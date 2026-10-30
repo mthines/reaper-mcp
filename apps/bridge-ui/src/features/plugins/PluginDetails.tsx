@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Markdown } from '../../components/Markdown.js';
 import { ResizeHandle, useDrawerWidth } from '../../components/ResizeHandle.js';
-import { formatAgo } from '../../lib/status.js';
 import { fxFormat, lorekitUrl, type KnowledgeFeed, type PluginRecord, type PluginRow } from './plugins.js';
 import { COVERAGE_LABEL } from './PluginsView.js';
 import { PublishRecord } from './PublishRecord.js';
 import { ShareIcon, SparkIcon } from '../../components/icons.js';
 import { learnPrompt } from './teach.js';
+import { formatAgo } from '../../lib/format.js';
 
 export const order = (r: PluginRow) => (r.coverage === 'learned' ? 0 : r.coverage === 'built-in' ? 1 : 2);
 

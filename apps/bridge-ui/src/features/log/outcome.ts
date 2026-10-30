@@ -1,4 +1,4 @@
-import type { Outcome } from '../../lib/status.js';
+import type { Outcome } from '../../lib/commands.js';
 
 // A refused request ("Track 9 not found") is a warning, a system error is an error
 export const ROW_CLASS: Record<Outcome, string> = { ok: '', error: 'row-err', refused: 'row-warn' };

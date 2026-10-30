@@ -1,6 +1,6 @@
-import type { Measurement } from '../../lib/status.js';
 import { PreviousLegend } from './Measurement.js';
 import { fmt, pct } from './format.js';
+import type { Measurement } from '../../lib/commands.js';
 
 const AESTHETICS: Array<[keyof Extract<Measurement, { kind: 'aesthetics' }>, string, string]> = [
   ['pq', 'Production quality', 'How clean and well produced it sounds'],

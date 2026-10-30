@@ -1,4 +1,4 @@
-import { parseParams, type CommandEntry } from '../../lib/status.js';
+import { parseParams, type CommandEntry } from '../../lib/commands.js';
 
 export const fmt = (v: number | undefined, digits = 1) =>
   v === undefined ? '–' : v <= -149 ? '−∞' : (v > 0 ? `+${v.toFixed(digits)}` : v.toFixed(digits)).replace('-', '−');

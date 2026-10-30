@@ -1,6 +1,6 @@
-import type { Measurement } from '../../lib/status.js';
 import { Readout, Scale } from './Readout.js';
 import { fmt, pct, tpWord, tpZone } from './format.js';
+import type { Measurement } from '../../lib/commands.js';
 
 export const lufsPct = (v: number) => pct(v, -40, 0);
 

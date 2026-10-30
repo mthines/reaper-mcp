@@ -1,7 +1,7 @@
-import type { Measurement } from '../../lib/status.js';
 import { lufsPct } from './Loudness.js';
 import { Readout, Scale } from './Readout.js';
 import { fmt, pct, tpWord, tpZone } from './format.js';
+import type { Measurement } from '../../lib/commands.js';
 
 const BAND_NAMES = ['Sub', 'Bass', 'Low mid', 'Mid', 'Upper mid', 'Presence', 'Brilliance'];
 const BAND_RANGES = ['20–60 Hz', '60–250 Hz', '250–500 Hz', '500 Hz–2 kHz', '2–4 kHz', '4–6 kHz', '6–20 kHz'];

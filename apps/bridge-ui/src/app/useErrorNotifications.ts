@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { sessionName, outcomeOf, type CommandEntry, type Session } from '../lib/status.js';
 import { load, save } from '../lib/storage.js';
+import { sessionName, type Session } from '../lib/sessions.js';
+import { outcomeOf, type CommandEntry } from '../lib/commands.js';
 
 const NOTIFY_KEY = 'mcp-bridge-notify';
 /** Desktop notification per failed command while enabled (a per-viewer choice, kept in localStorage). */

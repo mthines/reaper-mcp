@@ -1,8 +1,9 @@
-import { hasToolCalls, isConnected, sessionHue, sessionName, type BridgeStatus, type Session, type Liveness } from '../lib/status.js';
+import type { BridgeStatus, Liveness } from '../lib/status.js';
 import { Mark } from '../components/Mark.js';
 import { GearIcon, GitHubIcon } from '../components/icons.js';
 import { REPO_URL } from '../lib/links.js';
 import { usePopover } from '../lib/usePopover.js';
+import { hasToolCalls, isConnected, sessionHue, sessionName, type Session } from '../lib/sessions.js';
 
 export function Header({
   status,

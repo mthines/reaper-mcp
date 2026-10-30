@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { editViewOf, fittingLabels, listDiff, routeIds, timelineDiff, type Marker, type Route } from './edit-views.js';
-import type { CommandEntry } from '../../lib/status.js';
+import type { CommandEntry } from '../../lib/commands.js';
 
 const entry = (c: string, r: Record<string, unknown> | undefined, ok = true): CommandEntry => ({ n: 1, t: 0, c, ms: 1, ok, r });
 

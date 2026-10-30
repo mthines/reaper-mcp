@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatAgo } from '../../lib/status.js';
 import type { RequestState, RowMode, SnapshotInfo, SnapshotOp, SnapshotsFeed } from './snapshots.js';
 import { EditForm } from './EditForm.js';
 import { SaveForm } from './SaveForm.js';
+import { formatAgo } from '../../lib/format.js';
 
+/**
+ * The Snapshots view: the project's saved mixer snapshots. Click one (or press 1–9) to load it while
+ * listening, for a quick A/B/C; save the current mix (a blank name saves under the date and time); rename
+ * or delete one from its row. All go through the bridge's normal command path, so they show in the log and
+ * are refused while read-only or paused.
+ */
 export function SnapshotsView({
   feed,
   request,

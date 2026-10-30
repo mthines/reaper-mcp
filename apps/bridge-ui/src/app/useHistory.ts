@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { HISTORY_MAX, type BridgeStatus, type Sample } from '../lib/status.js';
+import type { BridgeStatus } from '../lib/status.js';
+import { HISTORY_MAX, type Sample } from '../lib/log.js';
 
 /** Snapshot the bridge's cumulative counters once per tick for the stat sparklines. */
 export function useHistory(status: BridgeStatus | null, now: number): Sample[] {

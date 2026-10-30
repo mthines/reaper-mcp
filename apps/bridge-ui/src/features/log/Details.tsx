@@ -3,10 +3,13 @@ import { ResizeHandle, useDrawerWidth } from '../../components/ResizeHandle.js';
 import { track } from '../../lib/analytics.js';
 import { EditViewSection } from '../edit-views/EditViews.js';
 import { MeasurementView } from '../measurements/Measurement.js';
-import { formatAgo, formatDay, formatParams, termFromSelection, speedOf, sessionHue, sessionName, outcomeOf, type CommandEntry, type Session } from '../../lib/status.js';
 import { CloseIcon } from '../../components/icons.js';
 import { BADGE, DOT_CLASS } from './outcome.js';
 import { SPEED_LABEL } from './speed.js';
+import { formatAgo, formatDay, formatParams } from '../../lib/format.js';
+import { termFromSelection } from '../../lib/search.js';
+import { speedOf, outcomeOf, type CommandEntry } from '../../lib/commands.js';
+import { sessionHue, sessionName, type Session } from '../../lib/sessions.js';
 
 /** Right-hand sidebar with everything known about one command. ↑/↓ move between rows, Esc closes. */
 export function Details({

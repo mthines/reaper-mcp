@@ -1,4 +1,4 @@
-import { VERY_SLOW_MS, type Speed } from '../../lib/status.js';
+import { VERY_SLOW_MS, type Speed } from '../../lib/commands.js';
 
 export const TOOL_TONE: Record<Speed, string> = { fast: '', slow: 'tone-warn', 'very-slow': 'tone-bad', long: '' };
 export const SPEED_LABEL: Record<Speed, string> = { fast: 'Fast', slow: 'Slow', 'very-slow': 'Very slow', long: 'Long-running (expected)' };

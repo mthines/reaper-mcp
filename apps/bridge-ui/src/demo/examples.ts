@@ -1,5 +1,5 @@
 import { demoSnapshots, type RequestState, type RowMode, type SnapshotOp, type SnapshotsFeed } from '../features/snapshots/snapshots.js';
-import type { CommandEntry } from '../lib/status.js';
+import type { CommandEntry } from '../lib/commands.js';
 
 /**
  * Fixed example data for the Storybook stories (and `?demo`): every measurement, edit view, drawer and

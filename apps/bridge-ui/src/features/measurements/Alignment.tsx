@@ -1,6 +1,6 @@
-import type { Measurement } from '../../lib/status.js';
 import { Readout } from './Readout.js';
 import { fmt, pct } from './format.js';
+import type { Measurement } from '../../lib/commands.js';
 
 /** How far a track sits behind (or ahead of) its reference, on a ms axis with the reference at 0 */
 export function Alignment({ m }: { m: Extract<Measurement, { kind: 'alignment' }> }) {

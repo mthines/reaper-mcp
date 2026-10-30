@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { formatAgo, measurementOf, type CommandEntry, type Measurement } from '../../lib/status.js';
 import { Aesthetics } from './Aesthetics.js';
 import { Alignment } from './Alignment.js';
 import { Loudness } from './Loudness.js';
@@ -8,6 +7,14 @@ import { Level, Readout, Scale } from './Readout.js';
 import { Spectrum } from './Spectrum.js';
 import { Waveform } from './Waveform.js';
 import { fmt, pct, targetOf, zoneOf } from './format.js';
+import { formatAgo } from '../../lib/format.js';
+import { measurementOf, type CommandEntry, type Measurement } from '../../lib/commands.js';
+
+/**
+ * What a measuring command read, in the page's meter language: hairline lines with one accent for levels,
+ * stereo and the spectrum; loudness leads with one big number against the agent's target. A level turns
+ * amber from −6 dB and red over 0 dB (correlation below 0), and the problem is named in words too.
+ */
 
 /**
  * The result of a measuring command, plus `history`: the same command on the same track, newest first

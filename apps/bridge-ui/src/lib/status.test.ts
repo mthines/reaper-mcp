@@ -1,46 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import {
-  formatDay,
-  bucketize,
-  historyTiers,
-  inSpan,
-  parseLogReply,
-  parseLongHistoryReply,
-  restoreLog,
-  spanOfBars,
-  timelineBars,
-  clearedBefore,
-  commandsPerMinute,
-  deriveSeries,
-  formatDuration,
-  latencyStats,
-  liveness,
-  mergeLog,
-  parseExtStateReply,
-  parseHistoryReply,
-  statusRequestUrl,
-  commandKind,
-  LONG_RUNNING,
-  outcomeOf,
-  SYSTEM_ERROR_PREFIXES,
-  speedOf,
-  measurementOf,
-  measurementHistory,
-  matchesQuery,
-  parseQuery,
-  termFromSelection,
-  formatParams,
-  webSocketLevel,
-  groupByTool,
-  hasToolCalls,
-  isConnected,
-  labelSessions,
-  sessionName,
-  settingUrl,
-  type BridgeStatus,
-  type CommandEntry,
-} from './status.js';
+import { parseLogReply, parseLongHistoryReply, liveness, parseExtStateReply, parseHistoryReply, statusRequestUrl, webSocketLevel, settingUrl, type BridgeStatus } from './status.js';
+import { formatDay, formatDuration, formatParams } from './format.js';
+import { bucketize, historyTiers, inSpan, spanOfBars, timelineBars } from './timeline.js';
+import { restoreLog, clearedBefore, commandsPerMinute, deriveSeries, latencyStats, mergeLog } from './log.js';
+import { commandKind, LONG_RUNNING, outcomeOf, SYSTEM_ERROR_PREFIXES, speedOf, measurementOf, measurementHistory, groupByTool, type CommandEntry } from './commands.js';
+import { matchesQuery, parseQuery, termFromSelection } from './search.js';
+import { hasToolCalls, isConnected, labelSessions, sessionName } from './sessions.js';
 
 const status: BridgeStatus = {
   v: 1,

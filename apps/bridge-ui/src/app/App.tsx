@@ -4,7 +4,7 @@ import { blockedBy } from '../features/snapshots/snapshots.js';
 import { useSnapshots } from '../features/snapshots/useSnapshots.js';
 import { isBoolean, useUrlState } from '../lib/url-state.js';
 import { LOREKIT_PUBLISH_TOKEN_KEY, loadLoreKitToken, saveLoreKitToken, useKnowledge } from '../features/plugins/useKnowledge.js';
-import { deriveSeries, formatAgo, inSpan, labelSessions, liveness, type SettingKey, type Span, type Liveness } from '../lib/status.js';
+import { liveness, type SettingKey, type Liveness } from '../lib/status.js';
 import { Header } from './Header.js';
 import { Notices } from './Notices.js';
 import { Offline } from './Offline.js';
@@ -22,6 +22,10 @@ import { RANGE_STORAGE_KEY, type RangeKey, isRangeKey, loadRange } from '../feat
 import { DISCORD_URL, REPO_URL } from '../lib/links.js';
 import { load, save } from '../lib/storage.js';
 import { useNow } from '../lib/useNow.js';
+import { deriveSeries } from '../lib/log.js';
+import { formatAgo } from '../lib/format.js';
+import { inSpan, type Span } from '../lib/timeline.js';
+import { labelSessions } from '../lib/sessions.js';
 
 const OVERVIEW_KEY = 'mcp-bridge-overview';
 

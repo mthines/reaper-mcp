@@ -1,7 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import { commandsPerMinute, formatDuration, formatMs, latencyStats, type BridgeStatus, type CommandEntry, type Series } from '../../lib/status.js';
+import type { BridgeStatus } from '../../lib/status.js';
 import { Sparkline } from './Sparkline.js';
 import { load, save } from '../../lib/storage.js';
+import { commandsPerMinute, latencyStats, type Series } from '../../lib/log.js';
+import { formatDuration, formatMs } from '../../lib/format.js';
+import type { CommandEntry } from '../../lib/commands.js';
 
 const STATS_OPEN_KEY = 'mcp-bridge-stats-open';
 

@@ -1,5 +1,5 @@
 import { useState, type MouseEvent, type ReactNode } from 'react';
-import { HISTORY_MAX } from '../../lib/status.js';
+import { HISTORY_MAX } from '../../lib/log.js';
 
 const SPARK_W = 100;
 const SPARK_H = 24;

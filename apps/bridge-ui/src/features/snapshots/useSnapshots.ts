@@ -1,17 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { track } from '../../lib/analytics.js';
-import {
-  demoSnapshots,
-  parseSnapshotsReply,
-  replacedBy,
-  settle,
-  snapshotRequestUrl,
-  snapshotsPollUrl,
-  timeSnapshotName,
-  type RequestState,
-  type SnapshotOp,
-  type SnapshotsFeed,
-} from './snapshots.js';
+import { demoSnapshots, parseSnapshotsReply, replacedBy, settle, snapshotRequestUrl, snapshotsPollUrl, timeSnapshotName, type RequestState, type SnapshotOp, type SnapshotsFeed } from './snapshots.js';
 
 const POLL_MS = 1_000;
 

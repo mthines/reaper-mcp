@@ -1,8 +1,10 @@
 import { memo, useLayoutEffect, useRef, useState } from 'react';
 import { prependedCount, scrollToRow, visibleRows } from './virtual-list.js';
-import { formatAgo, formatDay, formatMs, speedOf, sessionHue, sessionName, outcomeOf, type CommandEntry, type Session } from '../../lib/status.js';
 import { DOT_CLASS, ROW_CLASS } from './outcome.js';
 import { SPEED_LABEL, latencyScale } from './speed.js';
+import { formatAgo, formatDay, formatMs } from '../../lib/format.js';
+import { speedOf, outcomeOf, type CommandEntry } from '../../lib/commands.js';
+import { sessionHue, sessionName, type Session } from '../../lib/sessions.js';
 
 /** Height of one log row in px; the list is windowed, so every row must be exactly this tall. */
 const ROW_HEIGHT = 32;

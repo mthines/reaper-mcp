@@ -1,5 +1,7 @@
-import { formatAgo, groupByTool, isConnected, sessionHue, sessionName, type CommandEntry, type Session } from '../../lib/status.js';
 import { clock } from '../timeline/Timeline.js';
+import { formatAgo } from '../../lib/format.js';
+import { groupByTool, type CommandEntry } from '../../lib/commands.js';
+import { isConnected, sessionHue, sessionName, type Session } from '../../lib/sessions.js';
 
 /** One card per agent connection, newest activity first. Click one to filter the calls to it. */
 export function SessionsView({

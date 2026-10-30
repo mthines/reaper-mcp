@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { editViewOf, type EditView } from './edit-views.js';
-import type { CommandEntry } from '../../lib/status.js';
 import { Changes } from './views/Changes.js';
 import { Envelope } from './views/Envelope.js';
 import { FxChains } from './views/FxChains.js';
@@ -10,6 +9,12 @@ import { PianoRoll } from './views/PianoRoll.js';
 import { Plan } from './views/Plan.js';
 import { Routing } from './views/Routing.js';
 import { Timeline } from './views/Timeline.js';
+import type { CommandEntry } from '../../lib/commands.js';
+
+/**
+ * What an edit changed, or what a listing showed, in the measurements' hairline language: the value now is the
+ * accent, the value before is a hollow ghost (dashed for curves), and whatever this call added is drawn solid.
+ */
 
 /** The drawer's card for an edit view; nothing for commands without one */
 export function EditViewSection({ entry }: { entry: CommandEntry }) {

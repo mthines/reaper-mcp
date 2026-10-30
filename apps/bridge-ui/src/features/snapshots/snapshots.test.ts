@@ -1,17 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  REQUEST_TIMEOUT_MS,
-  blockedBy,
-  nameProblem,
-  parseSnapshotsReply,
-  replacedBy,
-  settle,
-  snapshotRequestUrl,
-  snapshotsPollUrl,
-  timeSnapshotName,
-  type RequestState,
-  type SnapshotsFeed,
-} from './snapshots.js';
+import { REQUEST_TIMEOUT_MS, blockedBy, nameProblem, parseSnapshotsReply, replacedBy, settle, snapshotRequestUrl, snapshotsPollUrl, timeSnapshotName, type RequestState, type SnapshotsFeed } from './snapshots.js';
 
 const unhex = (h: string) => new TextDecoder().decode(Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16)));
 const reply = (value: unknown) => `EXTSTATE\tMCPBridge\tsnapshots\t${JSON.stringify(value)}\n`;
