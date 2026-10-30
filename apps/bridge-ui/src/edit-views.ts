@@ -244,7 +244,6 @@ export function editViewOf(e: CommandEntry): EditView | null {
   }
 }
 
-/** What changed on the timeline: the marks (or items) this call added, moved or renamed, and the ones it removed */
 /**
  * Gains a normalize changed, as [after, before] dB: normalize never moves an item, so its
  * before is the one at the same position and length; items whose gain stayed are left out.
@@ -258,6 +257,7 @@ export function normalizedGains(lanes: ItemLane[]): Array<[number, number]> {
   );
 }
 
+/** What changed on the timeline: the marks (or items) this call added, moved or renamed, and the ones it removed */
 export function timelineDiff<T extends Region | Marker | Tempo | Item>(now: T[], was: T[] | undefined): { added: Set<T>; removed: T[] } {
   if (!was) return { added: new Set(), removed: [] };
   const key = (t: T) => JSON.stringify(t);
