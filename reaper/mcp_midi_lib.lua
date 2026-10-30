@@ -104,6 +104,12 @@ local function snap(qn, grid, swing)
   return best
 end
 
+-- The grid line after a line (with swing, odd lines sit swing steps late)
+local function line_after(line, grid, swing)
+  local j = math.floor((line + EPS) / grid) + 1
+  return j * grid + ((j % 2 == 1) and swing * grid or 0)
+end
+
 local function check_quantize(api, p)
   local t, err = midi_take(api, p)
   if not t then return nil, err end
@@ -128,7 +134,7 @@ local function apply_quantize(api, c)
   for _, n in ipairs(c.notes) do
     local line = snap(n.qs, c.grid, c.swing)
     -- Never before the item start, where REAPER would not play the note
-    while line < c.t.startQN - EPS do line = line + c.grid end
+    while line < c.t.startQN - EPS do line = line_after(line, c.grid, c.swing) end
     local off = line - n.qs
     -- Notes further from a line than the window are left where they are
     if math.abs(off) <= reach then
@@ -136,7 +142,7 @@ local function apply_quantize(api, c)
       n.nqs = line * c.strength + n.qs * (1 - c.strength)
       if c.lengths == "quantize" then
         local e = snap(n.qe, c.grid, c.swing)
-        if e <= line + EPS then e = line + c.grid end
+        if e <= line + EPS then e = line_after(line, c.grid, c.swing) end
         n.nqe = e * c.strength + n.qe * (1 - c.strength)
       else
         n.nqe = n.qe + (n.nqs - n.qs)

@@ -99,6 +99,16 @@ describe('mcp_midi_lib.lua quantize', () => {
     `);
   });
 
+  it('with swing, a note near an off-grid item start moves to the next swung line, not between lines', async () => {
+    await runLua(`
+      -- 8ths swung 0.5 put lines at 0, 0.75, 1, 1.75 …; the item starts at beat 0.8 (0.4 s), so its note on
+      -- beat 0.8 is nearest 0.75, before the item: the next line is 1, not 0.75 + one step (1.25)
+      local api = new_midi_fake{ tracks = { { items = { { pos = 0.4, len = 2, notes = { { s = 0, e = 0.1, pitch = 60 } } } } } } }
+      midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 0.5, swing = 0.5 })
+      assert(api.notes_of(0, 0) == "60@0.2-0.3:100", api.notes_of(0, 0))
+    `);
+  });
+
   it('snaps the end of a note whose start is already on the grid', async () => {
     await runLua(`
       local api = keys({ { s = 0, e = 0.9, pitch = 60 } })
