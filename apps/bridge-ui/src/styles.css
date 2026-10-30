@@ -688,8 +688,20 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 .result-warn { color: var(--warn); background: rgba(245, 184, 75, 0.08); border: 1px solid rgba(245, 184, 75, 0.28); }
 
 .facts { display: grid; grid-template-columns: 104px 1fr; gap: 9px 12px; margin: 0; font-size: 12.5px; }
+/* The drawer's content answers to the drawer's own width (it is resizable), not the window's */
+.drawer-body { container-type: inline-size; }
+/* Narrow: a slimmer label column; the ISO timestamp (also the When row's tooltip) and the session's client
+   (in the session's tooltip) give way so the rest stays on one line */
+@container (max-width: 340px) {
+  .facts { grid-template-columns: 76px minmax(0, 1fr); gap: 9px 10px; }
+  .facts .fact-wide, .session-fact-client { display: none; }
+}
+.session-fact { display: flex; min-width: 0; white-space: nowrap; }
+.session-fact .sdot { flex: none; }
+.session-fact-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.session-fact-client { flex: none; white-space: pre; }
 .facts dt { color: var(--faint); }
-.facts dd { margin: 0; color: var(--text); word-break: break-word; user-select: text; }
+.facts dd { min-width: 0; margin: 0; color: var(--text); word-break: break-word; user-select: text; }
 .facts .mono { font-size: 12px; }
 .muted { color: var(--faint); }
 
@@ -987,16 +999,18 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 
 /* Measurement results in the details drawer: hairline levels, stereo and spectrum; loudness leads with one
    big number. Zones: --warn from −6 dB, --bad over 0 dB or out of phase, always named in words as well. */
-.measure { --hold: #f4f7fa; --target: #b9a3ff; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
+.measure { --hold: #f4f7fa; --target: #b9a3ff; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; container-type: inline-size; }
 .measure-head {
   padding: 8px 12px; border-bottom: 1px solid var(--line);
   font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); background: var(--panel-2);
 }
 .measure-body { padding: 14px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
 .measure-readouts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; }
+/* Exactly four readouts (timeline: tempo, time sig, regions, markers) sit in one row above the 300px two-column layout, never 3 + 1 */
+@container (min-width: 301px) { .measure-readouts:has(> :nth-child(4):last-child) { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .measure-ro { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .measure-ro-label { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.measure-ro-value { font-size: 14px; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.measure-ro-value { overflow: hidden; text-overflow: ellipsis; font-size: 14px; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .measure-ro-value small { margin-left: 3px; font-size: 10.5px; color: var(--muted); }
 .measure-ro.zone-hot .measure-ro-value, .measure-ro.zone-hot .measure-ro-word { color: var(--warn); }
 .measure-ro.zone-over .measure-ro-value, .measure-ro.zone-over .measure-ro-word { color: var(--bad); }
@@ -1158,6 +1172,7 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 .ev-timeline { display: flex; flex-direction: column; gap: 6px; }
 .ev-lane { position: relative; }
 .ev-lane-markers { height: 22px; }
+.ev-lane-markers.ev-lane-context { height: 8px; }
 .ev-marker { position: absolute; top: 0; bottom: -30px; display: flex; gap: 4px; align-items: flex-start; pointer-events: auto; }
 .ev-marker i { width: 1px; height: 100%; background: var(--mk, var(--hold)); opacity: 0.8; }
 .ev-marker b { margin-top: -1px; font: 10.5px var(--mono); color: var(--muted); white-space: nowrap; max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
@@ -1189,7 +1204,10 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 .ev-trk-muted { opacity: 0.5; }
 .ev-trk-master { border-top-color: var(--line-2) !important; padding-top: 7px; }
 .ev-sw { width: 8px; height: 14px; border-radius: 2px; }
-.ev-tn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev-tn { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
+/* The name gives way, never the change word next to it */
+.ev-tn-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ev-tn .ev-mark { flex-shrink: 0; }
 .ev-tn-folder { color: var(--muted); font-weight: 500; }
 .ev-fader { grid-column: auto; }
 .ev-tv { font-size: 11px; text-align: right; color: var(--muted); }
@@ -1210,6 +1228,76 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 .ev-op-n { font-size: 10.5px; color: var(--faint); }
 .ev-op { font-size: 11.5px; font-weight: 500; color: var(--k-write); }
 .ev-op-what { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+
+/* What a call did to a row of a list (FX slot, track, route): added, moved, changed in place, removed */
+.ev-mark { margin-left: 6px; padding: 0 4px; border-radius: 3px; font-size: 10px; font-weight: 500; line-height: 15px; white-space: nowrap; }
+.ev-mark-new { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.ev-mark-moved { color: var(--h1); background: color-mix(in srgb, var(--h1) 14%, transparent); }
+.ev-mark-changed { color: var(--muted); background: var(--panel-2); }
+.ev-mark-gone { color: var(--faint); border: 1px dashed var(--line-2); }
+.ev-slot-new { box-shadow: inset 2px 0 var(--accent); }
+.ev-slot-moved { box-shadow: inset 2px 0 var(--h1); }
+.ev-slot-changed { box-shadow: inset 2px 0 var(--muted); }
+.ev-trk.ev-slot-new, .ev-trk.ev-slot-moved, .ev-trk.ev-slot-changed { padding-left: 5px; }
+.ev-slot-gone .ev-slot-name, .ev-slot-gone .ev-tn { color: var(--faint); text-decoration: line-through; }
+.ev-slot-gone .ev-bar, .ev-slot-gone .ev-pan, .ev-slot-gone .ev-chips, .ev-slot-gone .ev-tv { opacity: 0.35; }
+/* Change words sit on mixer and route rows when the drawer is wide; narrower, the row keeps its
+   coloured edge (the word is in its tooltip) and one legend under the list names the colours */
+.ev-mark-legend { display: none; margin-top: 8px; }
+.lg-edge { width: 2px; height: 10px; }
+.lg-edge-new { background: var(--accent); }
+.lg-edge-moved { background: var(--h1); }
+.lg-edge-changed { background: var(--muted); }
+.lg-struck { text-decoration: line-through; color: var(--faint); }
+@container (max-width: 460px) {
+  .ev-trk .ev-mark, .ev-route .ev-mark { display: none; }
+  .ev-mark-legend { display: flex; }
+}
+
+/* FX chain */
+.ev-chain { display: flex; flex-direction: column; gap: 4px; }
+.ev-slots { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.ev-slot { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 6px 0 6px 4px; font-size: 12px; }
+.ev-slot + .ev-slot { border-top: 1px solid var(--line); }
+.ev-slot-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.ev-slot-name small { margin-left: 6px; font-size: 11px; color: var(--faint); }
+.ev-slot-state { display: flex; align-items: baseline; font-size: 11px; color: var(--warn); white-space: nowrap; }
+.ev-slot-bypassed .ev-slot-name { color: var(--muted); }
+.ev-slot-offline .ev-slot-name { color: var(--faint); font-style: italic; }
+.ev-slot-offline .ev-slot-state { color: var(--faint); }
+.ev-lane-name { font-size: 10.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Routing: the mixer row with a direction instead of a colour swatch */
+.ev-route { grid-template-columns: 14px minmax(0, 1fr) minmax(40px, 1fr) 40px 30px 13px; }
+.ev-route-kind { font-size: 12px; color: var(--faint); text-align: center; }
+.ev-route .ev-tn { display: flex; align-items: baseline; min-width: 0; }
+
+/* Items per track, and the time selection / edit cursor across the whole timeline */
+.ev-timeline { position: relative; }
+.ev-lane-wrap { display: flex; flex-direction: column; gap: 2px; }
+.ev-item.ev-new { outline: 1.5px solid var(--accent); outline-offset: -1.5px; }
+.ev-item.ev-gone { background: none; border: 1px dashed var(--muted); }
+.ev-lane-empty { position: absolute; left: 0; line-height: 22px; }
+.ev-sel { position: absolute; top: -3px; bottom: -3px; z-index: 1; pointer-events: none; border-inline: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.ev-sel-was { border: 1px dashed var(--muted); background: none; }
+.ev-cur { position: absolute; top: -5px; bottom: -5px; z-index: 2; width: 0; margin-left: -1px; border-left: 2px solid var(--hold); pointer-events: none; }
+.ev-cur-was { border-left: 1px dashed var(--muted); }
+.lg-sel { width: 12px; height: 8px; border-inline: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 25%, transparent); }
+
+/* Narrow drawer (the card under ~300px): two readouts a row so values and zone words are not cut off,
+   marker labels that would collide show on hover, and the mixer drops its pan column (pan is in the row's tooltip) */
+.ev-marker.ev-quiet { padding: 0 4px; margin-left: -4px; }
+.ev-marker.ev-quiet b { display: none; }
+.ev-marker.ev-quiet:hover { z-index: 2; }
+.ev-marker.ev-quiet:hover b { display: block; padding: 0 3px; border-radius: 2px; background: var(--panel); max-width: none; }
+@container (max-width: 300px) {
+  .measure-readouts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ev-trk { grid-template-columns: 8px minmax(0, 1fr) minmax(36px, 0.8fr) 38px 47px; gap: 7px; }
+  .ev-trk .ev-pan { display: none; }
+  .ev-route { grid-template-columns: 14px minmax(0, 1fr) minmax(36px, 0.8fr) 38px 13px; }
+  .ev-name { white-space: normal; }
+  .ev-plan li { grid-template-columns: 14px minmax(0, auto) minmax(0, 1fr); gap: 6px; }
+}
 
 /* Component gallery (?gallery, developer mode): the real components side by side ------------------- */
 .gallery {
@@ -1239,3 +1327,23 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 .gallery-drawer .drawer { position: relative; inset: auto; z-index: auto; width: 100% !important; animation: none; box-shadow: none; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
 .gallery-drawer .resize-handle { display: none; }
 .gallery-stage .offline { margin: 0; }
+
+/* Sidecar analysis results: sections, band balance, alignment axis */
+.off-block { display: flex; flex-direction: column; gap: 6px; }
+.off-title { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.off-sections { position: relative; display: flex; align-items: flex-end; gap: 2px; height: 48px; border-bottom: 1px solid var(--line-2); }
+.off-sections > span:not(.off-integrated) { flex: 1; min-width: 2px; border-radius: 1px 1px 0 0; background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.off-sections > span.off-loud { background: var(--warn); }
+.off-integrated { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--hold); pointer-events: none; }
+.off-hints { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); }
+.off-hints .mono { color: var(--text); }
+.lufs-was.off-ref { border-color: var(--target); }
+.off-align { position: relative; height: 40px; margin-block: 14px 10px; }
+.off-align::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--line-2); }
+.off-align .ev-fill { top: 50%; }
+.off-align-ref, .off-align-trk { position: absolute; top: 4px; bottom: 4px; width: 2px; margin-left: -1px; background: var(--muted); }
+.off-align-trk { background: var(--hold); }
+.off-align-trk.off-inv { background: var(--warn); }
+.off-align-ref b, .off-align-trk b { position: absolute; left: 50%; transform: translateX(-50%); font: 10.5px var(--mono); font-weight: 400; color: var(--muted); white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.off-align-ref b { top: -14px; }
+.off-align-trk b { bottom: -14px; color: var(--text); }

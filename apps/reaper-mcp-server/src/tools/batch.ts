@@ -41,7 +41,7 @@ export function registerBatchTools(server: McpServer): void {
         enabled: z.coerce.number().int().min(0).max(1).optional().describe('Initial enabled state (1=enabled default, 0=bypassed)'),
         parameters: z.array(z.object({
           index: z.coerce.number().int().min(0).describe('Parameter index'),
-          value: z.coerce.number().min(0).max(1).describe('Normalized parameter value 0.0–1.0'),
+          value: z.coerce.number().describe('Parameter value: normalized 0.0–1.0 for most plugins; a few use their own range (ReaComp Threshold/Wet/Dry 0–2 linear gain, JSFX raw slider values). Check minValue/maxValue from get_fx_parameters'),
         })).optional().describe('Initial parameter values to set after adding the plugin'),
       })).describe('Array of FX plugins to add, in order'),
     },
@@ -62,7 +62,7 @@ export function registerBatchTools(server: McpServer): void {
         trackIndex: z.coerce.number().int().min(-1).describe('0-based track index (-1 = master track)'),
         fxIndex: z.coerce.number().int().min(0).describe('0-based FX index in the chain'),
         paramIndex: z.coerce.number().int().min(0).describe('0-based parameter index'),
-        value: z.coerce.number().min(0).max(1).describe('Normalized parameter value 0.0–1.0'),
+        value: z.coerce.number().describe('Parameter value: normalized 0.0–1.0 for most plugins; a few use their own range (ReaComp Threshold/Wet/Dry 0–2 linear gain, JSFX raw slider values). Check minValue/maxValue from get_fx_parameters'),
       })).describe('Array of FX parameter updates to apply'),
     },
     async ({ updates }) => {

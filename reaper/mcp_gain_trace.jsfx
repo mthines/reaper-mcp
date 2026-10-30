@@ -1,0 +1,126 @@
+desc:MCP Gain Trace (pre/post ducking meter)
+// Measures how much a chain of processors moves the level over time, live during playback.
+// Put one instance in mode "pre" at the start of a chain and one in mode "post" at the end (same slot).
+// Every 5 ms the post instance compares its 30 ms RMS with the pre RMS (post - pre, dB), at the
+// lag where they line up best (plugin latency in between), and reports percentiles relative to the
+// median gain: p5 / p1 = how deep the dips go, std = how much the gain moves.
+// Stats reset when playback starts or Reset changes. Audio passes through unmodified.
+// Everything runs in @sample. EEL2 has no scientific-notation literals (1e9 fails to compile).
+
+options:gmem=MCPGainTrace
+
+slider1:0<0,1,1{pre,post}>Mode
+slider2:0<0,7,1>Slot
+slider3:-45<-80,-20,1>Gate (dBFS, pre)
+slider4:0<-40,10,0.01>p5 (dB, rel. median)
+slider5:0<-40,10,0.01>p1 (dB, rel. median)
+slider6:0<0,20,0.01>Std (dB)
+slider7:0<-40,40,0.01>Median gain (dB)
+slider8:0<0,100000,0.1>Gated time (s)
+slider9:0<0,100,0.1>Lag (ms)
+slider10:0<0,1,1>Reset
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+RING = 4096;      // windows kept per slot
+LAGS = 16;        // lags tried, in windows
+BINS = 600;       // histogram bins: -40..+20 dB, 0.1 dB
+BINLO = -40;
+hist = 0;         // LAGS * BINS
+sums = hist + LAGS * BINS; // per lag: n, sum, sumsq
+ph = sums + LAGS * 3;      // post window energies, ring of 64
+AVG = 6;                   // gain is compared over AVG windows (30 ms RMS), so waveform phase doesn't count
+win = floor(srate * 0.005);
+acc = 0; total = 0; seen = -1;
+was_playing = 0;
+last_reset = slider10;
+nwin = 0;
+
+function reset_stats() local(i) (
+  i = 0; loop(LAGS * BINS + LAGS * 3 + 64, hist[i] = 0; i += 1);
+  slider4 = slider5 = slider6 = slider7 = slider8 = slider9 = 0;
+);
+
+function update_stats() local(l, s, sd, best, bstd, n, h, c, b, q1, q5, q50) (
+  best = -1; bstd = 1000000000; l = 0;
+  loop(LAGS,
+    s = sums + l * 3;
+    s[0] > 20 ? (
+      sd = sqrt(max(0, s[2] / s[0] - sqr(s[1] / s[0])));
+      sd < bstd ? ( bstd = sd; best = l; );
+    );
+    l += 1;
+  );
+  best >= 0 ? (
+    s = sums + best * 3; n = s[0]; h = hist + best * BINS;
+    c = 0; b = 0; q1 = q5 = q50 = -1;
+    loop(BINS,
+      c += h[b];
+      q1 < 0 && c >= n * 0.01 ? q1 = b;
+      q5 < 0 && c >= n * 0.05 ? q5 = b;
+      q50 < 0 && c >= n * 0.5 ? q50 = b;
+      b += 1;
+    );
+    slider4 = (q5 - q50) / 10;
+    slider5 = (q1 - q50) / 10;
+    slider6 = bstd;
+    slider7 = BINLO + (q50 + 0.5) / 10;
+    slider8 = n * win / srate;
+    slider9 = best * win / srate * 1000;
+  );
+);
+
+reset_stats();
+
+@slider
+slider10 != last_reset ? ( last_reset = slider10; reset_stats(); );
+
+@sample
+base = 16 + slider2 * (RING + 16);
+playing = play_state & 1;
+slider1 == 1 && playing && !was_playing ? reset_stats();
+was_playing = playing;
+
+slider1 == 0 ? (
+  total += 1;
+  gmem[base - 16] = total;
+) : (
+  // pre ran its whole block before this one: when its count moves, this block starts at count - samplesblock
+  gmem[base - 16] != seen ? ( seen = gmem[base - 16]; total = seen - samplesblock; acc = 0; );
+  total += 1;
+);
+acc += spl0 * spl0 + spl1 * spl1;
+
+total % win == 0 ? (
+  k = total / win - 1;
+  e = acc / win;
+  slider1 == 0 ? (
+    gmem[base + (k % RING)] = e;
+  ) : playing ? (
+    ph[k % 64] = e;
+    E = 0; j = 0; loop(AVG, E += ph[(k - j + 64) % 64]; j += 1);
+    E /= AVG;
+    l = 0;
+    loop(LAGS,
+      kk = k - l;
+      p = 0; j = 0;
+      loop(AVG, p += (kk - j >= 0 ? gmem[base + ((kk - j) % RING)] : 0); j += 1);
+      p /= AVG;
+      p > 0 && E > 0 && 10 * log10(p) > slider3 ? (
+        g = 10 * log10(E / p);
+        b = min(BINS - 1, max(0, floor((g - BINLO) * 10)));
+        hist[l * BINS + b] += 1;
+        s = sums + l * 3;
+        s[0] += 1; s[1] += g; s[2] += g * g;
+      );
+      l += 1;
+    );
+    nwin += 1;
+    nwin % 100 == 0 ? update_stats();
+  );
+  acc = 0;
+);

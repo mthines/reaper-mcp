@@ -1,4 +1,6 @@
 import {
+  useLayoutEffect,
+  useRef,
   useState,
   type CSSProperties,
   type PointerEvent,
@@ -7,11 +9,19 @@ import {
 import { Readout, fmt } from "./Measurement.js";
 import {
   editViewOf,
+  fittingLabels,
+  listDiff,
   newPoints,
+  routeIds,
   timelineDiff,
   type ChangeRow,
   type EditView,
   type EnvPoint,
+  type FxChain,
+  type FxSlot,
+  type Item,
+  type Route,
+  type SlotChange,
   type Marker,
   type MixRow,
   type Note,
@@ -52,6 +62,22 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 /** A mark's own colour, else one of the page's six hues by position */
 const hueOf = (hex: string, i: number) => hex || `var(--h${i % 6})`;
 
+/** The rendered width of an element, kept current as the drawer is resized (0 until measured) */
+function useWidth<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => setWidth(el.clientWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width] as const;
+}
+
 /** The drawer's card for an edit view; nothing for commands without one */
 export function EditViewSection({ entry }: { entry: CommandEntry }) {
   const v = editViewOf(entry);
@@ -68,6 +94,7 @@ export function EditViewSection({ entry }: { entry: CommandEntry }) {
 /** Listings show what is there; every other edit view is a write that shows before and after */
 const LISTINGS = new Set([
   "get_envelope_points",
+  "get_midi_cc",
   "get_midi_notes",
   "analyze_midi",
   "list_markers",
@@ -75,12 +102,17 @@ const LISTINGS = new Set([
   "get_tempo_map",
   "list_media_items",
   "list_tracks",
+  "list_midi_items",
+  "get_track_properties",
+  "get_track_routing",
+  "get_time_selection",
+  "get_fx_parameters",
 ]);
 
 function render(v: EditView): ReactNode {
   switch (v.kind) {
     case "changes":
-      return <Changes rows={v.rows} />;
+      return <Changes rows={v.rows} more={v.more} />;
     case "envelope":
       return <Envelope v={v} />;
     case "midi":
@@ -93,8 +125,40 @@ function render(v: EditView): ReactNode {
       return <Mixer v={v} />;
     case "plan":
       return <Plan v={v} />;
+    case "fxChain":
+      return <FxChains v={v} />;
+    case "routing":
+      return <Routing v={v} />;
   }
 }
+
+/** The word a list row carries for what this call did to it */
+const CHANGE_WORD: Record<SlotChange, string> = {
+  new: "added",
+  moved: "moved",
+  changed: "changed",
+};
+/** "+1 −1" when the call added or removed entries, else how many it changed or moved */
+const changedText = (added: number, removed: number, touched: number) =>
+  added || removed ? `+${added} −${removed}` : String(touched);
+const ChangeMark = ({ c }: { c?: SlotChange }) =>
+  c ? <span className={`ev-mark ev-mark-${c}`}>{CHANGE_WORD[c]}</span> : null;
+
+/** When the drawer is too narrow for a word on each row, rows keep their coloured edge and this names the colours */
+const ChangeLegend = ({ change, removed }: { change: Map<number, SlotChange>; removed: number }) => {
+  const kinds = (["new", "moved", "changed"] as SlotChange[]).filter((k) => [...change.values()].includes(k));
+  if (!kinds.length && !removed) return null;
+  return (
+    <div className="measure-legend ev-mark-legend">
+      {kinds.map((k) => (
+        <span key={k}>
+          <i className={`lg-edge lg-edge-${k}`} /> {CHANGE_WORD[k]}
+        </span>
+      ))}
+      {removed > 0 && <span className="lg-struck">removed</span>}
+    </div>
+  );
+};
 
 const Legend = ({ items }: { items: Array<[string, string]> }) => (
   <div className="measure-legend">
@@ -149,7 +213,7 @@ function valueText(
 const barPos = (r: ChangeRow, v: number) =>
   r.s === "db" ? pct(v, -60, 6) : r.s === "pan" ? pct(v, -1, 1) : pct(v, 0, 1);
 
-function Changes({ rows }: { rows: ChangeRow[] }) {
+function Changes({ rows, more = 0 }: { rows: ChangeRow[]; more?: number }) {
   return (
     <>
       <div className="ev-rows">
@@ -164,7 +228,7 @@ function Changes({ rows }: { rows: ChangeRow[] }) {
               key={i}
               className={`ev-row ${same ? "ev-same" : ""} ${hot ? "ev-hot" : ""}`}
             >
-              <span className="ev-name">
+              <span className="ev-name" title={`${r.t} · ${label}`}>
                 {r.t}
                 <small>{label}</small>
               </span>
@@ -191,6 +255,9 @@ function Changes({ rows }: { rows: ChangeRow[] }) {
           );
         })}
       </div>
+      {more > 0 && (
+        <div className="ev-more">+{plural(more, "more parameter")} not drawn</div>
+      )}
       {rows.some((r) => r.a !== undefined && r.a !== r.b) && (
         <Legend
           items={[
@@ -287,6 +354,16 @@ function envDomain(
         [-1, "−1"],
       ],
     };
+  if (unit === "cc")
+    return {
+      top: 127,
+      bottom: 0,
+      ticks: [
+        [127, "127"],
+        [64, "64"],
+        [0, "0"],
+      ],
+    };
   if (unit === "mute")
     return {
       top: 1.15,
@@ -330,10 +407,15 @@ const envValue = (unit: string, v: number) =>
         : `${v > 0 ? "+" : "−"}${Math.round(Math.abs(v) * 100)}%`
       : unit === "mute"
         ? String(v >= 0.5 ? 1 : 0)
-        : v.toFixed(3);
+        : unit === "cc"
+          ? String(Math.round(v))
+          : v.toFixed(3);
 
 function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) {
   const [hover, setHover] = useState<EnvPoint | null>(null);
+  // CC lanes count beats from the item start (beat 1 = the item's first beat); automation is project time
+  const when = (t: number, digits = 1) =>
+    v.beats ? `beat ${+(t + 1).toFixed(digits === 2 ? 2 : 1)}` : clock(t, digits);
   const span = Math.max(0.001, v.to - v.from);
   const vals = [...v.pts, ...(v.was ?? [])].map((p) => p[1]);
   const { top, bottom, ticks } = envDomain(v.unit, vals.length ? vals : [0]);
@@ -361,8 +443,12 @@ function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) {
   return (
     <>
       <div className="measure-readouts">
-        <Readout label="Envelope" value={v.env} />
-        <Readout label="Points" value={String(v.count)} />
+        <Readout
+          label={v.unit === "cc" ? "CC" : "Envelope"}
+          value={v.unit === "cc" ? v.env.split(" · ")[0].replace(/^CC /, "") : v.env}
+          unit={v.unit === "cc" ? v.env.split(" · ")[1] : undefined}
+        />
+        <Readout label={v.unit === "cc" ? "Events" : "Points"} value={String(v.count)} />
         {v.was && (
           <Readout
             label="Changed"
@@ -389,7 +475,7 @@ function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) {
             viewBox={`0 0 ${EW} ${EH}`}
             preserveAspectRatio="none"
             role="img"
-            aria-label={`${v.env} automation from ${clock(v.from, 1)} to ${clock(v.to, 1)}`}
+            aria-label={`${v.env} automation from ${when(v.from, 1)} to ${when(v.to, 1)}`}
           >
             {ticks.map(([d]) => (
               <line
@@ -428,7 +514,7 @@ function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) {
               key={`r${i}`}
               className="ev-dot ev-dot-gone"
               style={dot(x(p[0]), y(p[1]))}
-              title={`Removed: ${clock(p[0], 2)} · ${envValue(v.unit, p[1])}`}
+              title={`Removed: ${when(p[0], 2)} · ${envValue(v.unit, p[1])}`}
             />
           ))}
           {v.pts.filter(inView).map((p, i) => (
@@ -445,15 +531,20 @@ function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) {
                 left: `${Math.min(80, Math.max(20, (x(hover[0]) / EW) * 100))}%`,
               }}
             >
-              {clock(hover[0], 2)} · {envValue(v.unit, hover[1])}
+              {when(hover[0], 2)} · {envValue(v.unit, hover[1])}
             </div>
           )}
         </div>
       </div>
       <div className="measure-scale-words mono ev-gutter">
-        <span>{clock(v.from, 1)}</span>
-        <span>{clock(v.to, 1)}</span>
+        <span>{when(v.from, 1)}</span>
+        <span>{when(v.to, 1)}</span>
       </div>
+      {v.otherCcs && (
+        <div className="ev-more">
+          +{plural(v.otherCcs, "other controller")} in this item (filter with ccNumber)
+        </div>
+      )}
       {v.was && (
         <Legend
           items={[
@@ -690,9 +781,12 @@ function MidiStats({ v }: { v: Extract<EditView, { kind: "midiStats" }> }) {
             <span className="ev-val mono">
               ×{count} · {min === max ? min : `${min}–${max}`}
               {gun > 0 && (
-                <span className="ev-word">
+                <span
+                  className="ev-word"
+                  title={`${gun} notes in a row at one velocity`}
+                >
                   {" "}
-                  · {gun} in a row at one velocity
+                  · {gun} in a row
                 </span>
               )}
             </span>
@@ -761,8 +855,60 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
   const changed = regions.added.size + markers.added.size + tempos.added.size;
   const removed =
     regions.removed.length + markers.removed.length + tempos.removed.length;
+  // Dense markers on a narrow drawer: only the labels that fit are drawn, the rest show on hover
+  const [laneRef, laneW] = useWidth<HTMLDivElement>();
+  const marks = [...markers.removed, ...v.markers];
+  const labelled = fittingLabels(
+    marks.map((m) => [pct(m[0], 0, len) / 100, String(m[1] || m[3])]),
+    laneW || 1e6,
+    new Set(
+      marks.flatMap((m, i) =>
+        i < markers.removed.length || markers.added.has(m) ? [i] : [],
+      ),
+    ),
+  );
+  const time = v.sel !== undefined || v.cur !== undefined || v.wasSel !== undefined;
+  // On an item or selection view the markers are only context: their names show on hover
+  const context = time || v.lanes !== undefined;
+  const quiet = (i: number) => (!context && labelled.has(i) ? "" : "ev-quiet");
+  // A region too narrow for a letter or two shows its colour only
+  const roomy = (r: Region) =>
+    !laneW || ((r[1] - r[0]) / len) * laneW >= 28;
+  const lanes = v.lanes ?? [];
+  const laneDiffs = lanes.map((l) => timelineDiff<Item>(l.items, l.was));
+  const itemsAdded = laneDiffs.reduce((n, d) => n + d.added.size, 0);
+  const itemsRemoved = laneDiffs.reduce((n, d) => n + d.removed.length, 0);
+  const itemWrite = lanes.some((l) => l.was);
   return (
     <>
+      {time ? (
+        <div className="measure-readouts">
+          <Readout label="Selection" value={v.sel ? clock(v.sel[0], 1) : "none"} />
+          <Readout label="End" value={v.sel ? clock(v.sel[1], 1) : "–"} />
+          <Readout
+            label="Length"
+            value={v.sel ? (v.sel[1] - v.sel[0]).toFixed(1) : "–"}
+            unit={v.sel ? "s" : undefined}
+          />
+          <Readout label="Cursor" value={clock(v.cur ?? 0, 1)} />
+        </div>
+      ) : v.lanes ? (
+        <div className="measure-readouts">
+          <Readout
+            label="Items"
+            value={String(lanes.reduce((n, l) => n + l.items.length, 0))}
+          />
+          {itemWrite ? (
+            <Readout label="Changed" value={`+${itemsAdded} −${itemsRemoved}`} />
+          ) : (
+            <Readout
+              label="MIDI"
+              value={String(lanes.reduce((n, l) => n + l.items.filter((it) => it[4]).length, 0))}
+            />
+          )}
+          <Readout label={lanes.length > 1 ? "Tracks" : "Track"} value={lanes.map((l) => l.t).join(", ")} />
+        </div>
+      ) : (
       <div className="measure-readouts">
         <Readout
           label="Tempo"
@@ -779,20 +925,40 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
         {v.was ? (
           <Readout label="Changed" value={`+${changed} −${removed}`} />
         ) : (
-          <Readout
-            label="Marks"
-            value={`${v.regions.length} / ${v.markers.length}`}
-            unit="rgn / mkr"
-          />
+          <>
+            <Readout label="Regions" value={String(v.regions.length)} />
+            <Readout label="Markers" value={String(v.markers.length)} />
+          </>
         )}
       </div>
-      <div className="ev-timeline">
+      )}
+      <div className="ev-timeline" ref={laneRef}>
+        {v.wasSel && (
+          <span
+            className="ev-sel ev-sel-was"
+            style={{ left: at(v.wasSel[0]), width: `${pct(v.wasSel[1], 0, len) - pct(v.wasSel[0], 0, len)}%` }}
+            title={`Selection before: ${clock(v.wasSel[0], 1)}–${clock(v.wasSel[1], 1)}`}
+          />
+        )}
+        {v.sel && (
+          <span
+            className="ev-sel"
+            style={{ left: at(v.sel[0]), width: `${pct(v.sel[1], 0, len) - pct(v.sel[0], 0, len)}%` }}
+            title={`Selection ${clock(v.sel[0], 1)}–${clock(v.sel[1], 1)}`}
+          />
+        )}
+        {v.wasCur !== undefined && v.wasCur !== v.cur && (
+          <span className="ev-cur ev-cur-was" style={{ left: at(v.wasCur) }} title={`Cursor before: ${clock(v.wasCur, 1)}`} />
+        )}
+        {v.cur !== undefined && (
+          <span className="ev-cur" style={{ left: at(v.cur) }} title={`Cursor ${clock(v.cur, 1)}`} />
+        )}
         {(v.markers.length > 0 || markers.removed.length > 0) && (
-          <div className="ev-lane ev-lane-markers">
-            {markers.removed.map((m) => (
+          <div className={`ev-lane ev-lane-markers ${context ? "ev-lane-context" : ""}`}>
+            {markers.removed.map((m, i) => (
               <span
                 key={`r${m[3]}${m[0]}`}
-                className="ev-marker ev-gone"
+                className={`ev-marker ev-gone ${quiet(i)}`}
                 style={{ left: at(m[0]) }}
                 title={`Removed: ${m[1] || `Marker ${m[3]}`} at ${clock(m[0], 1)}`}
               >
@@ -800,10 +966,10 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
                 <b>{m[1] || m[3]}</b>
               </span>
             ))}
-            {v.markers.map((m) => (
+            {v.markers.map((m, i) => (
               <span
                 key={`${m[3]}${m[0]}`}
-                className={`ev-marker ${markers.added.has(m) ? "ev-new" : ""}`}
+                className={`ev-marker ${markers.added.has(m) ? "ev-new" : ""} ${quiet(markers.removed.length + i)}`}
                 style={
                   {
                     left: at(m[0]),
@@ -843,38 +1009,20 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
               }
               title={`${r[2] || `Region ${r[4]}`} · ${clock(r[0], 1)}–${clock(r[1], 1)}`}
             >
-              {r[2]}
+              {roomy(r) && r[2]}
             </span>
           ))}
         </div>
-        {v.items && (
-          <div className="ev-lane ev-lane-items">
-            {v.items.map((it, i) => (
-              <span
-                key={i}
-                className={`ev-item ${it[4] ? "ev-item-midi" : ""} ${it[5] ? "ev-item-muted" : ""}`}
-                style={{
-                  left: at(it[0]),
-                  width: `calc(${pct(it[0] + it[1], 0, len) - pct(it[0], 0, len)}% - 1px)`,
-                }}
-                title={`${it[4] ? "MIDI" : "Audio"} item · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}${it[5] ? " · muted" : ""}`}
-              >
-                {it[2] > 0 && (
-                  <i
-                    className="ev-fade-in"
-                    style={{ width: `${(it[2] / it[1]) * 100}%` }}
-                  />
-                )}
-                {it[3] > 0 && (
-                  <i
-                    className="ev-fade-out"
-                    style={{ width: `${(it[3] / it[1]) * 100}%` }}
-                  />
-                )}
-              </span>
-            ))}
-          </div>
-        )}
+        {v.items && <ItemsLane items={v.items} len={len} />}
+        {v.lanes?.map((lane, i) => (
+          <ItemsLane
+            key={i}
+            items={lane.items}
+            was={lane.was}
+            len={len}
+            name={lane.t}
+          />
+        ))}
         {(varies || tempos.added.size > 0 || tempos.removed.length > 0) && (
           <TempoLane
             tempo={v.tempo}
@@ -889,6 +1037,22 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
         <span>{clock(len / 2)}</span>
         <span>{clock(len)}</span>
       </div>
+      {(itemsAdded > 0 || itemsRemoved > 0) && (
+        <Legend
+          items={[
+            ["lg-new-mark", "Added or changed"],
+            ["lg-gone-mark", "Before"],
+          ]}
+        />
+      )}
+      {time && (v.wasSel !== undefined || v.wasCur !== undefined) && (
+        <Legend
+          items={[
+            ["lg-sel", "Now"],
+            ["lg-gone-mark", "Before"],
+          ]}
+        />
+      )}
       {v.was && (changed > 0 || removed > 0) && (
         <Legend
           items={[
@@ -973,13 +1137,24 @@ function TempoLane({
 
 // ── Mixer ────────────────────────────────────────────────────────────────────
 
-function MixerRow({ row, master }: { row: MixRow; master?: boolean }) {
+function MixerRow({
+  row,
+  master,
+  c,
+  gone,
+}: {
+  row: MixRow;
+  master?: boolean;
+  c?: SlotChange;
+  gone?: boolean;
+}) {
   const [name, depth, color, db, pan, flags] = row;
   const hot = db > 0;
   const folder = flags.includes("F");
   return (
     <div
-      className={`ev-trk ${master ? "ev-trk-master" : ""} ${flags.includes("M") ? "ev-trk-muted" : ""}`}
+      className={`ev-trk ${master ? "ev-trk-master" : ""} ${flags.includes("M") ? "ev-trk-muted" : ""} ${c ? `ev-slot-${c}` : ""} ${gone ? "ev-slot-gone" : ""}`}
+      title={`${name} · ${fmt(db)} dB · pan ${panText(pan)}${gone ? " · removed" : c ? ` · ${CHANGE_WORD[c]}` : ""}`}
     >
       <span
         className="ev-sw"
@@ -990,10 +1165,16 @@ function MixerRow({ row, master }: { row: MixRow; master?: boolean }) {
       <span
         className={`ev-tn ${folder ? "ev-tn-folder" : ""}`}
         style={{ paddingLeft: `${Math.min(depth, 4) * 12}px` }}
-        title={name}
       >
-        {folder ? "▾ " : ""}
-        {name}
+        <span className="ev-tn-text">
+          {folder ? "▾ " : ""}
+          {name}
+        </span>
+        {gone ? (
+          <span className="ev-mark ev-mark-gone">removed</span>
+        ) : (
+          <ChangeMark c={c} />
+        )}
       </span>
       <span
         className="ev-bar ev-fader"
@@ -1042,17 +1223,38 @@ function MixerRow({ row, master }: { row: MixRow; master?: boolean }) {
 }
 
 function Mixer({ v }: { v: Extract<EditView, { kind: "mixer" }> }) {
+  // Structure edits carry each track's id before and after, so added, removed and moved tracks can be told apart
+  const was = v.ids && v.was ? v.was : undefined;
+  const ids = v.ids ?? [];
+  const d = listDiff(
+    v.tracks.map((t, i): [string, MixRow] => [ids[i] ?? "", t]),
+    was?.tracks.map((t, i): [string, MixRow] => [was.ids[i] ?? "", t]),
+    (t) => t[0],
+    (a, b) => JSON.stringify(a[1]) === JSON.stringify(b[1]),
+  );
+  const added = [...d.change.values()].filter((c) => c === "new").length;
   return (
     <>
+      {was && (
+        <div className="measure-readouts">
+          <Readout label="Tracks" value={String(v.total)} />
+          <Readout label="Changed" value={changedText(added, d.removed.length, d.change.size + d.removed.length)} />
+        </div>
+      )}
+      {(v.from ?? 0) > 0 && <div className="ev-more">{plural(v.from ?? 0, "track")} above</div>}
       <div className="ev-mix">
         {v.tracks.map((t, i) => (
-          <MixerRow key={i} row={t} />
+          <MixerRow key={ids[i] ?? i} row={t} c={d.change.get(i)} />
+        ))}
+        {d.removed.map(([i, t]) => (
+          <MixerRow key={`gone${i}`} row={t[1]} gone />
         ))}
         {v.master && <MixerRow row={v.master} master />}
       </div>
-      {v.total > v.tracks.length && (
+      {was && <ChangeLegend change={d.change} removed={d.removed.length} />}
+      {v.total > (v.from ?? 0) + v.tracks.length && (
         <div className="ev-more">
-          +{v.total - v.tracks.length} more tracks not drawn
+          +{v.total - (v.from ?? 0) - v.tracks.length} more tracks not drawn
         </div>
       )}
     </>
@@ -1088,5 +1290,246 @@ function Plan({ v }: { v: Extract<EditView, { kind: "plan" }> }) {
         <div className="ev-more">A dry run: checked, nothing written.</div>
       )}
     </>
+  );
+}
+
+// ── FX chain ─────────────────────────────────────────────────────────────────
+
+/** "VST3: Pro-Q 3 (FabFilter)" → "Pro-Q 3"; the full name stays in the tooltip */
+const fxShort = (name: string) =>
+  name.replace(/^[A-Z0-9]+i?:\s*/, "").replace(/\s*\([^()]*\)$/, "") || name;
+const sameSlot = (a: FxSlot, b: FxSlot) =>
+  a[0] === b[0] && a[1] === b[1] && a[3] === b[3];
+
+function FxChains({ v }: { v: Extract<EditView, { kind: "fxChain" }> }) {
+  const diffs = v.chains.map((c) =>
+    listDiff(c.fx, c.was, (f, i) => f[2] || `${i}:${f[0]}`, sameSlot),
+  );
+  const added = diffs.reduce(
+    (n, d) => n + [...d.change.values()].filter((c) => c === "new").length,
+    0,
+  );
+  const removed = diffs.reduce((n, d) => n + d.removed.length, 0);
+  const touched = diffs.reduce((n, d) => n + d.change.size, 0) + removed;
+  const write = v.chains.some((c) => c.was);
+  const all = v.chains.flatMap((c) => c.fx);
+  return (
+    <>
+      <div className="measure-readouts">
+        <Readout
+          label={v.chains.length > 1 ? "Tracks" : "Track"}
+          value={v.chains.map((c) => c.t).join(" → ")}
+        />
+        <Readout label="FX" value={String(all.length)} />
+        {write ? (
+          <Readout label="Changed" value={changedText(added, removed, touched)} />
+        ) : (
+          <Readout
+            label="Bypassed"
+            value={String(all.filter((f) => f[1].includes("B")).length)}
+          />
+        )}
+      </div>
+      {v.chains.map((c, ci) => (
+        <FxChainList key={ci} chain={c} diff={diffs[ci]} named={v.chains.length > 1} />
+      ))}
+      {write && touched === 0 && (
+        <div className="ev-more">Nothing in the chain changed</div>
+      )}
+    </>
+  );
+}
+
+function FxChainList({
+  chain,
+  diff,
+  named,
+}: {
+  chain: FxChain;
+  diff: ReturnType<typeof listDiff<FxSlot>>;
+  named: boolean;
+}) {
+  return (
+    <div className="ev-chain">
+      {named && <div className="ev-lane-name">{chain.t}</div>}
+      {chain.fx.length === 0 && diff.removed.length === 0 && (
+        <div className="ev-more">No FX on this track</div>
+      )}
+      <ol className="ev-slots">
+        {chain.fx.map((f, i) => {
+          const c = diff.change.get(i);
+          const was = chain.was?.find((w) => w[2] && w[2] === f[2]);
+          return (
+            <li
+              key={`${f[2]}${i}`}
+              className={`ev-slot ${f[1].includes("B") ? "ev-slot-bypassed" : ""} ${f[1].includes("O") ? "ev-slot-offline" : ""} ${c ? `ev-slot-${c}` : ""}`}
+              title={[f[0], f[3] && `preset ${f[3]}`, was && was[0] !== f[0] && `was ${was[0]}`].filter(Boolean).join(" · ")}
+            >
+              <span className="ev-op-n mono">{i + 1}</span>
+              <span className="ev-slot-name">
+                {fxShort(f[0])}
+                {f[3] && <small>{f[3]}</small>}
+              </span>
+              <span className="ev-slot-state">
+                {f[1].includes("O") ? "offline" : f[1].includes("B") ? "bypassed" : ""}
+                <ChangeMark c={c} />
+              </span>
+            </li>
+          );
+        })}
+        {diff.removed.map(([i, f]) => (
+          <li key={`gone${f[2]}${i}`} className="ev-slot ev-slot-gone" title={`Removed: ${f[0]}`}>
+            <span className="ev-op-n mono">{i + 1}</span>
+            <span className="ev-slot-name">{fxShort(f[0])}</span>
+            <span className="ev-slot-state">
+              <span className="ev-mark ev-mark-gone">removed</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+// ── Routing ──────────────────────────────────────────────────────────────────
+
+const ROUTE_KIND: Record<Route[0], [string, string]> = {
+  s: ["→", "Send to"],
+  r: ["←", "Receive from"],
+  h: ["⇥", "Hardware output"],
+};
+const sameRoute = (a: Route, b: Route) =>
+  a[2] === b[2] && a[3] === b[3] && a[4] === b[4];
+
+function Routing({ v }: { v: Extract<EditView, { kind: "routing" }> }) {
+  const ids = routeIds(v.routes);
+  const wasIds = v.was ? routeIds(v.was) : [];
+  const diff = listDiff(
+    v.routes.map((r, i): [string, Route] => [ids[i], r]),
+    v.was?.map((r, i): [string, Route] => [wasIds[i], r]),
+    (r) => r[0],
+    (a, b) => sameRoute(a[1], b[1]),
+  );
+  const count = (k: Route[0]) => v.routes.filter((r) => r[0] === k).length;
+  return (
+    <>
+      <div className="measure-readouts">
+        <Readout label="Track" value={v.t} />
+        <Readout label="Sends" value={String(count("s") + count("h"))} />
+        <Readout label="Receives" value={String(count("r"))} />
+      </div>
+      {v.routes.length === 0 && diff.removed.length === 0 ? (
+        <div className="ev-more">No sends, receives or hardware outputs</div>
+      ) : (
+        <div className="ev-mix">
+          {v.routes.map((r, i) => {
+            const c = diff.change.get(i);
+            const before = c === "changed" ? v.was?.[wasIds.indexOf(ids[i])] : undefined;
+            return <RouteRow key={ids[i]} r={r} c={c} was={before} />;
+          })}
+          {diff.removed.map(([i, r]) => (
+            <RouteRow key={`gone${wasIds[i]}`} r={r[1]} gone />
+          ))}
+        </div>
+      )}
+      {v.was && <ChangeLegend change={diff.change} removed={diff.removed.length} />}
+      {v.was && diff.change.size + diff.removed.length > 0 && (
+        <Legend
+          items={[
+            ["lg-was", "Before"],
+            ["lg-tick", "After"],
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
+function RouteRow({ r, c, was, gone }: { r: Route; c?: SlotChange; was?: Route; gone?: boolean }) {
+  const [kind, other, db, pan, flags] = r;
+  const [glyph, word] = ROUTE_KIND[kind];
+  const hot = db > 0;
+  return (
+    <div
+      className={`ev-trk ev-route ${flags.includes("M") ? "ev-trk-muted" : ""} ${gone ? "ev-slot-gone" : ""} ${c ? `ev-slot-${c}` : ""}`}
+      title={`${word} ${other} · ${fmt(db)} dB · pan ${panText(pan)}${flags.includes("M") ? " · muted" : ""}${was ? ` · was ${fmt(was[2])} dB, pan ${panText(was[3])}` : ""}${gone ? " · removed" : c ? ` · ${CHANGE_WORD[c]}` : ""}`}
+    >
+      <span className="ev-route-kind" aria-label={word}>
+        {glyph}
+      </span>
+      <span className="ev-tn">
+        <span className="ev-tn-text">{other}</span>
+        {gone ? <span className="ev-mark ev-mark-gone">removed</span> : <ChangeMark c={c} />}
+      </span>
+      <span className="ev-bar ev-fader" role="img" aria-label={`${fmt(db)} dB`}>
+        <span className="ev-zero" style={{ left: `${pct(0, -60, 6)}%` }} />
+        <span
+          className={`ev-fill ${hot ? "ev-fill-hot" : ""}`}
+          style={{ left: 0, width: `${pct(db, -60, 6)}%` }}
+        />
+        {was && was[2] !== db && (
+          <span className="ev-was" style={{ left: `${pct(was[2], -60, 6)}%` }} />
+        )}
+      </span>
+      <span className={`ev-tv mono zone-${hot ? "hot" : "ok"}`}>{fmt(db)}</span>
+      <span className="ev-pan" role="img" aria-label={`pan ${panText(pan)}`}>
+        <span className="ev-pan-c" />
+        <span className="ev-pan-d" style={{ left: `${pct(pan, -1, 1)}%` }} />
+      </span>
+      <span className="ev-chips">
+        <span className={`ev-chip ${flags.includes("M") ? "ev-chip-m" : ""}`}>M</span>
+      </span>
+    </div>
+  );
+}
+
+/** One track's items; with `was`, the items before the edit show dashed where they no longer are */
+function ItemsLane({
+  items,
+  was,
+  len,
+  name,
+}: {
+  items: Item[];
+  was?: Item[];
+  len: number;
+  name?: string;
+}) {
+  const at = (t: number) => `${pct(t, 0, len)}%`;
+  const width = (it: Item) =>
+    `calc(${pct(it[0] + it[1], 0, len) - pct(it[0], 0, len)}% - 1px)`;
+  const { added, removed } = timelineDiff<Item>(items, was);
+  return (
+    <div className="ev-lane-wrap">
+      {name && <div className="ev-lane-name">{name}</div>}
+      <div className="ev-lane ev-lane-items">
+        {removed.map((it, i) => (
+          <span
+            key={`gone${i}`}
+            className="ev-item ev-gone"
+            style={{ left: at(it[0]), width: width(it) }}
+            title={`Before · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}`}
+          />
+        ))}
+        {items.map((it, i) => (
+          <span
+            key={i}
+            className={`ev-item ${it[4] ? "ev-item-midi" : ""} ${it[5] ? "ev-item-muted" : ""} ${added.has(it) ? "ev-new" : ""}`}
+            style={{ left: at(it[0]), width: width(it) }}
+            title={`${it[4] ? "MIDI" : "Audio"} item · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}${it[5] ? " · muted" : ""}`}
+          >
+            {it[2] > 0 && (
+              <i className="ev-fade-in" style={{ width: `${(it[2] / it[1]) * 100}%` }} />
+            )}
+            {it[3] > 0 && (
+              <i className="ev-fade-out" style={{ width: `${(it[3] / it[1]) * 100}%` }} />
+            )}
+          </span>
+        ))}
+        {items.length === 0 && removed.length === 0 && (
+          <span className="ev-more ev-lane-empty">No items</span>
+        )}
+      </div>
+    </div>
   );
 }

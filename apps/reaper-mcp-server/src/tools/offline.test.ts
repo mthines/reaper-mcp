@@ -66,10 +66,14 @@ describe('analyze_track_offline', () => {
 
     const result = await tool('analyze_track_offline')({ trackIndex: -1, startTime: 60, endTime: 180, sectionSeconds: 10 });
 
-    expect(sendCommandMock).toHaveBeenCalledTimes(1);
+    expect(sendCommandMock.mock.calls.filter(([type]) => type === 'render_track_to_wav')).toHaveLength(1);
     expect(sendCommandMock).toHaveBeenCalledWith('render_track_to_wav',
       expect.objectContaining({ trackIndex: -1, startTime: 60, endTime: 180 }), expect.any(Number));
     expect(client.analyzeAudio).toHaveBeenCalledWith({ path: '/tmp/r0.wav', sectionSeconds: 10 });
+    // …and logs a compact result for the bridge status page
+    const logged = sendCommandMock.mock.calls.find(([type]) => type === '_log_result');
+    expect(logged?.[1]).toMatchObject({ command: 'analyze_track_offline', ok: 1 });
+    expect(JSON.parse(logged?.[1].r as string)).toMatchObject({ lufs: -9.8, lra: 5.1, tp: -0.4, sections: [[60, 70, -10.2]] });
     const data = JSON.parse(result.content[0].text);
     expect(data).toMatchObject({ trackIndex: -1, trackName: 'T-1', startTime: 60, endTime: 180 });
     expect(data.loudness.integratedLufs).toBe(-9.8);
@@ -112,7 +116,7 @@ describe('analyze_audio_file', () => {
   it('analyzes a file without touching REAPER', async () => {
     const client = sidecar();
     const result = await tool('analyze_audio_file')({ path: '/refs/song.wav', startTime: 30, sectionSeconds: 10 });
-    expect(sendCommandMock).not.toHaveBeenCalled();
+    expect(sendCommandMock.mock.calls.map(([type]) => type)).toEqual(['_log_result']); // only the status page's log
     expect(client.analyzeAudio).toHaveBeenCalledWith({ path: '/refs/song.wav', startTime: 30, sectionSeconds: 10 });
     expect(JSON.parse(result.content[0].text).loudness.sections[0].start).toBe(30);
   });
@@ -125,7 +129,7 @@ describe('measure_track_alignment', () => {
 
     const result = await tool('measure_track_alignment')({ referenceTrack: 30, trackIndex: 31, startTime: 12, durationSeconds: 5, maxLagMs: 10 });
 
-    const renderCalls = sendCommandMock.mock.calls.map(([, p]) => p as Record<string, number>);
+    const renderCalls = sendCommandMock.mock.calls.filter(([type]) => type === 'render_track_to_wav').map(([, p]) => p as Record<string, number>);
     expect(renderCalls.map((p) => [p['trackIndex'], p['startTime'], p['endTime']])).toEqual([[30, 12, 17], [31, 12, 17]]);
     expect(client.align).toHaveBeenCalledWith({ referencePath: '/tmp/r0.wav', path: '/tmp/r1.wav', maxLagMs: 10 });
     const data = JSON.parse(result.content[0].text);
@@ -155,6 +159,17 @@ describe('measure_track_alignment', () => {
     expect(data.suggestedPlayOffsetMs).toBeUndefined();
     expect(data.suggestedPhase).toBeUndefined();
     expect(data.warning).toContain('below 0.3');
+  });
+
+  it('logs a silent window as a refused call with the sidecar\'s reason', async () => {
+    const client = sidecar();
+    renderOk();
+    const reason = 'The reference and track are silent in this window; pick a range where both play';
+    client.align.mockResolvedValue({ delaySamples: null, delayMs: null, correlation: null, polarityInverted: null, error: reason });
+    await tool('measure_track_alignment')({ referenceTrack: 1, trackIndex: 2, startTime: 0 });
+    const logged = sendCommandMock.mock.calls.find(([type]) => type === '_log_result');
+    expect(logged?.[1]).toMatchObject({ command: 'measure_track_alignment', ok: 0, e: reason });
+    expect(logged?.[1]).not.toHaveProperty('r');
   });
 
   it('cleans up the first render when the second fails', async () => {

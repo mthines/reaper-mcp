@@ -86,6 +86,30 @@ function measurementStories(): Story[] {
   const waveClipped = call('render_track_to_wav', { ...render, trackIndex: 1 }, { ...waveform(1.1, 0.06), rmsDb: -11.2, clipped: 37 }, { ms: 1043 });
   const waveQuiet = call('render_track_to_wav', { ...render, trackIndex: 2 }, { ...waveform(0.06, 0.004), rmsDb: -42.5, clipped: 0 }, { ms: 870 });
 
+  // Sidecar tools, logged by the server with `_log_result`
+  const SONG_SECTIONS = [-16.2, -15.8, -11.4, -9.6, -9.1, -12.8, -15.1, -9.2, -8.7, -9.4, -14, -18.5].map((l, i) => [i * 15, i * 15 + 15, l]);
+  const offlineR = {
+    name: 'Master', lufs: -10.4, lra: 6.8, tp: -0.6, peak: -0.9, crest: 9.1, dur: 180, sib: 4,
+    sections: SONG_SECTIONS, bands: [-15.2, -4.6, -8.9, -6.1, -11.8, -16.4, -18.9], res: [[315, 6.2], [2480, 4.1]],
+  };
+  const offline = call('analyze_track_offline', { trackIndex: -1, startTime: 0, durationSeconds: 180, sectionSeconds: 15 }, offlineR, { ms: 11_840 });
+  const offlineRef = call('analyze_track_offline', { trackIndex: -1, durationSeconds: 180, referencePath: '/refs/Pop Ref.wav' }, {
+    ...offlineR, ref: { lufs: -8.6, delta: -1.8, bands: [-0.8, 3.4, 1.2, 0.2, -1.6, -3.7, -2.9] },
+  }, { ms: 14_210 });
+  const audioFile = call('analyze_audio_file', { path: '/refs/Pop Ref.wav', sectionSeconds: 15 }, {
+    ...offlineR, name: 'Pop Ref.wav', lufs: -8.6, lra: 4.2, tp: -0.1, crest: 7.4, sib: 0, res: [],
+    sections: SONG_SECTIONS.map(([a, b, l]) => [a, b, l + 1.6]),
+  }, { ms: 2_930 });
+  const align = call('measure_track_alignment', { referenceTrack: 2, trackIndex: 3, startTime: 12 }, {
+    ref: 'Snare Top', name: 'Snare Btm', delayMs: 0.84, samples: 37, corr: 0.93, inv: 1, cur: 0, offset: -0.84, phase: 1,
+  }, { ms: 3_120 });
+  const alignUnsure = call('measure_track_alignment', { referenceTrack: 2, trackIndex: 9, startTime: 12 }, {
+    ref: 'Snare Top', name: 'Room', delayMs: -9.84, samples: -434, corr: 0.01, inv: 0, cur: 0, warn: 1,
+  }, { ms: 3_040 });
+  const aesthetics = call('analyze_track_aesthetics', { trackIndex: -1, startTime: 60 }, {
+    name: 'Master', pq: 7.42, pc: 5.81, ce: 6.66, cu: 7.05, lufs: -18, dur: 30,
+  }, { ms: 6_400 });
+
   return [
     story('Meters', meters, 'Comfortable levels'),
     story('Meters · hot', metersHot, 'Peaks above −6 dB turn amber, previous call ghosted', earlier(metersHot, { peakL: -6.8, peakR: -7.4, rmsL: -18.2, rmsR: -18.9 })),
@@ -102,6 +126,12 @@ function measurementStories(): Story[] {
     story('Waveform', wave, 'A render’s waveform on a dB scale; hover for values', earlier(wave, { ...waveform(0.45), rmsDb: -21.2, clipped: 0 })),
     story('Waveform · clipped', waveClipped, 'Clipped samples counted and named'),
     story('Waveform · quiet', waveQuiet, 'Quiet material still fills the height'),
+    story('Offline analysis', offline, 'Sections, band balance, resonances; previous call ghosted', earlier(offline, { ...offlineR, lufs: -11.6 })),
+    story('Offline · against a reference', offlineRef, 'Loudness and band balance against a reference file'),
+    story('Audio file', audioFile, 'A reference on disk, no REAPER involved', earlier(audioFile, { ...offlineR, lufs: -8.6 })),
+    story('Alignment', align, 'Bottom mic 0.84 ms late and inverted; the fix', earlier(align, { ref: 'Snare Top', name: 'Snare Btm', delayMs: 0.02, samples: 1, corr: 0.95, inv: 0, cur: -0.84, offset: -0.84, phase: 1 })),
+    story('Alignment · unsure', alignUnsure, 'Low correlation: no fix suggested'),
+    story('Aesthetics', aesthetics, 'Four scores on 0–10; previous call ghosted', earlier(aesthetics, { name: 'Master', pq: 7.18, pc: 5.9, ce: 6.4, cu: 6.95, lufs: -18, dur: 30 })),
   ];
 }
 
@@ -164,6 +194,13 @@ function editStories(): Story[] {
     hist: [0, 0, 0, 0, 0, 0, 0, 2, 7, 18, 62, 23, 8],
   });
   const markers = call('list_markers', {}, { regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO, len: 200 });
+  // A real session's density: twelve markers in six minutes, several seconds apart (the labels have to give way)
+  const denseMarkers: Array<[number, string, string, number]> = [
+    [0, 'COUNT', '', 1], [4, 'PRESET', '', 2], [62, '12 Ret guitar', '', 3], [70, 'Fill', '', 4], [96, 'Ret guitar', '', 5],
+    [100, 'Drop', '', 6], [150, 'Lead', '', 7], [208, 'TILFØJ', '', 8], [212, 'Stik', '', 9], [216, 'Solo', '', 10],
+    [300, 'Break', '', 11], [330, 'END', '', 12],
+  ];
+  const dense = call('list_markers', {}, { regions: SONG_REGIONS.map((r) => [Number(r[0]) * 1.8, Number(r[1]) * 1.8, r[2], r[3], r[4]]), markers: denseMarkers, tempo: SONG_TEMPO, len: 366 });
   const added = call('add_marker', { position: 80, name: 'Drop' }, {
     regions: SONG_REGIONS, markers: [SONG_MARKERS[0], [80, 'Drop', '', 2], SONG_MARKERS[1]], tempo: SONG_TEMPO, len: 200,
     was: { regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO },
@@ -185,6 +222,81 @@ function editStories(): Story[] {
     ],
     master: ['Master', 0, '', -0.3, 0, ''],
   });
+  const MIX = [
+    ['Drums', 0, '#f9a8d4', -3, 0, 'F'], ['Kick', 1, '#f9a8d4', -4.5, 0, ''], ['Snare', 1, '#f9a8d4', -8, 0.05, ''],
+    ['Bass', 0, '#fcd34d', -12, 0, ''], ['Vox', 0, '#7cc4ff', 1.5, 0, ''], ['Old Vox', 0, '', -9, 0, 'M'],
+  ];
+  const MIX_IDS = ['d1', 'k2', 's3', 'b4', 'v5', 'o6'];
+  const structure = call('add_track', { name: 'Vox Bus', index: 5 }, {
+    total: 6,
+    // Vox Bus added, Old Vox deleted earlier in the same plan, Bass moved above the drums
+    tracks: [MIX[3], MIX[0], MIX[1], MIX[2], MIX[4], ['Vox Bus', 0, '#7cc4ff', 0, 0, '']],
+    ids: ['b4', 'd1', 'k2', 's3', 'v5', 'vb7'],
+    was: { tracks: MIX, ids: MIX_IDS },
+    master: ['Master', 0, '', -0.3, 0, ''],
+  });
+  const VOX_CHAIN = [
+    ['VST3: Pro-Q 3 (FabFilter)', '', 'a1', ''], ['VST3: Pro-C 2 (FabFilter)', '', 'b2', 'Vocal Leveler'],
+    ['JS: De-esser', '', 'c3', ''], ['VST3: Saturn 2 (FabFilter)', '', 'd4', ''],
+  ];
+  const fxBypass = call('set_fx_enabled', track(8, { fxIndex: 3, enabled: 0 }), {
+    chains: [{ t: 'Vox', fx: [...VOX_CHAIN.slice(0, 3), ['VST3: Saturn 2 (FabFilter)', 'B', 'd4', '']], was: VOX_CHAIN }],
+  });
+  const fxAdded = call('add_fx', track(8, { fxName: 'ReaComp', position: 1 }), {
+    chains: [{ t: 'Vox', fx: [VOX_CHAIN[0], ['VST: ReaComp (Cockos)', '', 'e5', ''], VOX_CHAIN[1], VOX_CHAIN[3]], was: VOX_CHAIN }],
+  });
+  const fxMoved = call('move_fx', track(8, { fxIndex: 2, toTrackIndex: 9, toFxIndex: 0 }), {
+    chains: [
+      { t: 'Vox', fx: [VOX_CHAIN[0], VOX_CHAIN[1], VOX_CHAIN[3]], was: VOX_CHAIN },
+      { t: 'Vox Dbl', fx: [VOX_CHAIN[2], ['VST3: Pro-Q 3 (FabFilter)', 'O', 'f6', '']], was: [['VST3: Pro-Q 3 (FabFilter)', 'O', 'f6', '']] },
+    ],
+  });
+  const fxListed = call('get_track_properties', track(8), {
+    chains: [{ t: 'Vox', fx: [...VOX_CHAIN.slice(0, 3), ['VST3: Saturn 2 (FabFilter)', 'BO', 'd4', '']] }],
+  });
+  const routing = call('add_send', { from: 'Vox', to: 'Vox Bus', volume: -6 }, {
+    t: 'Vox',
+    routes: [['s', 'Verb', -12, 0, ''], ['s', 'Vox Bus', -6, 0, ''], ['s', 'Delay', -16, -0.3, 'M'], ['h', 'Out 3/4', 0, 0, '']],
+    was: [['s', 'Verb', -14, 0, ''], ['s', 'Delay', -16, -0.3, 'M'], ['h', 'Out 3/4', 0, 0, ''], ['r', 'Vox Dbl', -3, 0, '']],
+  });
+  const routingListed = call('get_track_routing', track(10), {
+    t: 'Verb', routes: [['r', 'Vox', -12, 0, ''], ['r', 'Gtr L', -18, -0.6, ''], ['r', 'Gtr R', -18, 0.6, ''], ['r', 'Snare', -20, 0, 'M']],
+  });
+  const ITEMS = [[16, 30, 0.5, 2, 0, 0], [48, 31, 0, 0.5, 0, 0], [112, 31, 0, 0, 0, 0]];
+  const itemMoved = call('move_media_item', track(4, { itemIndex: 1, newTrackIndex: 5, newPosition: 82 }), {
+    regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO, len: 200,
+    lanes: [
+      { t: 'Gtr L', items: [ITEMS[0], ITEMS[2]], was: ITEMS },
+      { t: 'Gtr R', items: [[82, 31, 0, 0.5, 0, 0], [160, 31, 0, 4, 0, 0]], was: [[160, 31, 0, 4, 0, 0]] },
+    ],
+  });
+  const itemSplit = call('split_media_item', track(4, { itemIndex: 0, position: 30 }), {
+    regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO, len: 200,
+    lanes: [{ t: 'Gtr L', items: [[16, 14, 0.5, 0, 0, 0], [30, 16, 0, 2, 0, 0], ITEMS[1], ITEMS[2]], was: ITEMS }],
+  });
+  const midiItems = call('list_midi_items', track(7), {
+    regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO, len: 200,
+    lanes: [{ t: 'Keys', items: [[16, 32, 0, 0, 1, 0], [48, 32, 0, 0, 1, 0], [112, 32, 0, 0, 1, 1], [160, 32, 0, 0, 1, 0]] }],
+  });
+  const selection = call('set_time_selection', { start: 48, end: 80 }, {
+    regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO, len: 200,
+    sel: [48, 80], cur: 48, wasSel: [16, 48], wasCur: 12.5,
+  });
+  const fxParams = call('get_fx_parameters', track(8, { fxIndex: 1 }), {
+    more: 41,
+    rows: [
+      { t: 'Pro-C 2', p: 'Threshold', s: 'norm', b: 0.62, bt: '−18.0 dB' },
+      { t: 'Pro-C 2', p: 'Ratio', s: 'norm', b: 0.3, bt: '3.0:1' },
+      { t: 'Pro-C 2', p: 'Attack', s: 'norm', b: 0.18, bt: '4.5 ms' },
+      { t: 'Pro-C 2', p: 'Release', s: 'norm', b: 0.44, bt: '120 ms' },
+      { t: 'Pro-C 2', p: 'Knee', s: 'norm', b: 0.5, bt: '12 dB' },
+    ],
+  });
+  const cc = call('insert_midi_cc', { trackIndex: 7, itemIndex: 0, ccNumber: 11, value: 30, position: 12 }, {
+    env: 'CC 11 · Expression', unit: 'cc', beats: 1, from: 0, to: 17, count: 9, otherCcs: 2,
+    pts: [[0, 64, 1], [2, 80, 1], [4, 96, 1], [6, 110, 1], [8, 100, 1], [10, 72, 1], [12, 30, 1], [14, 48, 1], [15.5, 90, 1]],
+    was: [[0, 64, 1], [2, 80, 1], [4, 96, 1], [6, 110, 1], [8, 100, 1], [10, 72, 1], [14, 48, 1], [15.5, 90, 1]],
+  });
   const plan = call('run_plan', { ops: '[…]', dryRun: true }, {
     total: 4, dryRun: true,
     ops: [['add_track', 'Vox Bus'], ['add_fx', '$bus · VST3: Pro-C 2'], ['add_send', 'Vox → $bus'], ['set_track', 'Vox']],
@@ -201,10 +313,24 @@ function editStories(): Story[] {
     story('Large MIDI item', big, 'First 256 of 2044 notes'),
     story('MIDI analysis', drums, 'Velocity per pitch, machine gun on the hi-hat'),
     story('Markers listed', markers, 'Regions and markers'),
+    story('Markers · dense', dense, 'Labels that would collide show on hover'),
     story('Marker added', added, 'The new marker underlined'),
     story('Tempo change', tempo, 'A 3/4 bridge at 88 BPM'),
     story('Items listed', items, 'Fades, a muted item, a MIDI item'),
     story('Mixer', mixer, 'Folders, mute, solo, arm, a hot fader'),
+    story('Tracks changed', structure, 'Added, moved and removed tracks marked'),
+    story('FX bypassed', fxBypass, 'The chain after, the bypassed slot marked'),
+    story('FX added', fxAdded, 'Inserted mid-chain; the removed one struck through'),
+    story('FX moved to another track', fxMoved, 'Both chains, before → after'),
+    story('FX chain listed', fxListed, 'Presets, a bypassed and offline slot'),
+    story('Send added', routing, 'New, changed and removed routes; was-level ghosted'),
+    story('Routing listed', routingListed, 'A bus and its receives'),
+    story('Item moved', itemMoved, 'From one track to another; where it was dashed'),
+    story('Item split', itemSplit, 'One item became two'),
+    story('MIDI items listed', midiItems, 'One lane, a muted item'),
+    story('Time selection', selection, 'Selection and cursor, where they were dashed'),
+    story('FX parameters listed', fxParams, 'The plugin’s readout, first parameters only'),
+    story('MIDI CC inserted', cc, 'A controller lane in beats, held between events'),
     story('Plan', plan, 'A dry run'),
   ];
 }

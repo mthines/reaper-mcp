@@ -28,7 +28,18 @@ export type Measurement =
   | { kind: 'correlation'; correlation?: number; stereoWidth?: number; midLevel?: number; sideLevel?: number }
   | { kind: 'crest'; crestFactor?: number; peakLevel?: number; rmsLevel?: number }
   | { kind: 'spectrum'; peakDb?: number; rmsDb?: number; fftSize?: number; sampleRate?: number; bands: number[] }
-  | { kind: 'waveform'; peakDb?: number; rmsDb?: number; clipped?: number; durationSeconds?: number; channels?: number; hi: number[]; lo: number[] };
+  | { kind: 'waveform'; peakDb?: number; rmsDb?: number; clipped?: number; durationSeconds?: number; channels?: number; hi: number[]; lo: number[] }
+  /** Offline analysis (sidecar): BS.1770 loudness, LRA, peaks, sections [start, end, LUFS], band balance (share of
+   *  energy in dB, sub..brilliance, null = silent), resonances [Hz, dB above the local spectrum], and a reference */
+  | {
+      kind: 'offline'; name?: string; lufs?: number; lra?: number; tp?: number; peak?: number; crest?: number; dur?: number; sib?: number;
+      sections: [number, number, number][]; bands: (number | null)[]; res: [number, number][];
+      ref?: { lufs?: number; delta?: number; bands: (number | null)[] };
+    }
+  /** Track alignment (sidecar): the delay against a reference track, polarity, and the playOffsetMs / phase that fix it */
+  | { kind: 'alignment'; ref?: string; name?: string; delayMs?: number; samples?: number; corr?: number; inv?: number; cur?: number; offset?: number; phase?: number; warn?: number }
+  /** Audiobox Aesthetics scores (0-10) and the level the clip was scored at */
+  | { kind: 'aesthetics'; name?: string; pq?: number; pc?: number; ce?: number; cu?: number; lufs?: number; dur?: number };
 
 const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[] }> = {
   read_track_meters: { kind: 'meters', fields: ['peakL', 'peakR', 'rmsL', 'rmsR'] },
@@ -37,6 +48,11 @@ const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[]
   read_track_crest: { kind: 'crest', fields: ['crestFactor', 'peakLevel', 'rmsLevel'] },
   read_track_spectrum: { kind: 'spectrum', fields: ['peakDb', 'rmsDb', 'fftSize', 'sampleRate'] },
   render_track_to_wav: { kind: 'waveform', fields: ['peakDb', 'rmsDb', 'clipped', 'durationSeconds', 'channels'] },
+  // Composed by the server (sidecar) and logged with `_log_result`
+  analyze_track_offline: { kind: 'offline', fields: ['lufs', 'lra', 'tp', 'peak', 'crest', 'dur', 'sib'] },
+  analyze_audio_file: { kind: 'offline', fields: ['lufs', 'lra', 'tp', 'peak', 'crest', 'dur', 'sib'] },
+  measure_track_alignment: { kind: 'alignment', fields: ['delayMs', 'samples', 'corr', 'inv', 'cur', 'offset', 'phase', 'warn'] },
+  analyze_track_aesthetics: { kind: 'aesthetics', fields: ['pq', 'pc', 'ce', 'cu', 'lufs', 'dur'] },
 };
 
 /** Every command the drawer draws a result for */
@@ -81,6 +97,27 @@ export function measurementOf(e: CommandEntry): Measurement | null {
   if (spec.kind === 'spectrum') {
     if (!isNumbers(e.r.bands)) return null;
     out.bands = e.r.bands;
+  }
+  if (spec.kind === 'offline' || spec.kind === 'alignment' || spec.kind === 'aesthetics') {
+    for (const f of ['name', 'ref']) if (typeof e.r[f] === 'string') out[f] = e.r[f];
+  }
+  if (spec.kind === 'offline') {
+    const r = e.r;
+    if (typeof r.lufs !== 'number') return null;
+    const bands = (v: unknown) => (Array.isArray(v) ? v.map((b) => (typeof b === 'number' ? b : null)) : []);
+    const triples = (v: unknown, n: number) =>
+      Array.isArray(v) ? v.filter((t) => Array.isArray(t) && t.length === n && t.every((x) => typeof x === 'number')) : [];
+    out.sections = triples(r.sections, 3);
+    out.res = triples(r.res, 2);
+    out.bands = bands(r.bands);
+    if (r.ref && typeof r.ref === 'object') {
+      const ref = r.ref as Record<string, unknown>;
+      out.ref = {
+        ...(typeof ref.lufs === 'number' ? { lufs: ref.lufs } : {}),
+        ...(typeof ref.delta === 'number' ? { delta: ref.delta } : {}),
+        bands: bands(ref.bands),
+      };
+    }
   }
   if (spec.kind === 'waveform') {
     const { hi, lo } = e.r;
@@ -545,6 +582,10 @@ export function outcomeOf(e: Pick<CommandEntry, 'ok' | 'e'>): Outcome {
  * Mirrors LONG_RUNNING in mcp_bridge.lua, which keeps them out of the timeline's slow count.
  */
 export const LONG_RUNNING = new Set([
+  'analyze_track_offline',
+  'analyze_audio_file',
+  'measure_track_alignment',
+  'analyze_track_aesthetics',
   'render_project',
   'render_track_to_wav',
   'run_plan',

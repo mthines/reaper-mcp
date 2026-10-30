@@ -117,6 +117,12 @@ describe('JSFX EEL2 lint checks', () => {
         const misused = named.filter(({ n }) => new RegExp(`\\bslider${n}\\b`).test(code));
         expect(misused.map(({ n, name }) => `slider${n} (use ${name})`)).toEqual([]);
       });
+
+      it('should not use scientific-notation literals in code', () => {
+        // EEL2 rejects literals like 1e9; the whole plugin then fails to compile and runs no code
+        const code = source.slice(source.search(/^@/m)).replace(/\/\/.*$/gm, '');
+        expect(code.match(/(?<![\w.$])\d+(\.\d+)?e[+-]?\d+\b/gi) ?? []).toEqual([]);
+      });
     });
   }
 });
