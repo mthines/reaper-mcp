@@ -492,6 +492,8 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
       none("used twice", project.render_versions(api, { versions = { { name = "A" }, { name = "a" } } }, fs, resolve))
       none("name must be letters", project.render_versions(api, { versions = { { name = "../x" } } }, fs, resolve))
       none("would both write", project.render_versions(api, { versions = { { name = "A", filePattern = "x" }, { name = "B", filePattern = "x" } } }, fs, resolve))
+      -- Mix and mix are one file on a case-insensitive disk (APFS, NTFS)
+      none("would both write", project.render_versions(api, { versions = { { name = "A", filePattern = "Mix" }, { name = "B", filePattern = "mix" } } }, fs, resolve))
       project.set_render(api, { source = "stems" })
       none("select the tracks to render first", project.render_versions(api, { versions = { { name = "A" } } }, fs, resolve))
       project.set_render(api, { source = "master" })

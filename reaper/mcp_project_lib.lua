@@ -1043,8 +1043,10 @@ function M.render_versions(api, p, fs, resolve)
       local refusal = render_refusal(api, settings, v.targets, fs, p.overwrite, "select the tracks to render first")
       if refusal then error({ refusal = "version " .. v.name .. ": " .. refusal .. " — nothing rendered" }) end
       for _, t in ipairs(v.targets) do
-        if seen_target[t] then error({ refusal = "versions " .. seen_target[t] .. " and " .. v.name .. " would both write " .. t .. " — give them distinct filePattern — nothing rendered" }) end
-        seen_target[t] = v.name
+        -- Lowercased: paths differing only in case are one file on APFS and NTFS
+        local key = t:lower()
+        if seen_target[key] then error({ refusal = "versions " .. seen_target[key] .. " and " .. v.name .. " would both write " .. t .. " — give them distinct filePattern — nothing rendered" }) end
+        seen_target[key] = v.name
       end
     end
     for _, v in ipairs(plan) do
