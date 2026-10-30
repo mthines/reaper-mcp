@@ -4771,7 +4771,9 @@ local last_update_poll = 0
 
 -- REAPER 7.03+: re-running this script stops it and starts the (possibly newer) installed copy
 local can_restart = type(reaper.set_action_options) == "function" and type(script_cmd_id) == "number" and script_cmd_id > 0
-if can_restart then reaper.set_action_options(3) end -- 1: terminate when re-launched, 2: then start again
+-- Running the script again stops it (1: terminate when re-launched); only a restart the bridge asks for itself
+-- adds 2 (then start again), so a user re-running mcp_bridge.lua turns it off instead of getting a new window
+if can_restart then reaper.set_action_options(1) end
 
 local function update_config()
   local text = read_file(script_dir .. "mcp_update.conf")
@@ -4784,6 +4786,7 @@ end
 
 local function restart_bridge()
   log_event("bridge_restart", {})
+  reaper.set_action_options(3)
   reaper.Main_OnCommand(script_cmd_id, 0)
 end
 

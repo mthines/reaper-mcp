@@ -782,8 +782,9 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   from the status feed (REAPER's web server sends no CORS headers), so other sites can fire the request but never with
   a valid token. Update runs `<clone>/scripts/update.sh` (`git pull --ff-only` + `install.sh`; refuses on local changes)
   detached, with the clone and node path from `Scripts/mcp_update.conf` (written by `setup` when it runs from a git
-  clone; never on Windows). Restart uses `set_action_options(3)` (REAPER 7.03+): the bridge re-runs its own action and
-  REAPER relaunches the installed copy. It restarts itself after a successful update; the page reloads when
+  clone; never on Windows). The bridge starts with `set_action_options(1)` (REAPER 7.03+), so re-running
+  `mcp_bridge.lua` stops it; restart switches to `set_action_options(3)` and re-runs its own action, and REAPER
+  relaunches the installed copy. It restarts itself after a successful update; the page reloads when
   `startedAt` changes (or once when the update is done, if the bridge script didn't change).
   **Developer mode** (`settings.dev`): `setup` writes `dev=1` for a clone with uncommitted changes, a branch other
   than `main` or unpushed commits (`isDevClone()` in `cli.ts`); the Settings toggle (`cfg_dev`, persistent) overrides
