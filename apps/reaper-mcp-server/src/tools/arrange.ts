@@ -131,7 +131,7 @@ export function registerArrangeTools(server: McpServer): void {
       end: seconds('Section end in seconds (instead of regionIndex)').optional(),
       position: seconds('Where the copy starts, in seconds'),
       insert: z.boolean().optional().describe('Insert time at the position first (default false: overwrite automation there, place items over)'),
-      envelopes: z.boolean().optional().describe('Copy envelope points too (default true)'),
+      envelopes: z.boolean().optional().describe('Copy the automation too: envelope points and the automation items inside the section (default true)'),
       tracks: z.array(z.coerce.number().int().min(0)).min(1).optional().describe('Track indexes to copy (default all)'),
     },
     (args) => send('copy_section', args),
