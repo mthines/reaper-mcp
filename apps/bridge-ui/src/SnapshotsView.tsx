@@ -58,7 +58,7 @@ export function SnapshotsView({
   }, [keys]);
 
   return (
-    <div className="snaps">
+    <div className="rows snaps">
       <SaveForm snapshots={feed?.snapshots ?? []} blocked={blocked} saving={pending?.op === 'save'} onSave={(name, desc) => onSend('save', name, desc)} />
       {blocked && (
         <p className="snap-blocked" role="note">
