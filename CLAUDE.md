@@ -88,6 +88,8 @@ reaper-mcp/
     src/status.ts             # Parses ExtState MCPBridge/status, liveness, log merge (unit-tested)
     src/App.tsx               # Status, latency strip, searchable/filterable command log
     build.mjs                 # esbuild bundle inlined into dist/apps/bridge-ui/mcp_bridge.html
+    build-config.mjs          # esbuild options + HTML template shared by build.mjs and dev.mjs
+    dev.mjs                   # pnpm dev:bridge: live-reload page, /_/ proxied over one socket, reaper/ installed on save
 
   .claude/skills/             # Mix skills (one dir per skill, each with SKILL.md), symlinked into ~/.claude/skills by scripts/sync-symlinks.sh
     mixer/SKILL.md            # /mixer — executes mixes (live session, reads/writes memory)
