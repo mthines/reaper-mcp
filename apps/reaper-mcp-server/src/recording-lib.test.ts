@@ -182,7 +182,8 @@ describe('mcp_recording_lib.lua (wasmoon)', () => {
       assert(keys.input.kind == "midi" and keys.input.device == "all" and keys.input.channel == 0, keys.input.label)
       assert(keys.mode == "midi_overdub")
       assert(#r.inputs.audio == 8 and #r.inputs.midi == 2 and r.inputs.midi[2].device == 3 and r.inputs.midi[2].name == "Keystation")
-      assert(#rec.get_record_setup(api, { all = true }).tracks == 3, "all lists every track")
+      local all = rec.get_record_setup(api, { all = true })
+      assert(#all.tracks == 3 and all.armedCount == 2, "all lists every track and still counts only the armed ones: " .. tostring(all.armedCount))
     `);
   });
 

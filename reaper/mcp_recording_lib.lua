@@ -185,10 +185,12 @@ end
 function M.get_record_setup(api, params)
   params = params or {}
   local tracks, total = {}, api.CountTracks(0)
-  local listed = 0
+  local listed, armed = 0, 0
   for i = 0, total - 1 do
     local tr = api.GetTrack(0, i)
-    if params.all or api.GetMediaTrackInfo_Value(tr, "I_RECARM") ~= 0 then
+    local is_armed = api.GetMediaTrackInfo_Value(tr, "I_RECARM") ~= 0
+    if is_armed then armed = armed + 1 end
+    if params.all or is_armed then
       listed = listed + 1
       if #tracks < MAX_TRACKS then tracks[#tracks + 1] = record_state(api, tr) end
     end
@@ -200,7 +202,7 @@ function M.get_record_setup(api, params)
     punch = mode == "time_selection" and time_selection(api) or nil,
     recordPath = path,
     projectPath = api.GetProjectPath and api.GetProjectPath("") or nil,
-    armedCount = params.all and nil or listed,
+    armedCount = armed,
     tracks = tracks,
     tracksMore = math.max(0, listed - #tracks),
     inputs = inputs(api),
