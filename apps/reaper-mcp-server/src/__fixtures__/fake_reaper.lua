@@ -374,8 +374,16 @@ function new_fake(spec)
     return tk
   end
   api.PCM_Source_CreateFromFile = function(path)
-    local sec = (spec.audio or {})[path]
+    local sec = (spec.audio or {})[path] or (rawget(api, "rendered") or {})[path]
     return { path = path, length = sec or 0, qn = path:lower():match("%.midi?$") ~= nil }
+  end
+  -- spec.levels = { lufs, truePeak, peak } (dB) for every rendered file; the gain to
+  -- reach `target` dB, as REAPER's CalculateNormalization returns it (0 = silence)
+  api.CalculateNormalization = function(src, mode, target)
+    local lv = spec.levels or { lufs = -14, truePeak = -1, peak = -1.5 }
+    local level = ({ [0] = lv.lufs, [2] = lv.peak, [3] = lv.truePeak })[mode]
+    if level == nil then return 0 end
+    return 10 ^ ((target - level) / 20)
   end
   api.PCM_Source_Destroy = function(src) src.destroyed = true end
   api.GetMediaSourceLength = function(src) return src.length, src.qn end
@@ -591,6 +599,21 @@ function b64encode(s)
   return table.concat(out)
 end
 
+function b64decode(s)
+  local out, bits, n = {}, 0, 0
+  for i = 1, #s do
+    local c = s:sub(i, i)
+    if c == "=" then break end
+    local idx = B64:find(c, 1, true)
+    if idx then
+      bits = (bits << 6) | (idx - 1)
+      n = n + 6
+      if n >= 8 then n = n - 8; out[#out + 1] = string.char((bits >> n) & 0xFF) end
+    end
+  end
+  return table.concat(out)
+end
+
 local EXT = { evaw = ".wav", ffia = ".aif", calf = ".flac", l3pm = ".mp3", vggo = ".ogg", SggO = ".opus" }
 
 function install_project_fake(api, spec, write)
@@ -668,14 +691,53 @@ function install_project_fake(api, spec, write)
     api.saved = (api.saved or 0) + 1
   end
 
+  -- Render targets as REAPER lists them: one per source file. Stems are named after the
+  -- selected tracks ($track in the pattern, else "<pattern>-<track>"); a region matrix
+  -- names <region>-<track> per region row.
   local function targets()
     local s = P().strings
-    local fourcc = s.RENDER_FORMAT
-    for cc in pairs(EXT) do if b64encode(cc .. "\0\0\0\0") == fourcc then fourcc = cc end end
-    local ext = EXT[fourcc] or ".wav"
+    local ext = EXT[b64decode(s.RENDER_FORMAT):sub(1, 4)] or ".wav"
     if s.RENDER_PATTERN == "" then return "" end
     local dir = s.RENDER_FILE
-    return (dir ~= "" and (dir .. "/") or "") .. s.RENDER_PATTERN .. ext
+    local function path(name) return (dir ~= "" and (dir .. "/") or "") .. name .. ext end
+    local function named(track)
+      if s.RENDER_PATTERN:find("$track", 1, true) then return path((s.RENDER_PATTERN:gsub("%$track", track))) end
+      return path(s.RENDER_PATTERN .. (track == "Master" and "" or ("-" .. track)))
+    end
+    if math.floor(P().info.RENDER_SETTINGS or 0) & (32 | 64) ~= 0 then -- selected items: one file, none without a selection
+      for i = 0, api.CountTracks(0) - 1 do
+        for _, it in ipairs(api.GetTrack(0, i).items or {}) do if it.selected then return named("Master") end end
+      end
+      return ""
+    end
+    local src = math.floor(P().info.RENDER_SETTINGS or 0) & (1 | 2 | 8 | 128)
+    if src == 0 then return named("Master") end
+    local list = {}
+    if src & 8 ~= 0 then
+      if P().info.RENDER_BOUNDSFLAG ~= 3 and P().info.RENDER_BOUNDSFLAG ~= 5 then return "" end
+      for _, m in ipairs(P().markers) do
+        for _, tr in ipairs((P().matrix or {})[m.num] or {}) do
+          if m.rgn then list[#list + 1] = path(m.name .. "-" .. (tr.is_master and "Master" or tr.name)) end
+        end
+      end
+      return table.concat(list, ";")
+    end
+    if src == 2 then return "" end -- REAPER 7: 2 alone lists nothing
+    if src == 1 then list[1] = named("Master") end
+    for i = 0, api.CountTracks(0) - 1 do
+      local tr = api.GetTrack(0, i)
+      if tr.selected then list[#list + 1] = named(tr.name) end
+    end
+    return table.concat(list, ";")
+  end
+  api.EnumRegionRenderMatrix = function(_, region, i) return ((P().matrix or {})[region] or {})[i + 1] end
+  api.SetRegionRenderMatrix = function(_, region, tr, add)
+    P().matrix = P().matrix or {}
+    local row = P().matrix[region] or {}
+    for k = #row, 1, -1 do if row[k] == tr then table.remove(row, k) end end
+    if add > 0 then row[#row + 1] = tr end
+    P().matrix[region] = row
+    write("render_matrix")
   end
   api.GetSetProjectInfo = function(_, key, val, set)
     if set then P().info[key] = val; write("info " .. key) end
@@ -683,6 +745,20 @@ function install_project_fake(api, spec, write)
   end
   api.GetSetProjectInfo_String = function(_, key, val, set)
     if key == "RENDER_TARGETS" then return true, targets() end
+    if key == "RENDER_METADATA" then
+      local meta = P().metadata or { keys = {}, values = {} }
+      P().metadata = meta
+      if set then
+        local k, v = val:match("^([^|]*)|(.*)$")
+        if not meta.values[k] then meta.keys[#meta.keys + 1] = k end
+        meta.values[k] = v ~= "" and v or nil
+        if v == "" then for i = #meta.keys, 1, -1 do if meta.keys[i] == k then table.remove(meta.keys, i) end end end
+        write("metadata " .. k)
+        return true, ""
+      end
+      if val == "" then return true, table.concat(meta.keys, ";") end
+      return true, meta.values[val] or ""
+    end
     if set and key == "RENDER_FORMAT2" and #val == 4 then val = b64encode(val .. "\0\0\0\0") end
     if set then
       if key == "RENDER_FORMAT" and #val == 4 then val = b64encode(val .. "\0\0\0\0") end
@@ -704,8 +780,26 @@ function install_project_fake(api, spec, write)
     api.commands[#api.commands + 1] = id
     if id == 40364 then api.metronome = 1 - api.metronome; api.writes = api.writes + 1 end
     if id == 42230 then
-      local t = targets()
-      if t ~= "" then api.fs.files[t] = true end
+      -- rawget: the bridge tests give api a catch-all __index
+      api.rendered = rawget(api, "rendered") or {}
+      api.render_log = rawget(api, "render_log") or {}
+      local muted = {}
+      for i = 0, api.CountTracks(0) - 1 do
+        local tr = api.GetTrack(0, i)
+        if api.GetMediaTrackInfo_Value(tr, "B_MUTE") == 1 then muted[#muted + 1] = tr.name end
+      end
+      local sel = {}
+      for i = 0, api.CountTracks(0) - 1 do
+        local tr = api.GetTrack(0, i)
+        if tr.selected then sel[#sel + 1] = tr.name end
+      end
+      api.render_log[#api.render_log + 1] = { pattern = P().strings.RENDER_PATTERN, muted = muted, selected = sel,
+        masterMuted = api.GetMediaTrackInfo_Value(api.GetMasterTrack(0), "B_MUTE") == 1 }
+      if rawget(api, "fail_render") then error("fake: render failed") end
+      for t in targets():gmatch("[^;]+") do
+        api.fs.files[t] = true
+        api.rendered[t] = rawget(api, "render_seconds") or 12.5
+      end
       api.writes = api.writes + 1
     end
   end

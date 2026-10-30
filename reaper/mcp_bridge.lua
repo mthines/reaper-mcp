@@ -3685,11 +3685,28 @@ function handlers.get_render_settings(params)
 end
 
 function handlers.set_render_settings(params)
-  return with_project_lib(function() return project_lib.set_render(reaper, params) end)
+  return with_project_lib(function()
+    local p, err = project_lib.decode_json_fields(params, plan_lib_ok and plan_lib.json_decode or function() return nil end)
+    if not p then return nil, err end
+    return project_lib.set_render(reaper, p, plan_lib_ok and plan_lib.resolve_track or nil)
+  end)
 end
 
 function handlers.render_project(params)
-  return with_project_lib(function() return project_lib.render(reaper, params, project_fs) end)
+  return with_project_lib(function()
+    local p, err = project_lib.decode_json_fields(params, plan_lib_ok and plan_lib.json_decode or function() return nil end)
+    if not p then return nil, err end
+    return project_lib.render(reaper, p, project_fs, plan_lib_ok and plan_lib.resolve_track or nil)
+  end)
+end
+
+function handlers.render_versions(params)
+  if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup`" end
+  return with_project_lib(function()
+    local p, err = project_lib.decode_json_fields(params, plan_lib.json_decode)
+    if not p then return nil, err end
+    return project_lib.render_versions(reaper, p, project_fs, plan_lib.resolve_track)
+  end)
 end
 
 function handlers.get_project_settings(params)
@@ -4330,6 +4347,9 @@ function handlers.render_track_to_wav(params)
   local saved_end      = reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     0, false)
   local saved_srate    = reaper.GetSetProjectInfo(0, "RENDER_SRATE",      0, false)
   local saved_channels = reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   0, false)
+  -- Delivery processing set_render_settings stores in the project: an analysis render must hear the raw mix
+  local saved_normalize = reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE", 0, false)
+  local saved_dither    = reaper.GetSetProjectInfo(0, "RENDER_DITHER",    0, false)
 
   -- Save solo and selection states for all tracks
   local track_count = reaper.CountTracks(0)
@@ -4366,6 +4386,8 @@ function handlers.render_track_to_wav(params)
     reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT", "evaw", true)
     reaper.GetSetProjectInfo(0, "RENDER_SRATE",    sample_rate, true)
     reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", 2,           true)
+    reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE", 0, true)
+    reaper.GetSetProjectInfo(0, "RENDER_DITHER",    0, true)
 
     -- Unsolo all tracks, then solo only the target track (master: none)
     for i = 0, track_count - 1 do
@@ -4395,6 +4417,8 @@ function handlers.render_track_to_wav(params)
     reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     saved_end,      true)
     reaper.GetSetProjectInfo(0, "RENDER_SRATE",      saved_srate,    true)
     reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   saved_channels, true)
+    reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE",  saved_normalize, true)
+    reaper.GetSetProjectInfo(0, "RENDER_DITHER",     saved_dither,    true)
     for i = 0, track_count - 1 do
       local t = reaper.GetTrack(0, i)
       reaper.SetMediaTrackInfo_Value(t, "I_SOLO", saved_solo_states[i] or 0)
@@ -4892,7 +4916,7 @@ local HISTORY_SLOW_MS = 100
 -- arbitrary work): never counted as slow. Mirrors LONG_RUNNING in apps/bridge-ui/src/status.ts.
 local LONG_RUNNING = {}
 for _, c in ipairs({
-  "render_project", "render_track_to_wav", "run_plan", "run_action", "save_project", "undo_project",
+  "render_project", "render_track_to_wav", "render_versions", "run_plan", "run_action", "save_project", "undo_project",
   "redo_project", "add_fx", "add_take_fx", "setup_fx_chain", "copy_fx", "move_fx", "set_fx_offline",
   "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
   "insert_audio_file", "snapshot_save", "snapshot_restore", "snapshot_edit",

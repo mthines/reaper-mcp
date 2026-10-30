@@ -34,6 +34,21 @@ describe('edit views from the log', () => {
     expect(editViewOf(entry('list_tracks', undefined))).toBeNull();
   });
 
+  it('render view: reads a render as file rows with their targets, versions grouped', () => {
+    const f = ['mix.wav', 184.2, -14.1, -1, -1.4, [0.5, 0.6], [-0.5, -0.6]];
+    expect(editViewOf(entry('render_project', { fmt: 'wav', bd: '24', src: 'master', norm: 'lufs_i', nt: -14, lim: -1, tp: true, groups: [{ v: '', m: [], f: [f, ['bad']] }] }))).toEqual({
+      kind: 'render', fmt: 'wav', bd: '24', src: 'master', norm: 'lufs_i', nt: -14, lim: -1, tp: true, groups: [{ v: '', m: [], f: [f] }],
+    });
+    const v = editViewOf(entry('render_versions', { fmt: 'mp3', kbps: 320, src: 'master', groups: [{ v: 'Instrumental', m: ['Vox'], f: [f] }], more: 2 }));
+    expect(v).toMatchObject({ kind: 'render', kbps: 320, more: 2, groups: [{ v: 'Instrumental', m: ['Vox'] }] });
+    expect(v).not.toHaveProperty('norm');
+  });
+
+  it('render view: draws nothing when no file came back', () => {
+    expect(editViewOf(entry('render_project', { fmt: 'wav', groups: [{ v: '', m: [], f: [] }] }))).toBeNull();
+    expect(editViewOf(entry('render_project', { fmt: 'wav' }))).toBeNull();
+  });
+
   it('drops malformed rows and keeps the rest', () => {
     const v = editViewOf(entry('get_midi_notes', { total: 3, notes: [[60, 0, 1, 100, 0], ['x'], [62, 1, 1, 90, 1]] }));
     expect(v).toMatchObject({ kind: 'midi', total: 3, more: 0, notes: [[60, 0, 1, 100, 0], [62, 1, 1, 90, 1]] });

@@ -26,7 +26,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
     tools: [
       'get_project_info',
       'undo_project', 'redo_project', 'save_project',
-      'get_render_settings', 'set_render_settings', 'render_project',
+      'get_render_settings', 'set_render_settings', 'render_project', 'render_versions',
       'get_project_settings', 'set_project_settings',
     ],
   },

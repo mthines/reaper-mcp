@@ -311,6 +311,7 @@ export const MCP_TOOL_NAMES = [
   'get_render_settings',
   'set_render_settings',
   'render_project',
+  'render_versions',
   'get_project_settings',
   'set_project_settings',
   'add_tempo_marker',

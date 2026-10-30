@@ -915,6 +915,106 @@ local function wav_waveform(path)
   return { hi = hi, lo = lo, peakDb = db(peak), rmsDb = db(math.sqrt(sum / count)), clipped = clipped, channels = channels }
 end
 
+-- Render results: one row per file written, with a few waveform slices read through REAPER's peak API
+-- (any format REAPER reads). At most RENDER_MAX_FILES files get a row; the rest are counted.
+local RENDER_MAX_FILES = 8
+-- Waveforms are built on REAPER's main thread after the render already blocked it: once this much
+-- time went to them in one call, the remaining files get rows without a waveform
+local RENDER_PEAKS_BUDGET_S = 1.0
+local RENDER_SLICES = 60
+
+-- The .reapeaks file REAPER would build for path (nil when it cannot say)
+local function peak_file(path)
+  if not api.GetPeakFileName then return nil end
+  local a, b = api.GetPeakFileName(path, "")
+  local name = type(b) == "string" and b ~= "" and b or a
+  return type(name) == "string" and name ~= "" and name or nil
+end
+local function exists(path)
+  local f = path and io.open(path, "rb")
+  if f then f:close() end
+  return f ~= nil
+end
+
+local function file_peaks(path)
+  if not (api.PCM_Source_CreateFromFile and api.PCM_Source_GetPeaks and api.new_array) then return nil end
+  local src = api.PCM_Source_CreateFromFile(path)
+  if not src then return nil end
+  -- Peaks built only for this view are removed again, so no .reapeaks lands beside a delivered file
+  local pk = peak_file(path)
+  local had_peaks = exists(pk)
+  local ok, hi, lo = pcall(function()
+    local len = api.GetMediaSourceLength(src)
+    if type(len) ~= "number" or len <= 0 then return nil end
+    local ch = math.min(2, math.max(1, math.floor(api.GetMediaSourceNumChannels(src) or 1)))
+    if api.PCM_Source_BuildPeaks and api.PCM_Source_BuildPeaks(src, 0) ~= 0 then
+      local guard = 0
+      while api.PCM_Source_BuildPeaks(src, 1) ~= 0 and guard < 1000000 do guard = guard + 1 end
+      api.PCM_Source_BuildPeaks(src, 2)
+    end
+    local n = RENDER_SLICES
+    local buf = api.new_array(n * ch * 2)
+    -- The buffer holds n * ch maxima, then n * ch minima, channels interleaved
+    local got = math.floor(api.PCM_Source_GetPeaks(src, n / len, 0, ch, n, 0, buf)) & 0xFFFFF
+    if got <= 0 then return nil end
+    local hi, lo = {}, {}
+    for i = 0, math.min(got, n) - 1 do
+      local mx, mn = 0, 0
+      for c = 1, ch do
+        local a, b = buf[i * ch + c], buf[n * ch + i * ch + c]
+        if a and a > mx then mx = a end
+        if b and b < mn then mn = b end
+      end
+      hi[#hi + 1], lo[#lo + 1] = round2(mx), round2(mn)
+    end
+    return hi, lo
+  end)
+  api.PCM_Source_Destroy(src)
+  if pk and not had_peaks and exists(pk) then os.remove(pk) end
+  if ok and hi then return hi, lo end
+end
+
+local function base_name(path) return (tostring(path):match("([^/\\]+)$")) or tostring(path) end
+
+-- [name, duration s, LUFS-I, true peak, sample peak, hi[], lo[]] per file
+local function render_rows(files, analysis, budget)
+  local by_file = {}
+  for _, a in ipairs(analysis or {}) do by_file[a.file] = a end
+  local rows = {}
+  for _, f in ipairs(files or {}) do
+    if budget.left <= 0 then budget.more = budget.more + 1 else
+      budget.left = budget.left - 1
+      local a = by_file[f] or {}
+      local hi, lo
+      local clock = api.time_precise
+      if not clock or clock() - budget.started < RENDER_PEAKS_BUDGET_S then hi, lo = file_peaks(f) end
+      rows[#rows + 1] = { base_name(f), round2(a.durationSeconds) or -1, round2(a.lufsIntegrated) or -150, round2(a.truePeak) or -150,
+        round2(a.samplePeak) or -150, hi or {}, lo or {} }
+    end
+  end
+  return rows
+end
+
+local function render_view(cmd_type, data)
+  if type(data) ~= "table" then return nil end
+  local budget = { left = RENDER_MAX_FILES, more = 0, started = api.time_precise and api.time_precise() or 0 }
+  local groups = {}
+  if cmd_type == "render_versions" then
+    for _, v in ipairs(data.versions or {}) do
+      groups[#groups + 1] = { v = tostring(v.name), m = v.muted or {}, f = render_rows(v.files, v.analysis, budget) }
+    end
+  else
+    groups[1] = { v = "", m = {}, f = render_rows(data.files, data.analysis, budget) }
+  end
+  local r = { fmt = data.format or "", src = data.source or "master", groups = groups }
+  if data.bitDepth then r.bd = tostring(data.bitDepth) end
+  if data.mp3Bitrate then r.kbps = data.mp3Bitrate end
+  if data.normalize then r.norm, r.nt = data.normalize, round2(data.normalizeTarget) end
+  if data.limitCeiling then r.lim, r.tp = round2(data.limitCeiling), data.limitTruePeak == true end
+  if budget.more > 0 then r.more = budget.more end
+  return r
+end
+
 -- The state a write is about to change, read before its handler runs (nil for every other command)
 function M.before(cmd_type, params)
   if cmd_type == "set_track_property" or cmd_type == "set_multiple_track_properties" then
@@ -986,6 +1086,8 @@ function M.summary(cmd_type, params, data, before)
     return fx_param_rows(params)
   elseif cmd_type == "run_plan" then
     return plan_view(params, data)
+  elseif cmd_type == "render_project" or cmd_type == "render_versions" then
+    return render_view(cmd_type, data)
   end
   local fields = RESULT_FIELDS[cmd_type]
   if not fields or type(data) ~= "table" then return nil end
