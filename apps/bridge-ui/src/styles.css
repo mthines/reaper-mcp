@@ -436,6 +436,8 @@ kbd {
   background: var(--panel-2);
   color: var(--text);
 }
+/* A link styled as a button: centred like a <button>, no underline (`:where` keeps it below per-link rules) */
+:where(a).btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 .btn:hover:not(:disabled) { border-color: #3c414a; background: #22252a; }
 .btn:disabled { opacity: 0.4; cursor: default; }
 .btn-on { color: var(--warn); border-color: rgba(245, 184, 75, 0.35); }
@@ -1232,4 +1234,3 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 .gallery-drawer .drawer { position: relative; inset: auto; z-index: auto; width: 100% !important; animation: none; box-shadow: none; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
 .gallery-drawer .resize-handle { display: none; }
 .gallery-stage .offline { margin: 0; }
-.gallery-head .btn { text-decoration: none; }
