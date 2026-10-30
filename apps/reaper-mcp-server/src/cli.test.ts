@@ -250,6 +250,19 @@ describe('ensureWebInterface', () => {
     expect(ensureWebInterface(ini, 8099)).toEqual({ ini, port: 8080, changed: false });
   });
 
+  it('re-enables a web interface left past csurf_cnt, which REAPER ignores', () => {
+    const ini = "[REAPER]\ncsurf_0=HTTP 0 8099 '' 'mcp_bridge.html' 0 ''\ncsurf_cnt=0\ncsurfrate=15\n";
+    const out = ensureWebInterface(ini, 8099);
+    expect(out.changed).toBe(true);
+    expect(out.ini).toBe("[REAPER]\ncsurf_0=HTTP 0 8099 '' 'mcp_bridge.html' 0 ''\ncsurf_cnt=1\ncsurfrate=15\n");
+  });
+
+  it('replaces a stale entry at the next index instead of duplicating it', () => {
+    const ini = "[REAPER]\ncsurf_cnt=1\ncsurf_0=OSC \"x\" 3 8000\ncsurf_1=HTTP 0 8080 '' 'index.html' 0 ''\n";
+    const out = ensureWebInterface(ini, 8099);
+    expect(out.ini).toBe("[REAPER]\ncsurf_cnt=2\ncsurf_0=OSC \"x\" 3 8000\ncsurf_1=HTTP 0 8099 '' 'mcp_bridge.html' 0 ''\n");
+  });
+
   it('preserves CRLF line endings', () => {
     const out = ensureWebInterface('[REAPER]\r\nfoo=1\r\n', 8099);
     expect(out.ini).not.toMatch(/[^\r]\n/);
