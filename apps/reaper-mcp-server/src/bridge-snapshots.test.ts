@@ -51,7 +51,7 @@ const PARAMS_B = JSON.stringify({
   mixerState: { version: 2, fullChunk: false, tracks: [{ index: 0, name: 'Kick', volume: 0.5, pan: 0, mute: false, solo: false, fx: [], sends: [] }] },
 });
 
-async function startBridge(files: Record<string, string> = {}) {
+async function startBridge(files: Record<string, string> = {}, before = '') {
   const factory = new LuaFactory();
   await factory.mountFile(`${SCRIPTS}mcp_bridge.lua`, readFileSync(join(REAPER_DIR, 'mcp_bridge.lua'), 'utf8'));
   for (const lib of LIBS) await factory.mountFile(SCRIPTS + lib, readFileSync(join(REAPER_DIR, lib), 'utf8'));
@@ -97,6 +97,7 @@ async function startBridge(files: Record<string, string> = {}) {
     api.atexit = function(fn) on_exit = fn end
     reaper = setmetatable(api, { __index = function() return function() end end })
     reaper.SetMediaTrackInfo_Value(api.GetTrack(0, 0), "D_VOL", 1) -- unity
+    ${before}
     dofile("${SCRIPTS}mcp_bridge.lua")
   `);
 
@@ -141,9 +142,13 @@ async function startBridge(files: Record<string, string> = {}) {
     },
     /** What the page sends for a restore or save */
     async request(op: string, name: string, description = '', token?: string) {
+      return this.requestFields(op, description ? [name, description] : [name], token);
+    },
+    /** What the page sends: each field hex-encoded, joined by `-` (edit: name, new name, description) */
+    async requestFields(op: string, fields: string[], token?: string) {
       const t = token ?? (await status()).control.token;
       const id = String(++reqs);
-      await set('MCPBridge/snap_req', `${id}-${t}-${op}-${hex(name)}${description ? `-${hex(description)}` : ''}`);
+      await set('MCPBridge/snap_req', `${id}-${t}-${op}-${fields.map(hex).join('-')}`);
       await tick();
       return id;
     },
@@ -272,5 +277,82 @@ describe('snapshot requests refused by the page settings', () => {
     expect(await bridge.file('mix-C.json')).toBeNull();
     expect((await bridge.published())?.result).toMatchObject({ op: 'save', ok: false, error: expect.stringMatching(error) });
     expect(await bridge.undo()).toEqual([]);
+  });
+});
+
+describe('snapshot delete and edit from the status page', () => {
+  it('deletes a snapshot: logged as from the page, gone from the list', async () => {
+    const bridge = await startBridge({ 'mix-A.json': LEGACY_SCOPED, 'mix-B.json': PARAMS_B });
+    await bridge.ping();
+    const id = await bridge.request('delete', 'mix-A');
+
+    expect(await bridge.file('mix-A.json')).toBeNull();
+    const published = await bridge.published();
+    expect(published?.result).toMatchObject({ id, op: 'delete', name: 'mix-A', ok: true });
+    expect(published?.snapshots.map((s) => s.name)).toEqual(['mix-B']);
+    expect((await bridge.status()).recent[0]).toMatchObject({ c: 'snapshot_delete', ok: true, src: 'page' });
+  });
+
+  it('renames a snapshot and changes its description, keeping its mixer state and its place as current', async () => {
+    const bridge = await startBridge({ 'mix-B.json': PARAMS_B });
+    await bridge.request('restore', 'mix-B');
+    const id = await bridge.requestFields('edit', ['mix-B', 'quiet kick', 'Kick down 6 dB']);
+
+    expect(await bridge.file('mix-B.json')).toBeNull();
+    const saved = JSON.parse((await bridge.file('quiet_kick.json')) ?? '{}');
+    expect(saved).toMatchObject({ name: 'quiet kick', description: 'Kick down 6 dB', timestamp: 1761800100000, trackCount: 1 });
+    expect(saved.mixerState.tracks[0]).toMatchObject({ name: 'Kick', volume: 0.5 });
+    const published = await bridge.published();
+    expect(published?.result).toMatchObject({ id, op: 'edit', name: 'quiet kick', ok: true });
+    expect(published?.current).toBe('quiet kick');
+    expect(published?.snapshots).toEqual([expect.objectContaining({ name: 'quiet kick', description: 'Kick down 6 dB' })]);
+
+    // and the renamed snapshot still restores
+    await bridge.request('restore', 'quiet kick');
+    expect((await bridge.published())?.result).toMatchObject({ op: 'restore', ok: true, tracksRestored: 1 });
+  });
+
+  it('refuses a new name that saves to another snapshot, changing nothing', async () => {
+    const bridge = await startBridge({ 'mix-A.json': LEGACY_SCOPED, 'mix-B.json': PARAMS_B });
+    await bridge.requestFields('edit', ['mix-B', 'mix-A', '']);
+    expect((await bridge.published())?.result).toMatchObject({ op: 'edit', ok: false, error: expect.stringContaining('already') });
+    expect(JSON.parse((await bridge.file('mix-A.json')) ?? '{}')).toMatchObject({ name: 'mix-A' });
+    expect(await bridge.file('mix-B.json')).not.toBeNull();
+  });
+
+  it('refuses delete and edit while read-only', async () => {
+    const bridge = await startBridge({ 'mix-B.json': PARAMS_B });
+    const token = (await bridge.status()).control.token;
+    await bridge.set('MCPBridge/cfg_readonly', '1');
+    await bridge.request('delete', 'mix-B', '', token);
+    await bridge.requestFields('edit', ['mix-B', 'mix-C', ''], token);
+    expect(await bridge.file('mix-B.json')).not.toBeNull();
+    expect((await bridge.published())?.result).toMatchObject({ op: 'edit', ok: false, error: expect.stringMatching(/Read-only mode is on/) });
+  });
+});
+
+describe('snapshot actions to bind to keys', () => {
+  const scripts = ['mcp_snapshot_quick_save.lua', 'mcp_snapshot_next.lua', 'mcp_snapshot_prev.lua'];
+  const registered = async () => ((await engine?.doString('return table.concat(added_scripts, "|")')) as string).split('|').filter(Boolean);
+  const before = (kb: string) => `
+    added_scripts = {}
+    reaper.AddRemoveReaScript = function(add, section, path, commit)
+      if add and section == 0 and commit then added_scripts[#added_scripts + 1] = path end
+      return 50000 + #added_scripts
+    end
+    for _, f in ipairs({ "${scripts.join('", "')}" }) do
+      local fh = io.open("${SCRIPTS}" .. f, "w"); fh:write("-- script"); fh:close()
+    end
+    local kb = io.open("/reaper/reaper-kb.ini", "w"); kb:write(${JSON.stringify(kb)}); kb:close()
+  `;
+
+  it('registers the quick save, next and previous scripts as actions when the bridge starts', async () => {
+    await startBridge({}, before('SCR 260 0 RScb8f "Custom: mcp_bridge.lua" mcp_bridge.lua\n'));
+    expect(await registered()).toEqual(scripts.map((f) => SCRIPTS + f));
+  });
+
+  it('leaves scripts that are already actions alone', async () => {
+    await startBridge({}, before('SCR 4 0 RSab "Custom: mcp_snapshot_next.lua" mcp_snapshot_next.lua\n'));
+    expect(await registered()).toEqual([`${SCRIPTS}mcp_snapshot_quick_save.lua`, `${SCRIPTS}mcp_snapshot_prev.lua`]);
   });
 });

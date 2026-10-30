@@ -1,4 +1,4 @@
-import { demoSnapshots, type RequestState, type SnapshotOp, type SnapshotsFeed } from './snapshots.js';
+import { demoSnapshots, type RequestState, type RowMode, type SnapshotOp, type SnapshotsFeed } from './snapshots.js';
 import type { CommandEntry } from './status.js';
 
 /**
@@ -375,6 +375,8 @@ export interface SnapshotStory {
   blocked: string | null;
   /** Show only the save form, with this name typed (and the replace prompt open) */
   saveForm?: { name: string; confirm?: boolean };
+  /** A row in rename or delete-confirm mode */
+  row?: RowMode;
   /** Drawn in a narrow column */
   narrow?: boolean;
 }
@@ -411,6 +413,9 @@ export const SNAPSHOT_STORIES: SnapshotStory[] = (() => {
     { title: 'Waiting for the list', feed: null, request: null, blocked: null },
     { title: 'Save · replaces', note: 'A name already saved', feed, request: null, blocked: null, saveForm: { name: 'mix-B' } },
     { title: 'Save · confirm replace', feed, request: null, blocked: null, saveForm: { name: 'mix-B', confirm: true } },
+    { title: 'Deleted', feed, request: { ...req('delete', 'mix-A'), state: 'done', result: { id: '17618', op: 'delete', name: 'mix-A', ok: true } }, blocked: null },
+    { title: 'Delete · confirm', note: 'Delete asks once, in the row', feed, request: null, blocked: null, row: { name: 'mix-B', mode: 'delete' } },
+    { title: 'Rename', note: 'Name and description, in place of the row', feed, request: null, blocked: null, row: { name: 'mix-B', mode: 'edit' } },
     { title: 'Narrow', note: 'Under ~420px', feed, request: { ...req('restore', 'mix-B'), state: 'pending' }, blocked: null, narrow: true },
   ];
 })();

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { formatAgo } from './status.js';
-import { DESCRIPTION_MAX, nameProblem, replacedBy, type RequestState, type SnapshotInfo, type SnapshotOp, type SnapshotsFeed } from './snapshots.js';
+import { DESCRIPTION_MAX, nameProblem, replacedBy, type RequestState, type RowMode, type SnapshotInfo, type SnapshotOp, type SnapshotsFeed } from './snapshots.js';
 
 /**
  * The Snapshots view: the project's saved mixer snapshots. Click one (or press 1–9) to load it while
- * listening, for a quick A/B/C; save the current mix under a new name. Both go through the bridge's normal
- * command path, so they show in the log, are one undo point, and are refused while read-only or paused.
+ * listening, for a quick A/B/C; save the current mix (a blank name saves under the date and time); rename
+ * or delete one from its row. All go through the bridge's normal command path, so they show in the log and
+ * are refused while read-only or paused.
  */
 export function SnapshotsView({
   feed,
@@ -15,6 +16,7 @@ export function SnapshotsView({
   now,
   onSend,
   keys = true,
+  initialRow,
 }: {
   /** Null until the bridge has published its list */
   feed: SnapshotsFeed | null;
@@ -23,10 +25,13 @@ export function SnapshotsView({
   blocked: string | null;
   query?: string;
   now: number;
-  onSend: (op: SnapshotOp, name: string, description?: string) => void;
+  onSend: (op: SnapshotOp, name: string, description?: string, newName?: string) => void;
   /** Number keys load snapshots (off in the gallery, where several views share the page) */
   keys?: boolean;
+  /** Gallery: start with this row in rename or delete-confirm mode */
+  initialRow?: RowMode;
 }) {
+  const [row, setRow] = useState<RowMode | null>(initialRow ?? null);
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = feed?.snapshots ?? [];
@@ -77,8 +82,24 @@ export function SnapshotsView({
           {shown.map((s, i) => {
             const current = feed.current === s.name;
             const loading = pending?.op === 'restore' && pending.name === s.name;
+            const mode = row?.name === s.name ? row.mode : null;
+            if (mode === 'edit') {
+              return (
+                <li key={s.name}>
+                  <EditForm
+                    snapshot={s}
+                    snapshots={feed.snapshots}
+                    onCancel={() => setRow(null)}
+                    onSave={(newName, description) => {
+                      onSend('edit', s.name, description, newName);
+                      setRow(null);
+                    }}
+                  />
+                </li>
+              );
+            }
             return (
-              <li key={s.name}>
+              <li key={s.name} className="snap-item">
                 <button
                   className={`snap-row${current ? ' snap-current' : ''}${loading ? ' snap-loading' : ''}`}
                   onClick={() => load(s)}
@@ -103,6 +124,33 @@ export function SnapshotsView({
                   </span>
                   <span className="snap-state">{loading ? 'Loading…' : current ? 'Loaded' : 'Load'}</span>
                 </button>
+                {mode === 'delete' ? (
+                  <span className="snap-actions snap-confirm" role="group" aria-label={`Delete ${s.name}?`}>
+                    <span className="snap-confirm-text">Delete?</span>
+                    <button
+                      className="btn btn-sm btn-warn"
+                      autoFocus
+                      onClick={() => {
+                        onSend('delete', s.name);
+                        setRow(null);
+                      }}
+                    >
+                      Delete
+                    </button>
+                    <button className="btn btn-sm" onClick={() => setRow(null)}>
+                      Keep
+                    </button>
+                  </span>
+                ) : (
+                  <span className="snap-actions">
+                    <button className="btn btn-sm" disabled={Boolean(blocked)} onClick={() => setRow({ name: s.name, mode: 'edit' })} title={blocked ?? `Rename ${s.name} or change its description`}>
+                      Rename
+                    </button>
+                    <button className="btn btn-sm" disabled={Boolean(blocked)} onClick={() => setRow({ name: s.name, mode: 'delete' })} title={blocked ?? `Delete ${s.name}`}>
+                      Delete
+                    </button>
+                  </span>
+                )}
               </li>
             );
           })}
@@ -135,12 +183,13 @@ function SaveForm({
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [confirm, setConfirm] = useState(initial?.confirm ?? false);
+  // A blank name saves under the date and time (the hook picks one no snapshot uses)
   const replaces = name.trim() ? replacedBy(snapshots, name) : null;
-  const problem = name ? nameProblem(name) : null;
+  const problem = name.trim() ? nameProblem(name) : null;
 
   const submit = (ev: FormEvent) => {
     ev.preventDefault();
-    if (blocked || saving || nameProblem(name)) return;
+    if (blocked || saving || problem) return;
     if (replaces && !confirm) {
       setConfirm(true);
       return;
@@ -160,7 +209,7 @@ function SaveForm({
           setName(ev.target.value);
           setConfirm(false);
         }}
-        placeholder="Name, e.g. mix-D"
+        placeholder="Name (blank: date and time)"
         aria-label="Snapshot name"
         aria-invalid={problem ? true : undefined}
         spellCheck={false}
@@ -175,12 +224,79 @@ function SaveForm({
         maxLength={DESCRIPTION_MAX}
         disabled={Boolean(blocked)}
       />
-      <button className={`btn${confirm ? ' btn-warn' : ''}`} type="submit" disabled={Boolean(blocked) || saving || !name.trim() || Boolean(problem)}>
+      <button className={`btn${confirm ? ' btn-warn' : ''}`} type="submit" disabled={Boolean(blocked) || saving || Boolean(problem)}>
         {saving ? 'Saving…' : confirm ? `Replace ${replaces?.name ?? ''}` : 'Save current mix'}
       </button>
       {(problem || (replaces && !confirm)) && (
         <span className={`snap-hint${problem ? ' snap-hint-bad' : ''}`} role="status">
           {problem ?? `Saving replaces “${replaces?.name}”.`}
+        </span>
+      )}
+    </form>
+  );
+}
+
+/** Rename a snapshot and change its description, in place of its row */
+function EditForm({
+  snapshot,
+  snapshots,
+  onSave,
+  onCancel,
+}: {
+  snapshot: SnapshotInfo;
+  snapshots: SnapshotInfo[];
+  onSave: (newName: string, description: string) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(snapshot.name);
+  const [description, setDescription] = useState(snapshot.description);
+  const problem = nameProblem(name);
+  // Another snapshot already saves to that file (the bridge refuses it too); its own file is fine
+  const taken = !problem ? replacedBy(snapshots.filter((s) => s.name !== snapshot.name), name) : null;
+  const unchanged = name.trim() === snapshot.name && description.trim() === snapshot.description;
+
+  const submit = (ev: FormEvent) => {
+    ev.preventDefault();
+    if (problem || taken) return;
+    if (unchanged) return onCancel();
+    onSave(name.trim(), description.trim());
+  };
+
+  return (
+    <form
+      className="snap-save snap-edit"
+      onSubmit={submit}
+      onKeyDown={(ev) => {
+        if (ev.key === 'Escape') onCancel();
+      }}
+      aria-label={`Edit ${snapshot.name}`}
+    >
+      <input
+        className="snap-input"
+        value={name}
+        onChange={(ev) => setName(ev.target.value)}
+        aria-label="New name"
+        aria-invalid={problem || taken ? true : undefined}
+        spellCheck={false}
+        autoFocus
+      />
+      <input
+        className="snap-input snap-input-desc"
+        value={description}
+        onChange={(ev) => setDescription(ev.target.value)}
+        placeholder="Description (optional)"
+        aria-label="Description"
+        maxLength={DESCRIPTION_MAX}
+      />
+      <button className="btn" type="submit" disabled={Boolean(problem || taken)}>
+        Save
+      </button>
+      <button className="btn" type="button" onClick={onCancel}>
+        Cancel
+      </button>
+      {(problem || taken) && (
+        <span className="snap-hint snap-hint-bad" role="status">
+          {problem ?? `“${taken?.name}” already uses that name.`}
         </span>
       )}
     </form>
@@ -194,15 +310,16 @@ export function SaveFormPreview(props: { snapshots: SnapshotInfo[]; name: string
 
 function RequestLine({ request }: { request: RequestState | null }) {
   if (!request) return null;
-  const verb = request.op === 'restore' ? 'load' : 'save';
+  const verb = { restore: 'load', save: 'save', delete: 'delete', edit: 'rename' }[request.op];
+  const done = { restore: 'loaded', save: 'saved', delete: 'deleted', edit: 'renamed' }[request.op];
   let tone = 'info';
   let text: string;
   let warnings: string[] = [];
   if (request.state === 'pending') {
-    text = request.op === 'restore' ? `Loading ${request.name}…` : `Saving ${request.name}…`;
+    text = `${{ restore: 'Loading', save: 'Saving', delete: 'Deleting', edit: 'Saving' }[request.op]} ${request.name}…`;
   } else if (request.state === 'lost') {
     tone = 'bad';
-    text = `No answer from the bridge: ${request.name} wasn’t ${verb === 'load' ? 'loaded' : 'saved'}. Is the bridge script running?`;
+    text = `No answer from the bridge: ${request.name} wasn’t ${done}. Is the bridge script running?`;
   } else if (request.result.ok) {
     tone = request.result.warnings?.length ? 'warn' : 'ok';
     warnings = request.result.warnings ?? [];
@@ -210,7 +327,7 @@ function RequestLine({ request }: { request: RequestState | null }) {
     text =
       request.op === 'restore'
         ? `Loaded ${request.name}${n !== undefined ? ` · ${n} track${n === 1 ? '' : 's'}` : ''}${warnings.length ? ` · ${warnings.length} warning${warnings.length === 1 ? '' : 's'}` : ''}`
-        : `Saved ${request.name}`;
+        : `${{ save: 'Saved', delete: 'Deleted', edit: 'Saved' }[request.op]} ${request.name}`;
   } else {
     tone = 'bad';
     text = `Couldn’t ${verb} ${request.name}: ${request.result.error ?? 'refused by the bridge'}`;

@@ -277,8 +277,8 @@ instead of just giving advice:
 
 ## 🛟 Safe by design
 
-- 📸 **Snapshots before and after every change.** A/B them in REAPER with the Snapshot
-  Manager, or bind *next/previous snapshot* to keys.
+- 📸 **Snapshots before and after every change.** A/B them in the bridge window, or bind
+  `mcp_snapshot_next` / `_prev` / `_quick_save` to keys (setup adds them to the Action List).
 - ↩️ **One change, one undo.** Each edit is labelled `MCP: …` in REAPER's undo history.
 - 🚫 **No surprise pop-ups.** It won't run anything that opens a dialog unless you allow
   it, and it never closes your project or quits REAPER.

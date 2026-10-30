@@ -67,4 +67,21 @@ export function registerSnapshotTools(server: McpServer): void {
       return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
     }
   );
+
+  server.tool(
+    'snapshot_edit',
+    'Rename a mixer snapshot and/or change its description. The saved mixer state is kept. A new name whose file belongs to another snapshot is refused.',
+    {
+      name: z.string().min(1).describe('Name of the snapshot to edit'),
+      newName: z.string().min(1).optional().describe('New name; omit to keep the name'),
+      description: z.string().optional().describe('New description; omit to keep it, "" clears it'),
+    },
+    async ({ name, newName, description }) => {
+      const res = await sendCommand('snapshot_edit', { name, newName, description });
+      if (!res.success) {
+        return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
+    }
+  );
 }

@@ -8,6 +8,7 @@ import {
   settle,
   snapshotRequestUrl,
   snapshotsPollUrl,
+  timeSnapshotName,
   type RequestState,
   type SnapshotsFeed,
 } from './snapshots.js';
@@ -106,5 +107,31 @@ describe('saving', () => {
     expect(blockedBy({ paused: true })).toMatch(/Paused/);
     expect(blockedBy({ readonly: false, paused: false })).toBeNull();
     expect(blockedBy(null)).toBeNull();
+  });
+});
+
+describe('deleting and renaming', () => {
+  it('sends a delete with the name only', () => {
+    expect(snapshotRequestUrl('delete', '1', 'ab', 'mix-A', 'ignored')).toBe(`/_/SET/EXTSTATE/MCPBridge/snap_req/1-ab-delete-${Buffer.from('mix-A').toString('hex')}`);
+  });
+
+  it('sends an edit as name, new name and description, an empty description clearing it', () => {
+    const fields = (url: string) => url.split('-edit-')[1].split('-').map(unhex);
+    expect(fields(snapshotRequestUrl('edit', '1', 'ab', 'mix-A', ' Wide ', ' mix A2 '))).toEqual(['mix-A', 'mix A2', 'Wide']);
+    expect(fields(snapshotRequestUrl('edit', '1', 'ab', 'mix-A', '', 'mix-A'))).toEqual(['mix-A', 'mix-A', '']);
+  });
+});
+
+describe('a save without a name', () => {
+  const at = new Date(2026, 9, 30, 14, 3, 7);
+
+  it('is named by the local date and time, like the quick-save action', () => {
+    expect(timeSnapshotName([], at)).toBe('2026-10-30 14:03:07');
+  });
+
+  it('gets a number when a snapshot already saves to that file', () => {
+    const snap = (name: string) => ({ name, description: '', timestamp: 1, scoped: false, fullChunk: false });
+    expect(timeSnapshotName([snap('2026-10-30 14:03:07')], at)).toBe('2026-10-30 14:03:07 2');
+    expect(timeSnapshotName([snap('2026-10-30 14:03:07'), snap('2026-10-30_14_03_07_2')], at)).toBe('2026-10-30 14:03:07 3');
   });
 });

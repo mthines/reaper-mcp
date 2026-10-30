@@ -44,6 +44,7 @@ export type CommandType =
   | 'snapshot_restore'
   | 'snapshot_list'
   | 'snapshot_delete'
+  | 'snapshot_edit'
   | 'get_track_routing'
   | 'read_track_lufs'
   | 'read_track_correlation'
@@ -278,6 +279,14 @@ export type SnapshotListParams = Record<string, never>;
 
 export interface SnapshotDeleteParams {
   name: string;
+}
+
+export interface SnapshotEditParams {
+  name: string;
+  /** Rename to this; omitted keeps the name */
+  newName?: string;
+  /** Replace the description; omitted keeps it */
+  description?: string;
 }
 
 export interface GetTrackRoutingParams {

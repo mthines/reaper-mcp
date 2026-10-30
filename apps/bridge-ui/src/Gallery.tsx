@@ -126,6 +126,7 @@ export function Gallery() {
                   blocked={s.blocked}
                   now={GALLERY_NOW}
                   keys={false}
+                  initialRow={s.row}
                   onSend={(op, name) => console.info('[gallery]', op, name)}
                 />
               )}

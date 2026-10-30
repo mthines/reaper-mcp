@@ -8,15 +8,18 @@
 --                                 While it keeps changing, the folder is re-read about once a
 --                                 second; ExtState `snapshots` is rewritten only when the list
 --                                 (or the current snapshot) changed.
---   snap_req  = <id>-<token>-<op>-<hex name>[-<hex description>]
---                                 op: restore | save. The token is the bridge's per-run control
+--   snap_req  = <id>-<token>-<op>-<hex name>[-<hex field>…]
+--                                 op: restore | delete <name>, save <name>-<description>,
+--                                 edit <name>-<new name>-<description>. The token is the bridge's per-run control
 --                                 token, only readable from the status feed (REAPER's web server
 --                                 sends no CORS headers), so another site can't make it count.
 --                                 Name and description travel hex-encoded: no URL or `;` escaping.
 --
--- A request runs as an ordinary snapshot_restore / snapshot_save command through the
+-- A request runs as an ordinary snapshot_restore / _save / _delete / _edit command through the
 -- bridge's dispatcher (ctx.run): logged on the page, refused in read-only or paused
 -- mode, one undo point per restore. The answer is published in `snapshots.result`.
+--
+-- It also registers the keybindable snapshot scripts as actions (M.register_actions).
 --
 -- Loaded by mcp_bridge.lua (keeps the bridge under Lua's 200-locals limit).
 -- =============================================================================
@@ -41,6 +44,33 @@ local CURRENT_SECTION, CURRENT_KEY = "MCP_Snapshots", "current_name"
 -- run(cmd) -> response (the bridge's dispatcher, returns { success, data, error }).
 function M.init(c)
   ctx = c
+end
+
+-- The keybindable snapshot scripts setup copies next to the bridge. `reaper-mcp setup` lists them in
+-- reaper-kb.ini while REAPER is closed (ensureSnapshotActions() in cli.ts); when REAPER was open, the
+-- bridge adds the missing ones when it starts. Returns the scripts it added.
+M.ACTION_SCRIPTS = { "mcp_snapshot_quick_save.lua", "mcp_snapshot_next.lua", "mcp_snapshot_prev.lua" }
+
+function M.register_actions(api, scripts_dir, kb_text)
+  local added = {}
+  if type(api.AddRemoveReaScript) ~= "function" then return added end
+  local listed = {}
+  for line in (kb_text or ""):gmatch("[^\r\n]+") do
+    if line:sub(1, 4) == "SCR " then
+      for _, f in ipairs(M.ACTION_SCRIPTS) do
+        if line:find(f, 1, true) then listed[f] = true end
+      end
+    end
+  end
+  for _, f in ipairs(M.ACTION_SCRIPTS) do
+    local path = scripts_dir .. f
+    local fh = not listed[f] and io.open(path, "rb")
+    if fh then
+      fh:close()
+      if (api.AddRemoveReaScript(true, 0, path, true) or 0) > 0 then added[#added + 1] = f end
+    end
+  end
+  return added
 end
 
 local function file_size(path)
@@ -117,10 +147,10 @@ function M.after_command(cmd, response)
   -- A save (page or agent) can replace a file with one of the same size: read that file again.
   -- Deleted files drop out of the cache on the next list().
   local data = type(response.data) == "table" and response.data or {}
-  if cmd.type == "snapshot_save" and type(data.path) == "string" then
+  if (cmd.type == "snapshot_save" or cmd.type == "snapshot_edit") and type(data.path) == "string" then
     cache[data.path] = nil
   end
-  if cmd.type == "snapshot_save" or cmd.type == "snapshot_delete" or cmd.type == "snapshot_restore" then
+  if cmd.type == "snapshot_save" or cmd.type == "snapshot_delete" or cmd.type == "snapshot_restore" or cmd.type == "snapshot_edit" then
     last_scan = -math.huge -- re-read on the next watched tick
   end
 end
@@ -131,21 +161,30 @@ end
 
 -- Runs one page request; returns true when it was valid (and ran)
 local function handle(req)
-  local id, token, op, hname, hdesc = req:match("^(%d+)%-(%x+)%-(%a+)%-(%x+)%-?(%x*)$")
-  if not id or token ~= ctx.token() or #hname % 2 ~= 0 or #hdesc % 2 ~= 0 then return false end
-  local name = unhex(hname):sub(1, NAME_MAX)
-  local cmd
-  if op == "restore" then
-    cmd = { id = "page-" .. id, type = "snapshot_restore", params = { name = name }, source = "page" }
+  local id, token, op, rest = req:match("^(%d+)%-(%x+)%-(%a+)%-([%x%-]*)$")
+  if not id or token ~= ctx.token() then return false end
+  local fields = {}
+  for h in (rest .. "-"):gmatch("(%x*)%-") do
+    if #h % 2 ~= 0 then return false end
+    fields[#fields + 1] = unhex(h)
+  end
+  local name = (fields[1] or ""):sub(1, NAME_MAX)
+  if name == "" then return false end
+  local cmd = { id = "page-" .. id, source = "page" }
+  if op == "restore" or op == "delete" then
+    cmd.type, cmd.params = "snapshot_" .. op, { name = name }
   elseif op == "save" then
-    cmd = { id = "page-" .. id, type = "snapshot_save", params = { name = name, description = unhex(hdesc):sub(1, DESC_MAX) }, source = "page" }
+    cmd.type, cmd.params = "snapshot_save", { name = name, description = (fields[2] or ""):sub(1, DESC_MAX) }
+  elseif op == "edit" and fields[2] and fields[2] ~= "" then
+    cmd.type = "snapshot_edit"
+    cmd.params = { name = name, newName = fields[2]:sub(1, NAME_MAX), description = (fields[3] or ""):sub(1, DESC_MAX) }
   else
     return false
   end
   local response = ctx.run(cmd) or {}
   local data = type(response.data) == "table" and response.data or {}
   result = {
-    id = id, op = op, name = name, ok = response.success == true,
+    id = id, op = op, name = op == "edit" and cmd.params.newName or name, ok = response.success == true,
     error = response.error, warnings = data.warnings, tracksRestored = data.tracksRestored,
   }
   return true
