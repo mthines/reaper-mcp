@@ -86,8 +86,14 @@ reaper-mcp/
       responses.ts            # BridgeResponse, ProjectInfo, TrackInfo, FxInfo, etc.
 
   apps/bridge-ui/             # Bridge status page (React → one self-contained mcp_bridge.html)
-    src/status.ts             # Parses ExtState MCPBridge/status, liveness, log merge (unit-tested)
-    src/App.tsx               # Status, latency strip, searchable/filterable command log
+    src/main.tsx              # Entry: renders app/App.tsx, registers the service worker
+    src/app/                  # The page shell: App, Header, Notices, Offline + the hooks that poll the bridge
+    src/components/           # Shared UI with no bridge knowledge: Combobox, Toggle, Notice, Mark, ResizeHandle, Markdown, icons
+    src/features/<feature>/   # One folder per area: log, stats, timeline, settings, measurements, edit-views, plugins, snapshots
+    src/lib/                  # Pure logic + small hooks: status (feed parsing), commands, log, timeline, sessions, search, format, url-state, analytics
+    src/demo/                 # ?demo's fake bridge and the fixed examples the stories draw (examples.ts, feed.ts)
+    src/test/stories.test.tsx # Runs every story's play function as a vitest test (jsdom)
+    .storybook/               # Storybook (React + Vite): pnpm storybook, nx build-storybook bridge-ui
     build.mjs                 # esbuild bundle inlined into dist/apps/bridge-ui/mcp_bridge.html
     build-config.mjs          # esbuild options + HTML template shared by build.mjs and dev.mjs
     dev.mjs                   # pnpm dev:bridge: live-reload page, /_/ proxied over one socket, reaper/ installed on save
@@ -110,7 +116,7 @@ reaper-mcp/
 
   scripts/
     sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (primary install model)
-    plugin-list.mjs           # Rebuild docs/PLUGINS.md's built-in plugin table from LoreKit (logic: apps/bridge-ui/src/plugin-list.mjs)
+    plugin-list.mjs           # Rebuild docs/PLUGINS.md's built-in plugin table from LoreKit (logic: apps/bridge-ui/src/features/plugins/plugin-list.mjs)
 
   reaper/                     # Files installed INTO REAPER (copied by setup command)
     mcp_tracks_lib.lua        # Pure track-structure + routing logic (wasmoon-tested), loaded by the bridge
@@ -708,7 +714,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   connection); it stays in CLOSE_WAIT/CLOSED, and near 100 the server stops answering until REAPER restarts. The
   bridge counts them every 30 s (`web_watch` in `mcp_bridge.lua`: `lsof` in the background into
   `mcp_bridge_data/web_sockets`, macOS/Linux) and publishes `status.web = { stuck, limit }`; the page warns from 50%
-  (`webSocketLevel()` in `status.ts`) and the bridge prints one console line at 90%. Test scripts that hit the web
+  (`webSocketLevel()` in `src/lib/status.ts`) and the bridge prints one console line at 90%. Test scripts that hit the web
   server reuse one connection (one `curl` with several URLs), or each request leaks a socket.
 
 - The bridge publishes JSON to **non-persistent ExtState** `MCPBridge/status` (in memory, no disk IO): counters,
@@ -729,7 +735,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   Calls and Tools views (and their counts) show the range too; older matches end the list with a button that widens
   the range to the next one that includes them.
 - URL state: navigation state lives in the query string via `useUrlState(key, default, { validate })` in
-  `src/url-state.ts` (a History API port of LoreKit web's hook: JSON values, a value equal to the default is dropped,
+  `src/lib/url-state.ts` (a History API port of LoreKit web's hook: JSON values, a value equal to the default is dropped,
   changes in one tick become one history entry), so Back/Forward step through it and a link or reload reopens it.
   Params: `view`, `range`, `span` (dragged timeline span), `filter` (all/errors), `q` (search; replaces, never pushes),
   `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, and on Plugins `coverage`, `inProject`, `plugin`
@@ -738,24 +744,24 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   state a viewer would want to go back to or share (tabs, filters, an open drawer); keep transient UI (hover, drag,
   copied flags) and per-viewer preferences (grouping, tokens) in `useState`/localStorage. Give each param a
   `validate` guard so a stale or hand-edited link falls back to the default, and keep keys unique across views.
-- Search (`parseQuery()` / `matchesQuery()` in `status.ts`): space-separated terms, all must match. A word matches the
+- Search (`parseQuery()` / `matchesQuery()` in `src/lib/search.ts`): space-separated terms, all must match. A word matches the
   command name, error or params text; `key:value` matches one param exactly (`trackIndex:6` is not 16; quote values
   with spaces, `fxName:"VST3: Pro-Q 3"`). Selecting text in a command's Params offers **Filter** (the whole param when
   the selection is on one `"key": value` line, `termFromSelection()`), which adds the term to `q` with a push.
 - Measurement results: the bridge keeps a compact result `r` (built in `reaper/mcp_edit_views_lib.lua`, which keeps
   `mcp_bridge.lua` under Lua's 200-locals limit) on meters/LUFS/correlation/crest/spectrum entries
   (`RESULT_FIELDS`, 48 spectrum bands) and, for `render_track_to_wav`, a waveform read from the WAV before the server
-  deletes it (`wav_waveform()`: 120 min/max slices, peak/RMS dBFS, clipped sample count; drawn on a dB scale to −48). `Measurement.tsx` draws them,
+  deletes it (`wav_waveform()`: 120 min/max slices, peak/RMS dBFS, clipped sample count; drawn on a dB scale to −48). `src/features/measurements/` draws them (one component per kind),
   colored by value (amber from −6 dB, red at 0), with the previous call on the same track ghosted (dashed/hollow) and
   its headline value and change in a "Previous call" line. Add a measuring command in `RESULT_FIELDS`, `MEASUREMENTS`
-  (`status.ts`) and a `Measurement` kind together.
+  (`src/lib/commands.ts`), a `Measurement` kind and an example in `src/demo/examples.ts` together.
   Sidecar tools the server composes itself (`analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment`,
   `analyze_track_aesthetics`) never pass through a bridge handler, so the server logs each result with the internal
-  `_log_result` command (`src/tool-log.ts`, fire-and-forget; `r` travels as a JSON string), which the bridge records as
+  `_log_result` command (`apps/reaper-mcp-server/src/tool-log.ts`, fire-and-forget; `r` travels as a JSON string), which the bridge records as
   an entry for that tool (`record_tool_result()`). Their compact `r` is built by `offlineSummary()` /
   `alignmentSummary()` / `aestheticsSummary()` and drawn as the `offline` / `alignment` / `aesthetics` measurements.
 - Edit views: writes and listings also keep an `r` (`M.summary` in `mcp_edit_views_lib.lua`), drawn by
-  `EditViews.tsx` from `editViewOf()` (`src/edit-views.ts`). A write reads the state it touches before its handler
+  `src/features/edit-views/` (`EditViews.tsx`, one view per kind in `views/`) from `editViewOf()` (`edit-views.ts`). A write reads the state it touches before its handler
   runs (`M.before`) and again after, so the drawer shows before → after: track and FX parameter changes (the
   plugin's own readout), the automation window an edit touched (padded 25%, at least 4 s; automation items drawn as blocks tinted by
   pool with their name and shared curve, moved/deleted items and a changed pool's old curve dashed), MIDI notes as a piano
@@ -766,7 +772,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   (tracks diffed by GUID), routing (sends/receives/hardware outs with level bars, the old level ghosted), the time
   selection and edit cursor, MIDI CC as a stepped lane in beats (the automation view, unit `cc`), and
   `get_fx_parameters` as readout bars. List diffs share `listDiff()` in `edit-views.ts`. Lists are capped so
-  an entry stays a few KB. Add a command in `M.summary`, `KIND_OF` (`edit-views.ts`) and a gallery story together;
+  an entry stays a few KB. Add a command in `M.summary`, `KIND_OF` (`edit-views.ts`) and an example in `src/demo/examples.ts` together;
   behaviour tests run the real bridge in wasmoon (`bridge-status.test.ts`, "edit views in the log").
 - Short windows (≤ 640px tall, an app window docked beside REAPER): the log is the page. Stats, timeline and footer
   hide; the header's Rebuild & reload, Settings and GitHub fold into a ⋯ menu (`HeaderMenu`, dotted when a rebuild
@@ -779,31 +785,35 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   views, where markers are only context, every marker name waits for hover). Under ~460px mixer and
   route rows drop their added/moved/changed word for a coloured edge plus one legend (`ChangeLegend`), so names stay
   readable. Structure edits in a big project draw a 64-row window around the change (`from`). Check new views at
-  ~300px in the gallery.
-- Component gallery (`?gallery`, like Storybook): the page's real components from fixed example data, every
-  state side by side (`src/Gallery.tsx`, stories in `src/gallery-stories.ts`). Opens only from a local build
-  (`file://`) or when the bridge runs in developer mode (`galleryAllowed()`; while REAPER is unreachable, the mode it last reported, `developerMode()`); otherwise the page opens as usual.
-  Shift-click the logo to get there. Add a story with every new component or state; `gallery-stories.test.ts`
-  fails when a measuring command or an edit view kind has no story.
+  ~300px with their `Narrow` story.
+- Storybook (`pnpm storybook`, port 6006; `nx build-storybook bridge-ui` → `dist/storybook/bridge-ui`): every component
+  in `src/components/` and `src/features/` has a sibling `<Name>.stories.tsx` (a `Default` story with every state side
+  by side, and a `Playground` with controls); behaviour lives in `<Name>.test.stories.tsx` (title `…/Tests`,
+  `tags: ['test']`) as play functions. `src/test/stories.test.tsx` runs every story and play function in vitest
+  (`composeStories`, jsdom), so the stories are the components' tests: assert what a viewer sees and can do (roles,
+  names, text), never CSS classes or internal state. Stories draw fixed data: `src/demo/examples.ts` (measurements,
+  edit views, drawer, Snapshots states; `measuredExamples()` / `editExamples()` per kind) and `exampleFeed()` in
+  `src/demo/feed.ts` (the `?demo` bridge on a frozen clock and seeded dice). `examples.test.ts` fails when a measuring
+  command or an edit view kind has no example.
 - Slow (≥100 ms) / very slow (≥500 ms) marks skip commands that are slow by nature (renders, plugin loads, project
-  IO, `run_plan`/`run_action`): `LONG_RUNNING` in `status.ts` and `mcp_bridge.lua`, kept equal by `status.test.ts`.
+  IO, `run_plan`/`run_action`): `LONG_RUNNING` in `src/lib/commands.ts` and `mcp_bridge.lua`, kept equal by `status.test.ts`.
 - Installable PWA: `apps/bridge-ui/public/` (manifest, service worker, icons) is copied next to the page; every file is
   `mcp_bridge*` and the service worker is scoped to `/mcp_bridge` so REAPER's other web remotes are untouched.
 - Sessions: each `reaper-mcp serve` process tags every command with flat top-level `sessionId` / `sessionDir` /
   `sessionClient` (from Claude Code's `CLAUDE_CODE_SESSION_ID` / `CLAUDE_PROJECT_DIR`, else `pid-<n>` / cwd — no hook
-  needed) and pings `_session` every 20s plus a goodbye on exit (`src/session.ts`). The bridge keeps the last hour of
+  needed) and pings `_session` every 20s plus a goodbye on exit (`apps/reaper-mcp-server/src/session.ts`). The bridge keeps the last hour of
   sessions in the status; the page shows connected agents, per-session chips, and Calls / Tools / Sessions views.
   Entries also carry `s` (session) and `p` (params JSON, truncated to 400 chars).
 - Settings the page writes via `/_/SET/EXTSTATE[PERSIST]/MCPBridge/<key>/<0|1>`, echoed back in `status.settings`:
   `cfg_paused` (in-memory: every non-`_` command fails until resumed or REAPER restarts), `cfg_readonly` (persistent:
   only `get_`/`list_`/`read_`/`analyze_`/`search_`/`measure_` + transport/navigation pass — `readonly_allows()`,
-  mirrored by `commandKind()` in `status.ts`), `cfg_open_on_start` (persistent, overrides `OPEN_UI_ON_START`).
+  mirrored by `commandKind()` in `src/lib/commands.ts`), `cfg_open_on_start` (persistent, overrides `OPEN_UI_ON_START`).
   Desktop error notifications are page-side (Notification API + localStorage).
 - `status.health` (re-checked every 10s): SWS present, JSFX installed in `Effects/reaper-mcp/`, and `outdated` when the
   installed `mcp_bridge.lua` differs from the running copy (setup ran; restart the script). Tested in wasmoon by
   `bridge-status.test.ts`.
 - One-click update and restart (`status.control`): the page checks GitHub's latest release (cached 6h in
-  localStorage, `src/update.ts`) and offers **Update**; the outdated notice offers **Restart bridge**. The page writes
+  localStorage, `src/lib/update.ts`) and offers **Update**; the outdated notice offers **Restart bridge**. The page writes
   `/_/SET/EXTSTATE/MCPBridge/request/<update|restart>-<token>`; the token is random per bridge run and only readable
   from the status feed (REAPER's web server sends no CORS headers), so other sites can fire the request but never with
   a valid token. Update runs `<clone>/scripts/update.sh` (`git pull --ff-only` + `install.sh`; refuses on local changes)
@@ -827,14 +837,14 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   only with their own `lk_ro_` token from Settings (kept in localStorage, never sent to the bridge). Records link into
   LoreKit by row id. The tab stays hidden until the bridge has published its list. **Contribute N** (with a token, when you have
   `user::` records) opens GitHub's new-file page with them as one file under `knowledge/contributions/` (format and
-  checks: `apps/bridge-ui/src/plugin-contributions.mjs`), so GitHub forks and opens the PR. The `plugin-contributions`
+  checks: `apps/bridge-ui/src/features/plugins/plugin-contributions.mjs`), so GitHub forks and opens the PR. The `plugin-contributions`
   workflow (`pull_request_target`, never runs PR code) comments what would be published; the maintainer's
   `publish-to-lorekit` label writes them to the built-in layer with secret `LOREKIT_PUBLISH_TOKEN` (`lk_rw_`, a
   writer in the `reaper-mcp` org) and closes the PR. Files a maintainer commits straight to `main` are published by
   running the workflow by hand (`workflow_dispatch`, job `publish-main`, optional `dry_run`): it publishes every file
   in the folder and removes them in one bot commit. Records too long for the URL open with a paste prompt
-  (`PASTE_HERE` in `src/contribute.ts`) and are on the clipboard. Client: `src/lorekit.ts`,
-  hook: `src/useKnowledge.ts`, matching: `src/plugins.ts`.
+  (`PASTE_HERE` in `src/features/plugins/contribute.ts`) and are on the clipboard. Client: `src/features/plugins/lorekit.ts`,
+  hook: `src/features/plugins/useKnowledge.ts`, matching: `src/features/plugins/plugins.ts`.
   Members of the `reaper-mcp` LoreKit org can skip GitHub: an `lk_rw_` token under
   Settings → **Publish to built-in** (localStorage, separate from the read token) adds a **Publish to built-in** button
   to their own records. It runs the same `parseContribution` checks, `POST /memories` with `org: reaper-mcp`, then
@@ -842,7 +852,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   them to the org as a member. With that token the header's **Contribute N** becomes **Publish N to built-in**: one
   inline confirm, then each record in turn (`publishAll()`, carries on past a failure, offers Retry for the failed).
   Settings links non-members to ask on Discord or through the `contributor-request` GitHub issue form
-  (`.github/ISSUE_TEMPLATE/contributor-request.yml`). Logic: `publishRecord()` in `src/lorekit.ts`; `?demo` fakes it.
+  (`.github/ISSUE_TEMPLATE/contributor-request.yml`). Logic: `publishRecord()` in `src/features/plugins/lorekit.ts`; `?demo` fakes it.
   One plugin installed in several formats (same title and vendor, e.g. `VST3i:`/`CLAPi:`/`VSTi: Vital (Vital Audio)`)
   is one row (`PluginRow.variants`, VST3 preferred for the Teach prompt), counting the instances of every format.
 - Snapshots tab (`view=snapshots`, shown when `status.control.snapshots`): lists the project's snapshots, loads one
@@ -858,15 +868,15 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   (`run_command()`), so it is logged (entry `src: "page"`), one undo point, and refused while read-only or paused,
   then answers in `snapshots.result` (echoing `id`). A successful restore from anywhere becomes `current`
   (ExtState `MCP_Snapshots/current_name`, which the next/prev actions continue from). Logic:
-  `reaper/mcp_snapshots_ui_lib.lua`; page: `src/snapshots.ts`, `src/useSnapshots.ts`, `src/SnapshotsView.tsx`;
+  `reaper/mcp_snapshots_ui_lib.lua`; page: `src/features/snapshots/` (`snapshots.ts`, `useSnapshots.ts`, `SnapshotsView.tsx`);
   tests: `bridge-snapshots.test.ts` (wasmoon), `snapshots.test.ts`. `snapshot_save` writes metadata (name,
   description, timestamp, trackCount, scoped, fullChunk) ahead of `mixerState`.
-- Usage statistics: `src/analytics.ts` is the only module that imports `@dash0/sdk-web` (pinned); components call
+- Usage statistics: `src/lib/analytics.ts` is the only module that imports `@dash0/sdk-web` (pinned); components call
   `track()` / `trackView()` with a typed `TrackEvent`. Events are listed in `apps/bridge-ui/tracking-plan.yaml`; add an
   event there and in `TrackEvent` together, never with names, search text, tokens or paths. The destination is the
   server's `DEFAULT_DESTINATION` (read by `build.mjs` from `telemetry-consent.ts`), service `reaper-mcp-bridge-ui`.
   On by default, off via Settings → Privacy, GPC/DNT, or `?demo`; fetch/xhr tracing stays off (the page polls the bridge).
-- Payload shapes live in `apps/bridge-ui/src/status.ts` (`BridgeStatus`, `BridgeHistory`, `LongHistory`) and
+- Payload shapes live in `apps/bridge-ui/src/lib/status.ts` (`BridgeStatus`) and `src/lib/timeline.ts` (`BridgeHistory`, `LongHistory`) and
   `publish_status()` / `publish_history()` / `publish_log()` in `mcp_bridge.lua` — change both together.
 
 ## Platform-Specific Paths
@@ -902,7 +912,9 @@ ESLint enforces dependency rules via `@nx/enforce-module-boundaries`:
     what the tool returned instead.
   - Name tests after the behaviour (`"refuses an unknown marker index and changes nothing"`), not the function.
 - **Test files**: `tools/*.test.ts` (tool responses with `sendCommand()` stubbed), `*-lib.test.ts` and
-  `bridge-*.test.ts` (the real Lua libraries and bridge running in wasmoon against a fake `reaper` API)
+  `bridge-*.test.ts` (the real Lua libraries and bridge running in wasmoon against a fake `reaper` API); in the
+  bridge page, `*.test.stories.tsx` play functions (what a viewer sees and does, run by `src/test/stories.test.tsx`)
+  and `*.test.ts` next to the pure modules in `src/lib/` and `src/features/*/` (bridge and LoreKit payloads, URLs)
 - **Validate changes with tests**: Always write small, simple, and effective tests to validate your changes. Prefer focused tests that check one behaviour well. If modifying existing code, add or update tests to cover the change before considering it complete.
 
 ## Running the MCP Server

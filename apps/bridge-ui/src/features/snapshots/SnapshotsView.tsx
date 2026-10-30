@@ -28,9 +28,9 @@ export function SnapshotsView({
   query?: string;
   now: number;
   onSend: (op: SnapshotOp, name: string, description?: string, newName?: string) => void;
-  /** Number keys load snapshots (off in the gallery, where several views share the page) */
+  /** Number keys load snapshots (off in stories, where several views share the page) */
   keys?: boolean;
-  /** Gallery: start with this row in rename or delete-confirm mode */
+  /** Stories: start with this row in rename or delete-confirm mode */
   initialRow?: RowMode;
 }) {
   const [row, setRow] = useState<RowMode | null>(initialRow ?? null);

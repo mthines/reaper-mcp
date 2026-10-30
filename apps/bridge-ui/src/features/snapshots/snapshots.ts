@@ -179,7 +179,7 @@ export function settle(req: RequestState | null, feed: SnapshotsFeed | null, now
   return req;
 }
 
-/** Example snapshots for `?demo` and the gallery */
+/** Example snapshots for `?demo` and the stories */
 export function demoSnapshots(now: number): SnapshotsFeed {
   const min = 60_000;
   return {

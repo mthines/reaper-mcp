@@ -88,7 +88,7 @@ function fakeResult(c: string): Record<string, unknown> | undefined {
       };
     }
   }
-  // Edit views: the gallery's example for the same command
+  // Edit views: the stories' example for the same command
   return EDIT_EXAMPLES.find((st) => st.entry.c === c)?.entry.r;
 }
 

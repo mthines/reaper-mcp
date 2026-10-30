@@ -12,7 +12,7 @@ export function SaveForm({
   blocked: string | null;
   saving: boolean;
   onSave: (name: string, description: string) => void;
-  /** Gallery: start with these values */
+  /** Stories: start with these values */
   initial?: { name: string; description?: string; confirm?: boolean };
 }) {
   const [name, setName] = useState(initial?.name ?? '');
@@ -71,7 +71,7 @@ export function SaveForm({
   );
 }
 
-/** Gallery: the save form with a name typed that would replace a snapshot */
+/** Stories: the save form with a name typed that would replace a snapshot */
 export function SaveFormPreview(props: { snapshots: SnapshotInfo[]; name: string; confirm?: boolean }) {
   return <SaveForm snapshots={props.snapshots} blocked={null} saving={false} onSave={() => undefined} initial={{ name: props.name, confirm: props.confirm }} />;
 }

@@ -22,7 +22,7 @@ export const EXAMPLE_NOW = Date.UTC(2026, 9, 29, 20, 30);
 let seq = 100;
 function call(c: string, params: Record<string, unknown>, r: Record<string, unknown> | undefined, opts: Partial<CommandEntry> = {}): CommandEntry {
   seq += 1;
-  return { n: seq, t: EXAMPLE_NOW - 60_000 + seq * 1000, c, ms: 4.2, ok: true, s: 'gallery', p: JSON.stringify(params), r, ...opts };
+  return { n: seq, t: EXAMPLE_NOW - 60_000 + seq * 1000, c, ms: 4.2, ok: true, s: 'example', p: JSON.stringify(params), r, ...opts };
 }
 
 /** The same call made two minutes earlier, with other results */
@@ -78,7 +78,7 @@ function measurementExampleList(): Example[] {
   const spectrum = call('read_track_spectrum', track(8, { fftSize: 4096 }), { ...spec, peakDb: -7.4, rmsDb: -18.2, bands: bands() });
   const spectrumHot = call('read_track_spectrum', track(9, { fftSize: 4096 }), { ...spec, peakDb: -0.4, rmsDb: -9.8, bands: bands(14, 8) });
 
-  const render = { trackIndex: 0, startTime: 30, endTime: 35, commandId: 'gallery' };
+  const render = { trackIndex: 0, startTime: 30, endTime: 35, commandId: 'example' };
   const wave = call('render_track_to_wav', render, { ...waveform(0.55), rmsDb: -19.4, clipped: 0 }, { ms: 912 });
   const waveClipped = call('render_track_to_wav', { ...render, trackIndex: 1 }, { ...waveform(1.1, 0.06), rmsDb: -11.2, clipped: 37 }, { ms: 1043 });
   const waveQuiet = call('render_track_to_wav', { ...render, trackIndex: 2 }, { ...waveform(0.06, 0.004), rmsDb: -42.5, clipped: 0 }, { ms: 870 });
