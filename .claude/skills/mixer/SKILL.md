@@ -108,7 +108,7 @@ Shipped baseline at the project `.claude/knowledge/` or `~/.claude/knowledge/`
 - `genres/{genre}.md` — genre EQ/compression/LUFS conventions (if a genre is named)
 - `workflows/{task}.md` — step-by-step procedures; map the request to one:
   gain-staging · session-prep · vocal-chain · drum-bus · low-end · stereo-image ·
-  master-bus · editing · stem-prep · delivery
+  master-bus · editing · stem-prep · delivery · section-levels
 - `reference/*.md` — frequencies, compression, metering, perceived-loudness, aesthetics-scoring,
   common-mistakes (read these instead of guessing).
 
@@ -212,6 +212,12 @@ loudness/limiting, defer to `/mastering`.
   measurement that disagrees is suspect first: diff plugin parameters against
   the before-snapshot, check for pre-fader readings, a bypassed meter or a
   different section.
+- **Section level changes are pooled automation items, never item gain.** When a
+  track is too loud or quiet in one part of the song, put automation items on its
+  Volume envelope with one pool per section type (`Vox Chorus` on every chorus),
+  so one edit moves every repeat (`workflows/section-levels.md`). Item gain and
+  take volume change what the FX chain receives; loose envelope points drift
+  apart between repeats.
 - **Never prefix track names with their parent or role** ("A INST", "STEM DRUMS",
   "LIVE OUT"). The folder already gives the context: a copy under `MIX A` is
   `INST`, not `A INST`. Keep the user's names and duplicate names across folders;

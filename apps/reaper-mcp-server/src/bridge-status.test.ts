@@ -11,7 +11,7 @@ const REAPER_DIR = join(__dirname, '../../../reaper');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
 const SCRIPTS = '/reaper/Scripts/';
 const BRIDGE_DIR = `${SCRIPTS}mcp_bridge_data/`;
-const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_edit_views_lib.lua'];
+const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua'];
 
 interface Entry { n: number; t: number; c: string; ok: boolean; s?: string; p?: string; e?: string; r?: Record<string, unknown> }
 type Row = [number, number, number, number, number];
@@ -284,9 +284,53 @@ const VOLUME_ENVELOPE = `
   api.GetEnvelopePoint = function(_, i) local p = pts[i + 1] return true, p[1], p[2], p[3], 0, false end
   api.InsertEnvelopePoint = function(_, t, v, s) pts[#pts + 1] = { t, v, s } end
   api.Envelope_SortPoints = function() table.sort(pts, function(a, b) return a[1] < b[1] end) end
+  -- The envelope lib's calls (-1 = the envelope itself)
+  api.CountEnvelopePointsEx = function(e) return api.CountEnvelopePoints(e) end
+  api.GetEnvelopePointEx = function(e, _, i) return api.GetEnvelopePoint(e, i) end
+  api.InsertEnvelopePointEx = function(e, _, t, v, s) return api.InsertEnvelopePoint(e, t, v, s) end
+  api.Envelope_SortPointsEx = function(e) return api.Envelope_SortPoints(e) end
+`;
+
+// The volume envelope above with one chorus automation item (pool 7, -1 dB) that pooled copies share
+const POOLED_ENVELOPE = `${VOLUME_ENVELOPE}
+  ais = { { pool = 7, pos = 10, len = 4 } }
+  pool_pts = { [7] = { { 0, 0.891, 0 }, { 4, 0.891, 0 } } }
+  local KEY = { D_POOL_ID = "pool", D_POSITION = "pos", D_LENGTH = "len" }
+  api.CountAutomationItems = function() return #ais end
+  api.GetSetAutomationItemInfo = function(_, i, parm, v, set)
+    local a = ais[i + 1]
+    if set then a[KEY[parm] or parm] = v end
+    return a[KEY[parm] or parm] or 0
+  end
+  api.GetSetAutomationItemInfo_String = function(_, i, parm) return true, ais[i + 1].pool == 7 and "Vox Chorus" or "" end
+  api.InsertAutomationItem = function(_, pool, pos, len)
+    ais[#ais + 1] = { pool = pool, pos = pos, len = len }
+    return #ais - 1
+  end
+  local function item_pts(ai) return pool_pts[ais[(ai & ~0x10000000) + 1].pool] or {} end
+  local plain_count, plain_get = api.CountEnvelopePointsEx, api.GetEnvelopePointEx
+  api.CountEnvelopePointsEx = function(e, ai) if ai < 0 then return plain_count(e, ai) end return #item_pts(ai) end
+  api.GetEnvelopePointEx = function(e, ai, i)
+    if ai < 0 then return plain_get(e, ai, i) end
+    local p = item_pts(ai)[i + 1]
+    return true, ais[(ai & ~0x10000000) + 1].pos + p[1], p[2], p[3], 0, false
+  end
 `;
 
 describe('edit views in the log', () => {
+  it('draws pooled automation items with their shared curve, the new one marked', async () => {
+    const bridge = await startBridge(POOLED_ENVELOPE);
+    await bridge.send('insert_automation_item', { trackIndex: 0, envelopeIndex: 0, position: 30, length: 4, poolId: 7 });
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({
+      env: 'Volume', unit: 'dB',
+      ais: [[10, 4, 7, 'Vox Chorus'], [30, 4, 7, 'Vox Chorus']],
+      pools: [[7, [[0, -1, 0], [4, -1, 0]]]],
+      ai: 1,
+      wasAis: [[10, 4, 7, 'Vox Chorus']],
+    });
+  });
+
   it('shows a track change as before and after, in dB', async () => {
     const bridge = await startBridge('api.tracks[1].vals.D_VOL = 1');
     await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -6 });

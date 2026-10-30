@@ -72,6 +72,11 @@ export type CommandType =
   | 'set_envelope_properties'
   | 'clear_envelope'
   | 'remove_envelope_points'
+  | 'edit_envelope_points'
+  | 'list_automation_items'
+  | 'insert_automation_item'
+  | 'set_automation_item'
+  | 'delete_automation_item'
   // MIDI editing
   | 'create_midi_item'
   | 'list_midi_items'
@@ -528,18 +533,22 @@ export interface SetEnvelopePropertiesParams {
 export interface ClearEnvelopeParams {
   trackIndex: number;
   envelopeIndex: number;
+  automationItemIndex?: number; // the points inside this automation item instead of the envelope
 }
 
 export interface RemoveEnvelopePointsParams {
   trackIndex: number;
   envelopeIndex: number;
+  automationItemIndex?: number;
   timeStart: number;  // seconds (inclusive)
   timeEnd: number;    // seconds (exclusive)
 }
 
+/** value is the raw envelope value; db (volume envelopes only) replaces it */
 export interface InsertEnvelopePointItem {
   time: number;       // seconds
-  value: number;
+  value?: number;
+  db?: number;
   shape?: number;     // 0=linear, 1=square, 2=slow, 3=fast start, 4=fast end, 5=bezier
   tension?: number;   // -1.0 to 1.0
 }
@@ -547,7 +556,59 @@ export interface InsertEnvelopePointItem {
 export interface InsertEnvelopePointsParams {
   trackIndex: number;
   envelopeIndex: number;
-  points: InsertEnvelopePointItem[];
+  automationItemIndex?: number;
+  points: string;     // JSON array of InsertEnvelopePointItem
+}
+
+/** Fields left out keep the point's current value */
+export interface EditEnvelopePointItem {
+  index: number;
+  time?: number;
+  value?: number;
+  db?: number;
+  shape?: number;
+  tension?: number;
+}
+
+export interface EditEnvelopePointsParams {
+  trackIndex: number;
+  envelopeIndex: number;
+  automationItemIndex?: number;
+  points: string;     // JSON array of EditEnvelopePointItem
+}
+
+export interface AutomationItemFields {
+  position?: number;     // seconds
+  length?: number;       // seconds
+  startOffset?: number;  // seconds into the pool's points
+  playRate?: number;
+  baseline?: number;     // 0..1 (0.5 = unchanged)
+  amplitude?: number;    // -1..1 (1 = unchanged)
+  loop?: boolean;
+  name?: string;         // the pool's name, shared by every instance
+}
+
+export interface InsertAutomationItemParams extends AutomationItemFields {
+  trackIndex: number;
+  envelopeIndex: number;
+  position: number;
+  length: number;
+  poolId?: number;            // an existing pool: a pooled instance with the same points
+  points?: string;            // new pool only: JSON array of InsertEnvelopePointItem, time from the item start
+  captureEnvelope?: boolean;  // move the underlying points in range into the new item
+}
+
+export interface SetAutomationItemParams extends AutomationItemFields {
+  trackIndex: number;
+  envelopeIndex: number;
+  automationItemIndex: number;
+}
+
+export interface DeleteAutomationItemParams {
+  trackIndex: number;
+  envelopeIndex: number;
+  automationItemIndex: number;
+  preservePoints?: boolean;   // keep the item's points on the underlying envelope
 }
 
 // --- Composite batch tool param types ---

@@ -82,11 +82,12 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   envelopes: {
     name: 'envelopes',
-    description: 'Automation envelopes: create, inspect, insert/delete points, clear, batch insert, set properties. Supports volume, pan, mute, width, trim volume, and FX parameter envelopes.',
+    description: 'Automation envelopes: create, inspect, insert/edit/delete points (dB on volume envelopes), clear, batch insert, set properties, and pooled automation items (one pool per repeated section). Supports volume, pan, mute, width, trim volume, and FX parameter envelopes.',
     tools: [
       'create_track_envelope', 'get_track_envelopes', 'get_envelope_points',
       'insert_envelope_point', 'insert_envelope_points', 'delete_envelope_point',
-      'clear_envelope', 'remove_envelope_points', 'set_envelope_properties',
+      'clear_envelope', 'remove_envelope_points', 'set_envelope_properties', 'edit_envelope_points',
+      'list_automation_items', 'insert_automation_item', 'set_automation_item', 'delete_automation_item',
     ],
   },
   analysis: {

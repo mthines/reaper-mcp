@@ -14,6 +14,7 @@ import {
   newPoints,
   routeIds,
   timelineDiff,
+  type AutoItem,
   type ChangeRow,
   type EditView,
   type EnvPoint,
@@ -417,7 +418,8 @@ function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) {
   const when = (t: number, digits = 1) =>
     v.beats ? `beat ${+(t + 1).toFixed(digits === 2 ? 2 : 1)}` : clock(t, digits);
   const span = Math.max(0.001, v.to - v.from);
-  const vals = [...v.pts, ...(v.was ?? [])].map((p) => p[1]);
+  const poolPts = [...(v.pools ?? []), ...(v.wasPools ?? [])].flatMap((p) => p[1]);
+  const vals = [...v.pts, ...(v.was ?? []), ...poolPts].map((p) => p[1]);
   const { top, bottom, ticks } = envDomain(v.unit, vals.length ? vals : [0]);
   const x = (t: number) => ((t - v.from) / span) * EW;
   const y = (val: number) =>
@@ -449,7 +451,14 @@ function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) {
           unit={v.unit === "cc" ? v.env.split(" · ")[1] : undefined}
         />
         <Readout label={v.unit === "cc" ? "Events" : "Points"} value={String(v.count)} />
-        {v.was && (
+        {v.ais && (
+          <Readout
+            label="Items"
+            value={String(v.ais.length + (v.aisMore ?? 0))}
+            unit={plural(new Set(v.ais.map((a) => a[2])).size, "pool")}
+          />
+        )}
+        {v.was && (added.size > 0 || removed.length > 0 || !v.ais) && (
           <Readout
             label="Changed"
             value={`+${added.size} −${removed.length}`}
@@ -508,7 +517,11 @@ function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) {
                 vectorEffect="non-scaling-stroke"
               />
             )}
+            {v.ais && (
+              <AutomationItems v={v} x={x} y={y} />
+            )}
           </svg>
+          {v.ais && <AutomationItemLabels v={v} x={x} />}
           {removed.filter(inView).map((p, i) => (
             <span
               key={`r${i}`}
@@ -545,15 +558,150 @@ function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) {
           +{plural(v.otherCcs, "other controller")} in this item (filter with ccNumber)
         </div>
       )}
-      {v.was && (
+      {(v.was || v.ais) && (
         <Legend
           items={[
-            ["lg-line", "Now"],
-            ["lg-previous", "Before"],
-            ["lg-new", "Added or moved"],
+            ...(v.was
+              ? ([
+                  ["lg-line", "Now"],
+                  ["lg-previous", "Before"],
+                  ["lg-new", "Added or moved"],
+                ] as Array<[string, string]>)
+              : []),
+            ...(v.ais ? ([["lg-ai", "Automation item (one colour per pool)"]] as Array<[string, string]>) : []),
           ]}
         />
       )}
+    </>
+  );
+}
+
+type EnvView = Extract<EditView, { kind: "envelope" }>;
+
+/** One colour per pool, in the order pools first appear, so pooled items share it */
+function poolColors(v: EnvView): Map<number, string> {
+  const colors = new Map<number, string>();
+  for (const a of [...(v.ais ?? []), ...(v.wasAis ?? [])])
+    if (!colors.has(a[2])) colors.set(a[2], `var(--h${colors.size % 6})`);
+  return colors;
+}
+
+const sameItem = (a: AutoItem, b: AutoItem) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+
+/** A pool's curve placed at an item, held at its last value to the item's end */
+function poolCurve(
+  pts: EnvPoint[],
+  item: AutoItem,
+  x: (t: number) => number,
+  y: (v: number) => number,
+): string {
+  const placed = pts
+    .filter((p) => p[0] <= item[1] + 1e-6)
+    .map((p) => [item[0] + p[0], p[1], p[2]] as EnvPoint);
+  if (!placed.length) return "";
+  const last = placed[placed.length - 1];
+  if (last[0] < item[0] + item[1]) placed.push([item[0] + item[1], last[1], 0]);
+  if (placed[0][0] > item[0]) placed.unshift([item[0], placed[0][1], 0]);
+  return curve(placed, x, y);
+}
+
+/** Automation items over the envelope (they override it where they sit), each with its pool's curve */
+function AutomationItems({
+  v,
+  x,
+  y,
+}: {
+  v: EnvView;
+  x: (t: number) => number;
+  y: (v: number) => number;
+}) {
+  const colors = poolColors(v);
+  const pts = new Map((v.pools ?? []).map((p) => [p[0], p[1]]));
+  const wasPts = new Map((v.wasPools ?? []).map((p) => [p[0], p[1]]));
+  const ais = v.ais ?? [];
+  // Items that moved, resized or went: their old place, dashed
+  const gone = (v.wasAis ?? []).filter((w) => !ais.some((a) => sameItem(a, w)));
+  return (
+    <g>
+      {gone.map((a, i) => (
+        <rect
+          key={`g${i}`}
+          className="ev-ai-gone"
+          x={x(a[0])}
+          width={Math.max(0.5, x(a[0] + a[1]) - x(a[0]))}
+          y={0}
+          height={EH}
+          style={{ stroke: colors.get(a[2]) }}
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+      {ais.map((a, i) => {
+        const color = colors.get(a[2]);
+        const before = wasPts.get(a[2]);
+        const now = pts.get(a[2]) ?? [];
+        const changed = before && JSON.stringify(before) !== JSON.stringify(now);
+        return (
+          <g key={i}>
+            <rect
+              className="ev-ai-cover"
+              x={x(a[0])}
+              width={Math.max(0.5, x(a[0] + a[1]) - x(a[0]))}
+              y={0}
+              height={EH}
+            />
+            <rect
+              className={`ev-ai ${v.ai === i ? "ev-ai-touched" : ""}`}
+              x={x(a[0])}
+              width={Math.max(0.5, x(a[0] + a[1]) - x(a[0]))}
+              y={0}
+              height={EH}
+              style={{ fill: color, stroke: color }}
+              vectorEffect="non-scaling-stroke"
+            />
+            {changed && (
+              <path
+                className="spectrum-previous"
+                d={poolCurve(before, a, x, y)}
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+            <path
+              className="ev-ai-line"
+              d={poolCurve(now, a, x, y)}
+              style={{ stroke: color }}
+              vectorEffect="non-scaling-stroke"
+            />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+/** Pool names on the items wide enough to hold one; every item says its name and pool on hover */
+function AutomationItemLabels({ v, x }: { v: EnvView; x: (t: number) => number }) {
+  const ais = v.ais ?? [];
+  const uses = new Map<number, number>();
+  for (const a of ais) uses.set(a[2], (uses.get(a[2]) ?? 0) + 1);
+  return (
+    <>
+      {ais.map((a, i) => {
+        const left = Math.max(0, x(a[0]));
+        const width = Math.min(EW, x(a[0] + a[1])) - left;
+        if (width <= 0) return null;
+        const name = a[3] || `Pool ${a[2]}`;
+        const pooled = (uses.get(a[2]) ?? 1) > 1;
+        return (
+          <span
+            key={i}
+            className={`ev-ai-label mono ${v.ai === i ? "ev-ai-label-touched" : ""}`}
+            style={{ left: `${(left / EW) * 100}%`, width: `${(width / EW) * 100}%` }}
+            title={`${name} · pool ${a[2]}${pooled ? ` · ${uses.get(a[2])} pooled items` : ""} · ${clock(a[0], 2)}–${clock(a[0] + a[1], 2)}`}
+          >
+            {width / EW > 0.1 ? `${name}${pooled ? " ⧉" : ""}` : ""}
+          </span>
+        );
+      })}
     </>
   );
 }

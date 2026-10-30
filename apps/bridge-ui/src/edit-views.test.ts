@@ -12,6 +12,22 @@ describe('edit views from the log', () => {
     });
   });
 
+  it('reads automation items and their pools, dropping malformed ones', () => {
+    const v = editViewOf(entry('insert_automation_item', {
+      env: 'Volume', unit: 'dB', from: 0, to: 40, pts: [[0, 0, 0]], count: 1, ai: 1,
+      ais: [[10, 4, 7, 'Vox Chorus'], [30, 4, 7, 'Vox Chorus'], ['x']],
+      pools: [[7, [[0, -1, 0], [4, -1, 0]]], ['bad']],
+      wasAis: [[10, 4, 7, 'Vox Chorus']], wasPools: [[7, [[0, -1, 0]]]],
+    }));
+    expect(v).toMatchObject({
+      kind: 'envelope', ai: 1,
+      ais: [[10, 4, 7, 'Vox Chorus'], [30, 4, 7, 'Vox Chorus']],
+      pools: [[7, [[0, -1, 0], [4, -1, 0]]]],
+      wasAis: [[10, 4, 7, 'Vox Chorus']],
+    });
+    expect(editViewOf(entry('get_envelope_points', { env: 'Pan', unit: 'pan', from: 0, to: 4, pts: [], count: 0 }))).not.toHaveProperty('ais');
+  });
+
   it('draws nothing for a failed call, another command, or an entry from an older bridge', () => {
     expect(editViewOf(entry('set_track_property', { rows: [{ t: 'Kick', p: 'volume', s: 'db', b: 0 }] }, false))).toBeNull();
     expect(editViewOf(entry('get_project_info', { rows: [] }))).toBeNull();

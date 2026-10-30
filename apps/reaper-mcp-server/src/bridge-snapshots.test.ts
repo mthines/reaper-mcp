@@ -14,7 +14,7 @@ const SCRIPTS = '/reaper/Scripts/';
 const SNAP_DIR = '/reaper/projects/.reaper-mcp/snapshots/';
 const LIBS = [
   'mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua',
-  'mcp_items_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_snapshots_ui_lib.lua',
+  'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_snapshots_ui_lib.lua',
 ];
 
 interface Listed { name: string; description: string; timestamp: number; trackCount?: number; scoped: boolean; fullChunk: boolean }

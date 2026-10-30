@@ -262,7 +262,7 @@ instead of just giving advice:
 |---|---|---|
 | 🎚️ **Tracks & mixer**: volume, pan, mute/solo, folders, colors, groups & VCAs | 🎛️ **FX & plugins**: add, tweak, bypass, presets, FX chains, track templates | 📈 **Metering**: LUFS, true peak, spectrum, stereo correlation, crest factor |
 | 🔀 **Routing**: sends, buses, sidechains, hardware outputs | 🎹 **MIDI**: write, edit and analyze notes & CC, live MIDI out | ✂️ **Editing**: split, trim, move, fades, takes, stretch markers |
-| 📍 **Arrangement**: markers, regions, tempo map | 〰️ **Automation**: envelopes and automation points | 💾 **Project**: save, render, undo/redo, snapshots, REAPER actions |
+| 📍 **Arrangement**: markers, regions, tempo map | 〰️ **Automation**: envelopes, points and pooled automation items | 💾 **Project**: save, render, undo/redo, snapshots, REAPER actions |
 
 👉 The main tools by area: **[docs/TOOLS.md](docs/TOOLS.md)**
 
