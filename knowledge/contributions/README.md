@@ -11,6 +11,10 @@ What happens next:
 2. The maintainer reviews it and adds the `publish-to-lorekit` label.
 3. The workflow writes the records into LoreKit's built-in layer (the `reaper-mcp` org) and
    closes the PR. The records live in LoreKit, so nothing is merged into this folder.
+4. The **Plugin list** workflow then adds the plugins to the
+   [built-in plugin list](../../docs/PLUGINS.md) (`docs/PLUGINS.md`, rebuilt from the built-in
+   layer by `node scripts/plugin-list.mjs`). It also runs daily, which picks up records published
+   straight from the bridge page.
 
 If the records don't fit in GitHub's URL, the file opens with a paste prompt instead: your
 records are on the clipboard, so paste over the prompt (⌘A, ⌘V) and propose the file.

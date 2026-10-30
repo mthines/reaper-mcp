@@ -80,7 +80,7 @@ jobs:
             ok=1
           fi
           if [ "$ok" = "0" ]; then
-            printf '\nA maintainer publishes these by adding the `publish-to-lorekit` label.\n' >> "$RUNNER_TEMP/comment.md"
+            printf '\nA maintainer publishes these by adding the `publish-to-lorekit` label. Published plugins are then added to the [built-in plugin list](%s).\n' "$GITHUB_SERVER_URL/$REPO/blob/main/docs/PLUGINS.md" >> "$RUNNER_TEMP/comment.md"
           fi
           cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
           exit $ok
@@ -131,7 +131,7 @@ jobs:
       - name: Report and close
         if: success()
         run: |
-          printf '\nThanks! These records are now built in for everyone. Closing: the records live in LoreKit, not in the repo.\n' >> "$RUNNER_TEMP/comment.md"
+          printf '\nThanks! These records are now built in for everyone, and the [built-in plugin list](%s) updates in a minute. Closing: the records live in LoreKit, not in the repo.\n' "$GITHUB_SERVER_URL/$REPO/blob/main/docs/PLUGINS.md" >> "$RUNNER_TEMP/comment.md"
           gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/comment.md"
           gh pr close "$PR" --repo "$REPO"
 

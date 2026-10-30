@@ -1,0 +1,49 @@
+name: Plugin list
+
+# Keeps the built-in plugin list in docs/PLUGINS.md in step with LoreKit's built-in layer.
+# Records reach that layer three ways: a contribution PR the maintainer labels `publish-to-lorekit`,
+# a file published from main (both in plugin-contributions.yml), and contributors with a publish
+# token, straight from the bridge page. So this runs after every Plugin contributions run, once a day
+# for the direct publishes, and by hand; it commits only when the list changed.
+
+on:
+  workflow_run:
+    workflows: ['Plugin contributions']
+    types: [completed]
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: plugin-list
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Rebuild the list from the built-in layer
+        run: node scripts/plugin-list.mjs
+
+      - name: Commit when it changed
+        run: |
+          git diff --quiet -- docs/PLUGINS.md && { echo "docs/PLUGINS.md is up to date" >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/PLUGINS.md
+          git commit -q -m "docs(plugins): update the built-in plugin list" \
+            -m "Rebuilt from LoreKit's built-in layer by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+          git pull -q --rebase origin main
+          git push -q origin HEAD:main
+          echo "Updated docs/PLUGINS.md" >> "$GITHUB_STEP_SUMMARY"

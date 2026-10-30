@@ -109,6 +109,7 @@ reaper-mcp/
 
   scripts/
     sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (primary install model)
+    plugin-list.mjs           # Rebuild docs/PLUGINS.md's built-in plugin table from LoreKit (logic: apps/bridge-ui/src/plugin-list.mjs)
 
   reaper/                     # Files installed INTO REAPER (copied by setup command)
     mcp_tracks_lib.lua        # Pure track-structure + routing logic (wasmoon-tested), loaded by the bridge
@@ -134,7 +135,8 @@ reaper-mcp/
 ### Where mix knowledge lives
 
 - **`knowledge/`** (genres, workflows, reference) — curated markdown read on demand by the mix skills; symlinked into `~/.claude/knowledge`.
-- **Plugin knowledge and process lessons** live in **LoreKit**, scope `project::reaper-mcp` — one record per plugin (tags `plugin-knowledge`, `category::…`, `preference::…`, `fx::…`) and lessons (`loop::mixing-lessons`), in two layers: the **built-in** layer (keys `plugins::<vendor>/<plugin>` / `mixing-lessons::<slug>`, owned by the `reaper-mcp` LoreKit org, tag `layer::built-in`, read by everyone through the server's `list_builtin_knowledge` / `get_builtin_knowledge` tools) and each user's own layer on top (keys `user::plugins::…` / `user::mixing-lessons::…`, tag `layer::user`, via the user's own LoreKit `memory.*`). The user's record wins. The skills only ever write `user::` keys; the maintainer moves records into the built-in layer with `/mix-memory publish`. Contract: `knowledge/reference/memory-protocol.md`.
+- **Plugin knowledge and process lessons** live in **LoreKit**, scope `project::reaper-mcp` — one record per plugin (tags `plugin-knowledge`, `category::…`, `preference::…`, `fx::…`) and lessons (`loop::mixing-lessons`), in two layers: the **built-in** layer (keys `plugins::<vendor>/<plugin>` / `mixing-lessons::<slug>`, owned by the `reaper-mcp` LoreKit org, tag `layer::built-in`, read by everyone through the server's `list_builtin_knowledge` / `get_builtin_knowledge` tools) and each user's own layer on top (keys `user::plugins::…` / `user::mixing-lessons::…`, tag `layer::user`, via the user's own LoreKit `memory.*`). The user's record wins. The skills only ever write `user::` keys; the maintainer moves records into the built-in layer with `/mix-memory publish`.
+- **`docs/PLUGINS.md`** lists every built-in plugin record (table between `<!-- plugin-list:start/end -->`, rebuilt by `node scripts/plugin-list.mjs`, never by hand). A publisher's `/mix-memory publish` (and `/learn-plugin`, which offers to publish) rebuild it in the clone; the `Plugin list` workflow rebuilds it on `main` after every `Plugin contributions` run and daily (direct publishes from the bridge page). Contract: `knowledge/reference/memory-protocol.md`.
 
 ## Workspace Packages
 
