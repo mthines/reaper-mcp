@@ -258,8 +258,18 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
       local env = api.tracks[1].envs[1]
       local got = {}
       for _, p in ipairs(env.pts) do got[#got + 1] = p.t .. "=" .. p.v end
-      assert(table.concat(got, " ") == "0=0 2=1 4=0 10=0.5 11=1 12=0.5", table.concat(got, " "))
+      assert(table.concat(got, " ") == "0=0 2=1 4=0 9.999=0 10=0.5 11=1 12=0.5 12.001=0", table.concat(got, " "))
       assert(r.envelopePoints == 1)
+    `);
+  });
+
+  it('copy section: keeps the shape of the destination\'s automation leading into and out of the copy', async () => {
+    await runLua(`
+      local api = new_timeline{ tracks = { { envs = { { pts = { { 0, 0 }, { 15, 0.15 }, { 100, 1 } } } } } } }
+      local function at(t) local _, v = api.Envelope_Evaluate(api.tracks[1].envs[1], t) return v end
+      local v49, v61 = at(49), at(61)
+      assert(arrange.copy_section(api, { start = 10, ["end"] = 20, position = 50 }))
+      assert(near(at(49), v49) and near(at(61), v61), at(49) .. " " .. at(61))
     `);
   });
 

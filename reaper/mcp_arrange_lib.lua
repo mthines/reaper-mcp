@@ -24,6 +24,7 @@ M.DELETE_AUTOMATION_ITEMS = 42086
 -- CalculateNormalization modes
 M.NORMALIZE_MODES = { lufs_i = 0, rms = 1, peak = 2, true_peak = 3, lufs_m_max = 4, lufs_s_max = 5 }
 local EPS = 1e-6
+local PIN = 0.001  -- seconds between a copied section's edge and the point keeping the destination's value
 
 local function num(v) return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge end
 local function int(v) return num(v) and v == math.floor(v) end
@@ -612,7 +613,13 @@ local function apply_section(api, c)
       -- Values at the section's edges, so the copy starts and ends where the source does
       local _, v_start = api.Envelope_Evaluate(env, s, 0, 0)
       local _, v_end = api.Envelope_Evaluate(env, e, 0, 0)
+      -- And the destination's own values just outside the copy, so ramps leading in and out keep their shape
+      local before, after = dest - PIN, dest + len + PIN
+      local _, v_before = api.Envelope_Evaluate(env, before, 0, 0)
+      local _, v_after = api.Envelope_Evaluate(env, after, 0, 0)
       if not c.insert then api.DeleteEnvelopePointRange(env, dest - EPS, dest + len + EPS) end
+      if before >= 0 then api.InsertEnvelopePoint(env, before, v_before, 0, 0, false, true) end
+      api.InsertEnvelopePoint(env, after, v_after, 0, 0, false, true)
       if math.abs(pts[1].t - s) > EPS then api.InsertEnvelopePoint(env, dest, v_start, 0, 0, false, true) end
       for _, pt in ipairs(pts) do
         api.InsertEnvelopePoint(env, pt.t + offset, pt.v, pt.shape, pt.tension, false, true)
