@@ -706,7 +706,10 @@ local ENVELOPE_WRITES = {
   insert_envelope_point = true, insert_envelope_points = true, delete_envelope_point = true,
   remove_envelope_points = true, clear_envelope = true, edit_envelope_points = true,
 }
-local MIDI_WRITES = { insert_midi_note = true, insert_midi_notes = true, edit_midi_note = true, edit_midi_notes = true, delete_midi_note = true }
+local MIDI_WRITES = {
+  insert_midi_note = true, insert_midi_notes = true, edit_midi_note = true, edit_midi_notes = true, delete_midi_note = true,
+  quantize_midi = true, transform_midi = true,
+}
 
 -- Measurements: numbers rounded to 0.01 so the feed stays small
 local SPECTRUM_BANDS = 48
@@ -839,6 +842,10 @@ function M.summary(cmd_type, params, data, before)
     return envelope_view(cmd_type, params, data, before)
   elseif MIDI_WRITES[cmd_type] or cmd_type == "get_midi_notes" then
     return midi_view(params, before)
+  elseif cmd_type == "import_midi_file" then
+    -- The first created item, all notes new
+    local first = type(data) == "table" and type(data.items) == "table" and data.items[1]
+    return first and first.itemIndex and midi_view({ trackIndex = first.trackIndex, itemIndex = first.itemIndex }, {})
   elseif cmd_type == "analyze_midi" then
     return midi_stats_view(data)
   elseif CC_COMMANDS[cmd_type] then

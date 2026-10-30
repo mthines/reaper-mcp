@@ -2497,6 +2497,7 @@ function handlers.insert_midi_note(params)
   reaper.Undo_BeginBlock()
   reaper.MIDI_InsertNote(take, false, false, start_ppq, end_ppq, chan, pitch, vel, false)
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Insert MIDI note", -1)
 
   reaper.UpdateArrange()
@@ -2540,6 +2541,7 @@ function handlers.insert_midi_notes(params)
     end
   end
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Insert " .. inserted .. " MIDI notes", -1)
 
   reaper.UpdateArrange()
@@ -2589,6 +2591,7 @@ function handlers.edit_midi_note(params)
   reaper.Undo_BeginBlock()
   reaper.MIDI_SetNote(take, note_idx, sel, muted, new_start_ppq, new_end_ppq, new_chan, new_pitch, new_vel, false)
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Edit MIDI note " .. note_idx, -1)
 
   reaper.UpdateArrange()
@@ -2647,6 +2650,7 @@ function handlers.edit_midi_notes(params)
   end
 
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Batch edit " .. edited .. " MIDI notes", -1)
   reaper.UpdateArrange()
 
@@ -2669,6 +2673,7 @@ function handlers.delete_midi_note(params)
 
   reaper.Undo_BeginBlock()
   reaper.MIDI_DeleteNote(take, note_idx)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Delete MIDI note " .. note_idx, -1)
 
   reaper.UpdateArrange()
@@ -2728,6 +2733,7 @@ function handlers.insert_midi_cc(params)
   -- chanmsg 176 = 0xB0 = CC message
   reaper.MIDI_InsertCC(take, false, false, ppq, 176, chan, cc_num, value)
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Insert MIDI CC " .. cc_num, -1)
 
   reaper.UpdateArrange()
@@ -2751,6 +2757,7 @@ function handlers.delete_midi_cc(params)
 
   reaper.Undo_BeginBlock()
   reaper.MIDI_DeleteCC(take, cc_idx)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Delete MIDI CC " .. cc_idx, -1)
 
   reaper.UpdateArrange()
@@ -4102,6 +4109,40 @@ function handlers.set_automation_item(params) return env_ext.run("set_item", par
 function handlers.delete_automation_item(params) return env_ext.run("delete_item", params) end
 
 -- =============================================================================
+-- MIDI composition: quantize, transform, file import, pitch profile
+-- =============================================================================
+
+-- Logic in mcp_midi_lib.lua; one table for the 200-locals limit. Nested params (note
+-- indexes, the velocity/humanize/length objects, an import's tracks) travel as JSON strings.
+local midi_ext = {}
+midi_ext.ok, midi_ext.lib = pcall(dofile, script_dir .. "mcp_midi_lib.lua")
+
+function midi_ext.run(name, params)
+  if not midi_ext.ok then
+    return nil, "mcp_midi_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(midi_ext.lib) .. ")"
+  end
+  local p = {}
+  for k, v in pairs(params) do p[k] = v end
+  for _, k in ipairs({ "notes", "velocity", "humanize", "length", "tracks" }) do
+    if type(p[k]) == "string" then
+      if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed — run `reaper-mcp setup`" end
+      local val, err = plan_lib.json_decode(p[k])
+      if type(val) ~= "table" then return nil, k .. " is not valid JSON" .. (err and (" (" .. tostring(err) .. ")") or "") .. " — nothing changed" end
+      p[k] = val
+    end
+  end
+  local ok, res, err = pcall(midi_ext.lib[name], reaper, p)
+  if not ok then return nil, "Handler error: " .. tostring(res) end
+  return res, err
+end
+
+function handlers.quantize_midi(params) return midi_ext.run("quantize", params) end
+function handlers.transform_midi(params) return midi_ext.run("transform", params) end
+function handlers.import_midi_file(params) return midi_ext.run("import", params) end
+-- Internal (detect_key on a MIDI track): not logged, not counted
+handlers["_midi_pitch_profile"] = function(params) return midi_ext.run("pitch_profile", params) end
+
+-- =============================================================================
 -- Live MIDI output handlers
 -- =============================================================================
 
@@ -4860,7 +4901,7 @@ for _, c in ipairs({
   "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
   "insert_audio_file", "snapshot_save", "snapshot_restore", "snapshot_edit",
   "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
-  "detect_transients", "create_transient_automation",
+  "detect_transients", "create_transient_automation", "detect_key", "import_midi_file",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
 local HISTORY_LONG_PUBLISH_INTERVAL = 10

@@ -239,6 +239,16 @@ describe('settings and params', () => {
     expect(measurementOf({ ...base, c: 'list_tracks', r: { peakL: -6 } })).toBeNull();
   });
 
+  it('reads a detected key: twelve chroma bins and the key, else nothing', () => {
+    const base = { n: 1, t: 0, ms: 1, ok: true, c: 'detect_key' };
+    const chroma = [1, 0, 0.4, 0, 0.7, 0.3, 0, 0.8, 0, 0.5, 0, 0.2];
+    expect(measurementOf({ ...base, r: { key: 'C major', tonic: 'C', mode: 'major', conf: 0.6, src: 'midi', chroma, alt: [['A minor', 0.8], 'junk'] } })).toEqual({
+      kind: 'key', key: 'C major', tonic: 'C', mode: 'major', conf: 0.6, src: 'midi', chroma, alt: [['A minor', 0.8]],
+    });
+    expect(measurementOf({ ...base, r: { key: 'C major', chroma: [1, 2] } })).toBeNull();
+    expect(measurementOf({ ...base, r: { chroma } })).toBeNull();
+  });
+
   it('finds the same measurement on the same track for the history', () => {
     const m = (n: number, c: string, track: number, ok = true): CommandEntry => ({ n, t: n, c, ms: 1, ok, p: JSON.stringify({ trackIndex: track }), r: { integrated: -14 } });
     const log = [m(6, 'read_track_lufs', 1), m(5, 'read_track_lufs', 2), m(4, 'read_track_crest', 1), m(3, 'read_track_lufs', 1, false), m(2, 'read_track_lufs', 1), m(1, 'read_track_lufs', 1)];

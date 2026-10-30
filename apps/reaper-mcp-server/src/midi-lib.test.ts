@@ -1,0 +1,231 @@
+/**
+ * Behaviour of reaper/mcp_midi_lib.lua (quantize, transform, MIDI file import, pitch
+ * profile), run in real Lua 5.4 (wasmoon) against the fake MIDI API
+ * (__fixtures__/fake_midi.lua). Assertions live in the Lua snippets: a failed
+ * `assert` rejects the promise.
+ */
+import { describe, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { LuaFactory } from 'wasmoon';
+
+const LIB_SRC = readFileSync(join(__dirname, '../../../reaper/mcp_midi_lib.lua'), 'utf8');
+const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_midi.lua'), 'utf8');
+
+const factory = new LuaFactory();
+
+// One track "Keys" with one 8-beat item at 2 s (= beat 4 on the project grid)
+const KEYS = `
+function keys(notes, extra)
+  local items = { { pos = 2, len = 4, notes = notes } }
+  for _, it in ipairs(extra or {}) do items[#items + 1] = it end
+  return new_midi_fake{ tracks = { { name = "Keys", items = items } } }
+end
+function refused(api, pattern, r, err)
+  assert(r == nil, "expected a refusal")
+  assert(err:find(pattern), "error: " .. tostring(err))
+  assert(err:find("nothing changed"), "says nothing changed: " .. err)
+  assert(api.writes == 0, "a refusal writes nothing")
+end
+`;
+
+async function runLua(snippet: string): Promise<void> {
+  const lua = await factory.createEngine();
+  try {
+    lua.global.set('LIB_SRC', LIB_SRC);
+    await lua.doString(FAKE_SRC);
+    await lua.doString(`midi = load(LIB_SRC, "mcp_midi_lib.lua")()\n${KEYS}\n${snippet}`);
+  } finally {
+    lua.global.close();
+  }
+}
+
+describe('mcp_midi_lib.lua quantize', () => {
+  it('snaps note starts to the grid and keeps their lengths, in one undo point', async () => {
+    await runLua(`
+      local api = keys({ { s = 0.1, e = 0.6, pitch = 60 }, { s = 1.45, e = 1.7, pitch = 62 }, { s = 2, e = 3, pitch = 64 } })
+      local r, err = midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 0.5 })
+      assert(r, tostring(err))
+      assert(api.notes_of(0, 0) == "60@0-0.5:100 62@1.5-1.75:100 64@2-3:100", api.notes_of(0, 0))
+      assert(r.notes == 3 and r.moved == 2, "the note already on the grid does not count as moved")
+      assert(r.maxShiftBeats == 0.1, "largest shift " .. r.maxShiftBeats)
+      assert(#api.undo == 1 and api.undo[1] == "MCP: Quantize MIDI")
+    `);
+  });
+
+  it('snaps to the project grid, not to the item start', async () => {
+    await runLua(`
+      -- An item at 0.25 s starts at beat 0.5: its note at item beat 0 sits on project beat 0.5
+      local api = new_midi_fake{ tracks = { { items = { { pos = 0.25, len = 2, notes = { { s = 0.1, e = 0.4, pitch = 60 } } } } } } }
+      midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 1 })
+      -- project beat 0.6 → 1.0, which is item beat 0.5
+      assert(api.notes_of(0, 0) == "60@0.5-0.8:100", api.notes_of(0, 0))
+    `);
+  });
+
+  it('moves part of the way at a strength below 1, and pushes off-beats later with swing', async () => {
+    await runLua(`
+      local api = keys({ { s = 0.2, e = 0.4, pitch = 60 }, { s = 0.6, e = 0.7, pitch = 62 } })
+      midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 0.5, strength = 0.5, swing = 0.5 })
+      -- 0.2 → half way to 0; 0.6 → half way to the swung off-beat at 0.75
+      assert(api.notes_of(0, 0) == "60@0.1-0.3:100 62@0.675-0.775:100", api.notes_of(0, 0))
+    `);
+  });
+
+  it('leaves notes outside the window alone and can quantize note ends too', async () => {
+    await runLua(`
+      local api = keys({ { s = 0.05, e = 0.9, pitch = 60 }, { s = 0.25, e = 0.4, pitch = 62 } })
+      local r = midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 1, window = 0.2, lengths = "quantize" })
+      assert(r.moved == 1, "only the note within 0.1 beat of a line moves")
+      assert(api.notes_of(0, 0) == "60@0-1:100 62@0.25-0.4:100", api.notes_of(0, 0))
+    `);
+  });
+
+  it('gives each of two edits in a row its own undo point', async () => {
+    await runLua(`
+      local api = keys({ { s = 0.1, e = 0.5, pitch = 60 } })
+      midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 1 })
+      midi.transform(api, { trackIndex = 0, itemIndex = 0, transpose = 2 })
+      assert(#api.undo == 2 and api.undo[1] == "MCP: Quantize MIDI" and api.undo[2] == "MCP: Transform MIDI", table.concat(api.undo, ","))
+    `);
+  });
+
+  it('quantizes only the chosen notes: by index, by pitch range, by channel', async () => {
+    await runLua(`
+      local api = keys({ { s = 0.1, e = 0.5, pitch = 36, chan = 9 }, { s = 0.1, e = 0.5, pitch = 60 }, { s = 1.1, e = 1.5, pitch = 72 } })
+      midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 1, notes = { 2 } })
+      assert(api.notes_of(0, 0) == "36@0.1-0.5:100 60@0.1-0.5:100 72@1-1.4:100", api.notes_of(0, 0))
+      midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 1, channel = 9 })
+      assert(api.notes_of(0, 0) == "36@0-0.4:100 60@0.1-0.5:100 72@1-1.4:100", api.notes_of(0, 0))
+      midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 1, pitchMin = 50, pitchMax = 70 })
+      assert(api.notes_of(0, 0) == "36@0-0.4:100 60@0-0.4:100 72@1-1.4:100", api.notes_of(0, 0))
+    `);
+  });
+
+  it('refuses a bad grid, an audio item, an unknown note or an empty selection and changes nothing', async () => {
+    await runLua(`
+      local api = keys({ { s = 0.1, e = 0.5, pitch = 60 } }, { { pos = 8, len = 2, audio = true } })
+      refused(api, "grid", midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 0 }))
+      refused(api, "not a MIDI item", midi.quantize(api, { trackIndex = 0, itemIndex = 1, grid = 1 }))
+      refused(api, "note 5 not found", midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 1, notes = { 5 } }))
+      refused(api, "no notes match", midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 1, pitchMin = 80 }))
+      refused(api, "swing", midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 1, swing = 1 }))
+      refused(api, "track 3 not found", midi.quantize(api, { trackIndex = 3, itemIndex = 0, grid = 1 }))
+      assert(#api.undo == 0)
+    `);
+  });
+});
+
+describe('mcp_midi_lib.lua transform', () => {
+  it('transposes and scales velocity, clamped to the given range', async () => {
+    await runLua(`
+      local api = keys({ { s = 0, e = 1, pitch = 60, vel = 100 }, { s = 1, e = 2, pitch = 64, vel = 40 } })
+      local r, err = midi.transform(api, { trackIndex = 0, itemIndex = 0, transpose = 7,
+        velocity = { scale = 1.5, max = 120 } })
+      assert(r, tostring(err))
+      assert(api.notes_of(0, 0) == "67@0-1:120 71@1-2:60", api.notes_of(0, 0))
+      assert(r.velocityClamped == 1 and r.avgVelocityBefore == 70 and r.avgVelocityAfter == 90)
+      assert(api.undo[1] == "MCP: Transform MIDI")
+    `);
+  });
+
+  it('refuses a transpose that would push any note out of 0-127 and changes nothing', async () => {
+    await runLua(`
+      local api = keys({ { s = 0, e = 1, pitch = 120 }, { s = 1, e = 2, pitch = 60 } })
+      refused(api, "1 note%(s%) would leave", midi.transform(api, { trackIndex = 0, itemIndex = 0, transpose = 12 }))
+      refused(api, "at least one of", midi.transform(api, { trackIndex = 0, itemIndex = 0 }))
+      refused(api, "velocity.set", midi.transform(api, { trackIndex = 0, itemIndex = 0, velocity = { set = 0 } }))
+      refused(api, "length.scale", midi.transform(api, { trackIndex = 0, itemIndex = 0, length = { scale = 0 } }))
+    `);
+  });
+
+  it('humanizes the same way for the same seed and reports it', async () => {
+    await runLua(`
+      local function run(seed)
+        local api = keys({ { s = 1, e = 2, pitch = 60, vel = 90 }, { s = 2, e = 3, pitch = 62, vel = 90 } })
+        local r = midi.transform(api, { trackIndex = 0, itemIndex = 0, humanize = { timingBeats = 0.05, velocity = 10, seed = seed } })
+        return api.notes_of(0, 0), r
+      end
+      local a, ra = run(7)
+      local b = run(7)
+      local c = run(8)
+      assert(a == b, "same seed, same result")
+      assert(a ~= c, "another seed differs")
+      assert(ra.seed == 7)
+      assert(a ~= "60@1-2:90 62@2-3:90", "notes moved: " .. a)
+      for s, vel in a:gmatch("@([%d.]+)%-[%d.]+:(%d+)") do
+        assert(tonumber(vel) >= 80 and tonumber(vel) <= 100, "velocity within ±10: " .. vel)
+      end
+    `);
+  });
+
+  it('sets lengths and makes notes legato on the same channel', async () => {
+    await runLua(`
+      local api = keys({ { s = 0, e = 0.25, pitch = 60 }, { s = 1, e = 1.25, pitch = 62 }, { s = 3, e = 3.5, pitch = 64 } })
+      midi.transform(api, { trackIndex = 0, itemIndex = 0, length = { legato = true } })
+      assert(api.notes_of(0, 0) == "60@0-1:100 62@1-3:100 64@3-3.5:100", "the last note keeps its length: " .. api.notes_of(0, 0))
+      midi.transform(api, { trackIndex = 0, itemIndex = 0, notes = { 2 }, length = { set = 2 } })
+      assert(api.notes_of(0, 0) == "60@0-1:100 62@1-3:100 64@3-5:100", api.notes_of(0, 0))
+    `);
+  });
+});
+
+describe('mcp_midi_lib.lua import', () => {
+  it('merges every file track into one named item on the target track', async () => {
+    await runLua(`
+      local api = new_midi_fake{ tracks = { { name = "Piano" } } }
+      local r, err = midi.import(api, { trackIndex = 0, position = 4, lengthQN = 8, name = "song.mid", tracks = {
+        { name = "RH", notes = { { 0, 1, 0, 72, 90 } }, cc = { { 0, 0, 64, 127 } } },
+        { name = "LH", notes = { { 0, 2, 0, 48, 80 }, { 2, 2, 0, 50, 80 } } } } })
+      assert(r, tostring(err))
+      assert(#r.items == 1 and r.items[1].notes == 3 and r.items[1].cc == 1 and r.items[1].itemIndex == 0)
+      local item = api.tracks[1].items[1]
+      assert(item.pos == 4 and item.len == 4, "8 beats at 120 BPM from 4 s")
+      assert(item.take.name == "song.mid")
+      assert(api.notes_of(0, 0) == "48@0-2:80 72@0-1:90 50@2-4:80", api.notes_of(0, 0))
+      assert(item.take.cc[1].cc == 64 and item.take.cc[1].value == 127)
+      assert(#api.undo == 1 and api.undo[1] == "MCP: Import MIDI file")
+    `);
+  });
+
+  it('puts each file track on a new named track when asked', async () => {
+    await runLua(`
+      local api = new_midi_fake{ tracks = { { name = "A" }, { name = "B" } } }
+      local r = midi.import(api, { trackIndex = 1, newTracks = true, position = 0, lengthQN = 4, tracks = {
+        { name = "Bass", notes = { { 0, 1, 0, 36, 100 } } }, { name = "Lead", notes = { { 1, 1, 0, 76, 100 } } } } })
+      assert(#api.tracks == 4)
+      assert(api.tracks[2].name == "Bass" and api.tracks[3].name == "Lead" and api.tracks[4].name == "B")
+      assert(r.items[2].trackIndex == 2 and api.notes_of(2, 0) == "76@1-2:100")
+    `);
+  });
+
+  it('refuses a malformed note, too many notes or a missing track and changes nothing', async () => {
+    await runLua(`
+      local api = new_midi_fake{ tracks = { { name = "A" } } }
+      refused(api, "malformed note", midi.import(api, { trackIndex = 0, position = 0, lengthQN = 4, tracks = { { notes = { { 0, 1, 0, 128, 100 } } } } }))
+      refused(api, "track 4 not found", midi.import(api, { trackIndex = 4, position = 0, lengthQN = 4, tracks = { { notes = { { 0, 1, 0, 60, 100 } } } } }))
+      refused(api, "no notes", midi.import(api, { trackIndex = 0, position = 0, lengthQN = 4, tracks = {} }))
+      local many = {}
+      for i = 1, midi.MAX_IMPORT_NOTES + 1 do many[i] = { 0, 1, 0, 60, 100 } end
+      refused(api, "at most", midi.import(api, { trackIndex = 0, position = 0, lengthQN = 4, tracks = { { notes = many } } }))
+    `);
+  });
+});
+
+describe('mcp_midi_lib.lua pitch_profile', () => {
+  it('weighs pitch classes by duration and velocity, skipping drums, muted notes and muted items', async () => {
+    await runLua(`
+      local api = new_midi_fake{ tracks = { { items = {
+        { pos = 0, len = 4, notes = { { s = 0, e = 2, pitch = 60, vel = 127 }, { s = 0, e = 1, pitch = 67, vel = 127 },
+          { s = 0, e = 4, pitch = 36, vel = 127, chan = 9 }, { s = 0, e = 4, pitch = 61, vel = 127, muted = true } } },
+        { pos = 4, len = 2, mute = true, notes = { { s = 0, e = 4, pitch = 62, vel = 127 } } },
+        { pos = 6, len = 2, audio = true } } } } }
+      local r = midi.pitch_profile(api, { trackIndex = 0 })
+      assert(r.chroma[1] == 2 and r.chroma[8] == 1, "C 2 beats, G 1 beat")
+      assert(r.chroma[2] == 0 and r.chroma[3] == 0, "muted note and muted item ignored")
+      assert(r.notes == 2 and r.midiItems == 1 and r.audioItems == 1)
+      local window = midi.pitch_profile(api, { trackIndex = 0, startTime = 0.25, endTime = 0.75 })
+      assert(window.chroma[1] == 1 and window.chroma[8] == 0.5, "clipped to the time window")
+    `);
+  });
+});

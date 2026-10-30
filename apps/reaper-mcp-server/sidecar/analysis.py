@@ -249,6 +249,36 @@ def _stft_power(audio: np.ndarray, sample_rate: int, n_fft: int = 4096) -> tuple
     return power, freqs
 
 
+CHROMA_LOW_HZ, CHROMA_HIGH_HZ = 55.0, 4200.0
+
+
+def chroma(audio: np.ndarray, sample_rate: int, n_fft: int = 8192) -> dict:
+    """
+    Pitch-class energy (C first), for key detection.
+
+    Each STFT bin from 55 Hz to 4.2 kHz adds its magnitude to the pitch class nearest its
+    frequency; every frame is normalized to its own largest class so loud passages do not
+    outweigh quiet ones, frames more than 60 dB under the loudest are skipped as silence,
+    and the average is scaled so the largest class is 1.
+    """
+    power, freqs = _stft_power(audio, sample_rate, n_fft)
+    band = (freqs >= CHROMA_LOW_HZ) & (freqs <= CHROMA_HIGH_HZ)
+    classes = np.mod(np.round(12 * np.log2(freqs[band] / 440.0) + 69).astype(int), 12)
+    mags = np.sqrt(power[band])
+    frames = np.zeros((12, mags.shape[1]))
+    for pc in range(12):
+        frames[pc] = mags[classes == pc].sum(axis=0)
+    energy = power[band].sum(axis=0)
+    loud = energy > (energy.max() * 1e-6 if energy.size and energy.max() > 0 else np.inf)
+    out = [0.0] * 12
+    if loud.any():
+        kept = frames[:, loud]
+        avg = (kept / np.maximum(kept.max(axis=0, keepdims=True), 1e-12)).mean(axis=1)
+        top = avg.max()
+        out = [_round(float(v / top), 4) if top > 0 else 0.0 for v in avg]
+    return {"chroma": out, "frames": int(loud.sum()), "durationSeconds": _round(audio.shape[1] / sample_rate, 3)}
+
+
 def band_balance(avg_power: np.ndarray, freqs: np.ndarray) -> dict[str, float | None]:
     """Each band's share of total energy in dB (0 dB = all energy in that band)."""
     total = avg_power[(freqs >= 20) & (freqs < 20000)].sum()

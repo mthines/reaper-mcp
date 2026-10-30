@@ -70,7 +70,7 @@ const kinds: Array<[EditView['kind'], string[]]> = [
     'list_automation_items', 'insert_automation_item', 'set_automation_item', 'delete_automation_item',
     'get_midi_cc', 'insert_midi_cc', 'delete_midi_cc',
   ]],
-  ['midi', ['insert_midi_note', 'insert_midi_notes', 'edit_midi_note', 'edit_midi_notes', 'delete_midi_note', 'get_midi_notes']],
+  ['midi', ['insert_midi_note', 'insert_midi_notes', 'edit_midi_note', 'edit_midi_notes', 'delete_midi_note', 'get_midi_notes', 'quantize_midi', 'transform_midi', 'import_midi_file']],
   ['midiStats', ['analyze_midi']],
   ['timeline', [
     'add_marker', 'add_region', 'edit_marker', 'edit_region', 'delete_marker', 'delete_region',

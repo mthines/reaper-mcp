@@ -72,6 +72,7 @@ reaper-mcp/
         aesthetics.ts         # analyze_track_aesthetics (requires Python sidecar)
         offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment (sidecar, no model)
         transients.ts         # detect_transients, create_transient_automation (sidecar onsets → envelope pulses, e.g. lighting)
+        composition.ts        # quantize_midi, transform_midi, import_midi_file (SMF parsed in smf.ts), detect_key (key.ts; logic in reaper/mcp_midi_lib.lua)
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
 
     sidecar/                  # Python sidecar for semantic audio analysis (opt-in)
@@ -120,6 +121,7 @@ reaper-mcp/
     mcp_actions_lib.lua       # Action proxy + selection setters (pure Lua, unit-tested via wasmoon)
     mcp_project_lib.lua       # Project ops, tempo map + marker editing (pure Lua, unit-tested via wasmoon)
     mcp_envelopes_lib.lua     # Envelopes, points (dB through the envelope's scaling) and pooled automation items (pure Lua, unit-tested via wasmoon)
+    mcp_midi_lib.lua          # Quantize, transform, MIDI file import, pitch-class profile (pure Lua, unit-tested via wasmoon)
     mcp_items_lib.lua         # Items, takes, take FX, FX move/copy/rename, FX chains, track templates (pure Lua, unit-tested via wasmoon)
     mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
     mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
@@ -149,7 +151,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (147 total)
+## MCP Tools (151 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -216,6 +218,15 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `delete_midi_cc` | `tools/midi.ts` | Delete a CC event by index |
 | `get_midi_item_properties` | `tools/midi.ts` | Get MIDI item properties (position, length, note/CC count, mute, loop) |
 | `set_midi_item_properties` | `tools/midi.ts` | Set MIDI item properties (position, length, mute, loop source) |
+
+### Composition (4)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `quantize_midi` | `tools/composition.ts` | Snap notes to the project grid: grid (beats), strength, swing, window, `lengths` keep/quantize; all notes or a selection (indexes, pitch range, channel) |
+| `transform_midi` | `tools/composition.ts` | Transpose (refused out of 0-127), velocity set/scale/add + clamp, humanize (seeded), length set/scale/legato |
+| `import_midi_file` | `tools/composition.ts` | Import a .mid (type 0/1, ≤5 MB, ≤20000 notes) without REAPER's dialog: merged onto a track or one new named track per file track; file tempo reported, not applied |
+| `detect_key` | `tools/composition.ts` | Key from a track's MIDI notes (drums skipped) or rendered audio / an audio file (sidecar chroma): key, confidence, relative, top 3, 12-bin chroma |
 
 ### Live MIDI Output (3)
 
@@ -420,7 +431,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 147 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 151 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
@@ -434,6 +445,8 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 - **Channel**: 0-15 (default 0; channel 9 = drums in General MIDI)
 - **Batch operations** (`insert_midi_notes`, `edit_midi_notes`): Pass a JSON array of note objects for efficient multi-note operations
 - The Lua bridge includes a fallback JSON array parser for REAPER versions without `CF_Json_Parse`
+- **Undo**: a MIDI API edit (`MIDI_SetNote`, `MIDI_InsertNote`, …) leaves the item unmarked, so REAPER folds it into the previous MIDI undo point. Every MIDI write calls `MarkTrackItemsDirty(track, item)` before `Undo_EndBlock` (seen in REAPER 7.40)
+- **Composition** (`mcp_midi_lib.lua`): quantize snaps to the project's beats, not the item start; swing pushes every second grid line later. Humanize is reproducible from `seed`. `detect_key` correlates the 12-bin profile with the Krumhansl-Kessler key profiles (`key.ts`); confidence is the gap to the best key that is not the relative key, scaled down for a flat profile
 
 ### Media Item Editing Concepts
 

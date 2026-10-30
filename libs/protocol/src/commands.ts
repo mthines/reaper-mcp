@@ -87,6 +87,9 @@ export type CommandType =
   | 'edit_midi_note'
   | 'edit_midi_notes'
   | 'delete_midi_note'
+  | 'quantize_midi'
+  | 'transform_midi'
+  | 'import_midi_file'
   | 'get_midi_cc'
   | 'insert_midi_cc'
   | 'delete_midi_cc'
@@ -394,6 +397,54 @@ export interface DeleteMidiNoteParams {
   trackIndex: number;
   itemIndex: number;
   noteIndex: number;
+}
+
+/** Which notes of an item a composition edit acts on; all when none is given. Nested values travel as JSON strings. */
+export interface MidiNoteSelection {
+  trackIndex: number;
+  itemIndex: number;
+  /** JSON array of note indexes */
+  notes?: string;
+  pitchMin?: number;
+  pitchMax?: number;
+  channel?: number;
+}
+
+export interface QuantizeMidiParams extends MidiNoteSelection {
+  /** Grid in beats (0.25 = 16ths) */
+  grid: number;
+  strength?: number;
+  swing?: number;
+  window?: number;
+  lengths?: 'keep' | 'quantize';
+}
+
+export interface TransformMidiParams extends MidiNoteSelection {
+  transpose?: number;
+  /** JSON object: { set?, scale?, add?, min?, max? } */
+  velocity?: string;
+  /** JSON object: { timingBeats?, velocity?, seed? } */
+  humanize?: string;
+  /** JSON object: { set?, scale?, legato? } */
+  length?: string;
+}
+
+export interface ImportMidiFileParams {
+  trackIndex: number;
+  newTracks?: boolean;
+  /** Seconds */
+  position: number;
+  lengthQN: number;
+  name?: string;
+  /** JSON array of { name, notes: [startQN, lengthQN, channel, pitch, velocity][], cc: [qn, channel, cc, value][] } */
+  tracks: string;
+}
+
+/** Params of the internal `_midi_pitch_profile` command (not a CommandType: internal commands are not tools). */
+export interface MidiPitchProfileParams {
+  trackIndex: number;
+  startTime?: number;
+  endTime?: number;
 }
 
 export interface GetMidiCCParams {

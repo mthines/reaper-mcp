@@ -420,6 +420,7 @@ function new_fake(spec)
     return true
   end
   api.MIDI_Sort = function() end
+  api.MarkTrackItemsDirty = function() end
   api.TimeMap2_timeToQN = function(_, t) return t * 2 end
   api.TimeMap2_QNToTime = function(_, qn) return qn / 2 end
   api.MIDI_GetPPQPosFromProjTime = function(_, t) return t * 2 * 960 end

@@ -1200,6 +1200,18 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 .ev-vel-new { stroke: var(--accent); stroke-width: 1.5; }
 .ev-vel-old { stroke: var(--muted); stroke-width: 1.5; opacity: 0.5; }
 .ev-bars { position: relative; height: 14px; font-size: 10.5px; color: var(--faint); }
+/* detect_key: one column per pitch class; scale tones lit, the tonic strongest, the previous call as a dashed tick */
+.key-bars { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; margin: 10px 0 4px; }
+.key-col { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; text-align: center; }
+.key-track { position: relative; height: 84px; border-bottom: 1px solid var(--line-2); }
+.key-fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 2px 2px 0 0; background: var(--faint); opacity: 0.45; }
+.key-in .key-fill { background: var(--accent); opacity: 0.55; }
+.key-tonic .key-fill { background: var(--accent); opacity: 1; }
+.key-was { position: absolute; left: 10%; right: 10%; height: 0; border-top: 1px dashed var(--muted); }
+.key-pc { font-size: 10.5px; color: var(--muted); overflow: hidden; }
+.key-tonic .key-pc { color: var(--accent); font-weight: 600; }
+.key-deg { min-height: 1.2em; font-size: 9.5px; color: var(--faint); }
+@container (max-width: 300px) { .key-deg { display: none; } .key-bars { gap: 2px; } }
 .ev-bars span { position: absolute; padding-left: 3px; }
 .ev-hist { display: flex; align-items: flex-end; gap: 2px; height: 28px; border-bottom: 1px solid var(--line-2); }
 .ev-hist span { flex: 1; min-height: 1px; border-radius: 1px 1px 0 0; background: var(--bar); }
