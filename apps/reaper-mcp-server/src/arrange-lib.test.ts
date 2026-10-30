@@ -227,10 +227,10 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
       assert(api.names(1) == "L@2,L@20", api.names(1))
       local lc = api.tracks[2].items[2]
       assert(near(lc.vals.D_LENGTH, 4) and near(lc.take.vals.D_STARTOFFS, 6), "the copy plays the region's part")
-      -- No volume point lies inside 8-12, so the envelope is left as it was
+      -- No volume point lies inside 8-12, yet the ramp through it is copied: edge points only
       local at = {}
       for _, p in ipairs(api.tracks[1].envs[1].pts) do at[#at + 1] = p.t end
-      assert(r.envelopePoints == 0 and table.concat(at, ",") == "0,6,12", table.concat(at, ","))
+      assert(r.envelopePoints == 0 and table.concat(at, ",") == "0,6,12,19.999,20,24,24.001", table.concat(at, ","))
       assert(#api.undo_labels == 1 and api.undo_labels[1] == "MCP: Copy section")
     `);
   });
@@ -368,6 +368,37 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
       -- After the copy the destination holds 0.5 until 20; inside it, 0.5 until the copied jump at 11
       assert(near(at(15), 0.5) and near(at(19), 0.5), at(15) .. " " .. at(19))
       assert(near(at(10.5), 0.5) and near(at(11.5), 0.8), at(10.5) .. " " .. at(11.5))
+    `);
+  });
+
+  it('copy section: a ramp or held level running through the section is copied without a point inside it', async () => {
+    await runLua(`
+      local function at(api, t) local _, v = api.Envelope_Evaluate(api.tracks[1].envs[1], t) return v end
+      local api = new_timeline{ tracks = { { envs = { { pts = { { 0, 0 }, { 100, 1 } } } } } } }
+      assert(arrange.copy_section(api, { start = 10, ["end"] = 20, position = 50 }))
+      assert(near(at(api, 55), 0.15) and near(at(api, 50), 0.1) and near(at(api, 60), 0.2), at(api, 55))
+      api = new_timeline{ tracks = { { envs = { { pts = { { 0, 0.5, 1 }, { 40, 1, 1 } } } } } } }
+      assert(arrange.copy_section(api, { start = 10, ["end"] = 20, position = 50 }))
+      assert(near(at(api, 55), 0.5), at(api, 55))
+    `);
+  });
+
+  it('remove time: an automation item starting inside the cut keeps its part after it, moved to the cut', async () => {
+    await runLua(`
+      local api = new_timeline{ tracks = { { envs = { { ais = { { pos = 55, len = 15 } } } } } } }
+      local r = assert(arrange.remove_time(api, { start = 50, ["end"] = 60 }))
+      local ai = api.tracks[1].envs[1].ais[1]
+      assert(ai.D_POSITION == 50 and ai.D_LENGTH == 10 and ai.D_STARTOFFS == 5, ai.D_POSITION .. " " .. ai.D_LENGTH .. " " .. tostring(ai.D_STARTOFFS))
+      assert(r.automationItemsTrimmed == 1)
+    `);
+  });
+
+  it('remove time: a held step before the cut stays a step at the cut', async () => {
+    await runLua(`
+      local function at(api, t) local _, v = api.Envelope_Evaluate(api.tracks[1].envs[1], t) return v end
+      local api = new_timeline{ tracks = { { envs = { { pts = { { 0, 0, 1 }, { 55, 1, 1 } } } } } } }
+      assert(arrange.remove_time(api, { start = 50, ["end"] = 60 }))
+      assert(at(api, 49.9995) == 0 and at(api, 51) == 1, at(api, 49.9995) .. " " .. at(api, 51))
     `);
   });
 

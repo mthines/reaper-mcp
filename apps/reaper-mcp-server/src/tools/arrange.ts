@@ -110,7 +110,7 @@ export function registerArrangeTools(server: McpServer): void {
   server.tool(
     'remove_time',
     'Cut a time range out of the whole project and close the gap: items, markers, tempo markers, envelope points and ' +
-      'automation items inside it are deleted, items crossing it are trimmed, regions shrink, and everything after moves ' +
+      'automation items inside it are deleted, items (and automation items starting inside it) crossing its end are trimmed, regions shrink, and everything after moves ' +
       'earlier. The tempo in force at the end of the cut is kept. One undo point; returns what was deleted, trimmed and moved.',
     {
       start: seconds('Start of the range in seconds'),

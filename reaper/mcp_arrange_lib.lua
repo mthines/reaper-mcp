@@ -425,7 +425,7 @@ local function apply_remove(api, c)
   local r = { start = r3(s), ["end"] = r3(e), itemsDeleted = 0, itemsTrimmed = 0, itemsMoved = 0, markersDeleted = 0,
     markersMoved = 0, regionsDeleted = 0, regionsTrimmed = 0, tempoMarkersDeleted = 0, tempoMarkersMoved = 0,
     envelopePointsDeleted = 0, envelopePointsMoved = 0, automationItemsDeleted = 0, automationItemsMoved = 0,
-    automationItemsKept = 0 }
+    automationItemsKept = 0, automationItemsTrimmed = 0 }
   local snap = snapshot(api)
   -- The values either side of the cut, kept at its edges so the automation outside it keeps its shape
   for _, x in ipairs(snap.envs) do
@@ -507,7 +507,11 @@ local function apply_remove(api, c)
         moved = true
       end
     end
-    if x.left then api.InsertEnvelopePoint(x.env, s - PIN, x.left, 0, 0, false, true) end
+    if x.left then
+      -- The pin carries the segment's shape, so a held step before the cut stays a step
+      local shape, tension = shape_through(x.pts, s - PIN)
+      api.InsertEnvelopePoint(x.env, s - PIN, x.left, shape, tension, false, true)
+    end
     if x.right then
       local shape, tension = shape_through(x.pts, e)
       api.InsertEnvelopePoint(x.env, s, x.right, shape, tension, false, true)
@@ -528,6 +532,16 @@ local function apply_remove(api, c)
       elseif ai.pos >= e - EPS then
         api.GetSetAutomationItemInfo(x.env, i - 1 - gone, "D_POSITION", ai.pos - len, true)
         r.automationItemsMoved = r.automationItemsMoved + 1
+      elseif ai.pos > s + EPS and ai.pos + ai.len > e + EPS then
+        -- Starts inside the cut, ends after it: keep the part after the cut, like a media item
+        local idx, cut_in = i - 1 - gone, e - ai.pos
+        local rate = api.GetSetAutomationItemInfo(x.env, idx, "D_PLAYRATE", 0, false)
+        if rate <= 0 then rate = 1 end
+        local offs = api.GetSetAutomationItemInfo(x.env, idx, "D_STARTOFFS", 0, false)
+        api.GetSetAutomationItemInfo(x.env, idx, "D_STARTOFFS", offs + cut_in * rate, true)
+        api.GetSetAutomationItemInfo(x.env, idx, "D_POSITION", s, true)
+        api.GetSetAutomationItemInfo(x.env, idx, "D_LENGTH", ai.len - cut_in, true)
+        r.automationItemsTrimmed = r.automationItemsTrimmed + 1
       elseif ai.pos + ai.len > s + EPS then
         r.automationItemsKept = r.automationItemsKept + 1
       end
@@ -691,7 +705,7 @@ local function apply_section(api, c)
         if pt.t >= s - EPS and pt.t < e - EPS then pts[#pts + 1] = pt end
       end
       copy_automation_items(api, env, s, e, offset, r)
-      if #pts == 0 then return end
+      if #all == 0 then return end
       -- Values at the section's edges, so the copy starts and ends where the source does
       local _, v_start = api.Envelope_Evaluate(env, s, 0, 0)
       local _, v_end = api.Envelope_Evaluate(env, e, 0, 0)
@@ -705,7 +719,8 @@ local function apply_section(api, c)
       -- The edge points carry the shape of the segment they sit in, so a held or curved segment stays one
       local after_shape, after_tension = shape_through(all, after)
       api.InsertEnvelopePoint(env, after, v_after, after_shape, after_tension, false, true)
-      if math.abs(pts[1].t - s) > EPS then
+      -- With no point inside, the start point alone carries a ramp or level running through the section
+      if #pts == 0 or math.abs(pts[1].t - s) > EPS then
         local start_shape, start_tension = shape_through(all, s)
         api.InsertEnvelopePoint(env, dest, v_start, start_shape, start_tension, false, true)
       end
