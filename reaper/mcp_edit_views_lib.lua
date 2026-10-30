@@ -843,9 +843,11 @@ function M.summary(cmd_type, params, data, before)
   elseif MIDI_WRITES[cmd_type] or cmd_type == "get_midi_notes" then
     return midi_view(params, before)
   elseif cmd_type == "import_midi_file" then
-    -- The first created item, all notes new
+    -- The first created item, all notes new; the other items (one per new track) are counted
     local first = type(data) == "table" and type(data.items) == "table" and data.items[1]
-    return first and first.itemIndex and midi_view({ trackIndex = first.trackIndex, itemIndex = first.itemIndex }, {})
+    local view = first and first.itemIndex and midi_view({ trackIndex = first.trackIndex, itemIndex = first.itemIndex }, {})
+    if view and #data.items > 1 then view.items = #data.items - 1 end
+    return view
   elseif cmd_type == "analyze_midi" then
     return midi_stats_view(data)
   elseif CC_COMMANDS[cmd_type] then
