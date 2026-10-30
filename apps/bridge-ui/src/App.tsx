@@ -6,7 +6,11 @@ import { manualInstallHint, openInBrowserToInstall, promptInstall, useInstallSta
 import { ResizeHandle, useDrawerWidth } from './ResizeHandle.js';
 import { setUsageStats, startAnalytics, track, trackView, type TrackEvent, type UsageStatsState } from './analytics.js';
 import { PluginsView } from './PluginsView.js';
+import { EditViewSection } from './EditViews.js';
+import { MeasurementView } from './Measurement.js';
+import { galleryAllowed } from './gallery-stories.js';
 import { prependedCount, scrollToRow, visibleRows } from './virtual-list.js';
+import { isBoolean, isNumberOrNull, isString, isStringOrNull, useUrlState } from './url-state.js';
 import { LOREKIT_PUBLISH_TOKEN_KEY, loadLoreKitToken, saveLoreKitToken, useKnowledge } from './useKnowledge.js';
 import type { KnowledgeFeed } from './plugins.js';
 import {
@@ -19,6 +23,10 @@ import {
   formatDuration,
   formatMs,
   formatParams,
+  measurementHistory,
+  matchesQuery,
+  parseQuery,
+  termFromSelection,
   SLOW_MS,
   VERY_SLOW_MS,
   speedOf,
@@ -42,6 +50,7 @@ import {
   spanOfBars,
   statusRequestUrl,
   timelineBars,
+  clearedBefore,
   type BridgeHistory,
   type BridgeSettings,
   type BridgeStatus,
@@ -98,15 +107,18 @@ interface Feed {
 
 const LONG_HISTORY_POLL_MS = 10_000;
 const CLEARED_KEY = 'mcp-bridge-cleared-through';
+/** When the viewer last pressed Clear: the timeline hides bars from before it too */
+const CLEARED_AT_KEY = 'mcp-bridge-cleared-at';
 
 /** Poll the bridge's ExtState through REAPER's web interface; pauses while the tab is hidden. */
-function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void } {
+function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; clearedAt: number } {
   const [feed, setFeed] = useState<Feed>({ status: null, history: null, longHistory: null, reachable: true, lastChangeAt: 0, log: [] });
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   // Highest sequence number cleared by the user. Numbers continue across bridge restarts and the
   // bridge keeps its log, so this is remembered too, or a reload would bring cleared entries back.
   const clearedThroughRef = useRef(Number(load(CLEARED_KEY)) || 0);
+  const [clearedAt, setClearedAt] = useState(() => Number(load(CLEARED_AT_KEY)) || 0);
   // The bridge's saved log (ExtState `log`) is requested when the page opens, after a bridge
   // restart, and when the live 50-entry window skipped entries (the page was hidden or paused).
   // Only the answer to the latest request counts, so an older snapshot can't leave a hole.
@@ -135,6 +147,8 @@ function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void } {
         if (renumbered) {
           clearedThroughRef.current = 0;
           save(CLEARED_KEY, '0');
+          save(CLEARED_AT_KEY, '0');
+          setClearedAt(0);
         }
         const incoming = status ? status.recent.filter((e) => e.n > clearedThroughRef.current) : [];
         let log = renumbered ? [] : prev.log;
@@ -198,14 +212,18 @@ function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void } {
     };
   }, []);
 
-  const clearLog = () =>
+  const clearLog = () => {
+    const at = Date.now();
+    save(CLEARED_AT_KEY, String(at));
+    setClearedAt(at);
     setFeed((prev) => {
       clearedThroughRef.current = Math.max(prev.log[0]?.n ?? 0, prev.status?.recent[0]?.n ?? 0);
       save(CLEARED_KEY, String(clearedThroughRef.current));
       return { ...prev, log: [] };
     });
+  };
 
-  return { ...feed, clearLog };
+  return { ...feed, clearLog, clearedAt };
 }
 
 /** Snapshot the bridge's cumulative counters once per tick for the stat sparklines. */
@@ -324,16 +342,28 @@ export function App() {
       window.resizeTo(980, 720);
     }
   }, []);
-  const { status, history, longHistory, reachable, lastChangeAt, log, clearLog } = useBridgeFeed(paused);
+  const { status, history, longHistory, reachable, lastChangeAt, log, clearLog, clearedAt } = useBridgeFeed(paused);
   // A span picked on the timeline filters the log views; the timeline's range stays as it is
-  const [selection, setSelection] = useState<Span | null>(null);
+  const [selection, setSelection] = useUrlState<Span | null>('span', null, { validate: isSpanOrNull });
   const shownLog = useMemo(() => inSpan(log, selection), [log, selection]);
   const now = useNow(1000);
+  // The timeline's range also windows the log; a selected span replaces it
+  // In the URL (`?range="1h"`) so Back/Forward step through ranges; a link without it opens the last one picked
+  const [openedRange] = useState<RangeKey>(loadRange);
+  const [rangeKey, setRangeKey] = useUrlState<RangeKey>('range', openedRange, { validate: isRangeKey });
+  const chooseRange = (key: RangeKey) => {
+    if (key === rangeKey) return;
+    track({ name: 'timeline_range_changed', range: key });
+    setRangeKey(key);
+    save(RANGE_STORAGE_KEY, key);
+    setSelection(null); // a selection is a span of the old range's bars
+  };
   const state: Liveness = liveness(status, lastChangeAt, now);
   const samples = useHistory(status, now);
   const series = useMemo(() => deriveSeries(samples, log), [samples, log]);
   const sessions = useMemo(() => new Map(labelSessions(status?.sessions ?? []).map((x) => [x.id, x])), [status?.sessions]);
-  const [view, setView] = useState<View>(loadView);
+  const [openedView] = useState<View>(loadView);
+  const [view, setView] = useUrlState<View>('view', openedView, { validate: isView });
   const chooseView = (v: View) => {
     if (v !== view) trackView(v);
     setView(v);
@@ -353,7 +383,10 @@ export function App() {
   const chooseUsageStats = (on: boolean) => setUsageStatsState(setUsageStats(on, Boolean(DEMO)));
   // `?install`: opened from the bridge window's Install button, so show the install setting straight away
   const request = useBridgeRequest(status);
-  const [settingsOpen, setSettingsOpen] = useState(() => new URLSearchParams(location.search).has('install'));
+  const [settingsOpen, setSettingsOpen] = useUrlState('settings', false, { validate: isBoolean });
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has('install')) setSettingsOpen(true, 'replace');
+  }, [setSettingsOpen]);
   const [loreToken, setLoreToken] = useState(() => loadLoreKitToken());
   const chooseLoreToken = (token: string | null) => {
     track({ name: 'lorekit_token_changed', kind: 'read', connected: token !== null });
@@ -408,10 +441,21 @@ export function App() {
         <>
           <Notices status={status} settings={settings} onSet={changeSetting('notice')} request={request} />
           <Stats status={status} log={log} now={now} series={series} />
-          <Timeline history={history} longHistory={longHistory} now={now} selection={selection} onSelect={setSelection} />
+          <Timeline
+            history={history}
+            longHistory={longHistory}
+            now={now}
+            rangeKey={rangeKey}
+            onRange={chooseRange}
+            selection={selection}
+            onSelect={setSelection}
+            clearedAt={clearedAt}
+          />
           <Log
             log={shownLog}
             selection={selection}
+            rangeKey={selection ? null : rangeKey}
+            onRange={chooseRange}
             oldestKept={log[log.length - 1]?.t ?? null}
             onClearSelection={() => setSelection(null)}
             sessions={sessions}
@@ -487,7 +531,10 @@ function Header({
   return (
     <header className="header">
       <div className="brand">
-        <Mark active={state === 'live'} />
+        <Mark
+          active={state === 'live'}
+          onShiftClick={galleryAllowed('?gallery', location.protocol, status?.settings?.dev) ? () => location.assign(`${location.pathname}?gallery`) : undefined}
+        />
         <div>
           <h1>MCP Bridge</h1>
           <p className="sub">
@@ -737,7 +784,7 @@ function useBridgeRequest(status: BridgeStatus | null): BridgeRequest {
   };
 }
 
-function Notice({ tone, action, children }: { tone: 'warn' | 'bad' | 'info'; action?: ReactNode; children: ReactNode }) {
+export function Notice({ tone, action, children }: { tone: 'warn' | 'bad' | 'info'; action?: ReactNode; children: ReactNode }) {
   return (
     <div className={`notice notice-${tone}`} role="status">
       <span className="notice-dot" aria-hidden />
@@ -1056,7 +1103,7 @@ function PublishSetting({ token, readToken, onChange }: { token: string | null; 
   );
 }
 
-function Toggle({
+export function Toggle({
   label,
   hint,
   on,
@@ -1089,7 +1136,8 @@ const EYE_THROTTLE_MS = 60;
 
 // The reaper-mcp logo (docs/assets/logo-mark.svg); the dot is an eye that blinks while the bridge is live.
 // Easter egg: clicking blinks and toggles "watching", where the eye follows the cursor across the window.
-function Mark({ active }: { active: boolean }) {
+/** `onShiftClick` (developer mode): shift-click opens the component gallery instead of blinking */
+export function Mark({ active, onShiftClick }: { active: boolean; onShiftClick?: () => void }) {
   const [watching, setWatching] = useState(false);
   const [look, setLook] = useState({ x: 0, y: 0 });
   const [blinks, setBlinks] = useState(0);
@@ -1131,7 +1179,8 @@ function Mark({ active }: { active: boolean }) {
     };
   }, [watching]);
 
-  const onClick = () => {
+  const onClick = (ev: MouseEvent<HTMLButtonElement>) => {
+    if (ev.shiftKey && onShiftClick) return onShiftClick();
     setWatching((w) => !w);
     setBlinks((n) => n + 1); // remounts the lid so back-to-back clicks each blink
     setBlinking(true);
@@ -1366,9 +1415,13 @@ function barWidth(ms: number): string {
 
 const RANGE_OPTIONS = RANGES.map((r) => ({ value: r.key, label: r.label, hint: `${barWidth(r.ms / r.bars)} per bar` }));
 
+const rangeOf = (key: RangeKey) => RANGES.find((r) => r.key === key) ?? RANGES[2];
+
+const isRangeKey = (v: unknown): v is RangeKey => RANGES.some((r) => r.key === v);
+
 function loadRange(): RangeKey {
   const saved = load(RANGE_STORAGE_KEY);
-  return RANGES.some((r) => r.key === saved) ? (saved as RangeKey) : '30m';
+  return isRangeKey(saved) ? saved : '30m';
 }
 
 /** Round up to a readable, even axis maximum with ~10% headroom, at least 4. */
@@ -1401,38 +1454,37 @@ function barAt(plot: HTMLElement, clientX: number, count: number): number {
 /**
  * Commands per time slot over a fixed window (stacked ok / slow / error). Drag across bars (or
  * click one) to select a span: the log below filters to it, and the range stays as it is.
+ * Without a span, the log shows the range.
  */
 function Timeline({
   history,
   longHistory,
   now,
+  rangeKey,
+  onRange,
   selection,
   onSelect,
+  clearedAt,
 }: {
   history: BridgeHistory | null;
   longHistory: LongHistory | null;
   now: number;
+  rangeKey: RangeKey;
+  onRange: (key: RangeKey) => void;
   selection: Span | null;
   onSelect: (span: Span | null) => void;
+  /** Bars that ended before the viewer's last Clear are drawn empty */
+  clearedAt: number;
 }) {
-  const [rangeKey, setRangeKey] = useState<RangeKey>(loadRange);
   const [hover, setHover] = useState<number | null>(null);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
-  const range = RANGES.find((r) => r.key === rangeKey) ?? RANGES[2];
+  const range = rangeOf(rangeKey);
   const tiers = useMemo(() => historyTiers(history, longHistory), [history, longHistory]);
-  const bars = useMemo(() => timelineBars(tiers, range.ms, range.bars, now), [tiers, range, now]);
+  const bars = useMemo(() => clearedBefore(timelineBars(tiers, range.ms, range.bars, now), clearedAt), [tiers, range, now, clearedAt]);
   const peak = Math.max(0, ...bars.map((b) => b.total));
   const yMax = niceMax(peak);
   const total = bars.reduce((sum, b) => sum + b.total, 0);
   const barMs = range.ms / range.bars;
-
-  const choose = (key: RangeKey) => {
-    if (key === rangeKey) return;
-    track({ name: 'timeline_range_changed', range: key });
-    setRangeKey(key);
-    save(RANGE_STORAGE_KEY, key);
-    onSelect(null); // a selection is a span of the old range's bars
-  };
 
   // While dragging, the drag is the selection; otherwise bars inside the selected span
   const picked = drag ? spanOfBars(bars, drag.from, drag.to) : selection;
@@ -1479,7 +1531,7 @@ function Timeline({
             <i className="lg lg-slow" /> ≥ {SLOW_MS} ms
             <i className="lg lg-err" /> error
           </span>
-          <Combobox label="Time range" value={rangeKey} options={RANGE_OPTIONS} onChange={choose} />
+          <Combobox label="Time range" value={rangeKey} options={RANGE_OPTIONS} onChange={onRange} />
         </div>
       </div>
       <div className="timeline-chart">
@@ -1564,14 +1616,21 @@ const VIEWS: Array<{ key: View; label: string }> = [
   { key: 'plugins', label: 'Plugins' },
 ];
 
+const isView = (v: unknown): v is View => VIEWS.some((x) => x.key === v);
+const isFilter = (v: unknown): v is Filter => v === 'all' || v === 'errors';
+const isSpanOrNull = (v: unknown): v is Span | null =>
+  v === null || (typeof v === 'object' && typeof (v as Span).start === 'number' && typeof (v as Span).end === 'number');
+
 function loadView(): View {
   const saved = load(VIEW_KEY);
-  return VIEWS.some((v) => v.key === saved) ? (saved as View) : 'calls';
+  return isView(saved) ? saved : 'calls';
 }
 
 function Log({
   log,
   selection,
+  rangeKey,
+  onRange,
   oldestKept,
   onClearSelection,
   sessions,
@@ -1587,6 +1646,9 @@ function Log({
   log: CommandEntry[];
   /** The timeline span the log is filtered to, if any */
   selection: Span | null;
+  /** The timeline range the calls and tools views are windowed to; null while a span is selected */
+  rangeKey: RangeKey | null;
+  onRange: (key: RangeKey) => void;
   /** Time of the oldest entry the page holds, before the selection filter */
   oldestKept: number | null;
   onClearSelection: () => void;
@@ -1600,10 +1662,17 @@ function Log({
   onClear: () => void;
   now: number;
 }) {
-  const [filter, setFilter] = useState<Filter>('all');
-  const [query, setQuery] = useState('');
-  const [sessionFilter, setSessionFilter] = useState<string | null>(null);
-  const [selected, setSelected] = useState<CommandEntry | null>(null);
+  const [filter, setFilter] = useUrlState<Filter>('filter', 'all', { validate: isFilter });
+  // Typing replaces the history entry instead of adding one per keystroke
+  const [query, setQuery] = useUrlState('q', '', { validate: isString, navigationMode: 'replace' });
+  const [sessionFilter, setSessionFilter] = useUrlState<string | null>('agent', null, { validate: isStringOrNull });
+  // The open command, by sequence number: it opens once the log holds it (also after a reload)
+  const [selectedN, setSelectedN] = useUrlState<number | null>('entry', null, { validate: isNumberOrNull });
+  const selected = useMemo(() => (selectedN === null ? null : (log.find((e) => e.n === selectedN) ?? null)), [log, selectedN]);
+  const setSelected = useCallback(
+    (e: CommandEntry | null, mode?: 'push' | 'replace') => setSelectedN(e ? e.n : null, mode),
+    [setSelectedN],
+  );
   const [copied, setCopied] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -1629,7 +1698,7 @@ function Log({
         const list = rowsRef.current;
         const i = list.findIndex((e) => e.n === selectedRef.current?.n);
         const next = list[i + (ev.key === 'ArrowDown' ? 1 : -1)];
-        if (next) setSelected(next);
+        if (next) setSelected(next, 'replace'); // stepping through rows doesn't add history
       }
     };
     window.addEventListener('keydown', onKey);
@@ -1648,14 +1717,29 @@ function Log({
   const multiSession = sessionIds.length > 1;
   const sessionOf = (id: string): Session => sessions.get(id) ?? { id, first: 0, last: 0, commands: 0, errors: 0 };
 
-  const scoped = useMemo(() => (sessionFilter ? log.filter((e) => e.s === sessionFilter) : log), [log, sessionFilter]);
+  const range = rangeKey ? rangeOf(rangeKey) : null;
+  const since = range ? now - range.ms : null;
+  const windowed = useMemo(() => (since === null ? log : log.filter((e) => e.t >= since)), [log, since]);
+  const scoped = useMemo(() => (sessionFilter ? windowed.filter((e) => e.s === sessionFilter) : windowed), [windowed, sessionFilter]);
   const errorCount = useMemo(() => scoped.filter((e) => !e.ok).length, [scoped]);
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return scoped.filter(
-      (e) => (filter === 'all' || !e.ok) && (!q || e.c.toLowerCase().includes(q) || e.e?.toLowerCase().includes(q)),
+  // Every match the page holds, then the ones inside the range: the rest are offered at the end of the list
+  const matches = useMemo(() => {
+    const terms = parseQuery(query);
+    return log.filter(
+      (e) =>
+        (!sessionFilter || e.s === sessionFilter) &&
+        (filter === 'all' || !e.ok) &&
+        matchesQuery(e, terms),
     );
-  }, [scoped, filter, query]);
+  }, [log, sessionFilter, filter, query]);
+  const rows = useMemo(() => (since === null ? matches : matches.filter((e) => e.t >= since)), [matches, since]);
+  const older = matches.length - rows.length;
+  // The smallest wider range that brings in the next older match
+  const wider = useMemo(() => {
+    const next = matches[rows.length];
+    if (!range || !next) return null;
+    return RANGES.find((r) => r.ms > range.ms && next.t >= now - r.ms) ?? RANGES[RANGES.length - 1];
+  }, [matches, rows.length, range, now]);
 
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
@@ -1670,11 +1754,15 @@ function Log({
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
-  const selectRow = useCallback((e: CommandEntry) => {
-    const open = selectedRef.current?.n === e.n;
-    if (!open) track({ name: 'log_entry_opened', ok: e.ok });
-    setSelected(open ? null : e);
-  }, []);
+  const selectRow = useCallback(
+    (e: CommandEntry) => {
+      const open = selectedRef.current?.n === e.n;
+      if (!open) track({ name: 'log_entry_opened', ok: e.ok });
+      // Every click is a step Back undoes (opening, closing or switching rows); only ↑/↓ replaces
+      setSelected(open ? null : e, 'push');
+    },
+    [setSelected],
+  );
   // Start of today: the rows only need to re-render when "Today" becomes "Yesterday"
   const today = new Date(now).setHours(0, 0, 0, 0);
 
@@ -1758,7 +1846,7 @@ function Log({
                 onClear();
               }}
               disabled={log.length === 0}
-              title="Clear this window's log (counters and timeline keep their history)"
+              title="Clear the log and the chart in this window (the bridge keeps its history and the counters)"
             >
               Clear
             </button>
@@ -1788,7 +1876,7 @@ function Log({
           </button>
           {sessionIds.map((id) => {
             const x = sessionOf(id);
-            const n = log.filter((e) => e.s === id).length;
+            const n = windowed.filter((e) => e.s === id).length;
             return (
               <button
                 key={id}
@@ -1828,9 +1916,11 @@ function Log({
             <div className="empty">
               {log.length === 0
                 ? 'No commands yet. New ones show up here as your agent sends them.'
-                : filter === 'errors' && !query
-                  ? 'No errors. Nice.'
-                  : 'Nothing matches that filter.'}
+                : older > 0 && range
+                  ? `Nothing in the ${range.label.toLowerCase()}.`
+                  : filter === 'errors' && !query
+                    ? 'No errors. Nice.'
+                    : 'Nothing matches that filter.'}
             </div>
           ) : (
             <LogRows
@@ -1841,6 +1931,16 @@ function Log({
               onSelect={selectRow}
             />
           )}
+          {wider && (
+            <div className="log-more">
+              <span>
+                {older.toLocaleString()} older {older === 1 ? 'command' : 'commands'}
+              </span>
+              <button className="btn btn-sm" onClick={() => onRange(wider.key)}>
+                Show {wider.label.toLowerCase()}
+              </button>
+            </div>
+          )}
         </div>
       )}
       {paused && view === 'calls' && <div className="paused-banner">Paused · new commands are still counted, the log is frozen</div>}
@@ -1850,17 +1950,26 @@ function Log({
           session={selected.s ? sessionOf(selected.s) : null}
           now={now}
           filtered={query.trim() === selected.c}
+          // A step Back undoes, unlike typing in the search box
           onFilter={() => {
             const off = query.trim() === selected.c;
             if (!off && !query.trim()) track({ name: 'log_searched', view });
-            setQuery(off ? '' : selected.c);
+            setQuery(off ? '' : selected.c, 'push');
+          }}
+          onAddTerm={(term) => {
+            if (!query.trim()) track({ name: 'log_searched', view });
+            setQuery((q) => (parseQuery(q).some((t) => JSON.stringify(t) === JSON.stringify(parseQuery(term)[0])) ? q : `${q.trim()} ${term}`.trim()), 'push');
           }}
           onClose={() => setSelected(null)}
+          history={measurementHistory(log, selected)}
+          onPick={(e) => setSelected(e, 'push')}
         />
       )}
     </section>
   );
 }
+
+const isToolSort = (v: unknown): v is ToolSort => TOOL_SORTS.some((x) => x.key === v);
 
 const TOOL_SORTS: Array<{ key: ToolSort; label: string }> = [
   { key: 'count', label: 'Calls' },
@@ -1881,9 +1990,15 @@ function ToolsView({
   now: number;
   onPick: (tool: string, errors: boolean) => void;
 }) {
-  const [sort, setSort] = useState<ToolSort>('count');
-  const q = query.trim().toLowerCase();
-  const groups = useMemo(() => groupByTool(log, sort).filter((g) => !q || g.c.includes(q)), [log, sort, q]);
+  const [sort, setSort] = useUrlState<ToolSort>('sort', 'count', { validate: isToolSort });
+  // Param terms narrow the calls counted, words the tools shown
+  const groups = useMemo(() => {
+    const terms = parseQuery(query);
+    const params = terms.filter((t) => t.key !== undefined);
+    const words = terms.filter((t) => t.key === undefined);
+    const calls = params.length ? log.filter((e) => matchesQuery(e, params)) : log;
+    return groupByTool(calls, sort).filter((g) => words.every((w) => g.c.includes(w.value)));
+  }, [log, sort, query]);
   const top = Math.max(1, ...groups.map((g) => g.count));
   const kinds = useMemo(() => {
     const k = { read: 0, write: 0, transport: 0 };
@@ -2165,13 +2280,16 @@ const Row = memo(
 );
 
 /** Right-hand sidebar with everything known about one command. ↑/↓ move between rows, Esc closes. */
-function Details({
+export function Details({
   entry: e,
   session,
   now,
   filtered,
   onFilter,
+  onAddTerm,
   onClose,
+  history,
+  onPick,
 }: {
   entry: CommandEntry;
   session: Session | null;
@@ -2179,7 +2297,12 @@ function Details({
   /** The log is already filtered to this command's tool */
   filtered: boolean;
   onFilter: () => void;
+  /** Add a search term (from a selection in the params) to the log's filter */
+  onAddTerm: (term: string) => void;
   onClose: () => void;
+  /** Earlier calls of the same measurement on the same track, for the result's history */
+  history: CommandEntry[];
+  onPick: (e: CommandEntry) => void;
 }) {
   const width = useDrawerWidth();
   const [copied, setCopied] = useState<string | null>(null);
@@ -2187,7 +2310,7 @@ function Details({
   const speed = SPEED_LABEL[speedOf(e.c, e.ms)];
   const params = formatParams(e.p);
 
-  const copy = async (what: 'error' | 'params' | 'json', text: string) => {
+  const copy = async (what: 'error' | 'params', text: string) => {
     track({ name: 'log_copied', what });
     try {
       await navigator.clipboard.writeText(text);
@@ -2266,6 +2389,9 @@ function Details({
           </div>
         )}
 
+        <MeasurementView entry={e} history={history} now={now} onPick={onPick} />
+        <EditViewSection entry={e} />
+
         <div className="code-block">
           <div className="code-head">
             <span>Params</span>
@@ -2275,31 +2401,76 @@ function Details({
               </button>
             )}
           </div>
-          <pre>{params ?? <span className="muted">No params</span>}</pre>
+          {params ? <ParamsText text={params} onAddTerm={onAddTerm} /> : <pre><span className="muted">No params</span></pre>}
         </div>
 
-        <button className="btn btn-block" onClick={() => copy('json', JSON.stringify({ ...e, p: parseParams(e.p) }, null, 2))}>
-          {copied === 'json' ? 'Copied' : 'Copy as JSON'}
-        </button>
         <p className="drawer-hint">
-          <kbd>↑</kbd> <kbd>↓</kbd> to move between commands · <kbd>Esc</kbd> to close
+          <kbd>↑</kbd> <kbd>↓</kbd> to move between commands · select a param to filter by it · <kbd>Esc</kbd> to close
         </p>
       </div>
     </aside>
   );
 }
 
-/** Params as a value when they parse, else the truncated text the bridge sent. */
-function parseParams(p: string | undefined): unknown {
-  if (!p) return undefined;
-  try {
-    return JSON.parse(p);
-  } catch {
-    return p;
-  }
+/**
+ * The formatted params; selecting text in them offers to filter the log by it (the whole param when the
+ * selection sits on one `"key": value` line).
+ */
+function ParamsText({ text, onAddTerm }: { text: string; onAddTerm: (term: string) => void }) {
+  const pre = useRef<HTMLPreElement>(null);
+  const [pick, setPick] = useState<{ term: string; x: number; y: number } | null>(null);
+
+  const read = () => {
+    const el = pre.current;
+    const sel = window.getSelection();
+    if (!el || !sel || sel.rangeCount === 0 || sel.isCollapsed || !el.contains(sel.anchorNode) || !el.contains(sel.focusNode)) return setPick(null);
+    const range = sel.getRangeAt(0);
+    const before = document.createRange();
+    before.setStart(el, 0);
+    before.setEnd(range.startContainer, range.startOffset);
+    const start = before.toString().length;
+    const term = termFromSelection(text, start, start + range.toString().length);
+    const box = range.getBoundingClientRect();
+    const host = el.getBoundingClientRect();
+    setPick(term ? { term, x: box.left + box.width / 2 - host.left, y: box.top - host.top } : null);
+  };
+
+  useEffect(() => {
+    // A click elsewhere or a collapsed selection hides the offer
+    const onChange = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) setPick(null);
+    };
+    document.addEventListener('selectionchange', onChange);
+    return () => document.removeEventListener('selectionchange', onChange);
+  }, []);
+  useEffect(() => setPick(null), [text]);
+
+  return (
+    <div className="params-text">
+      <pre ref={pre} onMouseUp={read} onKeyUp={read}>
+        {text}
+      </pre>
+      {pick && (
+        <button
+          className="params-filter"
+          style={{ left: pick.x, top: pick.y }}
+          // Keep the selection while clicking
+          onMouseDown={(ev) => ev.preventDefault()}
+          onClick={() => {
+            onAddTerm(pick.term);
+            window.getSelection()?.removeAllRanges();
+            setPick(null);
+          }}
+        >
+          Filter <span className="mono">{pick.term}</span>
+        </button>
+      )}
+    </div>
+  );
 }
 
-function Offline({ reachable }: { reachable: boolean }) {
+export function Offline({ reachable }: { reachable: boolean }) {
   return (
     <section className="offline">
       <div className="offline-icon" aria-hidden>

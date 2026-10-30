@@ -39,7 +39,7 @@ events:
   log_paused:
     paused: boolean
   log_copied:
-    what: [rows, error, params, json]
+    what: [rows, error, params]
   log_cleared: {}
   log_entry_opened:
     ok: boolean

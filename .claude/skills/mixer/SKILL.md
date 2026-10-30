@@ -44,9 +44,12 @@ before setting one.
 4. **Use the best available plugin** — `list_available_fx`, then prefer the
    highest `preference::` among LoreKit plugin records that match; fall back to stock.
 5. **Iterate** — change, verify with meters, adjust.
-6. **Optimize for perceived loudness, not just meters** — the ear is far more
-   sensitive at 2–5 kHz than at 100 Hz. Load `reference/perceived-loudness.md`
-   for any balance or EQ decision.
+6. **Decide on perceived loudness, never raw values** — the ear is far more
+   sensitive at 2–5 kHz than at 100 Hz, and peak/RMS dBFS or raw band `db` ignore
+   that. Balance in **LU** (short-term LUFS of each element against the mix bus,
+   same section, post-fader), tone and masking in **`kDb`** (K-weighted bands).
+   Load `reference/perceived-loudness.md` for any balance or EQ decision: it
+   has the rules, the per-band K gains and the stem reference points.
 
 ## Memory — get better every session
 
@@ -118,35 +121,42 @@ loudness/limiting, defer to `/mastering`.
 2. **Understand** the request; load the matching `workflows/` + `genres/` docs.
 3. **Snapshot** — `snapshot_save { name: "before-{task}" }`.
 4. **Analyze** — `list_tracks` (in a big session filter it: `parent` = a folder
-   index or name, `nameContains`, `compact: true`, `offset`/`limit`). Start with
-   `analyze_track_offline` on the master (-1) or the bus in question: it renders
-   once, needs no playback, works on folder tracks, and returns integrated LUFS,
-   LRA, true peak, crest, per-section loudness (`sectionSeconds`), band balance,
-   resonance and sibilance hints. Pass `referencePath` (or `analyze_audio_file`
-   on a reference song) for the tonal and loudness delta against a reference.
-   Use the real-time meters (`read_track_meters` / `read_track_spectrum` /
-   `read_track_correlation` / `measure_tracks`) for quick checks while playing;
-   `measure_tracks` reports a track that gave no data under `errors` instead of
-   zeros. Resonance hints are most meaningful on a single track; on a full mix
-   they also catch sustained notes.
-   For multi-mic sources (snare top/bottom, kick in/out, overheads vs close mics)
-   run `measure_track_alignment`, then `set_track_property` `playOffsetMs` =
-   `suggestedPlayOffsetMs` and `phase` = `suggestedPhase` (both absolute: they
-   already include the track's current offset and polarity). With a `warning`
-   (correlation under 0.3) there is no suggestion: pick a range where both tracks
-   play the same hits and measure again.
+   index or name, `nameContains`, `compact: true`, `offset`/`limit`).
+   - **Whole song / master** — `analyze_track_offline` on the master (-1) or the
+     bus in question: it renders once, needs no playback, works on folder
+     tracks, and returns integrated LUFS, LRA, true peak, crest, per-section
+     loudness (`sectionSeconds`), band balance, resonance and sibilance hints.
+     Pass `referencePath` (or `analyze_audio_file` on a reference song) for the
+     tonal and loudness delta against a reference. Resonance hints are most
+     meaningful on a single track; on a full mix they also catch sustained notes.
+   - **Balance between elements** — `list_regions` to find a section where every
+     compared element plays; then one `measure_tracks` call over it with the mix
+     bus and the elements (`lufs`, plus `spectrum` for tone). Add each track's
+     fader to its reading (the meters are pre-fader), express it as LU below the
+     mix bus, and compare against the stem reference points. Read spectra 3+
+     times (each is a ~0.5 s snapshot). A track that gave no data is under
+     `errors`, not zeros. `read_track_meters` is for headroom and clipping only,
+     never for balance.
+   - **Multi-mic sources** (snare top/bottom, kick in/out, overheads vs close
+     mics) — `measure_track_alignment`, then `set_track_property` `playOffsetMs`
+     = `suggestedPlayOffsetMs` and `phase` = `suggestedPhase` (both absolute:
+     they already include the track's current offset and polarity). With a
+     `warning` (correlation under 0.3) there is no suggestion: pick a range where
+     both tracks play the same hits and measure again.
 5. **Discover plugins** — `list_available_fx`; match against LoreKit plugin
    records by `category::` + `fx::` tags and pick the highest `preference::`
    (a `user::` record's preference overrides the built-in one).
 6. **Execute** — make changes, explaining each in audio terms.
-7. **Verify** — re-read meters/spectrum; compare against targets; revert if worse.
-   For a judgement call (did this change make the mix better?), A/B level-matched:
-   `analyze_track_aesthetics` on the same 30 s range before and after (it
-   normalizes to -18 LUFS by default — `normalizeLufs` — so a louder version does
-   not score better just for being louder). Only Production Quality (PQ) and
-   Content Usefulness (CU) judge a mix change; Content Enjoyment and Production
-   Complexity follow the arrangement and level. Treat PQ differences under ~0.1
-   as no change (`reference/aesthetics-scoring.md`).
+7. **Verify** — re-measure the same section the same way (LU, `kDb`); compare
+   against the reference points; revert if worse. For a judgement call (did this
+   change make the mix better?), A/B level-matched: `analyze_track_aesthetics`
+   on the same 30 s range before and after (it normalizes to -18 LUFS by
+   default — `normalizeLufs` — so a louder version does not score better just
+   for being louder). Only Production Quality (PQ) and Content Usefulness (CU)
+   judge a mix change; Content Enjoyment and Production Complexity follow the
+   arrangement and level. Treat PQ differences under ~0.1 as no change
+   (`reference/aesthetics-scoring.md`). Then ask the user to listen: their ear
+   has the final say.
 8. **Capture** — write any durable plugin learnings / process lessons (Memory).
    Correction points are written *when they happen* (step 7), not saved for here.
 9. **Report** — first run the **end-of-session retrospective** (Memory) and write
@@ -172,3 +182,16 @@ loudness/limiting, defer to `/mastering`.
 - **If a change sounds or measures worse, revert** to the before-snapshot.
 - **A "flat" analyzer is not perceptually flat** — a balanced mix slopes gently
   down from lows to highs.
+- **Perceived values only, never raw.** Every balance or EQ claim cites LU
+  (post-fader, against the mix bus, same section) or `kDb` (same band across
+  tracks or a reference). Never judge or report balance from peak/RMS dBFS,
+  raw band `db`, raw FFT bins or fader positions alone, and never compare one
+  band with a different band of the same spectrum.
+- **The user's ear is the finding.** When the user hears an imbalance, a
+  measurement that disagrees is suspect first: diff plugin parameters against
+  the before-snapshot, check for pre-fader readings, a bypassed meter or a
+  different section.
+- **Never prefix track names with their parent or role** ("A INST", "STEM DRUMS",
+  "LIVE OUT"). The folder already gives the context: a copy under `MIX A` is
+  `INST`, not `A INST`. Keep the user's names and duplicate names across folders;
+  target tracks by GUID or index instead of renaming them to make names unique.

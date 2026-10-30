@@ -11,9 +11,9 @@ const REAPER_DIR = join(__dirname, '../../../reaper');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
 const SCRIPTS = '/reaper/Scripts/';
 const BRIDGE_DIR = `${SCRIPTS}mcp_bridge_data/`;
-const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua'];
+const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_edit_views_lib.lua'];
 
-interface Entry { n: number; t: number; c: string; ok: boolean; s?: string; p?: string; e?: string }
+interface Entry { n: number; t: number; c: string; ok: boolean; s?: string; p?: string; e?: string; r?: Record<string, unknown> }
 type Row = [number, number, number, number, number];
 interface History { v: number; size: number; b: Row[] }
 interface LongHistory { v: number; tiers: Array<{ size: number; b: Row[] }> }
@@ -145,6 +145,228 @@ describe('bridge status feed', () => {
     await bridge.send('get_track_properties', { trackIndex: 0 }, A);
     const { recent } = await bridge.status();
     expect(JSON.parse(recent[0].p as string)).toEqual({ trackIndex: 0 });
+  });
+});
+
+describe('measurement results in the log', () => {
+  it('keeps meter readings, rounded, and nothing for other commands', async () => {
+    const bridge = await startBridge('api.Track_GetPeakInfo = function(_, ch) return ch == 0 and 0.5 or 0.25 end');
+    await bridge.send('read_track_meters', { trackIndex: 0 });
+    await bridge.send('get_track_properties', { trackIndex: 0 });
+    const { recent } = await bridge.status();
+    expect(recent[1].r).toEqual({ peakL: -6.02, peakR: -12.04, rmsL: -9.03, rmsR: -15.05 });
+    expect(recent[0].r).toBeUndefined();
+  });
+
+  it('folds the spectrum into 48 log-spaced bands, loudest bin each', async () => {
+    // 2048 bins at 48 kHz / 4096: ~11.7 Hz per bin; -20 dB around 1 kHz, -80 dB elsewhere
+    const bridge = await startBridge(`
+      api.GetSetProjectInfo = function() return 48000 end
+      api.TrackFX_GetParam = function() return 4096 end
+      api.gmem_read = function(i)
+        i = i - 4100 -- track 0's analyzer block (slot 1)
+        if i == 0 then return 2048 elseif i == 1 then return -3 elseif i == 2 then return -12 end
+        local hz = (i - 3) * 48000 / 4096
+        return (hz > 900 and hz < 1100) and -20 or -80
+      end
+    `);
+    const res = await bridge.send('read_track_spectrum', { trackIndex: 0, fftSize: 4096 });
+    expect(res.error).toBeUndefined();
+    const r = (await bridge.status()).recent[0].r as { bands: number[]; peakDb: number; sampleRate: number };
+    expect(r).toMatchObject({ peakDb: -3, sampleRate: 48000, fftSize: 4096 });
+    expect(r.bands).toHaveLength(48);
+    const loud = r.bands.flatMap((v, b) => (v === -20 ? [20 * 1000 ** ((b + 0.5) / 48)] : []));
+    expect(loud.length).toBeGreaterThan(0);
+    for (const hz of loud) {
+      expect(hz).toBeGreaterThan(800);
+      expect(hz).toBeLessThan(1250);
+    }
+  });
+  it("draws a render's waveform from the WAV it wrote, clipping counted", async () => {
+    // The render writes 1 s of 16-bit stereo at 1 kHz: a quiet first half, then a full-scale square
+    const bridge = await startBridge(`
+      local render = {}
+      api.GetTempPath = function() return "/tmp/" end
+      api.GetSetProjectInfo_String = function(_, k, v, set) if set then render[k] = v end return true, render[k] or "" end
+      api.Main_OnCommand = function(id)
+        if id ~= 42230 then return end
+        local frames = {}
+        for i = 0, 999 do
+          local v = i < 500 and 3277 or (i % 2 == 0 and 32767 or -32767)
+          frames[#frames + 1] = string.pack("<i2i2", v, -v)
+        end
+        local data = table.concat(frames)
+        local fmt = string.pack("<I2I2I4I4I2I2", 1, 2, 1000, 4000, 4, 16)
+        local f = io.open(render.RENDER_FILE .. render.RENDER_PATTERN .. ".wav", "wb")
+        f:write("RIFF", string.pack("<I4", 4 + 8 + #fmt + 8 + #data), "WAVE", "fmt ", string.pack("<I4", #fmt), fmt,
+          "data", string.pack("<I4", #data), data)
+        f:close()
+      end
+    `);
+    const res = (await bridge.send('render_track_to_wav', { trackIndex: 0, startTime: 2, endTime: 3, commandId: 'abc' })) as {
+      success: boolean;
+      data?: Record<string, unknown>;
+    };
+    expect(res.success).toBe(true);
+    expect(res.data).not.toHaveProperty('hi'); // the agent's answer stays as it was
+
+    const r = (await bridge.status()).recent[0].r as { hi: number[]; lo: number[]; peakDb: number; clipped: number; durationSeconds: number };
+    expect(r.durationSeconds).toBe(1);
+    expect(r.hi).toHaveLength(120);
+    expect(r.hi[10]).toBeCloseTo(0.1, 2);
+    expect(r.lo[10]).toBeCloseTo(-0.1, 2);
+    expect(r.hi[100]).toBe(1);
+    expect(r.lo[100]).toBe(-1);
+    expect(r.peakDb).toBe(0);
+    expect(r.clipped).toBe(1000); // 500 frames × 2 channels at full scale
+  });
+});
+
+const MIDI_ITEM = `
+  -- One 4-bar MIDI item at 0 s, 120 BPM (2 beats per second), 960 PPQ
+  local item, take = {}, {}
+  notes = { { 0, 960, 36, 100 }, { 1920, 2880, 38, 90 } }
+  api.CountTrackMediaItems = function() return 1 end
+  api.GetTrackMediaItem = function() return item end
+  api.GetActiveTake = function() return take end
+  api.TakeIsMIDI = function() return true end
+  api.GetMediaItemInfo_Value = function(_, k) return k == "D_LENGTH" and 8 or 0 end
+  api.TimeMap2_timeToQN = function(_, t) return t * 2 end
+  api.TimeMap2_QNToTime = function(_, q) return q / 2 end
+  api.TimeMap_GetTimeSigAtTime = function() return 4, 4, 120 end
+  api.MIDI_GetProjTimeFromPPQPos = function(_, ppq) return ppq / 1920 end
+  api.MIDI_GetPPQPosFromProjTime = function(_, t) return t * 1920 end
+  api.MIDI_CountEvts = function() return true, #notes, 0, 0 end
+  api.MIDI_GetNote = function(_, i) local n = notes[i + 1] return true, false, false, n[1], n[2], 0, n[3], n[4] end
+  api.MIDI_InsertNote = function(_, _, _, s, e, _, p, v) notes[#notes + 1] = { s, e, p, v } end
+  api.MIDI_SetNote = function(_, i, _, _, s, e, _, p, v) local n = notes[i + 1] n[1], n[2], n[3], n[4] = s or n[1], e or n[2], p or n[3], v or n[4] end
+  api.MIDI_DeleteNote = function(_, i) table.remove(notes, i + 1) end
+  api.MIDI_Sort = function() table.sort(notes, function(a, b) return a[1] < b[1] end) end
+`;
+
+const VOLUME_ENVELOPE = `
+  -- A volume envelope with 0 dB at 1 s and -6 dB at 3 s
+  local env = {}
+  pts = { { 1, 1, 0 }, { 3, 0.5, 0 } }
+  api.CountTrackEnvelopes = function() return 1 end
+  api.GetTrackEnvelope = function() return env end
+  api.GetEnvelopeName = function() return true, "Volume" end
+  api.GetEnvelopeScalingMode = function() return 0 end
+  api.ScaleFromEnvelopeMode = function(_, v) return v end
+  api.CountEnvelopePoints = function() return #pts end
+  api.GetEnvelopePoint = function(_, i) local p = pts[i + 1] return true, p[1], p[2], p[3], 0, false end
+  api.InsertEnvelopePoint = function(_, t, v, s) pts[#pts + 1] = { t, v, s } end
+  api.Envelope_SortPoints = function() table.sort(pts, function(a, b) return a[1] < b[1] end) end
+`;
+
+describe('edit views in the log', () => {
+  it('shows a track change as before and after, in dB', async () => {
+    const bridge = await startBridge('api.tracks[1].vals.D_VOL = 1');
+    await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -6 });
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toEqual({ rows: [{ t: 'Kick', p: 'volume', s: 'db', a: 0, b: -6 }] });
+  });
+
+  it('shows an FX parameter change with the plugin’s own readout', async () => {
+    const bridge = await startBridge(`
+      api.tracks[1].fx[1] = { name = "ReaEQ", guid = "{eq}", params = { [0] = 0.5 } }
+      api.TrackFX_GetParamName = function() return true, "Gain" end
+      api.TrackFX_GetParamNormalized = function(tr, fx, p) return tr.fx[fx + 1].params[p] end
+      api.TrackFX_GetFormattedParamValue = function(tr, fx, p) return true, string.format("%+.1f dB", (tr.fx[fx + 1].params[p] - 0.5) * 24) end
+    `);
+    await bridge.send('set_fx_parameter', { trackIndex: 0, fxIndex: 0, paramIndex: 0, value: 0.75 });
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toEqual({ rows: [{ t: 'Kick · ReaEQ', p: 'Gain', s: 'norm', a: 0.5, b: 0.75, at: '+0.0 dB', bt: '+6.0 dB' }] });
+  });
+
+  it('shows the automation around an inserted point, with the curve it replaced', async () => {
+    const bridge = await startBridge(VOLUME_ENVELOPE);
+    await bridge.send('insert_envelope_point', { trackIndex: 0, envelopeIndex: 0, time: 2, value: 0.25 });
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toEqual({
+      env: 'Volume', unit: 'dB', from: 1, to: 3, count: 3,
+      pts: [[1, 0, 0], [2, -12.04, 0], [3, -6.02, 0]],
+      was: [[1, 0, 0], [3, -6.02, 0]],
+    });
+  });
+
+  it('marks the notes a MIDI edit added and lists the ones it removed', async () => {
+    const bridge = await startBridge(MIDI_ITEM);
+    await bridge.send('insert_midi_note', { trackIndex: 0, itemIndex: 0, pitch: 42, velocity: 80, startPosition: 1, duration: 0.5 });
+    let r = (await bridge.status()).recent[0].r;
+    expect(r).toEqual({
+      total: 3, beats: 16, ts: [4, 4], more: 0, gone: [],
+      notes: [[36, 0, 1, 100, 0], [42, 1, 0.5, 80, 1], [38, 2, 1, 90, 0]],
+    });
+
+    await bridge.send('delete_midi_note', { trackIndex: 0, itemIndex: 0, noteIndex: 0 });
+    r = (await bridge.status()).recent[0].r;
+    expect(r).toMatchObject({ total: 2, gone: [[36, 0, 1, 100]] });
+  });
+
+  it('summarises a MIDI analysis per pitch', async () => {
+    const bridge = await startBridge(MIDI_ITEM);
+    await bridge.send('analyze_midi', { trackIndex: 0, itemIndex: 0 });
+    const r = (await bridge.status()).recent[0].r as { total: number; pitches: number[][] };
+    expect(r.total).toBe(2);
+    expect(r.pitches.map((p) => p.slice(0, 4))).toEqual([[36, 1, 100, 100], [38, 1, 90, 90]]);
+  });
+
+  it('keeps the first 256 notes of a large item and counts the rest', async () => {
+    const bridge = await startBridge(`${MIDI_ITEM}
+      notes = {}
+      for i = 0, 299 do notes[#notes + 1] = { i * 240, i * 240 + 120, 60, 100 } end
+    `);
+    await bridge.send('get_midi_notes', { trackIndex: 0, itemIndex: 0 });
+    const r = (await bridge.status()).recent[0].r as { notes: unknown[]; more: number; total: number };
+    expect(r.notes).toHaveLength(256);
+    expect(r).toMatchObject({ total: 300, more: 44 });
+  });
+
+  it('shows markers and regions on the timeline, with what was there before', async () => {
+    const bridge = await startBridge(`
+      api.AddProjectMarker2 = function(_, rgn, pos, rend, name, _, color)
+        local num = #api.project.markers + 1
+        table.insert(api.project.markers, { rgn = rgn, pos = pos, rend = rend, name = name, num = num, color = color or 0 })
+        return num
+      end
+    `);
+    await bridge.send('add_region', { start: 0, end: 16, name: 'Verse' });
+    await bridge.send('add_marker', { position: 8, name: 'Drop' });
+    const r = (await bridge.status()).recent[0].r as Record<string, unknown>;
+    expect(r).toMatchObject({
+      regions: [[0, 16, 'Verse', '', 1]],
+      markers: [[8, 'Drop', '', 2]],
+      tempo: [[0, 120, 4, 4, 0]],
+      len: 16,
+      was: { regions: [[0, 16, 'Verse', '', 1]], markers: [] },
+    });
+  });
+
+  it('draws the mixer from a track listing: folders, levels and states', async () => {
+    const bridge = await startBridge(`
+      api.tracks[1].vals.I_FOLDERDEPTH = 1
+      api.tracks[1].vals.D_VOL = 1
+      api.tracks[2] = { name = "Snare", guid = "{s}", vals = { D_VOL = 0.5, B_MUTE = 1, I_FOLDERDEPTH = -1 }, fx = {}, sends = {}, chunk = "" }
+    `);
+    await bridge.send('list_tracks');
+    const r = (await bridge.status()).recent[0].r as { tracks: unknown[]; total: number };
+    expect(r.total).toBe(2);
+    expect(r.tracks).toEqual([
+      ['Kick', 0, '', 0, 0, 'F'],
+      ['Snare', 1, '', -6.02, 0, 'M'],
+    ]);
+  });
+
+  it('lists a plan’s ops in order', async () => {
+    const bridge = await startBridge('api.CF_Json_Parse = false');
+    const ops = [
+      { op: 'add_track', name: 'Bass', as: '$bass' },
+      { op: 'add_fx', track: '$bass', fxName: 'ReaComp' },
+    ];
+    expect((await bridge.send('run_plan', { ops: JSON.stringify(ops), dryRun: true })).error).toBeUndefined();
+    const r = (await bridge.status()).recent[0].r;
+    expect(r).toMatchObject({ ops: [['add_track', 'Bass'], ['add_fx', '$bass · ReaComp']], total: 2, dryRun: true });
   });
 });
 

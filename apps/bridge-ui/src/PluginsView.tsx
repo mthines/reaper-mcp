@@ -17,8 +17,10 @@ import {
   type PluginRow,
   type PublishResult,
 } from './plugins.js';
+import { isBoolean, isStringOrNull, useUrlState } from './url-state.js';
 
 type Filter = 'all' | Coverage;
+const isFilter = (v: unknown): v is Filter => v === 'all' || v === 'learned' || v === 'built-in' || v === 'unknown';
 
 /** Prompt for one plugin: the exact FX name so the agent loads the right one on its scratch track. */
 export const learnPrompt = (row: PluginRow) => `/learn-plugin ${row.fx.name}`;
@@ -64,12 +66,13 @@ function loadGrouped(): boolean {
  * built-in ones. Plugins in the open project are marked and listed first; unknown ones point at /learn-plugin.
  */
 export function PluginsView({ feed, query, now, onOpenSettings }: { feed: KnowledgeFeed | undefined; query: string; now: number; onOpenSettings?: () => void }) {
-  const [filter, setFilter] = useState<Filter>('all');
-  const [inProject, setInProject] = useState(false);
+  const [filter, setFilter] = useUrlState<Filter>('coverage', 'all', { validate: isFilter });
+  const [inProject, setInProject] = useUrlState('inProject', false, { validate: isBoolean });
   const [grouped, setGrouped] = useState(loadGrouped);
   // Groups the viewer opened
   const [toggled, setToggled] = useState<Set<string>>(() => new Set());
-  const [open, setOpen] = useState<PluginRow | null>(null);
+  // The open plugin, by FX name: it opens once the feed has listed it (also after a reload)
+  const [openName, setOpenName] = useUrlState<string | null>('plugin', null, { validate: isStringOrNull });
   const [copied, copy] = useCopy();
   const [publishingAll, setPublishingAll] = useState(false);
   const mine = useMemo(() => contributable(feed?.records ?? []), [feed]);
@@ -80,6 +83,8 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
     window.open(c.url, '_blank', 'noopener,noreferrer');
   };
   const rows = useMemo(() => (feed ? pluginCoverage(feed) : []), [feed]);
+  const open = useMemo(() => (openName === null ? null : (rows.find((r) => r.fx.name === openName) ?? null)), [rows, openName]);
+  const setOpen = (r: PluginRow | null, mode?: 'push' | 'replace') => setOpenName(r ? r.fx.name : null, mode);
   const elsewhere = useMemo(() => (feed ? notInstalled(feed) : []), [feed]);
   const visibleRef = useRef<PluginRow[]>([]);
   const openRef = useRef(open);
@@ -94,7 +99,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
       const list = visibleRef.current;
       const i = list.findIndex((r) => r.fx.name === openRef.current?.fx.name);
       const next = list[i + (ev.key === 'ArrowDown' ? 1 : -1)];
-      if (next) setOpen(next);
+      if (next) setOpenName(next.fx.name, 'replace'); // stepping through rows doesn't add history
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -139,7 +144,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
   const openPlugin = (r: PluginRow) => {
     if (open?.fx.name === r.fx.name) return setOpen(null);
     track({ name: 'plugin_opened', coverage: r.coverage, in_project: r.used > 0, formats: r.variants.length });
-    setOpen(r);
+    setOpen(r, 'push');
   };
   const chooseFilter = (f: Filter, project = inProject) => {
     track({ name: 'plugins_filtered', filter: f, in_project: project });

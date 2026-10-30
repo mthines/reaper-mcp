@@ -3,17 +3,20 @@ desc:MCP Spectrum Analyzer
 // Writes frequency bin magnitudes (in dB) to shared memory (gmem)
 // so the Lua bridge can read them and pass to the MCP server.
 //
-// gmem layout:
-//   gmem[0] = bin count (fft_size / 2)
-//   gmem[1] = peak dB
-//   gmem[2] = RMS dB
-//   gmem[3 .. 3+bin_count-1] = magnitude in dB per frequency bin
+// gmem layout, one block of SLOT_STRIDE values per instance (base = slot * SLOT_STRIDE,
+// slot set by the bridge to trackIndex + 1, master = 0), so analyzers on different
+// tracks never overwrite each other:
+//   gmem[base + 0] = bin count (fft_size / 2)
+//   gmem[base + 1] = peak dB
+//   gmem[base + 2] = RMS dB
+//   gmem[base + 3 .. base + 3 + bin_count - 1] = magnitude in dB per frequency bin
 
 options:gmem=MCPAnalyzer
 
 slider1:fft_size_slider=4096<512,8192,1>FFT Size
 slider2:window_type=1<0,3,1{Rectangular,Hann,Hamming,Blackman-Harris}>Window Function
 slider3:smoothing=0.8<0,0.99,0.01>Smoothing
+slider4:gmem_slot=0<0,2000,1>gmem Slot
 
 @init
   // Allocate memory blocks
@@ -62,7 +65,18 @@ slider3:smoothing=0.8<0,0.99,0.01>Smoothing
   rms_sum = 0;
   rms_count = 0;
 
+  SLOT_STRIDE = 4100; // 3 header values + up to 4096 bins (fft size 8192)
+  base = 0;
+
 @slider
+  // A new slot starts empty, so the bridge reports "no data yet" instead of
+  // whatever a previous instance left there.
+  new_base = floor(gmem_slot + 0.5) * SLOT_STRIDE;
+  new_base != base ? (
+    base = new_base;
+    gmem[base] = 0;
+  );
+
   new_fft_size = fft_size_slider;  // named slider: slider1 stays 0
   // Snap to valid FFT sizes
   new_fft_size <= 512 ? new_fft_size = 512 :
@@ -106,8 +120,9 @@ slider3:smoothing=0.8<0,0.99,0.01>Smoothing
     // Copy to work buffer for FFT (real FFT needs 2x size)
     memcpy(work_buf, fft_buf, fft_size);
 
-    // Perform real FFT
+    // Perform real FFT; its output is in permuted order, so restore frequency order
     fft_real(work_buf, fft_size);
+    fft_permute(work_buf, fft_size / 2);
 
     // Calculate magnitudes and write to gmem with smoothing
     smooth = smoothing;
@@ -136,25 +151,25 @@ slider3:smoothing=0.8<0,0.99,0.01>Smoothing
       mag_buf[i] = smooth * mag_buf[i] + inv_smooth * mag_db;
 
       // Write to gmem
-      gmem[3 + i] = mag_buf[i];
+      gmem[base + 3 + i] = mag_buf[i];
 
       i += 1;
     );
 
     // Write metadata to gmem
-    gmem[0] = bin_count;
+    gmem[base] = bin_count;
 
     // Peak dB
     peak_val < 0.000001 ? peak_val = 0.000001;
-    gmem[1] = 20.0 * log10(peak_val);
+    gmem[base + 1] = 20.0 * log10(peak_val);
 
     // RMS dB
     rms_count > 0 ? (
       rms_val = sqrt(rms_sum / rms_count);
       rms_val < 0.000001 ? rms_val = 0.000001;
-      gmem[2] = 20.0 * log10(rms_val);
+      gmem[base + 2] = 20.0 * log10(rms_val);
     ) : (
-      gmem[2] = -150.0;
+      gmem[base + 2] = -150.0;
     );
 
     // Reset accumulators

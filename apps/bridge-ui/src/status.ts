@@ -17,6 +17,78 @@ export interface CommandEntry {
   s?: string;
   /** Request params as JSON, truncated by the bridge (may not parse) */
   p?: string;
+  /** Compact result of a measuring command (meters, LUFS, correlation, crest, spectrum bands, a render's waveform) */
+  r?: Record<string, unknown>;
+}
+
+/** A measuring command's result, typed by what it measured; numbers the bridge couldn't read are left out. */
+export type Measurement =
+  | { kind: 'meters'; peakL?: number; peakR?: number; rmsL?: number; rmsR?: number }
+  | { kind: 'lufs'; integrated?: number; shortTerm?: number; momentary?: number; truePeakL?: number; truePeakR?: number; duration?: number }
+  | { kind: 'correlation'; correlation?: number; stereoWidth?: number; midLevel?: number; sideLevel?: number }
+  | { kind: 'crest'; crestFactor?: number; peakLevel?: number; rmsLevel?: number }
+  | { kind: 'spectrum'; peakDb?: number; rmsDb?: number; fftSize?: number; sampleRate?: number; bands: number[] }
+  | { kind: 'waveform'; peakDb?: number; rmsDb?: number; clipped?: number; durationSeconds?: number; channels?: number; hi: number[]; lo: number[] };
+
+const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[] }> = {
+  read_track_meters: { kind: 'meters', fields: ['peakL', 'peakR', 'rmsL', 'rmsR'] },
+  read_track_lufs: { kind: 'lufs', fields: ['integrated', 'shortTerm', 'momentary', 'truePeakL', 'truePeakR', 'duration'] },
+  read_track_correlation: { kind: 'correlation', fields: ['correlation', 'stereoWidth', 'midLevel', 'sideLevel'] },
+  read_track_crest: { kind: 'crest', fields: ['crestFactor', 'peakLevel', 'rmsLevel'] },
+  read_track_spectrum: { kind: 'spectrum', fields: ['peakDb', 'rmsDb', 'fftSize', 'sampleRate'] },
+  render_track_to_wav: { kind: 'waveform', fields: ['peakDb', 'rmsDb', 'clipped', 'durationSeconds', 'channels'] },
+};
+
+/** Every command the drawer draws a result for */
+export const MEASURED_COMMANDS = Object.keys(MEASUREMENTS);
+
+const isNumbers = (v: unknown): v is number[] => Array.isArray(v) && v.length >= 2 && v.every((x) => typeof x === 'number');
+
+/** Params as a value when they parse, else the truncated text the bridge sent. */
+export function parseParams(p: string | undefined): unknown {
+  if (!p) return undefined;
+  try {
+    return JSON.parse(p);
+  } catch {
+    return p;
+  }
+}
+
+const trackOf = (e: CommandEntry) => {
+  const p = parseParams(e.p);
+  return p && typeof p === 'object' ? (p as Record<string, unknown>).trackIndex : undefined;
+};
+
+/**
+ * The same measurement on the same track, newest first, `e` included: what its history line plots.
+ * Only calls with a result; at most `limit`, centred on `e` so older calls keep their own neighbours.
+ */
+export function measurementHistory(log: CommandEntry[], e: CommandEntry, limit = 30): CommandEntry[] {
+  if (!measurementOf(e)) return [];
+  const track = trackOf(e);
+  const same = log.filter((x) => x.c === e.c && trackOf(x) === track && measurementOf(x) !== null);
+  const at = same.findIndex((x) => x.n === e.n);
+  const start = Math.max(0, Math.min(at - Math.floor(limit / 2), same.length - limit));
+  return same.slice(start, start + limit);
+}
+
+/** The entry's measurement, or null for other commands, failures, and entries logged before the bridge kept results */
+export function measurementOf(e: CommandEntry): Measurement | null {
+  const spec = MEASUREMENTS[e.c];
+  if (!spec || !e.ok || !e.r) return null;
+  const out: Record<string, unknown> = { kind: spec.kind };
+  for (const f of spec.fields) if (typeof e.r[f] === 'number') out[f] = e.r[f];
+  if (spec.kind === 'spectrum') {
+    if (!isNumbers(e.r.bands)) return null;
+    out.bands = e.r.bands;
+  }
+  if (spec.kind === 'waveform') {
+    const { hi, lo } = e.r;
+    if (!isNumbers(hi) || !isNumbers(lo) || hi.length !== lo.length) return null;
+    out.hi = hi;
+    out.lo = lo;
+  }
+  return out as Measurement;
 }
 
 /** One agent connection (an MCP server process), keyed by Claude Code session id. */
@@ -259,6 +331,12 @@ export type Liveness = 'live' | 'stale' | 'offline';
 export function liveness(status: BridgeStatus | null, lastChangeAt: number, now: number): Liveness {
   if (!status) return 'offline';
   return now - lastChangeAt > 3000 ? 'stale' : 'live';
+}
+
+/** Bars that ended by `at` (the viewer's last Clear) drawn empty; the bar Clear fell in keeps its counts. */
+export function clearedBefore(bars: TimeBar[], at: number): TimeBar[] {
+  if (!at) return bars;
+  return bars.map((b) => (b.end <= at ? { ...b, total: 0, errors: 0, slow: 0, avgMs: null } : b));
 }
 
 export interface LatencyStats {
@@ -532,4 +610,72 @@ export function formatParams(p: string | undefined): string | null {
   } catch {
     return `${p}…`;
   }
+}
+
+/**
+ * One search term: plain text matches the command name, error or params anywhere; `key:value` matches a
+ * param exactly (`trackIndex:6` is not track 16). A value with spaces is quoted: `fxName:"VST3: Pro-Q 3"`.
+ */
+export interface QueryTerm {
+  key?: string;
+  value: string;
+}
+
+/** Whitespace-separated terms, all of which must match */
+export function parseQuery(query: string): QueryTerm[] {
+  const terms: QueryTerm[] = [];
+  for (const m of query.matchAll(/(\w+):"([^"]*)"?|(\w+):(\S+)|"([^"]*)"?|(\S+)/g)) {
+    if (m[1] !== undefined) terms.push({ key: m[1], value: m[2].toLowerCase() });
+    else if (m[3] !== undefined) terms.push({ key: m[3], value: m[4].toLowerCase() });
+    else {
+      const v = (m[5] ?? m[6]).toLowerCase();
+      if (v) terms.push({ value: v });
+    }
+  }
+  return terms;
+}
+
+export function matchesQuery(e: CommandEntry, terms: QueryTerm[]): boolean {
+  if (terms.length === 0) return true;
+  let params: Record<string, unknown> | null | undefined;
+  return terms.every((t) => {
+    if (t.key === undefined) return e.c.toLowerCase().includes(t.value) || !!e.e?.toLowerCase().includes(t.value) || !!e.p?.toLowerCase().includes(t.value);
+    if (params === undefined) {
+      const p = parseParams(e.p);
+      params = p && typeof p === 'object' ? (p as Record<string, unknown>) : null;
+    }
+    const v = params?.[t.key];
+    return v !== undefined && v !== null && typeof v !== 'object' && String(v).toLowerCase() === t.value;
+  });
+}
+
+/** The term that filters to a param, quoted when the value has spaces */
+export function paramTerm(key: string, value: unknown): string {
+  const v = String(value);
+  return /[\s"]/.test(v) ? `${key}:"${v.replace(/"/g, '')}"` : `${key}:${v}`;
+}
+
+/**
+ * What a text selection in the formatted params filters by: inside one `"key": value` line, that param
+ * (wherever on the line the selection is); otherwise the selected words.
+ */
+export function termFromSelection(text: string, start: number, end: number): string | null {
+  const [from, to] = start <= end ? [start, end] : [end, start];
+  const selected = text.slice(from, to).trim();
+  if (!selected) return null;
+  const lineStart = text.lastIndexOf('\n', from - 1) + 1;
+  const nl = text.indexOf('\n', from);
+  const lineEnd = nl === -1 ? text.length : nl;
+  if (to <= lineEnd) {
+    const kv = /^\s*"(\w+)":\s*(.+?),?\s*$/.exec(text.slice(lineStart, lineEnd));
+    if (kv && !/^[[{]/.test(kv[2])) {
+      try {
+        return paramTerm(kv[1], JSON.parse(kv[2]));
+      } catch {
+        // not a plain JSON value: fall back to the text
+      }
+    }
+  }
+  // Any other text: its words, each a plain term
+  return selected.replace(/["{}]/g, ' ').split(/\s+/).filter(Boolean).join(' ') || null;
 }

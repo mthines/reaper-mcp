@@ -95,6 +95,7 @@ export const REAPER_ASSETS = [
   'mcp_tracks_lib.lua',
   'mcp_project_lib.lua',
   'mcp_items_lib.lua',
+  'mcp_edit_views_lib.lua',
   'mcp_snapshot_next.lua',
   'mcp_snapshot_prev.lua',
   'mcp_snapshot_quick_save.lua',

@@ -70,30 +70,34 @@ describe('meter tools', () => {
   });
 
   describe('read_track_spectrum', () => {
-    it('returns FFT spectrum data', async () => {
-      const spectrumData = {
-        trackIndex: 0,
-        fftSize: 4096,
-        sampleRate: 44100,
-        binCount: 2048,
-        frequencyResolution: 10.77,
-        peakDb: -6,
-        rmsDb: -12,
-        bins: [-40, -38, -35],
-      };
+    const spectrumData = {
+      trackIndex: 0,
+      fftSize: 4096,
+      sampleRate: 44100,
+      binCount: 2048,
+      frequencyResolution: 44100 / 4096,
+      peakDb: -6,
+      rmsDb: -12,
+      bins: new Array(2048).fill(-120),
+    };
 
-      mockedSendCommand.mockResolvedValue({
-        id: 'test',
-        success: true,
-        data: spectrumData,
-        timestamp: Date.now(),
-      });
+    it('returns 1/3-octave bands without the raw bins', async () => {
+      mockedSendCommand.mockResolvedValue({ id: 'test', success: true, data: spectrumData, timestamp: Date.now() });
 
-      const result = await tools['read_track_spectrum'].handler({ trackIndex: 0 });
-      expect(result).toEqual({
-        content: [{ type: 'text', text: JSON.stringify(spectrumData, null, 2) }],
-      });
+      const result = (await tools['read_track_spectrum'].handler({ trackIndex: 0 })) as { content: { text: string }[] };
+      const out = JSON.parse(result.content[0].text);
+      expect(out.bins).toBeUndefined();
+      expect(out.binCount).toBeUndefined();
+      expect(out.peakDb).toBe(-6);
+      expect(out.bands.at(-1).hz).toBe(16000);
       expect(mockedSendCommand).toHaveBeenCalledWith('read_track_spectrum', { trackIndex: 0, fftSize: 4096 });
+    });
+
+    it('returns the raw bins with includeBins', async () => {
+      mockedSendCommand.mockResolvedValue({ id: 'test', success: true, data: spectrumData, timestamp: Date.now() });
+
+      const result = (await tools['read_track_spectrum'].handler({ trackIndex: 0, includeBins: true })) as { content: { text: string }[] };
+      expect(JSON.parse(result.content[0].text).bins).toHaveLength(2048);
     });
 
     it('passes custom fftSize', async () => {

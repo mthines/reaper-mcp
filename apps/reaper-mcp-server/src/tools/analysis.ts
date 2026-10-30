@@ -1,7 +1,8 @@
 import { z } from 'zod/v4';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sendCommand } from '../bridge.js';
-import type { TrackMeasurement } from '@reaper-mcp/protocol';
+import type { TrackMeasurement, TrackSpectrum } from '@reaper-mcp/protocol';
+import { summarizeSpectrum } from './spectrum.js';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -25,12 +26,14 @@ export function noDataReason(metric: string, data: unknown): string | null {
 export function registerAnalysisTools(server: McpServer): void {
   server.tool(
     'read_track_lufs',
-    'Read ITU-R BS.1770 loudness data for a track. Auto-inserts the MCP LUFS Meter JSFX if not present. Returns integrated, short-term (3s), and momentary (400ms) LUFS plus true inter-sample peak levels. Audio must be playing to accumulate data.',
+    'Read ITU-R BS.1770 loudness data for a track. Auto-inserts the MCP LUFS Meter JSFX if not present. Returns integrated, short-term (3s), and momentary (400ms) LUFS plus true inter-sample peak levels. Audio must be playing to accumulate data. The meter sits in the track FX chain, so it reads pre-fader: add the track volume (dB) for its level in the mix. Compare tracks in LU against the mix bus over the same section.',
     {
       trackIndex: z.coerce.number().int().min(-1).describe('Zero-based track index (-1 = master track)'),
+      targetLufs: z.coerce.number().min(-60).max(0).optional()
+        .describe('The integrated loudness you are working to, in LUFS, from the task (e.g. -14 for streaming, -23 for EBU R128 broadcast). Optional; shown against the reading on the bridge page, never changes the measurement'),
     },
-    async ({ trackIndex }) => {
-      const res = await sendCommand('read_track_lufs', { trackIndex });
+    async ({ trackIndex, targetLufs }) => {
+      const res = await sendCommand('read_track_lufs', { trackIndex, ...(targetLufs === undefined ? {} : { targetLufs }) });
       if (!res.success) {
         return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
       }
@@ -70,7 +73,7 @@ export function registerAnalysisTools(server: McpServer): void {
 
   server.tool(
     'measure_tracks',
-    'Play audio and collect analysis measurements (LUFS, crest factor, correlation, spectrum) for one or more tracks in a single call. Handles playback start/stop automatically. LUFS supports multi-track; crest/correlation/spectrum use global gmem and are only reliable for single-track measurement. Afterwards it removes the MCP meters on the measured tracks (also ones an earlier call left) unless keepMeters. A meter that received no audio (muted, frozen or silent track, nothing in range) is reported under errors, not as numbers. For whole-song, folder or master numbers without playback, prefer analyze_track_offline.',
+    'Play audio and collect analysis measurements (LUFS, crest factor, correlation, spectrum) for one or more tracks in a single call. Handles playback start/stop automatically. LUFS and spectrum (1/3-octave bands) support multi-track; crest/correlation use global gmem and are only reliable for single-track measurement. First call may be slower due to JSFX meter auto-insertion. Readings are pre-fader (meters sit in each track FX chain): add each track volume to compare tracks; a folder/bus reads its children post-fader. Use this to balance tracks in LU and compare spectra on `kDb`. Afterwards it removes the MCP meters on the measured tracks (also ones an earlier call left) unless keepMeters. A meter that received no audio (muted, frozen or silent track, nothing in range) is reported under errors, not as numbers. For whole-song, folder or master numbers without playback, prefer analyze_track_offline.',
     {
       trackIndices: z.array(z.coerce.number().int().min(-1)).min(1).max(8)
         .describe('Track indices to measure (max 8; -1 = master track)'),
@@ -84,10 +87,12 @@ export function registerAnalysisTools(server: McpServer): void {
         .describe('FFT size for spectrum analysis'),
       stopWhenDone: z.boolean().optional().default(true)
         .describe('Stop playback after measuring'),
+      targetLufs: z.coerce.number().min(-60).max(0).optional()
+        .describe('The integrated loudness you are working to, in LUFS, from the task (e.g. -14 for streaming, -23 for EBU R128 broadcast). Optional; shown against the reading on the bridge page, never changes the measurement'),
       keepMeters: z.boolean().optional().default(false)
         .describe('Leave the MCP meter JSFX on the tracks (default: remove them afterwards)'),
     },
-    async ({ trackIndices, metrics, durationSeconds, startPosition, fftSize, stopWhenDone, keepMeters }) => {
+    async ({ trackIndices, metrics, durationSeconds, startPosition, fftSize, stopWhenDone, targetLufs, keepMeters }) => {
       try {
         // One read command per track and metric
         const reads: Array<{ trackIndex: number; metric: string; commandType: string; params: Record<string, unknown> }> = [];
@@ -99,6 +104,7 @@ export function registerAnalysisTools(server: McpServer): void {
             switch (metric) {
               case 'lufs':
                 commandType = 'read_track_lufs';
+                if (targetLufs !== undefined) params.targetLufs = targetLufs;
                 break;
               case 'crest':
                 commandType = 'read_track_crest';
@@ -190,7 +196,7 @@ export function registerAnalysisTools(server: McpServer): void {
               measurement.correlation = result.data as TrackMeasurement['correlation'];
               break;
             case 'spectrum':
-              measurement.spectrum = result.data as TrackMeasurement['spectrum'];
+              measurement.spectrum = summarizeSpectrum(result.data as TrackSpectrum);
               break;
           }
         }

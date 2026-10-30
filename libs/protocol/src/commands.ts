@@ -288,6 +288,8 @@ export interface GetTrackRoutingParams {
 
 export interface ReadTrackLufsParams {
   trackIndex: number;
+  /** The loudness the agent is working to (e.g. -14 for streaming). Not used by the bridge; logged for the status page. */
+  targetLufs?: number;
   /** Restart the measurement (integrated LUFS, true peak, duration) */
   reset?: boolean;
 }

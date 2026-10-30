@@ -10,6 +10,7 @@ import {
   restoreLog,
   spanOfBars,
   timelineBars,
+  clearedBefore,
   commandsPerMinute,
   deriveSeries,
   formatDuration,
@@ -22,6 +23,11 @@ import {
   commandKind,
   LONG_RUNNING,
   speedOf,
+  measurementOf,
+  measurementHistory,
+  matchesQuery,
+  parseQuery,
+  termFromSelection,
   formatParams,
   groupByTool,
   hasToolCalls,
@@ -218,6 +224,34 @@ describe('settings and params', () => {
     expect(speedOf('add_fx', 2)).toBe('long');
   });
 
+  it('types measuring results and ignores the rest', () => {
+    const base = { n: 1, t: 0, ms: 1, ok: true };
+    expect(measurementOf({ ...base, c: 'read_track_meters', r: { peakL: -6, peakR: 'x' } })).toEqual({ kind: 'meters', peakL: -6 });
+    expect(measurementOf({ ...base, c: 'read_track_spectrum', r: { peakDb: -3, bands: [-20, -30] } })).toEqual({ kind: 'spectrum', peakDb: -3, bands: [-20, -30] });
+    expect(measurementOf({ ...base, c: 'read_track_spectrum', r: { bands: ['x'] } })).toBeNull();
+    expect(measurementOf({ ...base, c: 'render_track_to_wav', r: { peakDb: -1, hi: [0.5, 0.9], lo: [-0.4, -0.8] } })).toEqual({ kind: 'waveform', peakDb: -1, hi: [0.5, 0.9], lo: [-0.4, -0.8] });
+    expect(measurementOf({ ...base, c: 'render_track_to_wav', r: { durationSeconds: 5 } })).toBeNull(); // the WAV couldn't be read
+    expect(measurementOf({ ...base, c: 'read_track_meters', ok: false, r: { peakL: -6 } })).toBeNull();
+    expect(measurementOf({ ...base, c: 'read_track_meters' })).toBeNull(); // logged before the bridge kept results
+    expect(measurementOf({ ...base, c: 'list_tracks', r: { peakL: -6 } })).toBeNull();
+  });
+
+  it('finds the same measurement on the same track for the history', () => {
+    const m = (n: number, c: string, track: number, ok = true): CommandEntry => ({ n, t: n, c, ms: 1, ok, p: JSON.stringify({ trackIndex: track }), r: { integrated: -14 } });
+    const log = [m(6, 'read_track_lufs', 1), m(5, 'read_track_lufs', 2), m(4, 'read_track_crest', 1), m(3, 'read_track_lufs', 1, false), m(2, 'read_track_lufs', 1), m(1, 'read_track_lufs', 1)];
+    expect(measurementHistory(log, log[0]).map((e) => e.n)).toEqual([6, 2, 1]);
+    expect(measurementHistory(log, log[0], 2).map((e) => e.n)).toEqual([6, 2]);
+    expect(measurementHistory(log, log[5], 2).map((e) => e.n)).toEqual([2, 1]);
+    expect(measurementHistory([{ n: 1, t: 1, c: 'list_tracks', ms: 1, ok: true }], { n: 1, t: 1, c: 'list_tracks', ms: 1, ok: true })).toEqual([]);
+  });
+
+  it('empties bars from before a Clear', () => {
+    const bar = (start: number) => ({ start, end: start + 10, total: 3, errors: 1, slow: 1, avgMs: 3 });
+    const out = clearedBefore([bar(0), bar(10), bar(20)], 25);
+    expect(out.map((b) => b.total)).toEqual([0, 0, 3]);
+    expect(clearedBefore([bar(0)], 0)[0].total).toBe(3);
+  });
+
   it('keeps the long-running list in step with the bridge', () => {
     const lua = readFileSync(new URL('../../../reaper/mcp_bridge.lua', import.meta.url), 'utf8');
     const block = lua.match(/for _, c in ipairs\(\{([^}]*)\}\) do LONG_RUNNING/)?.[1] ?? '';
@@ -342,5 +376,49 @@ describe('formatDay', () => {
     expect(older).toMatch(/27/);
     expect(older).not.toMatch(/26/);
     expect(formatDay(new Date(2025, 11, 31, 12).getTime(), now)).toMatch(/25/);
+  });
+});
+
+describe('search terms', () => {
+  const call = (n: number, c: string, params: Record<string, unknown>, e?: string): CommandEntry => ({ n, t: n, c, ms: 1, ok: !e, e, p: JSON.stringify(params) });
+  const log = [
+    call(1, 'read_track_spectrum', { trackIndex: 6, fftSize: 4096 }),
+    call(2, 'read_track_spectrum', { trackIndex: 16 }),
+    call(3, 'read_track_lufs', { trackIndex: 6 }),
+    call(4, 'add_fx', { trackIndex: 3, fxName: 'VST3: Pro-Q 3' }, 'FX not found'),
+  ];
+  const find = (q: string) => log.filter((e) => matchesQuery(e, parseQuery(q))).map((e) => e.n);
+
+  it('finds the calls on one track, not on tracks whose index merely contains it', () => {
+    expect(find('trackIndex:6')).toEqual([1, 3]);
+  });
+
+  it('needs every term to match', () => {
+    expect(find('spectrum trackIndex:6')).toEqual([1]);
+    expect(find('read_track_spectrum trackIndex:3')).toEqual([]);
+  });
+
+  it('matches plain words in the name, the error and the params', () => {
+    expect(find('lufs')).toEqual([3]);
+    expect(find('not found')).toEqual([4]);
+    expect(find('pro-q')).toEqual([4]);
+  });
+
+  it('takes a quoted value with spaces as one param', () => {
+    expect(find('fxName:"VST3: Pro-Q 3"')).toEqual([4]);
+    expect(find('fxname:"VST3: Pro-Q 3"')).toEqual([]); // param names are exact
+  });
+
+  it('turns a selection in the params into a filter for that param', () => {
+    const text = JSON.stringify({ fftSize: 4096, trackIndex: 6, fxName: 'VST3: Pro-Q 3' }, null, 2);
+    const sel = (s: string, skip = 0) => [text.indexOf(s) + skip, text.indexOf(s) + s.length] as const;
+    const six = sel(': 6', 2);
+    expect(termFromSelection(text, ...six)).toBe('trackIndex:6'); // just the value
+    expect(termFromSelection(text, ...sel('trackIndex'))).toBe('trackIndex:6'); // just the name
+    expect(termFromSelection(text, ...sel('Pro-Q'))).toBe('fxName:"VST3: Pro-Q 3"');
+    expect(termFromSelection(text, ...sel('4096,\n  "track'))).toBe('4096, track'); // across lines: the words
+    expect(termFromSelection(text, 0, 0)).toBeNull();
+    // Whatever it returns finds the call it came from
+    expect(log.filter((e) => matchesQuery(e, parseQuery(termFromSelection(text, ...six) ?? ''))).map((e) => e.n)).toEqual([1, 3]);
   });
 });

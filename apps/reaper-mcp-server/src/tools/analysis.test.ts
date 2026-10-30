@@ -53,6 +53,9 @@ describe('analysis tools', () => {
         content: [{ type: 'text', text: JSON.stringify(lufsData, null, 2) }],
       });
       expect(mockedSendCommand).toHaveBeenCalledWith('read_track_lufs', { trackIndex: 0 });
+
+      await tools['read_track_lufs'].handler({ trackIndex: 0, targetLufs: -14 });
+      expect(mockedSendCommand).toHaveBeenLastCalledWith('read_track_lufs', { trackIndex: 0, targetLufs: -14 });
     });
 
     it('returns error when track not found', async () => {

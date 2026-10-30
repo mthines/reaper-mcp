@@ -161,14 +161,14 @@ For a healthy mix signal chain:
 
 | Scenario | Meter Says | Listener Hears | Correct Action |
 |----------|-----------|---------------|----------------|
-| Bass and vocal at same RMS | "Equal volume" | Bass is much quieter | Bass should read 3-6 dB hotter on meters |
-| Hi-hat and kick at same peak | "Equal transients" | Hi-hat is much louder | Pull hi-hat fader down 3-5 dB |
+| Bass and vocal at same RMS | "Equal volume" | Not equal: RMS ignores how the ear weights frequency | Compare short-term LUFS (LU), never RMS; see `perceived-loudness.md` |
+| Hi-hat and kick at same peak | "Equal transients" | Hi-hat is much louder | Compare in LU and in `kDb` bands; expect the hats lower |
 | "Flat" spectrum on analyzer | "Balanced mix" | Presence-heavy, harsh | A well-balanced mix has a gentle downward slope on the analyzer |
-| LUFS matches target | "Correct loudness" | Depends on spectral content | LUFS uses K-weighting which partially compensates, but per-track balance still needs perceptual awareness |
+| LUFS matches target | "Correct loudness" | Correct overall, not per element | Per-element balance: LU of each element against the mix bus, same section, post-fader |
 
 ### LUFS and K-Weighting
 
-LUFS measurements already incorporate some psychoacoustic compensation via K-weighting (a +4 dB shelf at ~1.7 kHz + a 100 Hz high-pass). This means LUFS is better than raw RMS for perceived loudness — but it's a broadband measure. It tells you the overall perceived loudness, NOT whether individual instruments within the mix are perceptually balanced against each other. Per-track balance decisions still require perceived loudness awareness.
+LUFS measurements already incorporate psychoacoustic weighting via K-weighting (a +4 dB shelf above ~1.5 kHz and a high-pass that rolls off the deep lows). This makes LUFS the measure for **every** level comparison, per track as well as for the whole mix. Read each element's short-term LUFS over the same section as the mix bus and compare in LU. For per-band decisions, use the K-weighted `kDb` band values. `perceived-loudness.md` has the per-band K gains and the stem reference points.
 
 ## Common Metering Mistakes
 
@@ -181,5 +181,5 @@ LUFS measurements already incorporate some psychoacoustic compensation via K-wei
 | Not accounting for intersample peaks | Always use a true peak limiter (ISP mode) |
 | Comparing short-term LUFS between songs | Compare integrated LUFS for an apples-to-apples comparison |
 | Ignoring crest factor | A mix with good integrated LUFS but low crest factor is over-compressed |
-| Setting all tracks to the same dBFS target | Account for perceived loudness — bass instruments need higher meter readings than presence-range instruments |
+| Balancing tracks on dBFS / RMS readings | Gain-stage on dBFS (headroom); balance on LU against the mix bus (`perceived-loudness.md`) |
 | Treating a "flat" spectrum as balanced | The ear amplifies 2-5 kHz naturally; a flat spectrum sounds harsh. Expect a gentle downward slope from low to high |

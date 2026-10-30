@@ -102,6 +102,7 @@ reaper-mcp/
     genres/                   # Genre mixing conventions (targets, frequency balance, dynamics)
     workflows/                # Step-by-step mixing workflows (gain-staging, vocal-chain, etc.)
     reference/                # Reference material (frequencies, metering, compression, perceived loudness, memory-protocol)
+                              # Balance/EQ decisions use perceived values only (LU, kDb), never raw dBFS: reference/perceived-loudness.md
                               # Plugin knowledge + process lessons live in LoreKit, scope project::reaper-mcp
 
   scripts/
@@ -116,6 +117,7 @@ reaper-mcp/
     mcp_actions_lib.lua       # Action proxy + selection setters (pure Lua, unit-tested via wasmoon)
     mcp_project_lib.lua       # Project ops, tempo map + marker editing (pure Lua, unit-tested via wasmoon)
     mcp_items_lib.lua         # Items, takes, take FX, FX move/copy/rename, FX chains, track templates (pure Lua, unit-tested via wasmoon)
+    mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
     mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
     mcp_snapshot_quick_save.lua # Action: quick save with auto-name
@@ -310,7 +312,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | Tool | File | Description |
 |------|------|-------------|
 | `read_track_meters` | `tools/meters.ts` | Peak/RMS L/R in dB |
-| `read_track_spectrum` | `tools/meters.ts` | FFT frequency bins (auto-inserts JSFX analyzer) |
+| `read_track_spectrum` | `tools/meters.ts` | 1/3-octave bands, 25 Hz–16 kHz, raw `db` + K-weighted `kDb` (judge on `kDb`; table in `knowledge/reference/perceived-loudness.md`); auto-inserts JSFX analyzer; raw FFT bins with `includeBins` |
 | `read_track_lufs` | `tools/analysis.ts` | Integrated/short-term/momentary LUFS + true peak |
 | `read_track_correlation` | `tools/analysis.ts` | Stereo correlation, width, mid/side levels |
 | `read_track_crest` | `tools/analysis.ts` | Crest factor (peak-to-RMS ratio) |
@@ -632,7 +634,8 @@ The sidecar architecture admits new JSON-RPC methods easily — future phases (C
 The JSFX analyzer (`mcp_analyzer.jsfx`) runs in REAPER's audio thread:
 - Performs configurable FFT (512-8192 bins, default 4096)
 - Writes magnitude spectrum to `gmem[]` under namespace `MCPAnalyzer`
-- gmem layout: `[bin_count, peak_dB, rms_dB, bin[0], bin[1], ...]`
+- gmem layout: one 4100-value block per track at `(trackIndex + 1) * 4100` (master = 0; the bridge sets the slot on slider4): `[bin_count, peak_dB, rms_dB, bin[0], bin[1], ...]`, bins in frequency order (`fft_permute` after `fft_real`)
+- The "MCP Meters" container holding the meters is force-enabled on every read: REAPER 7.40 creates it bypassed when it is a track's only FX
 - Lua bridge reads via `reaper.gmem_attach("MCPAnalyzer")` + `reaper.gmem_read()`
 - Auto-inserted by `read_track_spectrum` tool, passes audio through unmodified
 
@@ -671,7 +674,43 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
 - Timeline: per-10s buckets for the last hour (sparse, `[id, total, errors, slow, sumMs]`) in ExtState
   `MCPBridge/history` (≤ 1 Hz), and 1m (24h) + 10m (7d) tiers in `MCPBridge/history_long` (≤ every 10s, polled every
   10s). The page draws each range (5m–7d, a listbox combo box) from the finest tier covering it (`timelineBars()`);
-  dragging across bars selects a span that filters the log views, leaving the range unchanged.
+  dragging across bars selects a span that filters the log views, leaving the range unchanged. Without a span the
+  Calls and Tools views (and their counts) show the range too; older matches end the list with a button that widens
+  the range to the next one that includes them.
+- URL state: navigation state lives in the query string via `useUrlState(key, default, { validate })` in
+  `src/url-state.ts` (a History API port of LoreKit web's hook: JSON values, a value equal to the default is dropped,
+  changes in one tick become one history entry), so Back/Forward step through it and a link or reload reopens it.
+  Params: `view`, `range`, `span` (dragged timeline span), `filter` (all/errors), `q` (search; replaces, never pushes),
+  `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, and on Plugins `coverage`, `inProject`, `plugin`
+  (open plugin by FX name). Opening, closing or switching a drawer by click (a row, "Previous call") pushes; ↑/↓ between rows replaces. `view` and `range` default
+  to the last pick in localStorage, so the bridge's bare `mcp_bridge.html` opens where you left off. Use it for any new
+  state a viewer would want to go back to or share (tabs, filters, an open drawer); keep transient UI (hover, drag,
+  copied flags) and per-viewer preferences (grouping, tokens) in `useState`/localStorage. Give each param a
+  `validate` guard so a stale or hand-edited link falls back to the default, and keep keys unique across views.
+- Search (`parseQuery()` / `matchesQuery()` in `status.ts`): space-separated terms, all must match. A word matches the
+  command name, error or params text; `key:value` matches one param exactly (`trackIndex:6` is not 16; quote values
+  with spaces, `fxName:"VST3: Pro-Q 3"`). Selecting text in a command's Params offers **Filter** (the whole param when
+  the selection is on one `"key": value` line, `termFromSelection()`), which adds the term to `q` with a push.
+- Measurement results: the bridge keeps a compact result `r` (built in `reaper/mcp_edit_views_lib.lua`, which keeps
+  `mcp_bridge.lua` under Lua's 200-locals limit) on meters/LUFS/correlation/crest/spectrum entries
+  (`RESULT_FIELDS`, 48 spectrum bands) and, for `render_track_to_wav`, a waveform read from the WAV before the server
+  deletes it (`wav_waveform()`: 120 min/max slices, peak/RMS dBFS, clipped sample count; drawn on a dB scale to −48). `Measurement.tsx` draws them,
+  colored by value (amber from −6 dB, red at 0), with the previous call on the same track ghosted (dashed/hollow) and
+  its headline value and change in a "Previous call" line. Add a measuring command in `RESULT_FIELDS`, `MEASUREMENTS`
+  (`status.ts`) and a `Measurement` kind together.
+- Edit views: writes and listings also keep an `r` (`M.summary` in `mcp_edit_views_lib.lua`), drawn by
+  `EditViews.tsx` from `editViewOf()` (`src/edit-views.ts`). A write reads the state it touches before its handler
+  runs (`M.before`) and again after, so the drawer shows before → after: track and FX parameter changes (the
+  plugin's own readout), the automation window an edit touched (padded 25%, at least 4 s), MIDI notes as a piano
+  roll (first 256, `more` counts the rest; added notes solid, removed dashed), `analyze_midi` velocity per pitch,
+  markers/regions/tempo/items on one timeline, `list_tracks` as a mixer, and `run_plan`'s ops. Lists are capped so
+  an entry stays a few KB. Add a command in `M.summary`, `KIND_OF` (`edit-views.ts`) and a gallery story together;
+  behaviour tests run the real bridge in wasmoon (`bridge-status.test.ts`, "edit views in the log").
+- Component gallery (`?gallery`, like Storybook): the page's real components from fixed example data, every
+  state side by side (`src/Gallery.tsx`, stories in `src/gallery-stories.ts`). Opens only from a local build
+  (`file://`) or when the bridge runs in developer mode (`galleryAllowed()`); otherwise the page opens as usual.
+  Shift-click the logo to get there. Add a story with every new component or state; `gallery-stories.test.ts`
+  fails when a measuring command or an edit view kind has no story.
 - Slow (≥100 ms) / very slow (≥500 ms) marks skip commands that are slow by nature (renders, plugin loads, project
   IO, `run_plan`/`run_action`): `LONG_RUNNING` in `status.ts` and `mcp_bridge.lua`, kept equal by `status.test.ts`.
 - Installable PWA: `apps/bridge-ui/public/` (manifest, service worker, icons) is copied next to the page; every file is

@@ -37,7 +37,7 @@ end
 
 - Runs in REAPER's audio processing thread (not the scripting thread)
 - Communicates with Lua via `gmem[]` shared memory (namespace: `MCPAnalyzer`)
-- gmem layout: `gmem[0]=bin_count, gmem[1]=peak_dB, gmem[2]=rms_dB, gmem[3..]=bins`
+- gmem layout: one 4100-value block per track at `base = (trackIndex + 1) * 4100` (master = 0, slot set by the bridge via slider4): `[base]=bin_count, [base+1]=peak_dB, [base+2]=rms_dB, [base+3..]=bins`
 - Must pass audio through unmodified (transparent insert)
 - FFT size is configurable via slider (512-8192, default 4096)
 - Window functions: Rectangular, Hann (default), Hamming, Blackman-Harris

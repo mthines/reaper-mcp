@@ -64,6 +64,10 @@ Apply clear, consistent names. Standard naming conventions:
 | Vocals | Lead Vox, BV 1, BV 2, BV Harmony, Dbl Vox |
 | Effects | FX Riser, FX Impact, FX Ambience |
 
+Don't prefix a track with its folder or role ("A INST", "STEM DRUMS", "LIVE OUT"):
+the folder hierarchy already says where it belongs, so the same name under
+different folders is fine. Keep names the user chose.
+
 ```
 tool: set_track_property
 params:

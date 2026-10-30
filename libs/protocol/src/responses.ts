@@ -138,6 +138,19 @@ export interface TrackSpectrum {
   bins: number[];
 }
 
+/** One 1/3-octave band: power sum of the FFT bins between its edges */
+export interface SpectrumBand {
+  hz: number; // nominal centre frequency
+  db: number;  // raw level: never compare bands or tracks on this
+  kDb: number; // K-weighted (BS.1770, the weighting LUFS uses): compare on this
+}
+
+/** What the spectrum tools return: 1/3-octave bands, raw bins only on request */
+export interface SpectrumSummary extends Omit<TrackSpectrum, 'bins' | 'binCount'> {
+  bands: SpectrumBand[];
+  bins?: number[];
+}
+
 export interface TransportState {
   playing: boolean;
   recording: boolean;
@@ -423,7 +436,7 @@ export interface TrackMeasurement {
   lufs?: LufsData;
   crest?: CrestFactorData;
   correlation?: CorrelationData;
-  spectrum?: TrackSpectrum;
+  spectrum?: SpectrumSummary;
   /** Metrics that returned no data, with why (e.g. the meter never received audio) */
   errors?: string[];
 }

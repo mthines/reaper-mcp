@@ -76,10 +76,14 @@ the user's own `user::` layer on top. Reads combine both; writes go to `user::` 
    sections and band balance. With a reference song, add `referencePath` for the
    loudness and tonal-balance delta. Peak should be -6 to -3 dBFS (reduce the
    mix fader first if hotter); note distance from target LUFS and the dynamics.
+   Pass the target as `targetLufs` on every `read_track_lufs` / `measure_tracks`
+   call, so the bridge page shows each reading against it.
 4. **Corrective EQ** — gentle only. Typical: steep HPF 20–30 Hz; low shelf -0.5 to
    -1 dB @ 80 Hz; low-mid dip -0.5 to -1 dB @ 250–350 Hz; +0.5 dB presence @
    2–4 kHz only if needed; air shelf +0.5 to +1 dB @ 10–12 kHz. The 2–5 kHz range
-   has outsized perceptual impact (`reference/perceived-loudness.md`). **If you're
+   has outsized perceptual impact (`reference/perceived-loudness.md`). Judge the
+   bus spectrum on K-weighted `kDb`, never raw `db`, against a level-matched
+   reference band by band, and read it 3+ times (each read is a ~0.5 s snapshot). **If you're
    EQing more than ±2 dB, the mix has a problem — go back.**
 5. **Glue compression** (optional) — only for cohesion: 1.5:1–2:1, slow attack
    30–80 ms, auto/200–500 ms release, **1–2 dB GR max**. More GR → fix the mix.

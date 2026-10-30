@@ -27,7 +27,7 @@ export type TrackEvent =
   | { name: 'log_filtered'; filter: 'all' | 'errors' }
   | { name: 'log_searched'; view: string }
   | { name: 'log_paused'; paused: boolean }
-  | { name: 'log_copied'; what: 'rows' | 'error' | 'params' | 'json' }
+  | { name: 'log_copied'; what: 'rows' | 'error' | 'params' }
   | { name: 'log_cleared' }
   | { name: 'log_entry_opened'; ok: boolean }
   | { name: 'session_filtered' }

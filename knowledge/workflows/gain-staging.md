@@ -71,37 +71,28 @@ params:
 
 Record: peak level (dBFS), RMS level (dBFS) for each track.
 
-Target levels (perceived-loudness-aware):
-- **Sub/bass instruments**: -16 to -14 dBFS RMS (sounds quieter than metered)
-- **Full-range instruments**: -18 dBFS RMS (±3 dB acceptable)
-- **Presence-range instruments**: -19 to -20 dBFS RMS (sounds louder than metered)
-- **High-frequency instruments**: -20 to -22 dBFS RMS
+Target levels (headroom, not balance):
+- **Average**: -18 dBFS RMS (±3 dB acceptable) on every track
 - **Peak**: -12 dBFS (not exceeding -6 dBFS)
+
+These raw targets only give plugins a sensible input level and keep the bus out of clipping. They say nothing about how loud a track sounds in the mix. Balance is a separate step, done afterwards on perceived loudness (`reference/perceived-loudness.md`).
 
 If a track reads:
 - Average of -30 dBFS → needs gain increase
 - Average of -8 dBFS → needs gain reduction
 - Peak of -3 dBFS → dangerously hot, reduce gain
 
-### Step 5: Calculate gain adjustments (perceived-loudness-aware)
+### Step 5: Calculate gain adjustments
 
-Use instrument-appropriate targets rather than a flat -18 dBFS for all tracks. The human ear is 10-15 dB more sensitive at 2-5 kHz than at 100 Hz, so bass instruments need higher meter readings to sound perceptually balanced (see `knowledge/reference/perceived-loudness.md`):
-
-| Instrument Category | Target RMS | Rationale |
-|-------------------|-----------|-----------|
-| Sub/bass (kick sub, bass, 808) | -16 to -14 dBFS | Low frequencies sound quieter than metered |
-| Full-range (piano, guitar, strings) | -18 dBFS | Standard target; spans the perceptual range |
-| Presence-range (vocals, snare, lead guitar) | -19 to -20 dBFS | 2-5 kHz content sounds louder than metered |
-| High-frequency (cymbals, hi-hats, shakers) | -20 to -22 dBFS | Very sensitive frequency range |
+Use the same -18 dBFS RMS target for every track. Don't use different raw targets per instrument to "pre-balance" the mix: raw RMS doesn't track perceived loudness, so the balance has to be set in LU afterwards anyway (Step 8).
 
 For each track:
 ```
 gain_adjustment_dB = target_dBFS - current_average_dBFS
 ```
 
-Example: Bass averages -24 dBFS → target -15 → needs +9 dB
-Example: Vocal averages -10 dBFS → target -19 → needs -9 dB
-Example: Piano averages -24 dBFS → target -18 → needs +6 dB
+Example: Bass averages -24 dBFS → target -18 → needs +6 dB
+Example: Vocal averages -10 dBFS → target -18 → needs -8 dB
 
 Round to nearest 0.5 dB for practical purposes.
 
@@ -131,13 +122,20 @@ params:
 
 Target: Mix bus should peak at -6 to -3 dBFS. If it's hitting 0 dBFS, pull all track faders down proportionally (or reduce master fader by the excess dB).
 
-### Step 8: Check instrument relationships
+### Step 8: Set the balance on perceived loudness
 
-Re-play the chorus section. Listen for:
-- Does the kick still hit harder than the snare? (relative levels should still feel musical)
-- Do vocals still sit over the instruments? (if not, the relative balance was off before; adjust individual tracks)
+Gain staging sets the floor; the balance is built on top of it, and only on perceived values:
 
-If relative balance is wrong, apply additional individual adjustments AFTER the gain staging is complete. Gain staging sets the floor; the mix is built on top of it.
+```
+tool: measure_tracks
+params:
+  trackIndices: [mix bus, lead vocal, guitars, drums, bass]
+  metrics: ["lufs"]
+  startPosition: [chorus start]
+  durationSeconds: 10
+```
+
+Add each track's fader to its reading (the meters are pre-fader). Then express each element as LU below the mix bus, and place it against the stem reference points in `reference/perceived-loudness.md`. Move faders by the LU difference, re-measure, and listen. If the user says something sounds too loud or too quiet, their ear is the finding.
 
 ### Step 9: Save post-staging snapshot
 
@@ -176,4 +174,4 @@ After completing gain staging:
 - **Ignoring bus tracks**: A drum bus that's receiving 8 inputs at -18 dBFS each will be summing to a much higher level. The bus fader controls the drum bus output level — check and adjust it.
 - **Single-moment readings**: Read meters over a representative 10+ second passage, not a single snapshot that may catch silence or a single loud peak.
 - **Not checking after gain staging**: Always play the mix after staging to confirm balance feels correct. The numbers are targets, not rules — use ears to verify.
-- **Setting all tracks to the same level**: A flat -18 dBFS on every track ignores psychoacoustic loudness perception. Bass instruments need higher readings; presence-range instruments need lower readings. See `knowledge/reference/perceived-loudness.md`.
+- **Treating gain staging as balance**: Equal -18 dBFS RMS on every track is correct for headroom, and it is not a balance. Never judge or set balance on RMS or peak readings; do it in LU (Step 8, `knowledge/reference/perceived-loudness.md`).

@@ -42,6 +42,8 @@ end
 local project_lib_ok, project_lib = pcall(dofile, script_dir .. "mcp_project_lib.lua")
 -- Items, takes, take FX, FX move/copy/rename, .RfxChain and track templates, same install rules.
 local items_lib_ok, items_lib = pcall(dofile, script_dir .. "mcp_items_lib.lua")
+-- What a write changed and what a listing showed, for the status page's drawer (same install rules).
+local edit_lib_ok, edit_lib = pcall(dofile, script_dir .. "mcp_edit_views_lib.lua")
 
 local last_poll = 0
 local last_heartbeat = 0
@@ -1002,22 +1004,32 @@ function handlers.read_track_spectrum(params)
     reaper.TrackFX_SetParam(track, analyzer_idx, 0, fft_size)
   end
 
-  -- Read spectrum data from gmem
-  -- JSFX writes: gmem[0] = bin_count, gmem[1] = peak_db, gmem[2] = rms_db, gmem[3..] = bins
-  reaper.gmem_attach("MCPAnalyzer")
+  -- Give this instance its own gmem block (master -1 -> slot 0), as read_track_lufs
+  -- does; with one shared block every track's analyzer overwrote the others.
+  local slot = idx + 1
+  local current_slot = reaper.TrackFX_GetParam(track, analyzer_idx, 3)
+  if math.abs(current_slot - slot) > 0.5 then
+    reaper.TrackFX_SetParam(track, analyzer_idx, 3, slot)
+  end
 
-  local bin_count = reaper.gmem_read(0)
+  -- Read spectrum data from gmem
+  -- JSFX writes at base = slot * 4100: [base] = bin_count, [base+1] = peak_db,
+  -- [base+2] = rms_db, [base+3..] = bins
+  reaper.gmem_attach("MCPAnalyzer")
+  local base = slot * 4100
+
+  local bin_count = reaper.gmem_read(base)
   if bin_count <= 0 then
     return nil, "Spectrum analyzer not producing data yet. Ensure audio is playing."
   end
 
-  local peak_db = reaper.gmem_read(1)
-  local rms_db = reaper.gmem_read(2)
+  local peak_db = reaper.gmem_read(base + 1)
+  local rms_db = reaper.gmem_read(base + 2)
   local sr = reaper.GetSetProjectInfo(0, "PROJECT_SRATE", 0, false)
 
   local bins = {}
   for i = 0, bin_count - 1 do
-    bins[#bins + 1] = reaper.gmem_read(3 + i)
+    bins[#bins + 1] = reaper.gmem_read(base + 3 + i)
   end
 
   return {
@@ -1907,20 +1919,29 @@ function ensure_jsfx_on_track(track, fx_name)
   -- Try container approach first (REAPER 7.06+)
   local container_idx = find_or_create_mcp_container(track)
   if container_idx then
+    -- Seen live (REAPER 7.40): a container added as a track's only FX comes up
+    -- bypassed, so the meters inside never see audio and read zeros. It only
+    -- holds pass-through meters, so it is safe to keep it enabled.
+    if not reaper.TrackFX_GetEnabled(track, container_idx) then
+      reaper.TrackFX_SetEnabled(track, container_idx, true)
+    end
     local ok, count_str = reaper.TrackFX_GetNamedConfigParm(track, container_idx, "container_count")
     local count = tonumber(count_str) or 0
 
-    -- Search inside container for existing JSFX
-    for i = 0, count - 1 do
-      local _, addr_str = reaper.TrackFX_GetNamedConfigParm(track, container_idx, "container_item." .. i)
-      local addr = tonumber(addr_str)
-      if addr then
-        local _, name = reaper.TrackFX_GetFXName(track, addr)
-        if name and name:find(fx_name, 1, true) then
-          return addr  -- Found inside container
+    local function find_in_container()
+      local _, n_str = reaper.TrackFX_GetNamedConfigParm(track, container_idx, "container_count")
+      for i = 0, (tonumber(n_str) or 0) - 1 do
+        local _, addr_str = reaper.TrackFX_GetNamedConfigParm(track, container_idx, "container_item." .. i)
+        local addr = tonumber(addr_str)
+        if addr then
+          local _, name = reaper.TrackFX_GetFXName(track, addr)
+          if name and name:find(fx_name, 1, true) then return addr end
         end
       end
     end
+
+    local found = find_in_container()
+    if found then return found end
 
     -- Not found — insert inside container
     -- Use legacy addressing: 0x2000000 + (1-based slot) * (top_chain_count + 1) + (1-based container pos)
@@ -1928,11 +1949,16 @@ function ensure_jsfx_on_track(track, fx_name)
     local slot = count + 1  -- 1-based, next empty slot
     local container_pos = container_idx + 1  -- 1-based
     local insert_addr = 0x2000000 + slot * (top_count + 1) + container_pos
-    local new_idx = reaper.TrackFX_AddByName(track, fx_name, false, insert_addr)
-    if new_idx >= 0 then
+    if reaper.TrackFX_AddByName(track, fx_name, false, insert_addr) >= 0 then
       -- Invalidate cache since FX count changed
       container_cache[tostring(track)] = nil
-      return new_idx
+      -- Look the new meter up by name: the index TrackFX_AddByName returns for a
+      -- container insert is not its address. Callers set slider params on the
+      -- returned index, and the wrong index wrote them into the track's first FX
+      -- (seen live: Pro-Q 4 band 1 gain pushed to +30 dB).
+      found = find_in_container()
+      if found then return found end
+      return nil, fx_name .. " was inserted but could not be found in the MCP Meters container"
     end
     -- Container insertion failed — fall through to direct
   end
@@ -5112,7 +5138,16 @@ for i = 1, math.min(STATUS_RECENT_MAX, #saved_log) do status.recent[i] = saved_l
 
 local STATUS_PARAMS_MAX = 400
 
-local function record_command(cmd, handler_ms, ok, err)
+-- Measurement results and edit views are kept on the log entry (`r`) so the status page can draw them
+-- (mcp_edit_views_lib.lua); everything else logs params only.
+if edit_lib_ok then
+  edit_lib.init({
+    api = reaper, to_db = to_db, json_decode = plan_lib_ok and plan_lib.json_decode or nil, json_decode_array = json_decode_array,
+    get_midi_notes = function(p) return handlers.get_midi_notes(p) end, get_midi_take = get_midi_take,
+  })
+end
+
+local function record_command(cmd, handler_ms, ok, err, data, before)
   local cmd_type = cmd.type
   -- Internal commands (e.g. the server's _bridge_diagnostics poller) are noise, but still mark the session alive
   if type(cmd_type) ~= "string" or cmd_type:sub(1, 1) == "_" then
@@ -5131,6 +5166,10 @@ local function record_command(cmd, handler_ms, ok, err)
   end
   if err then
     entry.e = tostring(err):gsub("%c", " "):sub(1, 300)
+  end
+  if ok and edit_lib_ok then
+    local got, r = pcall(edit_lib.summary, cmd_type, cmd.params or {}, data, before)
+    entry.r = got and r or nil
   end
   table.insert(status.recent, 1, entry)
   status.recent[STATUS_RECENT_MAX + 1] = nil
@@ -5195,6 +5234,7 @@ local function process_command(filename)
   local handler = handlers[cmd.type]
   local response = {}
   local handler_ms = 0
+  local before -- what a write is about to change, for its edit view
 
   local internal = type(cmd.type) == "string" and cmd.type:sub(1, 1) == "_"
   local blocked
@@ -5208,6 +5248,10 @@ local function process_command(filename)
   if blocked then
     response = { id = cmd.id, success = false, error = blocked, timestamp = os.time() * 1000 }
   elseif handler then
+    if edit_lib_ok then
+      local got, snapshot = pcall(edit_lib.before, cmd.type, cmd.params or {})
+      before = got and snapshot or nil
+    end
     local handler_start = reaper.time_precise()
     local ok, data_or_err, err_msg = pcall(handler, cmd.params or {})
     handler_ms = (reaper.time_precise() - handler_start) * 1000
@@ -5237,7 +5281,7 @@ local function process_command(filename)
   -- Add handler timing to response (rounded to microsecond precision)
   response._handlerMs = math.floor(handler_ms * 1000 + 0.5) / 1000
 
-  record_command(cmd, handler_ms, response.success, response.error)
+  record_command(cmd, handler_ms, response.success, response.error, response.data, before)
 
   -- Add pickup timing to response for profiling
   if cmd.timestamp then
