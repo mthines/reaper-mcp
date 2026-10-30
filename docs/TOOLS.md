@@ -74,8 +74,9 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 |------|-------------|
 | `undo_project` / `redo_project` | Undo / redo, reporting the undo label |
 | `save_project` | Save in place, or write a copy to a `.rpp` path — never opens a dialog |
-| `get_render_settings` / `set_render_settings` | Output dir, pattern, format, bounds, sample rate, channels |
-| `render_project` | Render with the current settings (refuses to overwrite unless asked) |
+| `get_render_settings` / `set_render_settings` | Output dir, pattern, format, bit depth / MP3 bitrate, dither, source (master, stems, region matrix), bounds, normalize to LUFS / limit, metadata (title, artist, ISRC, BWF), sample rate, channels |
+| `render_project` | Render with the current settings, optionally for given tracks; returns each file's length, LUFS-I and true peak (refuses to overwrite unless asked) |
+| `render_versions` | Several versions in one call (full, instrumental, TV mix): mute a set of tracks per version, render, restore |
 | `get_project_settings` / `set_project_settings` | Sample rate, title, author, notes, repeat, metronome |
 
 ### Envelopes / Automation

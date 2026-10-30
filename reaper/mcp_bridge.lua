@@ -3685,11 +3685,28 @@ function handlers.get_render_settings(params)
 end
 
 function handlers.set_render_settings(params)
-  return with_project_lib(function() return project_lib.set_render(reaper, params) end)
+  return with_project_lib(function()
+    local p, err = project_lib.decode_json_fields(params, plan_lib_ok and plan_lib.json_decode or function() return nil end)
+    if not p then return nil, err end
+    return project_lib.set_render(reaper, p, plan_lib_ok and plan_lib.resolve_track or nil)
+  end)
 end
 
 function handlers.render_project(params)
-  return with_project_lib(function() return project_lib.render(reaper, params, project_fs) end)
+  return with_project_lib(function()
+    local p, err = project_lib.decode_json_fields(params, plan_lib_ok and plan_lib.json_decode or function() return nil end)
+    if not p then return nil, err end
+    return project_lib.render(reaper, p, project_fs, plan_lib_ok and plan_lib.resolve_track or nil)
+  end)
+end
+
+function handlers.render_versions(params)
+  if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup`" end
+  return with_project_lib(function()
+    local p, err = project_lib.decode_json_fields(params, plan_lib.json_decode)
+    if not p then return nil, err end
+    return project_lib.render_versions(reaper, p, project_fs, plan_lib.resolve_track)
+  end)
 end
 
 function handlers.get_project_settings(params)
@@ -4855,7 +4872,7 @@ local HISTORY_SLOW_MS = 100
 -- arbitrary work): never counted as slow. Mirrors LONG_RUNNING in apps/bridge-ui/src/status.ts.
 local LONG_RUNNING = {}
 for _, c in ipairs({
-  "render_project", "render_track_to_wav", "run_plan", "run_action", "save_project", "undo_project",
+  "render_project", "render_track_to_wav", "render_versions", "run_plan", "run_action", "save_project", "undo_project",
   "redo_project", "add_fx", "add_take_fx", "setup_fx_chain", "copy_fx", "move_fx", "set_fx_offline",
   "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
   "insert_audio_file", "snapshot_save", "snapshot_restore", "snapshot_edit",

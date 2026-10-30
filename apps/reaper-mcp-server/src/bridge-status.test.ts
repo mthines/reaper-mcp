@@ -331,6 +331,62 @@ describe('edit views in the log', () => {
     });
   });
 
+  it('render view in the log: one row per file with its levels, waveform slices and the targets', async () => {
+    const setup = `
+      api.project.strings.RENDER_FILE = "/out"
+      api.project.strings.RENDER_PATTERN = "mix"
+      api.project.info.RENDER_NORMALIZE = 1 | 64
+      api.project.info.RENDER_NORMALIZE_TARGET = 10 ^ (-14 / 20)
+      api.project.info.RENDER_BRICKWALL = 10 ^ (-1 / 20)
+      local render = api.Main_OnCommand
+      api.Main_OnCommand = function(id, flag)
+        render(id, flag)
+        if id == 42230 then for path in pairs(api.rendered) do local f = io.open(path, "w"); f:write("RIFF"); f:close() end end
+      end
+      api.new_array = function() return {} end
+      api.GetMediaSourceNumChannels = function() return 2 end
+      api.PCM_Source_BuildPeaks = function() return 0 end
+      api.PCM_Source_GetPeaks = function(src, rate, start, ch, n, extra, buf)
+        for i = 0, n - 1 do
+          for c = 1, ch do buf[i * ch + c] = 0.5; buf[n * ch + i * ch + c] = -0.25 end
+        end
+        return n
+      end
+    `;
+    const bridge = await startBridge(setup, { '/out/.keep': '' });
+    const res = await bridge.send('render_project', {});
+    expect(res.error ?? 'ok').toBe('ok');
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({ fmt: 'wav', src: 'master', norm: 'lufs_i', nt: -14, lim: -1, tp: false });
+    const row = (r as { groups: Array<{ v: string; f: unknown[][] }> }).groups[0].f[0];
+    expect(row.slice(0, 5)).toEqual(['mix.wav', 12.5, -14, -1, -1.5]);
+    expect((row[5] as number[]).length).toBe(60);
+    expect((row[5] as number[])[0]).toBe(0.5);
+    expect((row[6] as number[])[0]).toBe(-0.25);
+  });
+
+  it('render view in the log: versions are grouped, each with its muted tracks', async () => {
+    const setup = `
+      api.tracks[2] = { name = "Vocals", guid = "{v}", vals = {}, fx = {}, sends = {}, chunk = "" }
+      api.project.strings.RENDER_FILE = "/out"
+      api.project.strings.RENDER_PATTERN = "song"
+      local render = api.Main_OnCommand
+      api.Main_OnCommand = function(id, flag)
+        render(id, flag)
+        if id == 42230 then for path in pairs(api.rendered) do local f = io.open(path, "w"); f:write("RIFF"); f:close() end end
+      end
+    `;
+    const bridge = await startBridge(setup, { '/out/.keep': '' });
+    const res = await bridge.send('render_versions', { versions: JSON.stringify([{ name: 'Full' }, { name: 'Instrumental', mute: ['Vocals'] }]) });
+    expect(res.error ?? 'ok').toBe('ok');
+    const { r } = (await bridge.status()).recent[0];
+    const groups = (r as { groups: Array<{ v: string; m: string[]; f: unknown[][] }> }).groups;
+    expect(groups.map((g) => [g.v, g.m, g.f[0][0]])).toEqual([
+      ['Full', [], 'song-Full.wav'],
+      ['Instrumental', ['Vocals'], 'song-Instrumental.wav'],
+    ]);
+  });
+
   it('shows a track change as before and after, in dB', async () => {
     const bridge = await startBridge('api.tracks[1].vals.D_VOL = 1');
     await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -6 });

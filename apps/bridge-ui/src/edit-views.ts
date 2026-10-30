@@ -39,6 +39,11 @@ export type Route = ['s' | 'r' | 'h', string, number, number, string];
 /** One track's items for an item edit; `was` is the lane before it */
 export interface ItemLane { t: string; items: Item[]; was?: Item[] }
 
+/** A rendered file: [name, duration s (−1 unknown), LUFS-I, true peak, sample peak (−150 unmeasured or silent), waveform maxima, minima] */
+export type RenderFile = [string, number, number, number, number, number[], number[]];
+/** One version of a render (`v` "" for a plain render), the tracks it muted and its files */
+export interface RenderGroup { v: string; m: string[]; f: RenderFile[] }
+
 export type EditView =
   | { kind: 'changes'; rows: ChangeRow[]; more?: number }
   | {
@@ -60,7 +65,12 @@ export type EditView =
   | { kind: 'mixer'; tracks: MixRow[]; total: number; from?: number; master?: MixRow; ids?: string[]; was?: { tracks: MixRow[]; ids: string[] } }
   | { kind: 'fxChain'; chains: FxChain[] }
   | { kind: 'routing'; t: string; routes: Route[]; was?: Route[] }
-  | { kind: 'plan'; ops: [string, string][]; total: number; dryRun?: boolean };
+  | { kind: 'plan'; ops: [string, string][]; total: number; dryRun?: boolean }
+  | {
+      kind: 'render'; fmt: string; src: string; groups: RenderGroup[]; more?: number;
+      /** Bit depth or MP3 kbps, the normalize mode and target (dB), and the limiter ceiling (dB, `tp` true peak) */
+      bd?: string; kbps?: number; norm?: string; nt?: number; lim?: number; tp?: boolean;
+    };
 
 const KIND_OF: Record<string, EditView['kind']> = {};
 const kinds: Array<[EditView['kind'], string[]]> = [
@@ -87,6 +97,7 @@ const kinds: Array<[EditView['kind'], string[]]> = [
   ]],
   ['routing', ['get_track_routing', 'add_send', 'set_send', 'remove_send', 'add_hardware_output']],
   ['plan', ['run_plan']],
+  ['render', ['render_project', 'render_versions']],
 ];
 for (const [kind, commands] of kinds) for (const c of commands) KIND_OF[c] = kind;
 
@@ -116,6 +127,8 @@ const MIX_ROW = [str, num, str, num, num, str];
 const ITEM = [num, num, num, num, num, num];
 const FX_SLOT = [str, str, str, str];
 const ROUTE = [(v: unknown) => v === 's' || v === 'r' || v === 'h', str, num, num, str];
+const numbers = (v: unknown): v is number[] => Array.isArray(v) && v.every(num);
+const RENDER_FILE = [str, num, num, num, num, numbers, numbers];
 const pair = (v: unknown): v is [number, number] => Array.isArray(v) && v.length === 2 && num(v[0]) && num(v[1]);
 const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(str);
 
@@ -220,6 +233,22 @@ export function editViewOf(e: CommandEntry): EditView | null {
     case 'routing': {
       if (!str(r.t) || !Array.isArray(r.routes)) return null;
       return { kind, t: r.t, routes: tuples<Route>(r.routes, ROUTE), ...(Array.isArray(r.was) ? { was: tuples<Route>(r.was, ROUTE) } : {}) };
+    }
+    case 'render': {
+      if (!Array.isArray(r.groups)) return null;
+      const groups = (r.groups as unknown[]).flatMap((g): RenderGroup[] => {
+        if (!g || typeof g !== 'object') return [];
+        const x = g as Record<string, unknown>;
+        return [{ v: str(x.v) ? x.v : '', m: strings(x.m) ? x.m : [], f: tuples<RenderFile>(x.f, RENDER_FILE) }];
+      });
+      if (!groups.some((g) => g.f.length)) return null;
+      return {
+        kind, fmt: str(r.fmt) ? r.fmt : '', src: str(r.src) ? r.src : 'master', groups,
+        ...(num(r.more) && r.more > 0 ? { more: r.more } : {}),
+        ...(str(r.bd) ? { bd: r.bd } : {}), ...(num(r.kbps) ? { kbps: r.kbps } : {}),
+        ...(str(r.norm) ? { norm: r.norm, ...(num(r.nt) ? { nt: r.nt } : {}) } : {}),
+        ...(num(r.lim) ? { lim: r.lim, tp: r.tp === true } : {}),
+      };
     }
     case 'plan': {
       const ops = tuples<[string, string]>(r.ops, [str, str]);

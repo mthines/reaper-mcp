@@ -622,8 +622,35 @@ export interface RenderSettings {
   endTime: number;
   sampleRate: number;
   channels: number;
+  source: string;
+  /** wav/aiff/flac only, when configured. */
+  bitDepth?: string;
+  mp3Bitrate?: number;
+  dither: boolean;
+  noiseShaping: boolean;
+  normalize: string;
+  /** dB; null when never set. */
+  normalizeTarget: number | null;
+  normalizeOnlyTooLoud: boolean;
+  limit: boolean;
+  limitCeiling: number | null;
+  limitTruePeak: boolean;
+  embedMetadata: boolean;
+  /** Stored metadata by REAPER key (e.g. "ID3:TIT2"). */
+  metadata: Record<string, string>;
+  /** Only with source region_matrix. */
+  regionMatrix?: Array<{ regionIndex: number; name: string; tracks: string[] }>;
   /** Files a render would write, as REAPER resolves them. */
   targets: string[];
+}
+
+/** One rendered file as REAPER measures it (levels absent for silence). */
+export interface RenderedFileAnalysis {
+  file: string;
+  durationSeconds?: number;
+  lufsIntegrated?: number;
+  truePeak?: number;
+  samplePeak?: number;
 }
 
 export interface RenderProjectResult {
@@ -632,6 +659,28 @@ export interface RenderProjectResult {
   missing: string[];
   bounds: string;
   format: string | null;
+  source: string;
+  bitDepth?: string;
+  mp3Bitrate?: number;
+  normalize?: string;
+  normalizeTarget?: number;
+  limitCeiling?: number;
+  limitTruePeak?: boolean;
+  /** Absent with analyze: false; up to 16 files. */
+  analysis?: RenderedFileAnalysis[];
+  analysisSkipped?: number;
+}
+
+export interface RenderVersionsResult {
+  rendered: true;
+  versions: Array<{ name: string; muted: string[]; files: string[]; missing: string[]; analysis?: RenderedFileAnalysis[] }>;
+  format: string | null;
+  bitDepth?: string;
+  source: string;
+  normalize?: string;
+  normalizeTarget?: number;
+  limitCeiling?: number;
+  limitTruePeak?: boolean;
 }
 
 export interface ProjectSettings {

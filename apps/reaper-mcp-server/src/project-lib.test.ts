@@ -10,6 +10,7 @@ import { LuaFactory } from 'wasmoon';
 
 const LIB_SRC = readFileSync(join(__dirname, '../../../reaper/mcp_project_lib.lua'), 'utf8');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
+const PLAN_SRC = readFileSync(join(__dirname, '../../../reaper/mcp_plan_lib.lua'), 'utf8');
 
 const factory = new LuaFactory();
 
@@ -17,8 +18,9 @@ async function runLua(snippet: string): Promise<void> {
   const lua = await factory.createEngine();
   try {
     lua.global.set('LIB_SRC', LIB_SRC);
+    lua.global.set('PLAN_SRC', PLAN_SRC);
     await lua.doString(FAKE_SRC);
-    await lua.doString(`project = load(LIB_SRC, "mcp_project_lib.lua")()\n${snippet}`);
+    await lua.doString(`project = load(LIB_SRC, "mcp_project_lib.lua")()\nresolve = load(PLAN_SRC, "mcp_plan_lib.lua")().resolve_track\n${snippet}`);
   } finally {
     lua.global.close();
   }
@@ -275,6 +277,225 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
       refused("sampleRate", project.set_settings(api, { sampleRate = 100, title = "x" }))
       refused("repeat must be true or false", project.set_settings(api, { ["repeat"] = "yes" }))
       assert(project.get_settings(api).title == "", "settings unchanged")
+    `);
+  });
+  // ── Delivery: render source, format options, normalize, metadata, versions ──
+
+  const DELIVERY = `
+    local fs = new_fs{ dirs = { "/tmp/out" } }
+    local api = new_fake{ fs = fs, tracks = { { name = "Drums" }, { name = "Bass" }, { name = "Vocals" } },
+      project = { markers = { { pos = 0, rend = 10, rgn = true, name = "Verse" }, { pos = 10, rend = 20, rgn = true, name = "Chorus" } } } }
+    assert(project.set_render(api, { outputDirectory = "/tmp/out", filePattern = "song", format = "wav" }))
+    local function refused(what, ok, err)
+      assert(ok == nil and err and err:find(what, 1, true) and err:find("nothing"), "expected refusal '" .. what .. "', got " .. tostring(err))
+    end
+  `;
+
+  it('render source: each source is written and read back; stems list the selected tracks', async () => {
+    await runLua(`${DELIVERY}
+      assert(project.get_render(api).source == "master", "master by default")
+      for _, src in ipairs({ "stems", "master_and_stems", "selected_via_master", "selected_items", "master" }) do
+        assert(project.set_render(api, { source = src }).source == src, "round-trips " .. src)
+      end
+      api.SetTrackSelected(api.GetTrack(0, 0), true)
+      api.SetTrackSelected(api.GetTrack(0, 2), true)
+      local r = project.set_render(api, { source = "stems", filePattern = "$track" })
+      assert(#r.targets == 2 and r.targets[1] == "/tmp/out/Drums.wav" and r.targets[2] == "/tmp/out/Vocals.wav", table.concat(r.targets, ","))
+      r = project.set_render(api, { source = "master_and_stems" })
+      assert(#r.targets == 3 and r.targets[1] == "/tmp/out/Master.wav", table.concat(r.targets, ","))
+      assert(math.floor(api.project.info.RENDER_SETTINGS) == 1, "master + stems is RENDER_SETTINGS 1")
+      project.set_render(api, { source = "stems" })
+      assert(math.floor(api.project.info.RENDER_SETTINGS) == 3, "stems of the selected tracks is 3, not 2 (REAPER 7 lists nothing for 2)")
+    `);
+  });
+
+  it('render source: region_matrix needs region bounds and replaces the rows it is given', async () => {
+    await runLua(`${DELIVERY}
+      local w = api.writes
+      refused("set bounds to all_regions", project.set_render(api, { source = "region_matrix" }, resolve))
+      refused("regionMatrix applies to source region_matrix", project.set_render(api, { regionMatrix = { { regionIndex = 1, tracks = { "Drums" } } } }, resolve))
+      refused("no region 9", project.set_render(api, { source = "region_matrix", bounds = "all_regions", regionMatrix = { { regionIndex = 9, tracks = { "Drums" } } } }, resolve))
+      refused("'Nope' not found", project.set_render(api, { source = "region_matrix", bounds = "all_regions", regionMatrix = { { regionIndex = 1, tracks = { "Nope" } } } }, resolve))
+      assert(api.writes == w, "refusals wrote nothing")
+      local r = assert(project.set_render(api, { source = "region_matrix", bounds = "all_regions",
+        regionMatrix = { { regionIndex = 1, tracks = { "Drums", "master" } }, { regionIndex = 2, tracks = { 2 } } } }, resolve))
+      assert(r.source == "region_matrix" and #r.regionMatrix == 2, "two rows")
+      assert(r.regionMatrix[1].name == "Verse" and r.regionMatrix[1].tracks[1] == "Drums" and r.regionMatrix[1].tracks[2] == "master")
+      assert(r.targets[1] == "/tmp/out/Verse-Drums.wav" and #r.targets == 3, table.concat(r.targets, ","))
+      r = project.set_render(api, { regionMatrix = { { regionIndex = 1, tracks = { "Bass" } } } }, resolve)
+      assert(#r.regionMatrix[1].tracks == 1 and r.regionMatrix[1].tracks[1] == "Bass", "the row was replaced, not added to")
+      assert(r.regionMatrix[2].tracks[1] == "Vocals", "other rows kept")
+    `);
+  });
+
+  it('render format options: bit depth, MP3 bitrate and dither store REAPER encodings and read back', async () => {
+    await runLua(`${DELIVERY}
+      local function blob() return b64decode(api.project.strings.RENDER_FORMAT) end
+      for depth, code in pairs({ ["16"] = 16, ["24"] = 24, ["32"] = 0x21, ["32f"] = 0x20 }) do
+        local r = assert(project.set_render(api, { bitDepth = depth }))
+        assert(r.bitDepth == depth and r.format == "wav", depth .. " read back as " .. tostring(r.bitDepth))
+        assert(blob():sub(1, 4) == "evaw" and string.unpack("<I2", blob(), 5) == code, "wav " .. depth .. " stored as " .. code)
+      end
+      local r = assert(project.set_render(api, { format = "flac", bitDepth = "24" }))
+      assert(r.format == "flac" and r.bitDepth == "24", "flac 24")
+      assert(blob():sub(1, 4) == "calf" and string.unpack("<i4i4", blob(), 5) == 24, "calf + int32 bits")
+      assert(select(2, string.unpack("<i4i4", blob(), 5)) == 5, "default compression level 5")
+      assert(r.targets[1] == "/tmp/out/song.flac", "still a flac target: " .. tostring(r.targets[1]))
+      r = assert(project.set_render(api, { format = "aiff", bitDepth = "16" }))
+      assert(r.bitDepth == "16" and blob():sub(1, 4) == "ffia", "aiff 16")
+      r = assert(project.set_render(api, { format = "mp3", mp3Bitrate = 320 }))
+      assert(r.mp3Bitrate == 320, "mp3 bitrate read back")
+      assert(string.unpack("<i4", blob(), 5) == 320 and string.unpack("<i4", blob(), 25) == 320, "kbps at bytes 4 and 24")
+      r = assert(project.set_render(api, { mp3Bitrate = 192 }))
+      assert(r.mp3Bitrate == 192 and string.unpack("<i4", blob(), 25) == 192, "a second change keeps the rest of the config")
+      r = assert(project.set_render(api, { dither = true, noiseShaping = true }))
+      assert(r.dither and r.noiseShaping and math.floor(api.project.info.RENDER_DITHER) == 15, "master and stems dither + noise shaping")
+      r = assert(project.set_render(api, { noiseShaping = false }))
+      assert(r.dither and not r.noiseShaping and math.floor(api.project.info.RENDER_DITHER) == 5)
+      local w = api.writes
+      refused("bitDepth applies to wav, aiff and flac", project.set_render(api, { format = "ogg", bitDepth = "24" }))
+      refused("mp3 takes mp3Bitrate", project.set_render(api, { bitDepth = "24" }))
+      refused("flac bitDepth must be one of 16, 24", project.set_render(api, { format = "flac", bitDepth = "32f" }))
+      refused("mp3Bitrate must be one of", project.set_render(api, { mp3Bitrate = 333 }))
+      refused("mp3Bitrate applies to format mp3", project.set_render(api, { format = "wav", mp3Bitrate = 320 }))
+      assert(api.writes == w and project.get_render(api).format == "mp3", "refusals changed nothing")
+    `);
+  });
+
+  it('render normalize: mode, target, too-loud only and the limiter read back as set', async () => {
+    await runLua(`${DELIVERY}
+      local r = project.get_render(api)
+      assert(r.normalize == "off" and r.limit == false, "off by default")
+      r = assert(project.set_render(api, { normalize = "lufs_i", normalizeTarget = -14, limit = true, limitCeiling = -1, limitTruePeak = true }))
+      assert(r.normalize == "lufs_i" and r.normalizeTarget == -14, "LUFS-I -14: " .. tostring(r.normalizeTarget))
+      assert(r.limit and r.limitCeiling == -1 and r.limitTruePeak, "true-peak limit at -1")
+      assert(math.abs(api.project.info.RENDER_NORMALIZE_TARGET - 10 ^ (-14 / 20)) < 1e-9, "target stored as linear amplitude")
+      assert(math.floor(api.project.info.RENDER_NORMALIZE) == 1 | 64 | 128, "flags")
+      r = assert(project.set_render(api, { normalize = "true_peak", normalizeTarget = -1, normalizeOnlyTooLoud = true }))
+      assert(r.normalize == "true_peak" and r.normalizeOnlyTooLoud and r.limit, "mode changed, limiter kept")
+      r = assert(project.set_render(api, { normalize = "off", limit = false }))
+      assert(r.normalize == "off" and not r.limit and r.normalizeTarget == -1, "off keeps the target for next time")
+      local fresh = new_fake{ fs = fs }
+      refused("normalize needs normalizeTarget", project.set_render(fresh, { normalize = "peak" }))
+      refused("limit needs limitCeiling", project.set_render(fresh, { limit = true }))
+      refused("normalizeTarget must be -70 to 0", project.set_render(api, { normalize = "lufs_i", normalizeTarget = 3 }))
+      refused("unknown normalize 'loud'", project.set_render(api, { normalize = "loud" }))
+    `);
+  });
+
+  it('render metadata: friendly fields write their keys, enable embedding, and an empty value clears', async () => {
+    await runLua(`${DELIVERY}
+      local r = assert(project.set_render(api, { metadata = { title = "Night Drive", artist = "Mads", isrc = "USABC2600001", description = "Final master" },
+        metadataRaw = { ["ID3:TCOM"] = "M. Thines" } }))
+      assert(r.embedMetadata == true and math.floor(api.project.info.RENDER_SETTINGS) & 512 ~= 0, "embedding turned on")
+      assert(r.metadata["ID3:TIT2"] == "Night Drive" and r.metadata["INFO:INAM"] == "Night Drive" and r.metadata["VORBIS:TITLE"] == "Night Drive", "title in every scheme")
+      assert(r.metadata["ID3:TSRC"] == "USABC2600001" and r.metadata["AXML:ISRC"] == "USABC2600001", "ISRC in ID3 and AXML")
+      assert(r.metadata["BWF:Description"] == "Final master" and r.metadata["ID3:TCOM"] == "M. Thines", "BWF + raw key")
+      r = assert(project.set_render(api, { metadata = { title = "" } }))
+      assert(r.metadata["ID3:TIT2"] == nil and r.metadata["ID3:TPE1"] == "Mads", "title cleared, artist kept")
+      r = assert(project.set_render(api, { embedMetadata = false }))
+      assert(r.embedMetadata == false and r.metadata["ID3:TPE1"] == "Mads", "embedding off keeps the stored metadata")
+      local w = api.writes
+      refused("unknown metadata field 'mood'", project.set_render(api, { metadata = { mood = "happy" } }))
+      refused("must look like SCHEME:FIELD", project.set_render(api, { metadataRaw = { ["bad key"] = "x" } }))
+      refused("one line", project.set_render(api, { metadata = { comment = "a\\nb" } }))
+      assert(api.writes == w, "refusals wrote nothing")
+    `);
+  });
+
+  it('render analysis: each file comes back measured, and tracks select the stems for that render only', async () => {
+    await runLua(`${DELIVERY}
+      local m = new_fake{ fs = fs, levels = { lufs = -9.25, truePeak = -0.4, peak = -0.9 } }
+      project.set_render(m, { outputDirectory = "/tmp/out", filePattern = "mix", normalize = "lufs_i", normalizeTarget = -9, limit = true, limitCeiling = -0.5 })
+      m.render_seconds = 184.2
+      local out = assert(project.render(m, {}, fs, resolve))
+      local a = out.analysis[1]
+      assert(a.file == "/tmp/out/mix.wav" and a.durationSeconds == 184.2, "duration " .. tostring(a.durationSeconds))
+      assert(a.lufsIntegrated == -9.25 and a.truePeak == -0.4 and a.samplePeak == -0.9, "levels " .. tostring(a.lufsIntegrated))
+      assert(out.normalize == "lufs_i" and out.normalizeTarget == -9 and out.limitCeiling == -0.5, "the targets travel with the result")
+      local quiet = assert(project.render(m, { overwrite = true, analyze = false }, fs, resolve))
+      assert(quiet.analysis == nil and quiet.rendered, "analyze false skips measuring")
+
+      api.SetTrackSelected(api.GetTrack(0, 1), true)
+      project.set_render(api, { source = "stems", filePattern = "$track" })
+      local st = assert(project.render(api, { tracks = { "Drums", "Vocals" } }, fs, resolve))
+      assert(#st.files == 2 and st.files[1] == "/tmp/out/Drums.wav" and st.files[2] == "/tmp/out/Vocals.wav", table.concat(st.files, ","))
+      local log = api.render_log[#api.render_log]
+      assert(#log.selected == 2 and log.selected[1] == "Drums", "the render saw only the requested tracks selected")
+      assert(api.IsTrackSelected(api.GetTrack(0, 1)) and not api.IsTrackSelected(api.GetTrack(0, 0)), "selection restored after the render")
+      local _, unknown = project.render(api, { tracks = { "Nope" }, overwrite = true }, fs, resolve)
+      assert(unknown and unknown:find("not found"), tostring(unknown))
+      local _, exist = project.render(api, { tracks = { "Drums" } }, fs, resolve)
+      assert(exist and exist:find("already exists") and api.IsTrackSelected(api.GetTrack(0, 1)), "refused, selection still restored")
+      project.set_render(api, { source = "master" })
+      local _, notstems = project.render(api, { tracks = { "Drums" } }, fs, resolve)
+      assert(notstems and notstems:find("tracks applies to source stems"), tostring(notstems))
+      api.SetTrackSelected(api.GetTrack(0, 1), false)
+      project.set_render(api, { source = "stems" })
+      local _, nosel = project.render(api, {}, fs, resolve)
+      assert(nosel and nosel:find("none is selected"), tostring(nosel))
+    `);
+  });
+
+  it('render versions: one render per version with its tracks muted, then mutes and pattern restored', async () => {
+    await runLua(`${DELIVERY}
+      api.SetMediaTrackInfo_Value(api.GetTrack(0, 1), "B_MUTE", 1) -- the user had Bass muted
+      local out = assert(project.render_versions(api, { versions = {
+        { name = "Instrumental", mute = { "Vocals" } },
+        { name = "A cappella", mute = { "Drums", "Bass" } },
+        { name = "TV", mute = {}, filePattern = "song_tv" },
+      } }, fs, resolve))
+      assert(#out.versions == 3, "three versions")
+      assert(out.versions[1].files[1] == "/tmp/out/song-Instrumental.wav" and out.versions[3].files[1] == "/tmp/out/song_tv.wav", out.versions[1].files[1])
+      assert(out.versions[1].analysis[1].lufsIntegrated == -14, "each version measured")
+      local l = api.render_log
+      assert(#l == 3 and table.concat(l[1].muted, ",") == "Bass,Vocals", "instrumental: vocals muted on top of the user's mutes: " .. table.concat(l[1].muted, ","))
+      assert(table.concat(l[2].muted, ",") == "Drums,Bass", table.concat(l[2].muted, ","))
+      assert(out.versions[2].muted[1] == "Drums", "muted names reported")
+      assert(api.GetMediaTrackInfo_Value(api.GetTrack(0, 2), "B_MUTE") == 0 and api.GetMediaTrackInfo_Value(api.GetTrack(0, 1), "B_MUTE") == 1, "mutes restored")
+      assert(api.project.strings.RENDER_PATTERN == "song", "pattern restored")
+    `);
+  });
+
+  it('render versions: refusals render nothing, and a failing render still restores the project', async () => {
+    await runLua(`${DELIVERY}
+      local function none(what, ok, err)
+        assert(ok == nil and err and err:find(what, 1, true), "expected '" .. what .. "', got " .. tostring(err))
+        assert(#(api.render_log or {}) == 0, "nothing rendered for: " .. what)
+      end
+      none("versions must be a non-empty list", project.render_versions(api, { versions = {} }, fs, resolve))
+      none("'Nope' not found", project.render_versions(api, { versions = { { name = "Inst", mute = { "Nope" } } } }, fs, resolve))
+      none("used twice", project.render_versions(api, { versions = { { name = "A" }, { name = "a" } } }, fs, resolve))
+      none("name must be letters", project.render_versions(api, { versions = { { name = "../x" } } }, fs, resolve))
+      none("would both write", project.render_versions(api, { versions = { { name = "A", filePattern = "x" }, { name = "B", filePattern = "x" } } }, fs, resolve))
+      fs.files["/tmp/out/song-B.wav"] = true
+      none("version B: refused: /tmp/out/song-B.wav already exists", project.render_versions(api, { versions = { { name = "A" }, { name = "B" } } }, fs, resolve))
+      assert(api.project.strings.RENDER_PATTERN == "song", "pattern restored after a refusal")
+      fs.files["/tmp/out/song-B.wav"] = nil
+      api.fail_render = true
+      local ok = pcall(project.render_versions, api, { versions = { { name = "Inst", mute = { "Vocals" } } } }, fs, resolve)
+      assert(not ok, "the render error surfaces")
+      assert(api.GetMediaTrackInfo_Value(api.GetTrack(0, 2), "B_MUTE") == 0, "vocals unmuted after the failure")
+      assert(api.project.strings.RENDER_PATTERN == "song", "pattern restored after the failure")
+    `);
+  });
+
+  it('render refusals: invalid settings change nothing, nested JSON params decode', async () => {
+    await runLua(`${DELIVERY}
+      local before = project.get_render(api)
+      local w = api.writes
+      refused("unknown source 'all'", project.set_render(api, { source = "all" }))
+      refused("dither must be true or false", project.set_render(api, { dither = "yes" }))
+      refused("limitCeiling must be -30 to 0", project.set_render(api, { limit = true, limitCeiling = 2 }))
+      refused("metadata must be an object", project.set_render(api, { metadata = "title" }))
+      assert(api.writes == w, "no write")
+      local after = project.get_render(api)
+      assert(after.source == before.source and after.format == before.format and after.normalize == before.normalize, "settings unchanged")
+      local json = load(PLAN_SRC)().json_decode
+      local p = assert(project.decode_json_fields({ metadata = '{"title":"X"}', versions = '[{"name":"A","mute":["Bass"]}]', format = "wav" }, json))
+      assert(p.metadata.title == "X" and p.versions[1].mute[1] == "Bass" and p.format == "wav", "decoded in place")
+      local _, bad = project.decode_json_fields({ tracks = "[1," }, json)
+      assert(bad and bad:find("tracks is not valid JSON"), tostring(bad))
     `);
   });
 });

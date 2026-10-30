@@ -158,6 +158,7 @@ export type CommandType =
   | 'get_render_settings'
   | 'set_render_settings'
   | 'render_project'
+  | 'render_versions'
   | 'get_project_settings'
   | 'set_project_settings'
   | 'add_tempo_marker'
@@ -903,11 +904,48 @@ export interface SetRenderSettingsParams {
   /** 0 = project sample rate. */
   sampleRate?: number;
   channels?: number;
+  source?: RenderSource;
+  /** JSON string of RegionMatrixRow[] (the bridge decodes nested params itself). */
+  regionMatrix?: string;
+  bitDepth?: '16' | '24' | '32' | '32f';
+  mp3Bitrate?: number;
+  dither?: boolean;
+  noiseShaping?: boolean;
+  normalize?: 'off' | RenderNormalize;
+  /** dB (LUFS for lufs_*). */
+  normalizeTarget?: number;
+  normalizeOnlyTooLoud?: boolean;
+  limit?: boolean;
+  /** dB. */
+  limitCeiling?: number;
+  limitTruePeak?: boolean;
+  /** JSON string of { title?, artist?, album?, genre?, year?, isrc?, comment?, description? }. */
+  metadata?: string;
+  /** JSON string of { "SCHEME:FIELD": value }. */
+  metadataRaw?: string;
+  embedMetadata?: boolean;
 }
+
+export type RenderSource = 'master' | 'stems' | 'master_and_stems' | 'selected_via_master' | 'region_matrix' | 'selected_items' | 'selected_items_via_master';
+export type RenderNormalize = 'lufs_i' | 'rms' | 'peak' | 'true_peak' | 'lufs_m_max' | 'lufs_s_max';
+export interface RegionMatrixRow { regionIndex: number; tracks: Array<number | string> }
 
 export interface RenderProjectParams {
   /** Delete existing target files first (otherwise refused: REAPER would prompt). */
   overwrite?: boolean;
+  /** JSON string of track refs selected for a stems render only. */
+  tracks?: string;
+  /** Measure each file written (default true). */
+  analyze?: boolean;
+}
+
+export interface RenderVersion { name: string; mute?: Array<number | string>; filePattern?: string }
+
+export interface RenderVersionsParams {
+  /** JSON string of RenderVersion[]. */
+  versions: string;
+  overwrite?: boolean;
+  analyze?: boolean;
 }
 
 export interface SetProjectSettingsParams {
