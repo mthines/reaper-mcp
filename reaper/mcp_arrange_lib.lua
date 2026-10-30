@@ -532,8 +532,8 @@ local function apply_remove(api, c)
       elseif ai.pos >= e - EPS then
         api.GetSetAutomationItemInfo(x.env, i - 1 - gone, "D_POSITION", ai.pos - len, true)
         r.automationItemsMoved = r.automationItemsMoved + 1
-      elseif ai.pos > s + EPS and ai.pos + ai.len > e + EPS then
-        -- Starts inside the cut, ends after it: keep the part after the cut, like a media item
+      elseif ai.pos >= s - EPS and ai.pos + ai.len > e + EPS then
+        -- Starts in the cut (or on its start), ends after it: keep the part after the cut, like a media item
         local idx, cut_in = i - 1 - gone, e - ai.pos
         local rate = api.GetSetAutomationItemInfo(x.env, idx, "D_PLAYRATE", 0, false)
         if rate <= 0 then rate = 1 end
@@ -542,7 +542,12 @@ local function apply_remove(api, c)
         api.GetSetAutomationItemInfo(x.env, idx, "D_POSITION", s, true)
         api.GetSetAutomationItemInfo(x.env, idx, "D_LENGTH", ai.len - cut_in, true)
         r.automationItemsTrimmed = r.automationItemsTrimmed + 1
+      elseif ai.pos + ai.len <= e + EPS and ai.pos + ai.len > s + EPS then
+        -- Starts before the cut, ends in it: drop its tail inside the cut
+        api.GetSetAutomationItemInfo(x.env, i - 1 - gone, "D_LENGTH", s - ai.pos, true)
+        r.automationItemsTrimmed = r.automationItemsTrimmed + 1
       elseif ai.pos + ai.len > s + EPS then
+        -- Spans the whole cut: one item cannot lose its middle, so it stays and is counted
         r.automationItemsKept = r.automationItemsKept + 1
       end
     end

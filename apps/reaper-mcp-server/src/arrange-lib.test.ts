@@ -393,6 +393,18 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('remove time: trims automation items that start on the cut or end inside it, and keeps one spanning it', async () => {
+    await runLua(`
+      local api = new_timeline{ tracks = { { envs = { { ais = { { pos = 40, len = 15 }, { pos = 50, len = 20 }, { pos = 30, len = 40 } } } } } } }
+      local r = assert(arrange.remove_time(api, { start = 50, ["end"] = 60 }))
+      local ais = api.tracks[1].envs[1].ais
+      assert(ais[1].D_POSITION == 40 and ais[1].D_LENGTH == 10, "tail inside the cut dropped: " .. ais[1].D_LENGTH)
+      assert(ais[2].D_POSITION == 50 and ais[2].D_LENGTH == 10 and ais[2].D_STARTOFFS == 10, "start on the cut trimmed")
+      assert(ais[3].D_POSITION == 30 and ais[3].D_LENGTH == 40, "spanning item kept")
+      assert(r.automationItemsTrimmed == 2 and r.automationItemsKept == 1)
+    `);
+  });
+
   it('remove time: a held step before the cut stays a step at the cut', async () => {
     await runLua(`
       local function at(api, t) local _, v = api.Envelope_Evaluate(api.tracks[1].envs[1], t) return v end
