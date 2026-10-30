@@ -24,11 +24,13 @@ type Story = StoryObj<typeof meta>;
 
 export const SwitchesOnAndOff: Story = {
   play: async ({ canvasElement, args }) => {
-    const toggle = within(canvasElement).getByRole('switch', { name: /Read-only/ });
-    await userEvent.click(toggle);
+    const canvas = within(canvasElement);
+    const toggle = canvas.getByRole('switch', { name: /Read-only/ });
+    // The input sits under its drawn switch: people click the label
+    await userEvent.click(canvas.getByText('Read-only'));
     await expect(toggle).toBeChecked();
     await expect(args.onChange).toHaveBeenLastCalledWith(true);
-    await userEvent.click(toggle);
+    await userEvent.click(canvas.getByText('Read-only'));
     await expect(toggle).not.toBeChecked();
     await expect(args.onChange).toHaveBeenLastCalledWith(false);
   },
@@ -37,9 +39,9 @@ export const SwitchesOnAndOff: Story = {
 export const IgnoresClicksWhileDisabled: Story = {
   args: { disabled: true },
   play: async ({ canvasElement, args }) => {
-    const toggle = within(canvasElement).getByRole('switch', { name: /Read-only/ });
-    await userEvent.click(toggle);
-    await expect(toggle).not.toBeChecked();
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByText('Read-only'));
+    await expect(canvas.getByRole('switch', { name: /Read-only/ })).not.toBeChecked();
     await expect(args.onChange).not.toHaveBeenCalled();
   },
 };

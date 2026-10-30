@@ -5067,7 +5067,7 @@ local function record_command(cmd, handler_ms, ok, err, data, before)
   end
   -- Only system errors count as errors. A refused request ("Track 9 not found") is a
   -- warning: the caller asked for something that can't be done. Same prefixes as
-  -- classifyBridgeError() in bridge.ts and SYSTEM_ERROR_PREFIXES in the page's status.ts.
+  -- classifyBridgeError() in bridge.ts and SYSTEM_ERROR_PREFIXES in the page's lib/commands.ts.
   local e_str = err and tostring(err) or ""
   local failed = not ok and (e_str:find("^Handler error:") or e_str:find("^Unknown command type")
     or e_str:find("^Internal error:")) ~= nil

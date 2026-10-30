@@ -45,8 +45,8 @@ export const LabelsMarkersWhenTheyAreWhatTheCallIsAbout: Story = {
   args: { entry: entry('list_markers', { regions: [], markers, tempo, len: 60 }) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('Drop')).toBeInTheDocument();
-    await expect(canvas.getByText('Outro')).toBeInTheDocument();
+    await expect(canvas.getByText('Drop')).toBeVisible();
+    await expect(canvas.getByText('Outro')).toBeVisible();
   },
 };
 
@@ -55,8 +55,8 @@ export const KeepsMarkerNamesForHoverOnAnItemsView: Story = {
   args: { entry: entry('list_media_items', { regions: [], markers, tempo, len: 60, lanes: [{ t: 'Keys', items: [[0, 4, 0, 0, 1, 0]] }] }) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    await expect(canvas.getByText('Drop')).not.toBeVisible();
     await expect(canvas.getByTitle(/^Drop at/)).toBeInTheDocument();
-    await expect(canvas.getByTitle(/^Outro at/)).toBeInTheDocument();
   },
 };
 

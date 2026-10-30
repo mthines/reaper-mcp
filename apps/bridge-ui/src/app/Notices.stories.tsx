@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { exampleFeed } from '../demo/feed.js';
+import { RELEASE_KEY } from '../lib/update.js';
 import { Notices } from './Notices.js';
 
 const { status } = exampleFeed();
@@ -10,6 +11,11 @@ const meta = {
   title: 'App/Notices',
   component: Notices,
   args: { status, settings, onSet: fn(), request: fn() },
+  // The release check sees this version as the latest, so no story offers an update or asks GitHub
+  beforeEach: () => {
+    localStorage.setItem(RELEASE_KEY, JSON.stringify({ at: Date.now(), release: { version: __VERSION__, url: 'https://github.com/mthines/reaper-mcp/releases' } }));
+    return () => localStorage.removeItem(RELEASE_KEY);
+  },
 } satisfies Meta<typeof Notices>;
 export default meta;
 type Story = StoryObj<typeof meta>;

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, within } from 'storybook/test';
 import { EXAMPLE_NOW } from '../../demo/examples.js';
 import { exampleFeed } from '../../demo/feed.js';
 import { Stats } from './Stats.js';
@@ -19,14 +19,12 @@ export const Default: Story = {};
 
 export const Playground: Story = {};
 
-export const ShowsAndHidesTheDetails: Story = {
+export const CountsTheCommandsAndErrors: Story = {
   tags: ['test'],
   parameters: { chromatic: { disableSnapshot: true } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const toggle = canvas.getByRole('button', { name: /stat details|fewer stats/ });
-    const name = toggle.getAttribute('aria-label');
-    await userEvent.click(toggle);
-    await expect(toggle).not.toHaveAttribute('aria-label', name);
+    await expect(canvas.getByText(status.commands.toLocaleString())).toBeVisible();
+    await expect(canvas.getByText(status.errors.toLocaleString())).toBeVisible();
   },
 };

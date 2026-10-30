@@ -27,14 +27,14 @@ type Story = StoryObj<typeof meta>;
 
 export const WritesABridgeSetting: Story = {
   play: async ({ canvasElement, args }) => {
-    await userEvent.click(within(canvasElement).getByRole('switch', { name: /Read-only mode/ }));
+    await userEvent.click(within(canvasElement).getByText('Read-only mode'));
     await expect(args.onSet).toHaveBeenCalledWith('cfg_readonly', true);
   },
 };
 
 export const TurnsUsageStatisticsOff: Story = {
   play: async ({ canvasElement, args }) => {
-    await userEvent.click(within(canvasElement).getByRole('switch', { name: /Share usage statistics/ }));
+    await userEvent.click(within(canvasElement).getByText('Share usage statistics'));
     await expect(args.onUsageStats).toHaveBeenCalledWith(false);
   },
 };

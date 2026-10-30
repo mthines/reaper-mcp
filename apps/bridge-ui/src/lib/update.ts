@@ -4,7 +4,7 @@ import type { BridgeUpdate } from './status.js';
 export type BridgeAction = 'update' | 'rebuild' | 'restart';
 
 export const RELEASES_API = 'https://api.github.com/repos/mthines/reaper-mcp/releases/latest';
-const RELEASE_KEY = 'mcp-bridge-latest-release';
+export const RELEASE_KEY = 'mcp-bridge-latest-release';
 const RELEASE_TTL_MS = 6 * 3600_000; // unauthenticated GitHub API allows 60 requests an hour
 
 /** -1, 0 or 1 for two `x.y.z` versions (a leading `v` and any `-pre` suffix are ignored). */

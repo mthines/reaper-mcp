@@ -9,10 +9,6 @@ import type { Session } from '../lib/sessions.js';
 
 // Fake bridge for `mcp_bridge.html?demo` — lets the UI be previewed without REAPER.
 
-// The clock and dice the fake bridge runs on: the real ones for ?demo, fixed ones for stories (createDemo's options)
-let now = Date.now;
-let random = Math.random;
-
 /** A seeded random number generator (mulberry32): the same sequence on every run */
 export function seededRandom(seed: number): () => number {
   let a = seed >>> 0;
@@ -48,10 +44,10 @@ const COMMANDS: Array<[string, number, Record<string, unknown>]> = [
   ['run_plan', 14, { ops: '[…]', dryRun: true }],
 ];
 
-const jitter = (v: number, by: number) => Math.round((v + (random() - 0.5) * by) * 100) / 100;
 
 /** What the bridge keeps of a measuring command's result (`r`), roughly like a mix bus reads */
-function fakeResult(c: string): Record<string, unknown> | undefined {
+function fakeResult(c: string, random: () => number): Record<string, unknown> | undefined {
+  const jitter = (v: number, by: number) => Math.round((v + (random() - 0.5) * by) * 100) / 100;
   switch (c) {
     case 'read_track_meters':
       return { peakL: jitter(-4, 6), peakR: jitter(-5, 6), rmsL: jitter(-16, 4), rmsR: jitter(-17, 4) };
@@ -111,9 +107,8 @@ export interface Demo {
   set(key: SettingKey, on: boolean): void;
 }
 
-export function createDemo(options: { now?: () => number; random?: () => number } = {}): Demo {
-  now = options.now ?? Date.now;
-  random = options.random ?? Math.random;
+/** `now` and `random` are the clock and dice the fake bridge runs on: the real ones for ?demo, fixed ones for stories */
+export function createDemo({ now = Date.now, random = Math.random }: { now?: () => number; random?: () => number } = {}): Demo {
   const startedAt = now() - 47 * 60_000;
   let n = 0;
   let errors = 0;
@@ -156,7 +151,7 @@ export function createDemo(options: { now?: () => number; random?: () => number 
     if (!ok) errors += 1;
     const ms = ok || !settings.paused ? Math.round(base * (0.5 + random() * 1.5) * 100) / 100 : 0.01;
     const entry: CommandEntry = { n, t, c, ms, ok, s: session.id, p: JSON.stringify(params) };
-    const result = ok ? fakeResult(c) : undefined;
+    const result = ok ? fakeResult(c, random) : undefined;
     if (result) entry.r = result;
     if (e) entry.e = e;
     recent = [entry, ...recent].slice(0, 50);

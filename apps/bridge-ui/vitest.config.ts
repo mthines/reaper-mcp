@@ -1,10 +1,17 @@
 import { defineConfig } from 'vitest/config';
+import { buildOptions } from './build-config.mjs';
+
+// The page's build-time constants (version, LoreKit token, Dash0 destination), the same values build.mjs bakes in
+const constants = Object.fromEntries(Object.entries(buildOptions().define as Record<string, string>).filter(([k]) => k.startsWith('__')));
 
 export default defineConfig({
+  define: constants,
   test: {
     globals: true,
     environment: 'node',
     watch: false,
     passWithNoTests: true,
+    // The page's stylesheet applies in jsdom, so a story can tell a shown element from a hidden one
+    css: { include: [/styles\.css$/] },
   },
 });
