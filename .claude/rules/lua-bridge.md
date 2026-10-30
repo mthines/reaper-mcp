@@ -48,4 +48,6 @@ end
 
 - The MCP server can be tested by mocking `sendCommand()` in bridge.ts
 - For integration tests, create a mock bridge that reads command files and writes canned response files
-- The Lua bridge cannot be unit tested outside of REAPER -- test it manually
+- The Lua runs in tests through wasmoon against a fake `reaper` API: pure `reaper/*_lib.lua` libraries in
+  `*-lib.test.ts`, the whole bridge in `bridge-*.test.ts`. Put new logic in a lib (the bridge's main chunk is at
+  Lua's 200-locals limit), and model in the fake what REAPER really does, checked live first

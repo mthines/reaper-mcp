@@ -752,7 +752,8 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
 - Edit views: writes and listings also keep an `r` (`M.summary` in `mcp_edit_views_lib.lua`), drawn by
   `EditViews.tsx` from `editViewOf()` (`src/edit-views.ts`). A write reads the state it touches before its handler
   runs (`M.before`) and again after, so the drawer shows before → after: track and FX parameter changes (the
-  plugin's own readout), the automation window an edit touched (padded 25%, at least 4 s), MIDI notes as a piano
+  plugin's own readout), the automation window an edit touched (padded 25%, at least 4 s; automation items drawn as blocks tinted by
+  pool with their name and shared curve, moved/deleted items and a changed pool's old curve dashed), MIDI notes as a piano
   roll (first 256, `more` counts the rest; added notes solid, removed dashed), `analyze_midi` velocity per pitch,
   markers/regions/tempo/items on one timeline, `list_tracks` as a mixer, and `run_plan`'s ops; also FX chains
   (add/remove/move/copy/bypass/offline/rename/preset, `get_track_properties`: slots marked added/moved/changed/removed by
