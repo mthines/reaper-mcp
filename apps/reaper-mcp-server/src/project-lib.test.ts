@@ -325,6 +325,9 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
       r = project.set_render(api, { regionMatrix = { { regionIndex = 1, tracks = { "Bass" } } } }, resolve)
       assert(#r.regionMatrix[1].tracks == 1 and r.regionMatrix[1].tracks[1] == "Bass", "the row was replaced, not added to")
       assert(r.regionMatrix[2].tracks[1] == "Vocals", "other rows kept")
+      w = api.writes
+      refused("set bounds to all_regions", project.set_render(api, { bounds = "project" }, resolve))
+      assert(api.writes == w and project.get_render(api).bounds == "all_regions", "region bounds kept while the source is region_matrix")
     `);
   });
 
@@ -457,6 +460,14 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('render versions: a version that mutes the master leaves the next version unmuted', async () => {
+    await runLua(`${DELIVERY}
+      assert(project.render_versions(api, { versions = { { name = "Silent", mute = { "master" } }, { name = "Full" } } }, fs, resolve))
+      assert(api.render_log[1].masterMuted and not api.render_log[2].masterMuted, "master muted only for its own version")
+      assert(api.GetMediaTrackInfo_Value(api.GetMasterTrack(0), "B_MUTE") == 0, "master restored")
+    `);
+  });
+
   it('render versions: refusals render nothing, and a failing render still restores the project', async () => {
     await runLua(`${DELIVERY}
       local function none(what, ok, err)
@@ -468,6 +479,9 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
       none("used twice", project.render_versions(api, { versions = { { name = "A" }, { name = "a" } } }, fs, resolve))
       none("name must be letters", project.render_versions(api, { versions = { { name = "../x" } } }, fs, resolve))
       none("would both write", project.render_versions(api, { versions = { { name = "A", filePattern = "x" }, { name = "B", filePattern = "x" } } }, fs, resolve))
+      project.set_render(api, { source = "stems" })
+      none("select the tracks to render first", project.render_versions(api, { versions = { { name = "A" } } }, fs, resolve))
+      project.set_render(api, { source = "master" })
       fs.files["/tmp/out/song-B.wav"] = true
       none("version B: refused: /tmp/out/song-B.wav already exists", project.render_versions(api, { versions = { { name = "A" }, { name = "B" } } }, fs, resolve))
       assert(api.project.strings.RENDER_PATTERN == "song", "pattern restored after a refusal")

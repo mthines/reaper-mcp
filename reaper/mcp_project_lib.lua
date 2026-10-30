@@ -653,7 +653,7 @@ function M.set_render(api, p, resolve)
   end
   local source = p.source or cur.source
   local bounds = p.bounds or cur.bounds
-  if p.source == "region_matrix" and bounds ~= "all_regions" and bounds ~= "selected_regions" then
+  if (p.source ~= nil or p.bounds ~= nil) and source == "region_matrix" and bounds ~= "all_regions" and bounds ~= "selected_regions" then
     return nil, "source region_matrix renders regions: set bounds to all_regions or selected_regions — nothing changed"
   end
   if p.regionMatrix ~= nil and source ~= "region_matrix" then
@@ -823,10 +823,10 @@ end
 local function is_absolute(path) return path:sub(1, 1) == "/" or path:match("^%a:[/\\]") ~= nil end
 
 -- Everything render_core refuses before REAPER renders, as a reason (nil = fine)
-local function render_refusal(api, settings, targets, fs, overwrite)
+local function render_refusal(api, settings, targets, fs, overwrite, hint)
   if #targets == 0 then
     if settings.source == "stems" or settings.source == "selected_via_master" or settings.source == "master_and_stems" then
-      return "refused: source " .. settings.source .. " renders the selected tracks and none is selected — select tracks or pass tracks"
+      return "refused: source " .. settings.source .. " renders the selected tracks and none is selected — " .. (hint or "select tracks or pass tracks")
     end
     if settings.source == "region_matrix" then
       return "refused: the region render matrix lists no track for the rendered regions — set regionMatrix with set_render_settings"
@@ -1033,7 +1033,7 @@ function M.render_versions(api, p, fs, resolve)
     for _, v in ipairs(plan) do
       api.GetSetProjectInfo_String(0, "RENDER_PATTERN", v.pattern, true)
       v.targets = render_targets(api)
-      local refusal = render_refusal(api, settings, v.targets, fs, p.overwrite)
+      local refusal = render_refusal(api, settings, v.targets, fs, p.overwrite, "select the tracks to render first")
       if refusal then error({ refusal = "version " .. v.name .. ": " .. refusal .. " — nothing rendered" }) end
       for _, t in ipairs(v.targets) do
         if seen_target[t] then error({ refusal = "versions " .. seen_target[t] .. " and " .. v.name .. " would both write " .. t .. " — give them distinct filePattern — nothing rendered" }) end
@@ -1047,7 +1047,8 @@ function M.render_versions(api, p, fs, resolve)
         local want = mute_set[m[1]] and 1 or m[2]
         if api.GetMediaTrackInfo_Value(m[1], "B_MUTE") ~= want then api.SetMediaTrackInfo_Value(m[1], "B_MUTE", want) end
       end
-      if mute_set[master] then api.SetMediaTrackInfo_Value(master, "B_MUTE", 1) end
+      local want_master = mute_set[master] and 1 or master_mute
+      if api.GetMediaTrackInfo_Value(master, "B_MUTE") ~= want_master then api.SetMediaTrackInfo_Value(master, "B_MUTE", want_master) end
       api.GetSetProjectInfo_String(0, "RENDER_PATTERN", v.pattern, true)
       local out, rerr = render_core(api, settings, v.targets, fs, p)
       if not out then

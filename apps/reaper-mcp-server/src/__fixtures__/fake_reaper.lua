@@ -787,7 +787,8 @@ function install_project_fake(api, spec, write)
         local tr = api.GetTrack(0, i)
         if tr.selected then sel[#sel + 1] = tr.name end
       end
-      api.render_log[#api.render_log + 1] = { pattern = P().strings.RENDER_PATTERN, muted = muted, selected = sel }
+      api.render_log[#api.render_log + 1] = { pattern = P().strings.RENDER_PATTERN, muted = muted, selected = sel,
+        masterMuted = api.GetMediaTrackInfo_Value(api.GetMasterTrack(0), "B_MUTE") == 1 }
       if rawget(api, "fail_render") then error("fake: render failed") end
       for t in targets():gmatch("[^;]+") do
         api.fs.files[t] = true
