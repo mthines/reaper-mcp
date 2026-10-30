@@ -164,6 +164,14 @@ describe('bridge status feed', () => {
     const { recent } = await bridge.status();
     expect(JSON.parse(recent[0].p as string)).toEqual({ trackIndex: 0 });
   });
+
+  it('logs an array param as JSON, not as the raw text the command parser left it in', async () => {
+    const bridge = await startBridge();
+    const updates = [{ trackIndex: 0, fxIndex: 0, paramIndex: 2, value: 0.5 }];
+    await bridge.send('set_multiple_fx_parameters', { updates }, A);
+    const { recent } = await bridge.status();
+    expect(JSON.parse(recent[0].p as string)).toEqual({ updates });
+  });
 });
 
 describe('measurement results in the log', () => {

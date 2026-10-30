@@ -5181,7 +5181,12 @@ local function record_command(cmd, handler_ms, ok, err, data, before)
   local entry = { n = status.seq, t = now_ms(), c = cmd_type, ms = math.floor(handler_ms * 100 + 0.5) / 100, ok = ok }
   if session then entry.s = session.id end
   if type(cmd.params) == "table" and next(cmd.params) ~= nil then
-    entry.p = json_encode(cmd.params):sub(1, STATUS_PARAMS_MAX)
+    -- Decode arrays the flat command parser left as JSON text, as the handlers do, so they log as JSON
+    local logged = {}
+    for k, v in pairs(cmd.params) do
+      logged[k] = type(v) == "string" and v:find("^%s*[%[{]") and decode_list(v, k) or v
+    end
+    entry.p = json_encode(logged):sub(1, STATUS_PARAMS_MAX)
   end
   if err then
     entry.e = tostring(err):gsub("%c", " "):sub(1, 300)
