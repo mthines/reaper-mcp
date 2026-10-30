@@ -1,4 +1,4 @@
-import { parseExtStateKey } from './status.js';
+import { parseExtStateKey } from '../../lib/status.js';
 
 /**
  * Snapshots view: the bridge's mixer snapshots, restored and saved from the page.

@@ -1,7 +1,7 @@
-import { LOG_MAX, commandKind, speedOf, type BridgeHistory, type LongHistory, type BridgeSettings, type BridgeStatus, type CommandEntry, type Session, type SettingKey } from './status.js';
+import { LOG_MAX, commandKind, speedOf, type BridgeHistory, type LongHistory, type BridgeSettings, type BridgeStatus, type CommandEntry, type Session, type SettingKey } from '../lib/status.js';
 
 import { DEMO_KNOWLEDGE } from './demo-plugins.js';
-import { EDIT_STORIES } from './gallery-stories.js';
+import { EDIT_STORIES } from './examples.js';
 
 // Fake bridge for `mcp_bridge.html?demo` — lets the UI be previewed without REAPER.
 

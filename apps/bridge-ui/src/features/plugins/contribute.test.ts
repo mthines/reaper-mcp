@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseContribution } from './plugin-contributions.mjs';
 import { contributable, contribution, contributionFileName, PASTE_HERE } from './contribute.js';
-import { DEMO_KNOWLEDGE } from './demo-plugins.js';
+import { DEMO_KNOWLEDGE } from '../../demo/demo-plugins.js';
 
 const mine = contributable(DEMO_KNOWLEDGE.records);
 const header = (key: string, tags: string) => `<!-- lorekit-record\nkey: ${key}\ntags: ${tags}\n-->\n`;

@@ -1,34 +1,10 @@
-import { demoSnapshots, type RequestState, type RowMode, type SnapshotOp, type SnapshotsFeed } from './snapshots.js';
-import type { CommandEntry } from './status.js';
+import { demoSnapshots, type RequestState, type RowMode, type SnapshotOp, type SnapshotsFeed } from '../features/snapshots/snapshots.js';
+import type { CommandEntry } from '../lib/status.js';
 
 /**
- * The component gallery (`?gallery`): every UI element in its states, like Storybook, for development.
- * Shown only from a local build (`file://`) or when the bridge runs in developer mode; anyone else
- * opening the link gets the normal page.
+ * Fixed example data for the Storybook stories (and `?demo`): every measurement, edit view, drawer and
+ * Snapshots state the page can draw. Add an example here with every new component state.
  */
-export function galleryAllowed(search: string, protocol: string, dev: boolean | undefined): boolean {
-  if (!new URLSearchParams(search).has('gallery')) return false;
-  return protocol === 'file:' || dev === true;
-}
-
-const DEV_KEY = 'mcp_bridge_dev';
-
-/**
- * Developer mode as the bridge last reported it: the reported value (remembered), else the remembered one, so
- * a developer still reaches the gallery while REAPER is unreachable. Storage may be blocked; then only `reported`.
- */
-export function developerMode(reported: boolean | undefined): boolean | undefined {
-  try {
-    if (reported !== undefined) {
-      localStorage.setItem(DEV_KEY, reported ? '1' : '0');
-      return reported;
-    }
-    const saved = localStorage.getItem(DEV_KEY);
-    return saved === null ? undefined : saved === '1';
-  } catch {
-    return reported;
-  }
-}
 
 export interface Story {
   title: string;
@@ -40,12 +16,12 @@ export interface Story {
 }
 
 /** A fixed "now" so the stories' relative times read the same on every load */
-export const GALLERY_NOW = Date.UTC(2026, 9, 29, 20, 30);
+export const EXAMPLE_NOW = Date.UTC(2026, 9, 29, 20, 30);
 
 let seq = 100;
 function call(c: string, params: Record<string, unknown>, r: Record<string, unknown> | undefined, opts: Partial<CommandEntry> = {}): CommandEntry {
   seq += 1;
-  return { n: seq, t: GALLERY_NOW - 60_000 + seq * 1000, c, ms: 4.2, ok: true, s: 'gallery', p: JSON.stringify(params), r, ...opts };
+  return { n: seq, t: EXAMPLE_NOW - 60_000 + seq * 1000, c, ms: 4.2, ok: true, s: 'gallery', p: JSON.stringify(params), r, ...opts };
 }
 
 /** The same call made two minutes earlier, with other results */
@@ -426,8 +402,8 @@ export interface SnapshotStory {
 }
 
 export const SNAPSHOT_STORIES: SnapshotStory[] = (() => {
-  const feed = demoSnapshots(GALLERY_NOW);
-  const req = (op: SnapshotOp, name: string) => ({ id: '17618', op, name, at: GALLERY_NOW - 2_000 });
+  const feed = demoSnapshots(EXAMPLE_NOW);
+  const req = (op: SnapshotOp, name: string) => ({ id: '17618', op, name, at: EXAMPLE_NOW - 2_000 });
   const readonlyError = "Read-only mode is on in the MCP Bridge window: 'snapshot_restore' would change the project. Ask the user to turn read-only off.";
   return [
     { title: 'List', note: 'mix-B loaded; 1–9 load from the keyboard', feed, request: null, blocked: null },

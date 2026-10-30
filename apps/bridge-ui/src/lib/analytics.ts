@@ -1,5 +1,5 @@
 import { addSignalAttribute, identify, init, sendEvent, startView } from '@dash0/sdk-web';
-import type { Coverage } from './plugins.js';
+import type { Coverage } from '../features/plugins/plugins.js';
 import type { Liveness } from './status.js';
 
 // Pseudonymous usage statistics for the bridge page: which views and actions people use, so the

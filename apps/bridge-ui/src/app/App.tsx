@@ -1,21 +1,20 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { Combobox, GroupedCombobox } from './Combobox.js';
-import { createDemo } from './demo.js';
-import { compareVersions, controlUrl, updateLog, useLatestRelease, type BridgeAction } from './update.js';
-import { manualInstallHint, openInBrowserToInstall, promptInstall, useInstallState } from './install.js';
-import { ResizeHandle, useDrawerWidth } from './ResizeHandle.js';
-import { setUsageStats, startAnalytics, track, trackView, type TrackEvent, type UsageStatsState } from './analytics.js';
-import { PluginsView } from './PluginsView.js';
-import { SnapshotsView } from './SnapshotsView.js';
-import { blockedBy } from './snapshots.js';
-import { useSnapshots, type SnapshotsHook } from './useSnapshots.js';
-import { EditViewSection } from './EditViews.js';
-import { MeasurementView } from './Measurement.js';
-import { developerMode, galleryAllowed } from './gallery-stories.js';
-import { prependedCount, scrollToRow, visibleRows } from './virtual-list.js';
-import { isBoolean, isNumberOrNull, isString, isStringOrNull, useUrlState } from './url-state.js';
-import { LOREKIT_PUBLISH_TOKEN_KEY, loadLoreKitToken, saveLoreKitToken, useKnowledge } from './useKnowledge.js';
-import type { KnowledgeFeed } from './plugins.js';
+import { Combobox, GroupedCombobox } from '../components/Combobox.js';
+import { createDemo } from '../demo/demo.js';
+import { compareVersions, controlUrl, updateLog, useLatestRelease, type BridgeAction } from '../lib/update.js';
+import { manualInstallHint, openInBrowserToInstall, promptInstall, useInstallState } from '../lib/install.js';
+import { ResizeHandle, useDrawerWidth } from '../components/ResizeHandle.js';
+import { setUsageStats, startAnalytics, track, trackView, type TrackEvent, type UsageStatsState } from '../lib/analytics.js';
+import { PluginsView } from '../features/plugins/PluginsView.js';
+import { SnapshotsView } from '../features/snapshots/SnapshotsView.js';
+import { blockedBy } from '../features/snapshots/snapshots.js';
+import { useSnapshots, type SnapshotsHook } from '../features/snapshots/useSnapshots.js';
+import { EditViewSection } from '../features/edit-views/EditViews.js';
+import { MeasurementView } from '../features/measurements/Measurement.js';
+import { prependedCount, scrollToRow, visibleRows } from '../features/log/virtual-list.js';
+import { isBoolean, isNumberOrNull, isString, isStringOrNull, useUrlState } from '../lib/url-state.js';
+import { LOREKIT_PUBLISH_TOKEN_KEY, loadLoreKitToken, saveLoreKitToken, useKnowledge } from '../features/plugins/useKnowledge.js';
+import type { KnowledgeFeed } from '../features/plugins/plugins.js';
 import {
   HISTORY_MAX,
   LOG_MAX,
@@ -72,7 +71,7 @@ import {
   type TimeBar,
   type ToolSort,
   webSocketLevel,
-} from './status.js';
+} from '../lib/status.js';
 
 const REPO_URL = 'https://github.com/mthines/reaper-mcp';
 declare const __VERSION__: string;
@@ -566,10 +565,7 @@ function Header({
   return (
     <header className="header">
       <div className="brand">
-        <Mark
-          active={state === 'live'}
-          onShiftClick={galleryAllowed('?gallery', location.protocol, developerMode(status?.settings?.dev)) ? () => location.assign(`${location.pathname}?gallery`) : undefined}
-        />
+        <Mark active={state === 'live'} />
         <div className="brand-text">
           <h1>MCP Bridge</h1>
           <p className="sub">
@@ -1295,8 +1291,7 @@ const EYE_THROTTLE_MS = 60;
 
 // The reaper-mcp logo (docs/assets/logo-mark.svg); the dot is an eye that blinks while the bridge is live.
 // Easter egg: clicking blinks and toggles "watching", where the eye follows the cursor across the window.
-/** `onShiftClick` (developer mode): shift-click opens the component gallery instead of blinking */
-export function Mark({ active, onShiftClick }: { active: boolean; onShiftClick?: () => void }) {
+export function Mark({ active }: { active: boolean }) {
   const [watching, setWatching] = useState(false);
   const [look, setLook] = useState({ x: 0, y: 0 });
   const [blinks, setBlinks] = useState(0);
@@ -1338,8 +1333,7 @@ export function Mark({ active, onShiftClick }: { active: boolean; onShiftClick?:
     };
   }, [watching]);
 
-  const onClick = (ev: MouseEvent<HTMLButtonElement>) => {
-    if (ev.shiftKey && onShiftClick) return onShiftClick();
+  const onClick = () => {
     setWatching((w) => !w);
     setBlinks((n) => n + 1); // remounts the lid so back-to-back clicks each blink
     setBlinking(true);

@@ -1,4 +1,4 @@
-import type { KnowledgeFeed } from './plugins.js';
+import type { KnowledgeFeed } from '../features/plugins/plugins.js';
 
 /** One command the bridge handled (newest first in BridgeStatus.recent). */
 export interface CommandEntry {

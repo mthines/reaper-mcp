@@ -264,13 +264,13 @@ describe('settings and params', () => {
   });
 
   it('treats the same failures as errors as the bridge timeline does', () => {
-    const lua = readFileSync(new URL('../../../reaper/mcp_bridge.lua', import.meta.url), 'utf8');
+    const lua = readFileSync(new URL('../../../../reaper/mcp_bridge.lua', import.meta.url), 'utf8');
     const block = lua.match(/local failed = not ok and \(([\s\S]*?)\) ~= nil/)?.[1] ?? '';
     expect(block.match(/"\^([^"]+)"/g)?.map((q) => q.slice(2, -1))).toEqual(SYSTEM_ERROR_PREFIXES);
   });
 
   it('keeps the long-running list in step with the bridge', () => {
-    const lua = readFileSync(new URL('../../../reaper/mcp_bridge.lua', import.meta.url), 'utf8');
+    const lua = readFileSync(new URL('../../../../reaper/mcp_bridge.lua', import.meta.url), 'utf8');
     const block = lua.match(/for _, c in ipairs\(\{([^}]*)\}\) do LONG_RUNNING/)?.[1] ?? '';
     expect(new Set(block.match(/"[a-z_]+"/g)?.map((q) => q.slice(1, -1)))).toEqual(LONG_RUNNING);
   });

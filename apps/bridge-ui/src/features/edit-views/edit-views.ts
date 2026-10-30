@@ -1,4 +1,4 @@
-import type { CommandEntry } from './status.js';
+import type { CommandEntry } from '../../lib/status.js';
 
 /**
  * What an edit changed, or what a listing showed, as the bridge keeps it on the log entry (`r`, built by

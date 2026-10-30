@@ -1,5 +1,5 @@
 import { useId, useState, type PointerEvent, type ReactNode } from 'react';
-import { formatAgo, measurementOf, parseParams, type CommandEntry, type Measurement } from './status.js';
+import { formatAgo, measurementOf, parseParams, type CommandEntry, type Measurement } from '../../lib/status.js';
 
 /**
  * What a measuring command read, in the page's meter language: hairline lines with one accent for levels,

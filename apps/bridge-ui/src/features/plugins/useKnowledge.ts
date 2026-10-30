@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { track } from './analytics.js';
+import { track } from '../../lib/analytics.js';
 import { fetchRecords, parseInstalled, parseUsed, publishRecord } from './lorekit.js';
 import type { InstalledFx, KnowledgeFeed, PluginRecord, UsedFx } from './plugins.js';
-import { parseExtStateKey } from './status.js';
+import { parseExtStateKey } from '../../lib/status.js';
 
 declare const __LOREKIT_TOKEN__: string;
 declare const __LOREKIT_API__: string;

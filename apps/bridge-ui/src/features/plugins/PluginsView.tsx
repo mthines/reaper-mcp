@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { track } from './analytics.js';
+import { track } from '../../lib/analytics.js';
 import { contributable, contribution } from './contribute.js';
 import { publishAll, type PublishOutcome } from './lorekit.js';
-import { Markdown } from './markdown.js';
-import { ResizeHandle, useDrawerWidth } from './ResizeHandle.js';
-import { formatAgo } from './status.js';
+import { Markdown } from '../../components/Markdown.js';
+import { ResizeHandle, useDrawerWidth } from '../../components/ResizeHandle.js';
+import { formatAgo } from '../../lib/status.js';
 import {
   fxFormat,
   groupByCreator,
@@ -17,7 +17,7 @@ import {
   type PluginRow,
   type PublishResult,
 } from './plugins.js';
-import { isBoolean, isStringOrNull, useUrlState } from './url-state.js';
+import { isBoolean, isStringOrNull, useUrlState } from '../../lib/url-state.js';
 
 type Filter = 'all' | Coverage;
 const isFilter = (v: unknown): v is Filter => v === 'all' || v === 'learned' || v === 'built-in' || v === 'unknown';

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { track } from './analytics.js';
+import { track } from '../../lib/analytics.js';
 import {
   demoSnapshots,
   parseSnapshotsReply,

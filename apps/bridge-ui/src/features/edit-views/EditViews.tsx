@@ -6,7 +6,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { Readout, fmt } from "./Measurement.js";
+import { Readout, fmt } from "../measurements/Measurement.js";
 import {
   editViewOf,
   fittingLabels,
@@ -29,7 +29,7 @@ import {
   type Region,
   type Tempo,
 } from "./edit-views.js";
-import type { CommandEntry } from "./status.js";
+import type { CommandEntry } from "../../lib/status.js";
 
 /**
  * What an edit changed, or what a listing showed, in the measurements' hairline language: the value now is the

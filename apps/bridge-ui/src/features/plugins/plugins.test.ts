@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { lorekitUrl, type PluginRecord } from './plugins.js';
-import { DEMO_KNOWLEDGE } from './demo-plugins.js';
+import { DEMO_KNOWLEDGE } from '../../demo/demo-plugins.js';
 
 const record = (over: Partial<PluginRecord>): PluginRecord => ({
   key: 'plugins::fabfilter/pro-q-3',

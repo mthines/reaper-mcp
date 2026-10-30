@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Markdown, safeHref } from './markdown.js';
+import { Markdown, safeHref } from './Markdown.js';
 
 const html = (md: string) => renderToStaticMarkup(<Markdown source={md} />);
 

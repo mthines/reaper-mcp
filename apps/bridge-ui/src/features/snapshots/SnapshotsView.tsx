@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { formatAgo } from './status.js';
+import { formatAgo } from '../../lib/status.js';
 import { DESCRIPTION_MAX, nameProblem, replacedBy, type RequestState, type RowMode, type SnapshotInfo, type SnapshotOp, type SnapshotsFeed } from './snapshots.js';
 
 /**
