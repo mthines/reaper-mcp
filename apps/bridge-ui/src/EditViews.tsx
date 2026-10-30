@@ -1015,15 +1015,21 @@ const dbRange = (gains: number[]) => {
 function ArrangeReadouts({ v, added, removed }: { v: Extract<EditView, { kind: "timeline" }>; added: number; removed: number }) {
   const lanes = v.lanes ?? [];
   const tracks = lanes.map((l) => l.t).join(", ") + (v.moreTracks ? ` +${v.moreTracks}` : "");
-  const gains = (items: Item[]) => items.flatMap((it) => (it[6] !== undefined ? [it[6]] : []));
+  // Normalize changes only gains, never positions: an item's before is the one at the same place
+  const normalized = lanes.flatMap((l) =>
+    l.items.flatMap((it) => {
+      const was = (l.was ?? []).find((w) => w[0] === it[0] && w[1] === it[1]);
+      return it[6] !== undefined && was?.[6] !== undefined && was[6] !== it[6] ? [[it[6], was[6]]] : [];
+    }),
+  );
   const range = v.to ?? v.span;
   return (
     <div className="measure-readouts">
       <Readout label="Edit" value={ARRANGE_LABEL[v.op!]} />
       {v.op === "normalize" ? (
         <>
-          <Readout label="Gain" value={dbRange(lanes.flatMap((l) => gains(l.items)))} unit="dB" />
-          <Readout label="Before" value={dbRange(lanes.flatMap((l) => gains(l.was ?? [])))} unit="dB" />
+          <Readout label="Gain" value={dbRange(normalized.map(([g]) => g))} unit="dB" />
+          <Readout label="Before" value={dbRange(normalized.map(([, w]) => w))} unit="dB" />
         </>
       ) : range ? (
         <>
