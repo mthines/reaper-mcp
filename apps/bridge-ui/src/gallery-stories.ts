@@ -242,7 +242,7 @@ function editStories(): Story[] {
     total: CHORDS.length + MELODY.length, beats: 16, ts: [4, 4], more: 0, notes: [...CHORDS, ...MELODY], gone: LOOSE,
   });
   const imported = call('import_midi_file', { path: '/Users/me/Sketches/hook.mid', trackIndex: 7, position: 0 }, {
-    total: CHORDS.length + MELODY.length, beats: 16, ts: [4, 4], more: 0, gone: [], notes: [...CHORDS, ...MELODY],
+    total: CHORDS.length + MELODY.length, beats: 16, ts: [4, 4], more: 0, gone: [], notes: [...CHORDS, ...MELODY].map((n) => [...n.slice(0, 4), 1]),
   });
   const deleted = call('delete_midi_note', { trackIndex: 7, itemIndex: 0, noteIndex: 3 }, {
     total: CHORDS.length - 1, beats: 16, ts: [4, 4], more: 0, gone: [[53, 4, 4, 72]], notes: CHORDS.filter((n) => !(n[0] === 53 && n[1] === 4)),
