@@ -1759,7 +1759,7 @@ function RecordTrack({ r, was }: { r: RecordRow; was?: RecordRow }) {
   return (
     <div className={`ev-rec ${armed ? "" : "ev-rec-off"}`}
       title={`${name} · ${armed ? "armed" : "not armed"}${armChanged ? (armed ? " (was not armed)" : " (was armed)") : ""}`}>
-      <span className={`ev-rec-arm ${armed ? "on" : ""} ${armChanged ? "ev-rec-changed" : ""}`} aria-label={armed ? "armed" : "not armed"} />
+      <span className={`ev-rec-arm ${armed ? "on" : ""} ${armChanged ? "ev-rec-changed" : ""}`} role="img" aria-label={armed ? "armed" : "not armed"} />
       <span className="ev-tn"><span className="ev-tn-text">{name}</span></span>
       {field(2, input, "ev-rec-in", (w) => w[2])}
       {field(3, `mon ${monitor}`, "ev-rec-mon", (w) => `mon ${w[3]}`)}
