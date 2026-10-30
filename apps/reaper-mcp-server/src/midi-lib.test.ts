@@ -293,4 +293,17 @@ describe('mcp_midi_lib.lua pitch_profile', () => {
       assert(trimmed.chroma[1] == 1 and trimmed.chroma[8] == 1, "clipped to the item: " .. table.concat(trimmed.chroma, ","))
     `);
   });
+
+  it('reads a late range on a track with more items than the cap, and counts what the cap left out', async () => {
+    await runLua(`
+      midi.MAX_PROFILE_ITEMS = 2
+      local items = {}
+      for k = 0, 5 do items[#items + 1] = { pos = k, len = 1, notes = { { s = 0, e = 2, pitch = 60 + k, vel = 127 } } } end
+      local api = new_midi_fake{ tracks = { { items = items } } }
+      local late = midi.pitch_profile(api, { trackIndex = 0, startTime = 5, endTime = 6 })
+      assert(late.notes == 1 and late.chroma[6] == 2 and late.itemsNotRead == nil, "item at 5 s read: " .. table.concat(late.chroma, ","))
+      local all = midi.pitch_profile(api, { trackIndex = 0 })
+      assert(all.notes == 2 and all.itemsNotRead == 4, tostring(all.itemsNotRead))
+    `);
+  });
 });

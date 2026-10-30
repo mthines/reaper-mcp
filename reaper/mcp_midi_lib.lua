@@ -376,10 +376,16 @@ function M.pitch_profile(api, p)
   local chroma = {}
   for k = 1, 12 do chroma[k] = 0 end
   local notes, midi_items, audio_items = 0, 0, 0
-  for i = 0, math.min(api.CountTrackMediaItems(tr), M.MAX_PROFILE_ITEMS) - 1 do
+  -- The cap counts only items that overlap the range, so a late range on a long track is still read
+  local read, capped = 0, 0
+  for i = 0, api.CountTrackMediaItems(tr) - 1 do
     local item = api.GetTrackMediaItem(tr, i)
     local take = api.GetActiveTake(item)
-    if take and api.GetMediaItemInfo_Value(item, "B_MUTE") == 0 then
+    local ipos = api.GetMediaItemInfo_Value(item, "D_POSITION")
+    local overlaps = ipos < (t1 or math.huge) and ipos + api.GetMediaItemInfo_Value(item, "D_LENGTH") > t0
+    if overlaps and read >= M.MAX_PROFILE_ITEMS then capped = capped + 1; overlaps = false end
+    if overlaps then read = read + 1 end
+    if overlaps and take and api.GetMediaItemInfo_Value(item, "B_MUTE") == 0 then
       if api.TakeIsMIDI(take) then
         midi_items = midi_items + 1
         -- Only what the item shows: notes past a trimmed edge are not heard (a loop's repeats count once)
@@ -403,7 +409,9 @@ function M.pitch_profile(api, p)
     end
   end
   for k = 1, 12 do chroma[k] = r4(chroma[k]) end
-  return { chroma = chroma, notes = notes, midiItems = midi_items, audioItems = audio_items }
+  local out = { chroma = chroma, notes = notes, midiItems = midi_items, audioItems = audio_items }
+  if capped > 0 then out.itemsNotRead = capped end
+  return out
 end
 
 return M

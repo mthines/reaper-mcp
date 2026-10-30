@@ -257,10 +257,10 @@ export function registerCompositionTools(server: McpServer): void {
             ...(args.endTime != null ? { endTime: args.endTime } : {}),
           });
           if (!res.success) return fail(`Error: ${res.error}`);
-          const p = res.data as { chroma: number[]; notes: number; midiItems: number; audioItems: number };
+          const p = res.data as { chroma: number[]; notes: number; midiItems: number; audioItems: number; itemsNotRead?: number };
           if (p.notes > 0) {
             profile = p.chroma;
-            extra = { notes: p.notes, midiItems: p.midiItems };
+            extra = { notes: p.notes, midiItems: p.midiItems, ...(p.itemsNotRead ? { itemsNotRead: p.itemsNotRead } : {}) };
           } else if (args.source === 'midi') {
             return fail(`Track ${trackIndex} has no MIDI notes in the range (drums on channel 10 are ignored)`);
           }
