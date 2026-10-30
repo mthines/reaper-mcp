@@ -395,6 +395,34 @@ describe('edit views in the log', () => {
     expect(await bridge.eval('(function() local f = io.open("/out/mix.wav.reapeaks", "rb"); if f then f:close() end; return f ~= nil end)()')).toBe(false);
   });
 
+  it('render view in the log: once waveforms took a second, the remaining files are listed without one', async () => {
+    const setup = `
+      api.project.strings.RENDER_FILE = "/out"
+      api.project.strings.RENDER_PATTERN = "song"
+      local render = api.Main_OnCommand
+      api.Main_OnCommand = function(id, flag)
+        render(id, flag)
+        if id == 42230 then for path in pairs(api.rendered) do local f = io.open(path, "w"); f:write("RIFF"); f:close() end end
+      end
+      fake_now = 0
+      api.time_precise = function() return fake_now end
+      api.new_array = function() return {} end
+      api.GetMediaSourceNumChannels = function() return 2 end
+      -- Each waveform takes 0.6 s of the main thread
+      api.PCM_Source_BuildPeaks = function(_, mode) if mode == 2 then fake_now = fake_now + 0.6 end return mode == 0 and 1 or 0 end
+      api.PCM_Source_GetPeaks = function(src, rate, start, ch, n, extra, buf)
+        for i = 0, n * ch * 2 do buf[i] = 0.5 end
+        return n
+      end
+      api.tracks[2] = { name = "Vocals", guid = "{v}", vals = {}, fx = {}, sends = {}, chunk = "" }
+    `;
+    const bridge = await startBridge(setup, { '/out/.keep': '' });
+    const res = await bridge.send('render_versions', { versions: JSON.stringify([{ name: 'A' }, { name: 'B', mute: ['Vocals'] }, { name: 'C', mute: ['Vocals'] }]) });
+    expect(res.error ?? 'ok').toBe('ok');
+    const groups = ((await bridge.status()).recent[0].r as { groups: Array<{ f: unknown[][] }> }).groups;
+    expect(groups.map((g) => (g.f[0][5] as number[]).length)).toEqual([60, 60, 0]);
+  });
+
   it('render view in the log: versions are grouped, each with its muted tracks', async () => {
     const setup = `
       api.tracks[2] = { name = "Vocals", guid = "{v}", vals = {}, fx = {}, sends = {}, chunk = "" }

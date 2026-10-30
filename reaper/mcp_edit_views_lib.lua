@@ -799,6 +799,9 @@ end
 -- Render results: one row per file written, with a few waveform slices read through REAPER's peak API
 -- (any format REAPER reads). At most RENDER_MAX_FILES files get a row; the rest are counted.
 local RENDER_MAX_FILES = 8
+-- Waveforms are built on REAPER's main thread after the render already blocked it: once this much
+-- time went to them in one call, the remaining files get rows without a waveform
+local RENDER_PEAKS_BUDGET_S = 1.0
 local RENDER_SLICES = 60
 
 -- The .reapeaks file REAPER would build for path (nil when it cannot say)
@@ -863,7 +866,9 @@ local function render_rows(files, analysis, budget)
     if budget.left <= 0 then budget.more = budget.more + 1 else
       budget.left = budget.left - 1
       local a = by_file[f] or {}
-      local hi, lo = file_peaks(f)
+      local hi, lo
+      local clock = api.time_precise
+      if not clock or clock() - budget.started < RENDER_PEAKS_BUDGET_S then hi, lo = file_peaks(f) end
       rows[#rows + 1] = { base_name(f), round2(a.durationSeconds) or -1, round2(a.lufsIntegrated) or -150, round2(a.truePeak) or -150,
         round2(a.samplePeak) or -150, hi or {}, lo or {} }
     end
@@ -873,7 +878,7 @@ end
 
 local function render_view(cmd_type, data)
   if type(data) ~= "table" then return nil end
-  local budget = { left = RENDER_MAX_FILES, more = 0 }
+  local budget = { left = RENDER_MAX_FILES, more = 0, started = api.time_precise and api.time_precise() or 0 }
   local groups = {}
   if cmd_type == "render_versions" then
     for _, v in ipairs(data.versions or {}) do
