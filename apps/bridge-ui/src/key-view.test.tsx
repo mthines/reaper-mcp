@@ -9,7 +9,7 @@ const keyCall = (n: number, conf: number) =>
 describe('key result', () => {
   it('shows the previous call\'s confidence in percent, like the readout', () => {
     const now = keyCall(2, 0.6);
-    const html = renderToStaticMarkup(<MeasurementView entry={now} history={[now, keyCall(1, 0.45)]} now={5000} onPick={() => {}} />);
+    const html = renderToStaticMarkup(<MeasurementView entry={now} history={[now, keyCall(1, 0.45)]} now={5000} onPick={() => undefined} />);
     expect(html).toContain('Confidence 45 %');
     expect(html).toContain('+15');
     expect(html).not.toContain('0.45');
