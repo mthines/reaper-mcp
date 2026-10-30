@@ -49,6 +49,11 @@ export function buildOptions(extra = {}) {
   };
 }
 
+/** The build-time constants alone (`__VERSION__`, the LoreKit and Dash0 values), for Storybook and vitest. */
+export function buildConstants() {
+  return Object.fromEntries(Object.entries(buildOptions().define).filter(([key]) => key.startsWith('__')));
+}
+
 /** The page as one self-contained HTML file; `headExtra` is inserted before </head> (dev's live reload). */
 export function renderHtml(outputFiles, headExtra = '') {
   const pick = (ext) => outputFiles.find((f) => f.path.endsWith(ext))?.text ?? '';

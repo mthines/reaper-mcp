@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitest/config';
-import { buildOptions } from './build-config.mjs';
+import { buildConstants } from './build-config.mjs';
 
 // The page's build-time constants (version, LoreKit token, Dash0 destination), the same values build.mjs bakes in
-const constants = Object.fromEntries(Object.entries(buildOptions().define as Record<string, string>).filter(([k]) => k.startsWith('__')));
+const constants = buildConstants();
 
 export default defineConfig({
   define: constants,
