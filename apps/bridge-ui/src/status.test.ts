@@ -31,6 +31,7 @@ import {
   parseQuery,
   termFromSelection,
   formatParams,
+  webSocketLevel,
   groupByTool,
   hasToolCalls,
   isConnected,
@@ -436,5 +437,15 @@ describe('search terms', () => {
     expect(termFromSelection(text, 0, 0)).toBeNull();
     // Whatever it returns finds the call it came from
     expect(log.filter((e) => matchesQuery(e, parseQuery(termFromSelection(text, ...six) ?? ''))).map((e) => e.n)).toEqual([1, 3]);
+  });
+});
+
+describe('webSocketLevel', () => {
+  it('warns from half the limit, urgently from 80%', () => {
+    expect(webSocketLevel(undefined)).toBe('ok');
+    expect(webSocketLevel({ stuck: 49, limit: 100 })).toBe('ok');
+    expect(webSocketLevel({ stuck: 50, limit: 100 })).toBe('filling');
+    expect(webSocketLevel({ stuck: 80, limit: 100 })).toBe('full');
+    expect(webSocketLevel({ stuck: 5, limit: 0 })).toBe('ok');
   });
 });

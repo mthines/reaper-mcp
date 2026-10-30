@@ -25,6 +25,7 @@ interface Status {
   sessions: Session[];
   settings: { paused: boolean; readonly: boolean; openOnStart: boolean; dev: boolean };
   health: { sws: boolean; jsfx: boolean; outdated: boolean };
+  web?: { stuck: number; limit: number };
   control: { token: string; canRestart: boolean; canUpdate: boolean; changed?: boolean; update?: { kind: string; state: string } };
 }
 
@@ -750,5 +751,55 @@ describe('persistent history', () => {
     await bridge.send('list_tracks', {}, A);
     await bridge.status();
     expect(await bridge.ext('log')).toBeNull();
+  });
+});
+
+describe('stuck web-server sockets', () => {
+  // A controllable clock, a fake lsof that reports `STUCK`, and no window opened on start
+  const SETUP = `
+    skew = 0
+    api.time_precise = function() return os.clock() + skew end
+    ext["MCPBridge/cfg_open_on_start"] = "0"
+    console = ""
+    api.ShowConsoleMsg = function(m) console = console .. m end
+    lsof_calls = {}
+    STUCK = "85"
+    os.execute = function(cmd)
+      lsof_calls[#lsof_calls + 1] = cmd
+      local f = io.open("${BRIDGE_DIR}web_sockets", "w"); f:write(STUCK .. "\\n"); f:close()
+      return true
+    end
+  `;
+  const INI = (cnt: number) => ({ '/reaper/reaper.ini': `[REAPER]\ncsurf_0=HTTP 0 8099 '' 'mcp_bridge.html' 0 ''\ncsurf_cnt=${cnt}\n` });
+
+  it('counts them in the background and reports them, warning once in the console near the limit', async () => {
+    const bridge = await startBridge(SETUP, INI(1));
+    expect((await bridge.status()).web).toBeUndefined(); // the first count is still running
+    expect(await bridge.eval('lsof_calls[1]')).toContain('-iTCP:8099');
+    await bridge.eval('(function() skew = 31 end)()');
+    await bridge.status(); // this tick reads the count; the next one publishes it
+    expect((await bridge.status()).web).toEqual({ stuck: 85, limit: 100 });
+    expect(await bridge.eval('console')).toBe('');
+
+    await bridge.eval('(function() STUCK = "95"; skew = 62 end)()');
+    await bridge.status();
+    await bridge.eval('(function() skew = 93 end)()');
+    await bridge.status();
+    expect((await bridge.status()).web).toEqual({ stuck: 95, limit: 100 });
+    expect(await bridge.eval('console')).toContain('Restart REAPER');
+  });
+
+  it('ignores a count left by an earlier REAPER run', async () => {
+    const bridge = await startBridge(`${SETUP} os.execute = function() return true end`, { ...INI(1), web_sockets: '99\n' });
+    await bridge.eval('(function() skew = 31 end)()');
+    await bridge.status();
+    expect((await bridge.status()).web).toBeUndefined();
+  });
+
+  it('does nothing when the web interface is past csurf_cnt, which REAPER ignores', async () => {
+    const bridge = await startBridge(SETUP, INI(0));
+    await bridge.eval('(function() skew = 31 end)()');
+    expect((await bridge.status()).web).toBeUndefined();
+    expect(await bridge.eval('#lsof_calls')).toBe(0);
   });
 });

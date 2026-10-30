@@ -164,6 +164,19 @@ export interface BridgeHealth {
   outdated: boolean;
 }
 
+/** Sockets REAPER's web server still holds after their client hung up; it stops answering near `limit`. */
+export interface BridgeWebSockets {
+  stuck: number;
+  limit: number;
+}
+
+/** When to warn that REAPER's web server is filling up: from half the limit, urgently from 80%. */
+export function webSocketLevel(web: BridgeWebSockets | undefined): 'ok' | 'filling' | 'full' {
+  if (!web || !(web.limit > 0)) return 'ok';
+  const share = web.stuck / web.limit;
+  return share >= 0.8 ? 'full' : share >= 0.5 ? 'filling' : 'ok';
+}
+
 /** A self-update run by the bridge (scripts/update.sh); gone once the bridge restarts into the new version. */
 export interface BridgeUpdate {
   /** update: pull the latest version; rebuild: build the working tree as it is (developer mode) */
@@ -204,6 +217,8 @@ export interface BridgeStatus {
   sessions?: Session[];
   settings?: BridgeSettings;
   health?: BridgeHealth;
+  /** Absent on Windows, without a web interface, and until the first count (30 s after the bridge starts) */
+  web?: BridgeWebSockets;
   /** Absent on bridges older than one-click update */
   control?: BridgeControl;
   /** Demo only: the live page builds this from ExtState `installed` and LoreKit (useKnowledge) */
