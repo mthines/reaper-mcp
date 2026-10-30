@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
 import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
 import { setupSidecar } from './setup-sidecar.js';
 import { firstRunTelemetryNotice, resolveTelemetry, writeTelemetryConfig, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
@@ -93,6 +93,7 @@ async function setup(): Promise<void> {
   }
 
   const webPort = await enableWebInterface();
+  await registerSnapshotActions();
 
   console.log('\nSetup complete!\n');
   console.log('Next steps:');
@@ -157,6 +158,24 @@ async function enableWebInterface(): Promise<number | null> {
   writeFileSync(iniPath, ensureWebInterface(readFileSync(iniPath, 'utf-8'), requested).ini, 'utf-8');
   console.log(`  Enabled on port ${result.port} (override with REAPER_WEB_PORT)`);
   return result.port;
+}
+
+/** List the snapshot scripts in REAPER's Action List (reaper-kb.ini), ready for a shortcut. */
+async function registerSnapshotActions(): Promise<void> {
+  console.log('\nRegistering snapshot actions (quick save, next, previous)...');
+  const kbPath = join(getReaperResourcePath(), 'reaper-kb.ini');
+  const kb = existsSync(kbPath) ? readFileSync(kbPath, 'utf-8') : '';
+  const { added } = ensureSnapshotActions(kb);
+  if (!added.length) {
+    console.log('  Already in the Action List');
+  } else if (await isReaperRunning()) {
+    // REAPER rewrites reaper-kb.ini from memory; the bridge adds them through the API when it starts
+    console.log('  REAPER is running: the bridge adds them when it next starts (re-run mcp_bridge.lua).');
+  } else {
+    writeFileSync(kbPath, ensureSnapshotActions(kb).kb, 'utf-8');
+    console.log(`  Added: ${added.join(', ')}`);
+  }
+  console.log('  Bind keys in Actions > Show action list: search "mcp_snapshot".');
 }
 
 // Configure Claude Code for this clone: pre-approve the REAPER tools globally and

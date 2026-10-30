@@ -44,7 +44,9 @@ export type TrackEvent =
   | { name: 'bridge_state_changed'; state: Liveness }
   | { name: 'knowledge_load_failed'; layer: 'built-in' | 'user' }
   | { name: 'snapshot_restored'; outcome: 'ok' | 'refused' | 'lost'; warnings: boolean }
-  | { name: 'snapshot_saved'; outcome: 'ok' | 'refused' | 'lost'; described: boolean; replaced: boolean }
+  | { name: 'snapshot_saved'; outcome: 'ok' | 'refused' | 'lost'; described: boolean; replaced: boolean; named: boolean }
+  | { name: 'snapshot_deleted'; outcome: 'ok' | 'refused' | 'lost' }
+  | { name: 'snapshot_edited'; outcome: 'ok' | 'refused' | 'lost'; renamed: boolean }
   | { name: 'page_error'; type: string };
 
 /** Why usage statistics are on or off, in words the Settings toggle can show. */

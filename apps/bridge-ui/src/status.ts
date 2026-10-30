@@ -626,6 +626,7 @@ export const LONG_RUNNING = new Set([
   'insert_audio_file',
   'snapshot_save',
   'snapshot_restore',
+  'snapshot_edit',
 ]);
 
 export type Speed = 'fast' | 'slow' | 'very-slow' | 'long';

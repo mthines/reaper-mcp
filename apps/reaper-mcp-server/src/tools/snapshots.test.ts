@@ -186,6 +186,23 @@ describe('snapshot tools', () => {
     });
   });
 
+  describe('snapshot_edit', () => {
+    it('sends the name, new name and description', async () => {
+      const data = { name: 'quiet kick', previousName: 'mix-B', description: 'Kick down', path: '/p/quiet_kick.json' };
+      mockedSendCommand.mockResolvedValue({ id: 'test', success: true, data, timestamp: Date.now() });
+
+      const result = await tools['snapshot_edit'].handler({ name: 'mix-B', newName: 'quiet kick', description: 'Kick down' });
+      expect(result).toEqual({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
+      expect(mockedSendCommand).toHaveBeenCalledWith('snapshot_edit', { name: 'mix-B', newName: 'quiet kick', description: 'Kick down' });
+    });
+
+    it('returns the bridge refusal for a taken name', async () => {
+      mockedSendCommand.mockResolvedValue({ id: 'test', success: false, error: "A snapshot already saves to that name's file: mix-A", timestamp: Date.now() });
+      const result = await tools['snapshot_edit'].handler({ name: 'mix-B', newName: 'mix-A' });
+      expect(result).toMatchObject({ isError: true });
+    });
+  });
+
   describe('snapshot_delete', () => {
     it('deletes snapshot and returns confirmation', async () => {
       const deleteData = { name: 'before-compression', deleted: true };

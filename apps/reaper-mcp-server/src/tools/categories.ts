@@ -101,8 +101,8 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   snapshots: {
     name: 'snapshots',
-    description: 'Mixer state snapshots: save, restore, list and delete named snapshots of volumes, pans, FX, and mutes',
-    tools: ['snapshot_save', 'snapshot_restore', 'snapshot_list', 'snapshot_delete'],
+    description: 'Mixer state snapshots: save, restore, list, rename and delete named snapshots of volumes, pans, FX, and mutes',
+    tools: ['snapshot_save', 'snapshot_restore', 'snapshot_list', 'snapshot_delete', 'snapshot_edit'],
   },
   routing: {
     name: 'routing',

@@ -79,6 +79,12 @@ events:
     outcome: [ok, refused, lost]
     described: boolean
     replaced: boolean        # it replaced a snapshot of the same name
+    named: boolean           # false: saved without a name, under the date and time
+  snapshot_deleted:          # the bridge answered a delete from the Snapshots view
+    outcome: [ok, refused, lost]
+  snapshot_edited:           # the bridge answered a rename / description edit from the Snapshots view
+    outcome: [ok, refused, lost]
+    renamed: boolean         # the name changed (else only the description)
   page_error:                # uncaught error or rejection in the page; severity ERROR
     type: string             # TypeError, RangeError, …, or non_error; never the message or stack
 

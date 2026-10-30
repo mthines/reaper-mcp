@@ -1387,7 +1387,16 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 .snap-current .snap-state { color: var(--live); }
 .snap-loading .snap-state { color: var(--accent); }
 .snap-foot { margin: 0; font-size: 12px; }
+.snap-item { display: flex; align-items: center; gap: 6px; }
+.snap-item .snap-row { flex: 1; min-width: 0; }
+.snap-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.snap-actions .btn-sm { color: var(--muted); }
+.snap-actions .btn-sm.btn-warn { color: var(--warn); }
+.snap-confirm-text { font-size: 12px; color: var(--warn); margin-right: 2px; }
+.snap-edit { padding: 8px; border: 1px solid var(--accent); border-radius: 9px; background: var(--panel); }
 @container (max-width: 420px) {
+  .snap-item { flex-wrap: wrap; justify-content: flex-end; }
+  .snap-item .snap-row { flex-basis: 100%; }
   .snap-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; }
   .snap-key { display: none; }
   .snap-meta { grid-column: 1; grid-row: 2; }

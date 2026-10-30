@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureWebInterface, findCloneRoot, isDevClone, updateConfigText, REAPER_ASSETS, RETIRED_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureWebInterface, ensureSnapshotActions, findCloneRoot, isDevClone, updateConfigText, REAPER_ASSETS, RETIRED_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `reaper-mcp-test-${randomUUID()}`);
@@ -311,5 +311,27 @@ describe('isDevClone', () => {
     expect(isDevClone({ ...release, branch: 'feat/x' })).toBe(true);
     expect(isDevClone({ ...release, ahead: 2 })).toBe(true);
     expect(isDevClone({ ...release, ahead: null })).toBe(true);
+  });
+});
+
+describe('ensureSnapshotActions', () => {
+  const kb = 'ACT 0 0 "abc" "Custom: Foo" 40001\nSCR 260 0 RScb8f "Custom: mcp_bridge.lua" mcp_bridge.lua\nKEY 1 65 40001 0\n';
+
+  it('lists the quick save, next and previous scripts as main-section actions', () => {
+    const out = ensureSnapshotActions(kb);
+    expect(out.added).toEqual(['mcp_snapshot_quick_save.lua', 'mcp_snapshot_next.lua', 'mcp_snapshot_prev.lua']);
+    expect(out.kb.startsWith(kb)).toBe(true);
+    expect(out.kb).toMatch(/^SCR 4 0 RS[0-9a-f]{40} "Custom: mcp_snapshot_next\.lua" mcp_snapshot_next\.lua$/m);
+  });
+
+  it('keeps a script that is already listed, and is idempotent', () => {
+    const once = ensureSnapshotActions(kb).kb;
+    expect(ensureSnapshotActions(once)).toEqual({ kb: once, added: [] });
+    const withNext = kb + 'SCR 4 0 RSdead "Custom: mcp_snapshot_next.lua" mcp_snapshot_next.lua\n';
+    expect(ensureSnapshotActions(withNext).added).toEqual(['mcp_snapshot_quick_save.lua', 'mcp_snapshot_prev.lua']);
+  });
+
+  it('creates the file for a REAPER that has no custom actions yet', () => {
+    expect(ensureSnapshotActions('').kb.split('\n').filter(Boolean)).toHaveLength(3);
   });
 });

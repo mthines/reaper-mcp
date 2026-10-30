@@ -577,6 +577,18 @@ function M.snapshot_exists(name)
   return false
 end
 
+-- The name a save without one gets: the local date and time (the status page's timeSnapshotName()
+-- matches), with " 2", " 3"… when a snapshot already saves to that file.
+function M.time_name(t)
+  local base = os.date("%Y-%m-%d %H:%M:%S", t)
+  local name, n = base, 1
+  while M.snapshot_exists(name) do
+    n = n + 1
+    name = base .. " " .. n
+  end
+  return name
+end
+
 -- Captures and writes a snapshot. Metadata is written BEFORE mixerState so the
 -- list can read name/timestamp/trackCount from a cheap, string-safe prefix.
 -- Returns: ok, err, trackCount, path

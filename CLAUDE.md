@@ -56,7 +56,7 @@ reaper-mcp/
         transport.ts          # play, stop, record, get_transport_state, set_cursor_position
         discovery.ts          # list_available_fx, search_fx
         presets.ts            # get_fx_preset_list, set_fx_preset
-        snapshots.ts          # snapshot_save, snapshot_restore, snapshot_list, snapshot_delete
+        snapshots.ts          # snapshot_save, snapshot_restore, snapshot_list, snapshot_delete, snapshot_edit
         routing.ts            # get_track_routing
         structure.ts          # add/delete/move track, folders, name/color, groups; send/hardware-output setters
         analysis.ts           # read_track_lufs, read_track_correlation, read_track_crest, measure_tracks
@@ -122,7 +122,9 @@ reaper-mcp/
     mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
     mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
-    mcp_snapshot_quick_save.lua # Action: quick save with auto-name
+    mcp_snapshot_quick_save.lua # Action: quick save, named by the date and time
+                              # The 3 snapshot actions are listed in reaper-kb.ini by setup (REAPER closed),
+                              # else registered by the bridge on start (register_actions in mcp_snapshots_ui_lib.lua)
     mcp_analyzer.jsfx         # Real-time FFT analyzer (JSFX, writes to gmem[])
     mcp_midi_emitter.jsfx     # Real-time MIDI emitter (JSFX, reads from gmem[] ring buffer)
     mcp_gain_trace.jsfx       # Live pre/post gain trace (pumping/ducking meter: p5/p1/std as params, gmem MCPGainTrace)
@@ -143,7 +145,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (139 total)
+## MCP Tools (140 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -291,7 +293,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `get_fx_preset_list` | `tools/presets.ts` | List available presets for an FX |
 | `set_fx_preset` | `tools/presets.ts` | Load a preset by name |
 
-### Snapshots (4)
+### Snapshots (5)
 
 | Tool | File | Description |
 |------|------|-------------|
@@ -299,6 +301,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `snapshot_restore` | `tools/snapshots.ts` | Restore a saved snapshot (FX params only if plugin name matches) |
 | `snapshot_list` | `tools/snapshots.ts` | List project-scoped snapshots (falls back to global for unsaved projects) |
 | `snapshot_delete` | `tools/snapshots.ts` | Delete a saved snapshot by name |
+| `snapshot_edit` | `tools/snapshots.ts` | Rename a snapshot and/or change its description; the mixer state is copied unchanged, a name another snapshot's file uses is refused |
 
 ### Routing (5)
 
@@ -404,7 +407,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 139 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 140 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
@@ -821,11 +824,14 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   is one row (`PluginRow.variants`, VST3 preferred for the Teach prompt), counting the instances of every format.
 - Snapshots tab (`view=snapshots`, shown when `status.control.snapshots`): lists the project's snapshots, loads one
   with a click or `1`–`9` (A/B/C while listening) and saves the current mix (name + optional description; a name that
-  saves to an existing file asks to replace it). While the view is open the page pings ExtState `snap_seen/<ms>` and
+  saves to an existing file asks to replace it; a blank name saves under the date and time, `timeSnapshotName()`, the
+  same name the quick-save action gives). Each row renames (name + description, `snapshot_edit`) or deletes (inline
+  confirm, `snapshot_delete`). While the view is open the page pings ExtState `snap_seen/<ms>` and
   reads `snapshots` once a second; the bridge re-reads the folder about once a second while pinged (a file is decoded
   again only when its size changed) and rewrites `snapshots` only when the list, the current snapshot or a result
-  changed. Restore/save: `snap_req/<id>-<token>-<restore|save>-<hex name>[-<hex description>]` with the per-run
-  control token; the bridge runs it as an ordinary `snapshot_restore` / `snapshot_save` command through the dispatcher
+  changed. Requests: `snap_req/<id>-<token>-<op>-<hex field>[-<hex field>…]` with the per-run control token (restore/delete:
+  name; save: name, description; edit: name, new name, description); the bridge runs it as an ordinary
+  `snapshot_restore` / `_save` / `_delete` / `_edit` command through the dispatcher
   (`run_command()`), so it is logged (entry `src: "page"`), one undo point, and refused while read-only or paused,
   then answers in `snapshots.result` (echoing `id`). A successful restore from anywhere becomes `current`
   (ExtState `MCP_Snapshots/current_name`, which the next/prev actions continue from). Logic:

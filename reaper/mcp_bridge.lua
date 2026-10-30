@@ -1716,6 +1716,80 @@ function handlers.snapshot_delete(params)
   return { name = name, deleted = true }
 end
 
+-- Rename a snapshot and/or change its description; the mixer state is kept. A new name that saves to
+-- another snapshot's file is refused (pass the same name to change only the description).
+function handlers.snapshot_edit(params)
+  local name = params.name
+  if not name or name == "" then
+    return nil, "name required"
+  end
+  local new_name = params.newName
+  if new_name ~= nil then
+    new_name = tostring(new_name):match("^%s*(.-)%s*$")
+    if new_name == "" then return nil, "newName must not be empty" end
+  else
+    new_name = name
+  end
+
+  local path = snapshot_path(name)
+  local content = read_file(path)
+  if not content then
+    return nil, "Snapshot not found: " .. name
+  end
+  -- The mixer state is copied as written: the bridge's fallback decoder is flat, so it is never re-encoded.
+  -- A JSON string can't hold a bare `"mixerState":` (its quotes would be escaped), so the first one is the key.
+  local snapshot = json_decode(content)
+  local key_end = select(2, content:find('"mixerState"%s*:%s*'))
+  local raw_state
+  if key_end and content:sub(key_end + 1, key_end + 1) == "{" then
+    local depth, in_str, i = 0, false, key_end + 1
+    while i <= #content do
+      local c = content:sub(i, i)
+      if in_str then
+        if c == "\\" then i = i + 1 elseif c == '"' then in_str = false end
+      elseif c == '"' then in_str = true
+      elseif c == "{" or c == "[" then depth = depth + 1
+      elseif c == "}" or c == "]" then
+        depth = depth - 1
+        if depth == 0 then raw_state = content:sub(key_end + 1, i); break end
+      end
+      i = i + 1
+    end
+  end
+  if not snapshot or not raw_state then
+    return nil, "Invalid snapshot file for: " .. name
+  end
+  local new_path = snapshot_path(new_name)
+  -- A case-only rename is the same file on macOS and Windows: never remove it after writing
+  local same_file = new_path:lower() == path:lower()
+  if not same_file and read_file(new_path) then
+    return nil, "A snapshot already saves to that name's file: " .. new_name
+  end
+
+  local description = params.description
+  if description == nil then description = snapshot.description or "" end
+  local ok, state = pcall(plan_lib_ok and plan_lib.json_decode or json_decode, raw_state)
+  if not ok or type(state) ~= "table" then state = {} end
+  local edited = "{" .. table.concat({
+    '"name":' .. json_encode(new_name),
+    '"description":' .. json_encode(tostring(description)),
+    '"timestamp":' .. json_encode(snapshot.timestamp or os.time() * 1000),
+    '"trackCount":' .. (type(state.tracks) == "table" and #state.tracks or tonumber(snapshot.trackCount) or 0),
+    '"scoped":' .. tostring(state.scoped == true or snapshot.scoped == true),
+    '"fullChunk":' .. tostring(state.fullChunk == true or snapshot.fullChunk == true),
+    '"mixerState":' .. raw_state,
+  }, ",") .. "}"
+  if not write_file(new_path, edited) then
+    return nil, "Failed to write snapshot file: " .. new_path
+  end
+  if not same_file then os.remove(path) end
+  -- The next/prev actions continue from the current snapshot by name
+  if new_name ~= name and reaper.GetExtState("MCP_Snapshots", "current_name") == name then
+    reaper.SetExtState("MCP_Snapshots", "current_name", new_name, false)
+  end
+  return { name = new_name, previousName = name, description = tostring(description), path = new_path }
+end
+
 -- =============================================================================
 -- Routing handler
 -- =============================================================================
@@ -5016,7 +5090,7 @@ for _, c in ipairs({
   "render_project", "render_track_to_wav", "run_plan", "run_action", "save_project", "undo_project",
   "redo_project", "add_fx", "add_take_fx", "setup_fx_chain", "copy_fx", "move_fx", "set_fx_offline",
   "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
-  "insert_audio_file", "snapshot_save", "snapshot_restore",
+  "insert_audio_file", "snapshot_save", "snapshot_restore", "snapshot_edit",
   "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
@@ -5429,6 +5503,7 @@ if snaps_lib_ok then
     decode = plan_lib_ok and plan_lib.json_decode or json_decode, encode = json_encode, read_file = read_file,
     token = function() return control_token end, run = run_command,
   })
+  snaps_lib.register_actions(reaper, script_dir, read_kb_ini())
 end
 
 -- =============================================================================

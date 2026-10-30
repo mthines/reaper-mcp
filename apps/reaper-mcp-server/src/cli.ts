@@ -1,5 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 
 /** Resolve asset path — checks sibling, parent, and walks up to repo root for dev/source usage */
 export function resolveAssetDir(baseDir: string, name: string): string {
@@ -150,6 +151,26 @@ export function ensureWebInterface(ini: string, port: number): { ini: string; po
   return { ini: lines.join(eol), port, changed: true };
 }
 
+/** Snapshot scripts to bind to keys: quick save (named by the time), next, previous */
+export const SNAPSHOT_ACTION_SCRIPTS = ['mcp_snapshot_quick_save.lua', 'mcp_snapshot_next.lua', 'mcp_snapshot_prev.lua'];
+
+/**
+ * List the snapshot scripts as actions in reaper-kb.ini text (main section), so they show in the Action List
+ * ready for a shortcut. A script already listed is kept as-is, with its shortcuts.
+ * Only safe while REAPER is closed: REAPER rewrites reaper-kb.ini from memory. When it was open, the
+ * bridge registers the missing ones on start (register_actions() in mcp_snapshots_ui_lib.lua).
+ */
+export function ensureSnapshotActions(kb: string): { kb: string; added: string[] } {
+  const listed = (file: string) => kb.split(/\r?\n/).some((l) => l.startsWith('SCR ') && l.includes(file));
+  const added = SNAPSHOT_ACTION_SCRIPTS.filter((f) => !listed(f));
+  if (!added.length) return { kb, added };
+  const eol = kb.includes('\r\n') ? '\r\n' : '\n';
+  // SCR <flags> <section> <command id> "<description>" <path relative to Scripts/>; 4 = a ReaScript
+  const lines = added.map((f) => `SCR 4 0 RS${createHash('sha1').update(f).digest('hex')} "Custom: ${f}" ${f}`);
+  const body = kb === '' || kb.endsWith('\n') ? kb : kb + eol;
+  return { kb: body + lines.join(eol) + eol, added };
+}
+
 /** All MCP tool names registered by the server */
 export const MCP_TOOL_NAMES = [
   // project
@@ -189,6 +210,7 @@ export const MCP_TOOL_NAMES = [
   'snapshot_restore',
   'snapshot_list',
   'snapshot_delete',
+  'snapshot_edit',
   // routing
   'get_track_routing',
   // midi

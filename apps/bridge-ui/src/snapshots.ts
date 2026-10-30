@@ -19,7 +19,10 @@ export interface SnapshotInfo {
   fullChunk: boolean;
 }
 
-export type SnapshotOp = 'restore' | 'save';
+export type SnapshotOp = 'restore' | 'save' | 'delete' | 'edit';
+
+/** A row of the Snapshots view being renamed, or asked to confirm its delete */
+export type RowMode = { name: string; mode: 'edit' | 'delete' };
 
 /** The bridge's answer to the page's latest request */
 export interface SnapshotResult {
@@ -69,12 +72,16 @@ function clip(text: string, max: number): string {
 }
 
 /**
- * Restore or save one snapshot. `token` is the bridge's per-run control token (status.control.token);
- * name and description travel hex-encoded, so no character needs URL or `;` escaping.
+ * Restore, save, delete or edit one snapshot. `token` is the bridge's per-run control token
+ * (status.control.token); the fields travel hex-encoded, so no character needs URL or `;` escaping.
+ * An edit sends the name, the new name and the description (empty clears it).
  */
-export function snapshotRequestUrl(op: SnapshotOp, id: string, token: string, name: string, description = ''): string {
-  const desc = op === 'save' ? clip(description.trim(), DESCRIPTION_MAX) : '';
-  return `/_/SET/EXTSTATE/MCPBridge/snap_req/${id}-${token}-${op}-${hex(clip(name.trim(), NAME_MAX))}${desc ? `-${hex(desc)}` : ''}`;
+export function snapshotRequestUrl(op: SnapshotOp, id: string, token: string, name: string, description = '', newName = ''): string {
+  const desc = op === 'save' || op === 'edit' ? clip(description.trim(), DESCRIPTION_MAX) : '';
+  const fields = [clip(name.trim(), NAME_MAX)];
+  if (op === 'edit') fields.push(clip(newName.trim(), NAME_MAX), desc);
+  else if (desc) fields.push(desc);
+  return `/_/SET/EXTSTATE/MCPBridge/snap_req/${id}-${token}-${op}-${fields.map(hex).join('-')}`;
 }
 
 /** Why a name can't be saved, or null */
@@ -97,6 +104,18 @@ export function snapshotFile(name: string): string {
     return b < 128 && /[A-Za-z0-9\-_.\s]/.test(c) ? c : '_';
   });
   return bytes.join('').replace(/\s+/g, '_');
+}
+
+/**
+ * The name a save without one gets: the local date and time, as the quick-save action names its snapshots
+ * (time_name() in mcp_snapshot_lib.lua), with " 2", " 3"… when a snapshot already saves to that file.
+ */
+export function timeSnapshotName(snapshots: SnapshotInfo[], date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  const base = `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())} ${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}`;
+  let name = base;
+  for (let n = 2; replacedBy(snapshots, name); n++) name = `${base} ${n}`;
+  return name;
 }
 
 /** The saved snapshot a new name would replace, if any */
