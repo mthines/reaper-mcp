@@ -828,6 +828,9 @@ local function render_refusal(api, settings, targets, fs, overwrite, hint)
     if settings.source == "stems" or settings.source == "selected_via_master" or settings.source == "master_and_stems" then
       return "refused: source " .. settings.source .. " renders the selected tracks and none is selected — " .. (hint or "select tracks or pass tracks")
     end
+    if settings.source == "selected_items" or settings.source == "selected_items_via_master" then
+      return "refused: source " .. settings.source .. " renders the selected items and none is selected — select items with set_selected_items"
+    end
     if settings.source == "region_matrix" then
       return "refused: the region render matrix lists no track for the rendered regions — set regionMatrix with set_render_settings"
     end

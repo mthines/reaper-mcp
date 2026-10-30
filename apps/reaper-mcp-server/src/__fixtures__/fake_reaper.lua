@@ -704,6 +704,12 @@ function install_project_fake(api, spec, write)
       if s.RENDER_PATTERN:find("$track", 1, true) then return path((s.RENDER_PATTERN:gsub("%$track", track))) end
       return path(s.RENDER_PATTERN .. (track == "Master" and "" or ("-" .. track)))
     end
+    if math.floor(P().info.RENDER_SETTINGS or 0) & (32 | 64) ~= 0 then -- selected items: one file, none without a selection
+      for i = 0, api.CountTracks(0) - 1 do
+        for _, it in ipairs(api.GetTrack(0, i).items or {}) do if it.selected then return named("Master") end end
+      end
+      return ""
+    end
     local src = math.floor(P().info.RENDER_SETTINGS or 0) & (1 | 2 | 8 | 128)
     if src == 0 then return named("Master") end
     local list = {}

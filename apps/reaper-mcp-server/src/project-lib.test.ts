@@ -437,6 +437,9 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
       project.set_render(api, { source = "stems" })
       local _, nosel = project.render(api, {}, fs, resolve)
       assert(nosel and nosel:find("none is selected"), tostring(nosel))
+      project.set_render(api, { source = "selected_items" })
+      local _, noitems = project.render(api, {}, fs, resolve)
+      assert(noitems and noitems:find("set_selected_items"), tostring(noitems))
     `);
   });
 
