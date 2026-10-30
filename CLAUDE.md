@@ -660,6 +660,27 @@ rewrites it from memory on exit. On start the bridge opens the page as a small C
 the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript console when the web interface is missing.
 `?demo` previews the page with fake data.
 
+**Developing the page or the bridge: run `pnpm dev:bridge`** (`apps/bridge-ui/dev.mjs`) and open
+`http://localhost:8098/mcp_bridge.html`, never REAPER's own `:8099` page.
+
+- It rebuilds the page on every save (unminified, inline sourcemap) and reloads each open tab over `/__dev/events`.
+- It proxies `/_/*` to REAPER over one keep-alive socket (`http.Agent`, `maxSockets: 1`) and never aborts an upstream
+  request. Aborting closes the socket from the client side, the one close REAPER's web server never frees (see Stuck
+  sockets below); a browser talking to REAPER directly hangs up on every reload, idle drop, and devtools refresh.
+- A saved `reaper/` file listed in `REAPER_ASSETS` (`cli.ts`, read as text) is copied into REAPER: Lua into
+  `Scripts/`, then the running bridge is asked to restart with the token from its status feed; JSFX into
+  `Effects/reaper-mcp/`, where it loads only when the plugin is re-added.
+- `build.mjs` and `dev.mjs` share the esbuild options and HTML template in `build-config.mjs`; change the page's build
+  there so production and dev stay the same.
+- Overrides: `BRIDGE_DEV_PORT` (8098), `REAPER_WEB_PORT` (8099), `REAPER_RESOURCE_PATH`.
+
+```bash
+# correct: the page talks to the dev server; REAPER sees one connection all session
+pnpm dev:bridge   # then open http://localhost:8098/mcp_bridge.html
+# incorrect: reloading REAPER's page or scripting it with curl leaks one REAPER socket per hang-up
+open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXTSTATE/MCPBridge/status
+```
+
 - Dedupe: every page poll is `SET/EXTSTATE/MCPBridge/ui_seen/<ms>;GET/EXTSTATE/MCPBridge/status`; the bridge skips
   opening a window when `ui_seen` is under 6s old (the page keeps pinging every 2s while hidden).
 
