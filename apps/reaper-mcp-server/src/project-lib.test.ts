@@ -468,6 +468,14 @@ describe('mcp_project_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('render versions: an MP3 render reports its bitrate, like render_project', async () => {
+    await runLua(`${DELIVERY}
+      assert(project.set_render(api, { format = "mp3", mp3Bitrate = 320 }))
+      local out = assert(project.render_versions(api, { versions = { { name = "Full" } } }, fs, resolve))
+      assert(out.format == "mp3" and out.mp3Bitrate == 320, "bitrate in the answer: " .. tostring(out.mp3Bitrate))
+    `);
+  });
+
   it('render versions: refusals render nothing, and a failing render still restores the project', async () => {
     await runLua(`${DELIVERY}
       local function none(what, ok, err)

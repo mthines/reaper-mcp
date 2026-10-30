@@ -676,6 +676,7 @@ export interface RenderVersionsResult {
   versions: Array<{ name: string; muted: string[]; files: string[]; missing: string[]; analysis?: RenderedFileAnalysis[] }>;
   format: string | null;
   bitDepth?: string;
+  mp3Bitrate?: number;
   source: string;
   normalize?: string;
   normalizeTarget?: number;

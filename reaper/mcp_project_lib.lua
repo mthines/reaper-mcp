@@ -1069,7 +1069,8 @@ function M.render_versions(api, p, fs, resolve)
     if type(err) == "table" and err.refusal then return nil, err.refusal end
     error(err, 0)
   end
-  local out = { rendered = true, versions = results, format = settings.format, bitDepth = settings.bitDepth, source = settings.source }
+  local out = { rendered = true, versions = results, format = settings.format, source = settings.source }
+  out.bitDepth, out.mp3Bitrate = settings.bitDepth, settings.mp3Bitrate
   if settings.normalize ~= "off" then out.normalize, out.normalizeTarget = settings.normalize, settings.normalizeTarget end
   if settings.limit then out.limitCeiling, out.limitTruePeak = settings.limitCeiling, settings.limitTruePeak end
   return out
