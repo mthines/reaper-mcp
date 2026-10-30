@@ -7,7 +7,7 @@ import { LogRows } from './LogRows.js';
 
 const { log, sessions } = exampleFeed();
 const today = new Date(EXAMPLE_NOW).setHours(0, 0, 0, 0);
-const sessionOf: ((id: string) => Session) | null = (id) => sessions.get(id) ?? { id, first: 0, last: 0, commands: 0, errors: 0 };
+const sessionOf = (id: string): Session => sessions.get(id) ?? { id, first: 0, last: 0, commands: 0, errors: 0 };
 
 const meta = {
   title: 'Features/Log/LogRows',
@@ -23,4 +23,4 @@ export const Default: Story = {};
 
 export const Playground: Story = {};
 
-export const OneAgent: Story = { args: { sessionOf: null } };
+export const OneAgent: Story = { render: (args) => <LogRows {...args} sessionOf={null} /> };
