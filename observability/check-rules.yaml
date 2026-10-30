@@ -63,3 +63,15 @@ spec:
             severity: info
           annotations:
             summary: reaper-mcp-server logged an ERROR (handler crash, server crash, or bridge timeout).
+
+        - alert: ReaperMcpCompUndone
+          # comp_lanes undoes itself when it fails after writing; refusals (gaps,
+          # overlaps) are input errors and never log this. Log event names are not a
+          # queryable label, so match the log's error.type attribute.
+          expr: >-
+            sum(increase({otel_metric_name="dash0.logs", service_name="reaper-mcp-server",
+              error_type="comp_undone"}[1h])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: comp_lanes failed half way and undid itself — a bug in the comp path.

@@ -21,6 +21,9 @@ import {
   type FxChain,
   type FxSlot,
   type Item,
+  type Lane,
+  type LaneItem,
+  type RecordRow,
   type Route,
   type SlotChange,
   type Marker,
@@ -108,6 +111,8 @@ const LISTINGS = new Set([
   "get_track_routing",
   "get_time_selection",
   "get_fx_parameters",
+  "get_record_setup",
+  "get_track_lanes",
 ]);
 
 function render(v: EditView): ReactNode {
@@ -130,6 +135,10 @@ function render(v: EditView): ReactNode {
       return <FxChains v={v} />;
     case "routing":
       return <Routing v={v} />;
+    case "record":
+      return <Record v={v} />;
+    case "lanes":
+      return <Lanes v={v} />;
   }
 }
 
@@ -1679,5 +1688,156 @@ function ItemsLane({
         )}
       </div>
     </div>
+  );
+}
+
+const RECORD_MODE: Record<string, string> = { normal: "Normal", time_selection: "Punch: time", selected_items: "Punch: items" };
+const PUNCH_ON: Record<string, string> = { time_selection: "time selection", selected_items: "selected items" };
+const MODE_WORD: Record<string, string> = {
+  input: "input", none: "monitor only", stereo_out: "output (stereo)", stereo_out_latency: "output (stereo, latency comp.)",
+  mono_out: "output (mono)", mono_out_latency: "output (mono, latency comp.)", midi_out: "MIDI output",
+  midi_overdub: "MIDI overdub", midi_replace: "MIDI replace", midi_touch_replace: "MIDI touch-replace",
+  midi_latch_replace: "MIDI latch-replace", multichannel_out: "output (multichannel)",
+  multichannel_out_latency: "output (multichannel, latency comp.)", input_mono: "input (mono)",
+  input_stereo: "input (stereo)", input_multichannel: "input (multichannel)", input_midi: "input (MIDI)",
+};
+const punchText = (p?: [number, number]) => (p ? `${clock(p[0])}–${clock(p[1])}` : "–");
+
+/** Record setup: the global mode and, per track, arm, input, monitoring and record mode; a write shows what it was */
+function Record({ v }: { v: Extract<EditView, { kind: "record" }> }) {
+  const was = v.was;
+  const changed = (a: unknown, b: unknown) => was !== undefined && a !== b;
+  const wasRows = new Map((was?.rows ?? []).map((r) => [r[0], r]));
+  const modeChanged = changed(was?.mode, v.mode);
+  const punchChanged = was !== undefined && punchText(was.punch) !== punchText(v.punch);
+  const pathChanged = changed(was?.path, v.path);
+  const rows = v.rows ?? [];
+  const rowChanged = rows.some((r) => {
+    const w = wasRows.get(r[0]);
+    return w && w.some((x, i) => x !== r[i]);
+  });
+  return (
+    <>
+      <div className="measure-readouts">
+        <Readout label="Mode" value={RECORD_MODE[v.mode] ?? v.mode} word={modeChanged ? "changed" : ""}
+          title={[PUNCH_ON[v.mode] && `Auto-punch on the ${PUNCH_ON[v.mode]}`, modeChanged && was && `Was ${RECORD_MODE[was.mode] ?? was.mode}`].filter(Boolean).join(" · ") || undefined} />
+        {(v.mode === "time_selection" || v.punch) && (
+          <Readout label="Punch" value={punchText(v.punch)} word={punchChanged ? "changed" : !v.punch ? "none" : ""}
+            zone={!v.punch ? "hot" : "ok"}
+            title={punchChanged ? `Was ${punchText(was?.punch)}` : !v.punch ? "No time selection: nothing records" : undefined} />
+        )}
+        {v.path !== undefined && (
+          <Readout label="Path" value={v.path || "project folder"} word={pathChanged ? "changed" : ""}
+            title={pathChanged ? `Was ${was?.path || "project folder"}` : undefined} />
+        )}
+      </div>
+      {v.rows && (rows.length === 0 ? (
+        <div className="ev-more">No armed tracks</div>
+      ) : (
+        <div className="ev-mix">
+          {rows.map((r, i) => <RecordTrack key={i} r={r} was={wasRows.get(r[0])} />)}
+        </div>
+      ))}
+      {v.more !== undefined && v.more > 0 && <div className="ev-more">+{plural(v.more, "more track")} not drawn</div>}
+      {rowChanged && <div className="ev-more">Changed values are underlined, with what they were beneath</div>}
+    </>
+  );
+}
+
+function RecordTrack({ r, was }: { r: RecordRow; was?: RecordRow }) {
+  const [name, armed, input, monitor, mode] = r;
+  const field = (i: 2 | 3 | 4, text: string, cls: string, wasText: (w: RecordRow) => string) => {
+    const old = was && was[i] !== r[i] ? wasText(was) : null;
+    return (
+      <span className={`ev-rec-f ${cls} ${old !== null ? "ev-rec-changed" : ""}`} title={old !== null ? `Was ${old}` : undefined}>
+        <span className="ev-rec-now">{text}</span>
+        {old !== null && <s className="ev-rec-was">{old}</s>}
+      </span>
+    );
+  };
+  const armChanged = was !== undefined && was[1] !== armed;
+  return (
+    <div className={`ev-rec ${armed ? "" : "ev-rec-off"}`}
+      title={`${name} · ${armed ? "armed" : "not armed"}${armChanged ? (armed ? " (was not armed)" : " (was armed)") : ""}`}>
+      <span className={`ev-rec-arm ${armed ? "on" : ""} ${armChanged ? "ev-rec-changed" : ""}`} aria-label={armed ? "armed" : "not armed"} />
+      <span className="ev-tn"><span className="ev-tn-text">{name}</span></span>
+      {field(2, input, "ev-rec-in", (w) => w[2])}
+      {field(3, `mon ${monitor}`, "ev-rec-mon", (w) => `mon ${w[3]}`)}
+      {field(4, MODE_WORD[mode] ?? mode, "ev-rec-mode", (w) => MODE_WORD[w[4]] ?? w[4])}
+    </div>
+  );
+}
+
+/** One colour per lane, as automation pools have, so a comp's parts match the takes they came from */
+const laneHue = (lane: number) => `var(--h${lane % 6})`;
+const PLAYS_WORD = ["silent", "plays", "plays (layered)"];
+
+/** Fixed lanes, one row each: their items, which lanes play, and for a comp where each part came from */
+function Lanes({ v }: { v: Extract<EditView, { kind: "lanes" }> }) {
+  // Zoomed to the items, as takes rarely start at 0
+  const all = [...v.items, ...(v.was?.items ?? [])];
+  const from = all.length ? Math.min(...all.map((it) => it[0])) : 0;
+  const len = Math.max(v.len, from + 1);
+  const at = (t: number) => `${pct(t, from, len)}%`;
+  const width = (s: number, l: number) => `calc(${pct(s + l, from, len) - pct(s, from, len)}% - 1px)`;
+  const segAt = (pos: number) => v.segs?.find((s) => Math.abs(s[0] - pos) < 0.011);
+  const playing = v.lanes.map((l, i) => [l, i] as const).filter(([l]) => l[1] > 0);
+  const wasLanes = v.was?.lanes;
+  const same = (a: LaneItem, b: LaneItem) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  const gone = (v.was?.items ?? []).filter((w) => !v.items.some((it) => same(it, w)));
+  const fresh = (it: LaneItem) => v.was !== undefined && !v.was.items.some((w) => same(w, it));
+  const laneName = (l: Lane | undefined, i: number) => (l && l[0]) || `Lane ${i + 1}`;
+  const rows = Math.max(v.lanes.length, wasLanes?.length ?? 0);
+  return (
+    <>
+      <div className="measure-readouts">
+        <Readout label="Track" value={v.t} />
+        <Readout label="Lanes" value={v.fixed ? String(v.lanes.length) : "off"}
+          word={v.was && v.was.fixed !== v.fixed ? (v.fixed ? "turned on" : "turned off") : ""} />
+        <Readout label="Playing" value={playing.length === 0 ? "–" : playing.length === 1 ? laneName(playing[0][0], playing[0][1]) : `${playing.length} lanes`}
+          word={playing.length > 1 ? "layered" : ""} title={playing.map(([l, i]) => laneName(l, i)).join(" + ") || undefined} />
+      </div>
+      <div className="ev-lanes">
+        {Array.from({ length: rows }, (_, i) => {
+          const lane = v.lanes[i];
+          const was = wasLanes?.[i];
+          const plays = lane?.[1] ?? 0;
+          const playsChanged = was !== undefined && lane !== undefined && was[1] !== plays;
+          const isComp = v.comp === i;
+          return (
+            <div key={i} className={`ev-flane ${plays ? "ev-flane-on" : ""} ${lane ? "" : "ev-slot-gone"}`}>
+              <span className="ev-flane-name" style={{ "--hue": laneHue(i) } as CSSProperties}
+                title={`${laneName(lane ?? was, i)} · ${PLAYS_WORD[plays]}${playsChanged ? ` (was ${PLAYS_WORD[was[1]]})` : ""}`}>
+                <i className={`ev-flane-play ev-play-${plays} ${playsChanged ? "ev-rec-changed" : ""}`} aria-hidden />
+                <span className="ev-tn-text">{laneName(lane ?? was, i)}</span>
+                {isComp && <span className="ev-mark ev-mark-new">new</span>}
+              </span>
+              <span className="ev-lane ev-lane-items">
+                {gone.filter((it) => it[2] === i).map((it, k) => (
+                  <span key={`g${k}`} className="ev-item ev-gone" style={{ left: at(it[0]), width: width(it[0], it[1]) }}
+                    title={`Before · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}`} />
+                ))}
+                {v.items.filter((it) => it[2] === i).map((it, k) => {
+                  const seg = isComp ? segAt(it[0]) : undefined;
+                  const hue = laneHue(seg ? seg[2] : i);
+                  return (
+                    <span key={k} className={`ev-item ev-litem ${it[3] ? "ev-item-midi" : ""} ${fresh(it) && !isComp ? "ev-new" : ""}`}
+                      style={{ left: at(it[0]), width: width(it[0], it[1]), "--hue": hue } as CSSProperties}
+                      title={`${seg ? `From ${laneName(v.lanes[seg[2]], seg[2])} · ` : ""}${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}`} />
+                  );
+                })}
+              </span>
+            </div>
+          );
+        })}
+        <div className="ev-flane ev-flane-axis" aria-hidden>
+          <span />
+          <span className="ev-axis mono"><span>{clock(from)}</span><span>{clock(len)}</span></span>
+        </div>
+      </div>
+      {v.was && (gone.length > 0 || v.lanes.some((l, i) => wasLanes?.[i] && wasLanes[i][1] !== l[1])) && (
+        <Legend items={[["lg-gone-mark", "Before"], ["lg-new-mark", "Added or changed"]]} />
+      )}
+    </>
   );
 }

@@ -5,6 +5,27 @@ import type { CommandEntry } from './status.js';
 const entry = (c: string, r: Record<string, unknown> | undefined, ok = true): CommandEntry => ({ n: 1, t: 0, c, ms: 1, ok, r });
 
 describe('edit views from the log', () => {
+  it('reads a record change with the state before it, dropping malformed rows', () => {
+    expect(editViewOf(entry('set_track_record', {
+      mode: 'normal', path: 'Audio', rows: [['Vox', 1, 'In 3/4', 'auto', 'input'], ['bad']],
+      was: { mode: 'normal', path: 'Audio', rows: [['Vox', 0, 'In 1', 'off', 'input']] },
+    }))).toEqual({
+      kind: 'record', mode: 'normal', path: 'Audio', rows: [['Vox', 1, 'In 3/4', 'auto', 'input']],
+      was: { mode: 'normal', path: 'Audio', rows: [['Vox', 0, 'In 1', 'off', 'input']] },
+    });
+    expect(editViewOf(entry('set_record_mode', { path: 'x' }))).toBeNull();
+  });
+
+  it('reads lanes with a comp and what played before', () => {
+    expect(editViewOf(entry('comp_lanes', {
+      t: 'Vox', fixed: 1, lanes: [['Take 1', 0], ['Comp', 1]], items: [[0, 4, 0, 0], [0, 4, 1, 0]], len: 4,
+      comp: 1, segs: [[0, 4, 0]], was: { fixed: 1, lanes: [['Take 1', 1]], items: [[0, 4, 0, 0]] },
+    }))).toEqual({
+      kind: 'lanes', t: 'Vox', fixed: true, lanes: [['Take 1', 0], ['Comp', 1]], items: [[0, 4, 0, 0], [0, 4, 1, 0]], len: 4,
+      comp: 1, segs: [[0, 4, 0]], was: { fixed: true, lanes: [['Take 1', 1]], items: [[0, 4, 0, 0]] },
+    });
+  });
+
   it('reads a change as before and after', () => {
     expect(editViewOf(entry('set_track_property', { rows: [{ t: 'Kick', p: 'volume', s: 'db', a: -6, b: -4.5 }] }))).toEqual({
       kind: 'changes',

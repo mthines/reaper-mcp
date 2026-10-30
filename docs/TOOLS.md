@@ -187,6 +187,17 @@ For quick A/B testing, bind these action scripts to keyboard shortcuts in REAPER
 | `remove_send` | Remove a send, receive or hardware output by index |
 | `add_hardware_output` | Route a track to an audio interface output (stereo or mono) |
 
+### Recording & Comping
+
+| Tool | Description |
+|------|-------------|
+| `get_record_setup` | Global record mode (normal / time-selection or item auto-punch) with punch range and record path; armed tracks (or `all`, max 64) with input label, monitoring, record mode; the audio and MIDI inputs |
+| `set_track_record` | Arm, record input (`audio` channel/stereo, `midi` device/channel, `none`), monitoring (off/on/auto), record mode, monitor-items for up to 64 tracks; all checked first, one undo point |
+| `set_record_mode` | Global record mode, punch range (time-selection mode) and record path |
+| `get_track_lanes` | Fixed lanes: on/off, each lane's name, playing state (exclusive/layered/off) and items (100 per lane) |
+| `set_track_lanes` | Fixed lanes on/off, lane count, names, which lane plays alone or which lanes play layered |
+| `comp_lanes` | Comp from lanes: `{start, end, lane}` ranges (max 200, no overlaps) copied onto a new exclusive comp lane with crossfades; a range a lane has no audio for is refused with the gap |
+
 ### Plan Executor
 
 | Tool | Description |

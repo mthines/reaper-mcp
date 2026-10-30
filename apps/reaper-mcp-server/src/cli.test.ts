@@ -166,7 +166,8 @@ describe('cli helpers', () => {
       expect(REAPER_ASSETS).toContain('mcp_edit_views_lib.lua');
       expect(REAPER_ASSETS).toContain('mcp_snapshots_ui_lib.lua');
       expect(REAPER_ASSETS).toContain('mcp_gain_trace.jsfx');
-      expect(REAPER_ASSETS.length).toBe(19);
+      expect(REAPER_ASSETS).toContain('mcp_recording_lib.lua');
+      expect(REAPER_ASSETS.length).toBe(20);
     });
 
     it('retires the gfx snapshot manager (replaced by the status page Snapshots tab)', () => {

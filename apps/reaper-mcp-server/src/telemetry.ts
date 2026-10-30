@@ -405,6 +405,18 @@ export function getSidecarDurationHistogram(): Histogram {
   return _sidecarDuration;
 }
 
+let _compSegments: Histogram | null = null;
+
+/** Segments (one per take switch, plus one) in each comp comp_lanes builds. */
+export function getCompSegmentsHistogram(): Histogram {
+  _compSegments ??= getMeter().createHistogram('reaper.comp.segments', {
+    description: 'Segments in one comp built by comp_lanes',
+    unit: '{segment}',
+    advice: { explicitBucketBoundaries: [1, 2, 4, 8, 16, 32, 64, 128, 200] },
+  });
+  return _compSegments;
+}
+
 // ---------------------------------------------------------------------------
 // Bridge health gauges
 // ---------------------------------------------------------------------------

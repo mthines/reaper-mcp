@@ -73,6 +73,7 @@ reaper-mcp/
         offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment (sidecar, no model)
         transients.ts         # detect_transients, create_transient_automation (sidecar onsets → envelope pulses, e.g. lighting)
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
+        recording.ts          # record setup (inputs, monitoring, punch), fixed lanes, comp_lanes (logic in reaper/mcp_recording_lib.lua)
 
     sidecar/                  # Python sidecar for semantic audio analysis (opt-in)
       server.py               # JSON-RPC server (Meta Audiobox Aesthetics, CC-BY 4.0)
@@ -121,6 +122,7 @@ reaper-mcp/
     mcp_project_lib.lua       # Project ops, tempo map + marker editing (pure Lua, unit-tested via wasmoon)
     mcp_envelopes_lib.lua     # Envelopes, points (dB through the envelope's scaling) and pooled automation items (pure Lua, unit-tested via wasmoon)
     mcp_items_lib.lua         # Items, takes, take FX, FX move/copy/rename, FX chains, track templates (pure Lua, unit-tested via wasmoon)
+    mcp_recording_lib.lua     # Record inputs/monitoring/modes, punch, fixed lanes and comping (pure Lua, unit-tested via wasmoon)
     mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
     mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
@@ -149,7 +151,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (147 total)
+## MCP Tools (153 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -346,6 +348,17 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `detect_transients` | `tools/transients.ts` | Hits in a track (rendered, ≤900 s) or an audio file (MP3 too; `filePosition` maps it to project time): time, strength 0..1, dominant band (low/mid/high), peakDb, plus tempo, per-band counts and per-section density; filter by `band`/`bands`/`sensitivity`/`minGapMs`/`minStrength`, paginated |
 | `create_transient_automation` | `tools/transients.ts` | Detect, then write one pulse per hit (attack, hold, exponential/linear decay, scaled by strength) onto an existing envelope — e.g. lighting that flashes on the kicks. Replaces the range's points (REAPER keeps an envelope's last point on a range delete; it becomes the first pulse point), `dryRun` returns the points. TS-composed over `remove_envelope_points` / `insert_envelope_points` |
 
+### Recording & Comping (6)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `get_record_setup` | `tools/recording.ts` | Global record mode (normal / time-selection or item auto-punch) with punch range and record path; armed tracks (or `all`, max 64) with input label, monitoring, record mode; the audio and MIDI inputs |
+| `set_track_record` | `tools/recording.ts` | Arm, record input (`audio` channel/stereo, `midi` device/channel, `none`), monitoring (off/on/auto), record mode, monitor-items for up to 64 tracks; all checked first, one undo point |
+| `set_record_mode` | `tools/recording.ts` | Global record mode, punch range (time-selection mode) and record path |
+| `get_track_lanes` | `tools/recording.ts` | Fixed lanes: on/off, each lane's name, playing state (exclusive/layered/off) and items (100 per lane) |
+| `set_track_lanes` | `tools/recording.ts` | Fixed lanes on/off, lane count, names, which lane plays alone or which lanes play layered |
+| `comp_lanes` | `tools/recording.ts` | Comp from lanes: `{start, end, lane}` ranges (max 200, no overlaps) copied onto a new exclusive comp lane with crossfades; a range a lane has no audio for is refused with the gap |
+
 ### Plan Executor (1)
 
 | Tool | File | Description |
@@ -420,11 +433,11 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 147 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 153 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
-Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`, `takes`, `fx_files`, `knowledge`
+Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`, `takes`, `fx_files`, `knowledge`, `recording`
 
 ### MIDI Editing Concepts
 
@@ -479,6 +492,14 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 - **Fade shapes**: 0 linear, 1 fast start, 2 fast end, 3 fast start (steep), 4 fast end (steep), 5 slow start/end, 6 slow start/end (steep); curves are -1..1.
 - **Files stay inside REAPER's resource folder**: `save_fx_chain` / `save_track_template` take a name (subfolders allowed) under `FXChains/` or `TrackTemplates/`; absolute paths, drive letters and `..` are refused, and an existing file is only replaced with `overwrite: true`. Loads also accept an absolute path with the right extension.
 - **Chunks, like `graft_fxchain`**: loading a chain or inserting a template edits track state chunks with `mcp_plan_lib.lua`'s helpers, regenerating FXIDs (and TRACKID/item GUIDs for templates). A saved template drops receives (`AUXRECV`) and folder state (`ISBUS`), which depend on the surrounding tracks.
+
+### Recording & Comping Concepts
+
+- **Logic lives in `reaper/mcp_recording_lib.lua`** (pure Lua over an injected API, unit-tested via wasmoon in `recording-lib.test.ts`).
+- **Inputs** travel as objects, never raw `I_RECINPUT` numbers: `{kind:"audio", channel (1-based), stereo}`, `{kind:"midi", device ("all", "vkb" or an index), channel (0 = all)}`, `{kind:"none"}`. An audio channel the device does not have is refused; with no audio device open (0 inputs) it is a warning instead. Answers carry a label ("In 3/4", "MIDI: all MIDI inputs, all channels").
+- **Punch**: `set_record_mode` `time_selection` records only inside the time selection (`punchStart`/`punchEnd` set it); `selected_items` punches on the selected items. Global toggles 40252/40076/40253.
+- **Fixed lanes** (REAPER 7): `C_LANEPLAYS` 1 = exclusive (the others go silent), 2 = layered. Turning lanes off puts every item on one lane, all playing (warned; `undo_project` restores). REAPER can drop the names of empty lanes, so name lanes once takes are on them.
+- **Comping** copies item chunks (GUIDs stripped), trims each copy to its range (take start offset moved by the play rate), extends the left part by the crossfade as far as its source reaches, and keeps the source fades at real item edges. Source lanes stay untouched and silent. A failure after the first write undoes the whole comp (`reaper.comp.undone` log).
 
 ### Envelope / Automation Concepts
 

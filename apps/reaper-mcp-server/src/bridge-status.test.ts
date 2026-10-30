@@ -11,7 +11,7 @@ const REAPER_DIR = join(__dirname, '../../../reaper');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
 const SCRIPTS = '/reaper/Scripts/';
 const BRIDGE_DIR = `${SCRIPTS}mcp_bridge_data/`;
-const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua'];
+const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_recording_lib.lua', 'mcp_edit_views_lib.lua'];
 
 interface Entry { n: number; t: number; c: string; ok: boolean; s?: string; p?: string; e?: string; r?: Record<string, unknown> }
 type Row = [number, number, number, number, number];
@@ -318,6 +318,59 @@ const POOLED_ENVELOPE = `${VOLUME_ENVELOPE}
 `;
 
 describe('edit views in the log', () => {
+  it('shows a record change per track with the input, monitoring and mode before it', async () => {
+    const bridge = await startBridge(`
+      api.GetNumAudioInputs = function() return 8 end
+      api.GetInputChannelName = function(i) return "Input " .. (i + 1) end
+      api.GetNumMIDIInputs = function() return 0 end
+      api.GetMIDIInputName = function() return false, "" end
+      api.tracks[1].vals.I_RECINPUT = 0
+    `);
+    const res = await bridge.send('set_track_record', {
+      tracks: JSON.stringify([{ track: 'Kick', arm: true, input: { kind: 'audio', channel: 3, stereo: true }, monitor: 'auto' }]),
+    });
+    expect(res.success).toBe(true);
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({
+      mode: 'normal',
+      rows: [['Kick', 1, 'In 3/4', 'auto', 'input']],
+      was: { rows: [['Kick', 0, 'In 1 · Input 1', 'off', 'input']] },
+    });
+  });
+
+  it('shows the lanes of a track with what played before a lane switch', async () => {
+    const bridge = await startBridge(`
+      local tr = api.tracks[1]
+      tr.vals.I_FREEMODE = 2
+      tr.vals.I_NUMFIXEDLANES = 2
+      tr.vals["C_LANEPLAYS:0"] = 1
+      local function item(pos, lane, name)
+        local it = { vals = { D_POSITION = pos, D_LENGTH = 4, I_FIXEDLANE = lane }, takes = {}, active = 1 }
+        it.takes[1] = { name = name, item = it }
+        return it
+      end
+      tr.items = { item(0, 0, "Take 1"), item(0, 1, "Take 2") }
+      local plain = api.GetSetMediaTrackInfo_String
+      api.GetSetMediaTrackInfo_String = function(t, k, v, set)
+        local n = k:match("^P_LANENAME:(%d+)")
+        if not n then return plain(t, k, v, set) end
+        t.lane_names = t.lane_names or {}
+        if set then t.lane_names[n] = v end
+        return true, t.lane_names[n] or ""
+      end
+    `);
+    const res = await bridge.send('set_track_lanes', { track: 'Kick', play: '1' });
+    expect(res.success).toBe(true);
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({
+      t: 'Kick', fixed: 1,
+      lanes: [['', 0], ['', 1]],
+      items: [[0, 4, 0, 0], [0, 4, 1, 0]],
+      was: { lanes: [['', 1], ['', 0]] },
+      len: 4,
+    });
+  });
+
   it('draws pooled automation items with their shared curve, the new one marked', async () => {
     const bridge = await startBridge(POOLED_ENVELOPE);
     await bridge.send('insert_automation_item', { trackIndex: 0, envelopeIndex: 0, position: 30, length: 4, poolId: 7 });

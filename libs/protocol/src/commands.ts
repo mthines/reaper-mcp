@@ -116,6 +116,13 @@ export type CommandType =
   | 'run_action'
   | 'set_selected_tracks'
   | 'set_selected_items'
+  // Recording setup, fixed lanes and comping
+  | 'get_record_setup'
+  | 'set_track_record'
+  | 'set_record_mode'
+  | 'get_track_lanes'
+  | 'set_track_lanes'
+  | 'comp_lanes'
   // Track structure + routing setters
   | 'add_track'
   | 'delete_track'
@@ -786,6 +793,62 @@ export interface SetSelectedItemsParams {
   /** JSON-encoded { trackIndex, itemIndex }[]. */
   items: string;
   mode?: SelectionMode;
+}
+
+// Recording setup, fixed lanes and comping (logic in reaper/mcp_recording_lib.lua).
+
+/** A track's record input: an audio channel (1-based, stereo = that channel and the next), a MIDI device or none */
+export type RecordInput =
+  | { kind: 'audio'; channel: number; stereo?: boolean }
+  | { kind: 'midi'; device?: number | 'all' | 'vkb'; channel?: number }
+  | { kind: 'none' };
+
+export interface GetRecordSetupParams {
+  /** List every track, not only the armed ones. */
+  all?: boolean;
+}
+
+export interface TrackRecordUpdate {
+  track: PlanTrackRef;
+  arm?: boolean;
+  input?: RecordInput;
+  monitor?: 'off' | 'on' | 'auto';
+  mode?: string;
+  monitorItems?: boolean;
+}
+
+export interface SetTrackRecordParams {
+  /** JSON-encoded TrackRecordUpdate[]. */
+  tracks: string;
+}
+
+export interface SetRecordModeParams {
+  mode?: 'normal' | 'time_selection' | 'selected_items';
+  punchStart?: number;
+  punchEnd?: number;
+  recordPath?: string;
+}
+
+export interface GetTrackLanesParams {
+  track: PlanTrackRef;
+}
+
+export interface SetTrackLanesParams {
+  track: PlanTrackRef;
+  fixedLanes?: boolean;
+  laneCount?: number;
+  /** JSON-encoded { lane, name }[]. */
+  names?: string;
+  /** JSON-encoded lane number (plays alone) or lane array (layered). */
+  play?: string;
+}
+
+export interface CompLanesParams {
+  track: PlanTrackRef;
+  /** JSON-encoded { start, end, lane }[] (seconds). */
+  ranges: string;
+  crossfadeMs?: number;
+  name?: string;
 }
 
 // Track structure + routing setters. Track refs: index (-1 = master), exact name, "{GUID}" or "master".
