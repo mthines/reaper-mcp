@@ -213,7 +213,7 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
 
   it('copy section: copies a region\'s items and automation to a later position, trimmed to the region', async () => {
     await runLua(`${SONG}
-      local r = assert(arrange.copy_section(api, { regionIndex = 0, position = 20 }))
+      local r = assert(arrange.copy_section(api, { regionIndex = 1, position = 20 }))
       assert(r.region == "Chorus" and r.itemCount == 2, tostring(r.itemCount))
       -- Gtr B (8-12) → 20-24; Bass L (2-12) trimmed to 8-12 → 20-24
       assert(api.names(0) == "A@0,B@8,B@20", api.names(0))
@@ -225,6 +225,19 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
       for _, p in ipairs(api.tracks[1].envs[1].pts) do at[#at + 1] = p.t end
       assert(r.envelopePoints == 0 and table.concat(at, ",") == "0,6,12", table.concat(at, ","))
       assert(#api.undo_labels == 1 and api.undo_labels[1] == "MCP: Copy section")
+    `);
+  });
+
+  it('copy section: picks the region by the number list_regions returns, not by its place in the list', async () => {
+    await runLua(`
+      local api = new_timeline{
+        tracks = { { items = { { pos = 0, len = 2, name = "I" }, { pos = 4, len = 2, name = "C" } } } },
+        markers = { { pos = 0, rend = 2, name = "Intro", rgn = true, num = 7 }, { pos = 4, rend = 6, name = "Chorus", rgn = true, num = 2 } },
+      }
+      local r = assert(arrange.copy_section(api, { regionIndex = 2, position = 10 }))
+      assert(r.region == "Chorus" and api.names(0) == "I@0,C@4,C@10", api.names(0))
+      local ok, err = arrange.copy_section(api, { regionIndex = 0, position = 20 })
+      assert(not ok and err:find("no region 0"), tostring(err))
     `);
   });
 
@@ -253,12 +266,12 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
   it('copy section: refuses an overlap, an unknown region and a bad track, changing nothing', async () => {
     await runLua(`${SONG}
       local cases = {
-        { regionIndex = 0, position = 10 },
-        { regionIndex = 0, position = 5 },
+        { regionIndex = 1, position = 10 },
+        { regionIndex = 1, position = 5 },
         { regionIndex = 3, position = 20 },
         { start = 4, ["end"] = 2, position = 20 },
-        { regionIndex = 0, position = 10, insert = true },
-        { regionIndex = 0, position = 20, tracks = { 9 } },
+        { regionIndex = 1, position = 10, insert = true },
+        { regionIndex = 1, position = 20, tracks = { 9 } },
       }
       for k, p in ipairs(cases) do
         local ok, err = arrange.copy_section(api, p)

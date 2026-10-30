@@ -622,13 +622,9 @@ function ARRANGE.section(params)
   local idx = tonumber(params.regionIndex)
   if idx == nil then return tonumber(params.start), tonumber(params["end"]) end
   local _, nm, nr = api.CountProjectMarkers(0)
-  local k = 0
   for i = 0, (nm or 0) + (nr or 0) - 1 do
-    local _, isrgn, pos, rend = api.EnumProjectMarkers3(0, i)
-    if isrgn then
-      if k == idx then return pos, rend end
-      k = k + 1
-    end
+    local _, isrgn, pos, rend, _, num = api.EnumProjectMarkers3(0, i)
+    if isrgn and num == idx then return pos, rend end
   end
 end
 

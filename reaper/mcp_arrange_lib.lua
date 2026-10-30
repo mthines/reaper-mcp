@@ -511,14 +511,10 @@ end
 -- Copy a section
 -- -----------------------------------------------------------------------------
 
--- regionIndex: the region's place in list_regions (0-based, by position)
+-- regionIndex: the region's number, the `index` list_regions returns (and edit/delete_region take)
 local function region_range(api, idx)
-  local k = 0
   for _, m in ipairs(markers(api)) do
-    if m.rgn then
-      if k == idx then return m.pos, m.rend, m.name end
-      k = k + 1
-    end
+    if m.rgn and m.num == idx then return m.pos, m.rend, m.name end
   end
 end
 
