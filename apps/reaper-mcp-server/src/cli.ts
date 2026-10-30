@@ -114,8 +114,11 @@ export const DEFAULT_WEB_PORT = 8099;
  * Only safe while REAPER is closed: REAPER rewrites reaper.ini from memory on exit.
  */
 export function ensureWebInterface(ini: string, port: number): { ini: string; port: number; changed: boolean } {
-  const existing = ini.match(/^csurf_\d+=HTTP \S+ (\d+)/m);
-  if (existing) return { ini, port: Number(existing[1]), changed: false };
+  // REAPER loads only csurf_0 … csurf_<cnt-1>; an HTTP line past the count is a leftover it ignores
+  const active = Number(ini.match(/^csurf_cnt=(\d+)/m)?.[1] ?? 0);
+  for (const m of ini.matchAll(/^csurf_(\d+)=HTTP \S+ (\d+)/gm)) {
+    if (Number(m[1]) < active) return { ini, port: Number(m[2]), changed: false };
+  }
 
   const eol = ini.includes('\r\n') ? '\r\n' : '\n';
   const lines = ini.split(/\r?\n/);
@@ -132,11 +135,13 @@ export function ensureWebInterface(ini: string, port: number): { ini: string; po
   const cntIdx = lines.findIndex((l, i) => i > start && i < end && l.startsWith('csurf_cnt='));
   const count = cntIdx === -1 ? 0 : Number(lines[cntIdx].slice('csurf_cnt='.length)) || 0;
   const entry = `csurf_${count}=HTTP 0 ${port} '' '${BRIDGE_UI_FILE}' 0 ''`;
+  const staleIdx = lines.findIndex((l, i) => i > start && i < end && l.startsWith(`csurf_${count}=`));
+  if (staleIdx !== -1) lines[staleIdx] = entry;
   if (cntIdx === -1) {
-    lines.splice(end, 0, `csurf_cnt=${count + 1}`, entry);
+    lines.splice(end, 0, `csurf_cnt=${count + 1}`, ...(staleIdx === -1 ? [entry] : []));
   } else {
     lines[cntIdx] = `csurf_cnt=${count + 1}`;
-    lines.splice(end, 0, entry);
+    if (staleIdx === -1) lines.splice(end, 0, entry);
   }
   return { ini: lines.join(eol), port, changed: true };
 }
