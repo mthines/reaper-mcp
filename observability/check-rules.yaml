@@ -69,7 +69,7 @@ spec:
           # silently fell back to CPU (an upgrade broke the accelerator path).
           expr: >-
             histogram_quantile(0.5, sum(increase(
-              {otel_metric_name="reaper.audio.separation.speed", reaper_separation_device!="cpu"}[1d]))) < 1
+              {otel_metric_name="reaper.audio.separation.speed", reaper_separation_device=~"mps|cuda"}[1d]))) < 1
           labels:
             severity: info
           annotations:

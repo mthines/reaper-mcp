@@ -287,7 +287,7 @@ resource (`service.instance.id`, `deployment.environment.name`). Count them per 
 - p95 of `reaper.bridge.command.duration` > 0.5 s — the defer loop is starved (heavy project, blocking render).
 - `mcp.server.operation.duration{error.type!=""}` / total > 5 % per `gen_ai.tool.name` — a tool regressed.
 - Any `reaper.bridge.handler_error` or `reaper.server.crash` log — a bug, not a user error.
-- p50 of `reaper.audio.separation.speed{reaper.separation.device!="cpu"}` < 1 — separation on an accelerator fell
+- p50 of `reaper.audio.separation.speed{reaper.separation.device=~"mps|cuda"}` < 1 — separation on an accelerator fell
   back to CPU speed (a torch/Demucs upgrade broke MPS or CUDA), so long songs start timing out.
 - Any `reaper.audio.separation.speed{reaper.separation.device="cpu_fallback"}` — the accelerator raised and the
   split re-ran on CPU (`ReaperMcpSeparationFellBack`).

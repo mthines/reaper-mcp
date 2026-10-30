@@ -356,7 +356,7 @@ Each takes a track (rendered post-FX, `-1` = master) or a file `path`; `measure_
 
 | Tool | File | Description |
 |------|------|-------------|
-| `analyze_loudness_curve` | `tools/mixcheck.ts` | Short-term and momentary LUFS over time (≤240 points each, every point its slice's loudest), integrated, true peak, LRA, PLR, loudest/quietest 3 s windows, and with `targetLufs` the spans over target + `toleranceLu`; times in project time |
+| `analyze_loudness_curve` | `tools/mixcheck.ts` | Short-term and momentary LUFS over time (≤240 points each, every point its slice's loudest), integrated, true peak, LRA, PLR, loudest/quietest 3 s windows, and with `targetLufs` the spans over target + `toleranceLu`; times in project time for a track, file seconds for a `path` |
 | `analyze_stereo_bands` | `tools/mixcheck.ts` | Correlation per band (low <120 Hz, lowMid, mid, high 2-8 kHz, air): overall, worst, out-of-phase share, side-to-mid dB, a 60-point series; flags a wide/out-of-phase low end or any band below 0 |
 | `measure_masking` | `tools/mixcheck.ts` | Renders 2-8 tracks over the same range (≤60 s) and scores each pair per K-weighted third-octave band (both loud there and within ~6 dB); pairs with their worst bands, top conflicts with which track to cut (the one the band matters less to) |
 | `separate_stems` | `tools/mixcheck.ts` | Demucs (`htdemucs` 4 stems, `htdemucs_6s` adds guitar/piano) to 32-bit float WAVs in `outDir` (default `<project media>/Stems/<name>-<time>`), ≤600 s; `insertTracks` adds them under a new folder in one undo point via the internal `insert_stem_tracks` (after a folder source's last child, lined up with the range). Needs `setup-sidecar --with-separation` |
@@ -640,6 +640,7 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 - **Audio loading**: always `soundfile` (`analysis.load_audio`). torchaudio 2.9+ removed `info()` and moved `load()` to torchcodec, so never call `torchaudio.load`/`torchaudio.info`; `torchaudio.functional` (filters, resampling) is fine.
 - **Loudness**: `analysis.py` implements ITU-R BS.1770-4 (K-weighting, 400 ms blocks, -70/-10 gates, channels summed) and EBU 3342 LRA; `tests/test_analysis.py` checks them against the EBU 3341/3342 reference signals.
 - **Lifecycle**: Sidecar receives SIGTERM when the MCP server receives SIGINT/SIGTERM. Managed via `getSidecarClient().shutdown()` in `main.ts`.
+- **One request at a time**: `sidecar.ts` queues requests, so a timeout counts only that request's work; one that waited `QUEUE_WAIT_MS` (5 min) behind an earlier request (a long separation) is refused as busy (`error.type=busy`) and the sidecar keeps running.
 - **Auto-restart**: If the sidecar crashes, one restart is attempted automatically. If restart fails, the tool returns a clear error.
 - **Script refresh**: every sidecar spawn first copies the build's `server.py` and modules over the installed ones, so an update (which never re-runs `setup-sidecar`) cannot leave an old `server.py` without the new methods.
 - **Install location**: Venv at `~/.reaper-mcp/sidecar-venv/`, scripts at `~/.reaper-mcp/sidecar/` (`server.py` plus `SIDECAR_MODULES` in `setup-sidecar.ts`, e.g. `analysis.py` — add a new module there).
