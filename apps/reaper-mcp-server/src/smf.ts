@@ -40,6 +40,8 @@ export interface SmfFile {
   timeSignature: [number, number] | null;
   /** Length in quarter notes: the end of the last note or event */
   lengthQN: number;
+  /** Events the import does not carry, counted by kind (only kinds that occur) */
+  skipped: Partial<Record<'sysex' | 'programChange' | 'channelPressure' | 'polyPressure' | 'pitchBend', number>>;
 }
 
 class Reader {
@@ -102,6 +104,8 @@ export function parseSmf(data: Uint8Array): SmfFile {
   let timeSignature: [number, number] | null = null;
   let endTicks = 0;
 
+  const skipped: SmfFile['skipped'] = {};
+  const skip = (kind: keyof SmfFile['skipped']) => { skipped[kind] = (skipped[kind] ?? 0) + 1; };
   for (let t = 0; t < trackCount && !r.done; t++) {
     const id = r.ascii(4);
     const len = r.u32();
@@ -146,6 +150,7 @@ export function parseSmf(data: Uint8Array): SmfFile {
       }
       if (b === 0xf0 || b === 0xf7) {
         tr.bytes(tr.varlen());
+        skip('sysex');
         continue;
       }
       if (b & 0x80) status = b;
@@ -158,6 +163,7 @@ export function parseSmf(data: Uint8Array): SmfFile {
       const channel = status & 0x0f;
       if (kind === 0xc0 || kind === 0xd0) {
         tr.byte();
+        skip(kind === 0xc0 ? 'programChange' : 'channelPressure');
         continue;
       }
       const d1 = tr.byte() & 0x7f;
@@ -171,6 +177,8 @@ export function parseSmf(data: Uint8Array): SmfFile {
         close((channel << 7) | d1, tick);
       } else if (kind === 0xb0) {
         track.cc.push({ time: tick / ppq, channel, cc: d1, value: d2 });
+      } else {
+        skip(kind === 0xe0 ? 'pitchBend' : 'polyPressure');
       }
     }
     // Notes never released end at the track's last event
@@ -182,5 +190,5 @@ export function parseSmf(data: Uint8Array): SmfFile {
     r.pos = start + len;
   }
 
-  return { format, ppq, tracks, tempo, tempoChanges, timeSignature, lengthQN: endTicks / ppq };
+  return { format, ppq, tracks, tempo, tempoChanges, timeSignature, lengthQN: endTicks / ppq, skipped };
 }

@@ -152,6 +152,7 @@ export function registerCompositionTools(server: McpServer): void {
     'REAPER\'s import dialog: notes and controllers of every file track merged into one item on trackIndex, or ' +
     'with newTracks each file track on a new track named after it, inserted at trackIndex. Placed at position ' +
     '(seconds) on the project grid; the file\'s tempo is reported, not applied (set it with set_project_tempo). ' +
+    'Pitch bend, program changes, aftertouch and sysex are not imported; file.notImported counts them. ' +
     'One undo point.',
     {
       path: z.string().min(1).describe('Absolute path of the .mid/.midi file'),
@@ -207,6 +208,8 @@ export function registerCompositionTools(server: McpServer): void {
           tempo: smf.tempo,
           tempoChanges: smf.tempoChanges,
           timeSignature: smf.timeSignature,
+          // Pitch bend, program changes, aftertouch and sysex are not imported: say how many were left out
+          ...(Object.keys(smf.skipped).length ? { notImported: smf.skipped } : {}),
         },
         ...(smf.tempo !== null ? { note: 'The file tempo was not applied; set it with set_project_tempo if wanted.' } : {}),
       });

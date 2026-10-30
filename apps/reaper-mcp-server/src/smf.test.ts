@@ -36,6 +36,7 @@ describe('parseSmf', () => {
   it('skips sysex, program change and pitch bend without losing its place', () => {
     const file = parseSmf(smf([[[0, 0xf0, 3, 0x7e, 0x09, 0xf7], [0, 0xc0, 5], [0, 0xe0, 0, 64], [0, 0x90, 67, 100], [480, 0x80, 67, 0]]]));
     expect(file.tracks[0].notes).toEqual([{ start: 0, length: 1, channel: 0, pitch: 67, velocity: 100 }]);
+    expect(file.skipped).toEqual({ sysex: 1, programChange: 1, pitchBend: 1 });
   });
 
   it('refuses a file that is not MIDI, an SMPTE division and format 2, saying why', () => {

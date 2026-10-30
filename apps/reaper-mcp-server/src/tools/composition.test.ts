@@ -59,12 +59,12 @@ describe('quantize_midi / transform_midi', () => {
 });
 
 describe('import_midi_file', () => {
-  it('parses the file and reports its tempo without applying it', async () => {
+  it('parses the file and reports its tempo and the events it leaves out, without applying the tempo', async () => {
     const path = join(dir, 'song.mid');
     writeFileSync(path, smf([
       [[0, 0xff, 0x51, 3, 0x09, 0x27, 0xc0]], // 100 BPM
       [[0, ...name('Bass')], [0, 0x90, 36, 100], [960, 0x80, 36, 0]],
-      [[0, ...name('Lead')], [480, 0x90, 72, 90], [480, 0x80, 72, 0]],
+      [[0, ...name('Lead')], [0, 0xe0, 0, 64], [480, 0x90, 72, 90], [480, 0x80, 72, 0]],
     ]));
     let sent: Record<string, unknown> = {};
     sendCommandMock.mockImplementation(async (_t, params) => {
@@ -75,6 +75,7 @@ describe('import_midi_file', () => {
     expect(res.items[0].notes).toBe(2);
     expect(res.file).toMatchObject({ name: 'song.mid', tracks: 2, notes: 2, tempo: 100 });
     expect(res.note).toMatch(/not applied/);
+    expect(res.file.notImported).toEqual({ pitchBend: 1 });
     // What REAPER is asked to write: both tracks, in quarter notes
     expect(JSON.parse(String(sent.tracks))).toEqual([
       { name: 'Bass', notes: [[0, 2, 0, 36, 100]], cc: [] },
