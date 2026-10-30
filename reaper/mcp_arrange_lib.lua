@@ -784,6 +784,7 @@ local function apply_process(api, c)
       api.SetMediaItemInfo_Value(s.item, "D_VOL", gain)
       local d = describe(api, s.item)
       d.levelBefore = r3(s.level + db(before) + db(take_vol))
+      d.levelAfter = r3(c.target)
       d.gainBeforeDb, d.gainAfterDb = db(before), db(gain)
       r.items[#r.items + 1] = d
     end

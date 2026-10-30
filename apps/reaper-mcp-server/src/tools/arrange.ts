@@ -97,7 +97,8 @@ export function registerArrangeTools(server: McpServer): void {
     'insert_time',
     'Open empty time at a position across the whole project: every item, marker, region, tempo marker, envelope point ' +
       'and automation item at or after it moves later by `length`; items spanning it are split (unless splitItems: false) ' +
-      'and regions spanning it grow. Independent of REAPER\'s ripple settings. One undo point; returns what moved.',
+      'and regions spanning it grow. An automation item spanning the position stays where it is (counted in ' +
+      'automationItemsSpanning). Independent of REAPER\'s ripple settings. One undo point; returns what moved.',
     {
       position: seconds('Where to open time, in seconds'),
       length: z.coerce.number().positive().max(3600).describe('How much time to insert, in seconds'),
@@ -123,7 +124,7 @@ export function registerArrangeTools(server: McpServer): void {
     'Copy a section of the song (a region by list_regions index, or start/end) to another position: the items in it ' +
       '(trimmed to the section) and, by default, its automation (envelope points, plus a pooled copy of each automation item ' +
       'wholly inside the section; items crossing an edge are counted in automationItemsCrossing, not copied), on every track or the given tracks. With `insert`, ' +
-      'time is opened at the position first so nothing there is overwritten (e.g. repeat a chorus). One undo point.',
+      'time is opened at the position first, across the whole project like insert_time, so nothing there is overwritten (e.g. repeat a chorus). One undo point.',
     {
       regionIndex: z.coerce.number().int().min(0).optional().describe('Region to copy (list_regions index)'),
       start: seconds('Section start in seconds (instead of regionIndex)').optional(),

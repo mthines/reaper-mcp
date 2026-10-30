@@ -372,7 +372,7 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
       local a, b = api.tracks[1].items[1], api.tracks[1].items[2]
       assert(math.abs(20 * math.log(a.vals.D_VOL, 10) - 11) < 1e-6, "-12 dB → -1 dB is +11 dB")
       assert(math.abs(20 * math.log(b.vals.D_VOL, 10) - 5) < 1e-6, "-6 dB → -1 dB is +5 dB")
-      assert(r.items[1].levelBefore == -12 and r.items[1].gainBeforeDb == 0 and r.items[1].gainAfterDb == 11)
+      assert(r.items[1].levelBefore == -12 and r.items[1].levelAfter == -1 and r.items[1].gainBeforeDb == 0 and r.items[1].gainAfterDb == 11)
       assert(#api.undo_labels == 1 and api.undo_labels[1] == "MCP: Normalize items")
     `);
   });
