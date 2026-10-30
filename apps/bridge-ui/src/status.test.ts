@@ -22,6 +22,8 @@ import {
   statusRequestUrl,
   commandKind,
   LONG_RUNNING,
+  outcomeOf,
+  SYSTEM_ERROR_PREFIXES,
   speedOf,
   measurementOf,
   measurementHistory,
@@ -171,15 +173,15 @@ describe('history', () => {
 
 describe('groupByTool', () => {
   const log: CommandEntry[] = [
-    { n: 4, t: 400, c: 'set_fx_parameter', ms: 2, ok: false, e: 'bad index' },
+    { n: 4, t: 400, c: 'set_fx_parameter', ms: 2, ok: false, e: 'Track 9 not found' },
     { n: 3, t: 300, c: 'list_tracks', ms: 1, ok: true },
     { n: 2, t: 200, c: 'set_fx_parameter', ms: 4, ok: true },
-    { n: 1, t: 100, c: 'set_fx_parameter', ms: 6, ok: false, e: 'older error' },
+    { n: 1, t: 100, c: 'set_fx_parameter', ms: 6, ok: false, e: 'Handler error: attempt to index nil' },
   ];
 
-  it('counts calls, errors and latency per command type', () => {
+  it('counts calls, system errors (not refused requests) and latency per command type', () => {
     const [fx, tracks] = groupByTool(log);
-    expect(fx).toMatchObject({ c: 'set_fx_parameter', kind: 'write', count: 3, errors: 2, avg: 4, max: 6, last: 400, lastError: 'bad index' });
+    expect(fx).toMatchObject({ c: 'set_fx_parameter', kind: 'write', count: 3, errors: 1, avg: 4, max: 6, last: 400, lastError: 'Handler error: attempt to index nil' });
     expect(tracks).toMatchObject({ c: 'list_tracks', kind: 'read', count: 1, errors: 0 });
   });
 
@@ -250,6 +252,20 @@ describe('settings and params', () => {
     const out = clearedBefore([bar(0), bar(10), bar(20)], 25);
     expect(out.map((b) => b.total)).toEqual([0, 0, 3]);
     expect(clearedBefore([bar(0)], 0)[0].total).toBe(3);
+  });
+
+  it('tells a system error from a refused request', () => {
+    expect(outcomeOf({ ok: true })).toBe('ok');
+    expect(outcomeOf({ ok: false, e: 'Track 99999 not found' })).toBe('refused');
+    expect(outcomeOf({ ok: false, e: 'Handler error: attempt to index nil' })).toBe('error');
+    expect(outcomeOf({ ok: false, e: 'Unknown command type: nope' })).toBe('error');
+    expect(outcomeOf({ ok: false, e: 'Internal error: emitter not found' })).toBe('error');
+  });
+
+  it('treats the same failures as errors as the bridge timeline does', () => {
+    const lua = readFileSync(new URL('../../../reaper/mcp_bridge.lua', import.meta.url), 'utf8');
+    const block = lua.match(/local failed = not ok and \(([\s\S]*?)\) ~= nil/)?.[1] ?? '';
+    expect(block.match(/"\^([^"]+)"/g)?.map((q) => q.slice(2, -1))).toEqual(SYSTEM_ERROR_PREFIXES);
   });
 
   it('keeps the long-running list in step with the bridge', () => {

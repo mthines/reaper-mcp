@@ -215,17 +215,23 @@ export const EDIT_STORIES: Story[] = editStories();
 /** The details drawer for the kinds of call it shows differently */
 export const DRAWER_STORIES: Story[] = (() => {
   const measured = MEASUREMENT_STORIES[3];
-  const failed = call('add_fx', { trackIndex: 3, fxName: 'VST3: Pro-Q 4' }, undefined, {
+  const refused = call('add_fx', { trackIndex: 3, fxName: 'VST3: Pro-Q 4' }, undefined, {
     ok: false,
     e: 'FX "VST3: Pro-Q 4" not found on track 3. Installed match candidates: Pro-Q 3',
     ms: 22.4,
+  });
+  const failed = call('send_midi_cc', { trackIndex: 0, cc: 1, value: 64 }, undefined, {
+    ok: false,
+    e: 'Internal error: reaper-mcp/mcp_midi_emitter was inserted but could not be found in the MCP Meters container',
+    ms: 3.1,
   });
   const long = call('render_project', { bounds: 'time_selection', overwrite: true }, undefined, { ms: 4655 });
   const slow = call('get_fx_parameters', { trackIndex: 3, fxIndex: 0 }, undefined, { ms: 612 });
   const bare = call('list_tracks', {}, undefined, { p: undefined, ms: 3.1 });
   return [
     { ...measured, title: 'With a result', note: 'A measurement, its params and the previous call' },
-    story('Error', failed, 'Failed call with its message'),
+    story('Refused', refused, 'An expected rejection: a warning, not counted as an error'),
+    story('Error', failed, 'A system error: counted, and notified when enabled'),
     story('Long-running', long, 'Slow by nature, so not marked slow'),
     story('Very slow', slow, 'Over 500 ms'),
     story('No params', bare),

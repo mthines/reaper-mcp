@@ -13,6 +13,7 @@ paths: ["reaper/**"]
 - JSON encoding: custom implementation that handles strings, numbers, booleans, arrays, and nested objects
 - All ReaScript API calls are in handler functions inside the `handlers` table
 - The bridge must be resilient to malformed input -- always wrap file reads in pcall
+- Error prefixes decide severity. A refused request ("Track 9 not found") returns a plain message: a warning everywhere (span status unset, WARN log, amber on the status page, no notification, not counted in `errors`). A system fault uses a prefix: `Handler error:` (crash, added by the dispatcher), `Unknown command type`, or `Internal error: …` for a handler that caught its own broken assumption. These count as errors. The list lives in `record_command`, `classifyBridgeError()` (`bridge.ts`) and `SYSTEM_ERROR_PREFIXES` (`apps/bridge-ui/src/status.ts`); `status.test.ts` keeps the page and the bridge equal.
 
 ### Adding a Lua Handler
 

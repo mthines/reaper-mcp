@@ -1,7 +1,7 @@
 /**
  * handlers.set_track_property (record arm, phase, input, playback offset),
  * handlers.render_track_to_wav (master = whole mix, no solo) and
- * handlers.remove_mcp_meters, run in real Lua 5.4 via wasmoon against a fake `reaper`.
+ * handlers.remove_mcp_meters and ensure_jsfx_on_track, run in real Lua 5.4 via wasmoon against a fake `reaper`.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -18,11 +18,18 @@ function handler(name: string): string {
   return BRIDGE_SRC.slice(start, end + 5);
 }
 
+function fn(name: string): string {
+  const start = BRIDGE_SRC.indexOf(`\nfunction ${name}(`);
+  const end = BRIDGE_SRC.indexOf('\nend\n', start);
+  expect(start).toBeGreaterThan(-1);
+  return BRIDGE_SRC.slice(start, end + 5);
+}
+
 async function run(setup: string, name: string, check: string): Promise<void> {
   const lua = await new LuaFactory().createEngine();
   try {
     await lua.doString(`handlers = {}\n${setup}`);
-    await lua.doString(handler(name));
+    await lua.doString(name.includes('(') ? name : handler(name));
     await lua.doString(check);
   } finally {
     lua.global.close();
@@ -179,6 +186,50 @@ describe('remove_mcp_meters', () => {
       assert(r, err)
       assert(r.tracks[1].trackIndex == 0 and r.tracks[1].removed == 2)
       assert(r.tracks[2].trackIndex == -1)
+    `);
+  });
+});
+
+// A track whose only FX is the "MCP Meters" container (index 0); REAPER reports
+// the container's items by name, the MIDI emitter without its path (seen live).
+const FAKE_CONTAINER = `
+  container_cache = {}
+  items = {}
+  inserts = 0
+  find_or_create_mcp_container = function() return 0 end
+  reaper = {
+    TrackFX_GetEnabled = function() return true end,
+    TrackFX_GetCount = function() return 1 end,
+    TrackFX_GetNamedConfigParm = function(_, _, key)
+      if key == "container_count" then return true, tostring(#items) end
+      local i = tonumber(key:match("container_item%.(%d+)"))
+      return true, tostring(1000 + i)
+    end,
+    TrackFX_GetFXName = function(_, addr) return true, items[addr - 1000 + 1] end,
+    TrackFX_AddByName = function(_, name)
+      inserts = inserts + 1
+      items[#items + 1] = name:find("emitter") and "JS: MCP MIDI Emitter"
+        or "JS: MCP LUFS Meter [reaper-mcp/mcp_lufs_meter.jsfx]"
+      return 5
+    end,
+  }
+`;
+
+describe('ensure_jsfx_on_track', () => {
+  it('finds the MIDI emitter REAPER names without its path, and inserts it only once', async () => {
+    await run(FAKE_CONTAINER, fn('ensure_jsfx_on_track'), `
+      local a, err = ensure_jsfx_on_track("T0", "reaper-mcp/mcp_midi_emitter")
+      assert(a == 1000, tostring(a) .. " " .. tostring(err))
+      local b = ensure_jsfx_on_track("T0", "reaper-mcp/mcp_midi_emitter")
+      assert(b == 1000 and inserts == 1, "inserts " .. inserts)
+    `);
+  });
+
+  it('finds a meter by its path next to the emitter', async () => {
+    await run(FAKE_CONTAINER + 'items = { "JS: MCP MIDI Emitter" }', fn('ensure_jsfx_on_track'), `
+      local a, err = ensure_jsfx_on_track("T0", "reaper-mcp/mcp_lufs_meter")
+      assert(a == 1001, tostring(a) .. " " .. tostring(err))
+      assert(ensure_jsfx_on_track("T0", "reaper-mcp/mcp_lufs_meter") == 1001 and inserts == 1)
     `);
   });
 });

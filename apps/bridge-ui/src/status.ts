@@ -525,6 +525,21 @@ export const SLOW_MS = 100;
 export const VERY_SLOW_MS = 500;
 
 /**
+ * Error prefixes that mean the system failed (a handler crash, an unknown command, a handler that
+ * caught its own broken assumption). Every other failure is a refused request ("Track 9 not found"):
+ * expected, shown as a warning, never counted as an error or notified. Mirrors record_command in
+ * mcp_bridge.lua (which counts errors for the timeline) and classifyBridgeError in the server.
+ */
+export const SYSTEM_ERROR_PREFIXES = ['Handler error:', 'Unknown command type', 'Internal error:'];
+
+export type Outcome = 'ok' | 'error' | 'refused';
+
+export function outcomeOf(e: Pick<CommandEntry, 'ok' | 'e'>): Outcome {
+  if (e.ok) return 'ok';
+  return SYSTEM_ERROR_PREFIXES.some((p) => e.e?.startsWith(p)) ? 'error' : 'refused';
+}
+
+/**
  * Commands whose duration is the work itself: renders, plugin instantiation (a sampler can take
  * seconds to load), project/chunk IO, and proxies that run arbitrary work. Never rated slow.
  * Mirrors LONG_RUNNING in mcp_bridge.lua, which keeps them out of the timeline's slow count.
@@ -583,7 +598,7 @@ export function groupByTool(entries: CommandEntry[], sort: ToolSort = 'count'): 
   for (const e of entries) {
     const g = groups.get(e.c) ?? { entries: [], errors: 0 };
     g.entries.push(e);
-    if (!e.ok) {
+    if (outcomeOf(e) === 'error') {
       g.errors += 1;
       g.lastError ??= e.e;
     }

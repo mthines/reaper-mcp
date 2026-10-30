@@ -51,6 +51,8 @@ import {
   statusRequestUrl,
   timelineBars,
   clearedBefore,
+  outcomeOf,
+  type Outcome,
   type BridgeHistory,
   type BridgeSettings,
   type BridgeStatus,
@@ -286,6 +288,16 @@ function useSettings(status: BridgeStatus | null): [BridgeSettings | null, (key:
 
 const NOTIFY_KEY = 'mcp-bridge-notify';
 
+// A refused request ("Track 9 not found") is a warning, a system error is an error
+const ROW_CLASS: Record<Outcome, string> = { ok: '', error: 'row-err', refused: 'row-warn' };
+const DOT_CLASS: Record<Outcome, string> = { ok: 'ok', error: 'err', refused: 'warn' };
+const OUTCOME_TAG: Record<Outcome, string> = { ok: 'ok ', error: 'ERR', refused: 'WRN' };
+const BADGE: Record<Outcome, { className: string; label: string }> = {
+  ok: { className: 'result-ok', label: 'Success' },
+  error: { className: 'result-err', label: 'Error' },
+  refused: { className: 'result-warn', label: 'Refused' },
+};
+
 /** Desktop notification per failed command while enabled (a per-viewer choice, kept in localStorage). */
 function useErrorNotifications(log: CommandEntry[], sessions: Map<string, Session>) {
   const [enabled, setEnabled] = useState(() => load(NOTIFY_KEY) === '1' && notificationPermission() === 'granted');
@@ -294,7 +306,8 @@ function useErrorNotifications(log: CommandEntry[], sessions: Map<string, Sessio
   useEffect(() => {
     const newest = log[0]?.n ?? 0;
     if (enabled) {
-      const fresh = log.filter((e) => e.n > notifiedThrough.current && !e.ok);
+      // Refused requests are expected (a warning), so only system errors reach the desktop
+      const fresh = log.filter((e) => e.n > notifiedThrough.current && outcomeOf(e) === 'error');
       // A burst collapses into one notification so a failing loop can't flood the desktop
       if (fresh.length > 3) {
         new Notification(`MCP Bridge: ${fresh.length} commands failed`, { body: fresh[0].e, tag: 'mcp-bridge-errors' });
@@ -1721,14 +1734,14 @@ function Log({
   const since = range ? now - range.ms : null;
   const windowed = useMemo(() => (since === null ? log : log.filter((e) => e.t >= since)), [log, since]);
   const scoped = useMemo(() => (sessionFilter ? windowed.filter((e) => e.s === sessionFilter) : windowed), [windowed, sessionFilter]);
-  const errorCount = useMemo(() => scoped.filter((e) => !e.ok).length, [scoped]);
+  const errorCount = useMemo(() => scoped.filter((e) => outcomeOf(e) === 'error').length, [scoped]);
   // Every match the page holds, then the ones inside the range: the rest are offered at the end of the list
   const matches = useMemo(() => {
     const terms = parseQuery(query);
     return log.filter(
       (e) =>
         (!sessionFilter || e.s === sessionFilter) &&
-        (filter === 'all' || !e.ok) &&
+        (filter === 'all' || outcomeOf(e) === 'error') &&
         matchesQuery(e, terms),
     );
   }, [log, sessionFilter, filter, query]);
@@ -1779,7 +1792,7 @@ function Log({
   const copy = async () => {
     track({ name: 'log_copied', what: 'rows' });
     const text = rows
-      .map((e) => `${new Date(e.t).toISOString()}  #${e.n}  ${e.ok ? 'ok ' : 'ERR'}  ${e.c}  ${e.ms}ms${e.s ? `  [${sessionName(sessionOf(e.s))}]` : ''}${e.e ? `  ${e.e}` : ''}`)
+      .map((e) => `${new Date(e.t).toISOString()}  #${e.n}  ${OUTCOME_TAG[outcomeOf(e)]}  ${e.c}  ${e.ms}ms${e.s ? `  [${sessionName(sessionOf(e.s))}]` : ''}${e.e ? `  ${e.e}` : ''}`)
       .join('\n');
     try {
       await navigator.clipboard.writeText(text);
@@ -2239,7 +2252,7 @@ const Row = memo(
     const ms = String(time.getMilliseconds()).padStart(3, '0');
     const speed = speedOf(e.c, e.ms);
     return (
-      <div className={`row ${e.ok ? '' : 'row-err'} ${selected ? 'row-selected' : ''}`}>
+      <div className={`row ${ROW_CLASS[outcomeOf(e)]} ${selected ? 'row-selected' : ''}`}>
         <button className="row-main" style={{ height: ROW_HEIGHT }} onClick={() => onSelect(e)} aria-pressed={selected}>
           {/* "x ago" is set on hover, so the row needn't re-render every second to keep it fresh */}
           <span className="row-time mono" onMouseEnter={(ev) => (ev.currentTarget.title = formatAgo(Date.now() - e.t))}>
@@ -2247,7 +2260,7 @@ const Row = memo(
             {hhmmss}
             <span className="row-ms">.{ms}</span>
           </span>
-          <span className={`status-dot ${e.ok ? 'ok' : 'err'}`} />
+          <span className={`status-dot ${DOT_CLASS[outcomeOf(e)]}`} />
           <span className="row-cmd mono">{e.c}</span>
           {e.e && <span className="row-err-inline">{e.e}</span>}
           <span className="row-end">
@@ -2326,7 +2339,7 @@ export function Details({
       <ResizeHandle fraction={width.fraction} onCommit={width.setFraction} />
       <div className="drawer-head">
         <div className="drawer-title">
-          <span className={`status-dot ${e.ok ? 'ok' : 'err'}`} />
+          <span className={`status-dot ${DOT_CLASS[outcomeOf(e)]}`} />
           <span className="tip-anchor">
             <button
               className={`drawer-filter mono${filtered ? ' active' : ''}`}
@@ -2346,7 +2359,7 @@ export function Details({
         </button>
       </div>
       <div className="drawer-body">
-        <div className={`result-badge ${e.ok ? 'result-ok' : 'result-err'}`}>{e.ok ? 'Success' : 'Error'}</div>
+        <div className={`result-badge ${BADGE[outcomeOf(e)].className}`}>{BADGE[outcomeOf(e)].label}</div>
 
         <dl className="facts">
           <dt>Handler time</dt>

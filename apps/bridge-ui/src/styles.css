@@ -468,6 +468,9 @@ kbd {
 .row-err { border-left-color: var(--bad); background: rgba(248, 113, 113, 0.04); }
 .row-selected { background: rgba(124, 196, 255, 0.07); border-left-color: var(--accent); }
 .row-err.row-selected { border-left-color: var(--bad); }
+.row-warn { border-left-color: var(--warn); background: rgba(245, 184, 75, 0.035); }
+.row-warn.row-selected { border-left-color: var(--warn); }
+.row-warn .row-err-inline { color: var(--warn); }
 
 .row-main {
   width: 100%;
@@ -484,6 +487,7 @@ kbd {
 .status-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 .status-dot.ok { background: var(--live); opacity: 0.75; }
 .status-dot.err { background: var(--bad); box-shadow: 0 0 8px rgba(248, 113, 113, 0.6); }
+.status-dot.warn { background: var(--warn); }
 .row-cmd { font-size: 12.5px; color: var(--text); flex: none; }
 .row-err-inline {
   flex: 1; min-width: 0;
@@ -681,6 +685,7 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 }
 .result-ok { color: var(--live); background: rgba(74, 222, 128, 0.09); border: 1px solid rgba(74, 222, 128, 0.25); }
 .result-err { color: var(--bad); background: rgba(248, 113, 113, 0.09); border: 1px solid rgba(248, 113, 113, 0.28); }
+.result-warn { color: var(--warn); background: rgba(245, 184, 75, 0.08); border: 1px solid rgba(245, 184, 75, 0.28); }
 
 .facts { display: grid; grid-template-columns: 104px 1fr; gap: 9px 12px; margin: 0; font-size: 12.5px; }
 .facts dt { color: var(--faint); }

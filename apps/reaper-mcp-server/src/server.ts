@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { getTracer, emitLog, exceptionAttributes, getToolDurationHistogram, redactHome } from './telemetry.js';
+import { classifyBridgeError, isSystemError } from './bridge.js';
 import { registerProjectTools } from './tools/project.js';
 import { registerTrackTools } from './tools/tracks.js';
 import { registerFxTools } from './tools/fx.js';
@@ -78,15 +79,15 @@ export function instrumentToolHandlers(server: McpServer): void {
             const res = result as { isError?: boolean; content?: { text?: string }[] };
             if (res?.isError) {
               // Tool-level failure reported to the client (semconv: error.type=tool_error).
-              // Logged at warn: the cause is already logged by the bridge/sidecar span below.
+              // A refused request ("Track 9 not found") leaves the status unset, like an
+              // HTTP 4xx; only system errors mark the span as failed. No log: the
+              // bridge/sidecar call below already logged the cause.
               const errorText = res.content?.[0]?.text ?? 'Tool error';
               metricAttrs['error.type'] = 'tool_error';
               span.setAttribute('error.type', 'tool_error');
-              span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(errorText).slice(0, MAX_STATUS_MESSAGE) });
-              emitLog('warn', `Tool ${toolName} returned an error: ${errorText}`, {
-                'gen_ai.tool.name': toolName,
-                'error.type': 'tool_error',
-              });
+              if (isSystemError(classifyBridgeError(errorText.replace(/^Error:\s*/, '')))) {
+                span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(errorText).slice(0, MAX_STATUS_MESSAGE) });
+              }
             }
             return result;
           } catch (err) {

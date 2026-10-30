@@ -1916,6 +1916,19 @@ end
 -- Falls back to direct insertion on older REAPER versions.
 -- Returns the FX index (possibly container-addressed) on success, or nil + error.
 function ensure_jsfx_on_track(track, fx_name)
+  -- REAPER names a JSFX "JS: <desc> [<path>]" but leaves the path out for some
+  -- (seen live: the MIDI emitter is just "JS: MCP MIDI Emitter"), so match either.
+  local desc = ({
+    ["reaper-mcp/mcp_analyzer"] = "JS: MCP Spectrum Analyzer",
+    ["reaper-mcp/mcp_lufs_meter"] = "JS: MCP LUFS Meter",
+    ["reaper-mcp/mcp_correlation_meter"] = "JS: MCP Correlation Meter",
+    ["reaper-mcp/mcp_crest_factor"] = "JS: MCP Crest Factor Meter",
+    ["reaper-mcp/mcp_midi_emitter"] = "JS: MCP MIDI Emitter",
+  })[fx_name]
+  local function is_it(name)
+    return name and (name:find(fx_name, 1, true) or (desc and name:find(desc, 1, true) == 1))
+  end
+
   -- Try container approach first (REAPER 7.06+)
   local container_idx = find_or_create_mcp_container(track)
   if container_idx then
@@ -1935,7 +1948,7 @@ function ensure_jsfx_on_track(track, fx_name)
         local addr = tonumber(addr_str)
         if addr then
           local _, name = reaper.TrackFX_GetFXName(track, addr)
-          if name and name:find(fx_name, 1, true) then return addr end
+          if is_it(name) then return addr end
         end
       end
     end
@@ -1958,7 +1971,7 @@ function ensure_jsfx_on_track(track, fx_name)
       -- (seen live: Pro-Q 4 band 1 gain pushed to +30 dB).
       found = find_in_container()
       if found then return found end
-      return nil, fx_name .. " was inserted but could not be found in the MCP Meters container"
+      return nil, "Internal error: " .. fx_name .. " was inserted but could not be found in the MCP Meters container"
     end
     -- Container insertion failed — fall through to direct
   end
@@ -1967,7 +1980,7 @@ function ensure_jsfx_on_track(track, fx_name)
   local fx_count = reaper.TrackFX_GetCount(track)
   for i = 0, fx_count - 1 do
     local _, name = reaper.TrackFX_GetFXName(track, i)
-    if name and name:find(fx_name, 1, true) then
+    if is_it(name) then
       return i
     end
   end
@@ -4641,7 +4654,7 @@ local SESSIONS_MAX = 20
 local SESSION_FORGET_S = 3600
 local sessions = {}
 
-local function touch_session(cmd, ok)
+local function touch_session(cmd, ok, failed)
   local id = cmd.sessionId
   if type(id) ~= "string" or id == "" then return nil end
   local s = sessions[id]
@@ -4656,7 +4669,7 @@ local function touch_session(cmd, ok)
   s.ended = nil
   if ok ~= nil then
     s.commands = s.commands + 1
-    if not ok then s.errors = s.errors + 1 end
+    if failed then s.errors = s.errors + 1 end
   end
   status_dirty = true
   return s
@@ -4995,7 +5008,7 @@ local saved_seq = 0
 local last_history_publish, last_history_long_publish, last_history_save =
   -HISTORY_MIN_PUBLISH_INTERVAL, -HISTORY_LONG_PUBLISH_INTERVAL, 0
 
-local function record_history(handler_ms, ok, cmd_type)
+local function record_history(handler_ms, ok, cmd_type, failed)
   local slow = ok and handler_ms >= HISTORY_SLOW_MS and not LONG_RUNNING[cmd_type]
   local t = now_ms()
   for _, tier in ipairs(HISTORY_TIERS) do
@@ -5006,7 +5019,7 @@ local function record_history(handler_ms, ok, cmd_type)
       tier.b[id] = b
     end
     b[1] = b[1] + 1
-    if not ok then b[2] = b[2] + 1 end
+    if failed then b[2] = b[2] + 1 end
     if slow then b[3] = b[3] + 1 end -- slow successes; errors counted apart
     b[4] = b[4] + handler_ms
   end
@@ -5155,10 +5168,16 @@ local function record_command(cmd, handler_ms, ok, err, data, before)
     if s and cmd_type == "_session" and type(cmd.params) == "table" and cmd.params.ended then s.ended = true end
     return
   end
-  local session = touch_session(cmd, ok)
+  -- Only system errors count as errors. A refused request ("Track 9 not found") is a
+  -- warning: the caller asked for something that can't be done. Same prefixes as
+  -- classifyBridgeError() in bridge.ts and SYSTEM_ERROR_PREFIXES in the page's status.ts.
+  local e_str = err and tostring(err) or ""
+  local failed = not ok and (e_str:find("^Handler error:") or e_str:find("^Unknown command type")
+    or e_str:find("^Internal error:")) ~= nil
+  local session = touch_session(cmd, ok, failed)
   status.commands = status.commands + 1
   status.seq = status.seq + 1
-  if not ok then status.errors = status.errors + 1 end
+  if failed then status.errors = status.errors + 1 end
   local entry = { n = status.seq, t = now_ms(), c = cmd_type, ms = math.floor(handler_ms * 100 + 0.5) / 100, ok = ok }
   if session then entry.s = session.id end
   if type(cmd.params) == "table" and next(cmd.params) ~= nil then
@@ -5174,7 +5193,7 @@ local function record_command(cmd, handler_ms, ok, err, data, before)
   table.insert(status.recent, 1, entry)
   status.recent[STATUS_RECENT_MAX + 1] = nil
   status_dirty = true
-  record_history(handler_ms, ok, cmd_type)
+  record_history(handler_ms, ok, cmd_type, failed)
   append_log(entry)
 end
 

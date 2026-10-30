@@ -232,7 +232,7 @@ namespace belongs to the official MCP conventions). Durations are in seconds.
 | Metric | Unit | Attributes |
 |--------|------|------------|
 | `mcp.server.operation.duration` | s | `mcp.method.name`, `gen_ai.tool.name`, `error.type` |
-| `reaper.bridge.command.duration` | s | `rpc.method`, `error.type` (`timeout`, `handler_crash`, `unknown_command`, `command_failed`) |
+| `reaper.bridge.command.duration` | s | `rpc.method`, `error.type` (`timeout`, `handler_crash`, `unknown_command`, `internal_error`, `command_failed`) |
 | `reaper.bridge.handler.duration` | s | `rpc.method`, `error.type` — time inside the Lua handler |
 | `reaper.bridge.pickup.duration` | s | — time until the defer loop picked the command up |
 | `reaper.sidecar.request.duration` | s | `rpc.method`, `error.type` |

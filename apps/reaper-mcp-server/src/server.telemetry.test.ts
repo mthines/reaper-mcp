@@ -48,14 +48,37 @@ describe('instrumentToolHandlers', () => {
     expect(span.status.code).toBe(SpanStatusCode.UNSET);
   });
 
-  it('marks isError results as error.type=tool_error', async () => {
+  it('marks a refused request error.type=tool_error but leaves the status unset, like an HTTP 4xx', async () => {
     const cb = wrapTool('add_fx', async () => ({ content: [{ type: 'text', text: 'Error: no such FX' }], isError: true }));
 
     await cb({}, { requestId: 1 });
 
     const [span] = exporter.getFinishedSpans();
     expect(span.attributes['error.type']).toBe('tool_error');
-    expect(span.status).toMatchObject({ code: SpanStatusCode.ERROR, message: 'Error: no such FX' });
+    expect(span.status.code).toBe(SpanStatusCode.UNSET);
+  });
+
+  it.each([
+    'Error: Internal error: emitter was inserted but could not be found',
+    'Error: Handler error: attempt to index a nil value',
+    'Error: Timeout: no response from REAPER Lua bridge after 10000ms',
+  ])('marks a system error as a failed span: %s', async (text) => {
+    const cb = wrapTool('send_midi_cc', async () => ({ content: [{ type: 'text', text }], isError: true }));
+
+    await cb({}, { requestId: 1 });
+
+    const [span] = exporter.getFinishedSpans();
+    expect(span.attributes['error.type']).toBe('tool_error');
+    expect(span.status).toMatchObject({ code: SpanStatusCode.ERROR, message: text });
+  });
+
+  it('logs nothing of its own for an isError result: the bridge already logged the cause', async () => {
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const cb = wrapTool('send_midi_cc', async () => ({ content: [{ type: 'text', text: 'Error: Track 9 not found' }], isError: true }));
+
+    await cb({}, { requestId: 3 });
+
+    expect(stderr.mock.calls.flat().join('\n')).not.toMatch(/returned an error/);
   });
 
   it('records the exception class as error.type and rethrows', async () => {

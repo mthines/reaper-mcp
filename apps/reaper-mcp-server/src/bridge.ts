@@ -74,13 +74,21 @@ export async function ensureBridgeDir(): Promise<string> {
 }
 
 // Bounded `error.type` values for bridge commands (metric + span attribute).
-export type BridgeErrorType = 'timeout' | 'handler_crash' | 'unknown_command' | 'command_failed';
+export type BridgeErrorType = 'timeout' | 'handler_crash' | 'unknown_command' | 'internal_error' | 'command_failed';
 
 /** Classify a failed bridge response by the error prefixes mcp_bridge.lua writes. */
 export function classifyBridgeError(error: string | undefined): BridgeErrorType {
+  if (error?.startsWith('Timeout:')) return 'timeout';
   if (error?.startsWith('Handler error:')) return 'handler_crash';
   if (error?.startsWith('Unknown command type')) return 'unknown_command';
+  // A handler that caught its own broken assumption (a bug, not a bad request)
+  if (error?.startsWith('Internal error:')) return 'internal_error';
   return 'command_failed';
+}
+
+/** Everything but `command_failed` (the request was refused) is a fault in the system. */
+export function isSystemError(type: BridgeErrorType): boolean {
+  return type !== 'command_failed';
 }
 
 /**
@@ -216,11 +224,14 @@ export async function sendCommand(
             }
 
             if (errorType) {
-              span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(response.error ?? 'Bridge error') });
-              // A handler returning an error (bad track index, missing FX) is an
-              // expected rejection — warn. A Lua crash or unknown command is a bug — error.
+              // A handler rejecting the request (bad track index, missing FX) is an expected
+              // outcome, like an HTTP 4xx: error.type says why, but the span status stays
+              // unset and the log is a warning. A Lua crash, unknown command or internal error
+              // is a system error.
+              const systemError = isSystemError(errorType);
+              if (systemError) span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(response.error ?? 'Bridge error') });
               emitLog(
-                errorType === 'command_failed' ? 'warn' : 'error',
+                systemError ? 'error' : 'warn',
                 `Bridge command ${type} failed: ${response.error ?? 'unknown error'}`,
                 {
                   'rpc.method': type,

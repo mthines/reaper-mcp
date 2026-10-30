@@ -28,6 +28,11 @@ const mockedUnlink = vi.mocked(unlink);
 const mockedMkdir = vi.mocked(mkdir);
 const mockedStat = vi.mocked(stat);
 
+// The global logger provider can be set only once per process: register one
+// whose emit every test can inspect.
+const emit = vi.fn();
+logs.setGlobalLoggerProvider({ getLogger: () => ({ emit }) } as unknown as Parameters<typeof logs.setGlobalLoggerProvider>[0]);
+
 describe('bridge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -70,6 +75,24 @@ describe('bridge', () => {
       );
       expect(result.success).toBe(true);
       expect(result.data).toEqual({ name: 'Test Project' });
+    });
+
+    it('logs a handler-reported internal error at ERROR, a bad request at WARN', async () => {
+      emit.mockClear();
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      mockedWriteFile.mockResolvedValue(undefined);
+      mockedUnlink.mockResolvedValue(undefined);
+      const fail = (error: string) => JSON.stringify({ id: 'test-uuid-1234', success: false, error, timestamp: Date.now() });
+
+      mockedReadFile.mockResolvedValueOnce(fail('Internal error: emitter was inserted but could not be found'));
+      await sendCommand('send_midi_cc', { trackIndex: 0, cc: 1, value: 0 });
+      mockedReadFile.mockResolvedValueOnce(fail('Track 99 not found'));
+      await sendCommand('send_midi_cc', { trackIndex: 99, cc: 1, value: 0 });
+
+      const failed = emit.mock.calls.map(([r]) => r).filter((r) => r.eventName === 'reaper.bridge.command.failed');
+      expect(failed).toHaveLength(2);
+      expect(failed[0]).toMatchObject({ severityNumber: SeverityNumber.ERROR, attributes: { 'error.type': 'internal_error' } });
+      expect(failed[1]).toMatchObject({ severityNumber: SeverityNumber.WARN, attributes: { 'error.type': 'command_failed' } });
     });
 
     it('returns timeout error when no response arrives', async () => {
@@ -157,9 +180,7 @@ describe('bridge', () => {
 
   describe('readBridgeEvents', () => {
     it('exports each Lua event as an OTel log record with its own timestamp and severity', async () => {
-      // The cached ProxyLogger binds to whichever global provider is registered.
-      const emit = vi.fn();
-      logs.setGlobalLoggerProvider({ getLogger: () => ({ emit }) } as unknown as Parameters<typeof logs.setGlobalLoggerProvider>[0]);
+      emit.mockClear();
       vi.spyOn(console, 'error').mockImplementation(() => undefined);
       mockedWriteFile.mockResolvedValue(undefined);
       mockedReadFile.mockResolvedValueOnce(
@@ -194,6 +215,8 @@ describe('bridge', () => {
     it('maps the Lua bridge error prefixes to bounded error.type values', () => {
       expect(classifyBridgeError('Handler error: attempt to index nil')).toBe('handler_crash');
       expect(classifyBridgeError('Unknown command type: nope')).toBe('unknown_command');
+      expect(classifyBridgeError('Internal error: x was inserted but could not be found')).toBe('internal_error');
+      expect(classifyBridgeError('Timeout: no response from REAPER Lua bridge after 10000ms')).toBe('timeout');
       expect(classifyBridgeError('Track 99 not found')).toBe('command_failed');
       expect(classifyBridgeError(undefined)).toBe('command_failed');
     });

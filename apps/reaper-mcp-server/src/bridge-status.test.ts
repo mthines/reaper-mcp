@@ -20,6 +20,7 @@ interface LongHistory { v: number; tiers: Array<{ size: number; b: Row[] }> }
 interface Session { id: string; dir?: string; client?: string; commands: number; errors: number; ended?: boolean }
 interface Status {
   commands: number;
+  errors: number;
   recent: Entry[];
   sessions: Session[];
   settings: { paused: boolean; readonly: boolean; openOnStart: boolean; dev: boolean };
@@ -138,6 +139,23 @@ describe('bridge status feed', () => {
     await bridge.send('_session', { ended: 1 }, A);
     const { sessions } = await bridge.status();
     expect(sessions[0].ended).toBe(true);
+  });
+
+  it('counts a system error as an error, a refused request only as a command', async () => {
+    const bridge = await startBridge();
+    const refused = await bridge.send('get_track_properties', { trackIndex: 99999 }, A);
+    expect(refused.success).toBe(false);
+    await bridge.send('no_such_command', {}, A);
+
+    const status = await bridge.status();
+    expect(status.commands).toBe(2);
+    expect(status.errors).toBe(1);
+    expect(status.sessions[0]).toMatchObject({ commands: 2, errors: 1 });
+    // The timeline publishes at most once a second
+    await new Promise((r) => setTimeout(r, 1000));
+    await bridge.status();
+    const buckets = JSON.parse((await bridge.ext('history')) ?? '{}').b as number[][];
+    expect(buckets.reduce((sum, b) => sum + b[2], 0)).toBe(1);
   });
 
   it('captures request params for the details drawer', async () => {
