@@ -4102,6 +4102,43 @@ function handlers.set_automation_item(params) return env_ext.run("set_item", par
 function handlers.delete_automation_item(params) return env_ext.run("delete_item", params) end
 
 -- =============================================================================
+-- Arrangement: copy items, insert/remove time, copy a section, process items
+-- =============================================================================
+
+-- Logic in mcp_arrange_lib.lua (one table, like env_ext: the main chunk is at the locals limit)
+local arrange_ext = {}
+arrange_ext.ok, arrange_ext.lib = pcall(dofile, script_dir .. "mcp_arrange_lib.lua")
+plan_ctx.arrange = arrange_ext.ok and arrange_ext.lib or nil
+
+-- `items` / `tracks` arrive as JSON strings (the bridge decodes only the top level)
+function arrange_ext.run(name, params)
+  if not arrange_ext.ok then
+    return nil, "mcp_arrange_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(arrange_ext.lib) .. ")"
+  end
+  for _, key in ipairs({ "items", "tracks" }) do
+    if type(params[key]) == "string" then
+      if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua" end
+      local ok, v = pcall(plan_lib.json_decode, params[key])
+      if not ok or type(v) ~= "table" then return nil, key .. " is not a JSON array — nothing changed" end
+      params[key] = v
+    end
+  end
+  local ok, res, err = pcall(arrange_ext.lib[name], reaper, params)
+  if not ok then return nil, "Handler error: " .. tostring(res) end
+  return res, err
+end
+
+function handlers.copy_media_items(params) return arrange_ext.run("copy_items", params) end
+
+function handlers.insert_time(params) return arrange_ext.run("insert_time", params) end
+
+function handlers.remove_time(params) return arrange_ext.run("remove_time", params) end
+
+function handlers.copy_section(params) return arrange_ext.run("copy_section", params) end
+
+function handlers.process_items(params) return arrange_ext.run("process_items", params) end
+
+-- =============================================================================
 -- Live MIDI output handlers
 -- =============================================================================
 
@@ -4860,7 +4897,7 @@ for _, c in ipairs({
   "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
   "insert_audio_file", "snapshot_save", "snapshot_restore", "snapshot_edit",
   "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
-  "detect_transients", "create_transient_automation",
+  "detect_transients", "create_transient_automation", "process_items",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
 local HISTORY_LONG_PUBLISH_INTERVAL = 10

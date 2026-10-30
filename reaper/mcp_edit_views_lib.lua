@@ -443,8 +443,8 @@ local function fx_chain_view(params, before)
   return #chains > 0 and { chains = chains } or nil
 end
 
--- Media items of a track, in the timeline's item shape
-local function track_items(tr)
+-- Media items of a track, in the timeline's item shape; `gain` adds the item's gain in dB
+local function track_items(tr, gain)
   local out = {}
   for i = 0, math.min(api.CountTrackMediaItems(tr) or 0, EDIT_MAX_MARKS) - 1 do
     local it = api.GetTrackMediaItem(tr, i)
@@ -454,6 +454,10 @@ local function track_items(tr)
       round2(api.GetMediaItemInfo_Value(it, "D_FADEINLEN")) or 0, round2(api.GetMediaItemInfo_Value(it, "D_FADEOUTLEN")) or 0,
       (take and api.TakeIsMIDI and api.TakeIsMIDI(take)) and 1 or 0, api.GetMediaItemInfo_Value(it, "B_MUTE") ~= 0 and 1 or 0,
     }
+    if gain then
+      local v = api.GetMediaItemInfo_Value(it, "D_VOL") or 1
+      out[#out][7] = v > 0 and round2(20 * math.log(v, 10)) or -150
+    end
   end
   return out
 end
@@ -605,6 +609,125 @@ local function item_view(params, before)
     for _, it in ipairs(lane.was or {}) do all[#all + 1] = it end
   end
   r.len = project_length(r, all)
+  return r
+end
+
+-- Arrangement edits: the whole timeline before and after, a lane for up to four tracks the
+-- edit touches, and the span it worked on (copied from, opened, cut) and where it copied to
+local ARRANGE = {}
+ARRANGE.OPS = { copy_media_items = "copy", insert_time = "insert", remove_time = "remove", copy_section = "section" }
+
+-- The section a copy_section call copies, from a region index or start/end
+function ARRANGE.section(params)
+  local idx = tonumber(params.regionIndex)
+  if idx == nil then return tonumber(params.start), tonumber(params["end"]) end
+  local _, nm, nr = api.CountProjectMarkers(0)
+  local k = 0
+  for i = 0, (nm or 0) + (nr or 0) - 1 do
+    local _, isrgn, pos, rend = api.EnumProjectMarkers3(0, i)
+    if isrgn then
+      if k == idx then return pos, rend end
+      k = k + 1
+    end
+  end
+end
+
+-- Track indexes for the lanes (at most four) and how many tracks the edit touches
+function ARRANGE.tracks(cmd_type, params)
+  if cmd_type == "copy_media_items" or cmd_type == "process_items" then
+    local idx = item_tracks(params)
+    return idx, #idx
+  end
+  local only = cmd_type == "copy_section" and decode_param_list(params.tracks)
+  local s, e
+  if cmd_type == "insert_time" then s, e = tonumber(params.position), math.huge
+  elseif cmd_type == "remove_time" then s, e = tonumber(params.start), math.huge
+  else s, e = ARRANGE.section(params) end
+  if not s or not e then return {}, 0 end
+  local out, n = {}, 0
+  local function consider(t)
+    local tr = api.GetTrack(0, t)
+    if not tr then return end
+    for i = 0, (api.CountTrackMediaItems(tr) or 0) - 1 do
+      local it = api.GetTrackMediaItem(tr, i)
+      local pos = api.GetMediaItemInfo_Value(it, "D_POSITION")
+      if pos < e and pos + api.GetMediaItemInfo_Value(it, "D_LENGTH") > s then
+        n = n + 1
+        if #out < 4 then out[#out + 1] = t end
+        return
+      end
+    end
+  end
+  if type(only) == "table" then
+    for _, t in ipairs(only) do if tonumber(t) then consider(tonumber(t)) end end
+  else
+    for t = 0, (api.CountTracks(0) or 0) - 1 do consider(t) end
+  end
+  return out, n
+end
+
+function ARRANGE.before(cmd_type, params)
+  local idx, n = ARRANGE.tracks(cmd_type, params)
+  local gain = cmd_type == "process_items" and params.operation == "normalize"
+  local b = { idx = idx, n = n, tl = timeline_snapshot(), lanes = {} }
+  for i, t in ipairs(idx) do b.lanes[i] = track_items(api.GetTrack(0, t), gain) end
+  if cmd_type == "copy_media_items" then
+    -- The sources' span, read before the copies land
+    local first, last
+    for _, ref in ipairs(decode_param_list(params.items) or {}) do
+      local tr = type(ref) == "table" and api.GetTrack(0, tonumber(ref.trackIndex) or -2)
+      local it = tr and api.GetTrackMediaItem(tr, tonumber(ref.itemIndex) or -1)
+      if it then
+        local pos = api.GetMediaItemInfo_Value(it, "D_POSITION")
+        first = math.min(first or pos, pos)
+        last = math.max(last or pos, pos + api.GetMediaItemInfo_Value(it, "D_LENGTH"))
+      end
+    end
+    if first then b.span = { round2(first), round2(last) } end
+  end
+  return b
+end
+
+function ARRANGE.view(cmd_type, params, data, before)
+  if type(before) ~= "table" or type(data) ~= "table" then return nil end
+  local r = timeline_snapshot()
+  r.was = before.tl
+  r.op = ARRANGE.OPS[cmd_type] or params.operation
+  local gain = cmd_type == "process_items" and params.operation == "normalize"
+  r.lanes = {}
+  local all = {}
+  for i, t in ipairs(before.idx) do
+    local tr = api.GetTrack(0, t)
+    if tr then
+      local lane = { t = name_of(tr), items = track_items(tr, gain), was = before.lanes[i] }
+      r.lanes[#r.lanes + 1] = lane
+      for _, it in ipairs(lane.items) do all[#all + 1] = it end
+      for _, it in ipairs(lane.was) do all[#all + 1] = it end
+    end
+  end
+  if before.n > #r.lanes then r.moreTracks = before.n - #r.lanes end
+  local num = function(v) return tonumber(v) end
+  if cmd_type == "insert_time" and num(data.position) and num(data.length) then
+    r.span = { data.position, round2(data.position + data.length) }
+  elseif cmd_type == "remove_time" and num(data.start) then
+    r.span = { data.start, data["end"] }
+  elseif cmd_type == "copy_section" and num(data.start) then
+    r.span = { data.start, data["end"] }
+    -- An insert at or before the section moved it along
+    if data.inserted and data.position <= data.start then r.span = { round2(data.start + data.length), round2(data["end"] + data.length) } end
+    r.to = { data.position, round2(data.position + data.length) }
+  elseif cmd_type == "copy_media_items" then
+    r.span = before.span
+    local first, last
+    for _, c in ipairs(type(data.copies) == "table" and data.copies or {}) do
+      first = math.min(first or c.position, c.position)
+      last = math.max(last or c.position, c.position + c.length)
+    end
+    if first then r.to = { round2(first), round2(last) } end
+  end
+  r.len = math.max(project_length(r, all), project_length(before.tl))
+  for _, v in ipairs({ r.span and r.span[2], r.to and r.to[2] }) do r.len = math.max(r.len, v or 0) end
+  r.len = round2(r.len) or 0
   return r
 end
 
@@ -818,6 +941,8 @@ function M.before(cmd_type, params)
     return fx_chains(params)
   elseif ITEM_COMMANDS[cmd_type] and cmd_type ~= "list_midi_items" then
     return item_lanes(params)
+  elseif ARRANGE.OPS[cmd_type] or cmd_type == "process_items" then
+    return ARRANGE.before(cmd_type, params)
   elseif cmd_type == "set_time_selection" or cmd_type == "set_cursor_position" then
     return time_state()
   elseif ROUTING_COMMANDS[cmd_type] and cmd_type ~= "get_track_routing" then
@@ -852,6 +977,8 @@ function M.summary(cmd_type, params, data, before)
     return fx_chain_view(params, before)
   elseif ITEM_COMMANDS[cmd_type] then
     return item_view(params, before)
+  elseif ARRANGE.OPS[cmd_type] or cmd_type == "process_items" then
+    return ARRANGE.view(cmd_type, params, data, before)
   elseif TIME_COMMANDS[cmd_type] then
     return time_view(before)
   elseif ROUTING_COMMANDS[cmd_type] then

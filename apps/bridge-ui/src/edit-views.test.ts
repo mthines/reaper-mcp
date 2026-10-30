@@ -128,6 +128,25 @@ describe('new edit views', () => {
     expect(t).toMatchObject({ cur: 8, wasCur: 2, wasSel: null });
   });
 
+  it('arrangement view: reads the op, the span, where it copied to and the item gains', () => {
+    const v = editViewOf(entry('copy_section', {
+      tempo: [[0, 120, 4, 4, 0]], len: 64, op: 'section', span: [8, 16], to: [32, 40], moreTracks: 3,
+      lanes: [{ t: 'Gtr', items: [[8, 8, 0, 0, 0, 0], [32, 8, 0, 0, 0, 0]], was: [[8, 8, 0, 0, 0, 0]] }],
+    }));
+    expect(v).toMatchObject({ kind: 'timeline', op: 'section', span: [8, 16], to: [32, 40], moreTracks: 3 });
+    const n = editViewOf(entry('process_items', {
+      tempo: [[0, 120, 4, 4, 0]], len: 10, op: 'normalize',
+      lanes: [{ t: 'Gtr', items: [[0, 4, 0, 0, 0, 0, 11]], was: [[0, 4, 0, 0, 0, 0, 'x']] }],
+    }));
+    expect(n).toMatchObject({ op: 'normalize', lanes: [{ items: [[0, 4, 0, 0, 0, 0, 11]], was: [[0, 4, 0, 0, 0, 0]] }] });
+  });
+
+  it('arrangement view: drops an unknown op and a malformed span', () => {
+    const v = editViewOf(entry('insert_time', { tempo: [[0, 120, 4, 4, 0]], len: 10, op: 'explode', span: [1] }));
+    expect(v).not.toHaveProperty('op');
+    expect(v).not.toHaveProperty('span');
+  });
+
   it('diffs a structure edit only when ids match the tracks', () => {
     const row = ['Kick', 0, '', 0, 0, ''];
     const ok = editViewOf(entry('add_track', { tracks: [row, row], total: 2, ids: ['a', 'b'], was: { tracks: [row], ids: ['a'] } }));

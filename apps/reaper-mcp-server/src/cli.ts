@@ -96,6 +96,7 @@ export const REAPER_ASSETS = [
   'mcp_tracks_lib.lua',
   'mcp_project_lib.lua',
   'mcp_items_lib.lua',
+  'mcp_arrange_lib.lua',
   'mcp_envelopes_lib.lua',
   'mcp_edit_views_lib.lua',
   'mcp_snapshots_ui_lib.lua',
@@ -244,6 +245,12 @@ export const MCP_TOOL_NAMES = [
   'add_stretch_marker',
   'get_stretch_markers',
   'delete_stretch_marker',
+  // arrangement
+  'copy_media_items',
+  'insert_time',
+  'remove_time',
+  'copy_section',
+  'process_items',
   // selection & navigation
   'get_selected_tracks',
   'get_time_selection',

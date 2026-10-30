@@ -146,6 +146,13 @@ describe('cli helpers', () => {
   });
 
   describe('constants', () => {
+    it('setup installs every library the bridge loads', () => {
+      const bridge = readFileSync(join(__dirname, '../../../reaper/mcp_bridge.lua'), 'utf8');
+      const loaded = [...bridge.matchAll(/dofile, script_dir \.\. "([^"]+)"/g)].map((m) => m[1]);
+      expect(loaded).toContain('mcp_arrange_lib.lua');
+      for (const lib of loaded) expect(REAPER_ASSETS as readonly string[]).toContain(lib);
+    });
+
     it('REAPER_ASSETS includes all required files', () => {
       expect(REAPER_ASSETS).toContain('mcp_bridge.lua');
       expect(REAPER_ASSETS).toContain('mcp_analyzer.jsfx');

@@ -1491,3 +1491,16 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
   .toolbar { flex-wrap: nowrap; padding: 6px; }
   .search { min-width: 0; }
 }
+
+/* Arrangement edits: the time an edit opened, cut or copied to (hatched), the source it copied from (outlined),
+   and a normalized item's new gain */
+.ev-span { position: absolute; top: -3px; bottom: -3px; z-index: 0; pointer-events: none; border-inline: 1px solid var(--accent);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent) 0 3px, transparent 3px 7px); }
+.ev-span-cut { border-color: var(--bad); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--bad) 20%, transparent) 0 3px, transparent 3px 7px); }
+.ev-span-src { border: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); background: none; }
+.lg-span { width: 12px; height: 8px; border-inline: 1px solid var(--accent); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 45%, transparent) 0 2px, transparent 2px 4px); }
+.lg-span-cut { border-color: var(--bad); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--bad) 45%, transparent) 0 2px, transparent 2px 4px); }
+.lg-span-src { width: 12px; height: 8px; border: 1px dashed var(--accent); }
+.ev-item-gain { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; }
+/* A region narrower than its padding at the end of the song stays inside the lane */
+.ev-lane-regions { overflow: hidden; }

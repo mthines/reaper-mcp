@@ -65,6 +65,11 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
       'add_stretch_marker', 'get_stretch_markers', 'delete_stretch_marker',
     ],
   },
+  arrange: {
+    name: 'arrange',
+    description: 'Arrangement: copy or repeat items, insert or remove time across the whole project (items, markers, regions, tempo, automation), copy a section to another position, normalize/reverse/glue items',
+    tools: ['copy_media_items', 'insert_time', 'remove_time', 'copy_section', 'process_items'],
+  },
   selection: {
     name: 'selection',
     description: 'Selection and navigation: get/set selected tracks and items, get/set time selection range',

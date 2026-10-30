@@ -11,7 +11,7 @@ const REAPER_DIR = join(__dirname, '../../../reaper');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
 const SCRIPTS = '/reaper/Scripts/';
 const BRIDGE_DIR = `${SCRIPTS}mcp_bridge_data/`;
-const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua'];
+const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_arrange_lib.lua'];
 
 interface Entry { n: number; t: number; c: string; ok: boolean; s?: string; p?: string; e?: string; r?: Record<string, unknown> }
 type Row = [number, number, number, number, number];
@@ -538,6 +538,46 @@ describe('edit views in the log', () => {
     await bridge.send('set_time_selection', { start: 8, end: 16 });
     const r = (await bridge.status()).recent[0].r;
     expect(r).toMatchObject({ sel: [8, 16], wasSel: [4, 12], cur: 0, len: 16 });
+  });
+});
+
+describe('arrangement view in the log', () => {
+  const SONG = `
+    api.tracks[1].items = { { vals = { D_POSITION = 2, D_LENGTH = 4 }, takes = {} }, { vals = { D_POSITION = 10, D_LENGTH = 2 }, takes = {} } }
+    api.DeleteTrackMediaItem = function(tr, it)
+      for i, x in ipairs(tr.items) do if x == it then table.remove(tr.items, i) return true end end
+    end
+  `;
+
+  it('arrangement view in the log: insert time shows the opened span and the items before and after', async () => {
+    const bridge = await startBridge(SONG);
+    const res = await bridge.send('insert_time', { position: 8, length: 4 });
+    expect(res.success).toBe(true);
+    const r = (await bridge.status()).recent[0].r;
+    expect(r).toMatchObject({
+      op: 'insert', span: [8, 12],
+      lanes: [{ t: 'Kick', items: [[2, 4, 0, 0, 0, 0], [14, 2, 0, 0, 0, 0]], was: [[2, 4, 0, 0, 0, 0], [10, 2, 0, 0, 0, 0]] }],
+      len: 16,
+    });
+    expect(r).toHaveProperty('was');
+  });
+
+  it('arrangement view in the log: remove time shows the cut span, with the items it deleted as before', async () => {
+    const bridge = await startBridge(SONG);
+    expect((await bridge.send('remove_time', { start: 1, end: 7 })).success).toBe(true);
+    const r = (await bridge.status()).recent[0].r;
+    expect(r).toMatchObject({
+      op: 'remove', span: [1, 7],
+      lanes: [{ t: 'Kick', items: [[4, 2, 0, 0, 0, 0]], was: [[2, 4, 0, 0, 0, 0], [10, 2, 0, 0, 0, 0]] }],
+    });
+  });
+
+  it('arrangement view in the log: a refused edit keeps no view', async () => {
+    const bridge = await startBridge(SONG);
+    const res = await bridge.send('remove_time', { start: 5, end: 1 });
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('nothing changed');
+    expect((await bridge.status()).recent[0].r).toBeUndefined();
   });
 });
 

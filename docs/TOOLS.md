@@ -143,6 +143,18 @@ Workflow: [knowledge/workflows/transient-lighting.md](../knowledge/workflows/tra
 | `delete_media_item` / `move_media_item` / `trim_media_item` | Edit operations |
 | `add_stretch_marker` / `get_stretch_markers` / `delete_stretch_marker` | Time-stretching |
 
+### Arrangement (5 tools)
+
+Each is one bridge call and one undo point; a refused request changes nothing. Time edits move everything in the project (items, markers, regions, tempo, envelope points, automation items) without depending on REAPER's ripple settings.
+
+| Tool | Description |
+|------|-------------|
+| `copy_media_items` | Copy or repeat items, keeping their spacing (`times`, `position`, `trackIndex`, `pooled`) |
+| `insert_time` | Open time at a position; spanning items split, spanning regions grow |
+| `remove_time` | Cut a range and close the gap; the tempo after the cut is kept |
+| `copy_section` | Copy a region (or start/end) to a position, items trimmed to it plus automation; `insert` opens time first |
+| `process_items` | `normalize` (peak, true peak, LUFS, RMS target via item gain), `reverse`, `glue` |
+
 ### Snapshots (A/B Testing)
 
 Snapshots capture your full mixer state: track volumes, pans, mute/solo, FX chains (all parameter values, enabled/offline states, presets), and send levels. Use them to A/B compare mix decisions or revert to a known-good state.

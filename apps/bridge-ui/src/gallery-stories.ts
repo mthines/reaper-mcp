@@ -339,6 +339,56 @@ function editStories(): Story[] {
     pts: [[0, 64, 1], [2, 80, 1], [4, 96, 1], [6, 110, 1], [8, 100, 1], [10, 72, 1], [12, 30, 1], [14, 48, 1], [15.5, 90, 1]],
     was: [[0, 64, 1], [2, 80, 1], [4, 96, 1], [6, 110, 1], [8, 100, 1], [10, 72, 1], [14, 48, 1], [15.5, 90, 1]],
   });
+  // Arrangement: the song with its 16 s bridge (144–160)
+  const shift = (r: (string | number)[], by: number, from: number) => (r[0] as number) >= from ? [(r[0] as number) + by, (r[1] as number) + by, ...r.slice(2)] : r;
+  const noBridge = SONG_REGIONS.filter((r) => r[2] !== 'Bridge').map((r) => shift(r, -16, 160));
+  const inserted = call('insert_time', { position: 144, length: 16 }, {
+    op: 'insert', span: [144, 160], moreTracks: 6,
+    regions: SONG_REGIONS.map((r) => shift(r, 16, 144)), markers: SONG_MARKERS, tempo: SONG_TEMPO, len: 216,
+    was: { regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO },
+    lanes: [
+      { t: 'Drums', items: [[0, 144, 0, 0, 0, 0], [160, 56, 0, 2, 0, 0]], was: [[0, 200, 0, 2, 0, 0]] },
+      { t: 'Gtr L', items: [ITEMS[0], ITEMS[1], ITEMS[2], [176, 31, 0, 4, 0, 0]], was: [ITEMS[0], ITEMS[1], ITEMS[2], [160, 31, 0, 4, 0, 0]] },
+    ],
+  });
+  const cut = call('remove_time', { start: 144, end: 160 }, {
+    op: 'remove', span: [144, 160], moreTracks: 6,
+    regions: noBridge, markers: SONG_MARKERS, tempo: SONG_TEMPO, len: 200,
+    was: { regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO },
+    lanes: [
+      { t: 'Drums', items: [[0, 144, 0, 0, 0, 0], [144, 40, 0, 2, 0, 0]], was: [[0, 200, 0, 2, 0, 0]] },
+      { t: 'Gtr L', items: [ITEMS[0], ITEMS[1], ITEMS[2], [144, 31, 0, 4, 0, 0]], was: [ITEMS[0], ITEMS[1], ITEMS[2], [160, 31, 0, 4, 0, 0]] },
+    ],
+  });
+  const section = call('copy_section', { regionIndex: 2, position: 200 }, {
+    op: 'section', span: [48, 80], to: [200, 232],
+    regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO, len: 232,
+    was: { regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO },
+    lanes: [
+      { t: 'Gtr L', items: [...ITEMS, [200, 31, 0, 0.5, 0, 0]], was: ITEMS },
+      { t: 'Vox', items: [[18, 28, 0.2, 0.5, 0, 0], [52, 26, 0.2, 1, 0, 0], [204, 26, 0.2, 1, 0, 0]], was: [[18, 28, 0.2, 0.5, 0, 0], [52, 26, 0.2, 1, 0, 0]] },
+    ],
+  });
+  const repeated = call('copy_media_items', { items: '[{"trackIndex":7,"itemIndex":0}]', times: 3 }, {
+    op: 'copy', span: [16, 24], to: [24, 48],
+    regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO, len: 200,
+    was: { regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO },
+    lanes: [{ t: 'Keys', items: [[16, 8, 0, 0, 1, 0], [24, 8, 0, 0, 1, 0], [32, 8, 0, 0, 1, 0], [40, 8, 0, 0, 1, 0]], was: [[16, 8, 0, 0, 1, 0]] }],
+  });
+  const normalized = call('process_items', { operation: 'normalize', items: '[…]', target: -1 }, {
+    op: 'normalize',
+    regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO, len: 200,
+    was: { regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO },
+    lanes: [
+      { t: 'Gtr L', items: [[16, 30, 0.5, 2, 0, 0, 11], [48, 31, 0, 0.5, 0, 0, 5.5]], was: [[16, 30, 0.5, 2, 0, 0, 0], [48, 31, 0, 0.5, 0, 0, 0]] },
+    ],
+  });
+  const glued = call('process_items', { operation: 'glue', items: '[…]' }, {
+    op: 'glue',
+    regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO, len: 200,
+    was: { regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO },
+    lanes: [{ t: 'Gtr L', items: [[16, 63, 0.5, 0.5, 0, 0], ITEMS[2]], was: [[16, 14, 0.5, 0, 0, 0], [30, 16, 0, 2, 0, 0], ITEMS[1], ITEMS[2]] }],
+  });
   const plan = call('run_plan', { ops: '[…]', dryRun: true }, {
     total: 4, dryRun: true,
     ops: [['add_track', 'Vox Bus'], ['add_fx', '$bus · VST3: Pro-C 2'], ['add_send', 'Vox → $bus'], ['set_track', 'Vox']],
@@ -377,6 +427,12 @@ function editStories(): Story[] {
     story('FX parameters listed', fxParams, 'The plugin’s readout, first parameters only'),
     story('MIDI CC inserted', cc, 'A controller lane in beats, held between events'),
     story('Plan', plan, 'A dry run'),
+    story('Arrange · time inserted', inserted, 'A 16 s gap opened at 2:24: everything after moves, the drum item split'),
+    story('Arrange · time removed', cut, 'The bridge cut: its region gone, the rest pulled back'),
+    story('Arrange · section copied', section, 'The chorus (outlined) copied to the end (hatched)'),
+    story('Arrange · items repeated', repeated, 'A 4-bar MIDI loop repeated 3 times'),
+    story('Arrange · normalized', normalized, 'Item gain to −1 dB peak, the gain each item got'),
+    story('Arrange · glued', glued, 'Three items became one'),
   ];
 }
 
