@@ -1,13 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatAgo } from '../../lib/status.js';
-import { DESCRIPTION_MAX, nameProblem, replacedBy, type RequestState, type RowMode, type SnapshotInfo, type SnapshotOp, type SnapshotsFeed } from './snapshots.js';
+import type { RequestState, RowMode, SnapshotInfo, SnapshotOp, SnapshotsFeed } from './snapshots.js';
+import { EditForm } from './EditForm.js';
+import { SaveForm } from './SaveForm.js';
 
-/**
- * The Snapshots view: the project's saved mixer snapshots. Click one (or press 1–9) to load it while
- * listening, for a quick A/B/C; save the current mix (a blank name saves under the date and time); rename
- * or delete one from its row. All go through the bridge's normal command path, so they show in the log and
- * are refused while read-only or paused.
- */
 export function SnapshotsView({
   feed,
   request,
@@ -164,148 +160,6 @@ export function SnapshotsView({
       )}
     </div>
   );
-}
-
-function SaveForm({
-  snapshots,
-  blocked,
-  saving,
-  onSave,
-  initial,
-}: {
-  snapshots: SnapshotInfo[];
-  blocked: string | null;
-  saving: boolean;
-  onSave: (name: string, description: string) => void;
-  /** Gallery: start with these values */
-  initial?: { name: string; description?: string; confirm?: boolean };
-}) {
-  const [name, setName] = useState(initial?.name ?? '');
-  const [description, setDescription] = useState(initial?.description ?? '');
-  const [confirm, setConfirm] = useState(initial?.confirm ?? false);
-  // A blank name saves under the date and time (the hook picks one no snapshot uses)
-  const replaces = name.trim() ? replacedBy(snapshots, name) : null;
-  const problem = name.trim() ? nameProblem(name) : null;
-
-  const submit = (ev: FormEvent) => {
-    ev.preventDefault();
-    if (blocked || saving || problem) return;
-    if (replaces && !confirm) {
-      setConfirm(true);
-      return;
-    }
-    onSave(name.trim(), description.trim());
-    setName('');
-    setDescription('');
-    setConfirm(false);
-  };
-
-  return (
-    <form className="snap-save" onSubmit={submit} aria-label="Save a snapshot">
-      <input
-        className="snap-input"
-        value={name}
-        onChange={(ev) => {
-          setName(ev.target.value);
-          setConfirm(false);
-        }}
-        placeholder="Name (blank: date and time)"
-        aria-label="Snapshot name"
-        aria-invalid={problem ? true : undefined}
-        spellCheck={false}
-        disabled={Boolean(blocked)}
-      />
-      <input
-        className="snap-input snap-input-desc"
-        value={description}
-        onChange={(ev) => setDescription(ev.target.value)}
-        placeholder="Description (optional)"
-        aria-label="Snapshot description"
-        maxLength={DESCRIPTION_MAX}
-        disabled={Boolean(blocked)}
-      />
-      <button className={`btn${confirm ? ' btn-warn' : ''}`} type="submit" disabled={Boolean(blocked) || saving || Boolean(problem)}>
-        {saving ? 'Saving…' : confirm ? `Replace ${replaces?.name ?? ''}` : 'Save current mix'}
-      </button>
-      {(problem || (replaces && !confirm)) && (
-        <span className={`snap-hint${problem ? ' snap-hint-bad' : ''}`} role="status">
-          {problem ?? `Saving replaces “${replaces?.name}”.`}
-        </span>
-      )}
-    </form>
-  );
-}
-
-/** Rename a snapshot and change its description, in place of its row */
-function EditForm({
-  snapshot,
-  snapshots,
-  onSave,
-  onCancel,
-}: {
-  snapshot: SnapshotInfo;
-  snapshots: SnapshotInfo[];
-  onSave: (newName: string, description: string) => void;
-  onCancel: () => void;
-}) {
-  const [name, setName] = useState(snapshot.name);
-  const [description, setDescription] = useState(snapshot.description);
-  const problem = nameProblem(name);
-  // Another snapshot already saves to that file (the bridge refuses it too); its own file is fine
-  const taken = !problem ? replacedBy(snapshots.filter((s) => s.name !== snapshot.name), name) : null;
-  const unchanged = name.trim() === snapshot.name && description.trim() === snapshot.description;
-
-  const submit = (ev: FormEvent) => {
-    ev.preventDefault();
-    if (problem || taken) return;
-    if (unchanged) return onCancel();
-    onSave(name.trim(), description.trim());
-  };
-
-  return (
-    <form
-      className="snap-save snap-edit"
-      onSubmit={submit}
-      onKeyDown={(ev) => {
-        if (ev.key === 'Escape') onCancel();
-      }}
-      aria-label={`Edit ${snapshot.name}`}
-    >
-      <input
-        className="snap-input"
-        value={name}
-        onChange={(ev) => setName(ev.target.value)}
-        aria-label="New name"
-        aria-invalid={problem || taken ? true : undefined}
-        spellCheck={false}
-        autoFocus
-      />
-      <input
-        className="snap-input snap-input-desc"
-        value={description}
-        onChange={(ev) => setDescription(ev.target.value)}
-        placeholder="Description (optional)"
-        aria-label="Description"
-        maxLength={DESCRIPTION_MAX}
-      />
-      <button className="btn" type="submit" disabled={Boolean(problem || taken)}>
-        Save
-      </button>
-      <button className="btn" type="button" onClick={onCancel}>
-        Cancel
-      </button>
-      {(problem || taken) && (
-        <span className="snap-hint snap-hint-bad" role="status">
-          {problem ?? `“${taken?.name}” already uses that name.`}
-        </span>
-      )}
-    </form>
-  );
-}
-
-/** Gallery: the save form with a name typed that would replace a snapshot */
-export function SaveFormPreview(props: { snapshots: SnapshotInfo[]; name: string; confirm?: boolean }) {
-  return <SaveForm snapshots={props.snapshots} blocked={null} saving={false} onSave={() => undefined} initial={{ name: props.name, confirm: props.confirm }} />;
 }
 
 function RequestLine({ request }: { request: RequestState | null }) {
