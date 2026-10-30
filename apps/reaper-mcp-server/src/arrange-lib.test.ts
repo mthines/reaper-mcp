@@ -325,6 +325,15 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('an edit that fails half way is undone, not left half applied', async () => {
+    await runLua(`${SONG}
+      api.SetEnvelopePoint = function() error("envelope write failed") end
+      local ok, err = arrange.insert_time(api, { position = 5, length = 2 })
+      assert(ok == nil and err:find("envelope write failed") and err:find("undone"), tostring(err))
+      assert(api.undone == "MCP: Insert time", tostring(api.undone))
+    `);
+  });
+
   it('insert and remove time: a square envelope stays square across the edit', async () => {
     await runLua(`
       local function mute() return new_timeline{ tracks = { { envs = { { pts = { { 0, 0, 1 }, { 100, 1, 1 } } } } } } } end

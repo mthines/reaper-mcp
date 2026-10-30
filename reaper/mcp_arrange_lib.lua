@@ -37,9 +37,12 @@ local function with_undo(api, label, fn)
   local ok, res = pcall(fn)
   if api.PreventUIRefresh then api.PreventUIRefresh(-1) end
   api.Undo_EndBlock(label, -1)
+  -- A failure half way leaves no partial edit: undo the block, but only when the top entry is ours
+  local undone = not ok and api.Undo_CanUndo2 and api.Undo_CanUndo2(0) == label
+  if undone then api.Undo_DoUndo2(0) end
   if api.UpdateTimeline then api.UpdateTimeline() end
   if api.UpdateArrange then api.UpdateArrange() end
-  if not ok then return nil, tostring(res) end
+  if not ok then return nil, tostring(res) .. (undone and " — the edit was undone" or "") end
   return res
 end
 

@@ -60,6 +60,8 @@ function new_timeline(spec)
   api.genGuid = function() return guid() end
   api.Undo_BeginBlock = function() end
   api.Undo_EndBlock = function(label) api.undo_labels[#api.undo_labels + 1] = label end
+  api.Undo_CanUndo2 = function() return api.undo_labels[#api.undo_labels] end
+  api.Undo_DoUndo2 = function() api.undone = table.remove(api.undo_labels) end
   api.PreventUIRefresh = function() end
   api.UpdateArrange = function() end
   api.UpdateTimeline = function() end
