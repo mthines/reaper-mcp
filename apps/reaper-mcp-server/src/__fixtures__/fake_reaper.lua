@@ -408,19 +408,24 @@ function new_fake(spec)
     if not e then return false end
     return true, false, false, e.ppq or 0, e[1], e[2], e[3], e[4]
   end
+  -- Like REAPER 7.40, a MIDI API edit alone makes no undo point: MarkTrackItemsDirty does
+  local function midi_write(what)
+    api.writes = api.writes + 1
+    api.log[#api.log + 1] = what
+  end
   api.MIDI_InsertCC = function(tk, _, _, ppq, chanmsg, chan, msg2, msg3)
     local evs = midi(tk).events
     evs[#evs + 1] = { chanmsg, chan, msg2, msg3, ppq = ppq }
-    write("insert_cc")
+    midi_write("insert_cc")
     return true
   end
   api.MIDI_DeleteCC = function(tk, i)
     table.remove(midi(tk).events, i + 1)
-    write("delete_cc")
+    midi_write("delete_cc")
     return true
   end
   api.MIDI_Sort = function() end
-  api.MarkTrackItemsDirty = function() end
+  api.MarkTrackItemsDirty = function() if api.in_block then api.block_dirty = true end end
   api.TimeMap2_timeToQN = function(_, t) return t * 2 end
   api.TimeMap2_QNToTime = function(_, qn) return qn / 2 end
   api.MIDI_GetPPQPosFromProjTime = function(_, t) return t * 2 * 960 end

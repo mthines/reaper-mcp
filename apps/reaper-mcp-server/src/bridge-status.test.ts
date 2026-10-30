@@ -375,6 +375,31 @@ describe('edit views in the log', () => {
     expect(r).toMatchObject({ total: 2, gone: [[36, 0, 1, 100]] });
   });
 
+  it('every note and CC edit is its own undo point, not merged into the previous MIDI one', async () => {
+    const bridge = await startBridge(`${MIDI_ITEM}
+      ccs = { { 0, 0xB0, 0, 7, 100 } }
+      api.MIDI_CountEvts = function() return true, #notes, #ccs, 0 end
+      api.MIDI_GetCC = function(_, i) local c = ccs[i + 1] if not c then return false end return true, false, false, c[1], c[2], c[3], c[4], c[5] end
+      api.MIDI_InsertCC = function(_, _, _, ppq, chanmsg, chan, msg2, msg3) ccs[#ccs + 1] = { ppq, chanmsg, chan, msg2, msg3 } return true end
+      api.MIDI_DeleteCC = function(_, i) table.remove(ccs, i + 1) return true end
+    `);
+    const edits: [string, Record<string, unknown>][] = [
+      ['insert_midi_note', { pitch: 42, velocity: 80, startPosition: 1, duration: 0.5 }],
+      ['insert_midi_notes', { notes: JSON.stringify([{ pitch: 43, velocity: 80, startPosition: 2, duration: 0.5 }]) }],
+      ['edit_midi_note', { noteIndex: 0, velocity: 90 }],
+      ['edit_midi_notes', { edits: JSON.stringify([{ noteIndex: 1, velocity: 70 }]) }],
+      ['delete_midi_note', { noteIndex: 0 }],
+      ['insert_midi_cc', { ccNumber: 1, value: 64, position: 1 }],
+      ['delete_midi_cc', { ccIndex: 0 }],
+    ];
+    for (const [type, params] of edits) {
+      const before = Number(await bridge.eval('#reaper.undo'));
+      const res = await bridge.send(type, { trackIndex: 0, itemIndex: 0, ...params });
+      expect(res.error ?? 'ok', type).toBe('ok');
+      expect(Number(await bridge.eval('#reaper.undo')), type).toBe(before + 1);
+    }
+  });
+
   it('shows a quantize as the notes before and after, through the MIDI library', async () => {
     const bridge = await startBridge(`${MIDI_ITEM}
       notes[2][1] = 1950 -- a late snare
