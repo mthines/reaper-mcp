@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PluginRow } from './plugins.js';
-import { ChevronIcon, SparkIcon } from '../../components/icons.js';
+import { Icon } from '../../components/index.js';
 
 export function toastText(copied: string): string {
   const mine = copied.match(/^contribute:(\d+):(filled|paste)$/);
@@ -50,11 +50,11 @@ export function TeachMenu({ options, onCopy }: { options: TeachOption[]; onCopy:
   return (
     <div className="split" ref={ref}>
       <button className="btn btn-sm kn-teach-all split-main" onClick={() => onCopy(primary.key, primary.rows)} title="Copy a /learn-plugin prompt for these plugins">
-        <SparkIcon /> Teach {primary.rows.length} {primary.label}
+        <Icon.Spark /> Teach {primary.rows.length} {primary.label}
       </button>
       {available.length > 1 && (
         <button className="btn btn-sm kn-teach-all split-caret" aria-haspopup="menu" aria-expanded={menu} aria-label="More teach options" onClick={() => setMenu((m) => !m)}>
-          <ChevronIcon className={`split-chevron ${menu ? 'kn-chevron-open' : ''}`} />
+          <Icon.Chevron className={`split-chevron ${menu ? 'kn-chevron-open' : ''}`} />
         </button>
       )}
       {menu && (

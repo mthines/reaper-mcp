@@ -88,8 +88,11 @@ reaper-mcp/
   apps/bridge-ui/             # Bridge status page (React → one self-contained mcp_bridge.html)
     src/main.tsx              # Entry: renders app/App.tsx, registers the service worker
     src/app/                  # The page shell: App, Header, Notices, Offline + the hooks that poll the bridge
-    src/components/           # Shared UI with no bridge knowledge: Combobox, Toggle, Notice, Mark, ResizeHandle, Markdown, icons
+    src/components/           # Shared UI with no bridge knowledge: Combobox (+ .Grouped), Toggle, Notice, Mark, ResizeHandle, Markdown, Icon.*
     src/features/<feature>/   # One folder per area: log, stats, timeline, settings, measurements, edit-views, plugins, snapshots
+                              # Each folder's index.ts exports a composite, namespaced component (Log.Rows, Log.Details,
+                              # Measurement.Loudness, EditView.Section, Snapshots.SaveForm, Plugins.Details, Settings.LoreKit,
+                              # Stats.Sparkline) plus its public functions; code outside a folder imports only its index
     src/lib/                  # Pure logic + small hooks: status (feed parsing), commands, log, timeline, sessions, search, format, url-state, analytics
     src/demo/                 # ?demo's fake bridge and the fixed examples the stories draw (examples.ts, feed.ts)
     src/test/stories.test.tsx # Runs every story's play function as a vitest test (jsdom)
@@ -777,7 +780,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
 - Short windows (≤ 640px tall, an app window docked beside REAPER): the log is the page. Stats, timeline and footer
   hide; the header's Rebuild & reload, Settings and GitHub fold into a ⋯ menu (`HeaderMenu`, dotted when a rebuild
   is available) with a **Stats & timeline** toggle (`mcp-bridge-overview` in localStorage). The log's toolbar is one row: a grouped combo box
-  (`GroupedCombobox` in `Combobox.tsx`, LoreKit's Combobox in headed groups: View, Show, Agent, Actions) and the search box. CSS switches it: `@media (max-height: 640px)`.
+  (`Combobox.Grouped`, LoreKit's Combobox in headed groups: View, Show, Agent, Actions) and the search box. CSS switches it: `@media (max-height: 640px)`.
 - Narrow drawer: the drawer is resizable, so its content answers to its own width with container queries
   (`.drawer-body` and `.measure` are `inline-size` containers), never `@media`. Under ~300px readouts go two a row,
   the mixer drops its pan column, and what gives way stays reachable (the ISO timestamp is the When row's tooltip,
@@ -786,8 +789,12 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   route rows drop their added/moved/changed word for a coloured edge plus one legend (`ChangeLegend`), so names stay
   readable. Structure edits in a big project draw a 64-row window around the change (`from`). Check new views at
   ~300px with their `Narrow` story.
+- Components: a feature's parts nest under its main component (`Object.assign(LogView, { Rows, Details, … })` in the
+  folder's `index.ts`), or under a plain object when there is no main one (`EditView.Section`, `Icon.Gear`). Add a new
+  part to its folder's namespace, and import a feature from its `index.ts` only, never its files (inside a folder,
+  files import each other directly; an index importing a sibling feature's index is fine, a cycle is not).
 - Storybook (`pnpm storybook`, port 6006; `nx build-storybook bridge-ui` → `dist/storybook/bridge-ui`): every component
-  in `src/components/` and `src/features/` has a sibling `<Name>.stories.tsx` (a `Default` story with every state side
+  in `src/components/` and `src/features/` has a sibling `<Name>.stories.tsx`, written against the namespace (`component: Measurement.Loudness`) (a `Default` story with every state side
   by side, and a `Playground` with controls); behaviour lives in `<Name>.test.stories.tsx` (title `…/Tests`,
   `tags: ['test']`) as play functions. `src/test/stories.test.tsx` runs every story and play function in vitest
   (`composeStories`, jsdom), so the stories are the components' tests: assert what a viewer sees and can do (roles,

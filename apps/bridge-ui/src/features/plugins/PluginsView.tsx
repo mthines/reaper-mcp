@@ -6,9 +6,9 @@ import { isBoolean, isStringOrNull, useUrlState } from '../../lib/url-state.js';
 import { PluginDetails, order } from './PluginDetails.js';
 import { PublishAll } from './PublishAll.js';
 import { TeachMenu, toastText } from './TeachMenu.js';
-import { ChevronIcon, ShareIcon, SparkIcon } from '../../components/icons.js';
 import { learnAllPrompt, learnPrompt } from './teach.js';
 import { useCopy } from '../../lib/useCopy.js';
+import { Icon } from '../../components/index.js';
 
 type Filter = 'all' | Coverage;
 const isFilter = (v: unknown): v is Filter => v === 'all' || v === 'learned' || v === 'built-in' || v === 'unknown';
@@ -168,7 +168,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
       </button>
       {r.coverage === 'unknown' && (
         <button className={`kn-teach ${copied === r.fx.name ? 'kn-teach-done' : ''}`} onClick={() => teach([r], learnPrompt(r), r.fx.name)} title={`Copy: ${learnPrompt(r)}`}>
-          {copied === r.fx.name ? 'Copied' : <><SparkIcon /> Teach</>}
+          {copied === r.fx.name ? 'Copied' : <><Icon.Spark /> Teach</>}
         </button>
       )}
     </div>
@@ -201,7 +201,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
                 aria-expanded={publishingAll}
                 title="Write the plugins you taught the mixer to the built-in layer in LoreKit, for everyone"
               >
-                <ShareIcon /> Publish {mine.length} to built-in
+                <Icon.Share /> Publish {mine.length} to built-in
               </button>
             ) : (
               <button
@@ -209,7 +209,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
                 onClick={() => contribute(mine)}
                 title="Share the plugins you taught the mixer with everyone: opens a pull request on GitHub"
               >
-                <ShareIcon /> Contribute {mine.length}
+                <Icon.Share /> Contribute {mine.length}
               </button>
             ))}
           <TeachMenu
@@ -275,7 +275,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
               <section key={g.creator} className="kn-group" aria-label={g.creator}>
                 <div className="kn-group-head">
                   <button className="kn-group-toggle-btn" aria-expanded={expanded} onClick={() => toggleGroup(g.creator)}>
-                    <ChevronIcon className={`kn-chevron ${expanded ? 'kn-chevron-open' : ''}`} />
+                    <Icon.Chevron className={`kn-chevron ${expanded ? 'kn-chevron-open' : ''}`} />
                     <span className="kn-group-name">{g.creator}</span>
                     <span className="kn-group-meta">
                       {knownHere} of {g.rows.length} known
@@ -288,7 +288,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
                       onClick={() => teach(unknown, learnAllPrompt(unknown), `group:${g.creator}`)}
                       title={`Copy a prompt that teaches the ${unknown.length} unknown ${g.creator} plugin${unknown.length === 1 ? '' : 's'}`}
                     >
-                      {copied === `group:${g.creator}` ? 'Copied' : <><SparkIcon /> Teach {unknown.length}</>}
+                      {copied === `group:${g.creator}` ? 'Copied' : <><Icon.Spark /> Teach {unknown.length}</>}
                     </button>
                   )}
                 </div>

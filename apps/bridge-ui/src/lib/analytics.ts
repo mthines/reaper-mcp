@@ -1,6 +1,6 @@
 import { addSignalAttribute, identify, init, sendEvent, startView } from '@dash0/sdk-web';
-import type { Coverage } from '../features/plugins/plugins.js';
 import type { Liveness } from './status.js';
+import type { Coverage } from '../features/plugins/index.js';
 
 // Pseudonymous usage statistics for the bridge page: which views and actions people use, so the
 // page can be improved. The only module that talks to the Dash0 Web SDK. Same destination and the

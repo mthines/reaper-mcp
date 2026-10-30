@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { EXAMPLE_NOW, MEASUREMENT_EXAMPLES } from '../../demo/examples.js';
 import type { CommandEntry } from '../../lib/commands.js';
-import { MeasurementView } from './Measurement.js';
+import { Measurement } from './index.js';
 
 const example = (title: string) => MEASUREMENT_EXAMPLES.find((x) => x.title === title) ?? MEASUREMENT_EXAMPLES[0];
 const of = (title: string) => ({ entry: example(title).entry, history: example(title).history });
@@ -10,11 +10,11 @@ const entry = (c: string, r: Record<string, unknown>): CommandEntry => ({ n: 1, 
 
 const meta = {
   title: 'Features/Measurements/MeasurementView/Tests',
-  component: MeasurementView,
+  component: Measurement,
   tags: ['test'],
   parameters: { chromatic: { disableSnapshot: true } },
   args: { ...of('Loudness · over target'), now: EXAMPLE_NOW, onPick: fn() },
-} satisfies Meta<typeof MeasurementView>;
+} satisfies Meta<typeof Measurement>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

@@ -2,15 +2,15 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { EXAMPLE_NOW, MEASUREMENT_EXAMPLES } from '../../demo/examples.js';
 import { StoryCard } from '../../demo/StoryCard.js';
-import { MeasurementView } from './Measurement.js';
+import { Measurement } from './index.js';
 
 const [first] = MEASUREMENT_EXAMPLES;
 
 const meta = {
   title: 'Features/Measurements/MeasurementView',
-  component: MeasurementView,
+  component: Measurement,
   args: { entry: first.entry, history: first.history, now: EXAMPLE_NOW, onPick: fn() },
-} satisfies Meta<typeof MeasurementView>;
+} satisfies Meta<typeof Measurement>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
@@ -21,7 +21,7 @@ export const Default: Story = {
       {MEASUREMENT_EXAMPLES.map((x) => (
         <StoryCard key={x.title} title={x.title} note={x.note}>
           <code className="mono-note">{x.entry.c}</code>
-          <MeasurementView {...args} entry={x.entry} history={x.history} />
+          <Measurement {...args} entry={x.entry} history={x.history} />
         </StoryCard>
       ))}
     </div>

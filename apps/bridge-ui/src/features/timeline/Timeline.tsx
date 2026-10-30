@@ -1,11 +1,11 @@
 import { useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Combobox } from '../../components/Combobox.js';
 import { track } from '../../lib/analytics.js';
 import { DAY, MINUTE, RANGE_OPTIONS, type RangeKey, barWidth, rangeOf } from './ranges.js';
 import { formatMs } from '../../lib/format.js';
 import { SLOW_MS } from '../../lib/commands.js';
 import { historyTiers, spanOfBars, timelineBars, type BridgeHistory, type LongHistory, type Span, type TimeBar } from '../../lib/timeline.js';
 import { clearedBefore } from '../../lib/log.js';
+import { Combobox } from '../../components/index.js';
 
 /** Round up to a readable, even axis maximum with ~10% headroom, at least 4. */
 function niceMax(v: number): number {

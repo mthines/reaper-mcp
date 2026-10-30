@@ -1,5 +1,5 @@
 import type { ChangeRow, SlotChange } from '../edit-views.js';
-import { fmt } from '../../measurements/format.js';
+import { fmt } from '../../measurements/index.js';
 
 export const pct = (v: number, min: number, max: number) =>
   max === min ? 0 : Math.min(100, Math.max(0, ((v - min) / (max - min)) * 100));

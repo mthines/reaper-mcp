@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import { SettingsPanel } from './SettingsPanel.js';
+import { Settings } from './index.js';
 
 const meta = {
   title: 'Features/Settings/SettingsPanel',
-  component: SettingsPanel,
+  component: Settings,
   args: {
     settings: { paused: false, readonly: false, openOnStart: true, dev: false },
     notify: false,
@@ -21,7 +21,7 @@ const meta = {
     onRestart: fn(),
   },
   decorators: [(Story) => <div className="story-drawer"><Story /></div>],
-} satisfies Meta<typeof SettingsPanel>;
+} satisfies Meta<typeof Settings>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

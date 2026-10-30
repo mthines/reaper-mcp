@@ -1,16 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { measuredExamples } from '../../demo/examples.js';
 import { StoryCard } from '../../demo/StoryCard.js';
-import { Offline } from './OfflineAnalysis.js';
+import { Measurement } from './index.js';
 
 const examples = measuredExamples('offline');
 const [first] = examples;
 
 const meta = {
   title: 'Features/Measurements/OfflineAnalysis',
-  component: Offline,
+  component: Measurement.Offline,
   args: { m: first.m, was: first.was?.lufs },
-} satisfies Meta<typeof Offline>;
+} satisfies Meta<typeof Measurement.Offline>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
@@ -20,7 +20,7 @@ export const Default: Story = {
       {examples.map((x) => (
         <StoryCard key={x.title} title={x.title} note={x.note}>
           <div className="measure">
-            <Offline m={x.m} was={x.was?.lufs} />
+            <Measurement.Offline m={x.m} was={x.was?.lufs} />
           </div>
         </StoryCard>
       ))}

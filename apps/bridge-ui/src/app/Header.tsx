@@ -1,9 +1,8 @@
 import type { BridgeStatus, Liveness } from '../lib/status.js';
-import { Mark } from '../components/Mark.js';
-import { GearIcon, GitHubIcon } from '../components/icons.js';
 import { REPO_URL } from '../lib/links.js';
 import { usePopover } from '../lib/usePopover.js';
 import { hasToolCalls, isConnected, sessionHue, sessionName, type Session } from '../lib/sessions.js';
+import { Icon, Mark } from '../components/index.js';
 
 export function Header({
   status,
@@ -82,11 +81,11 @@ export function Header({
         )}
         {onOpenSettings && (
           <button className="icon-link" onClick={onOpenSettings} title="Settings" aria-label="Settings">
-            <GearIcon />
+            <Icon.Gear />
           </button>
         )}
         <a className="icon-link" href={REPO_URL} target="_blank" rel="noreferrer" title="reaper-mcp on GitHub" aria-label="reaper-mcp on GitHub">
-          <GitHubIcon />
+          <Icon.GitHub />
         </a>
         <HeaderMenu overview={overview} onToggleOverview={onToggleOverview} onRebuild={onRebuild} onOpenSettings={onOpenSettings} />
         <span className={`pill pill-${state}`}>

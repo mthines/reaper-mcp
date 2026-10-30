@@ -1,25 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GroupedCombobox } from '../../components/Combobox.js';
 import { track } from '../../lib/analytics.js';
-import { PluginsView } from '../plugins/PluginsView.js';
-import { SnapshotsView } from '../snapshots/SnapshotsView.js';
-import type { SnapshotsHook } from '../snapshots/useSnapshots.js';
 import { isNumberOrNull, isString, isStringOrNull, useUrlState } from '../../lib/url-state.js';
-import type { KnowledgeFeed } from '../plugins/plugins.js';
-import { SearchIcon } from '../../components/icons.js';
 import { Details } from './Details.js';
 import { LogRows } from './LogRows.js';
 import { SessionsView } from './SessionsView.js';
 import { ToolsView } from './ToolsView.js';
 import { OUTCOME_TAG } from './outcome.js';
-import { spanLabel } from '../timeline/Timeline.js';
-import { RANGES, type RangeKey, rangeOf } from '../timeline/ranges.js';
 import { load } from '../../lib/storage.js';
 import { LOG_MAX } from '../../lib/log.js';
 import { measurementHistory, outcomeOf, type CommandEntry } from '../../lib/commands.js';
 import { matchesQuery, parseQuery } from '../../lib/search.js';
 import { hasToolCalls, isConnected, sessionHue, sessionName, type Session } from '../../lib/sessions.js';
 import type { Span } from '../../lib/timeline.js';
+import { Combobox, Icon } from '../../components/index.js';
+import { Plugins, type KnowledgeFeed } from '../plugins/index.js';
+import { Snapshots, type SnapshotsHook } from '../snapshots/index.js';
+import { RANGES, rangeOf, spanLabel, type RangeKey } from '../timeline/index.js';
 
 type Filter = 'all' | 'errors';
 export type View = 'calls' | 'tools' | 'sessions' | 'plugins' | 'snapshots';
@@ -231,7 +227,7 @@ export function Log({
   return (
     <section className="log">
       <div className="toolbar">
-        <GroupedCombobox
+        <Combobox.Grouped
           className="log-menu"
           label="View, filters and actions"
           triggerLabel={[
@@ -311,7 +307,7 @@ export function Log({
         )}
         {view !== 'sessions' && (
           <label className="search">
-            <SearchIcon />
+            <Icon.Search />
             <input
               ref={searchRef}
               value={query}
@@ -392,9 +388,9 @@ export function Log({
       )}
 
       {view === 'plugins' && knowledge ? (
-        <PluginsView feed={knowledge} query={query} now={now} onOpenSettings={onOpenSettings} />
+        <Plugins feed={knowledge} query={query} now={now} onOpenSettings={onOpenSettings} />
       ) : view === 'snapshots' && snapshots ? (
-        <SnapshotsView feed={snapshots.feed} request={snapshots.request} blocked={snapshots.blocked} query={query} now={now} onSend={snapshots.send} />
+        <Snapshots feed={snapshots.feed} request={snapshots.request} blocked={snapshots.blocked} query={query} now={now} onSend={snapshots.send} />
       ) : view === 'tools' ? (
         <ToolsView log={scoped} query={query} now={now} onPick={(tool, errors) => {
             track({ name: 'tool_picked', errors_only: errors });

@@ -1,12 +1,12 @@
 import type { EditView } from '../edit-views.js';
-import { Readout } from '../../measurements/Readout.js';
+import { Measurement } from '../../measurements/index.js';
 
 export function Plan({ v }: { v: Extract<EditView, { kind: "plan" }> }) {
   return (
     <>
       <div className="measure-readouts">
-        <Readout label="Ops" value={String(v.total)} />
-        <Readout label="Mode" value={v.dryRun ? "Dry run" : "Applied"} />
+        <Measurement.Readout label="Ops" value={String(v.total)} />
+        <Measurement.Readout label="Mode" value={v.dryRun ? "Dry run" : "Applied"} />
       </div>
       <ol className="ev-plan">
         {v.ops.map(([op, what], i) => (

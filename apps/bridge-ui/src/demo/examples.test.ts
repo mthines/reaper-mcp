@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { editKindOf, editViewOf } from '../features/edit-views/edit-views.js';
 import { MEASURED_COMMANDS, measurementOf } from '../lib/commands.js';
 import { DRAWER_EXAMPLES, EDIT_EXAMPLES, MEASUREMENT_EXAMPLES, SNAPSHOT_EXAMPLES } from './examples.js';
+import { editKindOf, editViewOf } from '../features/edit-views/index.js';
 
 // The stories draw these examples, so a new measuring command or view state without one is missing from Storybook
 describe('the examples the stories draw', () => {

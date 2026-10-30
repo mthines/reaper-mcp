@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { DEMO_KNOWLEDGE } from '../../demo/demo-plugins.js';
 import type { KnowledgeFeed } from './plugins.js';
-import { PublishRecord } from './PublishRecord.js';
+import { Plugins } from './index.js';
 
 const [mine] = DEMO_KNOWLEDGE.records.filter((r) => r.layer === 'user');
 
@@ -11,11 +11,11 @@ const published: NonNullable<KnowledgeFeed['publish']> = async (record, { remove
 
 const meta = {
   title: 'Features/Plugins/PublishRecord/Tests',
-  component: PublishRecord,
+  component: Plugins.PublishRecord,
   tags: ['test'],
   parameters: { chromatic: { disableSnapshot: true } },
   args: { record: mine, publish: fn(published) },
-} satisfies Meta<typeof PublishRecord>;
+} satisfies Meta<typeof Plugins.PublishRecord>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

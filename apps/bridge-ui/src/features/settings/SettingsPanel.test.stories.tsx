@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { SettingsPanel } from './SettingsPanel.js';
+import { Settings } from './index.js';
 
 const meta = {
   title: 'Features/Settings/SettingsPanel/Tests',
-  component: SettingsPanel,
+  component: Settings,
   tags: ['test'],
   parameters: { chromatic: { disableSnapshot: true } },
   args: {
@@ -21,7 +21,7 @@ const meta = {
     onPublishToken: fn(),
     onClose: fn(),
   },
-} satisfies Meta<typeof SettingsPanel>;
+} satisfies Meta<typeof Settings>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

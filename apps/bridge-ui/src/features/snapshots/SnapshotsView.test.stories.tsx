@@ -1,18 +1,18 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { EXAMPLE_NOW, SNAPSHOT_EXAMPLES } from '../../demo/examples.js';
-import { SnapshotsView } from './SnapshotsView.js';
+import { Snapshots } from './index.js';
 
 const example = (title: string) => SNAPSHOT_EXAMPLES.find((x) => x.title === title) ?? SNAPSHOT_EXAMPLES[0];
 const { feed } = example('List');
 
 const meta = {
   title: 'Features/Snapshots/SnapshotsView/Tests',
-  component: SnapshotsView,
+  component: Snapshots,
   tags: ['test'],
   parameters: { chromatic: { disableSnapshot: true } },
   args: { feed, request: null, blocked: null, now: EXAMPLE_NOW, onSend: fn() },
-} satisfies Meta<typeof SnapshotsView>;
+} satisfies Meta<typeof Snapshots>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

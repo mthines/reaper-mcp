@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Markdown } from '../../components/Markdown.js';
-import { ResizeHandle, useDrawerWidth } from '../../components/ResizeHandle.js';
 import { fxFormat, lorekitUrl, type KnowledgeFeed, type PluginRecord, type PluginRow } from './plugins.js';
 import { COVERAGE_LABEL } from './PluginsView.js';
 import { PublishRecord } from './PublishRecord.js';
-import { ShareIcon, SparkIcon } from '../../components/icons.js';
 import { learnPrompt } from './teach.js';
 import { formatAgo } from '../../lib/format.js';
+import { Icon, Markdown, ResizeHandle, useDrawerWidth } from '../../components/index.js';
 
 export const order = (r: PluginRow) => (r.coverage === 'learned' ? 0 : r.coverage === 'built-in' ? 1 : 2);
 
@@ -98,7 +96,7 @@ export function PluginDetails({
             {r.layer === 'user' && r.source && publish && <PublishRecord key={r.key} record={r} shadows={row.shadows} publish={publish} />}
             {r.layer === 'user' && r.source && (
               <button className="btn btn-block kn-contribute" onClick={() => onContribute(r)} title="Opens a pull request on GitHub">
-                <ShareIcon /> Contribute this record to everyone
+                <Icon.Share /> Contribute this record to everyone
               </button>
             )}
             {row.shadows && (
@@ -132,7 +130,7 @@ export function PluginDetails({
                 'Copied'
               ) : (
                 <>
-                  <SparkIcon /> Teach · copy prompt
+                  <Icon.Spark /> Teach · copy prompt
                 </>
               )}
             </button>

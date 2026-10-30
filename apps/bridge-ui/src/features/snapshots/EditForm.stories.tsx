@@ -1,15 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { SNAPSHOT_EXAMPLES } from '../../demo/examples.js';
-import { EditForm } from './EditForm.js';
+import { Snapshots } from './index.js';
 
 const snapshots = SNAPSHOT_EXAMPLES[0].feed?.snapshots ?? [];
 
 const meta = {
   title: 'Features/Snapshots/EditForm',
-  component: EditForm,
+  component: Snapshots.EditForm,
   args: { snapshot: snapshots[1], snapshots, onSave: fn(), onCancel: fn() },
-} satisfies Meta<typeof EditForm>;
+} satisfies Meta<typeof Snapshots.EditForm>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

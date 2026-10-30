@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { DEMO_KNOWLEDGE } from '../../demo/demo-plugins.js';
 import { pluginCoverage } from './plugins.js';
-import { TeachMenu } from './TeachMenu.js';
+import { Plugins } from './index.js';
 
 const rows = pluginCoverage(DEMO_KNOWLEDGE);
 const OPTIONS = [
@@ -12,9 +12,9 @@ const OPTIONS = [
 
 const meta = {
   title: 'Features/Plugins/TeachMenu',
-  component: TeachMenu,
+  component: Plugins.TeachMenu,
   args: { options: OPTIONS, onCopy: fn() },
-} satisfies Meta<typeof TeachMenu>;
+} satisfies Meta<typeof Plugins.TeachMenu>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

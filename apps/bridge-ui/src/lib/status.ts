@@ -1,8 +1,8 @@
-import type { KnowledgeFeed } from '../features/plugins/plugins.js';
 import type { CommandEntry } from './commands.js';
 import type { SavedLog } from './log.js';
 import type { Session } from './sessions.js';
 import type { BridgeHistory, LongHistory } from './timeline.js';
+import type { KnowledgeFeed } from '../features/plugins/index.js';
 
 /** Settings the page writes to ExtState, echoed back by the bridge. */
 export interface BridgeSettings {

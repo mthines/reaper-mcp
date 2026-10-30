@@ -2,16 +2,16 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { EXAMPLE_NOW } from '../../demo/examples.js';
 import { exampleFeed } from '../../demo/feed.js';
-import { ToolsView } from './ToolsView.js';
+import { Log } from './index.js';
 
 const { log } = exampleFeed();
 
 const meta = {
   title: 'Features/Log/ToolsView',
-  component: ToolsView,
+  component: Log.Tools,
   args: { log, query: '', now: EXAMPLE_NOW, onPick: fn() },
   argTypes: { query: { control: 'text' } },
-} satisfies Meta<typeof ToolsView>;
+} satisfies Meta<typeof Log.Tools>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

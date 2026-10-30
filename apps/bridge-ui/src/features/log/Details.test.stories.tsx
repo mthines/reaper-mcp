@@ -1,17 +1,17 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { DRAWER_EXAMPLES, EXAMPLE_NOW } from '../../demo/examples.js';
-import { Details } from './Details.js';
+import { Log } from './index.js';
 
 const example = (title: string) => DRAWER_EXAMPLES.find((x) => x.title === title) ?? DRAWER_EXAMPLES[0];
 
 const meta = {
   title: 'Features/Log/Details/Tests',
-  component: Details,
+  component: Log.Details,
   tags: ['test'],
   parameters: { chromatic: { disableSnapshot: true } },
   args: { entry: example('Error').entry, history: [], session: null, now: EXAMPLE_NOW, filtered: false, onFilter: fn(), onAddTerm: fn(), onClose: fn(), onPick: fn() },
-} satisfies Meta<typeof Details>;
+} satisfies Meta<typeof Log.Details>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

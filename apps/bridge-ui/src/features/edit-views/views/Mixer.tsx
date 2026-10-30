@@ -1,8 +1,7 @@
 import { listDiff, type EditView, type SlotChange, type MixRow } from '../edit-views.js';
 import { ChangeLegend, ChangeMark } from './ChangeLegend.js';
 import { CHANGE_WORD, changedText, panText, pct, plural } from './format.js';
-import { Readout } from '../../measurements/Readout.js';
-import { fmt } from '../../measurements/format.js';
+import { Measurement, fmt } from '../../measurements/index.js';
 
 function MixerRow({
   row,
@@ -104,8 +103,8 @@ export function Mixer({ v }: { v: Extract<EditView, { kind: "mixer" }> }) {
     <>
       {was && (
         <div className="measure-readouts">
-          <Readout label="Tracks" value={String(v.total)} />
-          <Readout label="Changed" value={changedText(added, d.removed.length, d.change.size + d.removed.length)} />
+          <Measurement.Readout label="Tracks" value={String(v.total)} />
+          <Measurement.Readout label="Changed" value={changedText(added, d.removed.length, d.change.size + d.removed.length)} />
         </div>
       )}
       {(v.from ?? 0) > 0 && <div className="ev-more">{plural(v.from ?? 0, "track")} above</div>}

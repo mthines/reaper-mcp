@@ -1,14 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { LoreKitSetting } from './LoreKitSettings.js';
+import { Settings } from './index.js';
 
 const meta = {
   title: 'Features/Settings/LoreKitSettings/Tests',
-  component: LoreKitSetting,
+  component: Settings.LoreKit,
   tags: ['test'],
   parameters: { chromatic: { disableSnapshot: true } },
   args: { token: null, onChange: fn() },
-} satisfies Meta<typeof LoreKitSetting>;
+} satisfies Meta<typeof Settings.LoreKit>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

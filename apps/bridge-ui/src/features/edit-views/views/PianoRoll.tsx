@@ -3,7 +3,7 @@ import type { EditView, Note } from '../edit-views.js';
 import { Legend } from './ChangeLegend.js';
 import { EH, EW } from './Envelope.js';
 import { noteName, pct, plural } from './format.js';
-import { Readout } from '../../measurements/Readout.js';
+import { Measurement } from '../../measurements/index.js';
 
 export const dot = (x: number, y: number): CSSProperties => ({
   left: `${(x / EW) * 100}%`,
@@ -45,16 +45,16 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
   return (
     <>
       <div className="measure-readouts">
-        <Readout label="Notes" value={String(v.total)} />
-        <Readout
+        <Measurement.Readout label="Notes" value={String(v.total)} />
+        <Measurement.Readout
           label="Length"
           value={(v.beats ?? beats).toFixed(beats % 1 ? 2 : 0)}
           unit="beats"
         />
         {v.gone ? (
-          <Readout label="Changed" value={`+${changed} −${gone.length}`} />
+          <Measurement.Readout label="Changed" value={`+${changed} −${gone.length}`} />
         ) : (
-          <Readout
+          <Measurement.Readout
             label="Range"
             value={
               pitches.length

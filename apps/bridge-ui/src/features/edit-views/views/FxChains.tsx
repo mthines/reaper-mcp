@@ -1,7 +1,7 @@
 import { listDiff, type EditView, type FxChain, type FxSlot } from '../edit-views.js';
 import { ChangeMark } from './ChangeLegend.js';
 import { changedText } from './format.js';
-import { Readout } from '../../measurements/Readout.js';
+import { Measurement } from '../../measurements/index.js';
 
 /** "VST3: Pro-Q 3 (FabFilter)" → "Pro-Q 3"; the full name stays in the tooltip */
 const fxShort = (name: string) =>
@@ -24,15 +24,15 @@ export function FxChains({ v }: { v: Extract<EditView, { kind: "fxChain" }> }) {
   return (
     <>
       <div className="measure-readouts">
-        <Readout
+        <Measurement.Readout
           label={v.chains.length > 1 ? "Tracks" : "Track"}
           value={v.chains.map((c) => c.t).join(" → ")}
         />
-        <Readout label="FX" value={String(all.length)} />
+        <Measurement.Readout label="FX" value={String(all.length)} />
         {write ? (
-          <Readout label="Changed" value={changedText(added, removed, touched)} />
+          <Measurement.Readout label="Changed" value={changedText(added, removed, touched)} />
         ) : (
-          <Readout
+          <Measurement.Readout
             label="Bypassed"
             value={String(all.filter((f) => f[1].includes("B")).length)}
           />

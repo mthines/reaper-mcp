@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { Combobox, GroupedCombobox } from './Combobox.js';
+import { Combobox } from './index.js';
 
 const RANGES = [
   { value: '5m', label: 'Last 5 minutes' },
@@ -65,7 +65,7 @@ export const PicksFromTheMouse: Story = {
 
 export const GroupedNamesItsChoicesAndRunsThePickedItem: Story = {
   render: (args) => (
-    <GroupedCombobox
+    <Combobox.Grouped
       label="View, filters and actions"
       triggerLabel="Calls · Errors"
       groups={[

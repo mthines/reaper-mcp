@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, within } from 'storybook/test';
 import { EXAMPLE_NOW } from '../../demo/examples.js';
 import { exampleFeed } from '../../demo/feed.js';
-import { Stats } from './Stats.js';
+import { Stats } from './index.js';
 
 const { status, log, series } = exampleFeed();
 

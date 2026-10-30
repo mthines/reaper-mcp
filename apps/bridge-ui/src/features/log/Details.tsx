@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { ResizeHandle, useDrawerWidth } from '../../components/ResizeHandle.js';
 import { track } from '../../lib/analytics.js';
-import { EditViewSection } from '../edit-views/EditViews.js';
-import { MeasurementView } from '../measurements/Measurement.js';
-import { CloseIcon } from '../../components/icons.js';
 import { BADGE, DOT_CLASS } from './outcome.js';
 import { SPEED_LABEL } from './speed.js';
 import { formatAgo, formatDay, formatParams } from '../../lib/format.js';
 import { termFromSelection } from '../../lib/search.js';
 import { speedOf, outcomeOf, type CommandEntry } from '../../lib/commands.js';
 import { sessionHue, sessionName, type Session } from '../../lib/sessions.js';
+import { Icon, ResizeHandle, useDrawerWidth } from '../../components/index.js';
+import { EditView } from '../edit-views/index.js';
+import { Measurement } from '../measurements/index.js';
 
 /** Right-hand sidebar with everything known about one command. ↑/↓ move between rows, Esc closes. */
 export function Details({
@@ -74,7 +73,7 @@ export function Details({
           </span>
         </div>
         <button className="icon-btn" onClick={onClose} aria-label="Close details" title="Close (Esc)">
-          <CloseIcon />
+          <Icon.Close />
         </button>
       </div>
       <div className="drawer-body">
@@ -127,8 +126,8 @@ export function Details({
           </div>
         )}
 
-        <MeasurementView entry={e} history={history} now={now} onPick={onPick} />
-        <EditViewSection entry={e} />
+        <Measurement entry={e} history={history} now={now} onPick={onPick} />
+        <EditView.Section entry={e} />
 
         <div className="code-block">
           <div className="code-head">

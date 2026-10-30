@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { setUsageStats, startAnalytics, track, trackView, type UsageStatsState } from '../lib/analytics.js';
-import { blockedBy } from '../features/snapshots/snapshots.js';
-import { useSnapshots } from '../features/snapshots/useSnapshots.js';
 import { isBoolean, useUrlState } from '../lib/url-state.js';
-import { LOREKIT_PUBLISH_TOKEN_KEY, loadLoreKitToken, saveLoreKitToken, useKnowledge } from '../features/plugins/useKnowledge.js';
 import { liveness, type SettingKey, type Liveness } from '../lib/status.js';
 import { Header } from './Header.js';
 import { Notices } from './Notices.js';
@@ -14,11 +11,6 @@ import { useBridgeRequest } from './useBridgeRequest.js';
 import { useErrorNotifications } from './useErrorNotifications.js';
 import { useHistory } from './useHistory.js';
 import { useSettings } from './useSettings.js';
-import { Log, VIEW_KEY, type View, isSpanOrNull, isView, loadView } from '../features/log/Log.js';
-import { SETTING_NAME, SettingsPanel } from '../features/settings/SettingsPanel.js';
-import { Stats } from '../features/stats/Stats.js';
-import { Timeline } from '../features/timeline/Timeline.js';
-import { RANGE_STORAGE_KEY, type RangeKey, isRangeKey, loadRange } from '../features/timeline/ranges.js';
 import { DISCORD_URL, REPO_URL } from '../lib/links.js';
 import { load, save } from '../lib/storage.js';
 import { useNow } from '../lib/useNow.js';
@@ -26,6 +18,12 @@ import { deriveSeries } from '../lib/log.js';
 import { formatAgo } from '../lib/format.js';
 import { inSpan, type Span } from '../lib/timeline.js';
 import { labelSessions } from '../lib/sessions.js';
+import { Log, VIEW_KEY, isSpanOrNull, isView, loadView, type View } from '../features/log/index.js';
+import { LOREKIT_PUBLISH_TOKEN_KEY, loadLoreKitToken, saveLoreKitToken, useKnowledge } from '../features/plugins/index.js';
+import { SETTING_NAME, Settings } from '../features/settings/index.js';
+import { blockedBy, useSnapshots } from '../features/snapshots/index.js';
+import { Stats } from '../features/stats/index.js';
+import { RANGE_STORAGE_KEY, Timeline, isRangeKey, loadRange, type RangeKey } from '../features/timeline/index.js';
 
 const OVERVIEW_KEY = 'mcp-bridge-overview';
 
@@ -180,7 +178,7 @@ export function App() {
             now={now}
           />
           {settingsOpen && settings && (
-            <SettingsPanel
+            <Settings
               settings={settings}
               onSet={changeSetting('settings')}
               notify={notify}

@@ -1,6 +1,6 @@
-import { demoSnapshots, type RequestState, type RowMode, type SnapshotOp, type SnapshotsFeed } from '../features/snapshots/snapshots.js';
-import { editViewOf, type EditView } from '../features/edit-views/edit-views.js';
 import { measurementOf, type CommandEntry, type Measurement } from '../lib/commands.js';
+import { editViewOf, type EditViewData } from '../features/edit-views/index.js';
+import { demoSnapshots, type RequestState, type RowMode, type SnapshotOp, type SnapshotsFeed } from '../features/snapshots/index.js';
 
 /**
  * Fixed example data for the Storybook stories (and `?demo`): every measurement, edit view, drawer and
@@ -455,9 +455,9 @@ export function measuredExamples<K extends Measurement['kind']>(kind: K) {
 }
 
 /** The edit view examples of one kind, as the drawer reads them */
-export function editExamples<K extends EditView['kind']>(kind: K) {
+export function editExamples<K extends EditViewData['kind']>(kind: K) {
   return EDIT_EXAMPLES.flatMap((x) => {
     const v = editViewOf(x.entry);
-    return v?.kind === kind ? [{ ...x, v: v as Extract<EditView, { kind: K }> }] : [];
+    return v?.kind === kind ? [{ ...x, v: v as Extract<EditViewData, { kind: K }> }] : [];
   });
 }

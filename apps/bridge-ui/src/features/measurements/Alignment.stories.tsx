@@ -1,16 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { measuredExamples } from '../../demo/examples.js';
 import { StoryCard } from '../../demo/StoryCard.js';
-import { Alignment } from './Alignment.js';
+import { Measurement } from './index.js';
 
 const examples = measuredExamples('alignment');
 const [first] = examples;
 
 const meta = {
   title: 'Features/Measurements/Alignment',
-  component: Alignment,
+  component: Measurement.Alignment,
   args: { m: first.m },
-} satisfies Meta<typeof Alignment>;
+} satisfies Meta<typeof Measurement.Alignment>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
@@ -20,7 +20,7 @@ export const Default: Story = {
       {examples.map((x) => (
         <StoryCard key={x.title} title={x.title} note={x.note}>
           <div className="measure">
-            <Alignment m={x.m} />
+            <Measurement.Alignment m={x.m} />
           </div>
         </StoryCard>
       ))}

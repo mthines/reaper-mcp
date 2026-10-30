@@ -1,8 +1,7 @@
 import { listDiff, routeIds, type EditView, type Route, type SlotChange } from '../edit-views.js';
 import { ChangeLegend, ChangeMark, Legend } from './ChangeLegend.js';
 import { CHANGE_WORD, panText, pct } from './format.js';
-import { Readout } from '../../measurements/Readout.js';
-import { fmt } from '../../measurements/format.js';
+import { Measurement, fmt } from '../../measurements/index.js';
 
 const ROUTE_KIND: Record<Route[0], [string, string]> = {
   s: ["→", "Send to"],
@@ -25,9 +24,9 @@ export function Routing({ v }: { v: Extract<EditView, { kind: "routing" }> }) {
   return (
     <>
       <div className="measure-readouts">
-        <Readout label="Track" value={v.t} />
-        <Readout label="Sends" value={String(count("s") + count("h"))} />
-        <Readout label="Receives" value={String(count("r"))} />
+        <Measurement.Readout label="Track" value={v.t} />
+        <Measurement.Readout label="Sends" value={String(count("s") + count("h"))} />
+        <Measurement.Readout label="Receives" value={String(count("r"))} />
       </div>
       {v.routes.length === 0 && diff.removed.length === 0 ? (
         <div className="ev-more">No sends, receives or hardware outputs</div>

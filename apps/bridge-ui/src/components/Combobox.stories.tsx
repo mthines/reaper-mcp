@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import { Combobox, GroupedCombobox } from './Combobox.js';
+import { Combobox } from './index.js';
 
 const RANGES = [
   { value: '5m', label: 'Last 5 minutes', hint: '10 s per bar' },
@@ -21,7 +21,7 @@ export const Default: Story = {
   render: (args) => (
     <div className="story-row">
       <Combobox {...args} />
-      <GroupedCombobox
+      <Combobox.Grouped
         label="View, filters and actions"
         triggerLabel="Calls · Errors"
         groups={[

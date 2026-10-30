@@ -3,9 +3,8 @@ import { compareVersions, updateLog, useLatestRelease } from '../lib/update.js';
 import { type BridgeSettings, type BridgeStatus, type SettingKey, webSocketLevel } from '../lib/status.js';
 import { DEMO } from './demo-mode.js';
 import type { BridgeRequest } from './useBridgeRequest.js';
-import { Notice } from '../components/Notice.js';
-import { CloseIcon } from '../components/icons.js';
 import { load, save } from '../lib/storage.js';
+import { Icon, Notice } from '../components/index.js';
 
 const SWS_DISMISS_KEY = 'mcp-bridge-sws-dismissed';
 
@@ -39,7 +38,7 @@ export function Notices({
         tone="info"
         action={
           <button className="icon-btn" aria-label="Dismiss" title="Dismiss" onClick={() => setUpdateDoneDismissed(true)}>
-            <CloseIcon />
+            <Icon.Close />
           </button>
         }
       >
@@ -87,7 +86,7 @@ export function Notices({
               title="Skip this version"
               onClick={() => { setSkipped(release.version); save(UPDATE_SKIP_KEY, release.version); }}
             >
-              <CloseIcon />
+              <Icon.Close />
             </button>
           </span>
         }
@@ -152,7 +151,7 @@ export function Notices({
         tone="info"
         action={
           <button className="icon-btn" aria-label="Dismiss" title="Dismiss" onClick={() => { setSwsDismissed(true); save(SWS_DISMISS_KEY, '1'); }}>
-            <CloseIcon />
+            <Icon.Close />
           </button>
         }
       >

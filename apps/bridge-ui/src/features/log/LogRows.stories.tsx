@@ -3,7 +3,7 @@ import { fn } from 'storybook/test';
 import { EXAMPLE_NOW } from '../../demo/examples.js';
 import { exampleFeed } from '../../demo/feed.js';
 import type { Session } from '../../lib/sessions.js';
-import { LogRows } from './LogRows.js';
+import { Log } from './index.js';
 
 const { log, sessions } = exampleFeed();
 const today = new Date(EXAMPLE_NOW).setHours(0, 0, 0, 0);
@@ -11,10 +11,10 @@ const sessionOf = (id: string): Session => sessions.get(id) ?? { id, first: 0, l
 
 const meta = {
   title: 'Features/Log/LogRows',
-  component: LogRows,
+  component: Log.Rows,
   args: { rows: log, today, selectedN: log[2]?.n, sessionOf, onSelect: fn() },
   decorators: [(Story) => <div className="log" style={{ height: 420, display: 'flex', flexDirection: 'column' }}><Story /></div>],
-} satisfies Meta<typeof LogRows>;
+} satisfies Meta<typeof Log.Rows>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
@@ -23,4 +23,4 @@ export const Default: Story = {};
 
 export const Playground: Story = {};
 
-export const OneAgent: Story = { render: (args) => <LogRows {...args} sessionOf={null} /> };
+export const OneAgent: Story = { render: (args) => <Log.Rows {...args} sessionOf={null} /> };

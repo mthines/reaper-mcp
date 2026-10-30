@@ -3,8 +3,7 @@ import { newPoints, type AutoItem, type EditView, type EnvPoint } from '../edit-
 import { Legend } from './ChangeLegend.js';
 import { dot } from './PianoRoll.js';
 import { clock, plural } from './format.js';
-import { Readout } from '../../measurements/Readout.js';
-import { fmt } from '../../measurements/format.js';
+import { Measurement, fmt } from '../../measurements/index.js';
 
 export const EW = 400;
 export const EH = 110;
@@ -139,21 +138,21 @@ export function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) 
   return (
     <>
       <div className="measure-readouts">
-        <Readout
+        <Measurement.Readout
           label={v.unit === "cc" ? "CC" : "Envelope"}
           value={v.unit === "cc" ? v.env.split(" · ")[0].replace(/^CC /, "") : v.env}
           unit={v.unit === "cc" ? v.env.split(" · ")[1] : undefined}
         />
-        <Readout label={v.unit === "cc" ? "Events" : "Points"} value={String(v.count)} />
+        <Measurement.Readout label={v.unit === "cc" ? "Events" : "Points"} value={String(v.count)} />
         {v.ais && (
-          <Readout
+          <Measurement.Readout
             label="Items"
             value={String(v.ais.length + (v.aisMore ?? 0))}
             unit={plural(new Set(v.ais.map((a) => a[2])).size, "pool")}
           />
         )}
         {v.was && (added.size > 0 || removed.length > 0 || !v.ais) && (
-          <Readout
+          <Measurement.Readout
             label="Changed"
             value={`+${added.size} −${removed.length}`}
           />

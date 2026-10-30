@@ -2,15 +2,15 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { DEMO_KNOWLEDGE } from '../../demo/demo-plugins.js';
 import { EXAMPLE_NOW } from '../../demo/examples.js';
-import { PluginsView } from './PluginsView.js';
+import { Plugins } from './index.js';
 
 const meta = {
   title: 'Features/Plugins/PluginsView',
-  component: PluginsView,
+  component: Plugins,
   args: { feed: DEMO_KNOWLEDGE, query: '', now: EXAMPLE_NOW, onOpenSettings: fn() },
   argTypes: { query: { control: 'text' } },
   decorators: [(Story) => <div style={{ height: 640, display: 'flex', flexDirection: 'column' }}><Story /></div>],
-} satisfies Meta<typeof PluginsView>;
+} satisfies Meta<typeof Plugins>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

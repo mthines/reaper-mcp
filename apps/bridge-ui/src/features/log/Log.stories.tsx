@@ -3,7 +3,7 @@ import { fn } from 'storybook/test';
 import { DEMO_KNOWLEDGE } from '../../demo/demo-plugins.js';
 import { EXAMPLE_NOW } from '../../demo/examples.js';
 import { exampleFeed } from '../../demo/feed.js';
-import { Log } from './Log.js';
+import { Log } from './index.js';
 
 const { log, sessions } = exampleFeed();
 

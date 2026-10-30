@@ -4,7 +4,7 @@ import { Legend } from './ChangeLegend.js';
 import { EW } from './Envelope.js';
 import { clock, hueOf, pct } from './format.js';
 import { useWidth } from '../../../lib/useWidth.js';
-import { Readout } from '../../measurements/Readout.js';
+import { Measurement } from '../../measurements/index.js';
 
 export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
   const len = Math.max(1, v.len);
@@ -47,34 +47,34 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
     <>
       {time ? (
         <div className="measure-readouts">
-          <Readout label="Selection" value={v.sel ? clock(v.sel[0], 1) : "none"} />
-          <Readout label="End" value={v.sel ? clock(v.sel[1], 1) : "–"} />
-          <Readout
+          <Measurement.Readout label="Selection" value={v.sel ? clock(v.sel[0], 1) : "none"} />
+          <Measurement.Readout label="End" value={v.sel ? clock(v.sel[1], 1) : "–"} />
+          <Measurement.Readout
             label="Length"
             value={v.sel ? (v.sel[1] - v.sel[0]).toFixed(1) : "–"}
             unit={v.sel ? "s" : undefined}
           />
-          <Readout label="Cursor" value={clock(v.cur ?? 0, 1)} />
+          <Measurement.Readout label="Cursor" value={clock(v.cur ?? 0, 1)} />
         </div>
       ) : v.lanes ? (
         <div className="measure-readouts">
-          <Readout
+          <Measurement.Readout
             label="Items"
             value={String(lanes.reduce((n, l) => n + l.items.length, 0))}
           />
           {itemWrite ? (
-            <Readout label="Changed" value={`+${itemsAdded} −${itemsRemoved}`} />
+            <Measurement.Readout label="Changed" value={`+${itemsAdded} −${itemsRemoved}`} />
           ) : (
-            <Readout
+            <Measurement.Readout
               label="MIDI"
               value={String(lanes.reduce((n, l) => n + l.items.filter((it) => it[4]).length, 0))}
             />
           )}
-          <Readout label={lanes.length > 1 ? "Tracks" : "Track"} value={lanes.map((l) => l.t).join(", ")} />
+          <Measurement.Readout label={lanes.length > 1 ? "Tracks" : "Track"} value={lanes.map((l) => l.t).join(", ")} />
         </div>
       ) : (
       <div className="measure-readouts">
-        <Readout
+        <Measurement.Readout
           label="Tempo"
           value={
             first
@@ -85,13 +85,13 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
           }
           unit="BPM"
         />
-        <Readout label="Time sig" value={sig} />
+        <Measurement.Readout label="Time sig" value={sig} />
         {v.was ? (
-          <Readout label="Changed" value={`+${changed} −${removed}`} />
+          <Measurement.Readout label="Changed" value={`+${changed} −${removed}`} />
         ) : (
           <>
-            <Readout label="Regions" value={String(v.regions.length)} />
-            <Readout label="Markers" value={String(v.markers.length)} />
+            <Measurement.Readout label="Regions" value={String(v.regions.length)} />
+            <Measurement.Readout label="Markers" value={String(v.markers.length)} />
           </>
         )}
       </div>

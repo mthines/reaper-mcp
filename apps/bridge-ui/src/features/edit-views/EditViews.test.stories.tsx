@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, within } from 'storybook/test';
 import { EDIT_EXAMPLES } from '../../demo/examples.js';
 import type { CommandEntry } from '../../lib/commands.js';
-import { EditViewSection } from './EditViews.js';
+import { EditView } from './index.js';
 
 const example = (title: string) => (EDIT_EXAMPLES.find((x) => x.title === title) ?? EDIT_EXAMPLES[0]).entry;
 const entry = (c: string, r: Record<string, unknown>, ok = true): CommandEntry => ({ n: 1, t: 0, c, ms: 1, ok, r });
@@ -11,11 +11,11 @@ const tempo = [[0, 120, 4, 4, 0]];
 
 const meta = {
   title: 'Features/Edit views/EditViewSection/Tests',
-  component: EditViewSection,
+  component: EditView.Section,
   tags: ['test'],
   parameters: { chromatic: { disableSnapshot: true } },
   args: { entry: example('Track volume') },
-} satisfies Meta<typeof EditViewSection>;
+} satisfies Meta<typeof EditView.Section>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

@@ -1,7 +1,7 @@
 import type { EditView } from '../edit-views.js';
 import { Legend } from './ChangeLegend.js';
 import { noteName, pct } from './format.js';
-import { Readout } from '../../measurements/Readout.js';
+import { Measurement } from '../../measurements/index.js';
 
 export function MidiStats({ v }: { v: Extract<EditView, { kind: "midiStats" }> }) {
   const guns = v.pitches.filter((p) => p[5] > 0).length;
@@ -9,12 +9,12 @@ export function MidiStats({ v }: { v: Extract<EditView, { kind: "midiStats" }> }
   return (
     <>
       <div className="measure-readouts">
-        <Readout
+        <Measurement.Readout
           label="Notes"
           value={String(v.total ?? v.pitches.reduce((s, p) => s + p[1], 0))}
         />
-        <Readout label="Pitches" value={String(v.pitches.length)} />
-        <Readout
+        <Measurement.Readout label="Pitches" value={String(v.pitches.length)} />
+        <Measurement.Readout
           label="Machine gun"
           value={guns ? `${guns} ${guns === 1 ? "pitch" : "pitches"}` : "none"}
           zone={guns ? "hot" : "ok"}

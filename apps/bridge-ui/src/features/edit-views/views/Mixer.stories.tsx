@@ -1,17 +1,17 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { editExamples } from '../../../demo/examples.js';
 import { StoryCard } from '../../../demo/StoryCard.js';
-import { Mixer } from './Mixer.js';
+import { EditView } from '../index.js';
 
 const examples = editExamples('mixer');
 const [first] = examples;
 
 const meta = {
   title: 'Features/Edit views/Mixer',
-  component: Mixer,
+  component: EditView.Mixer,
   args: { v: first.v },
   decorators: [(Story) => <div className="measure"><div className="measure-body"><Story /></div></div>],
-} satisfies Meta<typeof Mixer>;
+} satisfies Meta<typeof EditView.Mixer>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
@@ -23,7 +23,7 @@ export const Default: Story = {
         <StoryCard key={x.title} title={x.title} note={x.note}>
           <div className="measure">
             <div className="measure-body">
-              <Mixer v={x.v} />
+              <EditView.Mixer v={x.v} />
             </div>
           </div>
         </StoryCard>

@@ -1,4 +1,4 @@
-import { Mark } from '../components/Mark.js';
+import { Mark } from '../components/index.js';
 
 export function Offline({ reachable }: { reachable: boolean }) {
   return (

@@ -1,4 +1,4 @@
-import type { KnowledgeFeed, PluginRecord } from '../features/plugins/plugins.js';
+import type { KnowledgeFeed, PluginRecord } from '../features/plugins/index.js';
 
 // Fixture for the Plugins view in `?demo`: the real built-in records (as of 2026-10-27), a few learned ones,
 // and an installed list shaped like a typical setup.

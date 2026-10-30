@@ -1,12 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Level, Readout, Scale } from './Readout.js';
+import { Measurement } from './index.js';
 
 const meta = {
   title: 'Features/Measurements/Readout',
-  component: Readout,
+  component: Measurement.Readout,
   args: { label: 'Peak L', value: '−9.4', unit: 'dB', zone: 'ok' },
   argTypes: { zone: { control: 'select', options: ['ok', 'hot', 'over'] }, word: { control: 'text' } },
-} satisfies Meta<typeof Readout>;
+} satisfies Meta<typeof Measurement.Readout>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
@@ -15,16 +15,16 @@ export const Default: Story = {
   render: () => (
     <div className="measure">
       <div className="measure-readouts">
-        <Readout label="Peak L" value="−9.4" unit="dB" />
-        <Readout label="Peak R" value="−2.6" unit="dB" zone="hot" word="hot" />
-        <Readout label="True peak" value="+0.4" unit="dBTP" zone="over" word="over 0" />
-        <Readout label="Width" value="1.12" />
+        <Measurement.Readout label="Peak L" value="−9.4" unit="dB" />
+        <Measurement.Readout label="Peak R" value="−2.6" unit="dB" zone="hot" word="hot" />
+        <Measurement.Readout label="True peak" value="+0.4" unit="dBTP" zone="over" word="over 0" />
+        <Measurement.Readout label="Width" value="1.12" />
       </div>
-      <Level label="L" value={-21.3} hold={-9.4} />
-      <Level label="R" value={-14.2} hold={-2.6} was={{ value: -18.2, hold: -6.8 }} />
-      <Scale ticks={[-60, -40, -20, -6, 0]} min={-60} max={6} indent />
+      <Measurement.Level label="L" value={-21.3} hold={-9.4} />
+      <Measurement.Level label="R" value={-14.2} hold={-2.6} was={{ value: -18.2, hold: -6.8 }} />
+      <Measurement.Scale ticks={[-60, -40, -20, -6, 0]} min={-60} max={6} indent />
     </div>
   ),
 };
 
-export const Playground: Story = { render: (args) => <div className="measure-readouts"><Readout {...args} /></div> };
+export const Playground: Story = { render: (args) => <div className="measure-readouts"><Measurement.Readout {...args} /></div> };

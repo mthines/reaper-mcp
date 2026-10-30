@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { track } from '../../lib/analytics.js';
 import type { KnowledgeFeed, PluginRecord, PublishResult } from './plugins.js';
-import { ShareIcon } from '../../components/icons.js';
+import { Icon } from '../../components/index.js';
 
 type PublishState = { step: 'idle' | 'confirm' | 'busy' } | { step: 'done'; result: PublishResult } | { step: 'error'; message: string };
 
@@ -39,7 +39,7 @@ export function PublishRecord({ record, shadows, publish }: { record: PluginReco
   if (state.step === 'idle') {
     return (
       <button className="btn btn-block kn-contribute kn-publish-btn" onClick={() => setState({ step: 'confirm' })} title="Writes the record to the built-in layer in LoreKit">
-        <ShareIcon /> Publish to built-in
+        <Icon.Share /> Publish to built-in
       </button>
     );
   }

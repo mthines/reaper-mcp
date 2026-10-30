@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import { LoreKitSetting, PublishSetting } from './LoreKitSettings.js';
+import { Settings } from './index.js';
 
 const meta = {
   title: 'Features/Settings/LoreKitSettings',
-  component: LoreKitSetting,
+  component: Settings.LoreKit,
   args: { token: null, onChange: fn() },
   argTypes: { token: { control: 'text' } },
-} satisfies Meta<typeof LoreKitSetting>;
+} satisfies Meta<typeof Settings.LoreKit>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
@@ -15,10 +15,10 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   render: () => (
     <div className="story-stack">
-      <LoreKitSetting token={null} onChange={() => undefined} />
-      <LoreKitSetting token="lk_ro_example" onChange={() => undefined} />
-      <PublishSetting token={null} readToken="lk_ro_example" onChange={() => undefined} />
-      <PublishSetting token="lk_rw_example" readToken="lk_ro_example" onChange={() => undefined} />
+      <Settings.LoreKit token={null} onChange={() => undefined} />
+      <Settings.LoreKit token="lk_ro_example" onChange={() => undefined} />
+      <Settings.Publish token={null} readToken="lk_ro_example" onChange={() => undefined} />
+      <Settings.Publish token="lk_rw_example" readToken="lk_ro_example" onChange={() => undefined} />
     </div>
   ),
 };

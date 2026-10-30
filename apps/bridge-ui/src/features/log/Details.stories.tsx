@@ -3,14 +3,14 @@ import { fn } from 'storybook/test';
 import { DRAWER_EXAMPLES, EXAMPLE_NOW } from '../../demo/examples.js';
 import { StoryCard } from '../../demo/StoryCard.js';
 import type { Session } from '../../lib/sessions.js';
-import { Details } from './Details.js';
+import { Log } from './index.js';
 
 const SESSION: Session = { id: 'story', dir: '/Users/you/Music/midnight-drive', client: 'claude-code', first: EXAMPLE_NOW - 3_600_000, last: EXAMPLE_NOW, commands: 214, errors: 3, label: 'midnight-drive' };
 const [first] = DRAWER_EXAMPLES;
 
 const meta = {
   title: 'Features/Log/Details',
-  component: Details,
+  component: Log.Details,
   args: {
     entry: first.entry,
     history: first.history,
@@ -23,7 +23,7 @@ const meta = {
     onPick: fn(),
   },
   decorators: [(Story) => <div className="story-drawer"><Story /></div>],
-} satisfies Meta<typeof Details>;
+} satisfies Meta<typeof Log.Details>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
@@ -35,7 +35,7 @@ export const Default: Story = {
       {DRAWER_EXAMPLES.map((x) => (
         <StoryCard key={x.title} title={x.title} note={x.note}>
           <div className="story-drawer">
-            <Details {...args} entry={x.entry} history={x.history} />
+            <Log.Details {...args} entry={x.entry} history={x.history} />
           </div>
         </StoryCard>
       ))}

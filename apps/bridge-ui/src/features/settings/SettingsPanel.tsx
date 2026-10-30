@@ -3,9 +3,8 @@ import { manualInstallHint, openInBrowserToInstall, promptInstall, useInstallSta
 import { track, type TrackEvent, type UsageStatsState } from '../../lib/analytics.js';
 import type { BridgeSettings, SettingKey } from '../../lib/status.js';
 import { notificationPermission } from '../../app/useErrorNotifications.js';
-import { Toggle } from '../../components/Toggle.js';
-import { CloseIcon } from '../../components/icons.js';
 import { LoreKitSetting, PublishSetting } from './LoreKitSettings.js';
+import { Icon, Toggle } from '../../components/index.js';
 
 export function SettingsPanel({
   settings,
@@ -50,7 +49,7 @@ export function SettingsPanel({
       <div className="drawer-head">
         <div className="drawer-title">Settings</div>
         <button className="icon-btn" onClick={onClose} aria-label="Close settings" title="Close (Esc)">
-          <CloseIcon />
+          <Icon.Close />
         </button>
       </div>
       <div className="drawer-body">
