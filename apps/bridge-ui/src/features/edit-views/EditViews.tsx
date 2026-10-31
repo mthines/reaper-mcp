@@ -7,6 +7,7 @@ import { MidiStats } from './views/MidiStats.js';
 import { Mixer } from './views/Mixer.js';
 import { PianoRoll } from './views/PianoRoll.js';
 import { Plan } from './views/Plan.js';
+import { Render } from './views/Render.js';
 import { Routing } from './views/Routing.js';
 import { Timeline } from './views/Timeline.js';
 import type { CommandEntry } from '../../lib/commands.js';
@@ -32,6 +33,8 @@ export function EditViewSection({ entry }: { entry: CommandEntry }) {
 
 /** Listings show what is there; every other edit view is a write that shows before and after */
 const LISTINGS = new Set([
+  "render_project",
+  "render_versions",
   "get_envelope_points",
   "get_midi_cc",
   "get_midi_notes",
@@ -68,5 +71,7 @@ function render(v: EditView): ReactNode {
       return <FxChains v={v} />;
     case "routing":
       return <Routing v={v} />;
+    case "render":
+      return <Render v={v} />;
   }
 }

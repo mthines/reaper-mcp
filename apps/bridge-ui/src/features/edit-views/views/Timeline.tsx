@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { fittingLabels, timelineDiff, type EditView, type Item, type Marker, type Region, type Tempo } from '../edit-views.js';
+import { fittingLabels, normalizedGains, timelineDiff, type ArrangeOp, type EditView, type Item, type Marker, type Region, type Tempo } from '../edit-views.js';
 import { Legend } from './ChangeLegend.js';
 import { EW } from './Envelope.js';
 import { clock, hueOf, pct } from './format.js';
@@ -10,6 +10,54 @@ import chartStyles from '../../../styles/chart.module.css';
 import envelopeStyles from './Envelope.module.css';
 import styles from './Timeline.module.css';
 
+const ARRANGE_LABEL: Record<ArrangeOp, string> = {
+  copy: "Copy items",
+  section: "Copy section",
+  insert: "Insert time",
+  remove: "Remove time",
+  normalize: "Normalize",
+  reverse: "Reverse",
+  glue: "Glue",
+};
+// What the hatched band is, per op
+const SPAN_LABEL: Partial<Record<ArrangeOp, string>> = { insert: "Opened", remove: "Cut", copy: "Copied to", section: "Copied to" };
+
+const signedDb = (g: number) => `${g > 0 ? "+" : ""}${g.toFixed(1)}`;
+const dbRange = (gains: number[]) => {
+  if (!gains.length) return "–";
+  const lo = Math.min(...gains);
+  const hi = Math.max(...gains);
+  return lo === hi ? signedDb(lo) : `${signedDb(lo)}…${signedDb(hi)}`;
+};
+
+/** Readouts of an arrangement edit: what it did, where, and what it changed */
+function ArrangeReadouts({ v, added, removed }: { v: Extract<EditView, { kind: "timeline" }>; added: number; removed: number }) {
+  const lanes = v.lanes ?? [];
+  const tracks = lanes.map((l) => l.t).join(", ") + (v.moreTracks ? ` +${v.moreTracks}` : "");
+  const normalized = normalizedGains(lanes);
+  const range = v.to ?? v.span;
+  return (
+    <div className={chartStyles.measureReadouts}>
+      <Measurement.Readout label="Edit" value={v.op ? ARRANGE_LABEL[v.op] : "–"} />
+      {v.op === "normalize" ? (
+        <>
+          <Measurement.Readout label="Gain" value={dbRange(normalized.map(([g]) => g))} unit="dB" />
+          <Measurement.Readout label="Before" value={dbRange(normalized.map(([, w]) => w))} unit="dB" />
+        </>
+      ) : range ? (
+        <>
+          <Measurement.Readout label={v.op === "remove" ? "From" : "At"} value={clock(range[0], 1)} />
+          <Measurement.Readout label="Length" value={(range[1] - range[0]).toFixed(1)} unit="s" />
+          <Measurement.Readout label="Changed" value={`+${added} −${removed}`} />
+        </>
+      ) : (
+        <Measurement.Readout label="Changed" value={`+${added} −${removed}`} />
+      )}
+      <Measurement.Readout label="Tracks" value={String(lanes.length + (v.moreTracks ?? 0))} title={tracks} />
+    </div>
+  );
+}
+
 export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
   const len = Math.max(1, v.len);
   const at = (t: number) => `${pct(t, 0, len)}%`;
@@ -19,6 +67,9 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
   const bpms = [...v.tempo, ...tempos.removed].map((t) => t[1]);
   const varies = new Set(bpms).size > 1;
   const first = v.tempo[0];
+  // The hatched band: the time opened or cut, else where a copy landed
+  const band = v.op === "insert" || v.op === "remove" ? v.span : v.to;
+  const spanLabel = v.op && SPAN_LABEL[v.op];
   const sig = first && first[2] > 0 ? `${first[2]}/${first[3]}` : "–";
   const changed = regions.added.size + markers.added.size + tempos.added.size;
   const removed =
@@ -49,7 +100,9 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
   const itemWrite = lanes.some((l) => l.was);
   return (
     <>
-      {time ? (
+      {v.op ? (
+        <ArrangeReadouts v={v} added={itemsAdded} removed={itemsRemoved} />
+      ) : time ? (
         <div className={chartStyles.measureReadouts}>
           <Measurement.Readout label="Selection" value={v.sel ? clock(v.sel[0], 1) : "none"} />
           <Measurement.Readout label="End" value={v.sel ? clock(v.sel[1], 1) : "–"} />
@@ -101,6 +154,22 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
       </div>
       )}
       <div className={styles.evTimeline} ref={laneRef}>
+        {v.span && (v.op === "copy" || v.op === "section") && (
+          <span
+            className={styles.evSpan}
+            data-span="source"
+            style={{ left: at(v.span[0]), width: `${pct(v.span[1], 0, len) - pct(v.span[0], 0, len)}%` }}
+            title={`Source ${clock(v.span[0], 1)}–${clock(v.span[1], 1)}`}
+          />
+        )}
+        {band && (
+          <span
+            className={styles.evSpan}
+            data-span={v.op === "remove" ? "cut" : undefined}
+            style={{ left: at(band[0]), width: `${pct(band[1], 0, len) - pct(band[0], 0, len)}%` }}
+            title={`${spanLabel || ""} ${clock(band[0], 1)}–${clock(band[1], 1)}`}
+          />
+        )}
         {v.wasSel && (
           <span
             className={cx(styles.evSel, styles.evSelWas)}
@@ -191,6 +260,11 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
             name={lane.t}
           />
         ))}
+        {v.moreTracks ? (
+          <span className={chartStyles.evMore}>
+            +{v.moreTracks} more {v.moreTracks === 1 ? "track" : "tracks"} changed the same way
+          </span>
+        ) : null}
         {(varies || tempos.added.size > 0 || tempos.removed.length > 0) && (
           <TempoLane
             tempo={v.tempo}
@@ -205,10 +279,14 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
         <span>{clock(len / 2)}</span>
         <span>{clock(len)}</span>
       </div>
-      {(itemsAdded > 0 || itemsRemoved > 0) && (
+      {(itemsAdded > 0 || itemsRemoved > 0 || v.op) && (
         <Legend
           items={[
-            [chartStyles.lgNewMark, "Added or changed"],
+            ...(v.op === "copy" || v.op === "section" ? [[chartStyles.lgSpanSrc, "Source"] as [string, string]] : []),
+            ...(spanLabel && (v.to || v.span)
+              ? [[v.op === "remove" ? cx(chartStyles.lgSpan, chartStyles.lgSpanCut) : chartStyles.lgSpan, spanLabel] as [string, string]]
+              : []),
+            [chartStyles.lgNewMark, v.op === "normalize" ? "New gain" : "Added or changed"],
             [chartStyles.lgGoneMark, "Before"],
           ]}
         />
@@ -221,7 +299,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
           ]}
         />
       )}
-      {v.was && (changed > 0 || removed > 0) && (
+      {v.was && !v.op && (changed > 0 || removed > 0) && (
         <Legend
           items={[
             [chartStyles.lgNewMark, "Added or changed"],
@@ -338,8 +416,9 @@ function ItemsLane({
             key={i}
             className={cx(styles.evItem, it[4] ? styles.evItemMidi : '', it[5] ? styles.evItemMuted : '', added.has(it) ? styles.evNew : '')}
             style={{ left: at(it[0]), width: width(it) }}
-            title={`${it[4] ? "MIDI" : "Audio"} item · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}${it[5] ? " · muted" : ""}`}
+            title={`${it[4] ? "MIDI" : "Audio"} item · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}${it[5] ? " · muted" : ""}${it[6] !== undefined ? ` · gain ${signedDb(it[6])} dB` : ""}`}
           >
+            {it[6] !== undefined && added.has(it) && <b className={cx(styles.evItemGain, 'mono')}>{signedDb(it[6])}</b>}
             {it[2] > 0 && (
               <i className={styles.evFadeIn} style={{ width: `${(it[2] / it[1]) * 100}%` }} />
             )}

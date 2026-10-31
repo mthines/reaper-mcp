@@ -57,6 +57,14 @@ function waveform(top: number, bed = 0.03) {
   return { hi, lo, peakDb: Math.round(20 * Math.log10(peak) * 100) / 100, durationSeconds: 5, sampleRate: 44100, channels: 2 };
 }
 
+/** A rendered file row: name, length, LUFS-I, true peak, sample peak and 60 waveform slices peaking at `top` */
+function renderFile(name: string, dur: number, lufs: number, tp: number, peak: number, top: number): unknown[] {
+  // A song's shape on the dB scale: quiet intro, verses, louder choruses, a breakdown and a fade, with slice-to-slice jitter
+  const section = (i: number) => (i < 6 ? 0.06 + i * 0.03 : i < 18 ? 0.45 : i < 26 ? 0.95 : i < 36 ? 0.5 : i < 42 ? 0.15 : i < 54 ? 1 : (60 - i) / 6);
+  const hi = Array.from({ length: 60 }, (_, i) => Math.round(Math.min(1, top * section(i) * (0.82 + 0.18 * Math.abs(Math.sin(i * 2.3)))) * 100) / 100);
+  return [name, dur, lufs, tp, peak, hi, hi.map((v) => -Math.round(v * 0.94 * 100) / 100)];
+}
+
 const track = (trackIndex: number, extra: Record<string, unknown> = {}) => ({ trackIndex, ...extra });
 
 function measurementExampleList(): Example[] {
@@ -107,6 +115,17 @@ function measurementExampleList(): Example[] {
     name: 'Master', pq: 7.42, pc: 5.81, ce: 6.66, cu: 7.05, lufs: -18, dur: 30,
   }, { ms: 6_400 });
 
+  const key = call('detect_key', { trackIndex: 7 }, {
+    name: undefined, src: 'midi', key: 'A minor', tonic: 'A', mode: 'minor', r: 0.89, conf: 0.62, rel: 'C major',
+    alt: [['C major', 0.82], ['D minor', 0.71], ['F major', 0.66]],
+    chroma: [0.81, 0.04, 0.38, 0.06, 0.74, 0.31, 0.03, 0.47, 0.05, 1, 0.07, 0.22],
+  }, { ms: 140 });
+  const keyAudio = call('detect_key', { trackIndex: 3, endTime: 60 }, {
+    name: 'Gtr Bus', src: 'audio', key: 'D major', tonic: 'D', mode: 'major', r: 0.61, conf: 0.14, rel: 'B minor',
+    alt: [['G major', 0.58], ['A major', 0.55], ['E minor', 0.52]],
+    chroma: [0.55, 0.42, 1, 0.38, 0.71, 0.49, 0.83, 0.77, 0.44, 0.92, 0.4, 0.58],
+  }, { ms: 4_820 });
+
   return [
     example('Meters', meters, 'Comfortable levels'),
     example('Meters · hot', metersHot, 'Peaks above −6 dB turn amber, previous call ghosted', earlier(metersHot, { peakL: -6.8, peakR: -7.4, rmsL: -18.2, rmsR: -18.9 })),
@@ -129,6 +148,8 @@ function measurementExampleList(): Example[] {
     example('Alignment', align, 'Bottom mic 0.84 ms late and inverted; the fix', earlier(align, { ref: 'Snare Top', name: 'Snare Btm', delayMs: 0.02, samples: 1, corr: 0.95, inv: 0, cur: -0.84, offset: -0.84, phase: 1 })),
     example('Alignment · unsure', alignUnsure, 'Low correlation: no fix suggested'),
     example('Aesthetics', aesthetics, 'Four scores on 0–10; previous call ghosted', earlier(aesthetics, { name: 'Master', pq: 7.18, pc: 5.9, ce: 6.4, cu: 6.95, lufs: -18, dur: 30 })),
+    example('Key · MIDI', key, 'A minor from the notes: scale tones lit, the tonic strongest', earlier(key, { src: 'midi', key: 'C major', tonic: 'C', mode: 'major', r: 0.8, conf: 0.4, rel: 'A minor', alt: [], chroma: [1, 0.04, 0.4, 0.06, 0.7, 0.35, 0.03, 0.8, 0.05, 0.6, 0.07, 0.2] })),
+    example('Key · audio, unsure', keyAudio, 'A dense guitar bus: low confidence flagged'),
   ];
 }
 
@@ -199,6 +220,14 @@ function editExampleList(): Example[] {
   });
   const melody = call('insert_midi_notes', { trackIndex: 7, itemIndex: 0, notes: '[…]' }, {
     total: CHORDS.length + MELODY.length, beats: 16, ts: [4, 4], more: 0, gone: [], notes: [...CHORDS, ...MELODY],
+  });
+  // A played-in line, a little early and late, snapped to 8ths at full strength
+  const LOOSE = MELODY.map(([p, s, l, v], i) => [p, s + [0.06, -0.08, 0.11, -0.04, 0.09, -0.07, 0.05, 0.12][i], l, v]);
+  const quantized = call('quantize_midi', { trackIndex: 7, itemIndex: 0, grid: 0.5 }, {
+    total: CHORDS.length + MELODY.length, beats: 16, ts: [4, 4], more: 0, notes: [...CHORDS, ...MELODY], gone: LOOSE,
+  });
+  const imported = call('import_midi_file', { path: '/Users/me/Sketches/hook.mid', trackIndex: 7, position: 0 }, {
+    total: CHORDS.length + MELODY.length, beats: 16, ts: [4, 4], more: 0, gone: [], notes: [...CHORDS, ...MELODY].map((n) => [...n.slice(0, 4), 1]),
   });
   const deleted = call('delete_midi_note', { trackIndex: 7, itemIndex: 0, noteIndex: 3 }, {
     total: CHORDS.length - 1, beats: 16, ts: [4, 4], more: 0, gone: [[53, 4, 4, 72]], notes: CHORDS.filter((n) => !(n[0] === 53 && n[1] === 4)),
@@ -316,9 +345,82 @@ function editExampleList(): Example[] {
     pts: [[0, 64, 1], [2, 80, 1], [4, 96, 1], [6, 110, 1], [8, 100, 1], [10, 72, 1], [12, 30, 1], [14, 48, 1], [15.5, 90, 1]],
     was: [[0, 64, 1], [2, 80, 1], [4, 96, 1], [6, 110, 1], [8, 100, 1], [10, 72, 1], [14, 48, 1], [15.5, 90, 1]],
   });
+  // Arrangement: the song with its 16 s bridge (144–160)
+  const shift = (r: (string | number)[], by: number, from: number) => (r[0] as number) >= from ? [(r[0] as number) + by, (r[1] as number) + by, ...r.slice(2)] : r;
+  const noBridge = SONG_REGIONS.filter((r) => r[2] !== 'Bridge').map((r) => shift(r, -16, 160));
+  const inserted = call('insert_time', { position: 144, length: 16 }, {
+    op: 'insert', span: [144, 160], moreTracks: 6,
+    regions: SONG_REGIONS.map((r) => shift(r, 16, 144)), markers: SONG_MARKERS, tempo: SONG_TEMPO, len: 216,
+    was: { regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO },
+    lanes: [
+      { t: 'Drums', items: [[0, 144, 0, 0, 0, 0], [160, 56, 0, 2, 0, 0]], was: [[0, 200, 0, 2, 0, 0]] },
+      { t: 'Gtr L', items: [ITEMS[0], ITEMS[1], ITEMS[2], [176, 31, 0, 4, 0, 0]], was: [ITEMS[0], ITEMS[1], ITEMS[2], [160, 31, 0, 4, 0, 0]] },
+    ],
+  });
+  const cut = call('remove_time', { start: 144, end: 160 }, {
+    op: 'remove', span: [144, 160], moreTracks: 6,
+    regions: noBridge, markers: SONG_MARKERS, tempo: SONG_TEMPO, len: 200,
+    was: { regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO },
+    lanes: [
+      { t: 'Drums', items: [[0, 144, 0, 0, 0, 0], [144, 40, 0, 2, 0, 0]], was: [[0, 200, 0, 2, 0, 0]] },
+      { t: 'Gtr L', items: [ITEMS[0], ITEMS[1], ITEMS[2], [144, 31, 0, 4, 0, 0]], was: [ITEMS[0], ITEMS[1], ITEMS[2], [160, 31, 0, 4, 0, 0]] },
+    ],
+  });
+  const section = call('copy_section', { regionIndex: 2, position: 200 }, {
+    op: 'section', span: [48, 80], to: [200, 232],
+    regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO, len: 232,
+    was: { regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO },
+    lanes: [
+      { t: 'Gtr L', items: [...ITEMS, [200, 31, 0, 0.5, 0, 0]], was: ITEMS },
+      { t: 'Vox', items: [[18, 28, 0.2, 0.5, 0, 0], [52, 26, 0.2, 1, 0, 0], [204, 26, 0.2, 1, 0, 0]], was: [[18, 28, 0.2, 0.5, 0, 0], [52, 26, 0.2, 1, 0, 0]] },
+    ],
+  });
+  const repeated = call('copy_media_items', { items: '[{"trackIndex":7,"itemIndex":0}]', times: 3 }, {
+    op: 'copy', span: [16, 24], to: [24, 48],
+    regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO, len: 200,
+    was: { regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO },
+    lanes: [{ t: 'Keys', items: [[16, 8, 0, 0, 1, 0], [24, 8, 0, 0, 1, 0], [32, 8, 0, 0, 1, 0], [40, 8, 0, 0, 1, 0]], was: [[16, 8, 0, 0, 1, 0]] }],
+  });
+  const normalized = call('process_items', { operation: 'normalize', items: '[…]', target: -1 }, {
+    op: 'normalize',
+    regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO, len: 200,
+    was: { regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO },
+    lanes: [
+      { t: 'Gtr L', items: [[16, 30, 0.5, 2, 0, 0, 11], [48, 31, 0, 0.5, 0, 0, 5.5]], was: [[16, 30, 0.5, 2, 0, 0, 0], [48, 31, 0, 0.5, 0, 0, 0]] },
+    ],
+  });
+  const glued = call('process_items', { operation: 'glue', items: '[…]' }, {
+    op: 'glue',
+    regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO, len: 200,
+    was: { regions: SONG_REGIONS, markers: [], tempo: SONG_TEMPO },
+    lanes: [{ t: 'Gtr L', items: [[16, 63, 0.5, 0.5, 0, 0], ITEMS[2]], was: [[16, 14, 0.5, 0, 0, 0], [30, 16, 0, 2, 0, 0], ITEMS[1], ITEMS[2]] }],
+  });
   const plan = call('run_plan', { ops: '[…]', dryRun: true }, {
     total: 4, dryRun: true,
     ops: [['add_track', 'Vox Bus'], ['add_fx', '$bus · VST3: Pro-C 2'], ['add_send', 'Vox → $bus'], ['set_track', 'Vox']],
+  });
+  const renderMaster = call('render_project', { overwrite: true }, {
+    fmt: 'wav', bd: '24', src: 'master', norm: 'lufs_i', nt: -14, lim: -1, tp: true,
+    groups: [{ v: '', m: [], f: [renderFile('Night Drive (Master).wav', 214.6, -14.1, -1.02, -1.4, 0.8)] }],
+  });
+  const renderOver = call('render_project', {}, {
+    fmt: 'flac', bd: '16', src: 'master', norm: 'lufs_i', nt: -14,
+    groups: [{ v: '', m: [], f: [renderFile('Night Drive (Loud).flac', 214.6, -9.8, 0.4, 0.1, 1)] }],
+  });
+  const renderStems = call('render_project', { tracks: '["Drums","Bass","Keys","Vocals"]' }, {
+    fmt: 'wav', bd: '32f', src: 'stems',
+    groups: [{ v: '', m: [], f: [
+      renderFile('Drums.wav', 214.6, -17.2, -2.1, -2.6, 0.75), renderFile('Bass.wav', 214.6, -19.8, -5.3, -5.9, 0.5),
+      renderFile('Keys.wav', 214.6, -24.5, -9.1, -9.6, 0.3), renderFile('Lead Vocal Double (Harmony).wav', 214.6, -21.3, -0.6, -0.9, 0.85),
+    ] }],
+  });
+  const renderVersions = call('render_versions', { versions: '[…]' }, {
+    fmt: 'mp3', kbps: 320, src: 'master', norm: 'lufs_i', nt: -14, lim: -1, tp: true,
+    groups: [
+      { v: 'Full', m: [], f: [renderFile('song-Full.mp3', 214.6, -14, -1.1, -1.3, 0.8)] },
+      { v: 'Instrumental', m: ['Lead Vox', 'Vox Dbl', 'Backing Vox'], f: [renderFile('song-Instrumental.mp3', 214.6, -14.2, -1.05, -1.3, 0.7)] },
+      { v: 'TV', m: ['Lead Vox'], f: [renderFile('song-TV.mp3', 214.6, -13.9, -1.2, -1.5, 0.72)] },
+    ],
   });
   return [
     example('Track volume', volume, 'One track, before → after'),
@@ -332,6 +434,8 @@ function editExampleList(): Example[] {
     example('Automation item deleted', aiGone, 'The C section’s item gone, its place dashed'),
     example('Notes added', melody, 'A melody over the chords it kept'),
     example('Note deleted', deleted, 'The removed note dashed'),
+    example('MIDI quantized', quantized, 'A played-in melody snapped to 8ths: where each note was, dashed'),
+    example('MIDI file imported', imported, 'Every note new, from a .mid without REAPER’s dialog'),
     example('Large MIDI item', big, 'First 256 of 2044 notes'),
     example('MIDI analysis', drums, 'Velocity per pitch, machine gun on the hi-hat'),
     example('Markers listed', markers, 'Regions and markers'),
@@ -354,6 +458,16 @@ function editExampleList(): Example[] {
     example('FX parameters listed', fxParams, 'The plugin’s readout, first parameters only'),
     example('MIDI CC inserted', cc, 'A controller lane in beats, held between events'),
     example('Plan', plan, 'A dry run'),
+    example('Arrange · time inserted', inserted, 'A 16 s gap opened at 2:24: everything after moves, the drum item split'),
+    example('Arrange · time removed', cut, 'The bridge cut: its region gone, the rest pulled back'),
+    example('Arrange · section copied', section, 'The chorus (outlined) copied to the end (hatched)'),
+    example('Arrange · items repeated', repeated, 'A 4-bar MIDI loop repeated 3 times'),
+    example('Arrange · normalized', normalized, 'Item gain to −1 dB peak, the gain each item got'),
+    example('Arrange · glued', glued, 'Three items became one'),
+    example('Render · on target', renderMaster, 'Normalized to −14 LUFS, true-peak limited at −1'),
+    example('Render · off target', renderOver, 'Louder than the target, true peak over 0'),
+    example('Render · stems', renderStems, 'One file per selected track, 32-bit float, no target'),
+    example('Render · versions', renderVersions, 'Full, instrumental and TV mix in one call; muted tracks named'),
   ];
 }
 

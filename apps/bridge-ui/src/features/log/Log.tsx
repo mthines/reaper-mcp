@@ -15,6 +15,7 @@ import type { Span } from '../../lib/timeline.js';
 import { Combobox, Icon } from '../../components/index.js';
 import { Plugins, type KnowledgeFeed } from '../plugins/index.js';
 import { Snapshots, type SnapshotsHook } from '../snapshots/index.js';
+import { editViewOf } from '../edit-views/index.js';
 import { RANGES, rangeOf, spanLabel, type RangeKey } from '../timeline/index.js';
 import { cx } from '../../lib/cx.js';
 import listStyles from '../../styles/list.module.css';
@@ -175,7 +176,7 @@ export function Log({
   const selectRow = useCallback(
     (e: CommandEntry) => {
       const open = selectedRef.current?.n === e.n;
-      if (!open) track({ name: 'log_entry_opened', ok: e.ok });
+      if (!open) track({ name: 'log_entry_opened', ok: e.ok, view: editViewOf(e)?.kind ?? 'none' });
       // Every click is a step Back undoes (opening, closing or switching rows); only ↑/↓ replaces
       setSelected(open ? null : e, 'push');
     },

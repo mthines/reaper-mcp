@@ -198,3 +198,39 @@ def test_transients_of_silence_is_empty():
     result = analysis.transients(np.zeros((2, SR * 2), dtype=np.float32), SR)
     assert result["count"] == 0
     assert result["tempo"]["bpm"] is None
+
+
+def _tones(freqs_hz, seconds=3.0, sr=44100):
+    t = np.arange(int(seconds * sr)) / sr
+    return np.stack([sum(np.sin(2 * np.pi * f * t) for f in freqs_hz) / len(freqs_hz)] * 2).astype(np.float32), sr
+
+
+def test_chroma_of_a_c_major_triad_peaks_on_c_e_g():
+    # C4, E4, G4
+    audio, sr = _tones([261.63, 329.63, 392.00])
+    result = analysis.chroma(audio, sr)
+    c = result["chroma"]
+    assert len(c) == 12
+    strongest = sorted(range(12), key=lambda i: -c[i])[:3]
+    assert sorted(strongest) == [0, 4, 7]
+    assert max(c) == 1.0
+    assert all(c[i] < 0.5 for i in range(12) if i not in (0, 4, 7))
+
+
+def test_chroma_puts_no_weight_on_the_wrong_class_for_a_low_bass_note():
+    # A1 and B1 with their first harmonics: down there a bin is wider than a semitone, so the
+    # fundamental must not add weight to the neighbouring classes (B flat, C)
+    c = analysis.chroma(*_tones([55.0, 110.0, 165.0]))["chroma"]
+    assert c[10] < 0.3
+    c = analysis.chroma(*_tones([61.74, 123.47, 185.2]))["chroma"]
+    assert c[10] < 0.5 and c[0] < 0.5
+    # B minor (B3, D4, F#4) over a B1 bass with its octave: the triad's classes stay on top
+    c = analysis.chroma(*_tones([61.74, 123.47, 246.94, 293.66, 369.99]))["chroma"]
+    assert sorted(sorted(range(12), key=lambda i: -c[i])[:3]) == [2, 6, 11]
+
+
+def test_chroma_skips_silence_and_returns_zeros_for_it():
+    audio = np.zeros((2, 44100 * 2), dtype=np.float32)
+    result = analysis.chroma(audio, 44100)
+    assert result["chroma"] == [0.0] * 12
+    assert result["frames"] == 0

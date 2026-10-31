@@ -76,3 +76,38 @@ export const SaysADryRunPlanWroteNothing: Story = {
     await expect(within(canvasElement).getByText(/A dry run: checked, nothing written\./)).toBeInTheDocument();
   },
 };
+
+const notes = [[0, 1, 60, 100, 1], [1, 1, 64, 100, 1]];
+
+export const SaysHowManyImportedItemsItDoesNotDraw: Story = {
+  args: { entry: entry('import_midi_file', { notes, total: 2, beats: 4, more: 0, items: 2 }) },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText('+2 more imported items not drawn')).toBeInTheDocument();
+  },
+};
+
+export const SaysNothingMoreForAOneItemImport: Story = {
+  args: { entry: entry('import_midi_file', { notes, total: 2, beats: 4, more: 0 }) },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.textContent).not.toMatch(/imported item/);
+  },
+};
+
+// A file rendered 4 LU louder than a -14 target
+const loud = { fmt: 'wav', src: 'master', nt: -14, groups: [{ v: '', m: [], f: [['song.wav', 200, -10, -1.5, -1.6, [], []]] }] };
+
+export const MarksAFileOffAnIntegratedLoudnessTarget: Story = {
+  args: { entry: entry('render_project', { ...loud, norm: 'lufs_i' }) },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('group', { name: /^song\.wav/ })).toHaveAccessibleName(/−10\.0 LUFS-I \(off target\)/);
+    await expect(within(canvasElement).getByText(/Off target/)).toBeInTheDocument();
+  },
+};
+
+/** A momentary or short-term max target says nothing about integrated loudness */
+export const DoesNotGradeLoudnessAgainstAMaxTarget: Story = {
+  args: { entry: entry('render_project', { ...loud, norm: 'lufs_m_max' }) },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('group', { name: /^song\.wav/ })).not.toHaveAccessibleName(/off target/);
+  },
+};

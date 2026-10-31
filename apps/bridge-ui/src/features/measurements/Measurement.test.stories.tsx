@@ -85,3 +85,16 @@ export const ScoresTheFourAestheticsAxes: Story = {
     }
   },
 };
+
+const keyCall = (n: number, conf: number): CommandEntry =>
+  ({ n, t: EXAMPLE_NOW - (2 - n) * 60_000, c: 'detect_key', ms: 1, ok: true, r: { key: 'A minor', tonic: 'A', mode: 'minor', r: 0.8, conf, chroma: [1, 0, 0, 0, 0.5, 0, 0, 0.6, 0, 0.9, 0, 0] } });
+
+/** A key's headline is a percentage, so the previous call reads in whole percent like the readout */
+export const ShowsTheKeysPreviousConfidenceInPercent: Story = {
+  args: { entry: keyCall(2, 0.6), history: [keyCall(2, 0.6), keyCall(1, 0.45)] },
+  play: async ({ canvasElement }) => {
+    const previous = within(canvasElement).getByRole('button', { name: /Previous call/ });
+    await expect(previous.textContent).toMatch(/Confidence 45 %\s*\+15/);
+    await expect(previous.textContent).not.toMatch(/0\.45/);
+  },
+};

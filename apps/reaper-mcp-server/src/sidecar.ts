@@ -75,6 +75,14 @@ export interface AlignParams {
   maxLagMs?: number;
 }
 
+/** Params of the sidecar's chroma method (pitch-class energy, for detect_key). */
+export interface ChromaParams {
+  path: string;
+  /** Seconds into the file */
+  startTime?: number;
+  endTime?: number;
+}
+
 /** Params of the sidecar's transients method. */
 export interface TransientsParams {
   path: string;
@@ -96,6 +104,8 @@ export interface SidecarClient {
   align(params: AlignParams): Promise<Record<string, unknown>>;
   /** Transient (onset) times with strength, dominant band and a tempo estimate. */
   transients(params: TransientsParams): Promise<Record<string, unknown>>;
+  /** 12 pitch-class energies, C first, normalized so the largest is 1. */
+  chroma(params: ChromaParams): Promise<{ chroma: number[]; durationSeconds: number; frames: number }>;
   /** Terminate the sidecar process. Safe to call even if not running. */
   shutdown(): void;
 }
@@ -146,6 +156,10 @@ class SidecarClientImpl implements SidecarClient {
 
   transients(params: TransientsParams): Promise<Record<string, unknown>> {
     return this.call('transients', { ...params }) as Promise<Record<string, unknown>>;
+  }
+
+  chroma(params: ChromaParams): Promise<{ chroma: number[]; durationSeconds: number; frames: number }> {
+    return this.call('chroma', { ...params }) as Promise<{ chroma: number[]; durationSeconds: number; frames: number }>;
   }
 
   /**

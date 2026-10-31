@@ -153,6 +153,27 @@ const FAKE_METERS = `
   }
 `;
 
+describe('render_track_to_wav delivery settings', () => {
+  it('renders without the normalize, limiter and dither set for delivery, then puts them back', async () => {
+    await run(FAKE_RENDER + `
+      proj = { RENDER_NORMALIZE = 1 | 8 | 64, RENDER_DITHER = 3 }
+      at_render = {}
+      local base = reaper.GetSetProjectInfo
+      reaper.GetSetProjectInfo = function(p, key, v, set)
+        if proj[key] == nil then return base(p, key, v, set) end
+        if set then proj[key] = v end
+        return proj[key]
+      end
+      reaper.Main_OnCommand = function() at_render = { n = proj.RENDER_NORMALIZE, d = proj.RENDER_DITHER } end
+    `, 'render_track_to_wav', `
+      local r, err = handlers.render_track_to_wav({ trackIndex = -1, startTime = 0, endTime = 5, commandId = "abc" })
+      assert(r, err)
+      assert(at_render.n == 0 and at_render.d == 0, "raw mix rendered: " .. tostring(at_render.n) .. " " .. tostring(at_render.d))
+      assert(proj.RENDER_NORMALIZE == 73 and proj.RENDER_DITHER == 3, "delivery settings restored")
+    `);
+  });
+});
+
 describe('render_track_to_wav offset report', () => {
   it('reports the playback offset in ms (samples mode converted) and the polarity', async () => {
     await run(FAKE_RENDER + `

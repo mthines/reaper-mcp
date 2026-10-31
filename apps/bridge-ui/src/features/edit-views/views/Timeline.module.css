@@ -9,6 +9,8 @@
 .evMarker.evGone i { background: none; border-left: 1px dashed var(--muted); }
 .evMarker.evGone b { color: var(--faint); text-decoration: line-through; }
 .evLaneRegions { height: 22px; }
+/* A region narrower than its padding at the end of the song stays inside the lane */
+.evLaneRegions { overflow: hidden; }
 .evRegion {
   position: absolute; top: 0; bottom: 0; overflow: hidden; padding: 0 5px; border-radius: 2px;
   font-size: 10px; line-height: 22px; color: var(--text); white-space: nowrap; text-overflow: ellipsis;
@@ -45,3 +47,11 @@
 .evMarker.evQuiet b { display: none; }
 .evMarker.evQuiet:hover { z-index: 2; }
 .evMarker.evQuiet:hover b { display: block; padding: 0 3px; border-radius: 2px; background: var(--panel); max-width: none; }
+
+/* Arrangement edits: the time an edit opened, cut or copied to (hatched), the source it copied from (outlined),
+   and a normalized item's new gain */
+.evSpan { position: absolute; top: -3px; bottom: -3px; z-index: 0; pointer-events: none; border-inline: 1px solid var(--accent);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent) 0 3px, transparent 3px 7px); }
+.evSpan:where([data-span='cut']) { border-color: var(--bad); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--bad) 20%, transparent) 0 3px, transparent 3px 7px); }
+.evSpan:where([data-span='source']) { border: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); background: none; }
+.evItemGain { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; }

@@ -189,6 +189,7 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
           +{v.more} more {v.more === 1 ? "note" : "notes"} not drawn
         </div>
       )}
+      {v.items && <div className={chartStyles.evMore}>+{plural(v.items, "more imported item")} not drawn</div>}
       {v.gone && (
         <Legend
           items={[

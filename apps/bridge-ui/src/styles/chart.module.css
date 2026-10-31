@@ -91,3 +91,7 @@
 }
 .offHints { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); }
 .offHints :global(.mono) { color: var(--text); }
+.lgWarn { width: 8px; height: 8px; border-radius: 2px; background: var(--warn); }
+.lgSpan { width: 12px; height: 8px; border-inline: 1px solid var(--accent); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 45%, transparent) 0 2px, transparent 2px 4px); }
+.lgSpanCut { border-color: var(--bad); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--bad) 45%, transparent) 0 2px, transparent 2px 4px); }
+.lgSpanSrc { width: 12px; height: 8px; border: 1px dashed var(--accent); }
