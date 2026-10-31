@@ -11,5 +11,4 @@
 .lufsNeedle { position: absolute; top: -5px; bottom: -5px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--hold); box-shadow: 0 0 0 2px var(--panel); }
 .lufsWas { position: absolute; top: -5px; bottom: -5px; width: 3px; margin-left: -1.5px; border: 1px solid var(--muted); border-radius: 2px; background: var(--panel); }
 .lufsTarget { position: absolute; top: -4px; bottom: -4px; border-radius: 3px; background: color-mix(in srgb, var(--target) 22%, transparent); }
-.lufsTargetLabel { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 2px; font-size: 10px; color: var(--target); white-space: nowrap; }
 .lufsWas.offRef { border-color: var(--target); }
