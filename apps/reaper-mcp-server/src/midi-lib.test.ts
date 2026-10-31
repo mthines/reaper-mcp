@@ -260,6 +260,18 @@ describe('mcp_midi_lib.lua import', () => {
     `);
   });
 
+  it('a failed import that wrote nothing keeps the last import of the same tool', async () => {
+    await runLua(`
+      local api = new_midi_fake{ tracks = { { name = "A" } } }
+      local file = { trackIndex = 0, position = 0, lengthQN = 4, tracks = { { name = "T", notes = { { 0, 1, 0, 60, 100 } } } } }
+      assert(midi.import(api, file))
+      api.fail_create_at = 2
+      local r, err = midi.import(api, file)
+      assert(r == nil and not err:find("undone"), tostring(err))
+      assert(#api.tracks[1].items == 1 and #api.undo == 1 and api.undo[1] == "MCP: Import MIDI file")
+    `);
+  });
+
   it('merges a file with more tracks than may become new tracks', async () => {
     await runLua(`
       local api = new_midi_fake{ tracks = { { name = "A" } } }

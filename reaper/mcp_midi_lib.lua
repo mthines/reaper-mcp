@@ -22,17 +22,20 @@ local function r4(x) return math.floor(x * 10000 + 0.5) / 10000 end
 local function with_undo(api, label, fn)
   api.Undo_BeginBlock()
   local ok, res, err = pcall(fn)
-  api.Undo_EndBlock(label, -1)
-  -- A failure half way (an import that made some tracks) leaves no partial edit: undo the
-  -- block, but only when the top entry is ours
-  local failed = not ok or res == nil
-  local undone = failed and api.Undo_CanUndo2 and api.Undo_CanUndo2(0) == label
+  if ok then
+    api.Undo_EndBlock(label, -1)
+    api.UpdateArrange()
+    return res, err
+  end
+  -- A failure half way (an import that made some tracks) leaves no partial edit. The failed
+  -- block gets its own label, so a failure that wrote nothing (no undo point) never undoes
+  -- the user's last edit, even one by this same tool
+  local revert = label .. " (failed — reverting)"
+  api.Undo_EndBlock(revert, -1)
+  local undone = api.Undo_CanUndo2 and api.Undo_CanUndo2(0) == revert
   if undone then api.Undo_DoUndo2(0) end
   api.UpdateArrange()
-  local suffix = undone and " — the edit was undone" or ""
-  if not ok then return nil, "Handler error: " .. tostring(res) .. suffix end
-  if res == nil then return nil, tostring(err) .. suffix end
-  return res, err
+  return nil, "Handler error: " .. tostring(res) .. (undone and " — the edit was undone" or "")
 end
 
 -- The MIDI take of a track/item pair, or why not
