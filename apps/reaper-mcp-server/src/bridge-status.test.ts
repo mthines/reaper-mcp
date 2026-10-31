@@ -402,10 +402,9 @@ describe('edit views in the log', () => {
       tr.items = { item(0), item(35) }
     `);
     expect((await bridge.send('get_track_lanes', { track: 'Kick' })).success).toBe(true);
-    const { r } = (await bridge.status()).recent[0] as { r: { lanes: unknown[]; items: unknown[]; more: number } };
-    expect(r.lanes).toHaveLength(32);
-    expect(r.more).toBe(8);
-    expect(r.items).toEqual([[0, 4, 0, 0]]);
+    const { r } = (await bridge.status()).recent[0];
+    expect((r as { lanes: unknown[] }).lanes).toHaveLength(32);
+    expect(r).toMatchObject({ more: 8, items: [[0, 4, 0, 0]] });
   });
 
   it('draws pooled automation items with their shared curve, the new one marked', async () => {
