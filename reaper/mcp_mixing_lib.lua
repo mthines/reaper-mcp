@@ -461,7 +461,6 @@ function M.set_pins(api, p, inputs, outputs)
   -- A pin can only use channels the track has: widen the track to the highest one used, counting the
   -- pins this call leaves as they are, so an explicit trackChannels never narrows the track under them
   local before = read_pins(api, tr, fx)
-  local nchan_now = before.trackChannels or 2
   local rewritten = {}
   for _, w in ipairs(writes) do rewritten[w[1] .. ":" .. w[2]] = true end
   local kept = 0
@@ -470,7 +469,7 @@ function M.set_pins(api, p, inputs, outputs)
       if not rewritten[side .. ":" .. pin.pin] then
         -- Only channels the track has: an untouched pin on a channel past its width (ReaComp's
         -- sidechain pins default to 3/4) carries no audio and asks for no widening
-        for _, c in ipairs(pin.channels) do if c <= nchan_now then kept = math.max(kept, c) end end
+        for _, c in ipairs(pin.channels) do if c <= nchan then kept = math.max(kept, c) end end
       end
     end
   end
