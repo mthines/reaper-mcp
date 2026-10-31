@@ -3,9 +3,13 @@ import { Aesthetics } from './Aesthetics.js';
 import { Alignment } from './Alignment.js';
 import { Key } from './Key.js';
 import { Loudness } from './Loudness.js';
+import { LoudnessCurve } from './LoudnessCurve.js';
+import { Masking } from './Masking.js';
 import { Offline } from './OfflineAnalysis.js';
 import { Level, Readout, Scale } from './Readout.js';
 import { Spectrum } from './Spectrum.js';
+import { Stems } from './Stems.js';
+import { StereoBands } from './StereoBands.js';
 import { Waveform } from './Waveform.js';
 import { fmt, pct, targetOf, zoneOf } from './format.js';
 import { formatAgo } from '../../lib/format.js';
@@ -80,6 +84,14 @@ function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | un
       return <Aesthetics m={m} was={same('aesthetics', previous)} />;
     case 'key':
       return <Key m={m} was={same('key', previous)} />;
+    case 'curve':
+      return <LoudnessCurve m={m} was={same('curve', previous)} />;
+    case 'stereo':
+      return <StereoBands m={m} was={same('stereo', previous)} />;
+    case 'masking':
+      return <Masking m={m} />;
+    case 'stems':
+      return <Stems m={m} />;
     case 'correlation': {
       const c = m.correlation;
       const wc = same('correlation', previous)?.correlation;
@@ -161,6 +173,16 @@ function headline(m: Measurement): { value: number; label: string; unit: string;
       return v(m.pq, 'Quality', '/ 10', true);
     case 'key':
       return v(m.conf === undefined ? undefined : m.conf * 100, 'Confidence', '%', true);
+    case 'curve':
+      return v(m.lufs, 'Integrated', 'LUFS');
+    case 'stereo': {
+      const low = m.bands.find((b) => b[0] === 'low')?.[1];
+      return v(low ?? undefined, 'Low-end correlation', '', true);
+    }
+    case 'masking':
+      return v(m.pairs[0]?.[2], 'Worst pair', '', true);
+    case 'stems':
+      return m.secs && m.proc ? v(m.secs / m.proc, 'Speed', '× real time', true) : null;
   }
 }
 

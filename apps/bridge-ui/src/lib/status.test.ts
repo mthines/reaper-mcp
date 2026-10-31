@@ -205,6 +205,21 @@ describe('settings and params', () => {
     expect(measurementOf({ ...base, c: 'list_tracks', r: { peakL: -6 } })).toBeNull();
   });
 
+  it('types the mix checks, keeping valid rows and dropping a result without its data', () => {
+    const base = { n: 1, t: 0, ms: 1, ok: true };
+    expect(measurementOf({ ...base, c: 'analyze_loudness_curve', r: { name: 'Master', lufs: -10, start: 30, step: 1, term: 's', curve: [-12, -9], loud: [31, 34, -9], quiet: null, over: [[30, 32, -9], 'x'] } }))
+      .toEqual({ kind: 'curve', name: 'Master', term: 's', lufs: -10, start: 30, step: 1, curve: [-12, -9], loud: [31, 34, -9], quiet: null, over: [[30, 32, -9]] });
+    expect(measurementOf({ ...base, c: 'analyze_loudness_curve', r: { lufs: -10 } })).toBeNull();
+    expect(measurementOf({ ...base, c: 'analyze_stereo_bands', r: { bands: [['low', -0.6, -0.9, 0.8, 'x'], [3]], flags: ['low end', 4] } }))
+      .toEqual({ kind: 'stereo', bands: [['low', -0.6, -0.9, 0.8, null]], flags: ['low end'] });
+    expect(measurementOf({ ...base, c: 'measure_masking', r: { tracks: ['A', 'B'], hz: [100, 125], pairs: [['A', 'B', 0.4, [0.9, 'x']]], conflicts: [['A', 'B', 100, 0.9, 'cut B']] } }))
+      .toEqual({ kind: 'masking', tracks: ['A', 'B'], hz: [100, 125], pairs: [['A', 'B', 0.4, [0.9, 0]]], conflicts: [['A', 'B', 100, 0.9, 'cut B']] });
+    expect(measurementOf({ ...base, c: 'measure_masking', r: { tracks: ['A'] } })).toBeNull();
+    expect(measurementOf({ ...base, c: 'separate_stems', r: { model: 'htdemucs', secs: 20, proc: 8, stems: [['drums', -14, null]] } }))
+      .toEqual({ kind: 'stems', model: 'htdemucs', secs: 20, proc: 8, stems: [['drums', -14, null]] });
+    expect(measurementOf({ ...base, c: 'separate_stems', r: { stems: [] } })).toBeNull();
+  });
+
   it('reads a detected key: twelve chroma bins and the key, else nothing', () => {
     const base = { n: 1, t: 0, ms: 1, ok: true, c: 'detect_key' };
     const chroma = [1, 0, 0.4, 0, 0.7, 0.3, 0, 0.8, 0, 0.5, 0, 0.2];

@@ -3875,6 +3875,14 @@ local function with_items_lib(name, params)
 end
 
 function handlers.insert_audio_file(params) return with_items_lib("insert_audio_file", params) end
+function handlers.insert_stem_tracks(params)
+  -- files travels as a JSON string (the bridge decodes only the top level)
+  if type(params.files) == "string" and plan_lib_ok then
+    local ok, files = pcall(plan_lib.json_decode, params.files)
+    params.files = ok and files or nil
+  end
+  return with_items_lib("insert_stems", params)
+end
 function handlers.list_takes(params) return with_items_lib("list_takes", params) end
 function handlers.set_active_take(params) return with_items_lib("set_active_take", params) end
 function handlers.get_take_fx(params) return with_items_lib("get_take_fx", params) end
@@ -4111,6 +4119,57 @@ end
 function handlers.delete_envelope_point(params) return env_ext.run("delete_point", params) end
 
 function handlers.create_track_envelope(params) return env_ext.run("create", params) end
+
+-- Mixing depth (mcp_mixing_lib.lua): automation modes, FX parameter modulation, pins,
+-- monitoring FX, freeze / render in place, stretch markers. Nested params arrive as JSON strings.
+-- Lib wrappers added since the main chunk reached the 200-locals limit live here, one field each
+ext.mix = {}
+ext.mix.ok, ext.mix.lib = pcall(dofile, script_dir .. "mcp_mixing_lib.lua")
+
+function ext.mix.decode(v)
+  if type(v) ~= "string" then return v end
+  local ok, res = pcall(plan_lib.json_decode, v)
+  if ok then return res end
+  return nil
+end
+
+function ext.mix.run(name, ...)
+  if not ext.mix.ok then
+    return nil, "mcp_mixing_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(ext.mix.lib) .. ")"
+  end
+  local ok, res, err = pcall(ext.mix.lib[name], reaper, ...)
+  if not ok then return nil, "Handler error: " .. tostring(res) end
+  return res, err
+end
+
+function ext.mix.tracks(params)
+  params.tracks = ext.mix.decode(params.tracks)
+  return params
+end
+
+function handlers.set_automation_mode(params)
+  return ext.mix.run("set_automation_mode", plan_lib.resolve_track, ext.mix.tracks(params))
+end
+function handlers.get_fx_param_modulation(params) return ext.mix.run("get_modulation", params) end
+function handlers.set_fx_param_modulation(params)
+  return ext.mix.run("set_modulation", params, {
+    enabled = params.enabled, baseline = params.baseline,
+    lfo = ext.mix.decode(params.lfo), audio = ext.mix.decode(params.audio), link = ext.mix.decode(params.link),
+  })
+end
+function handlers.get_fx_pins(params) return ext.mix.run("get_pins", params) end
+function handlers.set_fx_pins(params)
+  return ext.mix.run("set_pins", params, ext.mix.decode(params.inputs), ext.mix.decode(params.outputs))
+end
+function handlers.list_monitoring_fx() return ext.mix.run("list_monitoring_fx") end
+function handlers.add_monitoring_fx(params) return ext.mix.run("add_monitoring_fx", params, ext.mix.decode(params.params)) end
+function handlers.set_monitoring_fx(params) return ext.mix.run("set_monitoring_fx", params, ext.mix.decode(params.params)) end
+function handlers.remove_monitoring_fx(params) return ext.mix.run("remove_monitoring_fx", params) end
+function handlers.freeze_tracks(params) return ext.mix.run("freeze_tracks", plan_lib.resolve_track, ext.mix.tracks(params)) end
+function handlers.unfreeze_tracks(params) return ext.mix.run("unfreeze_tracks", plan_lib.resolve_track, ext.mix.tracks(params)) end
+function handlers.apply_fx_to_items(params) return ext.mix.run("apply_fx_to_items", params, ext.mix.decode(params.items)) end
+function handlers.add_stretch_markers(params) return ext.mix.run("add_stretch_markers", params, ext.mix.decode(params.markers)) end
+function handlers.quantize_audio(params) return ext.mix.run("quantize_stretch", params, ext.mix.decode(params.hits)) end
 
 function handlers.set_envelope_properties(params)
   local track = reaper.GetTrack(0, params.trackIndex)
@@ -5042,7 +5101,9 @@ for _, c in ipairs({
   "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
   "insert_audio_file", "snapshot_save", "snapshot_restore", "snapshot_edit",
   "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
-  "detect_transients", "create_transient_automation", "detect_key", "import_midi_file", "process_items",
+  "detect_transients", "create_transient_automation", "insert_stem_tracks",
+  "analyze_loudness_curve", "analyze_stereo_bands", "measure_masking", "separate_stems",
+  "freeze_tracks", "unfreeze_tracks", "apply_fx_to_items", "quantize_audio", "detect_key", "import_midi_file", "process_items",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
 local HISTORY_LONG_PUBLISH_INTERVAL = 10

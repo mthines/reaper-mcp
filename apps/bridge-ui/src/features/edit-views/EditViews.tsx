@@ -9,7 +9,10 @@ import { PianoRoll } from './views/PianoRoll.js';
 import { Plan } from './views/Plan.js';
 import { Lanes } from './views/Lanes.js';
 import { Record } from './views/Record.js';
+import { Modulation } from './views/Modulation.js';
+import { Pins } from './views/Pins.js';
 import { Render } from './views/Render.js';
+import { Stretch } from './views/Stretch.js';
 import { Routing } from './views/Routing.js';
 import { Timeline } from './views/Timeline.js';
 import type { CommandEntry } from '../../lib/commands.js';
@@ -53,6 +56,9 @@ const LISTINGS = new Set([
   "get_fx_parameters",
   "get_record_setup",
   "get_track_lanes",
+  "get_fx_param_modulation",
+  "get_fx_pins",
+  "list_monitoring_fx",
 ]);
 
 function render(v: EditView): ReactNode {
@@ -81,5 +87,11 @@ function render(v: EditView): ReactNode {
       return <Record v={v} />;
     case "lanes":
       return <Lanes v={v} />;
+    case "modulation":
+      return <Modulation v={v} />;
+    case "pins":
+      return <Pins v={v} />;
+    case "stretch":
+      return <Stretch v={v} />;
   }
 }

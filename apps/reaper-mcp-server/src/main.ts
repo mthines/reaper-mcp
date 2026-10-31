@@ -473,7 +473,7 @@ switch (command) {
     break;
 
   case 'setup-sidecar':
-    setupSidecar().catch((err) => {
+    setupSidecar({ withSeparation: process.argv.includes('--with-separation') }).catch((err) => {
       console.error('Sidecar setup failed:', err);
       process.exit(1);
     });
@@ -505,7 +505,8 @@ Usage:
   reaper-mcp                  Start MCP server (stdio mode)
   reaper-mcp serve            Start MCP server (stdio mode)
   reaper-mcp setup            Install Lua bridge + JSFX analyzers into REAPER
-  reaper-mcp setup-sidecar    Install Python sidecar for perceptual audio analysis (opt-in, ~831 MB)
+  reaper-mcp setup-sidecar    Install Python sidecar for perceptual audio analysis (opt-in, ~831 MB);
+                              --with-separation adds stem separation (Demucs, ~80 MB model)
   reaper-mcp init             Configure Claude Code: tool allow-list + .mcp.json (copy-free)
   reaper-mcp doctor           Check that everything is configured correctly
   reaper-mcp status           Check if Lua bridge is running in REAPER

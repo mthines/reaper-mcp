@@ -921,6 +921,147 @@ local function wav_waveform(path)
   return { hi = hi, lo = lo, peakDb = db(peak), rmsDb = db(math.sqrt(sum / count)), clipped = clipped, channels = channels }
 end
 
+-- Mixing depth views: built from the handler's own result, which carries the state before
+local MIX = {}
+
+MIX.MODES = { trim = 0, read = 1, touch = 2, write = 3, latch = 4, latch_preview = 5 }
+
+function MIX.automation(data)
+  local rows = {}
+  for i, t in ipairs(data.tracks or {}) do
+    if i > EDIT_MAX_ROWS then break end
+    rows[#rows + 1] = { t = t.name, p = "Automation", s = "bool",
+      a = MIX.MODES[t.before] or 0, b = MIX.MODES[t.mode] or 0, at = t.before, bt = t.mode }
+  end
+  if data.globalOverrideBefore then
+    rows[#rows + 1] = { t = "All tracks", p = "Global override", s = "bool",
+      a = data.globalOverrideBefore == data.globalOverride and 1 or 0, b = 1,
+      at = data.globalOverrideBefore, bt = data.globalOverride }
+  end
+  return { rows = rows }
+end
+
+-- One modulated parameter in the page's compact shape (nil when it has none)
+function MIX.mod_row(m)
+  if type(m) ~= "table" or m.enabled == false then return nil end
+  local r = { p = m.name or ("Param " .. tostring(m.paramIndex)), base = round2(m.baseline) or 0, v = round2(m.value) or 0 }
+  if m.lfo then
+    r.lfo = { m.lfo.shape, round2(m.lfo.speed) or 0, round2(m.lfo.strength) or 0, round2(m.lfo.phase) or 0,
+              m.lfo.direction or 1, m.lfo.tempoSync and 1 or 0 }
+  end
+  if m.audio then
+    r.acs = { round2(m.audio.attackMs) or 0, round2(m.audio.releaseMs) or 0, round2(m.audio.minDb) or 0,
+              round2(m.audio.maxDb) or 0, round2(m.audio.strength) or 0, m.audio.channel or 1, m.audio.direction or 1 }
+  end
+  if m.link then
+    local src = (m.link.fxName or ("FX " .. tostring(m.link.fxIndex))) .. " / " .. (m.link.paramName or ("param " .. tostring(m.link.paramIndex)))
+    r.link = { src, round2(m.link.scale) or 1, round2(m.link.offset) or 0 }
+  end
+  return r
+end
+
+function MIX.modulation(cmd_type, data)
+  if type(data) ~= "table" then return nil end
+  local rows = {}
+  if cmd_type == "set_fx_param_modulation" then
+    local now = MIX.mod_row(data.modulation) or { p = (data.before and data.before.name) or ("Param " .. tostring(data.paramIndex)), off = 1 }
+    now.was = MIX.mod_row(data.before) or false
+    rows[1] = now
+  else
+    for i, m in ipairs(data.modulated or {}) do
+      if i > EDIT_MAX_ROWS then break end
+      rows[#rows + 1] = MIX.mod_row(m)
+    end
+  end
+  return { fx = data.fxName or "", rows = rows, total = data.modulated and #data.modulated or nil }
+end
+
+function MIX.pin_lists(side)
+  local out = {}
+  for i, pin in ipairs(side or {}) do
+    if i > EDIT_MAX_ROWS then break end
+    out[i] = pin.channels or {}
+  end
+  return out
+end
+
+function MIX.pins(data)
+  if type(data) ~= "table" or not data.inputs then return nil end
+  local r = { fx = data.fxName or "", ch = data.trackChannels or 2, ["in"] = MIX.pin_lists(data.inputs), out = MIX.pin_lists(data.outputs) }
+  local names = {}
+  for i, pin in ipairs(data.inputs) do if i <= EDIT_MAX_ROWS then names[i] = pin.name or "" end end
+  r.names = names
+  if data.before then
+    r.chWas = data.before.trackChannels
+    r.inWas = MIX.pin_lists(data.before.inputs)
+    r.outWas = MIX.pin_lists(data.before.outputs)
+  end
+  return r
+end
+
+-- Grid lines inside an item, seconds from its start (at most EDIT_MAX_POINTS)
+function MIX.grid_lines(pos, len, grid)
+  if not grid or grid <= 0 or not api.TimeMap2_timeToQN then return nil end
+  local lines = {}
+  local qn = math.ceil(api.TimeMap2_timeToQN(0, pos) / grid - 1e-9) * grid
+  while #lines < EDIT_MAX_POINTS do
+    local t = api.TimeMap2_QNToTime(0, qn) - pos
+    if t > len + 1e-9 then break end
+    lines[#lines + 1] = round2(t)
+    qn = qn + grid
+  end
+  return lines
+end
+
+function MIX.stretch(cmd_type, data)
+  if type(data) ~= "table" then return nil end
+  if cmd_type == "quantize_audio" then
+    return { len = data.length, moves = data.moves or {}, more = data.more or 0, grid = MIX.grid_lines(data.position or 0, data.length or 0, data.grid),
+             off = { data.offsetBefore and data.offsetBefore.avgMs or 0, data.offsetAfter and data.offsetAfter.avgMs or 0 } }
+  end
+  local marks, was = {}, {}
+  for i, m in ipairs(data.markers or {}) do if i <= EDIT_MAX_POINTS then marks[#marks + 1] = m.position end end
+  for i, m in ipairs(data.before or {}) do if i <= EDIT_MAX_POINTS then was[#was + 1] = m.position end end
+  return { len = data.length, marks = marks, was = was }
+end
+
+function MIX.freeze(cmd_type, data)
+  if type(data) ~= "table" then return nil end
+  local rows = {}
+  for i, t in ipairs(data.tracks or {}) do
+    if i > EDIT_MAX_ROWS then break end
+    local b = t.before or {}
+    local label = cmd_type == "freeze_tracks" and ("frozen · " .. tostring(data.mode)) or (t.frozen > 0 and ("frozen · " .. t.frozen .. " layers") or "live")
+    rows[#rows + 1] = { t = t.name, p = "Freeze", s = "bool", a = (b.frozen or 0) > 0 and 1 or 0, b = (t.frozen or 0) > 0 and 1 or 0,
+      at = (b.frozen or 0) > 0 and "frozen" or "live", bt = label }
+    rows[#rows + 1] = { t = t.name, p = "FX", s = "norm", a = math.min(1, (b.fx or 0) / 16), b = math.min(1, (t.fx or 0) / 16),
+      at = tostring(b.fx or 0), bt = tostring(t.fx or 0) }
+  end
+  for i, it in ipairs(data.items or {}) do
+    if i > EDIT_MAX_ROWS then break end
+    local b = it.before or {}
+    rows[#rows + 1] = { t = "Track " .. ((it.trackIndex or 0) + 1) .. " · item " .. ((it.itemIndex or 0) + 1), p = "Active take", s = "norm",
+      a = math.min(1, (b.takes or 1) / 8), b = math.min(1, (it.takes or 1) / 8), at = b.activeTake or "", bt = it.activeTake or "" }
+  end
+  return { rows = rows }
+end
+
+function MIX.monitor_slots()
+  local m = api.GetMasterTrack(0)
+  local out = {}
+  if not api.TrackFX_GetRecCount then return out end
+  for i = 0, math.min(api.TrackFX_GetRecCount(m), EDIT_MAX_ROWS) - 1 do
+    local idx = 0x1000000 + i
+    local _, name = api.TrackFX_GetFXName(m, idx)
+    local enabled = api.TrackFX_GetEnabled(m, idx) ~= false
+    local offline = api.TrackFX_GetOffline and api.TrackFX_GetOffline(m, idx) == true
+    out[#out + 1] = { name or ("FX " .. (i + 1)), (enabled and "" or "B") .. (offline and "O" or ""), short_id(api.TrackFX_GetFXGUID(m, idx)), "" }
+  end
+  return out
+end
+
+MIX.MONITOR = { list_monitoring_fx = true, add_monitoring_fx = true, set_monitoring_fx = true, remove_monitoring_fx = true }
+
 -- Render results: one row per file written, with a few waveform slices read through REAPER's peak API
 -- (any format REAPER reads). At most RENDER_MAX_FILES files get a row; the rest are counted.
 local RENDER_MAX_FILES = 8
@@ -1149,6 +1290,8 @@ function M.before(cmd_type, params)
   elseif ctx.recording and (cmd_type == "set_track_lanes" or cmd_type == "comp_lanes") then
     local tr = lane_track(params)
     return tr and lane_snapshot(tr)
+  elseif MIX.MONITOR[cmd_type] and cmd_type ~= "list_monitoring_fx" then
+    return MIX.monitor_slots()
   end
 end
 
@@ -1194,6 +1337,18 @@ function M.summary(cmd_type, params, data, before)
     return fx_param_rows(params)
   elseif cmd_type == "run_plan" then
     return plan_view(params, data)
+  elseif cmd_type == "set_automation_mode" then
+    return type(data) == "table" and MIX.automation(data) or nil
+  elseif cmd_type == "get_fx_param_modulation" or cmd_type == "set_fx_param_modulation" then
+    return MIX.modulation(cmd_type, data)
+  elseif cmd_type == "get_fx_pins" or cmd_type == "set_fx_pins" then
+    return MIX.pins(data)
+  elseif cmd_type == "add_stretch_markers" or cmd_type == "quantize_audio" then
+    return MIX.stretch(cmd_type, data)
+  elseif cmd_type == "freeze_tracks" or cmd_type == "unfreeze_tracks" or cmd_type == "apply_fx_to_items" then
+    return MIX.freeze(cmd_type, data)
+  elseif MIX.MONITOR[cmd_type] then
+    return { chains = { { t = "Monitoring FX", fx = MIX.monitor_slots(), was = before } } }
   elseif cmd_type == "render_project" or cmd_type == "render_versions" then
     return render_view(cmd_type, data)
   elseif RECORD_COMMANDS[cmd_type] then

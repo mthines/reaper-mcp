@@ -47,7 +47,23 @@ export type Measurement =
   | {
       kind: 'key'; name?: string; src?: string; key?: string; tonic?: string; mode?: string; rel?: string; r?: number; conf?: number;
       chroma: number[]; alt: [string, number][];
-    };
+    }
+  /** Loudness over time (sidecar): the short-term (or momentary, `term: 'm'`) curve from `start` every `step` s, and
+   *  spans [start, end, LUFS] of the loudest / quietest window and of every stretch over `target` */
+  | {
+      kind: 'curve'; name?: string; lufs?: number; tp?: number; lra?: number; plr?: number; maxM?: number; target?: number;
+      /** Seconds the short-term loudness spent over the target, as the tool counts them */
+      overS?: number;
+      start: number; step?: number; term?: string; curve: number[];
+      loud: [number, number, number | null] | null; quiet: [number, number, number | null] | null; over: [number, number, number | null][];
+    }
+  /** Stereo correlation per band (sidecar): [band, correlation, worst, out-of-phase share, side-to-mid dB], and flags */
+  | { kind: 'stereo'; name?: string; dur?: number; bands: [string, number | null, number | null, number | null, number | null][]; flags: string[] }
+  /** Masking between tracks (sidecar): band centres, the most masked pairs [a, b, overall, score per band], conflicts
+   *  [a, b, Hz, score, suggestion] */
+  | { kind: 'masking'; tracks: string[]; hz: number[]; pairs: [string, string, number, number[]][]; conflicts: [string, string, number | null, number | null, string][] }
+  /** Stem separation (sidecar, Demucs): each stem [name, LUFS, peak dBFS], speed, and the tracks it inserted */
+  | { kind: 'stems'; name?: string; model?: string; device?: string; secs?: number; proc?: number; inserted?: number; folder?: string; stems: [string, number | null, number | null][] };
 
 const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[] }> = {
   read_track_meters: { kind: 'meters', fields: ['peakL', 'peakR', 'rmsL', 'rmsR'] },
@@ -62,6 +78,10 @@ const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[]
   measure_track_alignment: { kind: 'alignment', fields: ['delayMs', 'samples', 'corr', 'inv', 'cur', 'offset', 'phase', 'warn'] },
   analyze_track_aesthetics: { kind: 'aesthetics', fields: ['pq', 'pc', 'ce', 'cu', 'lufs', 'dur'] },
   detect_key: { kind: 'key', fields: ['r', 'conf'] },
+  analyze_loudness_curve: { kind: 'curve', fields: ['lufs', 'tp', 'lra', 'plr', 'maxM', 'target', 'overS', 'start', 'step'] },
+  analyze_stereo_bands: { kind: 'stereo', fields: ['dur'] },
+  measure_masking: { kind: 'masking', fields: [] },
+  separate_stems: { kind: 'stems', fields: ['secs', 'proc', 'inserted'] },
 };
 
 /** Every command the drawer draws a result for */
@@ -107,11 +127,40 @@ export function measurementOf(e: CommandEntry): Measurement | null {
     if (!isNumbers(e.r.bands)) return null;
     out.bands = e.r.bands;
   }
-  if (spec.kind === 'offline' || spec.kind === 'alignment' || spec.kind === 'aesthetics') {
-    for (const f of ['name', 'ref']) if (typeof e.r[f] === 'string') out[f] = e.r[f];
+  if (spec.kind === 'offline' || spec.kind === 'alignment' || spec.kind === 'aesthetics' || spec.kind === 'curve' || spec.kind === 'stereo' || spec.kind === 'stems') {
+    for (const f of ['name', 'ref', 'term', 'model', 'device', 'folder']) if (typeof e.r[f] === 'string') out[f] = e.r[f];
+  }
+  const r = e.r;
+  const numOrNull = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
+  const rows = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is unknown[] => Array.isArray(x)) : []);
+  const span = (v: unknown): [number, number, number | null] | null =>
+    Array.isArray(v) && typeof v[0] === 'number' && typeof v[1] === 'number' ? [v[0], v[1], numOrNull(v[2])] : null;
+  if (spec.kind === 'curve') {
+    if (!isNumbers(r.curve)) return null;
+    out.curve = r.curve;
+    out.start = typeof r.start === 'number' ? r.start : 0;
+    out.loud = span(r.loud);
+    out.quiet = span(r.quiet);
+    out.over = rows(r.over).map(span).filter((x) => x !== null);
+  }
+  if (spec.kind === 'stereo') {
+    const bands = rows(r.bands).filter((b) => typeof b[0] === 'string').map((b) => [b[0], ...b.slice(1, 5).map(numOrNull)]);
+    if (bands.length === 0) return null;
+    out.bands = bands;
+    out.flags = Array.isArray(r.flags) ? r.flags.filter((f) => typeof f === 'string') : [];
+  }
+  if (spec.kind === 'masking') {
+    if (!isNumbers(r.hz) || !Array.isArray(r.tracks)) return null;
+    out.tracks = r.tracks.map(String);
+    out.hz = r.hz;
+    out.pairs = rows(r.pairs).filter((p) => Array.isArray(p[3])).map((p) => [String(p[0]), String(p[1]), numOrNull(p[2]) ?? 0, (p[3] as unknown[]).map((x) => numOrNull(x) ?? 0)]);
+    out.conflicts = rows(r.conflicts).map((c) => [String(c[0]), String(c[1]), numOrNull(c[2]), numOrNull(c[3]), typeof c[4] === 'string' ? c[4] : '']);
+  }
+  if (spec.kind === 'stems') {
+    out.stems = rows(r.stems).filter((x) => typeof x[0] === 'string').map((x) => [x[0], numOrNull(x[1]), numOrNull(x[2])]);
+    if ((out.stems as unknown[]).length === 0) return null;
   }
   if (spec.kind === 'offline') {
-    const r = e.r;
     if (typeof r.lufs !== 'number') return null;
     const bands = (v: unknown) => (Array.isArray(v) ? v.map((b) => (typeof b === 'number' ? b : null)) : []);
     const triples = (v: unknown, n: number) =>
@@ -181,6 +230,10 @@ export function outcomeOf(e: Pick<CommandEntry, 'ok' | 'e'>): Outcome {
  * Mirrors LONG_RUNNING in mcp_bridge.lua, which keeps them out of the timeline's slow count.
  */
 export const LONG_RUNNING = new Set([
+  'freeze_tracks',
+  'unfreeze_tracks',
+  'apply_fx_to_items',
+  'quantize_audio',
   'analyze_track_offline',
   'analyze_audio_file',
   'measure_track_alignment',
@@ -189,6 +242,11 @@ export const LONG_RUNNING = new Set([
   'process_items',
   'analyze_track_aesthetics',
   'detect_key',
+  'analyze_loudness_curve',
+  'analyze_stereo_bands',
+  'measure_masking',
+  'separate_stems',
+  'insert_stem_tracks',
   'import_midi_file',
   'render_project',
   'render_track_to_wav',

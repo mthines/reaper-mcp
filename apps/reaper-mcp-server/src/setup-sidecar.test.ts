@@ -33,6 +33,7 @@ import {
   checkPython,
   copySidecarScript,
   downloadModelWeights,
+  installSeparation,
   SIDECAR_DIR,
   SIDECAR_VENV_PATH,
   MIN_PYTHON_MAJOR,
@@ -195,5 +196,40 @@ describe('copySidecarScript', () => {
     const dests = vi.mocked(copyFileSync).mock.calls.map((c) => String(c[1]));
     expect(dests).toContain(`${SIDECAR_DIR}/server.py`);
     expect(dests).toContain(`${SIDECAR_DIR}/analysis.py`);
+  });
+
+  it('installs the mix-check and separation modules too', () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    copySidecarScript('/fake/dist');
+    const dests = vi.mocked(copyFileSync).mock.calls.map((c) => String(c[1]));
+    expect(dests).toContain(`${SIDECAR_DIR}/mixcheck.py`);
+    expect(dests).toContain(`${SIDECAR_DIR}/separation.py`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// installSeparation (--with-separation)
+// ---------------------------------------------------------------------------
+
+describe('installSeparation', () => {
+  beforeEach(() => execMock.mockReset());
+
+  it('installs Demucs from its own requirements file into the venv, then fetches the htdemucs model', async () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    mockExecSuccess('');
+    mockExecSuccess('Model htdemucs ready.');
+    await installSeparation('/fake/dist');
+    const [install, fetch] = execMock.mock.calls.map((c) => String(c[0]));
+    expect(install).toContain(SIDECAR_VENV_PATH);
+    expect(install).toMatch(/install -r ".*requirements-separation\.txt"/);
+    const script = fetch.slice(fetch.indexOf(' -c "') + 5, -1);
+    expect(script).toContain("get_model('htdemucs')");
+    expect(script).not.toContain('"');
+  });
+
+  it('refuses before running pip when the requirements file is missing', async () => {
+    vi.mocked(existsSync).mockReturnValue(false);
+    await expect(installSeparation('/fake/dist')).rejects.toThrow(/requirements-separation\.txt not found/);
+    expect(execMock).not.toHaveBeenCalled();
   });
 });

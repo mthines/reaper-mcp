@@ -1,7 +1,7 @@
 import { useId, useState, type PointerEvent } from 'react';
 import { PreviousLegend } from './Measurement.js';
 import { Readout } from './Readout.js';
-import { fmt, zoneOf } from './format.js';
+import { fmt, zoneOf, hzLabel } from './format.js';
 import type { Measurement } from '../../lib/commands.js';
 import { cx } from '../../lib/cx.js';
 import chartStyles from '../../styles/chart.module.css';
@@ -12,7 +12,6 @@ const H = 110;
 const F_MIN = 20;
 const F_MAX = 20_000;
 const xOf = (hz: number) => (Math.log10(hz / F_MIN) / Math.log10(F_MAX / F_MIN)) * W;
-const hzLabel = (hz: number) => (hz >= 1000 ? `${+(hz / 1000).toFixed(hz >= 10_000 ? 0 : 1)}k` : `${Math.round(hz)}`);
 
 /** 48 log-spaced bands (20 Hz – 20 kHz, loudest bin each): a hairline over a faint fill, the previous call ghosted */
 export function Spectrum({ m, previous }: { m: Extract<Measurement, { kind: 'spectrum' }>; previous: number[] | null }) {

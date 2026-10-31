@@ -11,7 +11,7 @@ const REAPER_DIR = join(__dirname, '../../../reaper');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
 const SCRIPTS = '/reaper/Scripts/';
 const BRIDGE_DIR = `${SCRIPTS}mcp_bridge_data/`;
-const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_recording_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_arrange_lib.lua', 'mcp_midi_lib.lua'];
+const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_recording_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_arrange_lib.lua', 'mcp_midi_lib.lua', 'mcp_mixing_lib.lua'];
 
 interface Entry { n: number; t: number; c: string; ok: boolean; s?: string; p?: string; e?: string; r?: Record<string, unknown> }
 type Row = [number, number, number, number, number];
@@ -399,6 +399,31 @@ describe('edit views in the log', () => {
       ai: 1,
       wasAis: [[10, 4, 7, 'Vox Chorus']],
     });
+  });
+
+  it('shows an automation mode change per track, from the old mode to the new one', async () => {
+    const bridge = await startBridge('api.tracks[1].vals.I_AUTOMODE = 1');
+    await bridge.send('set_automation_mode', { tracks: '[0]', mode: 'latch' });
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({ rows: [{ t: 'Kick', at: 'read', bt: 'latch' }] });
+  });
+
+  it('shows a global automation override change as a change, and an untouched one as no change', async () => {
+    const bridge = await startBridge(`
+      local override = -1
+      api.GetGlobalAutomationOverride = function() return override end
+      api.SetGlobalAutomationOverride = function(v) override = v end
+    `);
+    await bridge.send('set_automation_mode', { globalOverride: 'bypass' });
+    const changed = (await bridge.status()).recent[0].r as { rows: { p: string; a: number; b: number; at: string; bt: string }[] };
+    const row = changed.rows.find((x) => x.p === 'Global override');
+    expect(row).toMatchObject({ at: 'none', bt: 'bypass' });
+    expect(row?.a).not.toBe(row?.b);
+
+    await bridge.send('set_automation_mode', { globalOverride: 'bypass' });
+    const same = (await bridge.status()).recent[0].r as { rows: { p: string; a: number; b: number }[] };
+    const again = same.rows.find((x) => x.p === 'Global override');
+    expect(again?.a).toBe(again?.b);
   });
 
   it('render view in the log: one row per file with its levels, waveform slices and the targets', async () => {

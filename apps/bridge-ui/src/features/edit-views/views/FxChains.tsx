@@ -1,6 +1,6 @@
 import { listDiff, type EditView, type FxChain, type FxSlot } from '../edit-views.js';
 import { ChangeMark } from './ChangeLegend.js';
-import { changedText } from './format.js';
+import { changedText, fxShort } from './format.js';
 import { Measurement } from '../../measurements/index.js';
 import { cx } from '../../../lib/cx.js';
 import chartStyles from '../../../styles/chart.module.css';
@@ -9,9 +9,6 @@ import mixerStyles from './Mixer.module.css';
 import planStyles from './Plan.module.css';
 import styles from './FxChains.module.css';
 
-/** "VST3: Pro-Q 3 (FabFilter)" → "Pro-Q 3"; the full name stays in the tooltip */
-const fxShort = (name: string) =>
-  name.replace(/^[A-Z0-9]+i?:\s*/, "").replace(/\s*\([^()]*\)$/, "") || name;
 const sameSlot = (a: FxSlot, b: FxSlot) =>
   a[0] === b[0] && a[1] === b[1] && a[3] === b[3];
 
