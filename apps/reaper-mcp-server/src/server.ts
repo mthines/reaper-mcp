@@ -16,6 +16,7 @@ import { registerAnalysisTools } from './tools/analysis.js';
 import { registerMidiTools } from './tools/midi.js';
 import { registerMediaTools } from './tools/media.js';
 import { registerSelectionTools } from './tools/selection.js';
+import { registerRecordingTools } from './tools/recording.js';
 import { registerMarkerTools } from './tools/markers.js';
 import { registerTempoTools } from './tools/tempo.js';
 import { registerEnvelopeTools } from './tools/envelopes.js';
@@ -146,6 +147,7 @@ export function createServer(): McpServer {
   registerMidiTools(server);
   registerMediaTools(server);
   registerSelectionTools(server);
+  registerRecordingTools(server);
   registerMarkerTools(server);
   registerTempoTools(server);
   registerEnvelopeTools(server);

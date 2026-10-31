@@ -42,6 +42,15 @@ end
 local project_lib_ok, project_lib = pcall(dofile, script_dir .. "mcp_project_lib.lua")
 -- Items, takes, take FX, FX move/copy/rename, .RfxChain and track templates, same install rules.
 local items_lib_ok, items_lib = pcall(dofile, script_dir .. "mcp_items_lib.lua")
+-- Record setup (arm, input, monitoring, record mode), fixed lanes and comping, same install rules.
+-- One local (the main chunk is near Lua's 200-locals limit): the lib, or { load_error = why }.
+-- Lib wrappers added since the main chunk reached the 200-locals limit live here, one field each
+local ext = {}
+ext.recording = (function()
+  local ok, lib = pcall(dofile, script_dir .. "mcp_recording_lib.lua")
+  if ok then return lib end
+  return { load_error = tostring(lib) }
+end)()
 -- What a write changed and what a listing showed, for the status page's drawer (same install rules).
 local edit_lib_ok, edit_lib = pcall(dofile, script_dir .. "mcp_edit_views_lib.lua")
 -- Snapshot list, restore and save from the status page (same install rules).
@@ -3494,6 +3503,75 @@ function handlers.set_selected_items(params)
 end
 
 -- =============================================================================
+-- Recording setup, fixed lanes and comping (logic in mcp_recording_lib.lua)
+-- =============================================================================
+
+do -- locals scoped to this block: the main chunk is near Lua's 200-locals limit
+function ext.with_recording(fn)
+  if ext.recording.load_error then
+    return nil, "mcp_recording_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. ext.recording.load_error .. ")"
+  end
+  if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua" end
+  local ok, res, err = pcall(fn)
+  if not ok then return nil, tostring(res) end
+  return res, err
+end
+
+-- A JSON-encoded value (number, array or object) from the flat parser
+function ext.decode_json(value, field)
+  if value == nil or type(value) == "table" or type(value) == "number" then return value end
+  local v, err = plan_lib.json_decode(tostring(value))
+  if v == nil then return nil, field .. " is not valid JSON" .. (err and (" (" .. err .. ")") or "") end
+  return v
+end
+
+function handlers.get_record_setup(params)
+  return ext.with_recording(function()
+    return ext.recording.get_record_setup(reaper, { all = params.all == true or params.all == "true" })
+  end)
+end
+
+function handlers.set_track_record(params)
+  return ext.with_recording(function()
+    local list, err = decode_list(params.tracks, "tracks")
+    if not list then return nil, err end
+    return ext.recording.set_track_record(reaper, list, plan_lib.resolve_track)
+  end)
+end
+
+function handlers.set_record_mode(params)
+  return ext.with_recording(function() return ext.recording.set_record_mode(reaper, params) end)
+end
+
+function handlers.get_track_lanes(params)
+  return ext.with_recording(function() return ext.recording.get_track_lanes(reaper, params, plan_lib.resolve_track) end)
+end
+
+function handlers.set_track_lanes(params)
+  return ext.with_recording(function()
+    local p = { track = params.track, laneCount = params.laneCount }
+    if params.fixedLanes ~= nil then p.fixedLanes = params.fixedLanes == true or params.fixedLanes == "true" end
+    local err
+    p.names, err = ext.decode_json(params.names, "names")
+    if err then return nil, err end
+    p.play, err = ext.decode_json(params.play, "play")
+    if err then return nil, err end
+    return ext.recording.set_track_lanes(reaper, p, plan_lib.resolve_track)
+  end)
+end
+
+function handlers.comp_lanes(params)
+  return ext.with_recording(function()
+    local ranges, err = decode_list(params.ranges, "ranges")
+    if not ranges then return nil, err end
+    return ext.recording.comp_lanes(reaper, {
+      track = params.track, ranges = ranges, crossfadeMs = params.crossfadeMs, name = params.name,
+    }, plan_lib.resolve_track)
+  end)
+end
+end
+
+-- =============================================================================
 -- Track structure + routing setters (logic in mcp_tracks_lib.lua)
 -- =============================================================================
 
@@ -4045,7 +4123,6 @@ function handlers.create_track_envelope(params) return env_ext.run("create", par
 -- Mixing depth (mcp_mixing_lib.lua): automation modes, FX parameter modulation, pins,
 -- monitoring FX, freeze / render in place, stretch markers. Nested params arrive as JSON strings.
 -- Lib wrappers added since the main chunk reached the 200-locals limit live here, one field each
-local ext = {}
 ext.mix = {}
 ext.mix.ok, ext.mix.lib = pcall(dofile, script_dir .. "mcp_mixing_lib.lua")
 
@@ -5188,6 +5265,7 @@ if edit_lib_ok then
     api = reaper, to_db = to_db, json_decode = plan_lib_ok and plan_lib.json_decode or nil, json_decode_array = json_decode_array,
     get_midi_notes = function(p) return handlers.get_midi_notes(p) end, get_midi_take = get_midi_take,
     get_midi_cc = function(p) return handlers.get_midi_cc(p) end,
+    recording = not ext.recording.load_error and ext.recording or nil,
     resolve_track = function(ref)
       local res = plan_lib_ok and plan_lib.resolve_track(reaper, ref, {}) or nil
       return res and res.track or nil

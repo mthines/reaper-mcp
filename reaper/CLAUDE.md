@@ -12,6 +12,7 @@ Files installed INTO the REAPER DAW by the `setup` command. These run inside REA
 | `mcp_actions_lib.lua` | Lua | Action search/run proxy, selection setters |
 | `mcp_project_lib.lua` | Lua | Project ops, render settings, tempo map, markers |
 | `mcp_items_lib.lua` | Lua | Items, takes, take FX, FX chains, track templates, stem tracks (`insert_stems`) |
+| `mcp_recording_lib.lua` | Lua | Record inputs, monitoring and modes, punch, fixed lanes, comping |
 | `mcp_arrange_lib.lua` | Lua | Copy items, insert/remove time, copy a section, normalize/reverse/glue |
 | `mcp_envelopes_lib.lua` | Lua | Envelopes, points (dB through the envelope's scaling), pooled automation items |
 | `mcp_mixing_lib.lua` | Lua | Automation mode, FX modulation and pins, monitoring FX, freeze, apply FX, stretch markers and audio quantize |

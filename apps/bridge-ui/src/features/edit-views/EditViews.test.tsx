@@ -23,4 +23,18 @@ describe('edit views in the drawer', () => {
     expect(pins).toContain('Result');
     expect(pins).not.toContain('>Change<');
   });
+  it('counts the lanes past the drawn ones', () => {
+    const html = drawer('get_track_lanes', { t: 'Vox', fixed: 1, lanes: [['Take 1', 1], ['Take 2', 0]], items: [], len: 4, more: 8 });
+    expect(html).toContain('+8 more lanes not drawn');
+    expect(html).toContain('>10<');
+  });
+  it('compares two tracks with the same name each with its own state before', () => {
+    const html = drawer('set_track_record', {
+      mode: 'normal',
+      rows: [['Gtr', 1, 'In 1', 'auto', 'input'], ['Gtr', 1, 'In 2', 'auto', 'input']],
+      was: { mode: 'normal', rows: [['Gtr', 0, 'In 1', 'auto', 'input'], ['Gtr', 1, 'In 2', 'auto', 'input']] },
+    });
+    expect(html).toContain('(was not armed)');
+    expect(html).not.toMatch(/<s[ >]/);
+  });
 });

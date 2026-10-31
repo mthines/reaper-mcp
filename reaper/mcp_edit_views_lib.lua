@@ -1162,6 +1162,98 @@ local function render_view(cmd_type, data)
   return r
 end
 
+-- Recording: the global mode and one row per track [name, armed 0/1, input, monitor, mode]
+local RECORD_COMMANDS = { get_record_setup = true, set_track_record = true, set_record_mode = true }
+
+-- Rows for the first EDIT_MAX_ROWS states, and how many states did not fit
+local function record_rows(states)
+  local rows, dropped = {}, 0
+  for _, s in ipairs(states or {}) do
+    if #rows < EDIT_MAX_ROWS then
+      rows[#rows + 1] = { s.name or "", s.armed and 1 or 0, (s.input and s.input.label) or "", tostring(s.monitor or ""), tostring(s.mode or "") }
+    else
+      dropped = dropped + 1
+    end
+  end
+  return rows, dropped
+end
+
+local function record_global()
+  local g = ctx.recording.global_state(api)
+  return { mode = g.mode, path = g.recordPath, punch = g.punch and { g.punch.start, g.punch["end"] } or nil }
+end
+
+local function record_tracks(params)
+  local states = {}
+  for _, u in ipairs(decode_param_list(params.tracks) or {}) do
+    local tr = type(u) == "table" and ctx.resolve_track(u.track)
+    if tr and #states < EDIT_MAX_ROWS then states[#states + 1] = ctx.recording.record_state(api, tr) end
+  end
+  return states
+end
+
+local function record_view(cmd_type, params, data, before)
+  local r = record_global()
+  local dropped = 0
+  if cmd_type == "get_record_setup" then
+    r.rows, dropped = record_rows(type(data) == "table" and data.tracks or nil)
+    dropped = dropped + (type(data) == "table" and tonumber(data.tracksMore) or 0)
+  elseif cmd_type == "set_track_record" then
+    r.rows, dropped = record_rows(type(data) == "table" and data.tracks or record_tracks(params))
+  end
+  if dropped > 0 then r.more = dropped end
+  if before then
+    r.was = { mode = before.mode, path = before.path, punch = before.punch, rows = before.rows }
+  end
+  return r
+end
+
+-- Fixed lanes: [name, plays 0 off / 1 alone / 2 layered] per lane and [position, length, lane, 1 = MIDI] per item
+local LANE_COMMANDS = { get_track_lanes = true, set_track_lanes = true, comp_lanes = true }
+local PLAYS_CODE = { off = 0, exclusive = 1, layered = 2 }
+
+local function lane_snapshot(tr)
+  local st = ctx.recording.lanes_state(api, tr)
+  local lanes, items = {}, {}
+  -- Lanes past EDIT_MAX_ROWS are counted in `more`, their items left out (they have no row to sit on)
+  for i, l in ipairs(st.lanes) do
+    if i > EDIT_MAX_ROWS then break end
+    lanes[i] = { l.name, PLAYS_CODE[l.plays] or 0 }
+    for _, it in ipairs(l.items) do
+      if #items < EDIT_MAX_NOTES / 2 then items[#items + 1] = { round2(it.position) or 0, round2(it.length) or 0, l.lane, it.midi and 1 or 0 } end
+    end
+  end
+  local more = #st.lanes - #lanes
+  return { t = st.name, fixed = st.fixedLanes and 1 or 0, lanes = lanes, items = items, more = more > 0 and more or nil }
+end
+
+local function lane_track(params)
+  local tr = ctx.resolve_track(params.track)
+  if not tr or (api.GetMasterTrack and tr == api.GetMasterTrack(0)) then return nil end
+  return tr
+end
+
+local function lane_view(params, data, before)
+  local tr = lane_track(params)
+  if not tr then return nil end
+  local r = lane_snapshot(tr)
+  local len = 0
+  for _, it in ipairs(r.items) do len = math.max(len, it[1] + it[2]) end
+  if before then
+    r.was = { lanes = before.lanes, items = before.items, fixed = before.fixed }
+    for _, it in ipairs(before.items) do len = math.max(len, it[1] + it[2]) end
+  end
+  if type(data) == "table" and data.compLane then
+    r.comp = data.compLane
+    r.segs = {}
+    for _, s in ipairs(data.segments or {}) do
+      if #r.segs < EDIT_MAX_MARKS then r.segs[#r.segs + 1] = { round2(s.start) or 0, round2(s["end"]) or 0, s.lane } end
+    end
+  end
+  r.len = round2(len) or 0
+  return r
+end
+
 -- The state a write is about to change, read before its handler runs (nil for every other command)
 function M.before(cmd_type, params)
   if cmd_type == "set_track_property" or cmd_type == "set_multiple_track_properties" then
@@ -1194,6 +1286,13 @@ function M.before(cmd_type, params)
   elseif STRUCTURE_COMMANDS[cmd_type] then
     local rows, ids = mixer_all()
     return { tracks = rows, ids = ids }
+  elseif ctx.recording and (cmd_type == "set_track_record" or cmd_type == "set_record_mode") then
+    local g = record_global()
+    if cmd_type == "set_track_record" then g.rows = record_rows(record_tracks(params)) end
+    return g
+  elseif ctx.recording and (cmd_type == "set_track_lanes" or cmd_type == "comp_lanes") then
+    local tr = lane_track(params)
+    return tr and lane_snapshot(tr)
   elseif MIX.MONITOR[cmd_type] and cmd_type ~= "list_monitoring_fx" then
     return MIX.monitor_slots()
   end
@@ -1255,6 +1354,10 @@ function M.summary(cmd_type, params, data, before)
     return { chains = { { t = "Monitoring FX", fx = MIX.monitor_slots(), was = before } } }
   elseif cmd_type == "render_project" or cmd_type == "render_versions" then
     return render_view(cmd_type, data)
+  elseif RECORD_COMMANDS[cmd_type] then
+    return ctx.recording and record_view(cmd_type, params, data, before)
+  elseif LANE_COMMANDS[cmd_type] then
+    return ctx.recording and lane_view(params, data, before)
   end
   local fields = RESULT_FIELDS[cmd_type]
   if not fields or type(data) ~= "table" then return nil end

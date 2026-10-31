@@ -19,7 +19,7 @@ describe('the examples the stories draw', () => {
 
   it('cover every kind of edit view, each drawn', () => {
     const drawn = new Set(EDIT_EXAMPLES.filter((x) => editViewOf(x.entry) !== null).map((x) => editKindOf(x.entry.c)));
-    expect([...drawn].sort()).toEqual(['changes', 'envelope', 'fxChain', 'midi', 'midiStats', 'mixer', 'modulation', 'pins', 'plan', 'render', 'routing', 'stretch', 'timeline']);
+    expect([...drawn].sort()).toEqual(['changes', 'envelope', 'fxChain', 'lanes', 'midi', 'midiStats', 'mixer', 'modulation', 'pins', 'plan', 'record', 'render', 'routing', 'stretch', 'timeline']);
     expect(EDIT_EXAMPLES.every((x) => editViewOf(x.entry) !== null)).toBe(true);
   });
 

@@ -98,6 +98,7 @@ export const REAPER_ASSETS = [
   'mcp_items_lib.lua',
   'mcp_arrange_lib.lua',
   'mcp_envelopes_lib.lua',
+  'mcp_recording_lib.lua',
   'mcp_mixing_lib.lua',
   'mcp_midi_lib.lua',
   'mcp_edit_views_lib.lua',
@@ -299,6 +300,13 @@ export const MCP_TOOL_NAMES = [
   'run_action',
   'set_selected_tracks',
   'set_selected_items',
+  // recording setup, fixed lanes and comping
+  'get_record_setup',
+  'set_track_record',
+  'set_record_mode',
+  'get_track_lanes',
+  'set_track_lanes',
+  'comp_lanes',
   // track structure + routing setters
   'add_track',
   'delete_track',

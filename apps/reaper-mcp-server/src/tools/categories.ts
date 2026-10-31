@@ -79,6 +79,11 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
     description: 'Selection and navigation: get/set selected tracks and items, get/set time selection range',
     tools: ['get_selected_tracks', 'set_selected_tracks', 'set_selected_items', 'get_time_selection', 'set_time_selection'],
   },
+  recording: {
+    name: 'recording',
+    description: 'Recording setup and comping: armed tracks with inputs and monitoring, arm/input/monitor/record mode per track, global record mode (normal, auto-punch on a time selection or selected items) and record path, fixed lanes (names, which lane plays) and comping a new lane from ranges of the takes with crossfades',
+    tools: ['get_record_setup', 'set_track_record', 'set_record_mode', 'get_track_lanes', 'set_track_lanes', 'comp_lanes'],
+  },
   markers: {
     name: 'markers',
     description: 'Markers and regions: list, add, edit (rename, move, recolor), delete markers and regions with optional names and colors',

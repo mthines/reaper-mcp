@@ -42,6 +42,16 @@ export type Route = ['s' | 'r' | 'h', string, number, number, string];
 /** One track's items for an item edit; `was` is the lane before it */
 export interface ItemLane { t: string; items: Item[]; was?: Item[] }
 
+/** A track's record state: [name, 1 = armed, input ("In 3/4"), monitor (off/on/auto), record mode] */
+export type RecordRow = [string, number, string, string, string];
+export interface RecordState { mode: string; path?: string; punch?: [number, number]; rows?: RecordRow[] }
+/** A fixed lane: [name, plays: 0 off / 1 alone / 2 layered] */
+export type Lane = [string, number];
+/** An item on a lane: [position s, length s, lane, 1 = MIDI] */
+export type LaneItem = [number, number, number, number];
+/** A comp segment: [start s, end s, source lane] */
+export type CompSeg = [number, number, number];
+
 /**
  * One modulated FX parameter: name, baseline and value 0..1, and its sources —
  * lfo [shape, speed, strength, phase, direction −1/0/1, 1 = tempo sync],
@@ -84,6 +94,15 @@ export type EditView =
   | { kind: 'fxChain'; chains: FxChain[] }
   | { kind: 'routing'; t: string; routes: Route[]; was?: Route[] }
   | { kind: 'plan'; ops: [string, string][]; total: number; dryRun?: boolean }
+  | ({ kind: 'record'; more?: number; was?: RecordState } & RecordState)
+  | {
+      kind: 'lanes'; t: string; fixed: boolean; lanes: Lane[]; items: LaneItem[]; len: number;
+      /** lanes past the drawn ones (the bridge sends at most 32) */
+      more?: number;
+      /** comp_lanes: the new lane and each segment's source lane */
+      comp?: number; segs?: CompSeg[];
+      was?: { lanes: Lane[]; items: LaneItem[]; fixed: boolean };
+    }
   | { kind: 'modulation'; fx: string; rows: ModRow[]; total?: number }
   /** FX pins: the track channels (1-based) each input / output pin connects to, now and before a write */
   | { kind: 'pins'; fx: string; ch: number; in: number[][]; out: number[][]; names?: string[]; chWas?: number; inWas?: number[][]; outWas?: number[][] }
@@ -128,6 +147,8 @@ const kinds: Array<[EditView['kind'], string[]]> = [
   ]],
   ['routing', ['get_track_routing', 'add_send', 'set_send', 'remove_send', 'add_hardware_output']],
   ['plan', ['run_plan']],
+  ['record', ['get_record_setup', 'set_track_record', 'set_record_mode']],
+  ['lanes', ['get_track_lanes', 'set_track_lanes', 'comp_lanes']],
   ['modulation', ['get_fx_param_modulation', 'set_fx_param_modulation']],
   ['pins', ['get_fx_pins', 'set_fx_pins']],
   ['stretch', ['add_stretch_markers', 'quantize_audio']],
@@ -161,6 +182,18 @@ const MIX_ROW = [str, num, str, num, num, str];
 const ITEM = [num, num, num, num, num, num];
 const FX_SLOT = [str, str, str, str];
 const ROUTE = [(v: unknown) => v === 's' || v === 'r' || v === 'h', str, num, num, str];
+const RECORD_ROW = [str, num, str, str, str];
+const LANE = [str, num];
+const LANE_ITEM = [num, num, num, num];
+function recordState(r: Record<string, unknown>): RecordState | null {
+  if (!str(r.mode)) return null;
+  return {
+    mode: r.mode,
+    ...(str(r.path) ? { path: r.path } : {}),
+    ...(pair(r.punch) ? { punch: r.punch } : {}),
+    ...(Array.isArray(r.rows) ? { rows: tuples<RecordRow>(r.rows, RECORD_ROW) } : {}),
+  };
+}
 const numbers = (v: unknown): v is number[] => Array.isArray(v) && v.every(num);
 const RENDER_FILE = [str, num, num, num, num, numbers, numbers];
 const pair = (v: unknown): v is [number, number] => Array.isArray(v) && v.length === 2 && num(v[0]) && num(v[1]);
@@ -290,6 +323,25 @@ export function editViewOf(e: CommandEntry): EditView | null {
     case 'routing': {
       if (!str(r.t) || !Array.isArray(r.routes)) return null;
       return { kind, t: r.t, routes: tuples<Route>(r.routes, ROUTE), ...(Array.isArray(r.was) ? { was: tuples<Route>(r.was, ROUTE) } : {}) };
+    }
+    case 'record': {
+      const now = recordState(r);
+      if (!now) return null;
+      const was = r.was && typeof r.was === 'object' ? recordState(r.was as Record<string, unknown>) : null;
+      return { kind, ...now, ...(num(r.more) && r.more > 0 ? { more: r.more } : {}), ...(was ? { was } : {}) };
+    }
+    case 'lanes': {
+      if (!str(r.t) || !Array.isArray(r.lanes)) return null;
+      const w = r.was && typeof r.was === 'object' ? (r.was as Record<string, unknown>) : undefined;
+      return {
+        kind, t: r.t, fixed: r.fixed === 1 || r.fixed === true, len: num(r.len) ? r.len : 0,
+        lanes: tuples<Lane>(r.lanes, LANE), items: tuples<LaneItem>(r.items, LANE_ITEM),
+        ...(num(r.comp) ? { comp: r.comp, segs: tuples<CompSeg>(r.segs, [num, num, num]) } : {}),
+        ...(num(r.more) && r.more > 0 ? { more: r.more } : {}),
+        ...(w && Array.isArray(w.lanes)
+          ? { was: { lanes: tuples<Lane>(w.lanes, LANE), items: tuples<LaneItem>(w.items, LANE_ITEM), fixed: w.fixed === 1 || w.fixed === true } }
+          : {}),
+      };
     }
     case 'render': {
       if (!Array.isArray(r.groups)) return null;

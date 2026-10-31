@@ -248,6 +248,8 @@ namespace belongs to the official MCP conventions). Durations are in seconds.
 | `sidecar/analyze` | CLIENT | `rpc.system=jsonrpc`, `rpc.method`, `error.type` |
 | `reaper-mcp startup`, `poll bridge diagnostics` | INTERNAL | root spans for headless work |
 
+Recording tools add to their `tools/call` span: `reaper.record.mode`, `reaper.record.armed_count` (record setup),
+`reaper.lanes.count` (fixed lanes), `reaper.comp.segment_count` and `reaper.comp.source_lane_count` (`comp_lanes`).
 Mix-check tool spans add: `reaper.masking.track_count` / `conflict_count` (`measure_masking`), `reaper.stereo.flag_count`
 (`analyze_stereo_bands`), `reaper.loudness.over_target_seconds` (`analyze_loudness_curve`), `reaper.separation.stem_count`
 / `device` (`separate_stems`).
@@ -269,6 +271,7 @@ Mixing tools add attributes to their `tools/call` span: `reaper.quantize.hits` /
 | `reaper.arrange.items_changed` | {item} | `gen_ai.tool.name`, `reaper.arrange.operation` (copy/insert/remove/section/normalize/reverse/glue) — items one arrangement edit moved, split, trimmed, deleted, copied or processed; also on the tool span with `reaper.arrange.length_s` |
 | `reaper.bridge.up` | 1 | gauge: 1 while REAPER's heartbeat is fresh, 0 when the bridge is down |
 | `reaper.bridge.defer.interval`, `reaper.bridge.scan.duration` | s | `reaper.statistic` (p50/p95, avg/max) |
+| `reaper.comp.segments` | {segment} | — parts per successful `comp_lanes` (buckets 1–200) |
 | `reaper.audio.quantize.offset` | s | `reaper.quantize.stage` (`before`/`after`) — a `quantize_audio` call's average hit distance from the grid |
 
 **Logs** — trace-correlated OTLP log records (also mirrored as JSON lines on stderr), with event names:
@@ -281,6 +284,7 @@ Mixing tools add attributes to their `tools/call` span: `reaper.quantize.hits` /
 | `reaper.bridge.command.timeout` | ERROR | no response from REAPER |
 | `reaper.sidecar.timeout` / `exit` / `spawn_error` / `restart` | ERROR/WARN | Python sidecar lifecycle |
 | `reaper.server.crash` | ERROR | uncaught exception / unhandled rejection (`exception.*` attributes) |
+| `reaper.comp.undone` | ERROR | `comp_lanes` failed after it started writing and undid itself (a bug, not a refusal); `error.type=comp_undone` |
 
 `reaper.bridge.*` lifecycle events (`bridge_start`, `bridge_stop`, `handler_*`) come from the one shared bridge, so
 whichever server instance drains `bridge_events.jsonl` first reports each event exactly once — under its own
@@ -293,6 +297,7 @@ resource (`service.instance.id`, `deployment.environment.name`). Count them per 
 - p95 of `reaper.bridge.command.duration` > 0.5 s — the defer loop is starved (heavy project, blocking render).
 - `mcp.server.operation.duration{error.type!=""}` / total > 5 % per `gen_ai.tool.name` — a tool regressed.
 - Any `reaper.bridge.handler_error` or `reaper.server.crash` log — a bug, not a user error.
+- Any `reaper.comp.undone` log — a comp broke half way; refusals (gaps, overlaps) never log it.
 - p50 of `reaper.audio.separation.speed{reaper.separation.device=~"mps|cuda"}` < 1 — separation on an accelerator fell
   back to CPU speed (a torch/Demucs upgrade broke MPS or CUDA), so long songs start timing out.
 - Any `reaper.audio.separation.speed{reaper.separation.device="cpu_fallback"}` — the accelerator raised and the

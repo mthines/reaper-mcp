@@ -374,6 +374,32 @@ function editExampleList(): Example[] {
   const routingListed = call('get_track_routing', track(10), {
     t: 'Verb', routes: [['r', 'Vox', -12, 0, ''], ['r', 'Gtr L', -18, -0.6, ''], ['r', 'Gtr R', -18, 0.6, ''], ['r', 'Snare', -20, 0, 'M']],
   });
+  const ARMED = [
+    ['Lead Vox', 1, 'In 1 · Shure SM7B', 'auto', 'input'],
+    ['Gtr DI', 1, 'In 3/4', 'off', 'input'],
+    ['Keys', 1, 'MIDI: all MIDI inputs, all channels', 'on', 'midi_overdub'],
+  ];
+  const recordSetup = call('get_record_setup', {}, { mode: 'time_selection', path: 'Audio', punch: [62.5, 78], rows: ARMED });
+  const trackArmed = call('set_track_record', { tracks: [{ track: 'Lead Vox', arm: true, input: { kind: 'audio', channel: 1 }, monitor: 'auto' }] }, {
+    mode: 'normal', path: 'Audio', rows: [ARMED[0], ['Gtr DI', 0, 'In 3/4', 'off', 'stereo_out']],
+    was: { mode: 'normal', path: 'Audio', rows: [['Lead Vox', 0, 'In 2', 'off', 'input'], ['Gtr DI', 0, 'In 3/4', 'off', 'stereo_out']] },
+  });
+  const recordMode = call('set_record_mode', { mode: 'time_selection', punchStart: 62.5, punchEnd: 78 }, {
+    mode: 'time_selection', path: 'Audio', punch: [62.5, 78], was: { mode: 'normal', path: 'media' },
+  });
+  const TAKES = [['Take 1', 1], ['Take 2', 0], ['Take 3', 0]];
+  const TAKE_ITEMS = [[60, 32, 0, 0], [60, 32, 1, 0], [60, 14, 2, 0], [77, 15, 2, 0]];
+  const lanesListed = call('get_track_lanes', { track: 'Lead Vox' }, { t: 'Lead Vox', fixed: 1, lanes: TAKES, items: TAKE_ITEMS, len: 92 });
+  const lanesLayered = call('set_track_lanes', { track: 'Lead Vox', play: [0, 2] }, {
+    t: 'Lead Vox', fixed: 1, lanes: [['Take 1', 2], ['Take 2', 0], ['Take 3', 2]], items: TAKE_ITEMS, len: 92,
+    was: { fixed: 1, lanes: TAKES, items: TAKE_ITEMS },
+  });
+  const comp = call('comp_lanes', { track: 'Lead Vox', ranges: [{ start: 60, end: 68, lane: 0 }, { start: 68, end: 81, lane: 1 }, { start: 81, end: 92, lane: 2 }] }, {
+    t: 'Lead Vox', fixed: 1, lanes: [['Take 1', 0], ['Take 2', 0], ['Take 3', 0], ['Comp', 1]],
+    items: [...TAKE_ITEMS, [60, 8.01, 3, 0], [68, 9, 3, 0], [77, 4.01, 3, 0], [81, 11, 3, 0]],
+    comp: 3, segs: [[60, 68, 0], [68, 77, 1], [77, 81, 1], [81, 92, 2]], len: 92,
+    was: { fixed: 1, lanes: TAKES, items: TAKE_ITEMS },
+  });
   const ITEMS = [[16, 30, 0.5, 2, 0, 0], [48, 31, 0, 0.5, 0, 0], [112, 31, 0, 0, 0, 0]];
   const itemMoved = call('move_media_item', track(4, { itemIndex: 1, newTrackIndex: 5, newPosition: 82 }), {
     regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO, len: 200,
@@ -576,6 +602,12 @@ function editExampleList(): Example[] {
     example('Render · off target', renderOver, 'Louder than the target, true peak over 0'),
     example('Render · stems', renderStems, 'One file per selected track, 32-bit float, no target'),
     example('Render · versions', renderVersions, 'Full, instrumental and TV mix in one call; muted tracks named'),
+    example('Record setup', recordSetup, 'Armed tracks with input, monitoring and mode; auto-punch on a time selection'),
+    example('Track armed', trackArmed, 'Arm, input and monitoring changed: old values struck through'),
+    example('Record mode set', recordMode, 'Normal → auto-punch with a punch range and a new record path'),
+    example('Lanes listed', lanesListed, 'Three takes on fixed lanes; the first plays'),
+    example('Lanes layered', lanesLayered, 'Two lanes play together; the play marks were changed'),
+    example('Comp built', comp, 'A new Comp lane, each part tinted by the take it came from; the takes go silent'),
     example('Automation mode', autoMode, 'Two tracks to latch'),
     example('Modulation · LFO', modLfo, 'A tempo-synced LFO around the baseline; none before'),
     example('Modulation listed', modListed, 'An audio follower on 3 (band) and a parameter link'),

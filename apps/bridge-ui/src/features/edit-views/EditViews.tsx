@@ -7,6 +7,8 @@ import { MidiStats } from './views/MidiStats.js';
 import { Mixer } from './views/Mixer.js';
 import { PianoRoll } from './views/PianoRoll.js';
 import { Plan } from './views/Plan.js';
+import { Lanes } from './views/Lanes.js';
+import { Record } from './views/Record.js';
 import { Modulation } from './views/Modulation.js';
 import { Pins } from './views/Pins.js';
 import { Render } from './views/Render.js';
@@ -52,6 +54,8 @@ const LISTINGS = new Set([
   "get_track_routing",
   "get_time_selection",
   "get_fx_parameters",
+  "get_record_setup",
+  "get_track_lanes",
   "get_fx_param_modulation",
   "get_fx_pins",
   "list_monitoring_fx",
@@ -79,6 +83,10 @@ function render(v: EditView): ReactNode {
       return <Routing v={v} />;
     case "render":
       return <Render v={v} />;
+    case "record":
+      return <Record v={v} />;
+    case "lanes":
+      return <Lanes v={v} />;
     case "modulation":
       return <Modulation v={v} />;
     case "pins":

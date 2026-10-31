@@ -1,0 +1,17 @@
+/* Fixed lanes: a name column with the play state, then the lane's items on the time axis */
+.lanes { display: flex; flex-direction: column; gap: 4px; }
+.lane { display: grid; grid-template-columns: minmax(0, 124px) minmax(0, 1fr); gap: 8px; align-items: center; }
+.name { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.on .name { color: var(--text); }
+.gone .name { color: var(--faint); text-decoration: line-through; }
+.play { flex-shrink: 0; width: 8px; height: 8px; border-radius: 2px; border: 1px solid var(--hue); }
+.play[data-plays='1'] { background: var(--hue); }
+.play[data-plays='2'] { background: linear-gradient(135deg, var(--hue) 50%, transparent 50%); }
+.play.changed { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+.item { border-color: color-mix(in srgb, var(--hue) 70%, transparent); background: color-mix(in srgb, var(--hue) 22%, transparent); }
+.lane:not(.on) .item { opacity: 0.45; }
+.axisRow { margin-top: -2px; }
+.axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--faint); }
+@container (max-width: 300px) {
+  .lane { grid-template-columns: minmax(0, 64px) minmax(0, 1fr); }
+}
