@@ -8,7 +8,7 @@
 --   markers = { { pos = 4, name = "Verse" }, { pos = 8, rend = 16, name = "Chorus", rgn = true } },
 --   tempo = { { t = 0, bpm = 120 }, { t = 10, bpm = 90 } },
 -- }
--- api.writes counts every write; api.undo_labels records each undo block; api.actions records each action.
+-- api.writes counts every write; api.undo_labels records each undo block that wrote; api.actions records each action.
 
 local guid_n = 0
 local function guid()
@@ -19,7 +19,11 @@ end
 function new_timeline(spec)
   spec = spec or {}
   local api = { writes = 0, undo_labels = {}, actions = {} }
-  local function write() api.writes = api.writes + 1 end
+  -- api.fail_at_write = N makes the Nth write raise, like a REAPER call failing half way
+  local function write()
+    if api.fail_at_write == api.writes + 1 then error("write failed") end
+    api.writes = api.writes + 1
+  end
   local tracks, master = {}, { name = "MASTER", items = {}, envs = {}, master = true }
   local markers, tempo = {}, {}
 
@@ -58,8 +62,12 @@ function new_timeline(spec)
   api.tracks, api.master, api.markers, api.tempo = tracks, master, markers, tempo
 
   api.genGuid = function() return guid() end
-  api.Undo_BeginBlock = function() end
-  api.Undo_EndBlock = function(label) api.undo_labels[#api.undo_labels + 1] = label end
+  -- Like REAPER, a block that changed nothing leaves no undo point
+  local writes_at_begin
+  api.Undo_BeginBlock = function() writes_at_begin = api.writes end
+  api.Undo_EndBlock = function(label)
+    if api.writes ~= writes_at_begin then api.undo_labels[#api.undo_labels + 1] = label end
+  end
   api.Undo_CanUndo2 = function() return api.undo_labels[#api.undo_labels] end
   api.Undo_DoUndo2 = function() api.undone = table.remove(api.undo_labels) end
   api.PreventUIRefresh = function() end

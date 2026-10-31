@@ -197,6 +197,18 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('an edit that fails before writing anything keeps the last edit of the same tool', async () => {
+    await runLua(`
+      local api = new_timeline{ tracks = { { items = { { pos = 10, len = 2 } } } } }
+      assert(arrange.insert_time(api, { position = 5, length = 1 }))
+      -- Fails on its first write: no undo point of its own, so the earlier insert stays
+      api.fail_at_write = api.writes + 1
+      local r, err = arrange.insert_time(api, { position = 5, length = 1 })
+      assert(r == nil and not err:find("undone") and api.undone == nil, tostring(err))
+      assert(#api.undo_labels == 1 and api.undo_labels[1] == "MCP: Insert time")
+    `);
+  });
+
   it('insert and remove time: a tempo ramp across the edit keeps its tempo before the edit and its slope after', async () => {
     await runLua(`
       -- 100 → 200 BPM over 0..100 s: 150 at 50 s
@@ -353,7 +365,7 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
       api.SetEnvelopePoint = function() error("envelope write failed") end
       local ok, err = arrange.insert_time(api, { position = 5, length = 2 })
       assert(ok == nil and err:find("envelope write failed") and err:find("undone"), tostring(err))
-      assert(api.undone == "MCP: Insert time", tostring(api.undone))
+      assert(api.undone == "MCP: Insert time (failed — reverting)", tostring(api.undone))
     `);
   });
 
