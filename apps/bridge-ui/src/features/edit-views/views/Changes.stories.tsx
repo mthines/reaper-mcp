@@ -2,6 +2,9 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { editExamples } from '../../../demo/examples.js';
 import { StoryCard } from '../../../demo/StoryCard.js';
 import { EditView } from '../index.js';
+import { cx } from '../../../lib/cx.js';
+import chartStyles from '../../../styles/chart.module.css';
+import drawerStyles from '../../../styles/drawer.module.css';
 
 const examples = editExamples('changes');
 const [first] = examples;
@@ -10,7 +13,7 @@ const meta = {
   title: 'Features/Edit views/Changes',
   component: EditView.Changes,
   args: { rows: first.v.rows, more: first.v.more },
-  decorators: [(Story) => <div className="measure"><div className="measure-body"><Story /></div></div>],
+  decorators: [(Story) => <div className={chartStyles.measure}><div className={chartStyles.measureBody}><Story /></div></div>],
 } satisfies Meta<typeof EditView.Changes>;
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -21,8 +24,8 @@ export const Default: Story = {
     <div className="story-stack">
       {examples.map((x) => (
         <StoryCard key={x.title} title={x.title} note={x.note}>
-          <div className="measure">
-            <div className="measure-body">
+          <div className={chartStyles.measure}>
+            <div className={chartStyles.measureBody}>
               <EditView.Changes rows={x.v.rows} more={x.v.more} />
             </div>
           </div>
@@ -35,4 +38,4 @@ export const Default: Story = {
 export const Playground: Story = {};
 
 /** The drawer at its narrowest: labels give way, every view stays readable */
-export const Narrow: Story = { decorators: [(Story) => <div className="story-narrow drawer-body"><Story /></div>] };
+export const Narrow: Story = { decorators: [(Story) => <div className={cx(drawerStyles.drawerBody, 'story-narrow')}><Story /></div>] };

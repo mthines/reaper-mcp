@@ -1,6 +1,11 @@
 import { createRoot } from 'react-dom/client';
-import { App } from './app/App.js';
+// Stylesheet order is the cascade: the root sheet (tokens, base, utilities), then the shared modules,
+// then every component's own module (imported by the component), so a component's class wins a tie
 import './styles.css';
+import './styles/chart.module.css';
+import './styles/drawer.module.css';
+import './styles/list.module.css';
+import { App } from './app/App.js';
 
 const root = createRoot(document.getElementById('root') as HTMLElement);
 

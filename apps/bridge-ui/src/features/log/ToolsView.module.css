@@ -1,0 +1,44 @@
+.tools { padding: 10px 0 6px; }
+.mix { display: flex; gap: 2px; height: 6px; margin: 0 14px; border-radius: 3px; overflow: hidden; }
+.mixSeg { display: block; min-width: 2px; }
+.mixLegend {
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  margin: 7px 14px 8px;
+  font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums;
+}
+.mixLegend span { display: inline-flex; align-items: center; gap: 6px; }
+.mixNote { margin-left: auto; }
+.toolHead, .toolRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 92px 76px 72px;
+  align-items: center; gap: 10px;
+  padding: 0 14px 0 12px;
+}
+.toolHead {
+  position: sticky; top: -10px; z-index: 1;
+  height: 28px;
+  background: var(--panel);
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.05em;
+}
+.th { border: 0; background: none; padding: 0; text-align: right; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; }
+.th:hover, .thOn { color: var(--text); }
+.toolRow {
+  width: 100%; min-height: 34px;
+  border: 0; border-left: 2px solid transparent;
+  background: none; text-align: left;
+  font-size: 12.5px;
+}
+.toolRow:hover { background: rgba(255, 255, 255, 0.025); border-left-color: var(--line-2); }
+.toolName { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.toolName :global(.mono) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.share { flex: 1; min-width: 24px; max-width: 160px; height: 3px; margin-left: auto; border-radius: 2px; background: var(--line); overflow: hidden; }
+.share span { display: block; height: 100%; background: var(--bar); border-radius: 2px; }
+.num { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.errLink { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+
+@media (max-width: 720px) {
+  .toolHead, .toolRow { grid-template-columns: minmax(0, 1fr) 48px 64px 64px; }
+  .toolHead > :last-child, .toolRow > :last-child { display: none; }
+  .share { display: none; }
+}

@@ -1,3 +1,5 @@
+import { cx } from '../lib/cx.js';
+import styles from './Toggle.module.css';
 
 
 export function Toggle({
@@ -14,13 +16,13 @@ export function Toggle({
   onChange: (on: boolean) => void;
 }) {
   return (
-    <label className={`toggle ${disabled ? 'toggle-disabled' : ''}`}>
-      <span className="toggle-text">
-        <span className="toggle-label">{label}</span>
-        <span className="toggle-hint">{hint}</span>
+    <label className={cx(styles.toggle, disabled ? styles.toggleDisabled : '')}>
+      <span className={styles.toggleText}>
+        <span className={styles.toggleLabel}>{label}</span>
+        <span className={styles.toggleHint}>{hint}</span>
       </span>
       <input type="checkbox" role="switch" checked={on} disabled={disabled} onChange={(ev) => onChange(ev.target.checked)} />
-      <span className="switch" aria-hidden />
+      <span className={styles.switch} aria-hidden />
     </label>
   );
 }

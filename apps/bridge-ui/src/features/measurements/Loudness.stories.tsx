@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { measuredExamples } from '../../demo/examples.js';
 import { StoryCard } from '../../demo/StoryCard.js';
 import { Measurement } from './index.js';
+import chartStyles from '../../styles/chart.module.css';
 
 const examples = measuredExamples('lufs');
 const [first] = examples;
@@ -19,7 +20,7 @@ export const Default: Story = {
     <div className="story-stack">
       {examples.map((x) => (
         <StoryCard key={x.title} title={x.title} note={x.note}>
-          <div className="measure">
+          <div className={chartStyles.measure}>
             <Measurement.Loudness m={x.m} target={x.title.includes('no target') ? null : -14} was={x.was?.integrated} />
           </div>
         </StoryCard>

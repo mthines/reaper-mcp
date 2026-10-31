@@ -4,6 +4,7 @@ import { EXAMPLE_NOW, SNAPSHOT_EXAMPLES } from '../../demo/examples.js';
 import { StoryCard } from '../../demo/StoryCard.js';
 import { Snapshots } from './index.js';
 
+
 const [first] = SNAPSHOT_EXAMPLES;
 const views = SNAPSHOT_EXAMPLES.filter((x) => !x.saveForm);
 

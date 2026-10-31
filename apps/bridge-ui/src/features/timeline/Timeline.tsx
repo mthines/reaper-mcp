@@ -6,6 +6,8 @@ import { SLOW_MS } from '../../lib/commands.js';
 import { historyTiers, spanOfBars, timelineBars, type BridgeHistory, type LongHistory, type Span, type TimeBar } from '../../lib/timeline.js';
 import { clearedBefore } from '../../lib/log.js';
 import { Combobox } from '../../components/index.js';
+import { cx } from '../../lib/cx.js';
+import styles from './Timeline.module.css';
 
 /** Round up to a readable, even axis maximum with ~10% headroom, at least 4. */
 function niceMax(v: number): number {
@@ -100,31 +102,31 @@ export function Timeline({
   const tipAlign = leftPct < 15 ? 'start' : leftPct > 85 ? 'end' : 'center';
 
   return (
-    <section className="timeline" aria-label="Commands over time">
-      <div className="timeline-head">
-        <span className="timeline-title">
+    <section className={styles.timeline} aria-label="Commands over time">
+      <div className={styles.timelineHead}>
+        <span className={styles.timelineTitle}>
           Commands{' '}
-          <span className="timeline-sub">
+          <span className={styles.timelineSub}>
             {total.toLocaleString()} in the {range.label.toLowerCase()} · {barWidth(barMs)} per bar
           </span>
         </span>
-        <div className="timeline-controls">
-          <span className="legend">
-            <i className="lg lg-ok" /> ok
-            <i className="lg lg-slow" /> ≥ {SLOW_MS} ms
-            <i className="lg lg-err" /> error
+        <div className={styles.timelineControls}>
+          <span className={styles.legend}>
+            <i className={cx(styles.lg, styles.lgOk)} /> ok
+            <i className={cx(styles.lg, styles.lgSlow)} /> ≥ {SLOW_MS} ms
+            <i className={cx(styles.lg, styles.lgErr)} /> error
           </span>
           <Combobox label="Time range" value={rangeKey} options={RANGE_OPTIONS} onChange={onRange} />
         </div>
       </div>
-      <div className="timeline-chart">
-        <div className="y-axis" aria-hidden>
+      <div className={styles.timelineChart}>
+        <div className={styles.yAxis} aria-hidden>
           <span>{yMax}</span>
           <span>{yMax / 2}</span>
           <span>0</span>
         </div>
         <div
-          className={`plot ${picked ? 'plot-picking' : ''} ${bars.length > 100 ? 'plot-dense' : ''}`}
+          className={cx(styles.plot, picked ? styles.plotPicking : '', bars.length > 100 ? styles.plotDense : '')}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -132,52 +134,52 @@ export function Timeline({
           onMouseLeave={() => setHover(null)}
           title="Drag to select a span; the log shows only its commands"
         >
-          <div className="grid" aria-hidden />
+          <div className={styles.grid} aria-hidden />
           {bars.map((b, i) => {
             const ok = Math.max(0, b.total - b.errors - b.slow);
             return (
-              <div key={b.start} className={`tbar ${hover === i && !drag ? 'tbar-hover' : ''} ${isPicked(b) ? 'tbar-picked' : ''}`}>
-                <div className="tstack" style={{ height: `${(b.total / yMax) * 100}%` }}>
-                  {b.errors > 0 && <span className="seg-err" style={{ flexGrow: b.errors }} />}
-                  {b.slow > 0 && <span className="seg-slow" style={{ flexGrow: b.slow }} />}
-                  {ok > 0 && <span className="seg-ok" style={{ flexGrow: ok }} />}
+              <div key={b.start} className={cx(styles.tbar, hover === i && !drag ? styles.tbarHover : '', isPicked(b) ? styles.tbarPicked : '')}>
+                <div className={styles.tstack} style={{ height: `${(b.total / yMax) * 100}%` }}>
+                  {b.errors > 0 && <span className={styles.segErr} style={{ flexGrow: b.errors }} />}
+                  {b.slow > 0 && <span className={styles.segSlow} style={{ flexGrow: b.slow }} />}
+                  {ok > 0 && <span className={styles.segOk} style={{ flexGrow: ok }} />}
                 </div>
               </div>
             );
           })}
           {hb && (
-            <div className={`ttip ttip-${tipAlign}`} style={{ left: `${leftPct}%` }}>
-              <div className="ttip-time">
+            <div className={styles.ttip} data-align={tipAlign} style={{ left: `${leftPct}%` }}>
+              <div className={styles.ttipTime}>
                 {stamp(hb.start, range.ms, barMs < MINUTE)}–{clock(hb.end, barMs < MINUTE)}
               </div>
               {hb.total === 0 ? (
-                <div className="ttip-row">No commands</div>
+                <div className={styles.ttipRow}>No commands</div>
               ) : (
                 <>
-                  <div className="ttip-row">
+                  <div className={styles.ttipRow}>
                     <b>{hb.total}</b> command{hb.total === 1 ? '' : 's'}
                   </div>
                   {hb.slow > 0 && (
-                    <div className="ttip-row">
-                      <i className="lg lg-slow" /> {hb.slow} slow
+                    <div className={styles.ttipRow}>
+                      <i className={cx(styles.lg, styles.lgSlow)} /> {hb.slow} slow
                     </div>
                   )}
                   {hb.errors > 0 && (
-                    <div className="ttip-row">
-                      <i className="lg lg-err" /> {hb.errors} error{hb.errors === 1 ? '' : 's'}
+                    <div className={styles.ttipRow}>
+                      <i className={cx(styles.lg, styles.lgErr)} /> {hb.errors} error{hb.errors === 1 ? '' : 's'}
                     </div>
                   )}
-                  {hb.avgMs !== null && <div className="ttip-row ttip-muted">avg {formatMs(hb.avgMs)}</div>}
+                  {hb.avgMs !== null && <div className={cx(styles.ttipRow, styles.ttipMuted)}>avg {formatMs(hb.avgMs)}</div>}
                 </>
               )}
             </div>
           )}
         </div>
       </div>
-      <div className="x-axis" aria-hidden>
+      <div className={styles.xAxis} aria-hidden>
         <span>−{rangeKey}</span>
         {picked ? (
-          <span className="x-picked">
+          <span className={styles.xPicked}>
             {stamp(picked.start, range.ms)}–{stamp(picked.end, range.ms)} · {pickedTotal.toLocaleString()} command{pickedTotal === 1 ? '' : 's'}
           </span>
         ) : (

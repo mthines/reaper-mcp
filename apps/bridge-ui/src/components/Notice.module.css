@@ -1,0 +1,15 @@
+.notice {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 8px 7px 12px; min-height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  font-size: 12.5px; color: var(--muted);
+}
+.notice b { color: var(--text); font-weight: 600; }
+.notice a { color: var(--accent); }
+.noticeText { flex: 1; min-width: 0; }
+.noticeDot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--tone); }
+.notice[data-tone='warn'] { --tone: var(--warn); border-color: rgba(245, 184, 75, 0.3); background: rgba(245, 184, 75, 0.06); }
+.notice[data-tone='bad'] { --tone: var(--bad); border-color: rgba(248, 113, 113, 0.3); background: rgba(248, 113, 113, 0.06); }
+.notice[data-tone='info'] { --tone: var(--accent); border-color: rgba(124, 196, 255, 0.22); background: rgba(124, 196, 255, 0.05); }

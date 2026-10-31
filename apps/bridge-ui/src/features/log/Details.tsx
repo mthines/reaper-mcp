@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { track } from '../../lib/analytics.js';
-import { BADGE, DOT_CLASS } from './outcome.js';
+import { OUTCOME_LABEL } from './outcome.js';
 import { SPEED_LABEL } from './speed.js';
 import { formatAgo, formatDay, formatParams } from '../../lib/format.js';
 import { termFromSelection } from '../../lib/search.js';
@@ -9,6 +9,10 @@ import { sessionHue, sessionName, type Session } from '../../lib/sessions.js';
 import { Icon, ResizeHandle, useDrawerWidth } from '../../components/index.js';
 import { EditView } from '../edit-views/index.js';
 import { Measurement } from '../measurements/index.js';
+import { cx } from '../../lib/cx.js';
+import drawerStyles from '../../styles/drawer.module.css';
+import logRowsStyles from './LogRows.module.css';
+import styles from './Details.module.css';
 
 /** Right-hand sidebar with everything known about one command. ↑/↓ move between rows, Esc closes. */
 export function Details({
@@ -53,21 +57,21 @@ export function Details({
   };
 
   return (
-    <aside className="drawer" aria-label={`Details for ${e.c}`} style={width.style}>
+    <aside className={drawerStyles.drawer} aria-label={`Details for ${e.c}`} style={width.style}>
       <ResizeHandle fraction={width.fraction} onCommit={width.setFraction} />
-      <div className="drawer-head">
-        <div className="drawer-title">
-          <span className={`status-dot ${DOT_CLASS[outcomeOf(e)]}`} />
-          <span className="tip-anchor">
+      <div className={drawerStyles.drawerHead}>
+        <div className={drawerStyles.drawerTitle}>
+          <span className={logRowsStyles.statusDot} data-outcome={outcomeOf(e)} />
+          <span className={styles.tipAnchor}>
             <button
-              className={`drawer-filter mono${filtered ? ' active' : ''}`}
+              className={cx(styles.drawerFilter, 'mono', filtered && styles.active)}
               onClick={onFilter}
               aria-pressed={filtered}
               aria-describedby="drawer-filter-tip"
             >
               {e.c}
             </button>
-            <span id="drawer-filter-tip" role="tooltip" className="tip">
+            <span id="drawer-filter-tip" role="tooltip" className={styles.tip}>
               {filtered ? 'Click to show all commands again' : `Click to show only ${e.c} calls`}
             </span>
           </span>
@@ -76,10 +80,10 @@ export function Details({
           <Icon.Close />
         </button>
       </div>
-      <div className="drawer-body">
-        <div className={`result-badge ${BADGE[outcomeOf(e)].className}`}>{BADGE[outcomeOf(e)].label}</div>
+      <div className={drawerStyles.drawerBody}>
+        <div className={drawerStyles.resultBadge} data-outcome={outcomeOf(e)}>{OUTCOME_LABEL[outcomeOf(e)]}</div>
 
-        <dl className="facts">
+        <dl className={drawerStyles.facts}>
           <dt>Handler time</dt>
           <dd>
             <span className="mono">{e.ms} ms</span> <span className="muted">· {speed}</span>
@@ -93,12 +97,12 @@ export function Details({
             <>
               <dt>Session</dt>
               <dd>
-                <span className="session-inline session-fact" title={[sessionName(session), session.client].filter(Boolean).join(' · ')}>
+                <span className={cx(styles.sessionInline, styles.sessionFact)} title={[sessionName(session), session.client].filter(Boolean).join(' · ')}>
                   <i className={`sdot hue-${sessionHue(session.id)}`} />
-                  <span className="session-fact-name">{sessionName(session)}</span>
-                  {session.client && <span className="muted session-fact-client"> · {session.client}</span>}
+                  <span className={styles.sessionFactName}>{sessionName(session)}</span>
+                  {session.client && <span className={cx(styles.sessionFactClient, 'muted')}> · {session.client}</span>}
                 </span>
-                <span className="mono muted session-sub">{session.id}</span>
+                <span className={cx(styles.sessionSub, 'mono muted')}>{session.id}</span>
               </dd>
             </>
           )}
@@ -108,15 +112,15 @@ export function Details({
               <dd>This page (Snapshots)</dd>
             </>
           )}
-          <dt className="fact-wide">Timestamp</dt>
-          <dd className="mono fact-wide">{time.toISOString()}</dd>
+          <dt className={drawerStyles.factWide}>Timestamp</dt>
+          <dd className={cx(drawerStyles.factWide, 'mono')}>{time.toISOString()}</dd>
           <dt>Sequence</dt>
           <dd className="mono">#{e.n}</dd>
         </dl>
 
         {e.e && (
-          <div className="error-block">
-            <div className="error-head">
+          <div className={styles.errorBlock}>
+            <div className={styles.errorHead}>
               <span>Error</span>
               <button className="link-btn" onClick={() => copy('error', e.e ?? '')}>
                 {copied === 'error' ? 'Copied' : 'Copy'}
@@ -129,8 +133,8 @@ export function Details({
         <Measurement entry={e} history={history} now={now} onPick={onPick} />
         <EditView.Section entry={e} />
 
-        <div className="code-block">
-          <div className="code-head">
+        <div className={drawerStyles.codeBlock}>
+          <div className={drawerStyles.codeHead}>
             <span>Params</span>
             {params && (
               <button className="link-btn" onClick={() => copy('params', params)}>
@@ -141,7 +145,7 @@ export function Details({
           {params ? <ParamsText text={params} onAddTerm={onAddTerm} /> : <pre><span className="muted">No params</span></pre>}
         </div>
 
-        <p className="drawer-hint">
+        <p className={drawerStyles.drawerHint}>
           <kbd>↑</kbd> <kbd>↓</kbd> to move between commands · select a param to filter by it · <kbd>Esc</kbd> to close
         </p>
       </div>
@@ -184,13 +188,13 @@ function ParamsText({ text, onAddTerm }: { text: string; onAddTerm: (term: strin
   useEffect(() => setPick(null), [text]);
 
   return (
-    <div className="params-text">
+    <div className={styles.paramsText}>
       <pre ref={pre} onMouseUp={read} onKeyUp={read}>
         {text}
       </pre>
       {pick && (
         <button
-          className="params-filter"
+          className={styles.paramsFilter}
           style={{ left: pick.x, top: pick.y }}
           // Keep the selection while clicking
           onMouseDown={(ev) => ev.preventDefault()}

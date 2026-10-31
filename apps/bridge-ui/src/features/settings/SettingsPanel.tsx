@@ -5,6 +5,9 @@ import type { BridgeSettings, SettingKey } from '../../lib/status.js';
 import { notificationPermission } from '../../app/useErrorNotifications.js';
 import { LoreKitSetting, PublishSetting } from './LoreKitSettings.js';
 import { Icon, Toggle } from '../../components/index.js';
+import { cx } from '../../lib/cx.js';
+import drawerStyles from '../../styles/drawer.module.css';
+import styles from './SettingsPanel.module.css';
 
 export function SettingsPanel({
   settings,
@@ -45,15 +48,15 @@ export function SettingsPanel({
   const notifyDenied = notificationPermission() === 'denied';
 
   return (
-    <aside className="drawer drawer-settings" aria-label="Settings">
-      <div className="drawer-head">
-        <div className="drawer-title">Settings</div>
+    <aside className={cx(drawerStyles.drawer, drawerStyles.drawerSettings)} aria-label="Settings">
+      <div className={drawerStyles.drawerHead}>
+        <div className={drawerStyles.drawerTitle}>Settings</div>
         <button className="icon-btn" onClick={onClose} aria-label="Close settings" title="Close (Esc)">
           <Icon.Close />
         </button>
       </div>
-      <div className="drawer-body">
-        <div className="setting-group">
+      <div className={drawerStyles.drawerBody}>
+        <div className={styles.settingGroup}>
           <h3>Agent control</h3>
           <Toggle
             label="Pause agents"
@@ -68,7 +71,7 @@ export function SettingsPanel({
             onChange={(on) => onSet('cfg_readonly', on)}
           />
         </div>
-        <div className="setting-group">
+        <div className={styles.settingGroup}>
           <h3>This window</h3>
           <Toggle
             label="Open when the bridge starts"
@@ -91,12 +94,12 @@ export function SettingsPanel({
           />
           <InstallSetting />
         </div>
-        <div className="setting-group">
+        <div className={styles.settingGroup}>
           <h3>Bridge</h3>
-          <div className="install-row">
-            <div className="install-text">
-              <div className="toggle-label">Restart bridge</div>
-              <div className="toggle-hint">
+          <div className={styles.installRow}>
+            <div className={styles.installText}>
+              <div className={styles.rowLabel}>Restart bridge</div>
+              <div className={styles.rowHint}>
                 {onRestart ? (
                   'Stop mcp_bridge.lua and start it again, loading the installed copy.'
                 ) : (
@@ -118,7 +121,7 @@ export function SettingsPanel({
           </div>
         </div>
         {canUpdate && (
-          <div className="setting-group">
+          <div className={styles.settingGroup}>
             <h3>Updates</h3>
             <Toggle
               label="Developer mode"
@@ -130,7 +133,7 @@ export function SettingsPanel({
         )}
         <LoreKitSetting token={loreToken} onChange={onLoreToken} />
         <PublishSetting token={publishToken} readToken={loreToken} onChange={onPublishToken} />
-        <div className="setting-group">
+        <div className={styles.settingGroup}>
           <h3>Privacy</h3>
           <Toggle
             label="Share usage statistics"
@@ -171,10 +174,10 @@ function InstallSetting() {
     else setShowSteps(true); // no prompt from the browser (Safari, Firefox, or already installed): say where it is
   };
   return (
-    <div className="install-row">
-      <div className="install-text">
-        <div className="toggle-label">Desktop app</div>
-        <div className="toggle-hint">
+    <div className={styles.installRow}>
+      <div className={styles.installText}>
+        <div className={styles.rowLabel}>Desktop app</div>
+        <div className={styles.rowHint}>
           {state === 'installed'
             ? 'Running as the installed app.'
             : state === 'window'
@@ -185,8 +188,8 @@ function InstallSetting() {
         </div>
       </div>
       {state === 'installed' ? (
-        <span className="install-done">
-          <i className="kdot cov-learned" /> Installed
+        <span className={styles.installDone}>
+          <i className="kdot" data-coverage="learned" /> Installed
         </span>
       ) : (
         <button className="btn btn-sm" onClick={onInstall}>

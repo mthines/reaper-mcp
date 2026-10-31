@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { DISCORD_URL, REPO_URL } from '../../lib/links.js';
+import { cx } from '../../lib/cx.js';
+import settingsPanelStyles from './SettingsPanel.module.css';
+import styles from './LoreKitSettings.module.css';
 
 const LOREKIT_KEYS_URL = 'https://www.lorekit.io/settings/api-keys';
 
@@ -9,12 +12,12 @@ export function LoreKitSetting({ token, onChange }: { token: string | null; onCh
   const trimmed = draft.trim();
   const invalid = trimmed !== '' && !/^lk_ro_[A-Za-z0-9]+$/.test(trimmed);
   return (
-    <div className="setting-group">
+    <div className={settingsPanelStyles.settingGroup}>
       <h3>Your plugin knowledge</h3>
       {token ? (
-        <div className="lore-connected">
+        <div className={styles.loreConnected}>
           <span>
-            <i className="kdot cov-learned" /> LoreKit connected <span className="mono muted">{token.slice(0, 10)}…</span>
+            <i className="kdot" data-coverage="learned" /> LoreKit connected <span className="mono muted">{token.slice(0, 10)}…</span>
           </span>
           <button className="btn btn-sm" onClick={() => onChange(null)}>
             Disconnect
@@ -22,9 +25,9 @@ export function LoreKitSetting({ token, onChange }: { token: string | null; onCh
         </div>
       ) : (
         <>
-        <ol className="lore-steps">
+        <ol className={styles.loreSteps}>
           <li>
-            <a className="btn btn-sm lore-open" href={LOREKIT_KEYS_URL} target="_blank" rel="noreferrer">
+            <a className={cx(styles.loreOpen, 'btn btn-sm')} href={LOREKIT_KEYS_URL} target="_blank" rel="noreferrer">
               Open LoreKit API keys ↗
             </a>
             <span>Sign in or create a free account</span>
@@ -35,7 +38,7 @@ export function LoreKitSetting({ token, onChange }: { token: string | null; onCh
           <li>Paste it here and connect</li>
         </ol>
         <form
-          className="lore-form"
+          className={styles.loreForm}
           onSubmit={(ev) => {
             ev.preventDefault();
             if (trimmed && !invalid) {
@@ -45,7 +48,7 @@ export function LoreKitSetting({ token, onChange }: { token: string | null; onCh
           }}
         >
           <input
-            className="lore-input mono"
+            className={cx(styles.loreInput, 'mono')}
             type="password"
             autoComplete="off"
             spellCheck={false}
@@ -61,7 +64,7 @@ export function LoreKitSetting({ token, onChange }: { token: string | null; onCh
         </form>
         </>
       )}
-      <p className="setting-hint">
+      <p className={styles.settingHint}>
         {invalid
           ? 'That isn’t a read-only token. Use one that starts with lk_ro_ here; a write token only goes under Publish to built-in.'
           : token
@@ -80,12 +83,12 @@ export function PublishSetting({ token, readToken, onChange }: { token: string |
   const trimmed = draft.trim();
   const invalid = trimmed !== '' && !/^lk_rw_[A-Za-z0-9]+$/.test(trimmed);
   return (
-    <div className="setting-group">
+    <div className={settingsPanelStyles.settingGroup}>
       <h3>Publish to built-in</h3>
       {token ? (
-        <div className="lore-connected">
+        <div className={styles.loreConnected}>
           <span>
-            <i className="kdot cov-built-in" /> Publishing enabled <span className="mono muted">{token.slice(0, 10)}…</span>
+            <i className="kdot" data-coverage="built-in" /> Publishing enabled <span className="mono muted">{token.slice(0, 10)}…</span>
           </span>
           <button className="btn btn-sm" onClick={() => onChange(null)}>
             Remove
@@ -93,7 +96,7 @@ export function PublishSetting({ token, readToken, onChange }: { token: string |
         </div>
       ) : (
         <form
-          className="lore-form"
+          className={styles.loreForm}
           onSubmit={(ev) => {
             ev.preventDefault();
             if (trimmed && !invalid) {
@@ -103,7 +106,7 @@ export function PublishSetting({ token, readToken, onChange }: { token: string |
           }}
         >
           <input
-            className="lore-input mono"
+            className={cx(styles.loreInput, 'mono')}
             type="password"
             autoComplete="off"
             spellCheck={false}
@@ -118,7 +121,7 @@ export function PublishSetting({ token, readToken, onChange }: { token: string |
           </button>
         </form>
       )}
-      <p className="setting-hint">
+      <p className={styles.settingHint}>
         {invalid
           ? 'Publishing needs a read + write token, starting with lk_rw_.'
           : token
@@ -128,13 +131,13 @@ export function PublishSetting({ token, readToken, onChange }: { token: string |
             : 'For members of the reaper-mcp LoreKit org: publish your records for everyone without a GitHub pull request. Create a read + write key limited to project::reaper-mcp and the reaper-mcp org. Everyone else uses Contribute.'}
       </p>
       {!token && (
-        <p className="setting-hint">
+        <p className={styles.settingHint}>
           Not a member yet? Ask to become a contributor{' '}
-          <a className="setting-link" href={DISCORD_URL} target="_blank" rel="noreferrer">
+          <a className={styles.settingLink} href={DISCORD_URL} target="_blank" rel="noreferrer">
             on Discord ↗
           </a>{' '}
           or{' '}
-          <a className="setting-link" href={CONTRIBUTOR_REQUEST_URL} target="_blank" rel="noreferrer">
+          <a className={styles.settingLink} href={CONTRIBUTOR_REQUEST_URL} target="_blank" rel="noreferrer">
             on GitHub ↗
           </a>
         </p>

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Measurement } from './index.js';
+import chartStyles from '../../styles/chart.module.css';
 
 const meta = {
   title: 'Features/Measurements/Readout',
@@ -13,8 +14,8 @@ type Story = StoryObj<typeof meta>;
 /** The measurements' building blocks: a value readout in each zone, a level bar with its previous call, and a dB scale */
 export const Default: Story = {
   render: () => (
-    <div className="measure">
-      <div className="measure-readouts">
+    <div className={chartStyles.measure}>
+      <div className={chartStyles.measureReadouts}>
         <Measurement.Readout label="Peak L" value="−9.4" unit="dB" />
         <Measurement.Readout label="Peak R" value="−2.6" unit="dB" zone="hot" word="hot" />
         <Measurement.Readout label="True peak" value="+0.4" unit="dBTP" zone="over" word="over 0" />
@@ -27,4 +28,4 @@ export const Default: Story = {
   ),
 };
 
-export const Playground: Story = { render: (args) => <div className="measure-readouts"><Measurement.Readout {...args} /></div> };
+export const Playground: Story = { render: (args) => <div className={chartStyles.measureReadouts}><Measurement.Readout {...args} /></div> };

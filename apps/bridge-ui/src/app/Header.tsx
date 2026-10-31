@@ -3,6 +3,8 @@ import { REPO_URL } from '../lib/links.js';
 import { usePopover } from '../lib/usePopover.js';
 import { hasToolCalls, isConnected, sessionHue, sessionName, type Session } from '../lib/sessions.js';
 import { Icon, Mark } from '../components/index.js';
+import { cx } from '../lib/cx.js';
+import styles from './Header.module.css';
 
 export function Header({
   status,
@@ -30,20 +32,20 @@ export function Header({
   const label = state === 'live' ? 'Live' : state === 'stale' ? 'Not responding' : reachable ? 'Bridge stopped' : 'REAPER unreachable';
   const connected = [...sessions.values()].filter((x) => isConnected(x, now) && hasToolCalls(x));
   return (
-    <header className="header">
-      <div className="brand">
+    <header className={styles.header}>
+      <div className={styles.brand}>
         <Mark active={state === 'live'} />
-        <div className="brand-text">
+        <div className={styles.brandText}>
           <h1>MCP Bridge</h1>
-          <p className="sub">
+          <p className={styles.sub}>
             {status ? (
               <>
                 {/* Long paths lose their start, so the file name stays readable */}
-                <span className="sub-project" title={status.project || undefined}>
+                <span className={styles.subProject} title={status.project || undefined}>
                   <bdi dir="ltr">{status.project || 'Unsaved project'}</bdi>
                 </span>
                 <span className="dot-sep" />
-                <span className="sub-version">REAPER {status.reaperVersion.split('/')[0]}</span>
+                <span className={styles.subVersion}>REAPER {status.reaperVersion.split('/')[0]}</span>
               </>
             ) : (
               'reaper-mcp'
@@ -51,10 +53,10 @@ export function Header({
           </p>
         </div>
       </div>
-      <div className="header-actions">
+      <div className={styles.headerActions}>
         {status?.sessions && state === 'live' && (
           <button
-            className={`agents ${connected.length ? 'agents-on' : ''}`}
+            className={cx(styles.agents, connected.length ? styles.agentsOn : '')}
             onClick={onShowAgents}
             title={
               (connected.length
@@ -62,7 +64,7 @@ export function Header({
                 : 'No agent has pinged in the last 45s') + '\nClick to see sessions'
             }
           >
-            <span className="agents-dots" aria-hidden>
+            <span className={styles.agentsDots} aria-hidden>
               {connected.slice(0, 4).map((x) => (
                 <i key={x.id} className={`hue-${sessionHue(x.id)}`} />
               ))}
@@ -72,7 +74,7 @@ export function Header({
         )}
         {onRebuild && (
           <button
-            className="btn btn-sm btn-rebuild"
+            className={cx(styles.btnRebuild, 'btn btn-sm')}
             onClick={onRebuild}
             title="Developer mode: your working tree changed since the last install. Build it, install it into REAPER, restart the bridge and reload"
           >
@@ -80,16 +82,16 @@ export function Header({
           </button>
         )}
         {onOpenSettings && (
-          <button className="icon-link" onClick={onOpenSettings} title="Settings" aria-label="Settings">
+          <button className={styles.iconLink} onClick={onOpenSettings} title="Settings" aria-label="Settings">
             <Icon.Gear />
           </button>
         )}
-        <a className="icon-link" href={REPO_URL} target="_blank" rel="noreferrer" title="reaper-mcp on GitHub" aria-label="reaper-mcp on GitHub">
+        <a className={styles.iconLink} href={REPO_URL} target="_blank" rel="noreferrer" title="reaper-mcp on GitHub" aria-label="reaper-mcp on GitHub">
           <Icon.GitHub />
         </a>
         <HeaderMenu overview={overview} onToggleOverview={onToggleOverview} onRebuild={onRebuild} onOpenSettings={onOpenSettings} />
-        <span className={`pill pill-${state}`}>
-          <span className="pill-dot" />
+        <span className={styles.pill} data-state={state}>
+          <span className={styles.pillDot} />
           {label}
         </span>
       </div>
@@ -115,9 +117,9 @@ function HeaderMenu({
     fn();
   };
   return (
-    <div className="header-menu" ref={ref}>
+    <div className={styles.headerMenu} ref={ref}>
       <button
-        className={`icon-link ${onRebuild ? 'header-menu-flag' : ''}`}
+        className={cx(styles.iconLink, onRebuild ? styles.headerMenuFlag : '')}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={onRebuild ? 'More (rebuild available)' : 'More'}
@@ -131,15 +133,15 @@ function HeaderMenu({
         </svg>
       </button>
       {open && (
-        <div className="menu" role="menu">
+        <div className={styles.menu} role="menu">
           {onRebuild && (
-            <button role="menuitem" className="menu-accent" onClick={pick(onRebuild)}>
+            <button role="menuitem" className={styles.menuAccent} onClick={pick(onRebuild)}>
               Rebuild &amp; reload
             </button>
           )}
           {onToggleOverview && (
             <button role="menuitemcheckbox" aria-checked={overview} onClick={pick(onToggleOverview)}>
-              <span className="menu-check" aria-hidden>
+              <span className={styles.menuCheck} aria-hidden>
                 {overview ? '✓' : ''}
               </span>
               Stats &amp; timeline

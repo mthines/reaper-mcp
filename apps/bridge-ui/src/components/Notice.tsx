@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
+import styles from './Notice.module.css';
 
 export function Notice({ tone, action, children }: { tone: 'warn' | 'bad' | 'info'; action?: ReactNode; children: ReactNode }) {
   return (
-    <div className={`notice notice-${tone}`} role="status">
-      <span className="notice-dot" aria-hidden />
-      <span className="notice-text">{children}</span>
+    <div className={styles.notice} data-tone={tone} role="status">
+      <span className={styles.noticeDot} aria-hidden />
+      <span className={styles.noticeText}>{children}</span>
       {action}
     </div>
   );

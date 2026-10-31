@@ -5,6 +5,10 @@ import { PublishRecord } from './PublishRecord.js';
 import { learnPrompt } from './teach.js';
 import { formatAgo } from '../../lib/format.js';
 import { Icon, Markdown, ResizeHandle, useDrawerWidth } from '../../components/index.js';
+import { cx } from '../../lib/cx.js';
+import drawerStyles from '../../styles/drawer.module.css';
+import pluginsViewStyles from './PluginsView.module.css';
+import styles from './PluginDetails.module.css';
 
 export const order = (r: PluginRow) => (r.coverage === 'learned' ? 0 : r.coverage === 'built-in' ? 1 : 2);
 
@@ -47,27 +51,27 @@ export function PluginDetails({
   };
 
   return (
-    <aside className="drawer" aria-label={`Plugin ${row.label}`} style={width.style}>
+    <aside className={drawerStyles.drawer} aria-label={`Plugin ${row.label}`} style={width.style}>
       <ResizeHandle fraction={width.fraction} onCommit={width.setFraction} />
-      <div className="drawer-head">
-        <div className="drawer-title">
-          <i className={`kdot cov-${row.coverage}`} />
+      <div className={drawerStyles.drawerHead}>
+        <div className={drawerStyles.drawerTitle}>
+          <i className="kdot" data-coverage={row.coverage} />
           <span>{row.label}</span>
         </div>
         <button className="icon-btn" onClick={onClose} aria-label="Close" title="Close (Esc)">
           ✕
         </button>
       </div>
-      <div className="drawer-body">
-        <div className={`result-badge cov-badge-${row.coverage}`}>{COVERAGE_LABEL[row.coverage]}</div>
+      <div className={drawerStyles.drawerBody}>
+        <div className={cx(drawerStyles.resultBadge, styles.covBadge)} data-coverage={row.coverage}>{COVERAGE_LABEL[row.coverage]}</div>
         {row.variants.length > 1 && (
-          <p className="drawer-note" title={row.variants.map((v) => v.name).join('\n')}>
+          <p className={drawerStyles.drawerNote} title={row.variants.map((v) => v.name).join('\n')}>
             Installed as {row.variants.map((v) => fxFormat(v.name) || v.type).join(', ')}, shown as one plugin.
           </p>
         )}
         {r ? (
           <>
-            <dl className="facts">
+            <dl className={drawerStyles.facts}>
               <dt>Category</dt>
               <dd>
                 {r.category}
@@ -82,25 +86,25 @@ export function PluginDetails({
               <dt>Updated</dt>
               <dd>{formatAgo(now - r.updatedAt)}</dd>
             </dl>
-            <div className="code-block kn-record">
-              <div className="code-head">
+            <div className={cx(drawerStyles.codeBlock, drawerStyles.drawerGrow, styles.knRecord)}>
+              <div className={drawerStyles.codeHead}>
                 <span>{r.layer === 'user' ? 'Your notes' : 'What the mixer knows'}</span>
               </div>
-              <Markdown className="kn-md" source={r.preview} />
+              <Markdown className={styles.knMd} source={r.preview} />
             </div>
             {lorekitUrl(r) && (
-              <a className="btn btn-block kn-open" href={lorekitUrl(r)} target="_blank" rel="noreferrer">
+              <a className={cx(styles.knOpen, 'btn btn-block')} href={lorekitUrl(r)} target="_blank" rel="noreferrer">
                 Read the full record in LoreKit ↗
               </a>
             )}
             {r.layer === 'user' && r.source && publish && <PublishRecord key={r.key} record={r} shadows={row.shadows} publish={publish} />}
             {r.layer === 'user' && r.source && (
-              <button className="btn btn-block kn-contribute" onClick={() => onContribute(r)} title="Opens a pull request on GitHub">
+              <button className={cx(pluginsViewStyles.knContribute, 'btn btn-block')} onClick={() => onContribute(r)} title="Opens a pull request on GitHub">
                 <Icon.Share /> Contribute this record to everyone
               </button>
             )}
             {row.shadows && (
-              <p className="drawer-note">
+              <p className={drawerStyles.drawerNote}>
                 Your record overrides the{' '}
                 {lorekitUrl(row.shadows) ? (
                   <a href={lorekitUrl(row.shadows)} target="_blank" rel="noreferrer">
@@ -115,17 +119,17 @@ export function PluginDetails({
           </>
         ) : (
           <>
-            <p className="drawer-note">
+            <p className={drawerStyles.drawerNote}>
               The mixer has no record for this plugin, so it falls back to a stock plugin in the same category. Teach
               it once and it’ll use this one:
             </p>
-            <div className="code-block">
-              <div className="code-head">
+            <div className={drawerStyles.codeBlock}>
+              <div className={drawerStyles.codeHead}>
                 <span>Prompt</span>
               </div>
-              <pre className="kn-prompt">{learnCmd}</pre>
+              <pre className={styles.knPrompt}>{learnCmd}</pre>
             </div>
-            <button className={`btn btn-block kn-teach-drawer ${copied ? 'kn-teach-done' : ''}`} onClick={copy}>
+            <button className={cx(styles.knTeachDrawer, 'btn btn-block', copied ? pluginsViewStyles.knTeachDone : '')} onClick={copy}>
               {copied ? (
                 'Copied'
               ) : (
@@ -134,7 +138,7 @@ export function PluginDetails({
                 </>
               )}
             </button>
-            <p className="drawer-hint">Paste into Claude Code. It researches the plugin and probes it on a scratch track.</p>
+            <p className={drawerStyles.drawerHint}>Paste into Claude Code. It researches the plugin and probes it on a scratch track.</p>
           </>
         )}
       </div>

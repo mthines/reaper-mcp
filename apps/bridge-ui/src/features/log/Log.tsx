@@ -16,6 +16,9 @@ import { Combobox, Icon } from '../../components/index.js';
 import { Plugins, type KnowledgeFeed } from '../plugins/index.js';
 import { Snapshots, type SnapshotsHook } from '../snapshots/index.js';
 import { RANGES, rangeOf, spanLabel, type RangeKey } from '../timeline/index.js';
+import { cx } from '../../lib/cx.js';
+import listStyles from '../../styles/list.module.css';
+import styles from './Log.module.css';
 
 type Filter = 'all' | 'errors';
 export type View = 'calls' | 'tools' | 'sessions' | 'plugins' | 'snapshots';
@@ -225,10 +228,10 @@ export function Log({
   };
 
   return (
-    <section className="log">
-      <div className="toolbar">
+    <section className={styles.log}>
+      <div className={styles.toolbar}>
         <Combobox.Grouped
-          className="log-menu"
+          className={styles.logMenu}
           label="View, filters and actions"
           triggerLabel={[
             VIEWS.find((v) => v.key === view)?.label,
@@ -248,7 +251,7 @@ export function Log({
                       { key: 'all', label: <>All <span className="count">{scoped.length}</span></>, selected: filter === 'all', onPick: () => chooseFilter('all') },
                       {
                         key: 'errors',
-                        label: <>Errors <span className={`count ${errorCount ? 'count-bad' : ''}`}>{errorCount}</span></>,
+                        label: <>Errors <span className={cx('count', errorCount ? 'count-bad' : '')}>{errorCount}</span></>,
                         selected: filter === 'errors',
                         onPick: () => chooseFilter('errors'),
                       },
@@ -288,7 +291,7 @@ export function Log({
             },
           ]}
         />
-        <div className="seg" role="tablist" aria-label="View">
+        <div className={cx(listStyles.seg, styles.folds)} role="tablist" aria-label="View">
           {shownViews.map((v) => (
             <button key={v.key} role="tab" aria-selected={view === v.key} onClick={() => choose(v.key)}>
               {v.label}
@@ -296,17 +299,17 @@ export function Log({
           ))}
         </div>
         {view === 'calls' && (
-          <div className="seg" role="tablist" aria-label="Result">
+          <div className={cx(listStyles.seg, styles.folds)} role="tablist" aria-label="Result">
             <button role="tab" aria-selected={filter === 'all'} onClick={() => chooseFilter('all')}>
               All <span className="count">{scoped.length}</span>
             </button>
             <button role="tab" aria-selected={filter === 'errors'} onClick={() => chooseFilter('errors')}>
-              Errors <span className={`count ${errorCount ? 'count-bad' : ''}`}>{errorCount}</span>
+              Errors <span className={cx('count', errorCount ? 'count-bad' : '')}>{errorCount}</span>
             </button>
           </div>
         )}
         {view !== 'sessions' && (
-          <label className="search">
+          <label className={styles.search}>
             <Icon.Search />
             <input
               ref={searchRef}
@@ -327,8 +330,8 @@ export function Log({
           </label>
         )}
         {view === 'calls' && (
-          <div className="actions">
-            <button className={`btn ${paused ? 'btn-on' : ''}`} onClick={onTogglePause} title="Freeze the log to read it">
+          <div className={styles.actions}>
+            <button className={cx('btn', paused ? 'btn-on' : '')} onClick={onTogglePause} title="Freeze the log to read it">
               {paused ? 'Resume' : 'Pause'}
             </button>
             <button className="btn" onClick={copy} disabled={rows.length === 0} title="Copy visible rows">
@@ -347,12 +350,12 @@ export function Log({
       </div>
 
       {selection && view !== 'plugins' && view !== 'snapshots' && (
-        <div className="selection-bar" role="status">
+        <div className={styles.selectionBar} role="status">
           <span>
             Showing <b>{log.length.toLocaleString()}</b> command{log.length === 1 ? '' : 's'} from{' '}
             <span className="mono">{spanLabel(selection)}</span>
             {(oldestKept === null || selection.start < oldestKept) && (
-              <span className="selection-note"> · the log keeps the latest {LOG_MAX.toLocaleString()}; older commands are only counted in the chart</span>
+              <span className={styles.selectionNote}> · the log keeps the latest {LOG_MAX.toLocaleString()}; older commands are only counted in the chart</span>
             )}
           </span>
           <button className="btn" onClick={onClearSelection} title="Clear selection (Esc)">
@@ -362,8 +365,8 @@ export function Log({
       )}
 
       {agentsShown && (
-        <div className="chips" role="tablist" aria-label="Agent session">
-          <button role="tab" aria-selected={sessionFilter === null} className="chip" onClick={() => chooseSession(null)}>
+        <div className={cx(listStyles.chips, styles.folds)} role="tablist" aria-label="Agent session">
+          <button role="tab" aria-selected={sessionFilter === null} className={listStyles.chip} onClick={() => chooseSession(null)}>
             All agents
           </button>
           {sessionIds.map((id) => {
@@ -374,7 +377,7 @@ export function Log({
                 key={id}
                 role="tab"
                 aria-selected={sessionFilter === id}
-                className="chip"
+                className={listStyles.chip}
                 title={x.dir ?? id}
                 onClick={() => chooseSession(sessionFilter === id ? null : id)}
               >
@@ -402,9 +405,9 @@ export function Log({
             showCalls({ session, tool: '' });
           }} />
       ) : (
-        <div className="rows" role="log" aria-live="off">
+        <div className={listStyles.rows} role="log" aria-live="off">
           {rows.length === 0 ? (
-            <div className="empty">
+            <div className={listStyles.empty}>
               {log.length === 0
                 ? 'No commands yet. New ones show up here as your agent sends them.'
                 : older > 0 && range
@@ -423,7 +426,7 @@ export function Log({
             />
           )}
           {wider && (
-            <div className="log-more">
+            <div className={styles.logMore}>
               <span>
                 {older.toLocaleString()} older {older === 1 ? 'command' : 'commands'}
               </span>
@@ -434,7 +437,7 @@ export function Log({
           )}
         </div>
       )}
-      {paused && view === 'calls' && <div className="paused-banner">Paused · new commands are still counted, the log is frozen</div>}
+      {paused && view === 'calls' && <div className={styles.pausedBanner}>Paused · new commands are still counted, the log is frozen</div>}
       {selected && (
         <Details
           entry={selected}

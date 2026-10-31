@@ -1,10 +1,11 @@
 import { memo, useLayoutEffect, useRef, useState } from 'react';
 import { prependedCount, scrollToRow, visibleRows } from './virtual-list.js';
-import { DOT_CLASS, ROW_CLASS } from './outcome.js';
 import { SPEED_LABEL, latencyScale } from './speed.js';
 import { formatAgo, formatDay, formatMs } from '../../lib/format.js';
 import { speedOf, outcomeOf, type CommandEntry } from '../../lib/commands.js';
 import { sessionHue, sessionName, type Session } from '../../lib/sessions.js';
+import { cx } from '../../lib/cx.js';
+import styles from './LogRows.module.css';
 
 /** Height of one log row in px; the list is windowed, so every row must be exactly this tall. */
 const ROW_HEIGHT = 32;
@@ -68,7 +69,7 @@ export function LogRows({
 
   const { start, end } = visibleRows(view.top, view.height, ROW_HEIGHT, rows.length, ROWS_OVERSCAN, ROWS_PAD);
   return (
-    <div ref={ref} className="rows-window" style={{ height: rows.length * ROW_HEIGHT }}>
+    <div ref={ref} className={styles.rowsWindow} style={{ height: rows.length * ROW_HEIGHT }}>
       <div style={{ transform: `translateY(${start * ROW_HEIGHT}px)` }}>
         {rows.slice(start, end).map((e) => (
           <Row
@@ -107,27 +108,27 @@ const Row = memo(
     const ms = String(time.getMilliseconds()).padStart(3, '0');
     const speed = speedOf(e.c, e.ms);
     return (
-      <div className={`row ${ROW_CLASS[outcomeOf(e)]} ${selected ? 'row-selected' : ''}`}>
-        <button className="row-main" style={{ height: ROW_HEIGHT }} onClick={() => onSelect(e)} aria-pressed={selected}>
+      <div className={cx(styles.row, selected && styles.rowSelected)} data-outcome={outcomeOf(e)}>
+        <button className={styles.rowMain} style={{ height: ROW_HEIGHT }} onClick={() => onSelect(e)} aria-pressed={selected}>
           {/* "x ago" is set on hover, so the row needn't re-render every second to keep it fresh */}
-          <span className="row-time mono" onMouseEnter={(ev) => (ev.currentTarget.title = formatAgo(Date.now() - e.t))}>
-            <span className="row-day">{formatDay(e.t, today)}</span>
+          <span className={cx(styles.rowTime, 'mono')} onMouseEnter={(ev) => (ev.currentTarget.title = formatAgo(Date.now() - e.t))}>
+            <span className={styles.rowDay}>{formatDay(e.t, today)}</span>
             {hhmmss}
-            <span className="row-ms">.{ms}</span>
+            <span className={styles.rowMs}>.{ms}</span>
           </span>
-          <span className={`status-dot ${DOT_CLASS[outcomeOf(e)]}`} />
-          <span className="row-cmd mono">{e.c}</span>
-          {e.e && <span className="row-err-inline">{e.e}</span>}
-          <span className="row-end">
+          <span className={styles.statusDot} data-outcome={outcomeOf(e)} />
+          <span className={cx(styles.rowCmd, 'mono')}>{e.c}</span>
+          {e.e && <span className={styles.rowErrInline}>{e.e}</span>}
+          <span className={styles.rowEnd}>
             {session && (
-              <span className="row-session" title={session.dir ?? session.id}>
+              <span className={styles.rowSession} title={session.dir ?? session.id}>
                 <i className={`sdot hue-${sessionHue(session.id)}`} />
                 {sessionName(session)}
               </span>
             )}
-            <span className={`row-dur mono ${speed}`} title={speed === 'long' ? SPEED_LABEL.long : undefined}>
-              <span className="dur-track" aria-hidden>
-                <span className="dur-fill" style={{ width: `${latencyScale(e.ms) * 100}%` }} />
+            <span className={cx(styles.rowDur, 'mono')} data-speed={speed} title={speed === 'long' ? SPEED_LABEL.long : undefined}>
+              <span className={styles.durTrack} aria-hidden>
+                <span className={styles.durFill} style={{ width: `${latencyScale(e.ms) * 100}%` }} />
               </span>
               {formatMs(e.ms)}
             </span>

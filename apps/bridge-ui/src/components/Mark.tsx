@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { cx } from '../lib/cx.js';
+import styles from './Mark.module.css';
 
 // How far (in the 512 logo grid) the eye may look toward the cursor while watching.
 const EYE_REACH_X = 24;
@@ -59,8 +61,8 @@ export function Mark({ active }: { active: boolean }) {
   };
 
   return (
-    <button className="mark-btn" onClick={onClick} aria-label="reaper-mcp" aria-pressed={watching}>
-      <svg className={`mark ${active ? 'mark-active' : ''} ${blinking ? 'mark-blink' : ''}`} viewBox="0 0 512 512" aria-hidden>
+    <button className={styles.markBtn} onClick={onClick} aria-label="reaper-mcp" aria-pressed={watching}>
+      <svg className={cx(styles.mark, active ? styles.markActive : '', blinking ? styles.markBlink : '')} viewBox="0 0 512 512" aria-hidden>
         <defs>
           <linearGradient id="mark-bg" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stopColor="#1b1532" />
@@ -80,16 +82,16 @@ export function Mark({ active }: { active: boolean }) {
           </clipPath>
         </defs>
         <rect width="512" height="512" rx="116" fill="url(#mark-bg)" />
-        <rect className="mark-glow" width="512" height="512" rx="116" fill="url(#mark-glow)" />
+        <rect className={styles.markGlow} width="512" height="512" rx="116" fill="url(#mark-glow)" />
         <rect x="4" y="4" width="504" height="504" rx="112" fill="none" stroke="#fff" strokeOpacity="0.08" strokeWidth="8" />
-        <path className="mark-arc" d="M100 330 A156 156 0 0 1 412 330" fill="none" strokeWidth="56" strokeLinecap="round" />
-        <g className="mark-eye" style={{ transform: `translate(${look.x * EYE_REACH_X}px, ${look.y * EYE_REACH_Y}px)` }}>
-          <circle className="mark-dot" cx="256" cy="318" r="58" />
+        <path className={styles.markArc} d="M100 330 A156 156 0 0 1 412 330" fill="none" strokeWidth="56" strokeLinecap="round" />
+        <g className={styles.markEye} style={{ transform: `translate(${look.x * EYE_REACH_X}px, ${look.y * EYE_REACH_Y}px)` }}>
+          <circle className={styles.markDot} cx="256" cy="318" r="58" />
           {/* Eyelid: parked just above the dot, drops over it on a blink */}
           <g clipPath="url(#mark-eye)">
             {/* Outer group: where the lid rests (half-closed on hover); inner ellipse: the blinks */}
-            <g className="mark-lid-rest">
-              <ellipse key={blinks} className="mark-lid" cx="256" cy="180" rx="74" ry="80" fill="#130f1f" />
+            <g className={styles.markLidRest}>
+              <ellipse key={blinks} className={styles.markLid} cx="256" cy="180" rx="74" ry="80" fill="#130f1f" />
             </g>
           </g>
         </g>

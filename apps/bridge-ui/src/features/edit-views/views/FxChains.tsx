@@ -2,6 +2,12 @@ import { listDiff, type EditView, type FxChain, type FxSlot } from '../edit-view
 import { ChangeMark } from './ChangeLegend.js';
 import { changedText } from './format.js';
 import { Measurement } from '../../measurements/index.js';
+import { cx } from '../../../lib/cx.js';
+import chartStyles from '../../../styles/chart.module.css';
+import timelineStyles from './Timeline.module.css';
+import mixerStyles from './Mixer.module.css';
+import planStyles from './Plan.module.css';
+import styles from './FxChains.module.css';
 
 /** "VST3: Pro-Q 3 (FabFilter)" → "Pro-Q 3"; the full name stays in the tooltip */
 const fxShort = (name: string) =>
@@ -23,7 +29,7 @@ export function FxChains({ v }: { v: Extract<EditView, { kind: "fxChain" }> }) {
   const all = v.chains.flatMap((c) => c.fx);
   return (
     <>
-      <div className="measure-readouts">
+      <div className={chartStyles.measureReadouts}>
         <Measurement.Readout
           label={v.chains.length > 1 ? "Tracks" : "Track"}
           value={v.chains.map((c) => c.t).join(" → ")}
@@ -42,7 +48,7 @@ export function FxChains({ v }: { v: Extract<EditView, { kind: "fxChain" }> }) {
         <FxChainList key={ci} chain={c} diff={diffs[ci]} named={v.chains.length > 1} />
       ))}
       {write && touched === 0 && (
-        <div className="ev-more">Nothing in the chain changed</div>
+        <div className={chartStyles.evMore}>Nothing in the chain changed</div>
       )}
     </>
   );
@@ -58,27 +64,28 @@ function FxChainList({
   named: boolean;
 }) {
   return (
-    <div className="ev-chain">
-      {named && <div className="ev-lane-name">{chain.t}</div>}
+    <div className={styles.evChain}>
+      {named && <div className={timelineStyles.evLaneName}>{chain.t}</div>}
       {chain.fx.length === 0 && diff.removed.length === 0 && (
-        <div className="ev-more">No FX on this track</div>
+        <div className={chartStyles.evMore}>No FX on this track</div>
       )}
-      <ol className="ev-slots">
+      <ol className={mixerStyles.evSlots}>
         {chain.fx.map((f, i) => {
           const c = diff.change.get(i);
           const was = chain.was?.find((w) => w[2] && w[2] === f[2]);
           return (
             <li
               key={`${f[2]}${i}`}
-              className={`ev-slot ${f[1].includes("B") ? "ev-slot-bypassed" : ""} ${f[1].includes("O") ? "ev-slot-offline" : ""} ${c ? `ev-slot-${c}` : ""}`}
+              className={cx(mixerStyles.evSlot, f[1].includes("B") && mixerStyles.evSlotBypassed, f[1].includes("O") && mixerStyles.evSlotOffline)}
+              data-change={c}
               title={[f[0], f[3] && `preset ${f[3]}`, was && was[0] !== f[0] && `was ${was[0]}`].filter(Boolean).join(" · ")}
             >
-              <span className="ev-op-n mono">{i + 1}</span>
-              <span className="ev-slot-name">
+              <span className={cx(planStyles.evOpN, 'mono')}>{i + 1}</span>
+              <span className={mixerStyles.evSlotName}>
                 {fxShort(f[0])}
                 {f[3] && <small>{f[3]}</small>}
               </span>
-              <span className="ev-slot-state">
+              <span className={mixerStyles.evSlotState}>
                 {f[1].includes("O") ? "offline" : f[1].includes("B") ? "bypassed" : ""}
                 <ChangeMark c={c} />
               </span>
@@ -86,11 +93,11 @@ function FxChainList({
           );
         })}
         {diff.removed.map(([i, f]) => (
-          <li key={`gone${f[2]}${i}`} className="ev-slot ev-slot-gone" title={`Removed: ${f[0]}`}>
-            <span className="ev-op-n mono">{i + 1}</span>
-            <span className="ev-slot-name">{fxShort(f[0])}</span>
-            <span className="ev-slot-state">
-              <span className="ev-mark ev-mark-gone">removed</span>
+          <li key={`gone${f[2]}${i}`} className={mixerStyles.evSlot} data-change="gone" title={`Removed: ${f[0]}`}>
+            <span className={cx(planStyles.evOpN, 'mono')}>{i + 1}</span>
+            <span className={mixerStyles.evSlotName}>{fxShort(f[0])}</span>
+            <span className={mixerStyles.evSlotState}>
+              <span className={mixerStyles.evMark} data-change="gone">removed</span>
             </span>
           </li>
         ))}

@@ -9,6 +9,9 @@ import { Waveform } from './Waveform.js';
 import { fmt, pct, targetOf, zoneOf } from './format.js';
 import { formatAgo } from '../../lib/format.js';
 import { measurementOf, type CommandEntry, type Measurement } from '../../lib/commands.js';
+import { cx } from '../../lib/cx.js';
+import chartStyles from '../../styles/chart.module.css';
+import readoutStyles from './Readout.module.css';
 
 /**
  * What a measuring command read, in the page's meter language: hairline lines with one accent for levels,
@@ -25,9 +28,9 @@ export function MeasurementView({ entry, history, now, onPick }: { entry: Comman
   if (!m) return null;
   const previous = history.find((h) => h.n < entry.n);
   return (
-    <section className="measure" aria-label="Result">
-      <div className="measure-head">Result</div>
-      <div className="measure-body">{render(m, entry, previous)}</div>
+    <section className={chartStyles.measure} aria-label="Result">
+      <div className={chartStyles.measureHead}>Result</div>
+      <div className={chartStyles.measureBody}>{render(m, entry, previous)}</div>
       {previous && <Previous m={m} previous={previous} now={now} onPick={onPick} />}
     </section>
   );
@@ -41,9 +44,9 @@ function same<K extends Measurement['kind']>(kind: K, e: CommandEntry | undefine
 
 /** Legend for the ghost marks, shown whenever a chart draws the previous call */
 export const PreviousLegend = () => (
-  <div className="measure-legend">
-    <span><i className="lg-line" /> This call</span>
-    <span><i className="lg-previous" /> Previous call</span>
+  <div className={chartStyles.measureLegend}>
+    <span><i className={chartStyles.lgLine} /> This call</span>
+    <span><i className={chartStyles.lgPrevious} /> Previous call</span>
   </div>
 );
 
@@ -57,7 +60,7 @@ function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | un
           <Level label="R" value={m.rmsR} hold={m.peakR} was={was && { value: was.rmsR, hold: was.peakR }} />
           <Scale ticks={[-60, -40, -20, -6, 0]} min={-60} max={6} indent />
           {was && <PreviousLegend />}
-          <div className="measure-readouts">
+          <div className={chartStyles.measureReadouts}>
             <Readout label="Peak L" value={fmt(m.peakL)} unit="dB" zone={zoneOf(m.peakL)} />
             <Readout label="Peak R" value={fmt(m.peakR)} unit="dB" zone={zoneOf(m.peakR)} />
             <Readout label="RMS L" value={fmt(m.rmsL)} unit="dB" />
@@ -80,25 +83,25 @@ function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | un
       const phase = c !== undefined && c < 0;
       return (
         <>
-          <div className="measure-readouts">
+          <div className={chartStyles.measureReadouts}>
             <Readout label="Correlation" value={c === undefined ? '–' : fmt(c, 2)} zone={phase ? 'over' : 'ok'} word={phase ? 'phase' : undefined} />
             <Readout label="Width" value={m.stereoWidth?.toFixed(2) ?? '–'} />
             <Readout label="Side" value={fmt(m.sideLevel)} unit="dB" />
           </div>
-          <div className="hl-track hl-track-solo" role="img" aria-label={`Correlation ${c?.toFixed(2) ?? 'unknown'}, from −1 out of phase to +1 mono`}>
-            <span className="hl-centre" />
+          <div className={readoutStyles.hlTrack} role="img" aria-label={`Correlation ${c?.toFixed(2) ?? 'unknown'}, from −1 out of phase to +1 mono`}>
+            <span className={readoutStyles.hlCentre} />
             {c !== undefined && (
               <>
                 <span
-                  className="hl-fill hl-fill-correlation"
+                  className={cx(readoutStyles.hlFill, readoutStyles.hlFillCorrelation)}
                   style={{ clipPath: `inset(0 ${100 - Math.max(50, pct(c, -1, 1))}% 0 ${Math.min(50, pct(c, -1, 1))}% round 2px)` }}
                 />
-                <span className={`hl-dot zone-${phase ? 'over' : 'ok'}`} style={{ left: `${pct(c, -1, 1)}%` }} />
+                <span className={readoutStyles.hlDot} data-zone={phase ? 'over' : 'ok'} style={{ left: `${pct(c, -1, 1)}%` }} />
               </>
             )}
-            {wc !== undefined && <span className="hl-was-dot" style={{ left: `${pct(wc, -1, 1)}%` }} title={`Previous call ${fmt(wc, 2)}`} />}
+            {wc !== undefined && <span className={readoutStyles.hlWasDot} style={{ left: `${pct(wc, -1, 1)}%` }} title={`Previous call ${fmt(wc, 2)}`} />}
           </div>
-          <div className="measure-scale-words">
+          <div className={chartStyles.measureScaleWords}>
             <span>−1 phase</span>
             <span>0</span>
             <span>+1 mono</span>
@@ -111,7 +114,7 @@ function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | un
       const was = same('crest', previous);
       return (
         <>
-          <div className="measure-readouts">
+          <div className={chartStyles.measureReadouts}>
             <Readout label="Crest" value={fmt(m.crestFactor)} unit="dB" />
             <Readout label="Peak" value={fmt(m.peakLevel)} unit="dB" zone={zoneOf(m.peakLevel)} />
             <Readout label="RMS" value={fmt(m.rmsLevel)} unit="dB" zone={zoneOf(m.rmsLevel)} />
@@ -166,11 +169,11 @@ function Previous({ m, previous, now, onPick }: { m: Measurement; previous: Comm
   const delta = cur ? cur.value - was.value : null;
   const flat = delta === null || Math.abs(delta) < (digits === 1 ? 0.05 : 0.005);
   return (
-    <button className="measure-previous" onClick={() => onPick(previous)} title="Open the previous call (↓)">
+    <button className={chartStyles.measurePrevious} onClick={() => onPick(previous)} title="Open the previous call (↓)">
       <span>Previous call · {formatAgo(now - previous.t)}</span>
       <span className="mono">
         {was.label} {was.plain ? was.value.toFixed(digits) : fmt(was.value, digits)} {was.unit}
-        {delta !== null && <b className="measure-previous-delta"> {flat ? 'no change' : `${delta > 0 ? '+' : '−'}${Math.abs(delta).toFixed(digits)}`}</b>}
+        {delta !== null && <b className={chartStyles.measurePreviousDelta}> {flat ? 'no change' : `${delta > 0 ? '+' : '−'}${Math.abs(delta).toFixed(digits)}`}</b>}
       </span>
     </button>
   );

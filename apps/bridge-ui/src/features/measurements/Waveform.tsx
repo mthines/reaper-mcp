@@ -3,6 +3,9 @@ import { PreviousLegend } from './Measurement.js';
 import { Readout } from './Readout.js';
 import { fmt, zoneOf } from './format.js';
 import { parseParams, type CommandEntry, type Measurement } from '../../lib/commands.js';
+import { cx } from '../../lib/cx.js';
+import chartStyles from '../../styles/chart.module.css';
+import styles from './Waveform.module.css';
 
 const WW = 320;
 const WH = 84;
@@ -47,12 +50,12 @@ export function Waveform({ m, entry, previous }: { m: Extract<Measurement, { kin
   const hoverDb = hover === null ? 0 : peakAt(m, hover);
   return (
     <>
-      <div className="measure-readouts">
+      <div className={chartStyles.measureReadouts}>
         <Readout label="Peak" value={fmt(m.peakDb)} unit="dBFS" zone={clipped ? 'over' : zoneOf(m.peakDb)} word={clipped ? 'clipped' : undefined} />
         <Readout label="RMS" value={fmt(m.rmsDb)} unit="dBFS" />
         <Readout label="Clipped" value={String(m.clipped ?? '–')} unit="samples" zone={clipped ? 'over' : 'ok'} word={clipped ? '' : undefined} />
       </div>
-      <div className="waveform">
+      <div className={styles.waveform}>
         <svg viewBox={`0 0 ${WW} ${WH}`} preserveAspectRatio="none" onPointerMove={onMove} onPointerLeave={() => setHover(null)} role="img" aria-label={`Waveform of the rendered audio, peak ${fmt(m.peakDb)} dBFS${clipped ? `, ${m.clipped} clipped samples` : ''}`}>
           <defs>
             <linearGradient id={`wave-heat-${uid}`} gradientUnits="userSpaceOnUse" x1={0} x2={0} y1={0} y2={WH}>
@@ -68,28 +71,28 @@ export function Waveform({ m, entry, previous }: { m: Extract<Measurement, { kin
             </linearGradient>
           </defs>
           {[-6, -18].flatMap((db) => [waveOffset(db), 1 - waveOffset(db)]).map((f) => (
-            <line key={f} className="spectrum-grid" x1={0} x2={WW} y1={f * WH} y2={f * WH} vectorEffect="non-scaling-stroke" />
+            <line key={f} className={chartStyles.spectrumGrid} x1={0} x2={WW} y1={f * WH} y2={f * WH} vectorEffect="non-scaling-stroke" />
           ))}
-          <line className="spectrum-base" x1={0} x2={WW} y1={WH / 2} y2={WH / 2} vectorEffect="non-scaling-stroke" />
-          {previous && <path className="spectrum-previous" d={outline(previous)} vectorEffect="non-scaling-stroke" />}
-          <path className="waveform-shape" d={shape} fill={`url(#wave-heat-${uid})`} stroke={`url(#wave-heat-${uid})`} vectorEffect="non-scaling-stroke" />
-          {hover !== null && <line className="spectrum-cursor" x1={hx} x2={hx} y1={0} y2={WH} vectorEffect="non-scaling-stroke" />}
+          <line className={chartStyles.spectrumBase} x1={0} x2={WW} y1={WH / 2} y2={WH / 2} vectorEffect="non-scaling-stroke" />
+          {previous && <path className={chartStyles.spectrumPrevious} d={outline(previous)} vectorEffect="non-scaling-stroke" />}
+          <path className={styles.waveformShape} d={shape} fill={`url(#wave-heat-${uid})`} stroke={`url(#wave-heat-${uid})`} vectorEffect="non-scaling-stroke" />
+          {hover !== null && <line className={chartStyles.spectrumCursor} x1={hx} x2={hx} y1={0} y2={WH} vectorEffect="non-scaling-stroke" />}
         </svg>
         {hover !== null && (
           // Kept inside the chart near its edges
-          <div className="spectrum-tip mono" style={{ left: `${Math.min(80, Math.max(20, (hx / WW) * 100))}%` }}>
-            {(start + ((end - start) * hover) / (n - 1)).toFixed(2)} s · <span className={`zone-${hoverDb >= -0.01 ? 'over' : zoneOf(hoverDb)}`}>{fmt(hoverDb)} dBFS</span>
+          <div className={cx(chartStyles.spectrumTip, 'mono')} style={{ left: `${Math.min(80, Math.max(20, (hx / WW) * 100))}%` }}>
+            {(start + ((end - start) * hover) / (n - 1)).toFixed(2)} s · <span data-zone={hoverDb >= -0.01 ? 'over' : zoneOf(hoverDb)}>{fmt(hoverDb)} dBFS</span>
             {previous && previous.hi.length === n && <span className="muted"> (was {fmt(peakAt(previous, hover))})</span>}
           </div>
         )}
         {/* One label per half so they don't crowd */}
         {[-18, -6].map((db) => (
-          <span key={db} className="spectrum-y mono" style={{ top: `${(db === -18 ? waveOffset(db) : 1 - waveOffset(db)) * 100}%` }}>
+          <span key={db} className={cx(chartStyles.spectrumY, styles.waveformY, 'mono')} style={{ top: `${(db === -18 ? waveOffset(db) : 1 - waveOffset(db)) * 100}%` }}>
             {fmt(db, 0)}
           </span>
         ))}
       </div>
-      <div className="measure-scale-words mono">
+      <div className={cx(chartStyles.measureScaleWords, 'mono')}>
         <span>{start.toFixed(1)} s</span>
         <span>{end.toFixed(1)} s</span>
       </div>

@@ -1,5 +1,7 @@
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import { HISTORY_MAX } from '../../lib/log.js';
+import { cx } from '../../lib/cx.js';
+import styles from './Sparkline.module.css';
 
 const SPARK_W = 100;
 const SPARK_H = 24;
@@ -51,7 +53,7 @@ export function Sparkline({
       v ? (
         <rect
           key={i}
-          className={`spark-bar ${hover === i ? 'spark-bar-hover' : ''}`}
+          className={cx(styles.sparkBar, hover === i ? styles.sparkBarHover : '')}
           x={(offset + i) * slotW + slotW * 0.15}
           width={slotW * 0.7}
           y={y(v)}
@@ -64,7 +66,7 @@ export function Sparkline({
     const pts = values.flatMap((v, i) => (v === null ? [] : [[(offset + i + 0.5) * slotW, y(v)] as const]));
     if (pts.length > 0) {
       const line = pts.map(([px, py], i) => `${i ? 'L' : 'M'}${px.toFixed(2)},${py.toFixed(2)}`).join('');
-      body = <path className="spark-line" d={pts.length > 1 ? line : `M${pts[0][0]},${pts[0][1]}h0.01`} />;
+      body = <path className={styles.sparkLine} d={pts.length > 1 ? line : `M${pts[0][0]},${pts[0][1]}h0.01`} />;
     }
   }
 
@@ -74,18 +76,18 @@ export function Sparkline({
   const tipAlign = leftPct < 18 ? 'start' : leftPct > 82 ? 'end' : 'center';
 
   return (
-    <div className={`spark-wrap spark-${tone}`} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-      <svg className="spark" viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" role="img" aria-label={`${label}, last minute`}>
-        <line className="spark-base" x1="0" x2={SPARK_W} y1={SPARK_H - 0.5} y2={SPARK_H - 0.5} />
+    <div className={styles.sparkWrap} data-tone={tone} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <svg className={styles.spark} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" role="img" aria-label={`${label}, last minute`}>
+        <line className={styles.sparkBase} x1="0" x2={SPARK_W} y1={SPARK_H - 0.5} y2={SPARK_H - 0.5} />
         {body}
       </svg>
       {hover !== null && (
         <>
-          <span className="spark-guide" style={{ left: `${leftPct}%` }} />
+          <span className={styles.sparkGuide} style={{ left: `${leftPct}%` }} />
           {variant === 'line' && hv != null && (
-            <span className="spark-dot" style={{ left: `${leftPct}%`, top: `${(y(hv) / SPARK_H) * 100}%` }} />
+            <span className={styles.sparkDot} style={{ left: `${leftPct}%`, top: `${(y(hv) / SPARK_H) * 100}%` }} />
           )}
-          <span className={`spark-tip spark-tip-${tipAlign}`} style={{ left: `${leftPct}%` }}>
+          <span className={styles.sparkTip} data-align={tipAlign} style={{ left: `${leftPct}%` }}>
             <b>{hv == null ? 'no commands' : format(hv)}</b>
             <span>{ago === 0 ? 'now' : `${ago}s ago`}</span>
           </span>

@@ -3,6 +3,9 @@ import type { RequestState, RowMode, SnapshotInfo, SnapshotOp, SnapshotsFeed } f
 import { EditForm } from './EditForm.js';
 import { SaveForm } from './SaveForm.js';
 import { formatAgo } from '../../lib/format.js';
+import { cx } from '../../lib/cx.js';
+import listStyles from '../../styles/list.module.css';
+import styles from './SnapshotsView.module.css';
 
 /**
  * The Snapshots view: the project's saved mixer snapshots. Click one (or press 1–9) to load it while
@@ -65,22 +68,22 @@ export function SnapshotsView({
   }, [keys]);
 
   return (
-    <div className="rows snaps">
+    <div className={cx(listStyles.rows, styles.snaps)}>
       <SaveForm snapshots={feed?.snapshots ?? []} blocked={blocked} saving={pending?.op === 'save'} onSave={(name, desc) => onSend('save', name, desc)} />
       {blocked && (
-        <p className="snap-blocked" role="note">
+        <p className={styles.snapBlocked} role="note">
           {blocked}
         </p>
       )}
       <RequestLine request={request} />
       {feed === null ? (
-        <div className="empty">Reading snapshots from the bridge…</div>
+        <div className={listStyles.empty}>Reading snapshots from the bridge…</div>
       ) : feed.snapshots.length === 0 ? (
-        <div className="empty">No snapshots yet. Save the current mix to start comparing.</div>
+        <div className={listStyles.empty}>No snapshots yet. Save the current mix to start comparing.</div>
       ) : shown.length === 0 ? (
-        <div className="empty">No snapshot matches “{query.trim()}”.</div>
+        <div className={listStyles.empty}>No snapshot matches “{query.trim()}”.</div>
       ) : (
-        <ol className="snap-list" aria-label="Snapshots">
+        <ol className={styles.snapList} aria-label="Snapshots">
           {shown.map((s, i) => {
             const current = feed.current === s.name;
             const loading = pending?.op === 'restore' && pending.name === s.name;
@@ -101,20 +104,20 @@ export function SnapshotsView({
               );
             }
             return (
-              <li key={s.name} className="snap-item">
+              <li key={s.name} className={styles.snapItem}>
                 <button
-                  className={`snap-row${current ? ' snap-current' : ''}${loading ? ' snap-loading' : ''}`}
+                  className={cx(styles.snapRow, current && styles.snapCurrent, loading && styles.snapLoading)}
                   onClick={() => load(s)}
                   disabled={Boolean(blocked)}
                   aria-current={current ? 'true' : undefined}
                   title={blocked ?? `Load ${s.name}${i < 9 && keys ? ` (${i + 1})` : ''}`}
                 >
-                  {i < 9 && keys && <kbd className="snap-key">{i + 1}</kbd>}
-                  <span className="snap-main">
-                    <span className="snap-name">{s.name}</span>
-                    {s.description && <span className="snap-desc">{s.description}</span>}
+                  {i < 9 && keys && <kbd className={styles.snapKey}>{i + 1}</kbd>}
+                  <span className={styles.snapMain}>
+                    <span className={styles.snapName}>{s.name}</span>
+                    {s.description && <span className={styles.snapDesc}>{s.description}</span>}
                   </span>
-                  <span className="snap-meta">
+                  <span className={styles.snapMeta}>
                     <span title={new Date(s.timestamp).toLocaleString()}>{formatAgo(now - s.timestamp)}</span>
                     {s.trackCount !== undefined && (
                       <span>
@@ -124,11 +127,11 @@ export function SnapshotsView({
                     )}
                     {s.fullChunk && <span title="Exact track state: every plugin's internal state">exact</span>}
                   </span>
-                  <span className="snap-state">{loading ? 'Loading…' : current ? 'Loaded' : 'Load'}</span>
+                  <span className={styles.snapState}>{loading ? 'Loading…' : current ? 'Loaded' : 'Load'}</span>
                 </button>
                 {mode === 'delete' ? (
-                  <span className="snap-actions snap-confirm" role="group" aria-label={`Delete ${s.name}?`}>
-                    <span className="snap-confirm-text">Delete?</span>
+                  <span className={styles.snapActions} role="group" aria-label={`Delete ${s.name}?`}>
+                    <span className={styles.snapConfirmText}>Delete?</span>
                     <button
                       className="btn btn-sm btn-warn"
                       autoFocus
@@ -144,7 +147,7 @@ export function SnapshotsView({
                     </button>
                   </span>
                 ) : (
-                  <span className="snap-actions">
+                  <span className={styles.snapActions}>
                     <button className="btn btn-sm" disabled={Boolean(blocked)} onClick={() => setRow({ name: s.name, mode: 'edit' })} title={blocked ?? `Rename ${s.name} or change its description`}>
                       Rename
                     </button>
@@ -159,7 +162,7 @@ export function SnapshotsView({
         </ol>
       )}
       {feed && (
-        <p className="snap-foot muted">
+        <p className={cx(styles.snapFoot, 'muted')}>
           {feed.storage === 'project' ? 'Saved next to the project, in .reaper-mcp/snapshots.' : 'The project isn’t saved yet: snapshots go to the bridge folder.'}{' '}
           Each load is one undo step.
         </p>
@@ -193,10 +196,10 @@ function RequestLine({ request }: { request: RequestState | null }) {
     text = `Couldn’t ${verb} ${request.name}: ${request.result.error ?? 'refused by the bridge'}`;
   }
   return (
-    <div className={`snap-result snap-result-${tone}`} role="status">
+    <div className={styles.snapResult} data-tone={tone} role="status">
       <span>{text}</span>
       {warnings.length > 0 && (
-        <ul className="snap-warnings">
+        <ul className={styles.snapWarnings}>
           {warnings.slice(0, 5).map((w) => (
             <li key={w}>{w}</li>
           ))}

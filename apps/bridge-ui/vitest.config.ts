@@ -11,7 +11,7 @@ export default defineConfig({
     environment: 'node',
     watch: false,
     passWithNoTests: true,
-    // The page's stylesheet applies in jsdom, so a story can tell a shown element from a hidden one
-    css: { include: [/styles\.css$/] },
+    // The page's stylesheets (root and CSS modules) apply in jsdom, so a story can tell a shown element from a hidden one
+    css: { include: [/\.css$/] },
   },
 });

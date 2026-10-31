@@ -24,6 +24,8 @@ import { SETTING_NAME, Settings } from '../features/settings/index.js';
 import { blockedBy, useSnapshots } from '../features/snapshots/index.js';
 import { Stats } from '../features/stats/index.js';
 import { RANGE_STORAGE_KEY, Timeline, isRangeKey, loadRange, type RangeKey } from '../features/timeline/index.js';
+import { cx } from '../lib/cx.js';
+import styles from './App.module.css';
 
 const OVERVIEW_KEY = 'mcp-bridge-overview';
 
@@ -125,7 +127,7 @@ export function App() {
   };
 
   return (
-    <div className={`shell ${overview ? 'overview-on' : ''}`}>
+    <div className={cx(styles.shell, overview ? styles.overviewOn : '')}>
       <Header
         status={status}
         state={state}
@@ -145,17 +147,19 @@ export function App() {
       {status ? (
         <>
           <Notices status={status} settings={settings} onSet={changeSetting('notice')} request={request} />
-          <Stats status={status} log={log} now={now} series={series} />
-          <Timeline
-            history={history}
-            longHistory={longHistory}
-            now={now}
-            rangeKey={rangeKey}
-            onRange={chooseRange}
-            selection={selection}
-            onSelect={setSelection}
-            clearedAt={clearedAt}
-          />
+          <div className={styles.overview}>
+            <Stats status={status} log={log} now={now} series={series} />
+            <Timeline
+              history={history}
+              longHistory={longHistory}
+              now={now}
+              rangeKey={rangeKey}
+              onRange={chooseRange}
+              selection={selection}
+              onSelect={setSelection}
+              clearedAt={clearedAt}
+            />
+          </div>
           <Log
             log={shownLog}
             selection={selection}
@@ -194,9 +198,9 @@ export function App() {
               onRestart={status.control?.canRestart ? () => request('restart') : undefined}
             />
           )}
-          <footer className="footer">
+          <footer className={styles.footer}>
             <span className="mono" title="Bridge IPC directory">{status.bridgeDir}</span>
-            <span className="footer-meta">
+            <span className={styles.footerMeta}>
               Updated {formatAgo(now - lastChangeAt)}
               <span className="dot-sep" />
               <a href={REPO_URL} target="_blank" rel="noreferrer">reaper-mcp v{__VERSION__}</a>

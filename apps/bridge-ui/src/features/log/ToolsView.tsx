@@ -5,6 +5,9 @@ import { TOOL_TONE } from './speed.js';
 import { formatAgo, formatMs } from '../../lib/format.js';
 import { matchesQuery, parseQuery } from '../../lib/search.js';
 import { speedOf, groupByTool, type CommandEntry, type ToolSort } from '../../lib/commands.js';
+import { cx } from '../../lib/cx.js';
+import listStyles from '../../styles/list.module.css';
+import styles from './ToolsView.module.css';
 
 const isToolSort = (v: unknown): v is ToolSort => TOOL_SORTS.some((x) => x.key === v);
 
@@ -43,25 +46,25 @@ export function ToolsView({
     return k;
   }, [log]);
 
-  if (log.length === 0) return <div className="rows"><div className="empty">No commands yet. Tools show up here once your agent calls them.</div></div>;
+  if (log.length === 0) return <div className={listStyles.rows}><div className={listStyles.empty}>No commands yet. Tools show up here once your agent calls them.</div></div>;
 
   return (
-    <div className="rows tools">
-      <div className="mix" aria-label="Calls by kind">
+    <div className={cx(listStyles.rows, styles.tools)}>
+      <div className={styles.mix} aria-label="Calls by kind">
         {(['read', 'write', 'transport'] as const).map((k) =>
-          kinds[k] ? <span key={k} className={`mix-seg kind-${k}`} style={{ flexGrow: kinds[k] }} title={`${kinds[k]} ${k}`} /> : null,
+          kinds[k] ? <span key={k} className={styles.mixSeg} data-kind={k} style={{ flexGrow: kinds[k] }} title={`${kinds[k]} ${k}`} /> : null,
         )}
       </div>
-      <div className="mix-legend">
-        <span><i className="kdot kind-read" /> inspect {kinds.read}</span>
-        <span><i className="kdot kind-write" /> change {kinds.write}</span>
-        <span><i className="kdot kind-transport" /> transport {kinds.transport}</span>
-        <span className="mix-note">{groups.length} tools · last {log.length} calls</span>
+      <div className={styles.mixLegend}>
+        <span><i className="kdot" data-kind="read" /> inspect {kinds.read}</span>
+        <span><i className="kdot" data-kind="write" /> change {kinds.write}</span>
+        <span><i className="kdot" data-kind="transport" /> transport {kinds.transport}</span>
+        <span className={styles.mixNote}>{groups.length} tools · last {log.length} calls</span>
       </div>
-      <div className="tool-head" role="row">
+      <div className={styles.toolHead} role="row">
         <span>Tool</span>
         {TOOL_SORTS.map((x) => (
-          <button key={x.key} className={`th ${sort === x.key ? 'th-on' : ''}`} onClick={() => {
+          <button key={x.key} className={cx(styles.th, sort === x.key ? styles.thOn : '')} onClick={() => {
             if (x.key !== sort) track({ name: 'tools_sorted', sort: x.key });
             setSort(x.key);
           }} aria-pressed={sort === x.key}>
@@ -71,20 +74,20 @@ export function ToolsView({
         ))}
       </div>
       {groups.length === 0 ? (
-        <div className="empty">No tool matches that filter.</div>
+        <div className={listStyles.empty}>No tool matches that filter.</div>
       ) : (
         groups.map((g) => (
-          <button key={g.c} className="tool-row" onClick={() => onPick(g.c, false)} title={g.lastError ? `Last error: ${g.lastError}` : `Show ${g.c} calls`}>
-            <span className="tool-name">
-              <i className={`kdot kind-${g.kind}`} />
+          <button key={g.c} className={styles.toolRow} onClick={() => onPick(g.c, false)} title={g.lastError ? `Last error: ${g.lastError}` : `Show ${g.c} calls`}>
+            <span className={styles.toolName}>
+              <i className="kdot" data-kind={g.kind} />
               <span className="mono">{g.c}</span>
-              <span className="share" aria-hidden>
+              <span className={styles.share} aria-hidden>
                 <span style={{ width: `${(g.count / top) * 100}%` }} />
               </span>
             </span>
-            <span className="mono num">{g.count}</span>
+            <span className={cx(styles.num, 'mono')}>{g.count}</span>
             <span
-              className={`mono num ${g.errors ? 'tone-bad err-link' : 'muted'}`}
+              className={cx(styles.num, 'mono', g.errors ? cx(styles.errLink, 'tone-bad') : 'muted')}
               onClick={(ev) => {
                 if (!g.errors) return;
                 ev.stopPropagation();
@@ -93,8 +96,8 @@ export function ToolsView({
             >
               {g.errors ? `${g.errors} · ${Math.round((g.errors / g.count) * 100)}%` : '0'}
             </span>
-            <span className={`mono num ${TOOL_TONE[speedOf(g.c, g.p95)]}`}>{formatMs(g.p95)}</span>
-            <span className="num muted">{formatAgo(now - g.last)}</span>
+            <span className={cx(styles.num, 'mono', TOOL_TONE[speedOf(g.c, g.p95)])}>{formatMs(g.p95)}</span>
+            <span className={cx(styles.num, 'muted')}>{formatAgo(now - g.last)}</span>
           </button>
         ))
       )}

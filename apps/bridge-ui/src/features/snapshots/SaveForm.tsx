@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { DESCRIPTION_MAX, nameProblem, replacedBy, type SnapshotInfo } from './snapshots.js';
+import { cx } from '../../lib/cx.js';
+import styles from './SaveForm.module.css';
 
 export function SaveForm({
   snapshots,
@@ -36,9 +38,9 @@ export function SaveForm({
   };
 
   return (
-    <form className="snap-save" onSubmit={submit} aria-label="Save a snapshot">
+    <form className={styles.snapSave} onSubmit={submit} aria-label="Save a snapshot">
       <input
-        className="snap-input"
+        className={styles.snapInput}
         value={name}
         onChange={(ev) => {
           setName(ev.target.value);
@@ -51,7 +53,7 @@ export function SaveForm({
         disabled={Boolean(blocked)}
       />
       <input
-        className="snap-input snap-input-desc"
+        className={cx(styles.snapInput, styles.snapInputDesc)}
         value={description}
         onChange={(ev) => setDescription(ev.target.value)}
         placeholder="Description (optional)"
@@ -59,11 +61,11 @@ export function SaveForm({
         maxLength={DESCRIPTION_MAX}
         disabled={Boolean(blocked)}
       />
-      <button className={`btn${confirm ? ' btn-warn' : ''}`} type="submit" disabled={Boolean(blocked) || saving || Boolean(problem)}>
+      <button className={cx('btn', confirm && 'btn-warn')} type="submit" disabled={Boolean(blocked) || saving || Boolean(problem)}>
         {saving ? 'Saving…' : confirm ? `Replace ${replaces?.name ?? ''}` : 'Save current mix'}
       </button>
       {(problem || (replaces && !confirm)) && (
-        <span className={`snap-hint${problem ? ' snap-hint-bad' : ''}`} role="status">
+        <span className={cx(styles.snapHint, problem && styles.snapHintBad)} role="status">
           {problem ?? `Saving replaces “${replaces?.name}”.`}
         </span>
       )}

@@ -1,0 +1,5 @@
+.notices { flex: none; display: grid; gap: 8px; }
+.noticeActions { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.noticeLog { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.noticeDetails summary { cursor: pointer; margin-top: 4px; color: var(--muted); font-size: 12px; }
+.noticeDetails pre { margin: 6px 0 0; padding: 8px; max-height: 200px; overflow: auto; font-size: 11px; background: rgba(0, 0, 0, 0.25); border-radius: 6px; white-space: pre-wrap; }

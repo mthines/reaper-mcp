@@ -2,13 +2,16 @@ import type { EditView } from '../edit-views.js';
 import { Legend } from './ChangeLegend.js';
 import { noteName, pct } from './format.js';
 import { Measurement } from '../../measurements/index.js';
+import { cx } from '../../../lib/cx.js';
+import chartStyles from '../../../styles/chart.module.css';
+import styles from './MidiStats.module.css';
 
 export function MidiStats({ v }: { v: Extract<EditView, { kind: "midiStats" }> }) {
   const guns = v.pitches.filter((p) => p[5] > 0).length;
   const histMax = Math.max(1, ...(v.hist ?? []));
   return (
     <>
-      <div className="measure-readouts">
+      <div className={chartStyles.measureReadouts}>
         <Measurement.Readout
           label="Notes"
           value={String(v.total ?? v.pitches.reduce((s, p) => s + p[1], 0))}
@@ -21,18 +24,18 @@ export function MidiStats({ v }: { v: Extract<EditView, { kind: "midiStats" }> }
           word={guns ? "" : undefined}
         />
       </div>
-      <div className="ev-rows">
+      <div className={chartStyles.evRows}>
         {v.pitches.map(([pitch, count, min, max, avg, gun]) => (
-          <div key={pitch} className={`ev-row ${gun ? "ev-hot" : ""}`}>
-            <span className="ev-name">
+          <div key={pitch} className={cx(chartStyles.evRow, gun ? chartStyles.evHot : '')}>
+            <span className={chartStyles.evName}>
               {noteName(pitch)}
               <small>{pitch}</small>
             </span>
-            <span className="ev-val mono">
+            <span className={cx(chartStyles.evVal, 'mono')}>
               ×{count} · {min === max ? min : `${min}–${max}`}
               {gun > 0 && (
                 <span
-                  className="ev-word"
+                  className={chartStyles.evWord}
                   title={`${gun} notes in a row at one velocity`}
                 >
                   {" "}
@@ -41,33 +44,33 @@ export function MidiStats({ v }: { v: Extract<EditView, { kind: "midiStats" }> }
               )}
             </span>
             <span
-              className="ev-bar"
+              className={chartStyles.evBar}
               role="img"
               aria-label={`${noteName(pitch)} velocity ${min} to ${max}, average ${Math.round(avg)}`}
             >
               <span
-                className="ev-fill ev-fill-range"
+                className={chartStyles.evFill}
                 style={{
                   left: `${pct(min, 1, 127)}%`,
                   width: `max(3px, ${pct(max, 1, 127) - pct(min, 1, 127)}%)`,
                 }}
               />
               <span
-                className="ev-tick"
+                className={chartStyles.evTick}
                 style={{ left: `${pct(avg, 1, 127)}%` }}
               />
             </span>
           </div>
         ))}
       </div>
-      <div className="measure-scale-words mono">
+      <div className={cx(chartStyles.measureScaleWords, 'mono')}>
         <span>vel 1</span>
         <span>64</span>
         <span>127</span>
       </div>
       {v.hist && v.hist.length > 1 && (
         <div
-          className="ev-hist"
+          className={styles.evHist}
           role="img"
           aria-label="Velocity histogram, 1 to 127"
         >
@@ -82,8 +85,8 @@ export function MidiStats({ v }: { v: Extract<EditView, { kind: "midiStats" }> }
       )}
       <Legend
         items={[
-          ["lg-range", "Velocity range"],
-          ["lg-tick", "Average"],
+          [chartStyles.lgRange, "Velocity range"],
+          [chartStyles.lgTick, "Average"],
         ]}
       />
     </>

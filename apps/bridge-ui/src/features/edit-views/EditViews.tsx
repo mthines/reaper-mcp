@@ -10,6 +10,7 @@ import { Plan } from './views/Plan.js';
 import { Routing } from './views/Routing.js';
 import { Timeline } from './views/Timeline.js';
 import type { CommandEntry } from '../../lib/commands.js';
+import chartStyles from '../../styles/chart.module.css';
 
 /**
  * What an edit changed, or what a listing showed, in the measurements' hairline language: the value now is the
@@ -22,9 +23,9 @@ export function EditViewSection({ entry }: { entry: CommandEntry }) {
   if (!v) return null;
   const write = !LISTINGS.has(entry.c) && !(v.kind === "plan" && v.dryRun);
   return (
-    <section className="measure" aria-label={write ? "Change" : "Result"}>
-      <div className="measure-head">{write ? "Change" : "Result"}</div>
-      <div className="measure-body">{render(v)}</div>
+    <section className={chartStyles.measure} aria-label={write ? "Change" : "Result"}>
+      <div className={chartStyles.measureHead}>{write ? "Change" : "Result"}</div>
+      <div className={chartStyles.measureBody}>{render(v)}</div>
     </section>
   );
 }

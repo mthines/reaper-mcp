@@ -5,6 +5,8 @@ import { DEMO } from './demo-mode.js';
 import type { BridgeRequest } from './useBridgeRequest.js';
 import { load, save } from '../lib/storage.js';
 import { Icon, Notice } from '../components/index.js';
+import { cx } from '../lib/cx.js';
+import styles from './Notices.module.css';
 
 const SWS_DISMISS_KEY = 'mcp-bridge-sws-dismissed';
 
@@ -52,7 +54,7 @@ export function Notices({
       <Notice key="update" tone="info">
         <b>{rebuild ? 'Rebuilding from your working tree…' : 'Updating reaper-mcp…'}</b>{' '}
         {rebuild ? 'The bridge restarts and this page reloads when it’s done.' : 'This takes a minute or two; the bridge restarts when it’s done.'}
-        {log.length > 0 && <span className="notice-log mono">{log[log.length - 1]}</span>}
+        {log.length > 0 && <span className={cx(styles.noticeLog, 'mono')}>{log[log.length - 1]}</span>}
       </Notice>,
     );
   } else if (update?.state === 'failed') {
@@ -61,7 +63,7 @@ export function Notices({
       <Notice key="update" tone="bad" action={<button className="btn btn-sm" onClick={() => request(rebuild ? 'rebuild' : 'update')}>Try again</button>}>
         <b>{rebuild ? 'The rebuild didn’t finish.' : 'The update didn’t finish.'}</b> {log[log.length - 1] ?? 'See tmp/install.log in your reaper-mcp folder.'}
         {log.length > 1 && (
-          <details className="notice-details">
+          <details className={styles.noticeDetails}>
             <summary>Show log</summary>
             <pre className="mono">{log.join('\n')}</pre>
           </details>
@@ -74,7 +76,7 @@ export function Notices({
         key="update"
         tone="info"
         action={
-          <span className="notice-actions">
+          <span className={styles.noticeActions}>
             {control?.canUpdate && (
               <button className="btn btn-sm" onClick={() => request('update')}>
                 Update
@@ -160,7 +162,7 @@ export function Notices({
       </Notice>,
     );
   }
-  return notices.length ? <div className="notices">{notices}</div> : null;
+  return notices.length ? <div className={styles.notices}>{notices}</div> : null;
 }
 
 const UPDATE_SKIP_KEY = 'mcp-bridge-update-skipped';

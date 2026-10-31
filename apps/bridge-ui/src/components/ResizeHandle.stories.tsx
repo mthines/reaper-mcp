@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { ResizeHandle } from './ResizeHandle.js';
+import drawerStyles from '../styles/drawer.module.css';
 
 const meta = {
   title: 'Components/ResizeHandle',
@@ -11,7 +12,7 @@ const meta = {
     (Story) => (
       // The handle resizes the drawer it sits in
       <div className="story-drawer">
-        <aside className="drawer">
+        <aside className={drawerStyles.drawer}>
           <Story />
         </aside>
       </div>

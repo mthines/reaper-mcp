@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { ResizeHandle } from './ResizeHandle.js';
+import drawerStyles from '../styles/drawer.module.css';
 
 /** The handle as the drawer uses it: the committed width is kept and fed back */
 function Drawer({ initial, onCommit }: { initial: number | null; onCommit: (f: number | null) => void }) {
@@ -12,7 +13,7 @@ function Drawer({ initial, onCommit }: { initial: number | null; onCommit: (f: n
   };
   return (
     <div className="story-drawer">
-      <aside className="drawer">
+      <aside className={drawerStyles.drawer}>
         <ResizeHandle fraction={fraction} onCommit={commit} />
       </aside>
     </div>

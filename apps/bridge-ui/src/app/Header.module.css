@@ -1,0 +1,98 @@
+.header { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.brandText { min-width: 0; }
+.sub {
+  display: flex;
+  align-items: center;
+  margin: 1px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.subProject { min-width: 0; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.subVersion { flex: none; }
+.pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px; font-weight: 500;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  white-space: nowrap;
+}
+.pillDot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill[data-state='live'] { color: var(--live); border-color: rgba(74, 222, 128, 0.25); background: rgba(74, 222, 128, 0.07); }
+.pill[data-state='live'] .pillDot { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6); animation: ping 2s infinite; }
+.pill[data-state='stale'] { color: var(--warn); border-color: rgba(245, 184, 75, 0.25); background: rgba(245, 184, 75, 0.07); }
+.pill[data-state='offline'] { color: var(--muted); }
+.headerActions { flex: none; display: flex; align-items: center; gap: 8px; }
+.iconLink {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 8px;
+  color: var(--muted);
+  border: 1px solid transparent;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.iconLink:hover { color: var(--text); background: var(--panel-2); border-color: var(--line-2); }
+button.iconLink { background: none; padding: 0; }
+.agents {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 0 10px 0 8px; height: 26px;
+  border-radius: 999px;
+  font-size: 12px; color: var(--faint);
+  white-space: nowrap; cursor: default;
+}
+.agentsOn { color: var(--muted); }
+button.agents { border: 1px solid transparent; background: none; cursor: pointer; font: inherit; font-size: 12px; }
+button.agents:hover { color: var(--text); background: var(--panel-2); border-color: var(--line-2); }
+.agentsDots { display: inline-flex; }
+.agentsDots i {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--hue); box-shadow: 0 0 0 2px var(--bg);
+}
+.agentsDots i + i { margin-left: -2px; }
+
+@media (max-width: 720px) {
+  .agents { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill[data-state='live'] .pillDot { animation: none; }
+}
+
+/* A small app window docked beside REAPER: the log is the page. Stats, timeline and the footer are opt-in
+   (header menu, .overview-on), and the header's actions fold into that menu. */
+.headerMenu { position: relative; display: none; }
+.headerMenuFlag { position: relative; }
+.headerMenuFlag::after {
+  content: ''; position: absolute; top: 5px; right: 5px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--bg);
+}
+.menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
+  min-width: 180px; padding: 4px;
+  display: flex; flex-direction: column;
+  border: 1px solid var(--line-2); border-radius: 10px;
+  background: var(--panel-2); box-shadow: 0 8px 24px rgb(0 0 0 / 0.3);
+}
+.menu > a, .menu > button {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 10px; border: 0; border-radius: 6px;
+  background: none; color: var(--text); font: inherit; font-size: 12.5px;
+  text-align: left; text-decoration: none; cursor: pointer;
+}
+.menu > a:hover, .menu > button:hover, .menu > a:focus-visible, .menu > button:focus-visible { background: var(--panel); outline: none; }
+.menuAccent { color: var(--accent) !important; font-weight: 600; }
+.menuCheck { width: 12px; flex: none; color: var(--accent); }
+.menu > a, .menu > button:not(:has(.menuCheck)) { padding-left: 28px; }
+
+@media (max-height: 640px) {
+  .headerActions > .iconLink, .headerActions > .btnRebuild { display: none; }
+  .headerMenu { display: block; }
+}
+
+@keyframes ping { 70% { box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); } 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); } }

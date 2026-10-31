@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { initialHighlight, listKey, opensList, type ComboboxOption } from './combobox-logic.js';
+import { cx } from '../lib/cx.js';
+import styles from './Combobox.module.css';
 
 /**
  * A select-like popup list, modelled on LoreKit's Combobox: the trigger is a `button` with
@@ -58,11 +60,11 @@ export function Combobox<T extends string>({
   }, [open, highlight, id]);
 
   return (
-    <div className={`combo ${className}`} ref={rootRef}>
+    <div className={cx(styles.combo, className)} ref={rootRef}>
       <button
         ref={triggerRef}
         type="button"
-        className="combo-trigger"
+        className={styles.comboTrigger}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? `${id}-list` : undefined}
@@ -76,7 +78,7 @@ export function Combobox<T extends string>({
         }}
       >
         <span>{current?.label ?? value}</span>
-        <svg className="combo-chevron" viewBox="0 0 16 16" aria-hidden>
+        <svg className={styles.comboChevron} viewBox="0 0 16 16" aria-hidden>
           <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
@@ -84,7 +86,7 @@ export function Combobox<T extends string>({
         <ul
           ref={listRef}
           id={`${id}-list`}
-          className="combo-list"
+          className={styles.comboList}
           role="listbox"
           aria-label={label}
           tabIndex={-1}
@@ -106,21 +108,21 @@ export function Combobox<T extends string>({
               id={`${id}-opt-${i}`}
               role="option"
               aria-selected={o.value === value}
-              className={`combo-option ${i === highlight ? 'combo-option-hl' : ''}`}
+              className={cx(styles.comboOption, i === highlight ? styles.comboOptionHl : '')}
               onMouseEnter={() => setHighlight(i)}
               onMouseDown={(ev) => ev.preventDefault()}
               onClick={() => pick(i)}
             >
-              <span className="combo-check" aria-hidden>
+              <span className={styles.comboCheck} aria-hidden>
                 {o.value === value && (
                   <svg viewBox="0 0 16 16">
                     <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
               </span>
-              <span className="combo-text">
-                <span className="combo-label">{o.label}</span>
-                {o.hint && <span className="combo-hint">{o.hint}</span>}
+              <span className={styles.comboText}>
+                <span className={styles.comboLabel}>{o.label}</span>
+                {o.hint && <span className={styles.comboHint}>{o.hint}</span>}
               </span>
             </li>
           ))}
@@ -201,11 +203,11 @@ export function GroupedCombobox({
 
   let index = 0;
   return (
-    <div className={`combo ${className}`} ref={rootRef}>
+    <div className={cx(styles.combo, className)} ref={rootRef}>
       <button
         ref={triggerRef}
         type="button"
-        className="combo-trigger"
+        className={styles.comboTrigger}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? `${id}-list` : undefined}
@@ -218,8 +220,8 @@ export function GroupedCombobox({
           }
         }}
       >
-        <span className="combo-trigger-text">{triggerLabel}</span>
-        <svg className="combo-chevron" viewBox="0 0 16 16" aria-hidden>
+        <span className={styles.comboTriggerText}>{triggerLabel}</span>
+        <svg className={styles.comboChevron} viewBox="0 0 16 16" aria-hidden>
           <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
@@ -227,7 +229,7 @@ export function GroupedCombobox({
         <div
           ref={listRef}
           id={`${id}-list`}
-          className="combo-list combo-list-fixed"
+          className={cx(styles.comboList, styles.comboListFixed)}
           style={{ top: at.top, left: at.left, maxHeight: `calc(100vh - ${at.top + 8}px)` }}
           role="listbox"
           aria-label={label}
@@ -245,8 +247,8 @@ export function GroupedCombobox({
           }}
         >
           {shown.map((g) => (
-            <div key={g.label} role="group" aria-labelledby={`${id}-g-${g.label}`} className="combo-group">
-              <div id={`${id}-g-${g.label}`} role="presentation" className="combo-heading">
+            <div key={g.label} role="group" aria-labelledby={`${id}-g-${g.label}`} className={styles.comboGroup}>
+              <div id={`${id}-g-${g.label}`} role="presentation" className={styles.comboHeading}>
                 {g.label}
               </div>
               {g.items.map((it) => {
@@ -258,21 +260,21 @@ export function GroupedCombobox({
                     role="option"
                     aria-selected={it.selected === true}
                     aria-disabled={it.disabled || undefined}
-                    className={`combo-option ${i === highlight ? 'combo-option-hl' : ''} ${it.disabled ? 'combo-option-off' : ''}`}
+                    className={cx(styles.comboOption, i === highlight ? styles.comboOptionHl : '', it.disabled ? styles.comboOptionOff : '')}
                     onMouseEnter={() => setHighlight(i)}
                     onMouseDown={(ev) => ev.preventDefault()}
                     onClick={() => pick(i)}
                   >
-                    <span className="combo-check" aria-hidden>
+                    <span className={styles.comboCheck} aria-hidden>
                       {it.selected && (
                         <svg viewBox="0 0 16 16">
                           <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       )}
                     </span>
-                    <span className="combo-text">
-                      <span className="combo-label">{it.label}</span>
-                      {it.hint && <span className="combo-hint">{it.hint}</span>}
+                    <span className={styles.comboText}>
+                      <span className={styles.comboLabel}>{it.label}</span>
+                      {it.hint && <span className={styles.comboHint}>{it.hint}</span>}
                     </span>
                   </div>
                 );

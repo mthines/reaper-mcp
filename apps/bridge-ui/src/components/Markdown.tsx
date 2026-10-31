@@ -1,4 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
+import { cx } from '../lib/cx.js';
+import styles from './Markdown.module.css';
 
 /**
  * A small Markdown renderer for LoreKit records: headings, paragraphs, lists (two levels), tables,
@@ -9,7 +11,7 @@ import { Fragment, type ReactNode } from 'react';
  * an href only for http(s) and mailto URLs and always open in a new tab without a referrer.
  */
 export function Markdown({ source, className }: { source: string; className?: string }) {
-  return <div className={className ? `md ${className}` : 'md'}>{blocks(source.replace(/\r\n?/g, '\n'))}</div>;
+  return <div className={className ? cx(styles.md, className) : styles.md}>{blocks(source.replace(/\r\n?/g, '\n'))}</div>;
 }
 
 const SAFE_URL = /^(https?:\/\/|mailto:)/i;
@@ -72,7 +74,7 @@ function blocks(source: string): ReactNode[] {
       i += 2;
       while (i < lines.length && lines[i].trim().startsWith('|')) rows.push(cells(lines[i++]));
       out.push(
-        <div key={key()} className="md-table">
+        <div key={key()} className={styles.mdTable}>
           <table>
             <thead>
               <tr>

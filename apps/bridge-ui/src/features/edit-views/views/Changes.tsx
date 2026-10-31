@@ -1,11 +1,14 @@
 import type { ChangeRow } from '../edit-views.js';
 import { Legend } from './ChangeLegend.js';
 import { PROP_LABEL, barPos, pct, plural, valueText } from './format.js';
+import { cx } from '../../../lib/cx.js';
+import chartStyles from '../../../styles/chart.module.css';
+import styles from './Changes.module.css';
 
 export function Changes({ rows, more = 0 }: { rows: ChangeRow[]; more?: number }) {
   return (
     <>
-      <div className="ev-rows">
+      <div className={chartStyles.evRows}>
         {rows.map((r, i) => {
           const same = r.a !== undefined && r.a === r.b;
           const hot = r.s === "db" && (r.b ?? -150) > 0;
@@ -15,13 +18,13 @@ export function Changes({ rows, more = 0 }: { rows: ChangeRow[]; more?: number }
           return (
             <div
               key={i}
-              className={`ev-row ${same ? "ev-same" : ""} ${hot ? "ev-hot" : ""}`}
+              className={cx(chartStyles.evRow, same ? styles.evSame : '', hot ? chartStyles.evHot : '')}
             >
-              <span className="ev-name" title={`${r.t} · ${label}`}>
+              <span className={chartStyles.evName} title={`${r.t} · ${label}`}>
                 {r.t}
                 <small>{label}</small>
               </span>
-              <span className="ev-val mono">
+              <span className={cx(chartStyles.evVal, 'mono')}>
                 {same ? (
                   <>{after} · no change</>
                 ) : r.a === undefined ? (
@@ -31,7 +34,7 @@ export function Changes({ rows, more = 0 }: { rows: ChangeRow[]; more?: number }
                     {before} → <b>{after}</b>
                   </>
                 )}
-                {hot && <span className="ev-word"> · above 0</span>}
+                {hot && <span className={chartStyles.evWord}> · above 0</span>}
               </span>
               {r.s !== "bool" && r.b !== undefined && (
                 <ChangeBar
@@ -45,13 +48,13 @@ export function Changes({ rows, more = 0 }: { rows: ChangeRow[]; more?: number }
         })}
       </div>
       {more > 0 && (
-        <div className="ev-more">+{plural(more, "more parameter")} not drawn</div>
+        <div className={chartStyles.evMore}>+{plural(more, "more parameter")} not drawn</div>
       )}
       {rows.some((r) => r.a !== undefined && r.a !== r.b) && (
         <Legend
           items={[
-            ["lg-was", "Before"],
-            ["lg-tick", "After"],
+            [chartStyles.lgWas, "Before"],
+            [chartStyles.lgTick, "After"],
           ]}
         />
       )}
@@ -72,13 +75,13 @@ function ChangeBar({
   const a = r.a === undefined ? null : barPos(r, r.a);
   const origin = r.s === "pan" ? 50 : 0;
   return (
-    <span className="ev-bar" role="img" aria-label={label}>
+    <span className={chartStyles.evBar} role="img" aria-label={label}>
       {r.s === "db" && (
-        <span className="ev-zero" style={{ left: `${pct(0, -60, 6)}%` }} />
+        <span className={chartStyles.evZero} style={{ left: `${pct(0, -60, 6)}%` }} />
       )}
-      {r.s === "pan" && <span className="ev-zero" style={{ left: "50%" }} />}
+      {r.s === "pan" && <span className={chartStyles.evZero} style={{ left: "50%" }} />}
       <span
-        className="ev-fill ev-fill-rest"
+        className={cx(chartStyles.evFill, styles.evFillRest)}
         style={{
           left: `${Math.min(origin, b)}%`,
           width: `${Math.abs(b - origin)}%`,
@@ -86,14 +89,14 @@ function ChangeBar({
       />
       {a !== null && a !== b && (
         <span
-          className={`ev-fill ${b < a ? "ev-fill-down" : ""}`}
+          className={cx(chartStyles.evFill, b < a ? styles.evFillDown : '')}
           style={{ left: `${Math.min(a, b)}%`, width: `${Math.abs(b - a)}%` }}
         />
       )}
       {a !== null && a !== b && (
-        <span className="ev-was" style={{ left: `${a}%` }} />
+        <span className={chartStyles.evWas} style={{ left: `${a}%` }} />
       )}
-      <span className="ev-tick" style={{ left: `${b}%` }} />
+      <span className={chartStyles.evTick} style={{ left: `${b}%` }} />
     </span>
   );
 }

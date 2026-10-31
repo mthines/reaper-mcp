@@ -1,0 +1,7 @@
+.waveform svg { cursor: crosshair; }
+
+/* A render's waveform: min/max per slice, colored by amplitude */
+.waveform { position: relative; }
+.waveform svg { display: block; width: 100%; height: 160px; }
+.waveform .waveformY { z-index: 1; padding: 0 3px; border-radius: 3px; background: var(--panel); }
+.waveformShape { fill-opacity: 0.55; stroke-width: 0.8; stroke-linejoin: round; }

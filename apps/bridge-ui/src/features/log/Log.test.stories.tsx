@@ -30,24 +30,30 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const commandsShown = (el: HTMLElement) => [...el.querySelectorAll('.row-cmd')].map((n) => n.textContent);
+// A call row is a pressable button named with the time of the call
+const callRows = (canvas: ReturnType<typeof within>) => canvas.queryAllByRole('button', { pressed: false, name: /\d{2}:\d{2}:\d{2}/ });
 
 export const FiltersTheCallsBySearch: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByPlaceholderText('Filter commands or errors'), 'read_track_lufs');
-    await waitFor(() => expect(commandsShown(canvasElement).length).toBeGreaterThan(0));
-    await expect(new Set(commandsShown(canvasElement))).toEqual(new Set(['read_track_lufs']));
+    await waitFor(() => expect(callRows(canvas).some((row: HTMLElement) => !/read_track_lufs/.test(row.textContent ?? ''))).toBe(true));
+    const search = canvas.getByPlaceholderText('Filter commands or errors');
+    await userEvent.clear(search);
+    await userEvent.type(search, 'read_track_lufs');
+    await waitFor(() => expect(callRows(canvas).length).toBeGreaterThan(0));
+    for (const row of callRows(canvas)) await expect(row).toHaveTextContent('read_track_lufs');
   },
 };
 
 export const OpensACallInTheDrawerAndClosesIt: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const [first] = canvas.getAllByRole('button', { pressed: false }).filter((b) => b.classList.contains('row-main'));
-    const command = first.querySelector('.row-cmd')?.textContent ?? '';
-    await userEvent.click(first);
-    const drawer = canvas.getByRole('complementary', { name: `Details for ${command}` });
+    const search = canvas.getByPlaceholderText('Filter commands or errors');
+    await userEvent.clear(search);
+    await userEvent.type(search, 'read_track_lufs');
+    await waitFor(() => expect(callRows(canvas).length).toBeGreaterThan(0));
+    await userEvent.click(callRows(canvas)[0]);
+    const drawer = canvas.getByRole('complementary', { name: 'Details for read_track_lufs' });
     await expect(drawer).toBeInTheDocument();
     await userEvent.click(within(drawer).getByRole('button', { name: 'Close details' }));
     await expect(canvas.queryByRole('complementary', { name: /Details for/ })).toBeNull();

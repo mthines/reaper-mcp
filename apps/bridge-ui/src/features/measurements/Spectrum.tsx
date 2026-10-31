@@ -3,6 +3,9 @@ import { PreviousLegend } from './Measurement.js';
 import { Readout } from './Readout.js';
 import { fmt, zoneOf } from './format.js';
 import type { Measurement } from '../../lib/commands.js';
+import { cx } from '../../lib/cx.js';
+import chartStyles from '../../styles/chart.module.css';
+import styles from './Spectrum.module.css';
 
 const W = 320;
 const H = 110;
@@ -36,12 +39,12 @@ export function Spectrum({ m, previous }: { m: Extract<Measurement, { kind: 'spe
 
   return (
     <>
-      <div className="measure-readouts">
+      <div className={chartStyles.measureReadouts}>
         <Readout label="Peak" value={fmt(m.peakDb)} unit="dB" zone={zoneOf(m.peakDb)} />
         <Readout label="RMS" value={fmt(m.rmsDb)} unit="dB" />
         {m.fftSize !== undefined && <Readout label="FFT" value={String(m.fftSize)} />}
       </div>
-      <div className="spectrum">
+      <div className={styles.spectrum}>
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" onPointerMove={onMove} onPointerLeave={() => setHover(null)} role="img" aria-label="Frequency spectrum, 20 Hz to 20 kHz">
           {/* Tied to the dB scale: accent up to −18 dB, amber by −6, red at 0 */}
           <defs>
@@ -52,27 +55,27 @@ export function Spectrum({ m, previous }: { m: Extract<Measurement, { kind: 'spe
             </linearGradient>
           </defs>
           {grid.map((d) => (
-            <line key={d} className="spectrum-grid" x1={0} x2={W} y1={yOf(d)} y2={yOf(d)} vectorEffect="non-scaling-stroke" />
+            <line key={d} className={chartStyles.spectrumGrid} x1={0} x2={W} y1={yOf(d)} y2={yOf(d)} vectorEffect="non-scaling-stroke" />
           ))}
-          <line className="spectrum-base" x1={0} x2={W} y1={H} y2={H} vectorEffect="non-scaling-stroke" />
-          {previous && <path className="spectrum-previous" d={path(previous)} vectorEffect="non-scaling-stroke" />}
-          <path className="spectrum-area" d={area} fill={`url(#spec-heat-${uid})`} />
-          <path className="spectrum-line" d={line} stroke={`url(#spec-heat-${uid})`} vectorEffect="non-scaling-stroke" />
-          {hover !== null && <line className="spectrum-cursor" x1={xOf(centre(hover))} x2={xOf(centre(hover))} y1={0} y2={H} vectorEffect="non-scaling-stroke" />}
+          <line className={chartStyles.spectrumBase} x1={0} x2={W} y1={H} y2={H} vectorEffect="non-scaling-stroke" />
+          {previous && <path className={chartStyles.spectrumPrevious} d={path(previous)} vectorEffect="non-scaling-stroke" />}
+          <path className={styles.spectrumArea} d={area} fill={`url(#spec-heat-${uid})`} />
+          <path className={styles.spectrumLine} d={line} stroke={`url(#spec-heat-${uid})`} vectorEffect="non-scaling-stroke" />
+          {hover !== null && <line className={chartStyles.spectrumCursor} x1={xOf(centre(hover))} x2={xOf(centre(hover))} y1={0} y2={H} vectorEffect="non-scaling-stroke" />}
         </svg>
         {grid.map((d) => (
-          <span key={d} className="spectrum-y mono" style={{ top: `${(yOf(d) / H) * 100}%` }}>
+          <span key={d} className={cx(chartStyles.spectrumY, 'mono')} style={{ top: `${(yOf(d) / H) * 100}%` }}>
             {fmt(d, 0)}
           </span>
         ))}
         {hover !== null && (
-          <div className="spectrum-tip mono" style={{ left: `${(xOf(centre(hover)) / W) * 100}%` }}>
+          <div className={cx(chartStyles.spectrumTip, 'mono')} style={{ left: `${(xOf(centre(hover)) / W) * 100}%` }}>
             {hzLabel(centre(hover))} Hz · {fmt(bands[hover])} dB
             {previous && previous.length === n && <span className="muted"> (was {fmt(previous[hover])})</span>}
           </div>
         )}
       </div>
-      <div className="spectrum-x mono">
+      <div className={cx(styles.spectrumX, 'mono')}>
         {[100, 1000, 10_000].map((hz) => (
           <span key={hz} style={{ left: `${(xOf(hz) / W) * 100}%` }}>
             {hzLabel(hz)}

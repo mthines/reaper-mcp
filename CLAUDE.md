@@ -95,6 +95,9 @@ reaper-mcp/
                               # Stats.Sparkline) plus its public functions; code outside a folder imports only its index
     src/lib/                  # Pure logic + small hooks: status (feed parsing), commands, log, timeline, sessions, search, format, url-state, analytics
     src/demo/                 # ?demo's fake bridge and the fixed examples the stories draw (examples.ts, feed.ts)
+    src/styles.css            # Root stylesheet: CSS variables (tokens), base element styles and global utility classes only
+    src/styles/               # CSS modules shared across features: drawer, list (segmented tabs, chips, rows), chart (measure card, readouts, legends, bars)
+                              # Every component's own styles: <Name>.module.css beside it (styles.x, joined with cx() from lib/cx.ts)
     src/test/stories.test.tsx # Runs every story's play function as a vitest test (jsdom)
     .storybook/               # Storybook (React + Vite): pnpm storybook, nx build-storybook bridge-ui
     build.mjs                 # esbuild bundle inlined into dist/apps/bridge-ui/mcp_bridge.html
@@ -793,6 +796,17 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   folder's `index.ts`), or under a plain object when there is no main one (`EditView.Section`, `Icon.Gear`). Add a new
   part to its folder's namespace, and import a feature from its `index.ts` only, never its files (inside a folder,
   files import each other directly; an index importing a sibling feature's index is fine, a cycle is not).
+- Styles: CSS modules (esbuild `local-css` in the page build, Vite in Storybook and vitest). A component imports its
+  own `<Name>.module.css` as `styles` and any other module as `<name>Styles` (`chartStyles`, `drawerStyles`), and joins
+  classes with `cx(styles.row, selected && styles.rowSelected)`. State that picks a colour or a variant is a data
+  attribute styled from the module, never a class built from a string: `data-outcome`, `data-zone`, `data-change`,
+  `data-tone`, `data-state`, `data-coverage`, `data-kind`, `data-speed`, `data-align`. `src/styles.css` keeps only tokens,
+  base element styles and utilities used everywhere (`mono`, `muted`, `count`, `btn`/`btn-sm`/`icon-btn`/`link-btn`,
+  `sdot`/`hue-N`, `kdot`, `tone-*`); add to it only what is truly global. A module styles only its own classes: to
+  restyle another component's part, give that part a class of your own (`cx(chartStyles.evFill, styles.offAlignFill)`)
+  or reach a global with `:global(.mono)`. Order is the cascade: `main.tsx` (and `.storybook/preview.tsx`) imports the
+  root sheet, then the shared `styles/` modules, then each component brings its own, so a component's class wins a tie
+  with a shared one.
 - Storybook (`pnpm storybook`, port 6006; `nx build-storybook bridge-ui` → `dist/storybook/bridge-ui`): every component
   in `src/components/` and `src/features/` has a sibling `<Name>.stories.tsx`, written against the namespace (`component: Measurement.Loudness`) (a `Default` story with every state side
   by side, and a `Playground` with controls); behaviour lives in `<Name>.test.stories.tsx` (title `…/Tests`,

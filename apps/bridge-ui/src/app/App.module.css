@@ -1,0 +1,30 @@
+.shell {
+  max-width: 1100px;
+  height: 100%;
+  margin: 0;
+  padding: 20px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.footer {
+  flex: none;
+  display: flex; justify-content: space-between; gap: 16px;
+  color: var(--faint); font-size: 11.5px;
+}
+.footer :global(.mono) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Stats and timeline: part of the flex column, opt-in in short windows */
+.overview { display: contents; }
+.footerMeta { flex: none; display: inline-flex; align-items: center; }
+.footer a { color: var(--muted); text-decoration: none; }
+.footer a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+
+@media (max-width: 720px) {
+  .shell { padding: 14px 16px 10px; }
+}
+
+@media (max-height: 640px) {
+  .shell { padding: 10px 12px 8px; gap: 10px; }
+  .shell:not(.overviewOn) > .overview, .footer { display: none; }
+}

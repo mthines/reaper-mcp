@@ -4,6 +4,9 @@ import { Legend } from './ChangeLegend.js';
 import { dot } from './PianoRoll.js';
 import { clock, plural } from './format.js';
 import { Measurement, fmt } from '../../measurements/index.js';
+import { cx } from '../../../lib/cx.js';
+import chartStyles from '../../../styles/chart.module.css';
+import styles from './Envelope.module.css';
 
 export const EW = 400;
 export const EH = 110;
@@ -137,7 +140,7 @@ export function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) 
   };
   return (
     <>
-      <div className="measure-readouts">
+      <div className={chartStyles.measureReadouts}>
         <Measurement.Readout
           label={v.unit === "cc" ? "CC" : "Envelope"}
           value={v.unit === "cc" ? v.env.split(" · ")[0].replace(/^CC /, "") : v.env}
@@ -158,18 +161,18 @@ export function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) 
           />
         )}
       </div>
-      <div className="ev-env ev-gutter">
+      <div className={cx(styles.evEnv, styles.evGutter)}>
         {ticks.map(([d, label]) => (
           <span
             key={d}
-            className="ev-y mono"
+            className={cx(styles.evY, 'mono')}
             style={{ top: `${(y(d) / EH) * 100}%` }}
           >
             {label}
           </span>
         ))}
         <div
-          className="ev-plot"
+          className={styles.evPlot}
           onPointerMove={onMove}
           onPointerLeave={() => setHover(null)}
         >
@@ -182,7 +185,7 @@ export function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) 
             {ticks.map(([d]) => (
               <line
                 key={d}
-                className={d === 0 ? "spectrum-base" : "spectrum-grid"}
+                className={d === 0 ? chartStyles.spectrumBase : chartStyles.spectrumGrid}
                 x1={0}
                 x2={EW}
                 y1={y(d)}
@@ -192,20 +195,20 @@ export function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) 
             ))}
             {v.was && (
               <path
-                className="spectrum-previous"
+                className={chartStyles.spectrumPrevious}
                 d={curve(v.was, x, y)}
                 vectorEffect="non-scaling-stroke"
               />
             )}
             {line && (
               <path
-                className="ev-env-area"
+                className={styles.evEnvArea}
                 d={`${line}V${EH}H${v.pts.length === 1 ? 0 : x(v.pts[0][0])}Z`}
               />
             )}
             {line && (
               <path
-                className="ev-env-line"
+                className={styles.evEnvLine}
                 d={line}
                 vectorEffect="non-scaling-stroke"
               />
@@ -218,7 +221,7 @@ export function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) 
           {removed.filter(inView).map((p, i) => (
             <span
               key={`r${i}`}
-              className="ev-dot ev-dot-gone"
+              className={cx(styles.evDot, styles.evDotGone)}
               style={dot(x(p[0]), y(p[1]))}
               title={`Removed: ${when(p[0], 2)} · ${envValue(v.unit, p[1])}`}
             />
@@ -226,13 +229,13 @@ export function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) 
           {v.pts.filter(inView).map((p, i) => (
             <span
               key={i}
-              className={`ev-dot ${added.has(p) ? "ev-dot-new" : ""}`}
+              className={cx(styles.evDot, added.has(p) ? styles.evDotNew : '')}
               style={dot(x(p[0]), y(p[1]))}
             />
           ))}
           {hover && (
             <div
-              className="spectrum-tip mono"
+              className={cx(chartStyles.spectrumTip, 'mono')}
               style={{
                 left: `${Math.min(80, Math.max(20, (x(hover[0]) / EW) * 100))}%`,
               }}
@@ -242,12 +245,12 @@ export function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) 
           )}
         </div>
       </div>
-      <div className="measure-scale-words mono ev-gutter">
+      <div className={cx(chartStyles.measureScaleWords, styles.evGutter, 'mono')}>
         <span>{when(v.from, 1)}</span>
         <span>{when(v.to, 1)}</span>
       </div>
       {v.otherCcs && (
-        <div className="ev-more">
+        <div className={chartStyles.evMore}>
           +{plural(v.otherCcs, "other controller")} in this item (filter with ccNumber)
         </div>
       )}
@@ -256,12 +259,12 @@ export function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) 
           items={[
             ...(v.was
               ? ([
-                  ["lg-line", "Now"],
-                  ["lg-previous", "Before"],
-                  ["lg-new", "Added or moved"],
+                  [chartStyles.lgLine, "Now"],
+                  [chartStyles.lgPrevious, "Before"],
+                  [chartStyles.lgNew, "Added or moved"],
                 ] as Array<[string, string]>)
               : []),
-            ...(v.ais ? ([["lg-ai", "Automation item (one colour per pool)"]] as Array<[string, string]>) : []),
+            ...(v.ais ? ([[chartStyles.lgAi, "Automation item (one colour per pool)"]] as Array<[string, string]>) : []),
           ]}
         />
       )}
@@ -319,7 +322,7 @@ function AutomationItems({
       {gone.map((a, i) => (
         <rect
           key={`g${i}`}
-          className="ev-ai-gone"
+          className={styles.evAiGone}
           x={x(a[0])}
           width={Math.max(0.5, x(a[0] + a[1]) - x(a[0]))}
           y={0}
@@ -336,14 +339,14 @@ function AutomationItems({
         return (
           <g key={i}>
             <rect
-              className="ev-ai-cover"
+              className={styles.evAiCover}
               x={x(a[0])}
               width={Math.max(0.5, x(a[0] + a[1]) - x(a[0]))}
               y={0}
               height={EH}
             />
             <rect
-              className={`ev-ai ${v.ai === i ? "ev-ai-touched" : ""}`}
+              className={cx(styles.evAi, v.ai === i ? styles.evAiTouched : '')}
               x={x(a[0])}
               width={Math.max(0.5, x(a[0] + a[1]) - x(a[0]))}
               y={0}
@@ -353,13 +356,13 @@ function AutomationItems({
             />
             {changed && (
               <path
-                className="spectrum-previous"
+                className={chartStyles.spectrumPrevious}
                 d={poolCurve(before, a, x, y)}
                 vectorEffect="non-scaling-stroke"
               />
             )}
             <path
-              className="ev-ai-line"
+              className={styles.evAiLine}
               d={poolCurve(now, a, x, y)}
               style={{ stroke: color }}
               vectorEffect="non-scaling-stroke"
@@ -387,7 +390,7 @@ function AutomationItemLabels({ v, x }: { v: EnvView; x: (t: number) => number }
         return (
           <span
             key={i}
-            className={`ev-ai-label mono ${v.ai === i ? "ev-ai-label-touched" : ""}`}
+            className={cx(styles.evAiLabel, 'mono', v.ai === i ? styles.evAiLabelTouched : '')}
             style={{ left: `${(left / EW) * 100}%`, width: `${(width / EW) * 100}%` }}
             title={`${name} · pool ${a[2]}${pooled ? ` · ${uses.get(a[2])} pooled items` : ""} · ${clock(a[0], 2)}–${clock(a[0] + a[1], 2)}`}
           >

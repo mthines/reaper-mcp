@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { publishAll, type PublishOutcome } from './lorekit.js';
 import type { KnowledgeFeed, PluginRecord } from './plugins.js';
+import { cx } from '../../lib/cx.js';
+import publishRecordStyles from './PublishRecord.module.css';
+import drawerStyles from '../../styles/drawer.module.css';
 
 type PublishAllState = { step: 'confirm' } | { step: 'busy'; done: number; total: number } | { step: 'done'; outcomes: PublishOutcome[] };
 
@@ -34,19 +37,19 @@ export function PublishAll({
     const ok = state.outcomes.length - failed.length;
     const warnings = state.outcomes.flatMap((o) => ('result' in o && o.result.warning ? [`${o.record.name}: ${o.result.warning}`] : []));
     return (
-      <div className="kn-publish kn-publish-done" role="status">
+      <div className={cx(publishRecordStyles.knPublish, publishRecordStyles.knPublishDone)} role="status">
         <div>
           Published {ok} of {state.outcomes.length} to the built-in layer
           {ok > 0 && state.outcomes.some((o) => 'result' in o && o.result.removedCopy) ? '; your copies are archived (restorable in LoreKit)' : ''}.
         </div>
         {[...failed.map((o) => `${o.record.name}: ${o.error}`), ...warnings].map((line) => (
-          <div key={line} className="kn-publish-warn">
+          <div key={line} className={publishRecordStyles.knPublishWarn}>
             {line}
           </div>
         ))}
-        <div className="kn-publish-actions">
+        <div className={publishRecordStyles.knPublishActions}>
           {failed.length > 0 && (
-            <button className="btn btn-sm kn-publish-btn" onClick={() => run(failed.map((o) => o.record))}>
+            <button className={cx(publishRecordStyles.knPublishBtn, 'btn btn-sm')} onClick={() => run(failed.map((o) => o.record))}>
               Retry {failed.length} failed
             </button>
           )}
@@ -59,18 +62,18 @@ export function PublishAll({
   }
   const busy = state.step === 'busy';
   return (
-    <div className="kn-publish">
-      <p className="drawer-note">
+    <div className={publishRecordStyles.knPublish}>
+      <p className={drawerStyles.drawerNote}>
         Writes your {records.length} record{records.length === 1 ? '' : 's'} to the built-in layer for everyone
         {replacing > 0 ? `, replacing ${replacing} current built-in record${replacing === 1 ? '' : 's'}` : ''}:{' '}
         {records.map((r) => r.name).join(', ')}.
       </p>
-      <label className="kn-publish-check">
+      <label className={publishRecordStyles.knPublishCheck}>
         <input type="checkbox" checked={removeCopy} disabled={busy} onChange={(ev) => setRemoveCopy(ev.target.checked)} />
         Archive my copies afterwards (they would keep overriding the built-in ones)
       </label>
-      <div className="kn-publish-actions">
-        <button className="btn btn-sm kn-publish-btn" onClick={() => run(records)} disabled={busy}>
+      <div className={publishRecordStyles.knPublishActions}>
+        <button className={cx(publishRecordStyles.knPublishBtn, 'btn btn-sm')} onClick={() => run(records)} disabled={busy}>
           {busy ? `Publishing ${state.done + 1} of ${state.total}…` : `Publish ${records.length}`}
         </button>
         <button className="btn btn-sm" onClick={onClose} disabled={busy}>

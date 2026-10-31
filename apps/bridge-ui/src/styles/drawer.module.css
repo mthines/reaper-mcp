@@ -1,0 +1,71 @@
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 10;
+  width: min(400px, 100vw);
+  padding-top: env(safe-area-inset-top, 0px);
+  display: flex; flex-direction: column;
+  background: var(--panel);
+  border-left: 1px solid var(--line-2);
+  box-shadow: -16px 0 40px rgba(0, 0, 0, 0.45);
+  animation: drawer-in 0.18s ease-out;
+}
+
+@media (max-width: 720px) {
+  .drawer:not(.drawerSettings) { width: 100vw !important; }
+}
+.drawerHead {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 14px 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.drawerTitle { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 13.5px; font-weight: 600; }
+.drawerTitle :global(.mono) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawerBody { flex: 1; overflow-y: auto; padding: 16px 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+.resultBadge {
+  align-self: flex-start;
+  padding: 3px 9px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 600;
+}
+.resultBadge[data-outcome='ok'] { color: var(--live); background: rgba(74, 222, 128, 0.09); border: 1px solid rgba(74, 222, 128, 0.25); }
+.resultBadge[data-outcome='error'] { color: var(--bad); background: rgba(248, 113, 113, 0.09); border: 1px solid rgba(248, 113, 113, 0.28); }
+.resultBadge[data-outcome='refused'] { color: var(--warn); background: rgba(245, 184, 75, 0.08); border: 1px solid rgba(245, 184, 75, 0.28); }
+.facts { display: grid; grid-template-columns: 104px 1fr; gap: 9px 12px; margin: 0; font-size: 12.5px; }
+
+/* The drawer's content answers to the drawer's own width (it is resizable), not the window's */
+.drawerBody { container-type: inline-size; }
+
+/* Narrow: a slimmer label column; the ISO timestamp (also the When row's tooltip) and the session's client
+   (in the session's tooltip) give way so the rest stays on one line */
+@container (max-width: 340px) {
+  .facts { grid-template-columns: 76px minmax(0, 1fr); gap: 9px 10px; }
+  .facts .factWide { display: none; }
+}
+.facts dt { color: var(--faint); }
+.facts dd { min-width: 0; margin: 0; color: var(--text); word-break: break-word; user-select: text; }
+.facts :global(.mono) { font-size: 12px; }
+.codeBlock { border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
+.codeHead {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 10px;
+  background: var(--panel-2);
+  font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
+}
+.codeBlock pre {
+  margin: 0; padding: 10px 12px; max-height: 260px; overflow: auto;
+  font-family: var(--mono); font-size: 12px; line-height: 1.5;
+  color: var(--text); white-space: pre-wrap; word-break: break-word; user-select: text;
+}
+.drawerNote a { color: var(--accent); }
+
+/* Settings */
+.drawerSettings { z-index: 11; width: min(380px, 100vw); }
+.drawerHint { margin: auto 0 0; color: var(--faint); font-size: 11px; text-align: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer { animation: none; }
+}
+
+/* Body parts keep their height; one marked .drawerGrow takes what is left and scrolls inside */
+.drawerBody > :not(.drawerGrow) { flex-shrink: 0; }
+.drawerNote { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+
+@keyframes drawer-in { from { transform: translateX(24px); opacity: 0; } }

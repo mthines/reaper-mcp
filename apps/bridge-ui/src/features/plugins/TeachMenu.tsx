@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PluginRow } from './plugins.js';
 import { Icon } from '../../components/index.js';
+import { cx } from '../../lib/cx.js';
+import styles from './TeachMenu.module.css';
 
 export function toastText(copied: string): string {
   const mine = copied.match(/^contribute:(\d+):(filled|paste)$/);
@@ -48,17 +50,17 @@ export function TeachMenu({ options, onCopy }: { options: TeachOption[]; onCopy:
   if (available.length === 0) return null;
   const primary = available[0];
   return (
-    <div className="split" ref={ref}>
-      <button className="btn btn-sm kn-teach-all split-main" onClick={() => onCopy(primary.key, primary.rows)} title="Copy a /learn-plugin prompt for these plugins">
+    <div className={styles.split} ref={ref}>
+      <button className={cx(styles.knTeachAll, styles.splitMain, 'btn btn-sm')} onClick={() => onCopy(primary.key, primary.rows)} title="Copy a /learn-plugin prompt for these plugins">
         <Icon.Spark /> Teach {primary.rows.length} {primary.label}
       </button>
       {available.length > 1 && (
-        <button className="btn btn-sm kn-teach-all split-caret" aria-haspopup="menu" aria-expanded={menu} aria-label="More teach options" onClick={() => setMenu((m) => !m)}>
-          <Icon.Chevron className={`split-chevron ${menu ? 'kn-chevron-open' : ''}`} />
+        <button className={cx(styles.knTeachAll, styles.splitCaret, 'btn btn-sm')} aria-haspopup="menu" aria-expanded={menu} aria-label="More teach options" onClick={() => setMenu((m) => !m)}>
+          <Icon.Chevron className={cx(styles.splitChevron, menu ? styles.knChevronOpen : '')} />
         </button>
       )}
       {menu && (
-        <div className="split-menu" role="menu">
+        <div className={styles.splitMenu} role="menu">
           {available.map((o) => (
             <button
               key={o.key}

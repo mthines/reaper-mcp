@@ -5,6 +5,8 @@ import { load, save } from '../../lib/storage.js';
 import { commandsPerMinute, latencyStats, type Series } from '../../lib/log.js';
 import { formatDuration, formatMs } from '../../lib/format.js';
 import type { CommandEntry } from '../../lib/commands.js';
+import { cx } from '../../lib/cx.js';
+import styles from './Stats.module.css';
 
 const STATS_OPEN_KEY = 'mcp-bridge-stats-open';
 
@@ -18,10 +20,10 @@ export function Stats({ status, log, now, series }: { status: BridgeStatus; log:
     setOpen(!open);
   };
   return (
-    <section className={`stats ${open ? '' : 'stats-folded'}`}>
+    <section className={cx(styles.stats, open ? '' : styles.statsFolded)}>
       <button
         type="button"
-        className="stats-toggle"
+        className={styles.statsToggle}
         aria-expanded={open}
         aria-label={open ? 'Show fewer stats' : 'Show stat details'}
         title={open ? 'Show fewer stats' : 'Show stat details'}
@@ -80,11 +82,11 @@ function Stat({
   spark?: ReactNode;
 }) {
   return (
-    <div className="stat">
-      <span className="stat-label">{label}</span>
-      <span className={`stat-value ${tone ? `tone-${tone}` : ''}`}>{value}</span>
-      {hint && <span className="stat-hint">{hint}</span>}
-      {spark && <div className="stat-spark">{spark}</div>}
+    <div className={styles.stat}>
+      <span className={styles.statLabel}>{label}</span>
+      <span className={cx(styles.statValue, tone && `tone-${tone}`)}>{value}</span>
+      {hint && <span className={styles.statHint}>{hint}</span>}
+      {spark && <div className={styles.statSpark}>{spark}</div>}
     </div>
   );
 }

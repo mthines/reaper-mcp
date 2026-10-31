@@ -1,0 +1,40 @@
+.stats {
+  flex: none;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; min-width: 0; }
+.stat + .stat { border-left: 1px solid var(--line); }
+.statLabel { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.statValue { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.statHint { font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.statSpark { margin-top: 8px; height: 24px; }
+.statsToggle { display: none; }
+
+@media (max-width: 720px) {
+  /* Open: two columns; the toggle button is the first child, so count stats by type (div) */
+  .stats:not(.statsFolded) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats:not(.statsFolded) .stat + .stat { border-left: 0; }
+  .stats:not(.statsFolded) .stat { border-top: 1px solid var(--line); }
+  .stats:not(.statsFolded) .stat:nth-of-type(-n + 2) { border-top: 0; }
+  .stats:not(.statsFolded) .stat:nth-of-type(even) { border-left: 1px solid var(--line); }
+  .stats:not(.statsFolded) .stat:last-of-type:nth-of-type(odd) { grid-column: span 2; }
+  .statsToggle {
+    position: absolute; top: 6px; right: 6px; z-index: 1;
+    display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+    border: 0; border-radius: 6px; background: transparent; color: var(--faint); cursor: pointer;
+  }
+  .statsToggle:hover { color: var(--text); background: var(--line); }
+  .statsToggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* Folded: one row of label + value, about a fifth of the open height */
+  .statsFolded { grid-template-columns: repeat(5, minmax(0, 1fr)); padding-right: 30px; }
+  .statsFolded .stat { padding: 8px 10px; }
+  .statsFolded .statLabel { font-size: 10px; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .statsFolded .statValue { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .statsFolded .statHint, .statsFolded .statSpark { display: none; }
+  .statsFolded .statsToggle { top: 50%; transform: translateY(-50%); }
+}

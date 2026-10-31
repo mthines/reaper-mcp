@@ -1,5 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { DESCRIPTION_MAX, nameProblem, replacedBy, type SnapshotInfo } from './snapshots.js';
+import { cx } from '../../lib/cx.js';
+import saveFormStyles from './SaveForm.module.css';
+import styles from './EditForm.module.css';
 
 /** Rename a snapshot and change its description, in place of its row */
 export function EditForm({
@@ -29,7 +32,7 @@ export function EditForm({
 
   return (
     <form
-      className="snap-save snap-edit"
+      className={cx(saveFormStyles.snapSave, styles.snapEdit)}
       onSubmit={submit}
       onKeyDown={(ev) => {
         if (ev.key === 'Escape') onCancel();
@@ -37,7 +40,7 @@ export function EditForm({
       aria-label={`Edit ${snapshot.name}`}
     >
       <input
-        className="snap-input"
+        className={saveFormStyles.snapInput}
         value={name}
         onChange={(ev) => setName(ev.target.value)}
         aria-label="New name"
@@ -46,7 +49,7 @@ export function EditForm({
         autoFocus
       />
       <input
-        className="snap-input snap-input-desc"
+        className={cx(saveFormStyles.snapInput, saveFormStyles.snapInputDesc)}
         value={description}
         onChange={(ev) => setDescription(ev.target.value)}
         placeholder="Description (optional)"
@@ -60,7 +63,7 @@ export function EditForm({
         Cancel
       </button>
       {(problem || taken) && (
-        <span className="snap-hint snap-hint-bad" role="status">
+        <span className={cx(saveFormStyles.snapHint, saveFormStyles.snapHintBad)} role="status">
           {problem ?? `“${taken?.name}” already uses that name.`}
         </span>
       )}

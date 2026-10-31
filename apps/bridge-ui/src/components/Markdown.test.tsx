@@ -2,17 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Markdown, safeHref } from './Markdown.js';
 
-const html = (md: string) => renderToStaticMarkup(<Markdown source={md} />);
+// The rendered record, inside its wrapper
+const html = (md: string) => renderToStaticMarkup(<Markdown source={md} />).replace(/^<div[^>]*>|<\/div>$/g, '');
 
 describe('Markdown', () => {
   it('renders the formatting records use', () => {
     expect(html('## What it does\n\nA **3-band** *saturator* with `Heat`.')).toBe(
-      '<div class="md"><h4>What it does</h4><p>A <strong>3-band</strong> <em>saturator</em> with <code>Heat</code>.</p></div>',
+      '<h4>What it does</h4><p>A <strong>3-band</strong> <em>saturator</em> with <code>Heat</code>.</p>',
     );
-    expect(html('- one\n  - nested\n- two')).toBe('<div class="md"><ul><li>one<ul><li>nested</li></ul></li><li>two</li></ul></div>');
+    expect(html('- one\n  - nested\n- two')).toBe('<ul><li>one<ul><li>nested</li></ul></li><li>two</li></ul>');
     expect(html('| P | Range |\n|---|---|\n| Drive | 0–10 |')).toContain('<thead><tr><th>P</th><th>Range</th></tr></thead><tbody><tr><td>Drive</td><td>0–10</td></tr></tbody>');
     expect(html('| X | Y |\n|---|---|\n| low\\|high | 1 |')).toContain('<td>low|high</td><td>1</td>');
-    expect(html('```\na **b**\n```')).toBe('<div class="md"><pre><code>a **b**</code></pre></div>');
+    expect(html('```\na **b**\n```')).toBe('<pre><code>a **b**</code></pre>');
   });
 
   it('shows raw HTML as text, never as markup', () => {

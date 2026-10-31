@@ -4,6 +4,7 @@ import { EXAMPLE_NOW } from '../../demo/examples.js';
 import { exampleFeed } from '../../demo/feed.js';
 import type { Session } from '../../lib/sessions.js';
 import { Log } from './index.js';
+import logStyles from './Log.module.css';
 
 const { log, sessions } = exampleFeed();
 const today = new Date(EXAMPLE_NOW).setHours(0, 0, 0, 0);
@@ -13,7 +14,7 @@ const meta = {
   title: 'Features/Log/LogRows',
   component: Log.Rows,
   args: { rows: log, today, selectedN: log[2]?.n, sessionOf, onSelect: fn() },
-  decorators: [(Story) => <div className="log" style={{ height: 420, display: 'flex', flexDirection: 'column' }}><Story /></div>],
+  decorators: [(Story) => <div className={logStyles.log} style={{ height: 420, display: 'flex', flexDirection: 'column' }}><Story /></div>],
 } satisfies Meta<typeof Log.Rows>;
 export default meta;
 type Story = StoryObj<typeof meta>;

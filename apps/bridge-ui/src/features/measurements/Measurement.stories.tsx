@@ -20,7 +20,7 @@ export const Default: Story = {
     <div className="story-stack">
       {MEASUREMENT_EXAMPLES.map((x) => (
         <StoryCard key={x.title} title={x.title} note={x.note}>
-          <code className="mono-note">{x.entry.c}</code>
+          <code>{x.entry.c}</code>
           <Measurement {...args} entry={x.entry} history={x.history} />
         </StoryCard>
       ))}

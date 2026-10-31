@@ -33,7 +33,7 @@ export const FiltersToTheUnknownPlugins: Story = {
     await userEvent.click(unknown);
     await expect(unknown).toHaveAttribute('aria-selected', 'true');
     // Every row left is one to teach, as many as the tab counts
-    const count = Number(unknown.querySelector('.count')?.textContent);
+    const count = Number(unknown.textContent?.match(/\d+/)?.[0]);
     await expect(count).toBeGreaterThan(0);
     await expect(canvas.getAllByRole('button', { name: /^Teach$/ })).toHaveLength(count);
   },

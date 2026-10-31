@@ -2,6 +2,9 @@ import { listDiff, routeIds, type EditView, type Route, type SlotChange } from '
 import { ChangeLegend, ChangeMark, Legend } from './ChangeLegend.js';
 import { CHANGE_WORD, panText, pct } from './format.js';
 import { Measurement, fmt } from '../../measurements/index.js';
+import { cx } from '../../../lib/cx.js';
+import chartStyles from '../../../styles/chart.module.css';
+import mixerStyles from './Mixer.module.css';
 
 const ROUTE_KIND: Record<Route[0], [string, string]> = {
   s: ["→", "Send to"],
@@ -23,15 +26,15 @@ export function Routing({ v }: { v: Extract<EditView, { kind: "routing" }> }) {
   const count = (k: Route[0]) => v.routes.filter((r) => r[0] === k).length;
   return (
     <>
-      <div className="measure-readouts">
+      <div className={chartStyles.measureReadouts}>
         <Measurement.Readout label="Track" value={v.t} />
         <Measurement.Readout label="Sends" value={String(count("s") + count("h"))} />
         <Measurement.Readout label="Receives" value={String(count("r"))} />
       </div>
       {v.routes.length === 0 && diff.removed.length === 0 ? (
-        <div className="ev-more">No sends, receives or hardware outputs</div>
+        <div className={chartStyles.evMore}>No sends, receives or hardware outputs</div>
       ) : (
-        <div className="ev-mix">
+        <div className={mixerStyles.evMix}>
           {v.routes.map((r, i) => {
             const c = diff.change.get(i);
             const before = c === "changed" ? v.was?.[wasIds.indexOf(ids[i])] : undefined;
@@ -46,8 +49,8 @@ export function Routing({ v }: { v: Extract<EditView, { kind: "routing" }> }) {
       {v.was && diff.change.size + diff.removed.length > 0 && (
         <Legend
           items={[
-            ["lg-was", "Before"],
-            ["lg-tick", "After"],
+            [chartStyles.lgWas, "Before"],
+            [chartStyles.lgTick, "After"],
           ]}
         />
       )}
@@ -61,33 +64,34 @@ function RouteRow({ r, c, was, gone }: { r: Route; c?: SlotChange; was?: Route; 
   const hot = db > 0;
   return (
     <div
-      className={`ev-trk ev-route ${flags.includes("M") ? "ev-trk-muted" : ""} ${gone ? "ev-slot-gone" : ""} ${c ? `ev-slot-${c}` : ""}`}
+      className={cx(mixerStyles.evTrk, mixerStyles.evRoute, flags.includes("M") && mixerStyles.evTrkMuted)}
+      data-change={gone ? "gone" : c}
       title={`${word} ${other} · ${fmt(db)} dB · pan ${panText(pan)}${flags.includes("M") ? " · muted" : ""}${was ? ` · was ${fmt(was[2])} dB, pan ${panText(was[3])}` : ""}${gone ? " · removed" : c ? ` · ${CHANGE_WORD[c]}` : ""}`}
     >
-      <span className="ev-route-kind" aria-label={word}>
+      <span className={mixerStyles.evRouteKind} aria-label={word}>
         {glyph}
       </span>
-      <span className="ev-tn">
-        <span className="ev-tn-text">{other}</span>
-        {gone ? <span className="ev-mark ev-mark-gone">removed</span> : <ChangeMark c={c} />}
+      <span className={mixerStyles.evTn}>
+        <span className={mixerStyles.evTnText}>{other}</span>
+        {gone ? <span className={mixerStyles.evMark} data-change="gone">removed</span> : <ChangeMark c={c} />}
       </span>
-      <span className="ev-bar ev-fader" role="img" aria-label={`${fmt(db)} dB`}>
-        <span className="ev-zero" style={{ left: `${pct(0, -60, 6)}%` }} />
+      <span className={cx(chartStyles.evBar, mixerStyles.evFader)} role="img" aria-label={`${fmt(db)} dB`}>
+        <span className={chartStyles.evZero} style={{ left: `${pct(0, -60, 6)}%` }} />
         <span
-          className={`ev-fill ${hot ? "ev-fill-hot" : ""}`}
+          className={cx(chartStyles.evFill, hot ? mixerStyles.evFillHot : '')}
           style={{ left: 0, width: `${pct(db, -60, 6)}%` }}
         />
         {was && was[2] !== db && (
-          <span className="ev-was" style={{ left: `${pct(was[2], -60, 6)}%` }} />
+          <span className={chartStyles.evWas} style={{ left: `${pct(was[2], -60, 6)}%` }} />
         )}
       </span>
-      <span className={`ev-tv mono zone-${hot ? "hot" : "ok"}`}>{fmt(db)}</span>
-      <span className="ev-pan" role="img" aria-label={`pan ${panText(pan)}`}>
-        <span className="ev-pan-c" />
-        <span className="ev-pan-d" style={{ left: `${pct(pan, -1, 1)}%` }} />
+      <span className={cx(mixerStyles.evTv, "mono")} data-zone={hot ? "hot" : "ok"}>{fmt(db)}</span>
+      <span className={mixerStyles.evPan} role="img" aria-label={`pan ${panText(pan)}`}>
+        <span className={mixerStyles.evPanC} />
+        <span className={mixerStyles.evPanD} style={{ left: `${pct(pan, -1, 1)}%` }} />
       </span>
-      <span className="ev-chips">
-        <span className={`ev-chip ${flags.includes("M") ? "ev-chip-m" : ""}`}>M</span>
+      <span className={mixerStyles.evChips}>
+        <span className={mixerStyles.evChip} data-chip={flags.includes("M") ? "m" : undefined}>M</span>
       </span>
     </div>
   );

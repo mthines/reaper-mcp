@@ -5,6 +5,10 @@ import { EW } from './Envelope.js';
 import { clock, hueOf, pct } from './format.js';
 import { useWidth } from '../../../lib/useWidth.js';
 import { Measurement } from '../../measurements/index.js';
+import { cx } from '../../../lib/cx.js';
+import chartStyles from '../../../styles/chart.module.css';
+import envelopeStyles from './Envelope.module.css';
+import styles from './Timeline.module.css';
 
 export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
   const len = Math.max(1, v.len);
@@ -34,7 +38,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
   const time = v.sel !== undefined || v.cur !== undefined || v.wasSel !== undefined;
   // On an item or selection view the markers are only context: their names show on hover
   const context = time || v.lanes !== undefined;
-  const quiet = (i: number) => (!context && labelled.has(i) ? "" : "ev-quiet");
+  const quiet = (i: number) => !(!context && labelled.has(i));
   // A region too narrow for a letter or two shows its colour only
   const roomy = (r: Region) =>
     !laneW || ((r[1] - r[0]) / len) * laneW >= 28;
@@ -46,7 +50,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
   return (
     <>
       {time ? (
-        <div className="measure-readouts">
+        <div className={chartStyles.measureReadouts}>
           <Measurement.Readout label="Selection" value={v.sel ? clock(v.sel[0], 1) : "none"} />
           <Measurement.Readout label="End" value={v.sel ? clock(v.sel[1], 1) : "–"} />
           <Measurement.Readout
@@ -57,7 +61,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
           <Measurement.Readout label="Cursor" value={clock(v.cur ?? 0, 1)} />
         </div>
       ) : v.lanes ? (
-        <div className="measure-readouts">
+        <div className={chartStyles.measureReadouts}>
           <Measurement.Readout
             label="Items"
             value={String(lanes.reduce((n, l) => n + l.items.length, 0))}
@@ -73,7 +77,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
           <Measurement.Readout label={lanes.length > 1 ? "Tracks" : "Track"} value={lanes.map((l) => l.t).join(", ")} />
         </div>
       ) : (
-      <div className="measure-readouts">
+      <div className={chartStyles.measureReadouts}>
         <Measurement.Readout
           label="Tempo"
           value={
@@ -96,33 +100,33 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
         )}
       </div>
       )}
-      <div className="ev-timeline" ref={laneRef}>
+      <div className={styles.evTimeline} ref={laneRef}>
         {v.wasSel && (
           <span
-            className="ev-sel ev-sel-was"
+            className={cx(styles.evSel, styles.evSelWas)}
             style={{ left: at(v.wasSel[0]), width: `${pct(v.wasSel[1], 0, len) - pct(v.wasSel[0], 0, len)}%` }}
             title={`Selection before: ${clock(v.wasSel[0], 1)}–${clock(v.wasSel[1], 1)}`}
           />
         )}
         {v.sel && (
           <span
-            className="ev-sel"
+            className={styles.evSel}
             style={{ left: at(v.sel[0]), width: `${pct(v.sel[1], 0, len) - pct(v.sel[0], 0, len)}%` }}
             title={`Selection ${clock(v.sel[0], 1)}–${clock(v.sel[1], 1)}`}
           />
         )}
         {v.wasCur !== undefined && v.wasCur !== v.cur && (
-          <span className="ev-cur ev-cur-was" style={{ left: at(v.wasCur) }} title={`Cursor before: ${clock(v.wasCur, 1)}`} />
+          <span className={cx(styles.evCur, styles.evCurWas)} style={{ left: at(v.wasCur) }} title={`Cursor before: ${clock(v.wasCur, 1)}`} />
         )}
         {v.cur !== undefined && (
-          <span className="ev-cur" style={{ left: at(v.cur) }} title={`Cursor ${clock(v.cur, 1)}`} />
+          <span className={styles.evCur} style={{ left: at(v.cur) }} title={`Cursor ${clock(v.cur, 1)}`} />
         )}
         {(v.markers.length > 0 || markers.removed.length > 0) && (
-          <div className={`ev-lane ev-lane-markers ${context ? "ev-lane-context" : ""}`}>
+          <div className={cx(styles.evLane, styles.evLaneMarkers, context ? styles.evLaneContext : '')}>
             {markers.removed.map((m, i) => (
               <span
                 key={`r${m[3]}${m[0]}`}
-                className={`ev-marker ev-gone ${quiet(i)}`}
+                className={cx(styles.evMarker, styles.evGone, quiet(i) && styles.evQuiet)}
                 style={{ left: at(m[0]) }}
                 title={`Removed: ${m[1] || `Marker ${m[3]}`} at ${clock(m[0], 1)}`}
               >
@@ -133,7 +137,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
             {v.markers.map((m, i) => (
               <span
                 key={`${m[3]}${m[0]}`}
-                className={`ev-marker ${markers.added.has(m) ? "ev-new" : ""} ${quiet(markers.removed.length + i)}`}
+                className={cx(styles.evMarker, markers.added.has(m) && styles.evNew, quiet(markers.removed.length + i) && styles.evQuiet)}
                 style={
                   {
                     left: at(m[0]),
@@ -148,11 +152,11 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
             ))}
           </div>
         )}
-        <div className="ev-lane ev-lane-regions">
+        <div className={cx(styles.evLane, styles.evLaneRegions)}>
           {regions.removed.map((r) => (
             <span
               key={`r${r[4]}${r[0]}`}
-              className="ev-region ev-gone"
+              className={cx(styles.evRegion, styles.evGone)}
               style={{
                 left: at(r[0]),
                 width: `calc(${pct(r[1], 0, len) - pct(r[0], 0, len)}% - 1px)`,
@@ -163,7 +167,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
           {v.regions.map((r, i) => (
             <span
               key={`${r[4]}${r[0]}`}
-              className={`ev-region ${regions.added.has(r) ? "ev-new" : ""}`}
+              className={cx(styles.evRegion, regions.added.has(r) ? styles.evNew : '')}
               style={
                 {
                   left: at(r[0]),
@@ -196,7 +200,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
           />
         )}
       </div>
-      <div className="measure-scale-words mono">
+      <div className={cx(chartStyles.measureScaleWords, 'mono')}>
         <span>0:00</span>
         <span>{clock(len / 2)}</span>
         <span>{clock(len)}</span>
@@ -204,24 +208,24 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
       {(itemsAdded > 0 || itemsRemoved > 0) && (
         <Legend
           items={[
-            ["lg-new-mark", "Added or changed"],
-            ["lg-gone-mark", "Before"],
+            [chartStyles.lgNewMark, "Added or changed"],
+            [chartStyles.lgGoneMark, "Before"],
           ]}
         />
       )}
       {time && (v.wasSel !== undefined || v.wasCur !== undefined) && (
         <Legend
           items={[
-            ["lg-sel", "Now"],
-            ["lg-gone-mark", "Before"],
+            [chartStyles.lgSel, "Now"],
+            [chartStyles.lgGoneMark, "Before"],
           ]}
         />
       )}
       {v.was && (changed > 0 || removed > 0) && (
         <Legend
           items={[
-            ["lg-new-mark", "Added or changed"],
-            ["lg-gone-mark", "Removed"],
+            [chartStyles.lgNewMark, "Added or changed"],
+            [chartStyles.lgGoneMark, "Removed"],
           ]}
         />
       )}
@@ -263,8 +267,8 @@ function TempoLane({
     return `${d}H${EW}`;
   };
   return (
-    <div className="ev-tempo">
-      <span className="ev-tempo-label mono">tempo</span>
+    <div className={styles.evTempo}>
+      <span className={cx(styles.evTempoLabel, 'mono')}>tempo</span>
       <svg
         viewBox={`0 0 ${EW} ${TH}`}
         preserveAspectRatio="none"
@@ -273,13 +277,13 @@ function TempoLane({
       >
         {removed.length > 0 && (
           <path
-            className="spectrum-previous"
+            className={chartStyles.spectrumPrevious}
             d={path([...tempo.filter((t) => !added.has(t)), ...removed])}
             vectorEffect="non-scaling-stroke"
           />
         )}
         <path
-          className="ev-env-line"
+          className={envelopeStyles.evEnvLine}
           d={path(tempo)}
           vectorEffect="non-scaling-stroke"
         />
@@ -287,7 +291,7 @@ function TempoLane({
       {tempo.map((t, i) => (
         <span
           key={i}
-          className={`ev-dot ${added.has(t) ? "ev-dot-new" : ""}`}
+          className={cx(envelopeStyles.evDot, added.has(t) ? envelopeStyles.evDotNew : '')}
           style={{
             left: `${(x(t[0]) / EW) * 100}%`,
             top: `${(y(t[1]) / TH) * 100}%`,
@@ -318,13 +322,13 @@ function ItemsLane({
     `calc(${pct(it[0] + it[1], 0, len) - pct(it[0], 0, len)}% - 1px)`;
   const { added, removed } = timelineDiff<Item>(items, was);
   return (
-    <div className="ev-lane-wrap">
-      {name && <div className="ev-lane-name">{name}</div>}
-      <div className="ev-lane ev-lane-items">
+    <div className={styles.evLaneWrap}>
+      {name && <div className={styles.evLaneName}>{name}</div>}
+      <div className={cx(styles.evLane, styles.evLaneItems)}>
         {removed.map((it, i) => (
           <span
             key={`gone${i}`}
-            className="ev-item ev-gone"
+            className={cx(styles.evItem, styles.evGone)}
             style={{ left: at(it[0]), width: width(it) }}
             title={`Before · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}`}
           />
@@ -332,20 +336,20 @@ function ItemsLane({
         {items.map((it, i) => (
           <span
             key={i}
-            className={`ev-item ${it[4] ? "ev-item-midi" : ""} ${it[5] ? "ev-item-muted" : ""} ${added.has(it) ? "ev-new" : ""}`}
+            className={cx(styles.evItem, it[4] ? styles.evItemMidi : '', it[5] ? styles.evItemMuted : '', added.has(it) ? styles.evNew : '')}
             style={{ left: at(it[0]), width: width(it) }}
             title={`${it[4] ? "MIDI" : "Audio"} item · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}${it[5] ? " · muted" : ""}`}
           >
             {it[2] > 0 && (
-              <i className="ev-fade-in" style={{ width: `${(it[2] / it[1]) * 100}%` }} />
+              <i className={styles.evFadeIn} style={{ width: `${(it[2] / it[1]) * 100}%` }} />
             )}
             {it[3] > 0 && (
-              <i className="ev-fade-out" style={{ width: `${(it[3] / it[1]) * 100}%` }} />
+              <i className={styles.evFadeOut} style={{ width: `${(it[3] / it[1]) * 100}%` }} />
             )}
           </span>
         ))}
         {items.length === 0 && removed.length === 0 && (
-          <span className="ev-more ev-lane-empty">No items</span>
+          <span className={cx(chartStyles.evMore, styles.evLaneEmpty)}>No items</span>
         )}
       </div>
     </div>

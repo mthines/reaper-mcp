@@ -4,6 +4,10 @@ import { Legend } from './ChangeLegend.js';
 import { EH, EW } from './Envelope.js';
 import { noteName, pct, plural } from './format.js';
 import { Measurement } from '../../measurements/index.js';
+import { cx } from '../../../lib/cx.js';
+import chartStyles from '../../../styles/chart.module.css';
+import envelopeStyles from './Envelope.module.css';
+import styles from './PianoRoll.module.css';
 
 export const dot = (x: number, y: number): CSSProperties => ({
   left: `${(x / EW) * 100}%`,
@@ -44,7 +48,7 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
     Array.from({ length: rows }, (_, i) => hi - i).filter((q) => q % 12 === p);
   return (
     <>
-      <div className="measure-readouts">
+      <div className={chartStyles.measureReadouts}>
         <Measurement.Readout label="Notes" value={String(v.total)} />
         <Measurement.Readout
           label="Length"
@@ -64,18 +68,18 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
           />
         )}
       </div>
-      <div className="ev-roll ev-gutter">
+      <div className={cx(styles.evRoll, envelopeStyles.evGutter)}>
         {cs(0).map((p) => (
           <span
             key={p}
-            className="ev-y mono"
+            className={cx(envelopeStyles.evY, 'mono')}
             style={{ top: `${((y(p) + RH / rows / 2) / RH) * 100}%` }}
           >
             {noteName(p)}
           </span>
         ))}
         <div
-          className="ev-plot"
+          className={envelopeStyles.evPlot}
           onPointerMove={onMove}
           onPointerLeave={() => setHover(null)}
         >
@@ -90,7 +94,7 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
               .map((p) => (
                 <rect
                   key={p}
-                  className="ev-roll-black"
+                  className={styles.evRollBlack}
                   x={0}
                   y={y(p)}
                   width={EW}
@@ -100,9 +104,7 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
             {Array.from({ length: Math.floor(beats) + 1 }, (_, b) => (
               <line
                 key={b}
-                className={
-                  b % barBeats === 0 ? "spectrum-base" : "spectrum-grid"
-                }
+                className={b % barBeats === 0 ? chartStyles.spectrumBase : chartStyles.spectrumGrid}
                 x1={x(b)}
                 x2={x(b)}
                 y1={0}
@@ -113,7 +115,7 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
             {gone.map((n, i) => (
               <rect
                 key={`g${i}`}
-                className="ev-note-gone"
+                className={styles.evNoteGone}
                 x={x(n[1])}
                 y={y(n[0]) + 0.5}
                 width={Math.max(1, x(n[1] + n[2]) - x(n[1]) - 0.5)}
@@ -124,7 +126,7 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
             {v.notes.map((n, i) => (
               <rect
                 key={i}
-                className={n[4] ? "ev-note-new" : "ev-note"}
+                className={n[4] ? styles.evNoteNew : styles.evNote}
                 x={x(n[1])}
                 y={y(n[0]) + 0.5}
                 width={Math.max(1, x(n[1] + n[2]) - x(n[1]) - 0.5)}
@@ -135,7 +137,7 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
           </svg>
           {hover && (
             <div
-              className="spectrum-tip mono"
+              className={cx(chartStyles.spectrumTip, 'mono')}
               style={{
                 left: `${Math.min(80, Math.max(20, (x(hover[1]) / EW) * 100))}%`,
               }}
@@ -146,16 +148,16 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
           )}
         </div>
       </div>
-      <div className="ev-gutter">
+      <div className={envelopeStyles.evGutter}>
         <svg
-          className="ev-vel"
+          className={styles.evVel}
           viewBox={`0 0 ${EW} ${LANE}`}
           preserveAspectRatio="none"
           role="img"
           aria-label="Velocities"
         >
           <line
-            className="spectrum-base"
+            className={chartStyles.spectrumBase}
             x1={0}
             x2={EW}
             y1={LANE}
@@ -165,7 +167,7 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
           {v.notes.map((n, i) => (
             <line
               key={i}
-              className={n[4] ? "ev-vel-new" : "ev-vel-old"}
+              className={n[4] ? styles.evVelNew : styles.evVelOld}
               x1={x(n[1]) + 1}
               x2={x(n[1]) + 1}
               y1={LANE - (n[3] / 127) * LANE}
@@ -175,7 +177,7 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
           ))}
         </svg>
       </div>
-      <div className="ev-bars mono ev-gutter">
+      <div className={cx(styles.evBars, envelopeStyles.evGutter, 'mono')}>
         {Array.from({ length: Math.ceil(beats / barBeats) }, (_, i) => (
           <span key={i} style={{ left: `${pct(i * barBeats, 0, beats)}%` }}>
             {i + 1}
@@ -183,16 +185,16 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
         ))}
       </div>
       {v.more > 0 && (
-        <div className="ev-more">
+        <div className={chartStyles.evMore}>
           +{v.more} more {v.more === 1 ? "note" : "notes"} not drawn
         </div>
       )}
       {v.gone && (
         <Legend
           items={[
-            ["lg-note-new", "Added or changed"],
-            ["lg-note", "Unchanged"],
-            ["lg-note-gone", "Removed"],
+            [chartStyles.lgNoteNew, "Added or changed"],
+            [chartStyles.lgNote, "Unchanged"],
+            [chartStyles.lgNoteGone, "Removed"],
           ]}
         />
       )}

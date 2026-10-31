@@ -9,6 +9,11 @@ import { TeachMenu, toastText } from './TeachMenu.js';
 import { learnAllPrompt, learnPrompt } from './teach.js';
 import { useCopy } from '../../lib/useCopy.js';
 import { Icon } from '../../components/index.js';
+import { cx } from '../../lib/cx.js';
+import listStyles from '../../styles/list.module.css';
+import publishRecordStyles from './PublishRecord.module.css';
+import teachMenuStyles from './TeachMenu.module.css';
+import styles from './PluginsView.module.css';
 
 type Filter = 'all' | Coverage;
 const isFilter = (v: unknown): v is Filter => v === 'all' || v === 'learned' || v === 'built-in' || v === 'unknown';
@@ -79,8 +84,8 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
 
   if (!feed) {
     return (
-      <div className="rows">
-        <div className="empty">Plugin knowledge isn’t available from this bridge yet.</div>
+      <div className={listStyles.rows}>
+        <div className={listStyles.empty}>Plugin knowledge isn’t available from this bridge yet.</div>
       </div>
     );
   }
@@ -140,34 +145,34 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
   };
 
   const renderRow = (r: PluginRow) => (
-    <div key={r.fx.name} data-fx={r.fx.name} className={`kn-row ${open?.fx.name === r.fx.name ? 'kn-row-open' : ''}`}>
-      <button className="kn-row-main" onClick={() => openPlugin(r)}>
-        <i className={`kdot cov-${r.coverage}`} />
-        <span className="kn-name">
-          <span className="kn-title">{r.label}</span>
-          {!grouped && <span className="kn-vendor">{r.creator}</span>}
+    <div key={r.fx.name} data-fx={r.fx.name} className={cx(styles.knRow, open?.fx.name === r.fx.name ? styles.knRowOpen : '')}>
+      <button className={styles.knRowMain} onClick={() => openPlugin(r)}>
+        <i className="kdot" data-coverage={r.coverage} />
+        <span className={styles.knName}>
+          <span className={styles.knTitle}>{r.label}</span>
+          {!grouped && <span className={styles.knVendor}>{r.creator}</span>}
           {r.used > 0 && (
-            <span className="kn-used" title={`${r.used} instance${r.used === 1 ? '' : 's'} in the open project`}>
+            <span className={styles.knUsed} title={`${r.used} instance${r.used === 1 ? '' : 's'} in the open project`}>
               in project{r.used > 1 ? ` ×${r.used}` : ''}
             </span>
           )}
         </span>
-        {r.record ? <span className="tag">{r.record.category}</span> : <span />}
+        {r.record ? <span className={listStyles.tag}>{r.record.category}</span> : <span />}
         {r.record?.preference !== undefined ? (
-          <span className="kn-pref" title={`Preference ${r.record.preference}/100 within ${r.record.category}`}>
+          <span className={styles.knPref} title={`Preference ${r.record.preference}/100 within ${r.record.category}`}>
             <span style={{ width: `${r.record.preference}%` }} />
           </span>
         ) : (
           <span />
         )}
         {r.coverage !== 'unknown' && (
-          <span className={`kn-state cov-text-${r.coverage}`}>
+          <span className={styles.knState} data-coverage={r.coverage}>
             {r.coverage === 'learned' ? `${r.record?.notes ?? 0} note${r.record?.notes === 1 ? '' : 's'}` : COVERAGE_LABEL[r.coverage]}
           </span>
         )}
       </button>
       {r.coverage === 'unknown' && (
-        <button className={`kn-teach ${copied === r.fx.name ? 'kn-teach-done' : ''}`} onClick={() => teach([r], learnPrompt(r), r.fx.name)} title={`Copy: ${learnPrompt(r)}`}>
+        <button className={cx(styles.knTeach, copied === r.fx.name ? styles.knTeachDone : '')} onClick={() => teach([r], learnPrompt(r), r.fx.name)} title={`Copy: ${learnPrompt(r)}`}>
           {copied === r.fx.name ? 'Copied' : <><Icon.Spark /> Teach</>}
         </button>
       )}
@@ -175,15 +180,15 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
   );
 
   return (
-    <div className="rows plugins">
-      <div className="kn-summary">
-        <div className="kn-meter" aria-label={`${known} of ${rows.length} installed plugins known`}>
-          <span className="kn-seg kn-learned" style={{ flexGrow: count('learned') }} />
-          <span className="kn-seg kn-builtin" style={{ flexGrow: count('built-in') }} />
-          <span className="kn-seg kn-unknown" style={{ flexGrow: count('unknown') }} />
+    <div className={cx(listStyles.rows, styles.plugins)}>
+      <div className={styles.knSummary}>
+        <div className={styles.knMeter} aria-label={`${known} of ${rows.length} installed plugins known`}>
+          <span className={cx(styles.knSeg, styles.knLearned)} style={{ flexGrow: count('learned') }} />
+          <span className={cx(styles.knSeg, styles.knBuiltin)} style={{ flexGrow: count('built-in') }} />
+          <span className={cx(styles.knSeg, styles.knUnknown)} style={{ flexGrow: count('unknown') }} />
         </div>
-        <div className="kn-head">
-          <p className="kn-headline">
+        <div className={styles.knHead}>
+          <p className={styles.knHeadline}>
             The mixer knows <b>{known}</b> of your <b>{rows.length}</b> installed plugins
             {feed.used && (
               <>
@@ -192,11 +197,11 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
               </>
             )}
           </p>
-          <div className="kn-actions">
+          <div className={styles.knActions}>
           {mine.length > 0 &&
             (feed.publish ? (
               <button
-                className="btn btn-sm kn-contribute kn-publish-btn"
+                className={cx(styles.knContribute, publishRecordStyles.knPublishBtn, 'btn btn-sm')}
                 onClick={() => setPublishingAll((o) => !o)}
                 aria-expanded={publishingAll}
                 title="Write the plugins you taught the mixer to the built-in layer in LoreKit, for everyone"
@@ -205,7 +210,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
               </button>
             ) : (
               <button
-                className="btn btn-sm kn-contribute"
+                className={cx(styles.knContribute, 'btn btn-sm')}
                 onClick={() => contribute(mine)}
                 title="Share the plugins you taught the mixer with everyone: opens a pull request on GitHub"
               >
@@ -224,9 +229,9 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
         {publishingAll && feed.publish && (
           <PublishAll records={mine} builtIn={feed.records} publish={feed.publish} onClose={() => setPublishingAll(false)} />
         )}
-        {feed.problem && <p className="kn-problem">{feed.problem}</p>}
+        {feed.problem && <p className={styles.knProblem}>{feed.problem}</p>}
         {feed.userLayer === 'off' && (
-          <p className="kn-connect">
+          <p className={styles.knConnect}>
             Showing built-in records.{' '}
             {onOpenSettings ? (
               <button className="link-btn" onClick={onOpenSettings}>
@@ -238,22 +243,22 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
             to include the plugins you taught the mixer.
           </p>
         )}
-        <div className="kn-controls">
-          <div className="chips kn-chips" role="tablist" aria-label="Coverage">
+        <div className={styles.knControls}>
+          <div className={cx(listStyles.chips, styles.knChips)} role="tablist" aria-label="Coverage">
             {(['all', 'learned', 'built-in', 'unknown'] as const).map((f) => (
-              <button key={f} role="tab" aria-selected={filter === f} className="chip" onClick={() => chooseFilter(f)}>
-                {f !== 'all' && <i className={`kdot cov-${f}`} />}
+              <button key={f} role="tab" aria-selected={filter === f} className={listStyles.chip} onClick={() => chooseFilter(f)}>
+                {f !== 'all' && <i className="kdot" data-coverage={f} />}
                 {f === 'all' ? 'All' : COVERAGE_LABEL[f]}
                 <span className="count">{f === 'all' ? rows.length : count(f)}</span>
               </button>
             ))}
             {feed.used && (
-              <button className="chip chip-project" aria-pressed={inProject} onClick={() => chooseFilter(filter, !inProject)} title="Only plugins loaded in the open project">
+              <button className={cx(listStyles.chip, styles.chipProject)} aria-pressed={inProject} onClick={() => chooseFilter(filter, !inProject)} title="Only plugins loaded in the open project">
                 In this project <span className="count">{usedRows.length}</span>
               </button>
             )}
           </div>
-          <div className="seg seg-sm" role="tablist" aria-label="Layout">
+          <div className={cx(listStyles.seg, listStyles.segSm)} role="tablist" aria-label="Layout">
             <button role="tab" aria-selected={!grouped} onClick={() => chooseGrouped(false)}>
               List
             </button>
@@ -264,7 +269,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
         </div>
       </div>
 
-      {matching.length === 0 && <div className="empty">{inProject && usedRows.length === 0 ? 'The open project has no plugins loaded.' : 'No plugins match.'}</div>}
+      {matching.length === 0 && <div className={listStyles.empty}>{inProject && usedRows.length === 0 ? 'The open project has no plugins loaded.' : 'No plugins match.'}</div>}
 
       {grouped
         ? groups.map((g) => {
@@ -272,19 +277,19 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
             const unknown = g.rows.filter((r) => r.coverage === 'unknown');
             const knownHere = g.rows.length - unknown.length;
             return (
-              <section key={g.creator} className="kn-group" aria-label={g.creator}>
-                <div className="kn-group-head">
-                  <button className="kn-group-toggle-btn" aria-expanded={expanded} onClick={() => toggleGroup(g.creator)}>
-                    <Icon.Chevron className={`kn-chevron ${expanded ? 'kn-chevron-open' : ''}`} />
-                    <span className="kn-group-name">{g.creator}</span>
-                    <span className="kn-group-meta">
+              <section key={g.creator} className={styles.knGroup} aria-label={g.creator}>
+                <div className={styles.knGroupHead}>
+                  <button className={styles.knGroupToggleBtn} aria-expanded={expanded} onClick={() => toggleGroup(g.creator)}>
+                    <Icon.Chevron className={cx(teachMenuStyles.knChevron, expanded ? teachMenuStyles.knChevronOpen : '')} />
+                    <span className={styles.knGroupName}>{g.creator}</span>
+                    <span className={styles.knGroupMeta}>
                       {knownHere} of {g.rows.length} known
-                      {g.used > 0 && <span className="kn-used">{g.used} in project</span>}
+                      {g.used > 0 && <span className={styles.knUsed}>{g.used} in project</span>}
                     </span>
                   </button>
                   {unknown.length > 0 && (
                     <button
-                      className={`kn-teach ${copied === `group:${g.creator}` ? 'kn-teach-done' : ''}`}
+                      className={cx(styles.knTeach, copied === `group:${g.creator}` ? styles.knTeachDone : '')}
                       onClick={() => teach(unknown, learnAllPrompt(unknown), `group:${g.creator}`)}
                       title={`Copy a prompt that teaches the ${unknown.length} unknown ${g.creator} plugin${unknown.length === 1 ? '' : 's'}`}
                     >
@@ -299,14 +304,14 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
         : matching.map(renderRow)}
 
       {elsewhere.length > 0 && filter === 'all' && !inProject && !q && (
-        <div className="kn-elsewhere">
+        <div className={styles.knElsewhere}>
           Also known but not installed here: {elsewhere.map((r) => r.name).join(', ')}
         </div>
       )}
 
       {open && <PluginDetails row={open} now={now} onClose={() => setOpen(null)} onContribute={(r) => contribute([r])} publish={feed.publish} />}
       {copied && (
-        <div className="toast" role="status">
+        <div className={styles.toast} role="status">
           {toastText(copied)}
         </div>
       )}

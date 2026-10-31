@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { dragDrawerWidth, parseDrawerFraction, drawerFractionFromWidth, drawerWidthBounds, drawerWidthCss, drawerWidthPx, keyboardDrawerWidth } from './drawer-width.js';
+import styles from './ResizeHandle.module.css';
 
 const STORAGE_KEY = 'mcp_bridge.drawer_width';
 
@@ -40,7 +41,8 @@ export function ResizeHandle({ fraction, onCommit }: { fraction: number | null; 
   const [preview, setPreview] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  const drawer = () => ref.current?.closest<HTMLElement>('.drawer') ?? null;
+  // The handle is the drawer's first child
+  const drawer = () => ref.current?.parentElement ?? null;
 
   const show = (next: number) => {
     const el = drawer();
@@ -117,7 +119,7 @@ export function ResizeHandle({ fraction, onCommit }: { fraction: number | null; 
   return (
     <div
       ref={ref}
-      className="resize-handle"
+      className={styles.resizeHandle}
       role="separator"
       aria-orientation="vertical"
       aria-label="Resize sidebar"

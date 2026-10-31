@@ -2,6 +2,9 @@ import { listDiff, type EditView, type SlotChange, type MixRow } from '../edit-v
 import { ChangeLegend, ChangeMark } from './ChangeLegend.js';
 import { CHANGE_WORD, changedText, panText, pct, plural } from './format.js';
 import { Measurement, fmt } from '../../measurements/index.js';
+import { cx } from '../../../lib/cx.js';
+import chartStyles from '../../../styles/chart.module.css';
+import styles from './Mixer.module.css';
 
 function MixerRow({
   row,
@@ -19,52 +22,53 @@ function MixerRow({
   const folder = flags.includes("F");
   return (
     <div
-      className={`ev-trk ${master ? "ev-trk-master" : ""} ${flags.includes("M") ? "ev-trk-muted" : ""} ${c ? `ev-slot-${c}` : ""} ${gone ? "ev-slot-gone" : ""}`}
+      className={cx(styles.evTrk, master && styles.evTrkMaster, flags.includes("M") && styles.evTrkMuted)}
+      data-change={gone ? "gone" : c}
       title={`${name} · ${fmt(db)} dB · pan ${panText(pan)}${gone ? " · removed" : c ? ` · ${CHANGE_WORD[c]}` : ""}`}
     >
       <span
-        className="ev-sw"
+        className={styles.evSw}
         style={{
           background: master ? "var(--line-2)" : color || "var(--line-2)",
         }}
       />
       <span
-        className={`ev-tn ${folder ? "ev-tn-folder" : ""}`}
+        className={cx(styles.evTn, folder ? styles.evTnFolder : '')}
         style={{ paddingLeft: `${Math.min(depth, 4) * 12}px` }}
       >
-        <span className="ev-tn-text">
+        <span className={styles.evTnText}>
           {folder ? "▾ " : ""}
           {name}
         </span>
         {gone ? (
-          <span className="ev-mark ev-mark-gone">removed</span>
+          <span className={styles.evMark} data-change="gone">removed</span>
         ) : (
           <ChangeMark c={c} />
         )}
       </span>
       <span
-        className="ev-bar ev-fader"
+        className={cx(chartStyles.evBar, styles.evFader)}
         role="img"
         aria-label={`${name} ${fmt(db)} dB`}
       >
-        <span className="ev-zero" style={{ left: `${pct(0, -60, 6)}%` }} />
+        <span className={chartStyles.evZero} style={{ left: `${pct(0, -60, 6)}%` }} />
         <span
-          className={`ev-fill ${hot ? "ev-fill-hot" : ""}`}
+          className={cx(chartStyles.evFill, hot ? styles.evFillHot : '')}
           style={{ left: 0, width: `${pct(db, -60, 6)}%` }}
         />
       </span>
-      <span className={`ev-tv mono zone-${hot ? "hot" : "ok"}`}>{fmt(db)}</span>
+      <span className={cx(styles.evTv, "mono")} data-zone={hot ? "hot" : "ok"}>{fmt(db)}</span>
       <span
-        className="ev-pan"
+        className={styles.evPan}
         role="img"
         aria-label={`pan ${panText(pan)}`}
         title={`Pan ${panText(pan)}`}
       >
-        <span className="ev-pan-c" />
-        <span className="ev-pan-d" style={{ left: `${pct(pan, -1, 1)}%` }} />
+        <span className={styles.evPanC} />
+        <span className={styles.evPanD} style={{ left: `${pct(pan, -1, 1)}%` }} />
       </span>
       <span
-        className="ev-chips"
+        className={styles.evChips}
         aria-label={
           [
             flags.includes("M") && "muted",
@@ -78,7 +82,8 @@ function MixerRow({
         {(["M", "S", "R"] as const).map((f) => (
           <span
             key={f}
-            className={`ev-chip ${flags.includes(f) ? `ev-chip-${f.toLowerCase()}` : ""}`}
+            className={styles.evChip}
+            data-chip={flags.includes(f) ? f.toLowerCase() : undefined}
           >
             {f}
           </span>
@@ -102,13 +107,13 @@ export function Mixer({ v }: { v: Extract<EditView, { kind: "mixer" }> }) {
   return (
     <>
       {was && (
-        <div className="measure-readouts">
+        <div className={chartStyles.measureReadouts}>
           <Measurement.Readout label="Tracks" value={String(v.total)} />
           <Measurement.Readout label="Changed" value={changedText(added, d.removed.length, d.change.size + d.removed.length)} />
         </div>
       )}
-      {(v.from ?? 0) > 0 && <div className="ev-more">{plural(v.from ?? 0, "track")} above</div>}
-      <div className="ev-mix">
+      {(v.from ?? 0) > 0 && <div className={chartStyles.evMore}>{plural(v.from ?? 0, "track")} above</div>}
+      <div className={styles.evMix}>
         {v.tracks.map((t, i) => (
           <MixerRow key={ids[i] ?? i} row={t} c={d.change.get(i)} />
         ))}
@@ -119,7 +124,7 @@ export function Mixer({ v }: { v: Extract<EditView, { kind: "mixer" }> }) {
       </div>
       {was && <ChangeLegend change={d.change} removed={d.removed.length} />}
       {v.total > (v.from ?? 0) + v.tracks.length && (
-        <div className="ev-more">
+        <div className={chartStyles.evMore}>
           +{v.total - (v.from ?? 0) - v.tracks.length} more tracks not drawn
         </div>
       )}

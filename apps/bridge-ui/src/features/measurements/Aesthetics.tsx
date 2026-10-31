@@ -1,6 +1,8 @@
 import { PreviousLegend } from './Measurement.js';
 import { fmt, pct } from './format.js';
 import type { Measurement } from '../../lib/commands.js';
+import { cx } from '../../lib/cx.js';
+import chartStyles from '../../styles/chart.module.css';
 
 const AESTHETICS: Array<[keyof Extract<Measurement, { kind: 'aesthetics' }>, string, string]> = [
   ['pq', 'Production quality', 'How clean and well produced it sounds'],
@@ -13,27 +15,27 @@ const AESTHETICS: Array<[keyof Extract<Measurement, { kind: 'aesthetics' }>, str
 export function Aesthetics({ m, was }: { m: Extract<Measurement, { kind: 'aesthetics' }>; was: Extract<Measurement, { kind: 'aesthetics' }> | null }) {
   return (
     <>
-      <div className="ev-rows">
+      <div className={chartStyles.evRows}>
         {AESTHETICS.map(([k, label, hint]) => {
           const v = m[k] as number | undefined;
           const w = was?.[k] as number | undefined;
           return (
-            <div key={k} className="ev-row" title={hint}>
-              <span className="ev-name">{label}</span>
-              <span className="ev-val mono">
+            <div key={k} className={chartStyles.evRow} title={hint}>
+              <span className={chartStyles.evName}>{label}</span>
+              <span className={cx(chartStyles.evVal, 'mono')}>
                 <b>{v === undefined ? '–' : v.toFixed(1)}</b> / 10
                 {w !== undefined && v !== undefined && Math.abs(v - w) >= 0.05 && <span> · {v > w ? '+' : '−'}{Math.abs(v - w).toFixed(1)}</span>}
               </span>
-              <span className="ev-bar">
-                <span className="ev-fill" style={{ left: 0, width: `${v === undefined ? 0 : pct(v, 0, 10)}%` }} />
-                {w !== undefined && <span className="ev-was" style={{ left: `${pct(w, 0, 10)}%` }} />}
+              <span className={chartStyles.evBar}>
+                <span className={chartStyles.evFill} style={{ left: 0, width: `${v === undefined ? 0 : pct(v, 0, 10)}%` }} />
+                {w !== undefined && <span className={chartStyles.evWas} style={{ left: `${pct(w, 0, 10)}%` }} />}
               </span>
             </div>
           );
         })}
       </div>
       {was && <PreviousLegend />}
-      <div className="off-hints">
+      <div className={chartStyles.offHints}>
         <span>
           {m.name ?? 'Clip'}
           {m.dur !== undefined ? `, ${Math.round(m.dur)} s` : ''}

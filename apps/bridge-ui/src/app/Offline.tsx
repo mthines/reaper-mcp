@@ -1,9 +1,10 @@
 import { Mark } from '../components/index.js';
+import styles from './Offline.module.css';
 
 export function Offline({ reachable }: { reachable: boolean }) {
   return (
-    <section className="offline">
-      <div className="offline-icon" aria-hidden>
+    <section className={styles.offline}>
+      <div className={styles.offlineIcon} aria-hidden>
         <Mark active={false} />
       </div>
       {reachable ? (

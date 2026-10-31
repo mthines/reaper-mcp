@@ -1,0 +1,62 @@
+.rowsWindow { position: relative; }
+.row { border-left: 2px solid transparent; }
+.row:hover { background: rgba(255, 255, 255, 0.02); }
+.row[data-outcome='error'] { border-left-color: var(--bad); background: rgba(248, 113, 113, 0.04); }
+.rowSelected { background: rgba(124, 196, 255, 0.07); border-left-color: var(--accent); }
+.row[data-outcome='error'].rowSelected { border-left-color: var(--bad); }
+.row[data-outcome='refused'] { border-left-color: var(--warn); background: rgba(245, 184, 75, 0.035); }
+.row[data-outcome='refused'].rowSelected { border-left-color: var(--warn); }
+.row[data-outcome='refused'] .rowErrInline { color: var(--warn); }
+.rowMain {
+  width: 100%;
+  display: flex; align-items: center; gap: 12px;
+  /* Height is set inline from ROW_HEIGHT (the list is windowed); keep content to one line */
+  padding: 0 14px 0 12px;
+  border: 0; background: none; text-align: left;
+  overflow: hidden; white-space: nowrap;
+}
+.rowTime { color: var(--faint); font-size: 12px; flex: none; }
+.rowMs { opacity: 0.55; }
+
+/* Fixed width so the times line up whether the day reads Today, Yesterday or a date */
+.rowDay { display: inline-block; min-width: 9ch; margin-right: 1ch; opacity: 0.7; }
+.statusDot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.statusDot[data-outcome='ok'] { background: var(--live); opacity: 0.75; }
+.statusDot[data-outcome='error'] { background: var(--bad); box-shadow: 0 0 8px rgba(248, 113, 113, 0.6); }
+.statusDot[data-outcome='refused'] { background: var(--warn); }
+.rowCmd { font-size: 12.5px; color: var(--text); flex: none; }
+.rowErrInline {
+  flex: 1; min-width: 0;
+  color: var(--bad); opacity: 0.85;
+  font-size: 12px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rowEnd { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 14px; }
+.rowSession {
+  display: inline-flex; align-items: center; gap: 6px;
+  max-width: 140px;
+  font-size: 11.5px; color: var(--faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rowDur {
+  flex: none;
+  display: inline-flex; align-items: center; gap: 10px;
+  font-size: 12px; color: var(--muted);
+  min-width: 140px; justify-content: flex-end;
+}
+.durTrack { width: 56px; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.durFill { display: block; height: 100%; background: var(--bar); border-radius: 2px; }
+[data-speed='slow'] .durFill { background: var(--warn); }
+[data-speed='very-slow'] .durFill { background: var(--bad); }
+.rowDur[data-speed='slow'] { color: var(--warn); }
+.rowDur[data-speed='very-slow'] { color: var(--bad); }
+
+@media (max-width: 720px) {
+  .rowErrInline, .durTrack { display: none; }
+  .rowDur { min-width: 0; }
+  .rowSession { display: none; }
+}
+
+/* The selected row's tint and accent edge already mark it; no browser focus ring on top. Tab focus gets the hover tint. */
+.rowMain { outline: none; }
+.row:has(.rowMain:focus-visible):not(.rowSelected) { background: rgba(255, 255, 255, 0.04); }

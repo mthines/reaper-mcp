@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { EditView } from '../index.js';
+import chartStyles from '../../../styles/chart.module.css';
 
 const meta = {
   title: 'Features/Edit views/Change legend',
@@ -19,7 +20,7 @@ export const Default: Story = {
         <EditView.ChangeMark c="changed" />
       </div>
       <EditView.ChangeLegend {...args} />
-      <EditView.Legend items={[['lg-line', 'Now'], ['lg-previous', 'Before']]} />
+      <EditView.Legend items={[[chartStyles.lgLine, 'Now'], [chartStyles.lgPrevious, 'Before']]} />
     </div>
   ),
 };
