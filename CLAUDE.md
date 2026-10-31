@@ -460,6 +460,7 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, 
 - The Lua bridge includes a fallback JSON array parser for REAPER versions without `CF_Json_Parse`
 - **Undo**: a MIDI API edit (`MIDI_SetNote`, `MIDI_InsertNote`, …) leaves the item unmarked, so REAPER folds it into the previous MIDI undo point. Every MIDI write calls `MarkTrackItemsDirty(track, item)` before `Undo_EndBlock` (seen in REAPER 7.40)
 - **Composition** (`mcp_midi_lib.lua`): quantize snaps to the project's beats, not the item start; swing pushes every second grid line later. Humanize is reproducible from `seed`. `detect_key` correlates the 12-bin profile with the Krumhansl-Kessler key profiles (`key.ts`); confidence is the gap to the best key that is not the relative key, scaled down for a flat profile and by the best key's correlation
+- **A MIDI or arrangement write that fails half way is undone** (an import leaves no new tracks). The failed block is closed under its own `… (failed — reverting)` label and undone only when that label is on top, so a failure that wrote nothing never undoes an earlier edit, the same rule as `run_plan`.
 
 ### Media Item Editing Concepts
 
