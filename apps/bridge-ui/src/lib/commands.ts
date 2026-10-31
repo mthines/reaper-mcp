@@ -230,6 +230,10 @@ export function outcomeOf(e: Pick<CommandEntry, 'ok' | 'e'>): Outcome {
  * Mirrors LONG_RUNNING in mcp_bridge.lua, which keeps them out of the timeline's slow count.
  */
 export const LONG_RUNNING = new Set([
+  'freeze_tracks',
+  'unfreeze_tracks',
+  'apply_fx_to_items',
+  'quantize_audio',
   'analyze_track_offline',
   'analyze_audio_file',
   'measure_track_alignment',

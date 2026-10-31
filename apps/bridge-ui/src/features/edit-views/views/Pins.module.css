@@ -1,0 +1,15 @@
+/* FX pins: one row per pin, one column per track channel */
+.pins { overflow-x: auto; padding-bottom: 2px; }
+.row { display: grid; grid-template-columns: 64px repeat(var(--cols), minmax(14px, 1fr)); align-items: center; gap: 2px; min-height: 18px; }
+.name { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side { color: var(--faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; margin: 6px 0 2px; }
+.ch { color: var(--faint); font-size: 10px; text-align: center; }
+.pin { justify-self: center; width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--line-2); }
+.on { background: var(--text); border-color: var(--text); }
+.new { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+.gone { border: 1px dashed var(--muted); background: transparent; }
+.out { opacity: 0.4; }
+
+@container (max-width: 300px) {
+  .row { grid-template-columns: 36px repeat(var(--cols), minmax(12px, 1fr)); }
+}

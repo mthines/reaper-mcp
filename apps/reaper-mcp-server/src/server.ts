@@ -30,6 +30,7 @@ import { registerAestheticsTools } from './tools/aesthetics.js';
 import { registerOfflineTools } from './tools/offline.js';
 import { registerTransientTools } from './tools/transients.js';
 import { registerMixcheckTools } from './tools/mixcheck.js';
+import { registerMixingTools } from './tools/mixing.js';
 import { registerCompositionTools } from './tools/composition.js';
 import { registerKnowledgeTools } from './tools/knowledge.js';
 
@@ -159,6 +160,7 @@ export function createServer(): McpServer {
   registerOfflineTools(server);
   registerTransientTools(server);
   registerMixcheckTools(server);
+  registerMixingTools(server);
   registerCompositionTools(server);
   registerKnowledgeTools(server);
 

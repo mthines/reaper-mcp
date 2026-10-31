@@ -430,9 +430,55 @@ local function index_of(api, tr, env)
   return -1
 end
 
+-- A send's envelope always exists (GetTrackSendInfo_Value P_ENV) but stays out of the
+-- track's envelope list until it is active, visible and has a point; it starts at the
+-- send's current level, pan or mute so showing it changes nothing audible.
+local SEND_ENVELOPES = {
+  Volume = { key = "<VOLENV", field = "D_VOL" },
+  Pan = { key = "<PANENV", field = "D_PAN" },
+  Mute = { key = "<MUTEENV", field = "B_MUTE" },
+}
+
+local function create_send_envelope(api, tr, p)
+  local spec = SEND_ENVELOPES[p.envelopeName or ""]
+  if not spec then return nil, "A send envelope is Volume, Pan or Mute (got " .. tostring(p.envelopeName) .. ")" end
+  if p.fxIndex ~= nil then return nil, "Give sendIndex or fxIndex, not both" end
+  local send, sends = int(p.sendIndex), api.GetTrackNumSends(tr, 0)
+  if not send or send < 0 or send >= sends then
+    return nil, "Send index " .. tostring(p.sendIndex) .. " out of range (track has " .. sends .. " sends)"
+  end
+  local env = api.GetTrackSendInfo_Value(tr, 0, send, "P_ENV:" .. spec.key)
+  if not env then return nil, "REAPER returned no envelope for send " .. send end
+  local name = "Send " .. p.envelopeName
+  return with_undo(api, "MCP: Create envelope '" .. name .. "'", function()
+    local created = index_of(api, tr, env) < 0
+    local ok, chunk = api.GetEnvelopeStateChunk(env, "", false)
+    if not ok or type(chunk) ~= "string" then return nil, "Could not read the send envelope" end
+    local shown = chunk:gsub("\nACT 0", "\nACT 1"):gsub("\nVIS 0", "\nVIS 1")
+    if not shown:find("\nPT ", 1, true) then
+      local current = api.GetTrackSendInfo_Value(tr, 0, send, spec.field)
+      local value
+      if spec.field == "D_VOL" then value = M.from_db(api, env, current > 0 and 20 * math.log(current, 10) or M.MIN_DB)
+      elseif spec.field == "B_MUTE" then value = current ~= 0 and 0 or 1
+      else value = -current end -- pan envelopes store left as positive (seen live, REAPER 7.40)
+      shown = shown:gsub(">%s*$", "PT 0 " .. string.format("%.10g", value) .. " 0\n>")
+    end
+    if shown ~= chunk then api.SetEnvelopeStateChunk(env, shown, false) end
+    if api.TrackList_AdjustWindows then api.TrackList_AdjustWindows(false) end
+    local dest = api.GetTrackSendInfo_Value(tr, 0, send, "P_DESTTRACK")
+    local res = {
+      trackIndex = int(p.trackIndex), envelopeIndex = index_of(api, tr, env), name = name,
+      created = created, pointCount = api.CountEnvelopePoints(env), send = { index = send },
+    }
+    if dest then res.send.destTrackName = select(2, api.GetTrackName(dest)) end
+    return res
+  end)
+end
+
 function M.create(api, p)
   local tr, err = get_track(api, p)
   if not tr then return nil, err end
+  if p.sendIndex ~= nil then return create_send_envelope(api, tr, p) end
   local name = p.envelopeName
   if p.fxIndex ~= nil then
     local fx, param = int(p.fxIndex), int(p.paramIndex)

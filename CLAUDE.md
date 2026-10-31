@@ -76,6 +76,7 @@ reaper-mcp/
         composition.ts        # quantize_midi, transform_midi, import_midi_file (SMF parsed in smf.ts), detect_key (key.ts; logic in reaper/mcp_midi_lib.lua)
         mixcheck.ts           # analyze_loudness_curve, analyze_stereo_bands, measure_masking, separate_stems (sidecar)
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
+        mixing.ts             # automation mode, FX modulation + pins, monitoring FX, freeze, render in place, stretch markers, quantize_audio (logic in reaper/mcp_mixing_lib.lua)
 
     sidecar/                  # Python sidecar for semantic audio analysis (opt-in)
       server.py               # JSON-RPC server (Meta Audiobox Aesthetics, CC-BY 4.0)
@@ -138,6 +139,7 @@ reaper-mcp/
     mcp_actions_lib.lua       # Action proxy + selection setters (pure Lua, unit-tested via wasmoon)
     mcp_project_lib.lua       # Project ops, tempo map + marker editing (pure Lua, unit-tested via wasmoon)
     mcp_envelopes_lib.lua     # Envelopes, points (dB through the envelope's scaling) and pooled automation items (pure Lua, unit-tested via wasmoon)
+    mcp_mixing_lib.lua        # Automation mode, FX modulation/pins, monitoring FX, freeze, apply FX, stretch markers + audio quantize (pure Lua, unit-tested via wasmoon)
     mcp_midi_lib.lua          # Quantize, transform, MIDI file import, pitch-class profile (pure Lua, unit-tested via wasmoon)
     mcp_items_lib.lua         # Items, takes, take FX, FX move/copy/rename, FX chains, track templates (pure Lua, unit-tested via wasmoon)
     mcp_arrange_lib.lua       # Copy items, insert/remove time, copy a section, normalize/reverse/glue (pure Lua, unit-tested via wasmoon)
@@ -169,7 +171,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (162 total)
+## MCP Tools (175 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -319,7 +321,7 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 
 | Tool | File | Description |
 |------|------|-------------|
-| `create_track_envelope` | `tools/envelopes.ts` | Create/show an envelope on a track (Volume, Pan, Mute, Width, Trim Volume via native actions, selection kept; or FX parameter); `created: false` when it existed |
+| `create_track_envelope` | `tools/envelopes.ts` | Create/show an envelope on a track (Volume, Pan, Mute, Width, Trim Volume via native actions, selection kept; FX parameter; or a send's Volume/Pan/Mute with `sendIndex`, starting at the send's current value); `created: false` when it existed |
 | `get_track_envelopes` | `tools/envelopes.ts` | List envelopes on a track (name, point and automation item counts, active/visible/armed); send envelopes carry `send` (index, destination track) |
 | `get_envelope_points` | `tools/envelopes.ts` | Get automation points with pagination (time, raw value, `db` on volume envelopes, shape, tension) |
 | `insert_envelope_point` | `tools/envelopes.ts` | Insert an automation point (`value` or `db`) with shape/tension |
@@ -385,6 +387,24 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `detect_transients` | `tools/transients.ts` | Hits in a track (rendered, ≤900 s) or an audio file (MP3 too; `filePosition` maps it to project time): time, strength 0..1, dominant band (low/mid/high), peakDb, plus tempo, per-band counts and per-section density; filter by `band`/`bands`/`sensitivity`/`minGapMs`/`minStrength`, paginated |
 | `create_transient_automation` | `tools/transients.ts` | Detect, then write one pulse per hit (attack, hold, exponential/linear decay, scaled by strength) onto an existing envelope — e.g. lighting that flashes on the kicks. Replaces the range's points (REAPER keeps an envelope's last point on a range delete; it becomes the first pulse point), `dryRun` returns the points. TS-composed over `remove_envelope_points` / `insert_envelope_points` |
 
+### Mixing Depth (14)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `set_automation_mode` | `tools/mixing.ts` | Tracks' automation mode (trim, read, touch, write, latch, latch_preview) and/or the global override (`none`/`bypass`); returns before and after |
+| `get_fx_param_modulation` | `tools/mixing.ts` | One parameter's modulation (baseline, LFO, audio control signal, link), or every modulated parameter of an FX |
+| `set_fx_param_modulation` | `tools/mixing.ts` | LFO (shape, speed, strength, phase, tempo sync), audio follower (channel, attack/release, dB range) and/or parameter link; only given fields change, all validated first |
+| `get_fx_pins` | `tools/mixing.ts` | Each input/output pin's track channels (1-based) and the track's channel count |
+| `set_fx_pins` | `tools/mixing.ts` | Connect pins to channels (e.g. a sidechain on 3/4); widens the track to the highest channel used, never narrows it |
+| `list_monitoring_fx` | `tools/mixing.ts` | The monitoring FX chain (heard in the monitors, never rendered; global, not in the project) |
+| `add_monitoring_fx` | `tools/mixing.ts` | Add a monitoring FX, with optional normalized parameters |
+| `set_monitoring_fx` | `tools/mixing.ts` | Bypass, offline or set parameters of a monitoring FX |
+| `remove_monitoring_fx` | `tools/mixing.ts` | Remove a monitoring FX |
+| `freeze_tracks` | `tools/mixing.ts` | Freeze tracks to stereo/mono/multichannel (native actions 41223/40901/40877), selection kept; not the master |
+| `unfreeze_tracks` | `tools/mixing.ts` | Restore one freeze layer (41644); refuses a track that is not frozen |
+| `apply_fx_to_items` | `tools/mixing.ts` | Render in place: track + take FX to a new active take (40209/40361/41993); the old take stays |
+| `add_stretch_markers` | `tools/mixing.ts` | Many stretch markers on an audio item in one call and one undo point |
+| `quantize_audio` | `tools/mixing.ts` | Hits from the sidecar (`transients`), then stretch markers moved toward the grid (strength, window, swing); returns the timing offset before/after (TS-composed over `get_media_item_properties` + the `quantize_audio` bridge command) |
 ### Mix Checks (4) — Requires Python Sidecar
 
 Each takes a track (rendered post-FX, `-1` = master) or a file `path`; `measure_masking` takes 2-8 tracks.
@@ -471,7 +491,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 162 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 175 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
@@ -547,11 +567,20 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, 
 - **Files stay inside REAPER's resource folder**: `save_fx_chain` / `save_track_template` take a name (subfolders allowed) under `FXChains/` or `TrackTemplates/`; absolute paths, drive letters and `..` are refused, and an existing file is only replaced with `overwrite: true`. Loads also accept an absolute path with the right extension.
 - **Chunks, like `graft_fxchain`**: loading a chain or inserting a template edits track state chunks with `mcp_plan_lib.lua`'s helpers, regenerating FXIDs (and TRACKID/item GUIDs for templates). A saved template drops receives (`AUXRECV`) and folder state (`ISBUS`), which depend on the surrounding tracks.
 
+### Mixing Depth Concepts
+
+- **Logic lives in `reaper/mcp_mixing_lib.lua`** (pure Lua over an injected API, unit-tested via wasmoon in `mixing-lib.test.ts`); the bridge handlers decode the nested JSON params and pass `reaper` in.
+- **Modulation** goes through `TrackFX_Get/SetNamedConfigParm` keys `param.N.{mod,lfo,acs,plink}.*` (REAPER 6.37+). Reads fail until a parameter has modulation; an unknown key's write fails, so every write is checked and the whole edit is one undo point (seen live: undo removes it).
+- **Pins** are bit masks per pin (`TrackFX_Get/SetPinMappings`, low and high 32 channels). ReaComp has 4 inputs; pins 2/3 (0-based) are its sidechain and default to channels 3/4.
+- **Freeze and apply FX are native actions on the selection**: the lib selects the targets, runs the action, then restores the selection. Both block REAPER while they render (`LONG_RUNNING`). A freeze adds a `<FREEZE` block to the track chunk per layer; that is how `unfreeze_tracks` knows a track is frozen.
+- **Quantize**: hits arrive in source seconds and map to item positions as `(source - startOffset) / playRate`. Each hit moves toward its nearest grid line (with swing) when within `window × (1 + swing) × grid / 2` (as quantize_midi); hits at the item edges, crossing a neighbour or landing on a line another hit took are skipped. Existing stretch markers are replaced, and anchors at 0 and the item end keep its length. A stretch marker's position is take time at play rate 1 (seen live: source = start offset + position), so the lib multiplies item seconds by the play rate on the way in and divides on the way out; the tools speak item seconds. No hit inside the item is refused, so the item's own markers are never wiped.
+- **Monitoring FX** live on the master at index `0x1000000 + i` (`TrackFX_GetRecCount`). They are global to REAPER, not saved with the project.
+
 ### Envelope / Automation Concepts
 
 - **Creating envelopes**: Use `create_track_envelope` before adding points. Built-in envelopes use `envelopeName` ("Volume", "Pan", "Mute", "Width", "Trim Volume"). FX parameter envelopes use `fxIndex` + `paramIndex`.
 - **Logic lives in `reaper/mcp_envelopes_lib.lua`** (pure Lua over an injected API, unit-tested via wasmoon in `envelopes-lib.test.ts`); the bridge handlers only pass `reaper` in.
-- **Envelope values**: give `db` on volume envelopes (Volume, Trim Volume, Send Volume). REAPER's own Volume envelope is fader-scaled (716.2 = 0 dB, not 1.0); `db` is converted with the envelope's scaling mode (`ScaleToEnvelopeMode`). Raw `value`: Pan -1.0 to 1.0, Mute 0 or 1, FX parameters 0..1.
+- **Envelope values**: give `db` on volume envelopes (Volume, Trim Volume, Send Volume). REAPER's own Volume envelope is fader-scaled (716.2 = 0 dB, not 1.0); `db` is converted with the envelope's scaling mode (`ScaleToEnvelopeMode`). Raw `value`: Pan -1.0 to 1.0 in REAPER's envelope sign (positive is left: a track or send panned 50% left starts its pan envelope at +0.5), Mute 0 or 1, FX parameters 0..1.
 - **Automation items**: instances of one pool share their points, so editing one edits every instance; pool ids are project-wide, so pools reach across tracks. Point calls use the item index with `0x10000000` (one loop iteration = the pool's own points), except `SetEnvelopePointEx`, which ignores a flagged index (REAPER 7.40) and takes the plain one. A new pool's `D_POOL_QNLEN` is set to the item's length, since REAPER can make it shorter and drops pool points past it without an error; a point at the item end is kept 1 ms inside, and points outside an item are refused.
 - **Section levels** (opinionated): pooled automation items on the Volume envelope, one pool per section type, never item gain (`knowledge/workflows/section-levels.md`).
 - **Transient-driven automation** (lighting): `create_transient_automation` from a track render (a warped item's file is read without its stretch markers), onto a new muted track's plugin envelope (`knowledge/workflows/transient-lighting.md`).
@@ -844,7 +873,9 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   ceiling, length; versions grouped with their muted tracks; format, source and target as readouts); and arrangement
   edits (`op`, the `span` they opened, cut or copied from
   hatched or outlined, where they copied `to`, a lane for up to 4 touched tracks plus `moreTracks`, normalized items
-  with their gain as a 7th item field). List diffs share `listDiff()` in `edit-views.ts`. Lists are capped so
+  with their gain as a 7th item field); FX modulation (LFO path, audio-follower band, link, the old baseline ghosted), FX pins as a
+  pin × channel grid (new connections marked, track widening shown), stretch markers and `quantize_audio` (grid lines, hits
+  before dashed, offset before → after), and freeze / automation mode / apply FX as change rows. List diffs share `listDiff()` in `edit-views.ts`. Lists are capped so
   an entry stays a few KB. Add a command in `M.summary`, `KIND_OF` (`edit-views.ts`) and an example in `src/demo/examples.ts` together;
   behaviour tests run the real bridge in wasmoon (`bridge-status.test.ts`, "edit views in the log").
 - Short windows (≤ 640px tall, an app window docked beside REAPER): the log is the page. Stats, timeline and footer

@@ -214,7 +214,39 @@ function new_fake(spec)
     end
   end
   function api.GetEnvelopeStateChunk(env) return true, env.chunk end
-  function api.SetEnvelopeStateChunk(env, chunk) write(); env.chunk = chunk end
+  function api.SetEnvelopeStateChunk(env, chunk)
+    write()
+    env.chunk = chunk
+    -- A send envelope joins the track's list once it is active, visible and has a point (as REAPER)
+    if env.hidden and chunk:find("ACT 1", 1, true) and chunk:find("VIS 1", 1, true) then
+      local v = chunk:match("\\nPT 0 ([%-%d%.e]+)")
+      if v then
+        env.hidden = nil
+        env.points = { { time = 0, value = tonumber(v), shape = 0 } }
+        env.track.envs[#env.track.envs + 1] = env
+      end
+    end
+  end
+  -- Sends: each has a hidden Volume/Pan/Mute envelope from the start (P_ENV)
+  for ti, t in ipairs(spec.tracks or {}) do
+    local tr = api.tracks[ti]
+    tr.sends = {}
+    for si, sd in ipairs(t.sends or {}) do
+      local send = { dest = sd.dest, vol = sd.vol or 1, pan = sd.pan or 0, mute = sd.mute or 0, envs = {} }
+      for key, name in pairs({ ["<VOLENV"] = "Send Volume", ["<PANENV"] = "Send Pan", ["<MUTEENV"] = "Send Mute" }) do
+        send.envs[key] = { name = name, send = si - 1, dest = sd.dest, mode = key == "<VOLENV" and 1 or 0, points = {}, ais = {},
+          hidden = true, track = tr, chunk = "<" .. key:sub(2) .. "\\nACT 0 -1\\nVIS 0 1 1\\nLANEHEIGHT 0 0\\n>" }
+      end
+      tr.sends[si] = send
+    end
+  end
+  function api.GetTrackNumSends(tr) return #tr.sends end
+  function api.GetTrackSendInfo_Value(tr, _, s, parm)
+    local send = tr.sends[s + 1]
+    if parm:sub(1, 6) == "P_ENV:" then return send.envs[parm:sub(7)] end
+    if parm == "P_DESTTRACK" then return api.tracks[send.dest + 1] end
+    if parm == "D_VOL" then return send.vol elseif parm == "D_PAN" then return send.pan elseif parm == "B_MUTE" then return send.mute end
+  end
   return api
 end
 
@@ -302,6 +334,51 @@ describe('mcp_envelopes_lib.lua (wasmoon)', () => {
       assert(err:find("after"))
       r = assert(env.remove_range(api, { trackIndex = 0, envelopeIndex = 0 }, "MCP: Clear envelope"))
       assert(r.deletedPoints == 2 and r.totalPoints == 0)
+    `);
+  });
+
+  it('shows a send volume envelope, starting at the send level, as a track envelope that names the send', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { name = "Vox", sends = { { dest = 1, vol = 0.5 } } }, { name = "Verb" } } }
+      local r = assert(env.create(api, { trackIndex = 0, sendIndex = 0, envelopeName = "Volume" }))
+      assert(r.created and r.name == "Send Volume" and r.envelopeIndex == 0 and r.pointCount == 1)
+      assert(r.send.index == 0 and r.send.destTrackName == "Verb")
+      local pts = assert(env.get_points(api, { trackIndex = 0, envelopeIndex = 0 }))
+      assert(math.abs(pts.points[1].db - (20 * math.log(0.5, 10))) < 0.01, "first point at the send's -6 dB: " .. pts.points[1].db)
+      assert(#api.undo == 1)
+      r = assert(env.create(api, { trackIndex = 0, sendIndex = 0, envelopeName = "Volume" }))
+      assert(r.created == false and r.envelopeIndex == 0, "an envelope already shown is not created again")
+    `);
+  });
+
+  it('starts a send pan envelope where the send is panned, in REAPER\'s envelope sign (left is positive)', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { name = "Vox", sends = { { dest = 1, pan = -0.5 } } }, { name = "Verb" } } }
+      local r = assert(env.create(api, { trackIndex = 0, sendIndex = 0, envelopeName = "Pan" }))
+      local pts = assert(env.get_points(api, { trackIndex = 0, envelopeIndex = r.envelopeIndex }))
+      assert(pts.points[1].value == 0.5, "50% left is +0.5 on a pan envelope: " .. pts.points[1].value)
+    `);
+  });
+
+  it('starts a send mute envelope muted when the send is muted', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { name = "Vox", sends = { { dest = 1, mute = 1 } } }, { name = "Verb" } } }
+      local r = assert(env.create(api, { trackIndex = 0, sendIndex = 0, envelopeName = "Mute" }))
+      local pts = assert(env.get_points(api, { trackIndex = 0, envelopeIndex = r.envelopeIndex }))
+      assert(pts.points[1].value == 0, "0 = muted")
+    `);
+  });
+
+  it('refuses a send index the track does not have, a Width send envelope, or sendIndex with fxIndex, and changes nothing', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { name = "Vox", sends = { { dest = 1 } } }, { name = "Verb" } } }
+      local r, err = env.create(api, { trackIndex = 0, sendIndex = 3, envelopeName = "Volume" })
+      assert(not r and err:find("Send index 3 out of range %(track has 1 sends%)"), tostring(err))
+      r, err = env.create(api, { trackIndex = 0, sendIndex = 0, envelopeName = "Width" })
+      assert(not r and err:find("Volume, Pan or Mute"), tostring(err))
+      r, err = env.create(api, { trackIndex = 0, sendIndex = 0, envelopeName = "Volume", fxIndex = 0, paramIndex = 0 })
+      assert(not r and err:find("not both"), tostring(err))
+      assert(api.writes == 0 and #api.tracks[1].envs == 0)
     `);
   });
 
