@@ -1,6 +1,9 @@
 .tools { padding: 10px 0 6px; }
 .mix { display: flex; gap: 2px; height: 6px; margin: 0 14px; border-radius: 3px; overflow: hidden; }
 .mixSeg { display: block; min-width: 2px; }
+.mixSeg:where([data-kind='read']) { background: var(--k-read); }
+.mixSeg:where([data-kind='write']) { background: var(--k-write); }
+.mixSeg:where([data-kind='transport']) { background: var(--k-transport); }
 .mixLegend {
   display: flex; flex-wrap: wrap; gap: 4px 14px;
   margin: 7px 14px 8px;

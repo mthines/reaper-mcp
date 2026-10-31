@@ -85,9 +85,10 @@ kbd {
 .hue-5 { --hue: var(--h5); }
 .sdot { display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--hue); }
 .sdot-off { background: none; box-shadow: inset 0 0 0 1.5px var(--hue); opacity: 0.7; }
-[data-kind='read'] { background: var(--k-read); }
-[data-kind='write'] { background: var(--k-write); }
-[data-kind='transport'] { background: var(--k-transport); }
+/* Command kind: the dot's colour (ToolsView's mix bar segments colour themselves the same way) */
+.kdot:where([data-kind='read']) { background: var(--k-read); }
+.kdot:where([data-kind='write']) { background: var(--k-write); }
+.kdot:where([data-kind='transport']) { background: var(--k-transport); }
 .kdot { display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 2px; }
 .kdot[data-coverage='learned'] { background: var(--live); border-radius: 50%; }
 .kdot[data-coverage='built-in'] { background: var(--accent); border-radius: 50%; }
