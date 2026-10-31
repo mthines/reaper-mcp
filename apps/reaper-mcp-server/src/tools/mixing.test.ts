@@ -3,6 +3,7 @@
  * for quantize_audio). The bridge's own behaviour is tested in mixing-lib.test.ts.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { z } from 'zod/v4';
 
 vi.mock('../bridge.js', () => ({ sendCommand: vi.fn() }));
 vi.mock('../sidecar.js', () => ({ getSidecarClient: vi.fn() }));
@@ -110,5 +111,25 @@ describe('quantize_audio', () => {
     const res = await tool('quantize_audio')({ trackIndex: 0, itemIndex: 0, grid: 1 });
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toBe('Error: Hit detection failed: could not read /audio/drums.wav');
+  });
+});
+
+describe('mixing tools: input schemas', () => {
+  function schema(n: string): z.ZodObject {
+    let shape: z.ZodRawShape = {};
+    registerMixingTools({ tool: (t: string, _d: string, s: z.ZodRawShape) => { if (t === n) shape = s; } } as unknown as McpServer);
+    return z.object(shape);
+  }
+
+  it('turns a parameter link off without naming its source, but needs the source to turn it on', () => {
+    const s = schema('set_fx_param_modulation');
+    expect(s.safeParse({ trackIndex: 0, fxIndex: 0, paramIndex: 1, link: { enabled: false } }).success).toBe(true);
+    expect(s.safeParse({ trackIndex: 0, fxIndex: 0, paramIndex: 1, link: { fxIndex: 1, paramIndex: 2 } }).success).toBe(true);
+  });
+
+  it('caps quantize_audio swing at 0.9, like quantize_midi', () => {
+    const s = schema('quantize_audio');
+    expect(s.safeParse({ trackIndex: 0, itemIndex: 0, grid: 0.5, swing: 0.9 }).success).toBe(true);
+    expect(s.safeParse({ trackIndex: 0, itemIndex: 0, grid: 0.5, swing: 0.95 }).success).toBe(false);
   });
 });

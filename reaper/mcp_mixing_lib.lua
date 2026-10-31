@@ -458,15 +458,26 @@ function M.set_pins(api, p, inputs, outputs)
   if p.trackChannels ~= nil and (not want or want < 2 or want > 128 or want % 2 ~= 0) then
     return nil, "trackChannels must be an even number 2..128 — nothing changed"
   end
-  -- A pin can only use channels the track has: widen the track to the highest one used
-  local needed = math.max(hi_in, hi_out)
-  needed = needed + needed % 2
+  -- A pin can only use channels the track has: widen the track to the highest one used, counting the
+  -- pins this call leaves as they are, so an explicit trackChannels never narrows the track under them
+  local before = read_pins(api, tr, fx)
+  local rewritten = {}
+  for _, w in ipairs(writes) do rewritten[w[1] .. ":" .. w[2]] = true end
+  local kept = 0
+  for side, list in pairs({ [0] = before.inputs, [1] = before.outputs }) do
+    for _, pin in ipairs(list) do
+      if not rewritten[side .. ":" .. pin.pin] then
+        for _, c in ipairs(pin.channels) do kept = math.max(kept, c) end
+      end
+    end
+  end
+  local highest = math.max(hi_in, hi_out, kept)
+  local needed = highest + highest % 2
   if want and want < needed then
-    return nil, "trackChannels " .. want .. " is below channel " .. math.max(hi_in, hi_out) .. " used by a pin — nothing changed"
+    return nil, "trackChannels " .. want .. " is below channel " .. highest .. " used by a pin — nothing changed"
   end
   local target = want or (needed > nchan and needed or nil)
 
-  local before = read_pins(api, tr, fx)
   return with_undo(api, "MCP: Set FX pins", -1, function()
     if target and target ~= nchan then api.SetMediaTrackInfo_Value(tr, "I_NCHAN", target) end
     for _, w in ipairs(writes) do

@@ -184,6 +184,16 @@ describe('mcp_mixing_lib.lua: FX pins', () => {
     `);
   });
 
+  it('never narrows the track under pins the call leaves as they are', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { nchan = 2, fx = { { name = "ReaComp", ins = 4, outs = 2 } } } } }
+      assert(mix.set_pins(api, { trackIndex = 0, fxIndex = 0 }, { { pin = 2, channels = { 3 } }, { pin = 3, channels = { 4 } } }))
+      api.writes = 0
+      refused(api, "below channel 4", mix.set_pins(api, { trackIndex = 0, fxIndex = 0, trackChannels = 2 }, { { pin = 0, channels = { 1 } } }))
+      assert(api.tracks[1].nchan == 4)
+    `);
+  });
+
   it('refuses a pin the FX does not have, a channel outside 1..64 or too few track channels and changes nothing', async () => {
     await runLua(`
       local api = new_fake{ tracks = { { nchan = 2, fx = { { ins = 2, outs = 2 } } } } }
@@ -364,6 +374,19 @@ describe('mcp_mixing_lib.lua: stretch markers', () => {
       local api2 = new_fake{ tracks = { { items = { { pos = 0, len = 2, rate = 2 } } } } }
       local a = assert(mix.add_stretch_markers(api2, { trackIndex = 0, itemIndex = 0 }, { { position = 1 } }))
       assert(api2.tracks[1].items[1].takes[1].sm[1][1] == 2 and a.markers[1].position == 1)
+    `);
+  });
+
+  it('swing widens the reach like quantize_midi, so window 1 still reaches every hit', async () => {
+    await runLua(`
+      -- 120 BPM, grid 1 QN, swing 0.5: lines at 20 and 21.5 QN. A hit at 20.8 QN (10.4 s) is 0.7 QN from
+      -- 21.5, past half a step (0.5) but within (1 + swing) / 2 of one (0.75)
+      local api = new_fake{ tracks = { { items = { { pos = 10, len = 4 } } } } }
+      local r, err = mix.quantize_stretch(api, { trackIndex = 0, itemIndex = 0, grid = 1, swing = 0.5 }, { 0.4 })
+      assert(r and r.moved == 1, tostring(err))
+      assert(math.abs(api.tracks[1].items[1].takes[1].sm[2][1] - 0.75) < 1e-9, "onto the swung line at 10.75 s")
+      api.writes = 0
+      refused(api, "swing", mix.quantize_stretch(api, { trackIndex = 0, itemIndex = 0, grid = 1, swing = 0.95 }, { 0.4 }))
     `);
   });
 
