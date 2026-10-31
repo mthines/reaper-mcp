@@ -284,7 +284,7 @@ resource (`service.instance.id`, `deployment.environment.name`). Count them per 
 - p95 of `reaper.bridge.command.duration` > 0.5 s — the defer loop is starved (heavy project, blocking render).
 - `mcp.server.operation.duration{error.type!=""}` / total > 5 % per `gen_ai.tool.name` — a tool regressed.
 - Any `reaper.bridge.handler_error` or `reaper.server.crash` log — a bug, not a user error.
-- p95 of `reaper.bridge.handler.duration{rpc.method="import_midi_file"}` against `reaper.midi.notes_changed` — a large import blocks REAPER's main thread; past ~5 s it risks a timeout and a retried import.
+- p95 of `reaper.bridge.handler.duration{rpc.method="import_midi_file"}` against `reaper.midi.notes_changed` — a large import blocks REAPER's main thread; the server waits 60 s for it, and one that runs past that is reported as failed while REAPER may still finish it, so a retry imports twice.
 - p95 of `reaper.bridge.handler.duration{rpc.method=~"insert_time|remove_time|copy_section"}` rising while
   `reaper.arrange.items_changed` stays flat — the whole-project walk got slower per item. Any
   `error.type="timeout"` on them (and on `copy_media_items` / `process_items`) matters more than elsewhere: REAPER may still
