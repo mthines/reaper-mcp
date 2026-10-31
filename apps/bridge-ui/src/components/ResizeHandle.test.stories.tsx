@@ -39,7 +39,7 @@ export const WidensWithTheLeftArrowAndNarrowsWithTheRight: Story = {
     handle(canvasElement).focus();
     await userEvent.keyboard('{ArrowLeft}');
     await expect(width(canvasElement)).toBeGreaterThan(before);
-    await expect(args.onCommit).toHaveBeenCalledTimes(1);
+    await expect(args.onCommit).toHaveBeenLastCalledWith(expect.any(Number));
     await userEvent.keyboard('{ArrowRight}');
     await expect(width(canvasElement)).toBe(before);
   },
