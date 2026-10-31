@@ -1,0 +1,8 @@
+.snapSave { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.snapInput { flex: 1 1 140px; min-width: 0; height: 30px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--panel-2); color: var(--text); font: inherit; }
+.snapInputDesc { flex: 2 1 200px; }
+.snapInput:focus { outline: 0; border-color: var(--accent); }
+.snapInput[aria-invalid='true'] { border-color: var(--bad); }
+.snapInput:disabled { opacity: 0.5; }
+.snapHint { flex-basis: 100%; font-size: 12px; color: var(--warn); }
+.snapHintBad { color: var(--bad); }

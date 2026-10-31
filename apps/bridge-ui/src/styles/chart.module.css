@@ -1,0 +1,97 @@
+/* Measurement results in the details drawer: hairline levels, stereo and spectrum; loudness leads with one
+   big number. Zones: --warn from −6 dB, --bad over 0 dB or out of phase, always named in words as well. */
+.measure { --hold: #f4f7fa; --target: #b9a3ff; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; container-type: inline-size; }
+.measureHead {
+  padding: 8px 12px; border-bottom: 1px solid var(--line);
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); background: var(--panel-2);
+}
+.measureBody { padding: 14px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+.measureReadouts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; }
+
+/* Exactly four readouts (timeline: tempo, time sig, regions, markers) sit in one row above the 300px two-column layout, never 3 + 1 */
+@container (min-width: 301px) { .measureReadouts:has(> :nth-child(4):last-child) { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.measureRo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.measureRoLabel { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.measureRoValue { overflow: hidden; text-overflow: ellipsis; font-size: 14px; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.measureRoValue small { margin-left: 3px; font-size: 10.5px; color: var(--muted); }
+.measureRo[data-zone='hot'] .measureRoValue, .measureRo[data-zone='hot'] .measureRoWord { color: var(--warn); }
+.measureRo[data-zone='over'] .measureRoValue, .measureRo[data-zone='over'] .measureRoWord { color: var(--bad); }
+.measureLegend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--muted); }
+.measureLegend i { display: inline-block; vertical-align: middle; margin-right: 4px; border-radius: 1px; }
+.measureScale { height: 14px; font: 10.5px var(--mono); color: var(--faint); }
+.measureScale > div { position: relative; height: 100%; }
+.measureScale span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.measureScaleIndent { padding: 0 60px 0 22px; }
+.measureScaleWords { display: flex; justify-content: space-between; font: 10.5px var(--mono); color: var(--faint); }
+.lgNeedle { width: 3px; height: 10px; background: var(--hold); }
+.lgShort { width: 12px; height: 6px; border-radius: 3px; background: var(--accent); opacity: 0.35; }
+.lgMomentary { width: 6px; height: 6px; border-radius: 50% !important; background: var(--muted); }
+.lgTarget { width: 12px; height: 8px; background: color-mix(in srgb, var(--target) 40%, transparent); }
+.lgLine { width: 12px; height: 2px; background: var(--accent); }
+.lgPrevious { width: 12px; height: 0; border-top: 1px dashed var(--muted); }
+.spectrumGrid { stroke: var(--line); stroke-width: 1; }
+.spectrumBase { stroke: var(--line-2); stroke-width: 1; }
+.spectrumPrevious { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.7; }
+.spectrumCursor { stroke: var(--muted); stroke-width: 1; }
+.spectrumY { position: absolute; left: 2px; transform: translateY(-110%); font-size: 10px; color: var(--faint); pointer-events: none; }
+.spectrumTip {
+  position: absolute; z-index: 2; top: 4px; transform: translateX(-50%); padding: 3px 7px; border-radius: 6px;
+  font-size: 11px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line-2); white-space: nowrap; pointer-events: none;
+}
+.spectrumTip [data-zone='hot'] { color: var(--warn); }
+.spectrumTip [data-zone='over'] { color: var(--bad); }
+
+/* The previous call on the same track, for comparison; opens it */
+.measurePrevious {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px; width: 100%;
+  border: 0; border-top: 1px solid var(--line); padding: 9px 12px; background: transparent;
+  font-size: 11px; color: var(--muted); text-align: left; cursor: pointer;
+}
+.measurePrevious:hover { background: var(--hover, rgba(127, 127, 127, 0.06)); color: var(--text); }
+.measurePrevious:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.measurePreviousDelta { font-weight: 500; color: var(--text); }
+
+/* Edit views: what a write changed (before as a hollow ghost, after in the accent), or what a listing showed */
+.lgTick { width: 2px; height: 10px; background: var(--hold); }
+.lgWas { width: 3px; height: 10px; border: 1px solid var(--muted); background: var(--panel); }
+.lgNew { width: 7px; height: 7px; border-radius: 50% !important; background: var(--accent); }
+.lgRange { width: 12px; height: 3px; background: var(--accent); }
+.lgNote { width: 12px; height: 6px; background: var(--muted); opacity: 0.5; }
+.lgNoteNew { width: 12px; height: 6px; background: var(--accent); }
+.lgNoteGone { width: 12px; height: 6px; border: 1px dashed var(--bad); }
+.lgNewMark { width: 10px; height: 8px; border: 1.5px solid var(--accent); }
+.lgGoneMark { width: 10px; height: 8px; border: 1px dashed var(--muted); }
+.evMore { font-size: 11px; color: var(--faint); }
+.evWord { color: var(--warn); }
+.evRows { display: flex; flex-direction: column; gap: 9px; }
+.evRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: baseline; }
+.evName { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evName small { margin-left: 5px; font-size: 11px; color: var(--faint); }
+.evVal { font-size: 11.5px; color: var(--muted); white-space: nowrap; text-align: right; }
+.evVal b { font-weight: 400; color: var(--text); }
+.evHot .evVal b { color: var(--warn); }
+.evBar { grid-column: 1 / -1; position: relative; height: 12px; }
+.evBar::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--line-2); }
+.evFill { position: absolute; top: 50%; height: 3px; margin-top: -1.5px; border-radius: 2px; background: var(--accent); }
+.evHot .evFill { background: var(--warn); }
+.evTick { position: absolute; top: 1px; bottom: 1px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--hold); }
+.evWas { position: absolute; top: -1px; bottom: -1px; width: 3px; margin-left: -1.5px; border: 1px solid var(--muted); border-radius: 1px; background: var(--panel); }
+.evZero { position: absolute; top: 2px; bottom: 2px; width: 1px; background: var(--faint); }
+.lgAi { width: 12px; height: 8px; border: 1px solid var(--h0); background: color-mix(in srgb, var(--h0) 15%, transparent); }
+.lgEdge { width: 2px; height: 10px; }
+.lgEdge:where([data-change='new']) { background: var(--accent); }
+.lgEdge:where([data-change='moved']) { background: var(--h1); }
+.lgEdge:where([data-change='changed']) { background: var(--muted); }
+.lgStruck { text-decoration: line-through; color: var(--faint); }
+.lgSel { width: 12px; height: 8px; border-inline: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 25%, transparent); }
+
+@container (max-width: 300px) {
+  .measureReadouts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .evName { white-space: normal; }
+}
+.offHints { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); }
+.offHints :global(.mono) { color: var(--text); }
+.lgWarn { width: 8px; height: 8px; border-radius: 2px; background: var(--warn); }
+.lgSpan { width: 12px; height: 8px; border-inline: 1px solid var(--accent); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 45%, transparent) 0 2px, transparent 2px 4px); }
+.lgSpanCut { border-color: var(--bad); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--bad) 45%, transparent) 0 2px, transparent 2px 4px); }
+.lgSpanSrc { width: 12px; height: 8px; border: 1px dashed var(--accent); }

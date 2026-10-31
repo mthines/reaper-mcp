@@ -1,29 +1,15 @@
 import { createRoot } from 'react-dom/client';
-import { App } from './App.js';
-import { Gallery } from './Gallery.js';
-import { developerMode, galleryAllowed } from './gallery-stories.js';
-import { parseExtStateReply } from './status.js';
+// Stylesheet order is the cascade: the root sheet (tokens, base, utilities), then the shared modules,
+// then every component's own module (imported by the component), so a component's class wins a tie
 import './styles.css';
+import './styles/chart.module.css';
+import './styles/drawer.module.css';
+import './styles/list.module.css';
+import { App } from './app/App.js';
 
 const root = createRoot(document.getElementById('root') as HTMLElement);
 
-// `?gallery` shows the component gallery from a local build, or when the bridge says it runs in developer
-// mode; otherwise the param is ignored and the page opens as usual
-async function start() {
-  const search = location.search;
-  if (!new URLSearchParams(search).has('gallery')) return root.render(<App />);
-  let dev: boolean | undefined;
-  if (location.protocol !== 'file:') {
-    try {
-      const res = await fetch('/_/GET/EXTSTATE/MCPBridge/status', { cache: 'no-store' });
-      dev = parseExtStateReply(await res.text())?.settings?.dev;
-    } catch {
-      // REAPER unreachable: the developer mode it last reported decides
-    }
-  }
-  root.render(galleryAllowed(search, location.protocol, developerMode(dev)) ? <Gallery /> : <App />);
-}
-void start();
+root.render(<App />);
 
 // Installable app: the service worker is scoped to /mcp_bridge* so REAPER's other web remotes are untouched
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

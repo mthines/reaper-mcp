@@ -1,0 +1,12 @@
+/* detect_key: one column per pitch class; scale tones lit, the tonic strongest, the previous call as a dashed tick */
+.bars { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; margin: 10px 0 4px; }
+.col { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; text-align: center; }
+.track { position: relative; height: 84px; border-bottom: 1px solid var(--line-2); }
+.fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 2px 2px 0 0; background: var(--faint); opacity: 0.45; }
+.col:where([data-scale='in']) .fill { background: var(--accent); opacity: 0.55; }
+.col:where([data-scale='tonic']) .fill { background: var(--accent); opacity: 1; }
+.was { position: absolute; left: 10%; right: 10%; height: 0; border-top: 1px dashed var(--muted); }
+.pc { font-size: 10.5px; color: var(--muted); overflow: hidden; }
+.col:where([data-scale='tonic']) .pc { color: var(--accent); font-weight: 600; }
+.deg { min-height: 1.2em; font-size: 9.5px; color: var(--faint); }
+@container (max-width: 300px) { .deg { display: none; } .bars { gap: 2px; } }

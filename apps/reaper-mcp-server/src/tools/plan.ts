@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { PlanOp } from '@reaper-mcp/protocol';
 import { sendCommand } from '../bridge.js';
 import { actionRef, actionSection } from './actions.js';
+import { itemRefs } from './arrange.js';
 
 /**
  * Applying a plan can re-instantiate many plugins (add_fx, graft_fxchain), which
@@ -86,6 +87,25 @@ const opSchema = z.discriminatedUnion('op', [
     section: actionSection,
     allowDialog: z.boolean().optional(),
   }),
+  z.object({
+    op: z.literal('copy_items'),
+    items: itemRefs.describe('Items to copy, as the project is before the plan (no op that adds tracks or items may come first)'),
+    times: z.coerce.number().int().min(1).max(64).optional(),
+    position: z.coerce.number().min(0).optional(),
+    trackIndex: z.coerce.number().int().min(0).optional(),
+    pooled: z.boolean().optional(),
+  }),
+  z.object({
+    op: z.literal('insert_time'),
+    position: z.coerce.number().min(0),
+    length: z.coerce.number().positive().max(3600),
+    splitItems: z.boolean().optional(),
+  }),
+  z.object({
+    op: z.literal('remove_time'),
+    start: z.coerce.number().min(0),
+    end: z.coerce.number().min(0),
+  }),
 ]);
 
 export const runPlanShape = {
@@ -156,7 +176,7 @@ export function registerPlanTools(server: McpServer): void {
     'Execute a multi-step edit as ONE bridge call in ONE undo block, all-or-nothing. ' +
       'Use instead of many sequential tool calls. Ops run in order: add_track, set_track, add_fx, ' +
       'set_fx_params, add_send, graft_fxchain (copy a source FX chain onto a track; sends are not copied), ' +
-      'select_tracks, and run_action (any REAPER action — usually after select_tracks; same safety rules as run_action; only run_action ops may follow a run_action). ' +
+      'select_tracks, copy_items / insert_time / remove_time (as the arrange tools), and run_action (any REAPER action — usually after select_tracks; same safety rules as run_action; only run_action ops may follow a run_action). ' +
       'Target tracks by index, exact name, "{GUID}", or a "$ref" that an earlier add_track/add_fx bound with `as`. ' +
       'Every target is resolved before anything is written: an unknown or ambiguous track rejects the whole plan, ' +
       'and a failure mid-apply reverts it. Use dryRun to preview resolution and conflicts. ' +

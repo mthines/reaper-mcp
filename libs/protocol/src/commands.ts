@@ -87,6 +87,9 @@ export type CommandType =
   | 'edit_midi_note'
   | 'edit_midi_notes'
   | 'delete_midi_note'
+  | 'quantize_midi'
+  | 'transform_midi'
+  | 'import_midi_file'
   | 'get_midi_cc'
   | 'insert_midi_cc'
   | 'delete_midi_cc'
@@ -104,6 +107,12 @@ export type CommandType =
   | 'add_stretch_marker'
   | 'get_stretch_markers'
   | 'delete_stretch_marker'
+  // Arrangement
+  | 'copy_media_items'
+  | 'insert_time'
+  | 'remove_time'
+  | 'copy_section'
+  | 'process_items'
   // Composite batch tools
   | 'set_multiple_track_properties'
   | 'setup_fx_chain'
@@ -165,6 +174,7 @@ export type CommandType =
   | 'get_render_settings'
   | 'set_render_settings'
   | 'render_project'
+  | 'render_versions'
   | 'get_project_settings'
   | 'set_project_settings'
   | 'add_tempo_marker'
@@ -403,6 +413,54 @@ export interface DeleteMidiNoteParams {
   noteIndex: number;
 }
 
+/** Which notes of an item a composition edit acts on; all when none is given. Nested values travel as JSON strings. */
+export interface MidiNoteSelection {
+  trackIndex: number;
+  itemIndex: number;
+  /** JSON array of note indexes */
+  notes?: string;
+  pitchMin?: number;
+  pitchMax?: number;
+  channel?: number;
+}
+
+export interface QuantizeMidiParams extends MidiNoteSelection {
+  /** Grid in beats (0.25 = 16ths) */
+  grid: number;
+  strength?: number;
+  swing?: number;
+  window?: number;
+  lengths?: 'keep' | 'quantize';
+}
+
+export interface TransformMidiParams extends MidiNoteSelection {
+  transpose?: number;
+  /** JSON object: { set?, scale?, add?, min?, max? } */
+  velocity?: string;
+  /** JSON object: { timingBeats?, velocity?, seed? } */
+  humanize?: string;
+  /** JSON object: { set?, scale?, legato? } */
+  length?: string;
+}
+
+export interface ImportMidiFileParams {
+  trackIndex: number;
+  newTracks?: boolean;
+  /** Seconds */
+  position: number;
+  lengthQN: number;
+  name?: string;
+  /** JSON array of { name, notes: [startQN, lengthQN, channel, pitch, velocity][], cc: [qn, channel, cc, value][] } */
+  tracks: string;
+}
+
+/** Params of the internal `_midi_pitch_profile` command (not a CommandType: internal commands are not tools). */
+export interface MidiPitchProfileParams {
+  trackIndex: number;
+  startTime?: number;
+  endTime?: number;
+}
+
 export interface GetMidiCCParams {
   trackIndex: number;
   itemIndex: number;
@@ -481,6 +539,53 @@ export interface SplitMediaItemParams {
   trackIndex: number;
   itemIndex: number;
   position: number; // seconds (absolute project position)
+}
+
+/** An item as the media tools address it */
+export interface ItemRef {
+  trackIndex: number;
+  itemIndex: number;
+}
+
+export interface CopyMediaItemsParams {
+  /** JSON-encoded ItemRef[] (the bridge decodes only the top level) */
+  items: string;
+  times?: number;       // 1-64, copies laid end to end
+  position?: number;    // seconds; default: end of the last source item
+  trackIndex?: number;  // destination track; default: each item's own track
+  pooled?: boolean;     // MIDI copies share the source's pool
+}
+
+export interface InsertTimeParams {
+  position: number;     // seconds
+  length: number;       // seconds
+  splitItems?: boolean; // default true: split items that span the position
+}
+
+export interface RemoveTimeParams {
+  start: number;
+  end: number;
+}
+
+export interface CopySectionParams {
+  regionIndex?: number; // list_regions index; or start + end
+  start?: number;
+  end?: number;
+  position: number;
+  insert?: boolean;     // open time at position first
+  envelopes?: boolean;  // default true
+  /** JSON-encoded track index array; default every track */
+  tracks?: string;
+}
+
+export type NormalizeMode = 'peak' | 'true_peak' | 'lufs_i' | 'rms' | 'lufs_m_max' | 'lufs_s_max';
+
+export interface ProcessItemsParams {
+  operation: 'normalize' | 'reverse' | 'glue';
+  /** JSON-encoded ItemRef[] */
+  items: string;
+  mode?: NormalizeMode; // normalize only, default peak
+  target?: number;      // dB, -70..0; default 0 for peak modes
 }
 
 export interface DeleteMediaItemParams {
@@ -742,7 +847,10 @@ export type PlanOp =
   | { op: 'add_send'; from: PlanTrackRef; to: PlanTrackRef; volume?: number; pan?: number; mute?: number }
   | { op: 'graft_fxchain'; track: PlanTrackRef; from?: PlanTrackRef; fromChunk?: string }
   | { op: 'select_tracks'; tracks: PlanTrackRef[]; mode?: SelectionMode }
-  | { op: 'run_action'; action: ActionRef; section?: ActionSection; allowDialog?: boolean };
+  | { op: 'run_action'; action: ActionRef; section?: ActionSection; allowDialog?: boolean }
+  | { op: 'copy_items'; items: ItemRef[]; times?: number; position?: number; trackIndex?: number; pooled?: boolean }
+  | { op: 'insert_time'; position: number; length: number; splitItems?: boolean }
+  | { op: 'remove_time'; start: number; end: number };
 
 export interface RunPlanParams {
   /** JSON-encoded PlanOp[] — sent as a string because the bridge's flat parser cannot read nested arrays; mcp_plan_lib.lua decodes it. */
@@ -966,11 +1074,48 @@ export interface SetRenderSettingsParams {
   /** 0 = project sample rate. */
   sampleRate?: number;
   channels?: number;
+  source?: RenderSource;
+  /** JSON string of RegionMatrixRow[] (the bridge decodes nested params itself). */
+  regionMatrix?: string;
+  bitDepth?: '16' | '24' | '32' | '32f';
+  mp3Bitrate?: number;
+  dither?: boolean;
+  noiseShaping?: boolean;
+  normalize?: 'off' | RenderNormalize;
+  /** dB (LUFS for lufs_*). */
+  normalizeTarget?: number;
+  normalizeOnlyTooLoud?: boolean;
+  limit?: boolean;
+  /** dB. */
+  limitCeiling?: number;
+  limitTruePeak?: boolean;
+  /** JSON string of { title?, artist?, album?, genre?, year?, isrc?, comment?, description? }. */
+  metadata?: string;
+  /** JSON string of { "SCHEME:FIELD": value }. */
+  metadataRaw?: string;
+  embedMetadata?: boolean;
 }
+
+export type RenderSource = 'master' | 'stems' | 'master_and_stems' | 'selected_via_master' | 'region_matrix' | 'selected_items' | 'selected_items_via_master';
+export type RenderNormalize = 'lufs_i' | 'rms' | 'peak' | 'true_peak' | 'lufs_m_max' | 'lufs_s_max';
+export interface RegionMatrixRow { regionIndex: number; tracks: Array<number | string> }
 
 export interface RenderProjectParams {
   /** Delete existing target files first (otherwise refused: REAPER would prompt). */
   overwrite?: boolean;
+  /** JSON string of track refs selected for a stems render only. */
+  tracks?: string;
+  /** Measure each file written (default true). */
+  analyze?: boolean;
+}
+
+export interface RenderVersion { name: string; mute?: Array<number | string>; filePattern?: string }
+
+export interface RenderVersionsParams {
+  /** JSON string of RenderVersion[]. */
+  versions: string;
+  overwrite?: boolean;
+  analyze?: boolean;
 }
 
 export interface SetProjectSettingsParams {

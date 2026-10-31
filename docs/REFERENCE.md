@@ -309,7 +309,7 @@ out of version control.
 ```
 reaper-mcp/
 ├── apps/
-│   ├── reaper-mcp-server/        # MCP server (153 tools, esbuild bundle)
+│   ├── reaper-mcp-server/        # MCP server (163 tools, esbuild bundle)
 │   └── bridge-ui/                # Bridge status page (React → one self-contained HTML file)
 ├── libs/protocol/                # Shared TypeScript types
 ├── .claude/skills/               # Mix skills (/mixer, /critique, /mastering, /learn-plugin, /mix-memory)
@@ -320,7 +320,7 @@ reaper-mcp/
 ├── scripts/sync-symlinks.sh      # Symlink skills + knowledge into ~/.claude (primary install)
 ├── reaper/                       # Files installed into REAPER
 │   ├── mcp_bridge.lua            # Persistent Lua bridge
-│   ├── mcp_*_lib.lua             # Lua libraries the bridge loads (plan, actions, tracks, project, items, envelopes, snapshots, edit views)
+│   ├── mcp_*_lib.lua             # Lua libraries the bridge loads (plan, actions, tracks, project, items, envelopes, arrange, snapshots, edit views)
 │   ├── mcp_snapshot_*.lua        # Snapshot action scripts (next/prev/quick-save + shared lib)
 │   ├── mcp_analyzer.jsfx         # FFT spectrum analyzer
 │   ├── mcp_lufs_meter.jsfx       # LUFS meter (BS.1770)

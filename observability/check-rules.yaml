@@ -75,3 +75,13 @@ spec:
             severity: warning
           annotations:
             summary: comp_lanes failed half way and undid itself — a bug in the comp path.
+
+        - alert: ReaperMcpArrangeTimeout
+          # A timed-out arrange edit may still finish in REAPER, and a retry would apply it twice.
+          expr: >-
+            sum(histogram_count(increase({otel_metric_name="reaper.bridge.command.duration",
+              error_type="timeout", rpc_method=~"insert_time|remove_time|copy_section|copy_media_items|process_items"}[15m]))) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: An arrange edit (time, section, item copy or process) timed out — check the project before retrying.
