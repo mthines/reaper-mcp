@@ -1,0 +1,135 @@
+import { listDiff, type EditView, type SlotChange, type MixRow } from '../edit-views.js';
+import { ChangeLegend, ChangeMark } from './ChangeLegend.js';
+import { CHANGE_WORD, changedText, panText, pct, plural } from './format.js';
+import { Measurement, fmt } from '../../measurements/index.js';
+import { cx } from '../../../lib/cx.js';
+import chartStyles from '../../../styles/chart.module.css';
+import styles from './Mixer.module.css';
+
+function MixerRow({
+  row,
+  master,
+  c,
+  gone,
+}: {
+  row: MixRow;
+  master?: boolean;
+  c?: SlotChange;
+  gone?: boolean;
+}) {
+  const [name, depth, color, db, pan, flags] = row;
+  const hot = db > 0;
+  const folder = flags.includes("F");
+  return (
+    <div
+      className={cx(styles.evTrk, master && styles.evTrkMaster, flags.includes("M") && styles.evTrkMuted)}
+      data-change={gone ? "gone" : c}
+      title={`${name} · ${fmt(db)} dB · pan ${panText(pan)}${gone ? " · removed" : c ? ` · ${CHANGE_WORD[c]}` : ""}`}
+    >
+      <span
+        className={styles.evSw}
+        style={{
+          background: master ? "var(--line-2)" : color || "var(--line-2)",
+        }}
+      />
+      <span
+        className={cx(styles.evTn, folder ? styles.evTnFolder : '')}
+        style={{ paddingLeft: `${Math.min(depth, 4) * 12}px` }}
+      >
+        <span className={styles.evTnText}>
+          {folder ? "▾ " : ""}
+          {name}
+        </span>
+        {gone ? (
+          <span className={styles.evMark} data-change="gone">removed</span>
+        ) : (
+          <ChangeMark c={c} />
+        )}
+      </span>
+      <span
+        className={cx(chartStyles.evBar, styles.evFader)}
+        role="img"
+        aria-label={`${name} ${fmt(db)} dB`}
+      >
+        <span className={chartStyles.evZero} style={{ left: `${pct(0, -60, 6)}%` }} />
+        <span
+          className={cx(chartStyles.evFill, hot ? styles.evFillHot : '')}
+          style={{ left: 0, width: `${pct(db, -60, 6)}%` }}
+        />
+      </span>
+      <span className={cx(styles.evTv, "mono")} data-zone={hot ? "hot" : "ok"}>{fmt(db)}</span>
+      <span
+        className={styles.evPan}
+        role="img"
+        aria-label={`pan ${panText(pan)}`}
+        title={`Pan ${panText(pan)}`}
+      >
+        <span className={styles.evPanC} />
+        <span className={styles.evPanD} style={{ left: `${pct(pan, -1, 1)}%` }} />
+      </span>
+      <span
+        className={styles.evChips}
+        aria-label={
+          [
+            flags.includes("M") && "muted",
+            flags.includes("S") && "soloed",
+            flags.includes("R") && "armed",
+          ]
+            .filter(Boolean)
+            .join(", ") || undefined
+        }
+      >
+        {(["M", "S", "R"] as const).map((f) => (
+          <span
+            key={f}
+            className={styles.evChip}
+            data-chip={flags.includes(f) ? f.toLowerCase() : undefined}
+          >
+            {f}
+          </span>
+        ))}
+      </span>
+    </div>
+  );
+}
+
+export function Mixer({ v }: { v: Extract<EditView, { kind: "mixer" }> }) {
+  // Structure edits carry each track's id before and after, so added, removed and moved tracks can be told apart
+  const was = v.ids && v.was ? v.was : undefined;
+  const ids = v.ids ?? [];
+  const d = listDiff(
+    v.tracks.map((t, i): [string, MixRow] => [ids[i] ?? "", t]),
+    was?.tracks.map((t, i): [string, MixRow] => [was.ids[i] ?? "", t]),
+    (t) => t[0],
+    (a, b) => JSON.stringify(a[1]) === JSON.stringify(b[1]),
+  );
+  const added = [...d.change.values()].filter((c) => c === "new").length;
+  return (
+    <>
+      {was && (
+        <div className={chartStyles.measureReadouts}>
+          <Measurement.Readout label="Tracks" value={String(v.total)} />
+          <Measurement.Readout label="Changed" value={changedText(added, d.removed.length, d.change.size + d.removed.length)} />
+        </div>
+      )}
+      {(v.from ?? 0) > 0 && <div className={chartStyles.evMore}>{plural(v.from ?? 0, "track")} above</div>}
+      <div className={styles.evMix}>
+        {v.tracks.map((t, i) => (
+          <MixerRow key={ids[i] ?? i} row={t} c={d.change.get(i)} />
+        ))}
+        {d.removed.map(([i, t]) => (
+          <MixerRow key={`gone${i}`} row={t[1]} gone />
+        ))}
+        {v.master && <MixerRow row={v.master} master />}
+      </div>
+      {was && <ChangeLegend change={d.change} removed={d.removed.length} />}
+      {v.total > (v.from ?? 0) + v.tracks.length && (
+        <div className={chartStyles.evMore}>
+          +{v.total - (v.from ?? 0) - v.tracks.length} more tracks not drawn
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Plan ─────────────────────────────────────────────────────────────────────

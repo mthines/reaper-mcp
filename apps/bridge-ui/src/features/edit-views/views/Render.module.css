@@ -1,0 +1,28 @@
+/* Render results: one row per file, the version (if any) above its files */
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+.tag { padding: 1px 7px; border: 1px solid var(--line-2); border-radius: 999px; font: 500 10.5px/16px var(--mono); color: var(--muted); }
+.files { display: flex; flex-direction: column; margin-top: 10px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(48px, 1.1fr) 42px 38px 38px; gap: 8px; align-items: center; padding: 5px 0; font-size: 12px; }
+.row + .row, .group + .group { border-top: 1px solid var(--line); }
+.head { padding-top: 0; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); }
+.name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wave { display: block; width: 100%; height: 22px; }
+.shape { fill: var(--accent); stroke: var(--accent); stroke-width: 0.5px; opacity: 0.85; }
+.v { font-size: 11px; text-align: right; color: var(--muted); }
+.v:where([data-zone='hot']) { color: var(--warn); }
+.v:where([data-zone='over']) { color: var(--bad); }
+.version { display: flex; gap: 8px; align-items: baseline; padding: 8px 0 2px; font-size: 12px; min-width: 0; }
+.muted { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+/* Narrow drawer: name and length on one line, the waveform under them across the width, the levels last */
+@container (max-width: 300px) {
+  .row { grid-template-columns: minmax(0, 1fr) 72px 56px; grid-template-areas: 'name name dur' 'wave wave wave' '. lufs tp'; row-gap: 3px; }
+  .name { grid-area: name; }
+  .wave { grid-area: wave; }
+  .lufs { grid-area: lufs; }
+  .tp { grid-area: tp; }
+  .dur { grid-area: dur; }
+  .head { display: none; }
+  .lufs::after { content: ' LUFS'; color: var(--faint); }
+  .tp::after { content: ' TP'; color: var(--faint); }
+  .lufs, .tp { white-space: nowrap; }
+}

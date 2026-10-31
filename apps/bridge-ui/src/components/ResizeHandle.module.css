@@ -1,0 +1,16 @@
+/* Left edge: drag, or focus and use the arrow keys, to resize (24px hit target centred on the border) */
+.resizeHandle {
+  position: absolute; top: 0; bottom: 0; left: -12px; width: 24px; z-index: 1;
+  cursor: col-resize; touch-action: none; user-select: none; outline: none;
+}
+.resizeHandle::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%);
+  background: linear-gradient(to bottom, transparent, var(--accent), transparent);
+  opacity: 0; transition: opacity 0.2s;
+}
+.resizeHandle:hover::after, .resizeHandle:focus-visible::after, .resizeHandle[data-resizing]::after { opacity: 1; }
+body:has(.resizeHandle[data-resizing]) { cursor: col-resize; user-select: none; }
+
+@media (max-width: 720px) {
+  .resizeHandle { display: none; }
+}

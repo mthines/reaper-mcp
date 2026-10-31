@@ -1,0 +1,12 @@
+.offline {
+  margin: 8vh 0 0;
+  max-width: 440px;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.offlineIcon { margin-bottom: 14px; }
+.offline h2 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+.offline p { margin: 0 0 14px; color: var(--muted); }
+.offline ol { margin: 0; padding-left: 18px; color: var(--muted); display: grid; gap: 6px; }

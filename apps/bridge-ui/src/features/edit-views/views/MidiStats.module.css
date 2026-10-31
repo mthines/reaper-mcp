@@ -1,0 +1,2 @@
+.evHist { display: flex; align-items: flex-end; gap: 2px; height: 28px; border-bottom: 1px solid var(--line-2); }
+.evHist span { flex: 1; min-height: 1px; border-radius: 1px 1px 0 0; background: var(--bar); }

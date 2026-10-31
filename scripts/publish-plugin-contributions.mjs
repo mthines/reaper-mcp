@@ -12,7 +12,7 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseContribution } from '../apps/bridge-ui/src/plugin-contributions.mjs';
+import { parseContribution } from '../apps/bridge-ui/src/features/plugins/plugin-contributions.mjs';
 
 const SCOPE = 'project::reaper-mcp';
 const ORG = 'reaper-mcp';

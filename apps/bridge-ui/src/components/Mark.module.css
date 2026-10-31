@@ -1,0 +1,46 @@
+/* Logo: grey dot when the bridge is down; while live the orange dot is an eye that blinks now and then. */
+.mark { width: 34px; height: 34px; flex: none; display: block; }
+.mark .markArc { stroke: #d9d3e6; opacity: 0.55; transition: opacity 0.3s; }
+.mark .markDot { fill: var(--faint); transition: fill 0.3s; }
+.mark .markGlow { opacity: 0; transition: opacity 0.3s; }
+.markActive .markArc, .markActive .markGlow { opacity: 1; }
+.markActive .markDot { fill: url(#mark-dot); }
+
+/* The lid is two layers: .mark-lid-rest sets where it rests (animated, half-closed on hover), and
+   .mark-lid blinks on top of that. A closed lid sits 140px down, so a blink travels 140px minus the rest. */
+.markBtn { --lid-rest: 0px; }
+.mark .markLidRest { transition: transform 0.22s ease-out; }
+
+/* Hover: the lid eases part-way down (sleepy eye), a hint that the logo does something. */
+@media (hover: hover) {
+  .markBtn:hover { --lid-rest: 46px; }
+  .markBtn:hover .markLidRest { transform: translateY(46px); }
+}
+
+/* 16s cycle (1% = 160ms): one blink midway, a quick double blink at the end.
+   The lid snaps shut (ease-in, ~80ms) and opens a little slower (ease-out, ~140ms). */
+.markActive .markLid { animation: blink 16s infinite; }
+
+/* Click: one blink now (wins over the idle cycle), and the eye eases toward the cursor while watching. */
+.mark.markBlink .markLid { animation: blink-once 0.24s; }
+.mark .markEye { transition: transform 0.18s ease-out; }
+.markBtn { display: block; flex: none; padding: 0; border: 0; background: none; border-radius: 9px; cursor: pointer; }
+.markBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .markActive .markLid, .mark.markBlink .markLid { animation: none; }
+  .mark .markLidRest { transition: none; }
+  .mark .markEye { transition: none; }
+}
+
+@keyframes blink {
+  0%, 44%, 96% { transform: translateY(0); animation-timing-function: ease-in; }
+  44.5%, 96.5%, 97.8% { transform: translateY(calc(140px - var(--lid-rest))); animation-timing-function: ease-out; }
+  45.4%, 97.3%, 98.7%, 100% { transform: translateY(0); animation-timing-function: ease-in; }
+}
+
+@keyframes blink-once {
+  0% { transform: translateY(0); animation-timing-function: ease-in; }
+  35% { transform: translateY(calc(140px - var(--lid-rest))); animation-timing-function: ease-out; }
+  100% { transform: translateY(0); }
+}
