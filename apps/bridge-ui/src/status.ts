@@ -606,6 +606,7 @@ export const LONG_RUNNING = new Set([
   'measure_track_alignment',
   'detect_transients',
   'create_transient_automation',
+  'process_items',
   'analyze_track_aesthetics',
   'render_project',
   'render_track_to_wav',

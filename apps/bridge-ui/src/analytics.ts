@@ -30,7 +30,7 @@ export type TrackEvent =
   | { name: 'log_paused'; paused: boolean }
   | { name: 'log_copied'; what: 'rows' | 'error' | 'params' }
   | { name: 'log_cleared' }
-  | { name: 'log_entry_opened'; ok: boolean }
+  | { name: 'log_entry_opened'; ok: boolean; view: string }
   | { name: 'session_filtered' }
   | { name: 'tools_sorted'; sort: string }
   | { name: 'tool_picked'; errors_only: boolean }

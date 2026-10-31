@@ -13,6 +13,7 @@ import {
   listDiff,
   newPoints,
   routeIds,
+  normalizedGains,
   timelineDiff,
   type AutoItem,
   type ChangeRow,
@@ -21,6 +22,7 @@ import {
   type FxChain,
   type FxSlot,
   type Item,
+  type ArrangeOp,
   type Route,
   type SlotChange,
   type Marker,
@@ -995,6 +997,54 @@ function MidiStats({ v }: { v: Extract<EditView, { kind: "midiStats" }> }) {
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
 
+const ARRANGE_LABEL: Record<ArrangeOp, string> = {
+  copy: "Copy items",
+  section: "Copy section",
+  insert: "Insert time",
+  remove: "Remove time",
+  normalize: "Normalize",
+  reverse: "Reverse",
+  glue: "Glue",
+};
+// What the hatched band is, per op
+const SPAN_LABEL: Partial<Record<ArrangeOp, string>> = { insert: "Opened", remove: "Cut", copy: "Copied to", section: "Copied to" };
+
+const signedDb = (g: number) => `${g > 0 ? "+" : ""}${g.toFixed(1)}`;
+const dbRange = (gains: number[]) => {
+  if (!gains.length) return "–";
+  const lo = Math.min(...gains);
+  const hi = Math.max(...gains);
+  return lo === hi ? signedDb(lo) : `${signedDb(lo)}…${signedDb(hi)}`;
+};
+
+/** Readouts of an arrangement edit: what it did, where, and what it changed */
+function ArrangeReadouts({ v, added, removed }: { v: Extract<EditView, { kind: "timeline" }>; added: number; removed: number }) {
+  const lanes = v.lanes ?? [];
+  const tracks = lanes.map((l) => l.t).join(", ") + (v.moreTracks ? ` +${v.moreTracks}` : "");
+  const normalized = normalizedGains(lanes);
+  const range = v.to ?? v.span;
+  return (
+    <div className="measure-readouts">
+      <Readout label="Edit" value={v.op ? ARRANGE_LABEL[v.op] : "–"} />
+      {v.op === "normalize" ? (
+        <>
+          <Readout label="Gain" value={dbRange(normalized.map(([g]) => g))} unit="dB" />
+          <Readout label="Before" value={dbRange(normalized.map(([, w]) => w))} unit="dB" />
+        </>
+      ) : range ? (
+        <>
+          <Readout label={v.op === "remove" ? "From" : "At"} value={clock(range[0], 1)} />
+          <Readout label="Length" value={(range[1] - range[0]).toFixed(1)} unit="s" />
+          <Readout label="Changed" value={`+${added} −${removed}`} />
+        </>
+      ) : (
+        <Readout label="Changed" value={`+${added} −${removed}`} />
+      )}
+      <Readout label="Tracks" value={String(lanes.length + (v.moreTracks ?? 0))} title={tracks} />
+    </div>
+  );
+}
+
 function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
   const len = Math.max(1, v.len);
   const at = (t: number) => `${pct(t, 0, len)}%`;
@@ -1004,6 +1054,8 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
   const bpms = [...v.tempo, ...tempos.removed].map((t) => t[1]);
   const varies = new Set(bpms).size > 1;
   const first = v.tempo[0];
+  // The hatched band: the time opened or cut, else where a copy landed
+  const band = v.op === "insert" || v.op === "remove" ? v.span : v.to;
   const sig = first && first[2] > 0 ? `${first[2]}/${first[3]}` : "–";
   const changed = regions.added.size + markers.added.size + tempos.added.size;
   const removed =
@@ -1034,7 +1086,9 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
   const itemWrite = lanes.some((l) => l.was);
   return (
     <>
-      {time ? (
+      {v.op ? (
+        <ArrangeReadouts v={v} added={itemsAdded} removed={itemsRemoved} />
+      ) : time ? (
         <div className="measure-readouts">
           <Readout label="Selection" value={v.sel ? clock(v.sel[0], 1) : "none"} />
           <Readout label="End" value={v.sel ? clock(v.sel[1], 1) : "–"} />
@@ -1086,6 +1140,20 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
       </div>
       )}
       <div className="ev-timeline" ref={laneRef}>
+        {v.span && (v.op === "copy" || v.op === "section") && (
+          <span
+            className="ev-span ev-span-src"
+            style={{ left: at(v.span[0]), width: `${pct(v.span[1], 0, len) - pct(v.span[0], 0, len)}%` }}
+            title={`Source ${clock(v.span[0], 1)}–${clock(v.span[1], 1)}`}
+          />
+        )}
+        {band && (
+          <span
+            className={`ev-span ${v.op === "remove" ? "ev-span-cut" : ""}`}
+            style={{ left: at(band[0]), width: `${pct(band[1], 0, len) - pct(band[0], 0, len)}%` }}
+            title={`${v.op ? SPAN_LABEL[v.op] : ""} ${clock(band[0], 1)}–${clock(band[1], 1)}`}
+          />
+        )}
         {v.wasSel && (
           <span
             className="ev-sel ev-sel-was"
@@ -1176,6 +1244,11 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
             name={lane.t}
           />
         ))}
+        {v.moreTracks ? (
+          <span className="ev-more">
+            +{v.moreTracks} more {v.moreTracks === 1 ? "track" : "tracks"} changed the same way
+          </span>
+        ) : null}
         {(varies || tempos.added.size > 0 || tempos.removed.length > 0) && (
           <TempoLane
             tempo={v.tempo}
@@ -1190,10 +1263,12 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
         <span>{clock(len / 2)}</span>
         <span>{clock(len)}</span>
       </div>
-      {(itemsAdded > 0 || itemsRemoved > 0) && (
+      {(itemsAdded > 0 || itemsRemoved > 0 || v.op) && (
         <Legend
           items={[
-            ["lg-new-mark", "Added or changed"],
+            ...(v.op === "copy" || v.op === "section" ? [["lg-span-src", "Source"] as [string, string]] : []),
+            ...(SPAN_LABEL[v.op!] && (v.to || v.span) ? [[v.op === "remove" ? "lg-span lg-span-cut" : "lg-span", SPAN_LABEL[v.op!]!] as [string, string]] : []),
+            ["lg-new-mark", v.op === "normalize" ? "New gain" : "Added or changed"],
             ["lg-gone-mark", "Before"],
           ]}
         />
@@ -1206,7 +1281,7 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
           ]}
         />
       )}
-      {v.was && (changed > 0 || removed > 0) && (
+      {v.was && !v.op && (changed > 0 || removed > 0) && (
         <Legend
           items={[
             ["lg-new-mark", "Added or changed"],
@@ -1774,8 +1849,9 @@ function ItemsLane({
             key={i}
             className={`ev-item ${it[4] ? "ev-item-midi" : ""} ${it[5] ? "ev-item-muted" : ""} ${added.has(it) ? "ev-new" : ""}`}
             style={{ left: at(it[0]), width: width(it) }}
-            title={`${it[4] ? "MIDI" : "Audio"} item · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}${it[5] ? " · muted" : ""}`}
+            title={`${it[4] ? "MIDI" : "Audio"} item · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}${it[5] ? " · muted" : ""}${it[6] !== undefined ? ` · gain ${signedDb(it[6])} dB` : ""}`}
           >
+            {it[6] !== undefined && added.has(it) && <b className="ev-item-gain mono">{signedDb(it[6])}</b>}
             {it[2] > 0 && (
               <i className="ev-fade-in" style={{ width: `${(it[2] / it[1]) * 100}%` }} />
             )}

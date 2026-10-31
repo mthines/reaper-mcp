@@ -104,6 +104,12 @@ export type CommandType =
   | 'add_stretch_marker'
   | 'get_stretch_markers'
   | 'delete_stretch_marker'
+  // Arrangement
+  | 'copy_media_items'
+  | 'insert_time'
+  | 'remove_time'
+  | 'copy_section'
+  | 'process_items'
   // Composite batch tools
   | 'set_multiple_track_properties'
   | 'setup_fx_chain'
@@ -477,6 +483,53 @@ export interface SplitMediaItemParams {
   position: number; // seconds (absolute project position)
 }
 
+/** An item as the media tools address it */
+export interface ItemRef {
+  trackIndex: number;
+  itemIndex: number;
+}
+
+export interface CopyMediaItemsParams {
+  /** JSON-encoded ItemRef[] (the bridge decodes only the top level) */
+  items: string;
+  times?: number;       // 1-64, copies laid end to end
+  position?: number;    // seconds; default: end of the last source item
+  trackIndex?: number;  // destination track; default: each item's own track
+  pooled?: boolean;     // MIDI copies share the source's pool
+}
+
+export interface InsertTimeParams {
+  position: number;     // seconds
+  length: number;       // seconds
+  splitItems?: boolean; // default true: split items that span the position
+}
+
+export interface RemoveTimeParams {
+  start: number;
+  end: number;
+}
+
+export interface CopySectionParams {
+  regionIndex?: number; // list_regions index; or start + end
+  start?: number;
+  end?: number;
+  position: number;
+  insert?: boolean;     // open time at position first
+  envelopes?: boolean;  // default true
+  /** JSON-encoded track index array; default every track */
+  tracks?: string;
+}
+
+export type NormalizeMode = 'peak' | 'true_peak' | 'lufs_i' | 'rms' | 'lufs_m_max' | 'lufs_s_max';
+
+export interface ProcessItemsParams {
+  operation: 'normalize' | 'reverse' | 'glue';
+  /** JSON-encoded ItemRef[] */
+  items: string;
+  mode?: NormalizeMode; // normalize only, default peak
+  target?: number;      // dB, -70..0; default 0 for peak modes
+}
+
 export interface DeleteMediaItemParams {
   trackIndex: number;
   itemIndex: number;
@@ -736,7 +789,10 @@ export type PlanOp =
   | { op: 'add_send'; from: PlanTrackRef; to: PlanTrackRef; volume?: number; pan?: number; mute?: number }
   | { op: 'graft_fxchain'; track: PlanTrackRef; from?: PlanTrackRef; fromChunk?: string }
   | { op: 'select_tracks'; tracks: PlanTrackRef[]; mode?: SelectionMode }
-  | { op: 'run_action'; action: ActionRef; section?: ActionSection; allowDialog?: boolean };
+  | { op: 'run_action'; action: ActionRef; section?: ActionSection; allowDialog?: boolean }
+  | { op: 'copy_items'; items: ItemRef[]; times?: number; position?: number; trackIndex?: number; pooled?: boolean }
+  | { op: 'insert_time'; position: number; length: number; splitItems?: boolean }
+  | { op: 'remove_time'; start: number; end: number };
 
 export interface RunPlanParams {
   /** JSON-encoded PlanOp[] — sent as a string because the bridge's flat parser cannot read nested arrays; mcp_plan_lib.lua decodes it. */

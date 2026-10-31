@@ -23,6 +23,7 @@ import { registerBatchTools } from './tools/batch.js';
 import { registerPlanTools } from './tools/plan.js';
 import { registerActionTools } from './tools/actions.js';
 import { registerItemTools } from './tools/items.js';
+import { registerArrangeTools } from './tools/arrange.js';
 import { registerFxHousekeepingTools } from './tools/fx-housekeeping.js';
 import { registerCategoryTools } from './tools/categories.js';
 import { registerAestheticsTools } from './tools/aesthetics.js';
@@ -149,6 +150,7 @@ export function createServer(): McpServer {
   registerPlanTools(server);
   registerActionTools(server);
   registerItemTools(server);
+  registerArrangeTools(server);
   registerFxHousekeepingTools(server);
   registerCategoryTools(server);
   registerAestheticsTools(server);

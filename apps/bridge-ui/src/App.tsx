@@ -10,6 +10,7 @@ import { SnapshotsView } from './SnapshotsView.js';
 import { blockedBy } from './snapshots.js';
 import { useSnapshots, type SnapshotsHook } from './useSnapshots.js';
 import { EditViewSection } from './EditViews.js';
+import { editViewOf } from './edit-views.js';
 import { MeasurementView } from './Measurement.js';
 import { developerMode, galleryAllowed } from './gallery-stories.js';
 import { prependedCount, scrollToRow, visibleRows } from './virtual-list.js';
@@ -1940,7 +1941,7 @@ function Log({
   const selectRow = useCallback(
     (e: CommandEntry) => {
       const open = selectedRef.current?.n === e.n;
-      if (!open) track({ name: 'log_entry_opened', ok: e.ok });
+      if (!open) track({ name: 'log_entry_opened', ok: e.ok, view: editViewOf(e)?.kind ?? 'none' });
       // Every click is a step Back undoes (opening, closing or switching rows); only ↑/↓ replaces
       setSelected(open ? null : e, 'push');
     },

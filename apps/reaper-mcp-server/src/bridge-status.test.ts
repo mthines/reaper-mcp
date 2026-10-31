@@ -11,7 +11,7 @@ const REAPER_DIR = join(__dirname, '../../../reaper');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
 const SCRIPTS = '/reaper/Scripts/';
 const BRIDGE_DIR = `${SCRIPTS}mcp_bridge_data/`;
-const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua'];
+const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_arrange_lib.lua'];
 
 interface Entry { n: number; t: number; c: string; ok: boolean; s?: string; p?: string; e?: string; r?: Record<string, unknown> }
 type Row = [number, number, number, number, number];
@@ -652,6 +652,72 @@ describe('edit views in the log', () => {
     await bridge.send('set_time_selection', { start: 8, end: 16 });
     const r = (await bridge.status()).recent[0].r;
     expect(r).toMatchObject({ sel: [8, 16], wasSel: [4, 12], cur: 0, len: 16 });
+  });
+});
+
+describe('arrangement view in the log', () => {
+  const SONG = `
+    api.tracks[1].items = { { vals = { D_POSITION = 2, D_LENGTH = 4 }, takes = {} }, { vals = { D_POSITION = 10, D_LENGTH = 2 }, takes = {} } }
+    api.DeleteTrackMediaItem = function(tr, it)
+      for i, x in ipairs(tr.items) do if x == it then table.remove(tr.items, i) return true end end
+    end
+  `;
+
+  it('arrangement view in the log: insert time shows the opened span and the items before and after', async () => {
+    const bridge = await startBridge(SONG);
+    const res = await bridge.send('insert_time', { position: 8, length: 4 });
+    expect(res.success).toBe(true);
+    const r = (await bridge.status()).recent[0].r;
+    expect(r).toMatchObject({
+      op: 'insert', span: [8, 12],
+      lanes: [{ t: 'Kick', items: [[2, 4, 0, 0, 0, 0], [14, 2, 0, 0, 0, 0]], was: [[2, 4, 0, 0, 0, 0], [10, 2, 0, 0, 0, 0]] }],
+      len: 16,
+    });
+    expect(r).toHaveProperty('was');
+  });
+
+  it('arrangement view in the log: remove time shows the cut span, with the items it deleted as before', async () => {
+    const bridge = await startBridge(SONG);
+    expect((await bridge.send('remove_time', { start: 1, end: 7 })).success).toBe(true);
+    const r = (await bridge.status()).recent[0].r;
+    expect(r).toMatchObject({
+      op: 'remove', span: [1, 7],
+      lanes: [{ t: 'Kick', items: [[4, 2, 0, 0, 0, 0]], was: [[2, 4, 0, 0, 0, 0], [10, 2, 0, 0, 0, 0]] }],
+    });
+  });
+
+  it('arrangement view in the log: processing items on six tracks draws four lanes and counts the other two', async () => {
+    const bridge = await startBridge(`
+      for t = 1, 6 do
+        api.tracks[t] = api.tracks[t] or { name = "T" .. t, guid = "{T" .. t .. "}", vals = {}, fx = {}, sends = {}, chunk = "" }
+        api.tracks[t].items = { { vals = { D_POSITION = t, D_LENGTH = 1 }, takes = {} } }
+      end
+      api.Main_OnCommand = function() end
+      local function all() local l = {} for _, tr in ipairs(api.tracks) do for _, it in ipairs(tr.items or {}) do l[#l + 1] = it end end return l end
+      api.CountMediaItems = function() return #all() end
+      api.GetMediaItem = function(_, i) return all()[i + 1] end
+      api.IsMediaItemSelected = function(it) return it.selected == true end
+      api.SetMediaItemSelected = function(it, on) it.selected = on end
+      api.SelectAllMediaItems = function(_, on) for _, it in ipairs(all()) do it.selected = on end end
+      api.ValidatePtr2 = api.ValidatePtr2 or function() return true end
+      api.GetMediaItem_Track = function(it)
+        for _, tr in ipairs(api.tracks) do for _, x in ipairs(tr.items or {}) do if x == it then return tr end end end
+      end
+    `);
+    const items = [0, 1, 2, 3, 4, 5].map((t) => ({ trackIndex: t, itemIndex: 0 }));
+    const res = await bridge.send('process_items', { operation: 'glue', items: JSON.stringify(items) });
+    expect(res.success, res.error).toBe(true);
+    const r = (await bridge.status()).recent[0].r;
+    expect(r).toMatchObject({ moreTracks: 2 });
+    expect(r?.lanes).toHaveLength(4);
+  });
+
+  it('arrangement view in the log: a refused edit keeps no view', async () => {
+    const bridge = await startBridge(SONG);
+    const res = await bridge.send('remove_time', { start: 5, end: 1 });
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('nothing changed');
+    expect((await bridge.status()).recent[0].r).toBeUndefined();
   });
 });
 
