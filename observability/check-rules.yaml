@@ -64,6 +64,28 @@ spec:
           annotations:
             summary: reaper-mcp-server logged an ERROR (handler crash, server crash, or bridge timeout).
 
+        - alert: ReaperMcpSeparationSlow
+          # Demucs runs several times faster than real time on MPS/CUDA; under 1x there means it
+          # silently fell back to CPU (an upgrade broke the accelerator path).
+          expr: >-
+            histogram_quantile(0.5, sum(increase(
+              {otel_metric_name="reaper.audio.separation.speed", reaper_separation_device=~"mps|cuda"}[1d]))) < 1
+          labels:
+            severity: info
+          annotations:
+            summary: Stem separation on an accelerator runs slower than real time — it likely fell back to CPU.
+
+        - alert: ReaperMcpSeparationFellBack
+          # The accelerator raised and the separation re-ran on CPU (device label cpu_fallback);
+          # the warning log carries the error.
+          expr: >-
+            sum(histogram_count(increase(
+              {otel_metric_name="reaper.audio.separation.speed", reaper_separation_device="cpu_fallback"}[1d]))) > 0
+          labels:
+            severity: info
+          annotations:
+            summary: Stem separation fell back to CPU after the accelerator failed — see the separate_stems warning log.
+
         - alert: ReaperMcpQuantizeOffGrid
           # quantize_audio records each call's average hit distance from the grid before
           # and after; after is ~0 at strength 1 (a softer strength leaves some offset

@@ -153,6 +153,7 @@ export type CommandType =
   | 'add_hardware_output'
   // Items, takes, take FX and FX housekeeping
   | 'insert_audio_file'
+  | 'insert_stem_tracks'
   | 'list_takes'
   | 'set_active_take'
   | 'get_take_fx'
@@ -1132,6 +1133,17 @@ export interface InsertAudioFileParams {
   filePath: string;
   /** Seconds; defaults to the edit cursor. */
   position?: number;
+}
+
+export interface InsertStemTracksParams {
+  /** Stems as a JSON string of [{name, path}] (nested params travel as JSON). */
+  files: string;
+  /** Seconds; where each stem item starts (default 0). */
+  position?: number;
+  /** Insert the folder after this track index (-1 = at the top; default: at the end). */
+  afterTrack?: number;
+  /** Name of the folder track holding the stems (default "Stems"). */
+  folderName?: string;
 }
 
 export interface ItemRefParams {

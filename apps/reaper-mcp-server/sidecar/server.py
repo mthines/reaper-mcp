@@ -284,6 +284,141 @@ def handle_transients(request_id: Any, params: dict) -> str:
         return _err(request_id, -32000, f"Transient detection failed: {exc}")
 
 
+def _load_window(request_id: Any, params: dict, min_seconds: float) -> tuple[Any, int, float] | str:
+    """Read params.path over [startTime, endTime), or an error response."""
+    import analysis
+
+    error = _check_file(request_id, params, "path")
+    if error:
+        return error
+    start = float(params.get("startTime", 0))
+    audio, sr = analysis.load_audio(params["path"], start, params.get("endTime"))
+    if audio.shape[1] < int(min_seconds * sr):
+        return _err(request_id, -32000, f"Audio too short: need at least {min_seconds:g} s")
+    return audio, sr, start
+
+
+def _shift(span: dict | None, offset: float) -> None:
+    if span and offset:
+        for key in ("start", "end"):
+            if key in span:
+                span[key] = round(span[key] + offset, 1)
+
+
+def handle_loudness_curve(request_id: Any, params: dict) -> str:
+    """
+    Short-term and momentary loudness over time (bucketed), loudest/quietest
+    windows and spans over a target. Times are in the file's own seconds plus
+    startTime.
+
+    params: path, startTime?, endTime?, targetLufs?, toleranceLu? (default 1)
+    """
+    import mixcheck
+
+    try:
+        loaded = _load_window(request_id, params, 0.4)
+        if isinstance(loaded, str):
+            return loaded
+        audio, sr, start = loaded
+        target = params.get("targetLufs")
+        result = mixcheck.loudness_curve(audio, sr, None if target is None else float(target),
+                                         float(params.get("toleranceLu", 1.0)))
+        for key in ("loudest", "quietest"):
+            _shift(result.get(key), start)
+        for span in result.get("overTarget", []):
+            _shift(span, start)
+        result["startTime"] = start
+        return _ok(request_id, result)
+    except Exception as exc:  # noqa: BLE001
+        return _err(request_id, -32000, f"Loudness curve failed: {exc}")
+
+
+def handle_stereo_bands(request_id: Any, params: dict) -> str:
+    """
+    Stereo correlation, width and phase problems per frequency band.
+
+    params: path, startTime?, endTime?
+    """
+    import mixcheck
+
+    try:
+        loaded = _load_window(request_id, params, 0.5)
+        if isinstance(loaded, str):
+            return loaded
+        audio, sr, start = loaded
+        result = mixcheck.band_correlation(audio, sr)
+        result["startTime"] = start
+        return _ok(request_id, result)
+    except ValueError as exc:
+        return _err(request_id, -32602, str(exc))
+    except Exception as exc:  # noqa: BLE001
+        return _err(request_id, -32000, f"Stereo band analysis failed: {exc}")
+
+
+def handle_masking(request_id: Any, params: dict) -> str:
+    """
+    Where 2-8 tracks (renders of the same time range) compete for the same
+    third-octave bands, with which one to cut.
+
+    params: tracks: [{name, path}]
+    """
+    import analysis
+    import mixcheck
+
+    tracks = params.get("tracks")
+    if not isinstance(tracks, list) or not 2 <= len(tracks) <= 8:
+        return _err(request_id, -32602, "tracks must list 2 to 8 {name, path}")
+    loaded = []
+    rate = None
+    try:
+        for t in tracks:
+            error = _check_file(request_id, t, "path")
+            if error:
+                return error
+            audio, sr = analysis.load_audio(t["path"])
+            if rate is not None and sr != rate:
+                return _err(request_id, -32000, f"Sample rates differ: {rate} vs {sr}")
+            rate = sr
+            loaded.append((str(t.get("name") or os.path.basename(t["path"])), audio))
+        return _ok(request_id, mixcheck.masking(loaded, rate))
+    except ValueError as exc:
+        return _err(request_id, -32602, str(exc))
+    except Exception as exc:  # noqa: BLE001
+        return _err(request_id, -32000, f"Masking analysis failed: {exc}")
+
+
+def handle_separate(request_id: Any, params: dict) -> str:
+    """
+    Split a file into stems with Demucs (opt-in install), written as WAVs to outDir.
+
+    params: path, outDir, model? (htdemucs|htdemucs_6s), stems? [names], startTime?, endTime?, maxSeconds?
+    """
+    import separation
+
+    error = _check_file(request_id, params, "path")
+    if error:
+        return error
+    if not params.get("outDir"):
+        return _err(request_id, -32602, "Missing required param: outDir")
+    try:
+        return _ok(request_id, separation.separate(
+            params["path"], params["outDir"], str(params.get("model", "htdemucs")), params.get("stems"),
+            float(params.get("startTime", 0)), params.get("endTime"), params.get("maxSeconds")))
+    except ValueError as exc:
+        return _err(request_id, -32602, str(exc))
+    except RuntimeError as exc:
+        return _err(request_id, -32000, str(exc))
+    except Exception as exc:  # noqa: BLE001
+        return _err(request_id, -32000, f"Separation failed: {exc}")
+
+
+def handle_separation_status(request_id: Any, params: dict) -> str:
+    """Whether Demucs is installed, so a caller can refuse before rendering anything."""
+    import separation
+
+    return _ok(request_id, {"installed": separation.is_installed(), "message": separation.NOT_INSTALLED})
+
+
 def handle_chroma(request_id: Any, params: dict) -> str:
     """
     Pitch-class energy of a file (C first, largest = 1), for key detection.
@@ -312,6 +447,11 @@ METHODS = {
     "align": handle_align,
     "transients": handle_transients,
     "chroma": handle_chroma,
+    "loudness_curve": handle_loudness_curve,
+    "stereo_bands": handle_stereo_bands,
+    "masking": handle_masking,
+    "separate": handle_separate,
+    "separation_status": handle_separation_status,
 }
 
 

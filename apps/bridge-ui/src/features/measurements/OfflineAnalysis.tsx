@@ -1,6 +1,6 @@
 import { lufsPct } from './Loudness.js';
 import { Readout, Scale } from './Readout.js';
-import { fmt, pct, tpWord, tpZone } from './format.js';
+import { fmt, pct, tpWord, tpZone, secs } from './format.js';
 import type { Measurement } from '../../lib/commands.js';
 import { cx } from '../../lib/cx.js';
 import loudnessStyles from './Loudness.module.css';
@@ -9,7 +9,6 @@ import styles from './OfflineAnalysis.module.css';
 
 const BAND_NAMES = ['Sub', 'Bass', 'Low mid', 'Mid', 'Upper mid', 'Presence', 'Brilliance'];
 const BAND_RANGES = ['20–60 Hz', '60–250 Hz', '250–500 Hz', '500 Hz–2 kHz', '2–4 kHz', '4–6 kHz', '6–20 kHz'];
-const secs = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 /** Offline loudness of a render or a file: the integrated number first, then how it moves and where the energy sits */
 export function Offline({ m, was }: { m: Extract<Measurement, { kind: 'offline' }>; was?: number }) {

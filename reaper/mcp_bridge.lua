@@ -3797,6 +3797,14 @@ local function with_items_lib(name, params)
 end
 
 function handlers.insert_audio_file(params) return with_items_lib("insert_audio_file", params) end
+function handlers.insert_stem_tracks(params)
+  -- files travels as a JSON string (the bridge decodes only the top level)
+  if type(params.files) == "string" and plan_lib_ok then
+    local ok, files = pcall(plan_lib.json_decode, params.files)
+    params.files = ok and files or nil
+  end
+  return with_items_lib("insert_stems", params)
+end
 function handlers.list_takes(params) return with_items_lib("list_takes", params) end
 function handlers.set_active_take(params) return with_items_lib("set_active_take", params) end
 function handlers.get_take_fx(params) return with_items_lib("get_take_fx", params) end
@@ -5016,7 +5024,8 @@ for _, c in ipairs({
   "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
   "insert_audio_file", "snapshot_save", "snapshot_restore", "snapshot_edit",
   "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
-  "detect_transients", "create_transient_automation",
+  "detect_transients", "create_transient_automation", "insert_stem_tracks",
+  "analyze_loudness_curve", "analyze_stereo_bands", "measure_masking", "separate_stems",
   "freeze_tracks", "unfreeze_tracks", "apply_fx_to_items", "quantize_audio", "detect_key", "import_midi_file", "process_items",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0

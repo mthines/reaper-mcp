@@ -74,12 +74,16 @@ reaper-mcp/
         offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment (sidecar, no model)
         transients.ts         # detect_transients, create_transient_automation (sidecar onsets → envelope pulses, e.g. lighting)
         composition.ts        # quantize_midi, transform_midi, import_midi_file (SMF parsed in smf.ts), detect_key (key.ts; logic in reaper/mcp_midi_lib.lua)
+        mixcheck.ts           # analyze_loudness_curve, analyze_stereo_bands, measure_masking, separate_stems (sidecar)
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
         mixing.ts             # automation mode, FX modulation + pins, monitoring FX, freeze, render in place, stretch markers, quantize_audio (logic in reaper/mcp_mixing_lib.lua)
 
     sidecar/                  # Python sidecar for semantic audio analysis (opt-in)
       server.py               # JSON-RPC server (Meta Audiobox Aesthetics, CC-BY 4.0)
+      mixcheck.py             # Loudness curve, stereo correlation per band, masking between tracks
+      separation.py           # Stem separation with Demucs (opt-in: setup-sidecar --with-separation)
       requirements.txt        # Pinned Python deps
+      requirements-separation.txt # Demucs, installed only by --with-separation
       tests/test_server.py    # pytest unit tests for the sidecar
 
   libs/protocol/              # Shared TypeScript types (compiled with tsc)
@@ -167,7 +171,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (171 total)
+## MCP Tools (175 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -401,6 +405,16 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `apply_fx_to_items` | `tools/mixing.ts` | Render in place: track + take FX to a new active take (40209/40361/41993); the old take stays |
 | `add_stretch_markers` | `tools/mixing.ts` | Many stretch markers on an audio item in one call and one undo point |
 | `quantize_audio` | `tools/mixing.ts` | Hits from the sidecar (`transients`), then stretch markers moved toward the grid (strength, window, swing); returns the timing offset before/after (TS-composed over `get_media_item_properties` + the `quantize_audio` bridge command) |
+### Mix Checks (4) — Requires Python Sidecar
+
+Each takes a track (rendered post-FX, `-1` = master) or a file `path`; `measure_masking` takes 2-8 tracks.
+
+| Tool | File | Description |
+|------|------|-------------|
+| `analyze_loudness_curve` | `tools/mixcheck.ts` | Short-term and momentary LUFS over time (≤240 points each, every point its slice's loudest), integrated, true peak, LRA, PLR, loudest/quietest 3 s windows, and with `targetLufs` the spans over target + `toleranceLu`; times in project time for a track, file seconds for a `path` |
+| `analyze_stereo_bands` | `tools/mixcheck.ts` | Correlation per band (low <120 Hz, lowMid, mid, high 2-8 kHz, air): overall, worst, out-of-phase share, side-to-mid dB, a 60-point series; flags a wide/out-of-phase low end or any band below 0 |
+| `measure_masking` | `tools/mixcheck.ts` | Renders 2-8 tracks over the same range (≤60 s) and scores each pair per K-weighted third-octave band (both loud there and within ~6 dB); pairs with their worst bands, top conflicts with which track to cut (the one the band matters less to) |
+| `separate_stems` | `tools/mixcheck.ts` | Demucs (`htdemucs` 4 stems, `htdemucs_6s` adds guitar/piano) to 32-bit float WAVs in `outDir` (default `<project media>/Stems/<name>-<time>`), ≤600 s; `insertTracks` adds them under a new, muted folder (they sum back to the source) in one undo point via the internal `insert_stem_tracks` (after a folder source's last child, lined up with the range). Needs `setup-sidecar --with-separation` (pre-downloads `htdemucs`; the first `htdemucs_6s` call downloads ~80 MB) |
 
 ### Plan Executor (1)
 
@@ -477,7 +491,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 171 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 175 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
@@ -703,10 +717,11 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 
 - **Opt-in**: The sidecar is installed separately via `setup-sidecar`. `pnpm install` and `pnpm nx build` never touch Python.
 - **Lazy spawn**: The sidecar process spawns on the first sidecar tool call, not at server startup; the aesthetics model loads only on the first `analyze` request.
-- **JSON-RPC methods**: `analyze` (aesthetics, with optional `normalizeLufs`), `analyze_audio` (loudness/spectrum/reference, `sidecar/analysis.py`), `align` (cross-correlation delay + polarity), `transients` (per-band spectral-flux onsets: low <150 Hz, mid, high >4 kHz, each band scaled to its own 99th percentile so a kick counts as much as a hat; dominant band by mean per-bin log rise; tempo from the onset autocorrelation).
+- **JSON-RPC methods**: `analyze` (aesthetics, with optional `normalizeLufs`), `analyze_audio` (loudness/spectrum/reference, `sidecar/analysis.py`), `align` (cross-correlation delay + polarity), `loudness_curve` / `stereo_bands` / `masking` (`sidecar/mixcheck.py`), `separate` (Demucs, `sidecar/separation.py`: model loaded once per process, CUDA/MPS/CPU with a CPU fallback, `REAPER_MCP_SEPARATION_DEVICE` overrides; a separation call gets its own timeout, ~90 s + 3 s per audio second), `transients` (per-band spectral-flux onsets: low <150 Hz, mid, high >4 kHz, each band scaled to its own 99th percentile so a kick counts as much as a hat; dominant band by mean per-bin log rise; tempo from the onset autocorrelation).
 - **Audio loading**: always `soundfile` (`analysis.load_audio`). torchaudio 2.9+ removed `info()` and moved `load()` to torchcodec, so never call `torchaudio.load`/`torchaudio.info`; `torchaudio.functional` (filters, resampling) is fine.
 - **Loudness**: `analysis.py` implements ITU-R BS.1770-4 (K-weighting, 400 ms blocks, -70/-10 gates, channels summed) and EBU 3342 LRA; `tests/test_analysis.py` checks them against the EBU 3341/3342 reference signals.
 - **Lifecycle**: Sidecar receives SIGTERM when the MCP server receives SIGINT/SIGTERM. Managed via `getSidecarClient().shutdown()` in `main.ts`.
+- **One request at a time**: `sidecar.ts` queues requests, so a timeout counts only that request's work; one that waited `QUEUE_WAIT_MS` (5 min) behind an earlier request (a long separation) is refused as busy (`error.type=busy`) and the sidecar keeps running.
 - **Auto-restart**: If the sidecar crashes, one restart is attempted automatically. If restart fails, the tool returns a clear error.
 - **Script refresh**: every sidecar spawn first copies the build's `server.py` and modules over the installed ones, so an update (which never re-runs `setup-sidecar`) cannot leave an old `server.py` without the new methods.
 - **Install location**: Venv at `~/.reaper-mcp/sidecar-venv/`, scripts at `~/.reaper-mcp/sidecar/` (`server.py` plus `SIDECAR_MODULES` in `setup-sidecar.ts`, e.g. `analysis.py` — add a new module there).
@@ -724,6 +739,9 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 | `apps/reaper-mcp-server/src/tools/aesthetics.ts` | `analyze_track_aesthetics` tool registration |
 | `apps/reaper-mcp-server/src/tools/offline.ts` | `analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment` |
 | `apps/reaper-mcp-server/src/tools/transients.ts` | `detect_transients`, `create_transient_automation` (pulse generation in `pulsePoints()`) |
+| `apps/reaper-mcp-server/sidecar/mixcheck.py` | Loudness curve, per-band stereo correlation, third-octave masking (numpy only) |
+| `apps/reaper-mcp-server/sidecar/separation.py` | Demucs stem separation (soundfile I/O, never demucs's torchaudio I/O) |
+| `apps/reaper-mcp-server/src/tools/mixcheck.ts` | `analyze_loudness_curve`, `analyze_stereo_bands`, `measure_masking`, `separate_stems` |
 
 ### Render Pipeline
 
@@ -832,10 +850,13 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   its headline value and change in a "Previous call" line. Add a measuring command in `RESULT_FIELDS`, `MEASUREMENTS`
   (`src/lib/commands.ts`), a `Measurement` kind and an example in `src/demo/examples.ts` together.
   Sidecar tools the server composes itself (`analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment`,
-  `analyze_track_aesthetics`) never pass through a bridge handler, so the server logs each result with the internal
+  `analyze_track_aesthetics`, and the mix checks) never pass through a bridge handler, so the server logs each result with the internal
   `_log_result` command (`apps/reaper-mcp-server/src/tool-log.ts`, fire-and-forget; `r` travels as a JSON string), which the bridge records as
   an entry for that tool (`record_tool_result()`). Their compact `r` is built by `offlineSummary()` /
-  `alignmentSummary()` / `aestheticsSummary()` and drawn as the `offline` / `alignment` / `aesthetics` measurements.
+  `alignmentSummary()` / `aestheticsSummary()` and drawn as the `offline` / `alignment` / `aesthetics` measurements;
+  the mix checks by `curveSummary()` / `stereoBandsSummary()` / `maskingSummary()` / `stemsSummary()` as `curve` (the
+  short-term line against the target, spans over it shaded), `stereo` (correlation per band on −1…+1), `masking` (a
+  pairs × bands heat map) and `stems` (each stem's LUFS, speed, inserted tracks).
 - Edit views: writes and listings also keep an `r` (`M.summary` in `mcp_edit_views_lib.lua`), drawn by
   `src/features/edit-views/` (`EditViews.tsx`, one view per kind in `views/`) from `editViewOf()` (`edit-views.ts`). A write reads the state it touches before its handler
   runs (`M.before`) and again after, so the drawer shows before → after: track and FX parameter changes (the
@@ -1048,7 +1069,7 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 |---------|-------------|
 | `serve` (default) | Start MCP server in stdio mode for Claude Code |
 | `setup` | Install Lua bridge + JSFX analyzers into REAPER |
-| `setup-sidecar` | Install Python sidecar for perceptual audio analysis (opt-in, ~831 MB). Requires Python 3.10+. Installs venv at `~/.reaper-mcp/sidecar-venv/`, downloads Audiobox Aesthetics weights. |
+| `setup-sidecar` | Install Python sidecar for perceptual audio analysis (opt-in, ~831 MB). Requires Python 3.10+. Installs venv at `~/.reaper-mcp/sidecar-venv/`, downloads Audiobox Aesthetics weights. `--with-separation` also installs Demucs and its htdemucs model (~80 MB) for `separate_stems`; on an existing install only that step runs. |
 | `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` that runs the clone's built `main.js` (copy-free) |
 | `doctor` | Verify all components are configured correctly (includes 4 sidecar sub-checks) |
 | `status` | Check if Lua bridge is running in REAPER |

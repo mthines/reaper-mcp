@@ -6,9 +6,12 @@
  *   2. Create an isolated venv at ~/.reaper-mcp/sidecar-venv/
  *   3. Install pinned deps from sidecar/requirements.txt
  *   4. Pre-download Audiobox Aesthetics model weights
- *   5. Copy server.py (+ its analysis.py module) to ~/.reaper-mcp/sidecar/
+ *   5. Copy server.py (+ its modules) to ~/.reaper-mcp/sidecar/
  *
- * Usage: node dist/apps/reaper-mcp-server/main.js setup-sidecar
+ * With --with-separation it also installs Demucs (sidecar/requirements-separation.txt) and
+ * pre-downloads its htdemucs model for separate_stems; on an existing install only that step runs.
+ *
+ * Usage: node dist/apps/reaper-mcp-server/main.js setup-sidecar [--with-separation]
  */
 
 import { exec as execImpl } from 'node:child_process';
@@ -43,7 +46,9 @@ export const SIDECAR_VENV_PATH = join(homedir(), '.reaper-mcp', 'sidecar-venv');
 export const SIDECAR_DIR = join(homedir(), '.reaper-mcp', 'sidecar');
 export const SIDECAR_SCRIPT_DEST = join(SIDECAR_DIR, 'server.py');
 /** Python modules server.py imports; installed next to it. */
-export const SIDECAR_MODULES = ['analysis.py'];
+export const SIDECAR_MODULES = ['analysis.py', 'mixcheck.py', 'separation.py'];
+/** The Demucs model separate_stems uses by default; pre-downloaded by --with-separation. */
+export const SEPARATION_MODEL = 'htdemucs';
 export const MODEL_ID = 'facebook/audiobox-aesthetics';
 export const MIN_PYTHON_MAJOR = 3;
 export const MIN_PYTHON_MINOR = 10;
@@ -135,6 +140,27 @@ export async function installDeps(requirementsPath: string): Promise<void> {
   if (stderr) process.stderr.write(stderr);
 }
 
+/** Install Demucs into the existing venv and pre-download its default model (~80 MB, torch hub cache). */
+export async function installSeparation(baseDir: string): Promise<void> {
+  const requirements = join(resolveAssetDir(baseDir, 'sidecar'), 'requirements-separation.txt');
+  if (!existsSync(requirements)) {
+    throw new Error(`requirements-separation.txt not found at: ${requirements}\nRun \`pnpm nx build reaper-mcp-server\` first.`);
+  }
+  const pip = join(SIDECAR_VENV_PATH, VENV_BIN, VENV_PIP_NAME);
+  const python = join(SIDECAR_VENV_PATH, VENV_BIN, VENV_PYTHON_NAME);
+  const install = await exec(`"${pip}" install -r "${requirements}"`);
+  if (install.stdout) process.stdout.write(install.stdout);
+  if (install.stderr) process.stderr.write(install.stderr);
+  // Single quotes only: the script goes inside a double-quoted shell argument.
+  const script = [
+    'from demucs.pretrained import get_model',
+    `get_model('${SEPARATION_MODEL}')`,
+    `print('Model ${SEPARATION_MODEL} ready.')`,
+  ].join('; ');
+  const fetch = await exec(`"${python}" -c "${script}"`);
+  if (fetch.stdout) process.stdout.write(fetch.stdout);
+}
+
 /** Pre-download the Audiobox Aesthetics model weights. */
 export async function downloadModelWeights(): Promise<void> {
   const python = join(SIDECAR_VENV_PATH, VENV_BIN, VENV_PYTHON_NAME);
@@ -172,7 +198,13 @@ export function copySidecarScript(baseDir: string): void {
 // Main entry point
 // ---------------------------------------------------------------------------
 
-export async function setupSidecar(): Promise<void> {
+export async function setupSidecar(options: { withSeparation?: boolean } = {}): Promise<void> {
+  const venvPython = join(SIDECAR_VENV_PATH, VENV_BIN, VENV_PYTHON_NAME);
+  if (options.withSeparation && existsSync(venvPython)) {
+    // The sidecar is already installed: add only what separation needs
+    await addSeparation();
+    return;
+  }
   console.log('REAPER MCP — Setup Python Sidecar\n');
   console.log('This installs the opt-in audio AI subsystem for perceptual analysis.');
   console.log('Requires Python 3.10+ and an internet connection (~831 MB download).\n');
@@ -238,7 +270,21 @@ export async function setupSidecar(): Promise<void> {
     process.exit(1);
   }
 
+  if (options.withSeparation) await addSeparation();
+
   console.log('\nSidecar setup complete!\n');
   console.log('The analyze_track_aesthetics tool is now available.');
   console.log('Run `node dist/apps/reaper-mcp-server/main.js doctor` to verify.\n');
+}
+
+async function addSeparation(): Promise<void> {
+  console.log('\nInstalling stem separation (Demucs) and its htdemucs model (~80 MB)...');
+  try {
+    await installSeparation(__dirname);
+    copySidecarScript(__dirname);
+    console.log('  Stem separation installed: separate_stems is ready.');
+  } catch (err) {
+    console.error(`\nFailed to install stem separation: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
 }

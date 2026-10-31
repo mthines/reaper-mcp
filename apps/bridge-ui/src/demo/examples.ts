@@ -114,6 +114,59 @@ function measurementExampleList(): Example[] {
   const aesthetics = call('analyze_track_aesthetics', { trackIndex: -1, startTime: 60 }, {
     name: 'Master', pq: 7.42, pc: 5.81, ce: 6.66, cu: 7.05, lufs: -18, dur: 30,
   }, { ms: 6_400 });
+  // A song's short-term loudness, one point a second: quiet verses, loud choruses
+  const song = (lift: number) => SONG_SECTIONS.flatMap(([, , l], i) =>
+    Array.from({ length: 15 }, (_, k) => Math.round((l + lift + Math.sin((i * 15 + k) / 2.3) * 0.9 - (k < 2 && i > 0 ? 1.5 : 0)) * 10) / 10));
+  const curveR = {
+    name: 'Master', lufs: -10.4, tp: -0.6, lra: 6.8, plr: 9.8, maxM: -6.9, target: -14, overS: 86, start: 0, step: 1, term: 's',
+    curve: song(0), loud: [124, 127, -7.8], quiet: [176, 179, -19.3],
+    over: [[30, 76, -8.6], [105, 150, -7.8]],
+  };
+  const curve = call('analyze_loudness_curve', { trackIndex: -1, endTime: 180, targetLufs: -14 }, curveR, { ms: 9_800 });
+  const curveShort = call('analyze_loudness_curve', { path: '/bounces/Hook.wav' }, {
+    name: 'Hook', lufs: -16.8, tp: -3.2, lra: 1.4, plr: 13.6, start: 0, step: 0.1, term: 'm',
+    curve: Array.from({ length: 24 }, (_, i) => -17 + Math.sin(i / 2) * 2), loud: null, quiet: null, over: [],
+  }, { ms: 410 });
+  const stereoR = {
+    name: 'Master', dur: 180, flags: ['low end wide (correlation 0.42): mono the bass below 120 Hz'],
+    bands: [['low', 0.42, -0.31, 0.08, -6.2], ['lowMid', 0.71, 0.12, 0.01, -9.4], ['mid', 0.55, -0.12, 0.04, -7.1], ['high', 0.38, -0.22, 0.09, -4.8], ['air', 0.21, -0.4, 0.18, -3.1]],
+  };
+  const stereo = call('analyze_stereo_bands', { trackIndex: -1, endTime: 180 }, stereoR, { ms: 8_200 });
+  const stereoPhase = call('analyze_stereo_bands', { trackIndex: 4 }, {
+    name: 'Synth Pad', dur: 60, flags: ['low end out of phase (correlation −0.62): it cancels in mono', 'the low mids (120–500 Hz) out of phase overall (correlation −0.18): it cancels in mono'],
+    bands: [['low', -0.62, -0.91, 0.84, 4.1], ['lowMid', -0.18, -0.7, 0.61, 1.2], ['mid', 0.34, -0.3, 0.22, -3.3], ['high', 0.51, 0.02, 0.05, -5.6], ['air', null, null, null, null]],
+  }, { ms: 3_100 });
+  const MASK_HZ = [40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000];
+  const bump = (centre: number, width: number, peak: number) => MASK_HZ.map((_, k) => Math.round(Math.max(0, peak * (1 - Math.abs(k - centre) / width)) * 100) / 100);
+  const maskingR = {
+    tracks: ['Kick', 'Bass', 'Keys', 'Vocal'], hz: MASK_HZ,
+    pairs: [
+      ['Kick', 'Bass', 0.31, bump(4, 4, 0.92)],
+      ['Keys', 'Vocal', 0.24, bump(13, 5, 0.74)],
+      ['Bass', 'Keys', 0.12, bump(8, 3, 0.48)],
+      ['Kick', 'Keys', 0.03, bump(19, 2, 0.21)],
+      ['Kick', 'Vocal', 0.01, bump(20, 1, 0.1)],
+      ['Bass', 'Vocal', 0, bump(0, 0, 0)],
+    ],
+    conflicts: [
+      ['Kick', 'Bass', 100, 0.92, 'cut Bass around 100 Hz (it matters more to Kick)'],
+      ['Keys', 'Vocal', 800, 0.74, 'cut Keys around 800 Hz (it matters more to Vocal)'],
+      ['Bass', 'Keys', 250, 0.48, 'cut Keys around 250 Hz (it matters more to Bass)'],
+    ],
+  };
+  const masking = call('measure_masking', { tracks: [0, 1, 5, 9], startTime: 48, durationSeconds: 20 }, maskingR, { ms: 6_900 });
+  const maskingClear = call('measure_masking', { tracks: [0, 12], startTime: 48 }, {
+    tracks: ['Kick', 'Hi-hat'], hz: MASK_HZ, pairs: [['Kick', 'Hi-hat', 0, bump(0, 0, 0)]], conflicts: [],
+  }, { ms: 2_400 });
+  const stemsR = {
+    name: 'Master', model: 'htdemucs', device: 'mps', secs: 180, proc: 61.4, inserted: 4, folder: 'Master stems',
+    stems: [['drums', -14.2, -1.8], ['bass', -16.9, -4.1], ['other', -15.3, -2.6], ['vocals', -13.1, 0.7]],
+  };
+  const stems = call('separate_stems', { trackIndex: -1, endTime: 180, insertTracks: true }, stemsR, { ms: 64_200 });
+  const stems6 = call('separate_stems', { path: '/refs/Live Take.flac', model: 'htdemucs_6s', stems: ['guitar', 'piano', 'vocals'] }, {
+    name: 'Live Take', model: 'htdemucs_6s', device: 'cpu', secs: 45, proc: 52.3,
+    stems: [['vocals', -17.4, -5.2], ['guitar', -19.8, -7.9], ['piano', null, -61.2]],
+  }, { ms: 54_800 });
 
   const key = call('detect_key', { trackIndex: 7 }, {
     name: undefined, src: 'midi', key: 'A minor', tonic: 'A', mode: 'minor', r: 0.89, conf: 0.62, rel: 'C major',
@@ -150,6 +203,17 @@ function measurementExampleList(): Example[] {
     example('Aesthetics', aesthetics, 'Four scores on 0–10; previous call ghosted', earlier(aesthetics, { name: 'Master', pq: 7.18, pc: 5.9, ce: 6.4, cu: 6.95, lufs: -18, dur: 30 })),
     example('Key · MIDI', key, 'A minor from the notes: scale tones lit, the tonic strongest', earlier(key, { src: 'midi', key: 'C major', tonic: 'C', mode: 'major', r: 0.8, conf: 0.4, rel: 'A minor', alt: [], chroma: [1, 0.04, 0.4, 0.06, 0.7, 0.35, 0.03, 0.8, 0.05, 0.6, 0.07, 0.2] })),
     example('Key · audio, unsure', keyAudio, 'A dense guitar bus: low confidence flagged'),
+    example('Loudness curve', curve, 'Short-term loudness against −14 LUFS: spans over target shaded, previous call dashed; hover for values',
+      earlier(curve, { ...curveR, lufs: -9.1, curve: song(1.3), over: [[28, 80, -7.3], [100, 165, -6.5]] })),
+    example('Loudness curve · short clip', curveShort, 'Under 3 s: momentary only, no target'),
+    example('Stereo per band', stereo, 'A wide low end flagged; previous call ghosted',
+      earlier(stereo, { ...stereoR, bands: stereoR.bands.map(([b, c, ...rest]) => [b, Math.min(1, (c as number) + 0.3), ...rest]) })),
+    example('Stereo per band · out of phase', stereoPhase, 'Bands below 0 cancel in mono: red, named; a silent band says so'),
+    example('Masking', masking, 'Pairs by band: Kick × Bass fight at 100 Hz; which to cut',
+      earlier(masking, { ...maskingR, pairs: maskingR.pairs.map(([a, b, o, sc]) => [a, b, (o as number) * 1.4, sc]) })),
+    example('Masking · clear', maskingClear, 'Nothing masks'),
+    example('Stems', stems, 'Four stems inserted under a folder; vocals peak over 0 kept as float', earlier(stems, { ...stemsR, proc: 58.2 })),
+    example('Stems · 6-stem model on a CPU', stems6, 'Three of six stems written to disk only; a silent stem'),
   ];
 }
 

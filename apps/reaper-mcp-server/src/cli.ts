@@ -372,10 +372,15 @@ export const MCP_TOOL_NAMES = [
   'apply_fx_to_items',
   'add_stretch_markers',
   'quantize_audio',
+  'analyze_loudness_curve',
+  'analyze_stereo_bands',
+  'measure_masking',
+  'separate_stems',
   // built-in mix knowledge (read-only LoreKit proxy)
   'list_builtin_knowledge',
   'get_builtin_knowledge',
-  // Note: 'render_track_to_wav' and 'remove_mcp_meters' (measure_tracks cleanup) are internal
+  // Note: 'render_track_to_wav', 'remove_mcp_meters' (measure_tracks cleanup) and 'insert_stem_tracks'
+  // (the insertTracks option of separate_stems) are internal
   // Lua bridge commands, NOT public MCP tools.
   // They must NOT be listed here — MCP_TOOL_NAMES drives the Claude Code allowlist.
 ] as const;
