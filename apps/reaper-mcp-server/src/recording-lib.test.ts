@@ -245,6 +245,16 @@ describe('mcp_recording_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('set_record_mode reports a mode switch REAPER did not make as an error and undoes the rest', async () => {
+    await runLua(`
+      local api = fake{}
+      api.Main_OnCommand = function() end -- the toggle action does nothing
+      local r, err = rec.set_record_mode(api, { mode = "time_selection", punchStart = 12, punchEnd = 20 })
+      assert(r == nil and err:find("did not switch the record mode to time_selection %(it reads normal%)"), tostring(err))
+      assert(api.undone == "MCP: Set record mode" and #api.undo == 0, "the punch range set with it is undone")
+    `);
+  });
+
   it('get_track_lanes groups items by lane with names and play state', async () => {
     await runLua(`
       local api = fake${TAKES}
