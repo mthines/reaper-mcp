@@ -23,12 +23,14 @@ export function Record({ v }: { v: Extract<EditView, { kind: "record" }> }) {
   const was = v.was;
   const changed = (a: unknown, b: unknown) => was !== undefined && a !== b;
   const wasRows = new Map((was?.rows ?? []).map((r) => [r[0], r]));
+  // The bridge sends both lists in the same track order: match by position, by name only when that differs
+  const wasOf = (r: RecordRow, i: number) => (was?.rows?.[i]?.[0] === r[0] ? was.rows[i] : wasRows.get(r[0]));
   const modeChanged = changed(was?.mode, v.mode);
   const punchChanged = was !== undefined && punchText(was.punch) !== punchText(v.punch);
   const pathChanged = changed(was?.path, v.path);
   const rows = v.rows ?? [];
-  const rowChanged = rows.some((r) => {
-    const w = wasRows.get(r[0]);
+  const rowChanged = rows.some((r, i) => {
+    const w = wasOf(r, i);
     return w && w.some((x, i) => x !== r[i]);
   });
   return (
@@ -50,7 +52,7 @@ export function Record({ v }: { v: Extract<EditView, { kind: "record" }> }) {
         <div className={chartStyles.evMore}>No armed tracks</div>
       ) : (
         <div className={mixerStyles.evMix}>
-          {rows.map((r, i) => <RecordTrack key={i} r={r} was={wasRows.get(r[0])} />)}
+          {rows.map((r, i) => <RecordTrack key={i} r={r} was={wasOf(r, i)} />)}
         </div>
       ))}
       {v.more !== undefined && v.more > 0 && <div className={chartStyles.evMore}>+{plural(v.more, "more track")} not drawn</div>}

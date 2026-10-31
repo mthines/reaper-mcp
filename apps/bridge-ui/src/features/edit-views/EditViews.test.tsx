@@ -28,4 +28,13 @@ describe('edit views in the drawer', () => {
     expect(html).toContain('+8 more lanes not drawn');
     expect(html).toContain('>10<');
   });
+  it('compares two tracks with the same name each with its own state before', () => {
+    const html = drawer('set_track_record', {
+      mode: 'normal',
+      rows: [['Gtr', 1, 'In 1', 'auto', 'input'], ['Gtr', 1, 'In 2', 'auto', 'input']],
+      was: { mode: 'normal', rows: [['Gtr', 0, 'In 1', 'auto', 'input'], ['Gtr', 1, 'In 2', 'auto', 'input']] },
+    });
+    expect(html).toContain('(was not armed)');
+    expect(html).not.toMatch(/<s[ >]/);
+  });
 });

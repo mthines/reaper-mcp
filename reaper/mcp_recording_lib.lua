@@ -558,8 +558,9 @@ function M.comp_lanes(api, params, resolve_track)
       local nxt, prev = segments[i + 1], segments[i - 1]
       local joins_next = nxt and math.abs(nxt.s - seg.e) < 1e-6
       local joins_prev = prev and math.abs(prev.e - seg.s) < 1e-6
-      -- Overlap the next segment by the crossfade, as far as this source item reaches.
-      local tail = joins_next and math.min(xf, seg.src.e - seg.e) or 0
+      -- Overlap the next segment by the crossfade, as far as this source item reaches and
+      -- never past half the next segment, so a short part is still heard.
+      local tail = joins_next and math.min(xf, seg.src.e - seg.e, (nxt.e - nxt.s) / 2) or 0
       local it = copy_segment(api, tr, seg.src.item, seg.s, seg.e + tail, comp_lane)
       local keep_in = math.abs(seg.s - seg.src.s) < 1e-6 and api.GetMediaItemInfo_Value(seg.src.item, "D_FADEINLEN") or 0
       local keep_out = math.abs(seg.e - seg.src.e) < 1e-6 and api.GetMediaItemInfo_Value(seg.src.item, "D_FADEOUTLEN") or 0

@@ -312,6 +312,18 @@ describe('mcp_recording_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('comp_lanes keeps a short part audible: a crossfade never covers more than half of it', async () => {
+    await runLua(`
+      local api = fake${TAKES}
+      local r = assert(rec.comp_lanes(api, { track = "Vox", crossfadeMs = 200, ranges = {
+        { start = 10, ["end"] = 13, lane = 0 },
+        { start = 13, ["end"] = 13.1, lane = 1 },
+      } }, R))
+      local items = r.lanes[4].items
+      assert(math.abs(items[1].length - 3.05) < 1e-6, "the first overlaps the 100 ms part by 50 ms, not 200: " .. items[1].length)
+    `);
+  });
+
   it('comp_lanes refuses a range with no audio on its lane, or overlapping ranges, and changes nothing', async () => {
     await runLua(`
       local api = fake${TAKES}
