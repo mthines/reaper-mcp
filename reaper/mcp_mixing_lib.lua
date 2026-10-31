@@ -788,7 +788,7 @@ function M.quantize_stretch(api, p, hits)
   local strength = tonumber(p.strength or 1)
   if not strength or strength < 0 or strength > 1 then return nil, "strength must be 0..1" end
   local swing = tonumber(p.swing or 0)
-  if not swing or swing < 0 or swing > 1 then return nil, "swing must be 0..1" end
+  if not swing or swing < 0 or swing > 0.9 then return nil, "swing must be 0..0.9" end
   local window = tonumber(p.window or 1)
   if not window or window <= 0 or window > 1 then return nil, "window must be > 0 and <= 1" end
   if type(hits) ~= "table" then return nil, "hits must be a list of source times" end
@@ -808,7 +808,8 @@ function M.quantize_stretch(api, p, hits)
   if #list == 0 then return nil, "No hits inside the item — nothing changed" end
 
   local before = read_markers(api, t)
-  local reach = window * grid / 2
+  -- With swing the lines are up to (1 + swing) steps apart, so window 1 still reaches every hit (as quantize_midi)
+  local reach = window * (1 + swing) * grid / 2
   local placed, last_pos, last_line = {}, edge, nil
   local moved, skipped, err_before, err_after = 0, 0, {}, {}
   for _, h in ipairs(list) do
