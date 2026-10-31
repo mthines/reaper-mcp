@@ -4158,8 +4158,10 @@ end
 function handlers.quantize_midi(params) return ext.midi.run("quantize", params) end
 function handlers.transform_midi(params) return ext.midi.run("transform", params) end
 function handlers.import_midi_file(params) return ext.midi.run("import", params) end
--- Internal (detect_key on a MIDI track): not logged, not counted
+-- Internal (detect_key on a MIDI track): not logged, not counted, but refused while paused,
+-- since it answers an agent's tool call (a read, so read-only mode allows it)
 handlers["_midi_pitch_profile"] = function(params) return ext.midi.run("pitch_profile", params) end
+ext.paused_too = { _midi_pitch_profile = true }
 
 -- =============================================================================
 -- Arrangement: copy items, insert/remove time, copy a section, process items
@@ -5292,7 +5294,7 @@ local function run_command(cmd)
 
   local internal = type(cmd.type) == "string" and cmd.type:sub(1, 1) == "_"
   local blocked
-  if not internal and cfg("cfg_paused") then
+  if (not internal or ext.paused_too[cmd.type]) and cfg("cfg_paused") then
     blocked = "Paused by user in the MCP Bridge window. Ask the user to resume agent control."
   elseif not internal and cfg("cfg_readonly") and not readonly_allows(cmd.type) then
     blocked = "Read-only mode is on in the MCP Bridge window: '" .. tostring(cmd.type)

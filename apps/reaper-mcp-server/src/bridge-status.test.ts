@@ -770,6 +770,10 @@ describe('bridge settings from the status page', () => {
     expect(res.success).toBe(false);
     expect(res.error).toMatch(/paused by user/i);
     expect((await bridge.send('_session', {}, A)).success).toBe(true);
+    // detect_key reads MIDI through an internal command; pause stops it like the audio path
+    const key = await bridge.send('_midi_pitch_profile', { trackIndex: 0 }, A);
+    expect(key.success).toBe(false);
+    expect(key.error).toMatch(/paused by user/i);
 
     await bridge.set('cfg_paused', '0');
     expect((await bridge.send('get_project_info', {}, A)).success).toBe(true);
