@@ -194,6 +194,16 @@ describe('mcp_mixing_lib.lua: FX pins', () => {
     `);
   });
 
+  it('changing only the main pins of a stereo track leaves it stereo, whatever the sidechain pins default to', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { nchan = 2, fx = { { name = "ReaComp", ins = 4, outs = 2 } } } } }
+      local r, err = mix.set_pins(api, { trackIndex = 0, fxIndex = 0 }, { { pin = 0, channels = { 2 } }, { pin = 1, channels = { 1 } } })
+      assert(r and api.tracks[1].nchan == 2, tostring(err))
+      r, err = mix.set_pins(api, { trackIndex = 0, fxIndex = 0, trackChannels = 2 }, { { pin = 0, channels = { 1 } } })
+      assert(r and api.tracks[1].nchan == 2, tostring(err))
+    `);
+  });
+
   it('refuses a pin the FX does not have, a channel outside 1..64 or too few track channels and changes nothing', async () => {
     await runLua(`
       local api = new_fake{ tracks = { { nchan = 2, fx = { { ins = 2, outs = 2 } } } } }
