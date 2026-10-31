@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { track } from '../../lib/analytics.js';
+import { fetchText } from '../../lib/fetch-text.js';
 import { fetchRecords, parseInstalled, parseUsed, publishRecord } from './lorekit.js';
 import type { InstalledFx, KnowledgeFeed, PluginRecord, UsedFx } from './plugins.js';
 import { parseExtStateKey } from '../../lib/status.js';
@@ -38,7 +39,9 @@ export function saveLoreKitToken(token: string | null, key = LOREKIT_TOKEN_KEY):
 export function useKnowledge(enabled: boolean, userToken: string | null, publishToken: string | null = null): KnowledgeFeed | undefined {
   const [installed, setInstalled] = useState<{ supported: boolean; fx: InstalledFx[] } | null>(null);
   const [builtIn, setBuiltIn] = useState<{ records: PluginRecord[]; error?: string } | null>(null);
-  const [user, setUser] = useState<{ records: PluginRecord[]; error?: string } | null>(null);
+  // Kept with the token it was loaded with, so a changed or removed token never shows the old records
+  const [loaded, setUser] = useState<{ token: string; records: PluginRecord[]; error?: string } | null>(null);
+  const user = loaded && loaded.token === userToken ? loaded : null;
   const [used, setUsed] = useState<UsedFx[] | undefined>(undefined);
   // Bumped after a publish so both layers are read again straight away
   const [reload, setReload] = useState(0);
@@ -53,9 +56,9 @@ export function useKnowledge(enabled: boolean, userToken: string | null, publish
       if (!document.hidden) {
         const withInstalled = !haveInstalled || n % INSTALLED_EVERY === 0;
         n += 1;
-        try {
-          const res = await fetch(`/_/GET/EXTSTATE/MCPBridge/used${withInstalled ? ';GET/EXTSTATE/MCPBridge/installed' : ''}`, { cache: 'no-store' });
-          const body = await res.text();
+        // null: bridge unreachable, keep the last lists
+        const body = await fetchText(`/_/GET/EXTSTATE/MCPBridge/used${withInstalled ? ';GET/EXTSTATE/MCPBridge/installed' : ''}`);
+        if (body !== null) {
           const nextUsed = parseUsed(parseExtStateKey(body, 'used'));
           if (!cancelled && nextUsed) setUsed(nextUsed);
           const next = withInstalled ? parseInstalled(parseExtStateKey(body, 'installed')) : null;
@@ -63,8 +66,6 @@ export function useKnowledge(enabled: boolean, userToken: string | null, publish
             haveInstalled = true;
             setInstalled(next);
           }
-        } catch {
-          // bridge unreachable: keep the last lists
         }
       }
       if (!cancelled) timer = setTimeout(tick, USED_POLL_MS);
@@ -99,16 +100,15 @@ export function useKnowledge(enabled: boolean, userToken: string | null, publish
   }, [ready, reload]);
 
   useEffect(() => {
-    setUser(null);
     if (!ready || !userToken) return;
     const ctrl = new AbortController();
     const load = () =>
       fetchRecords(__LOREKIT_API__, userToken, 'user', ctrl.signal).then(
-        (records) => setUser({ records }),
+        (records) => setUser({ token: userToken, records }),
         (e: unknown) => {
           if (ctrl.signal.aborted) return;
           track({ name: 'knowledge_load_failed', layer: 'user' });
-          setUser({ records: [], error: errorText(e) });
+          setUser({ token: userToken, records: [], error: errorText(e) });
         },
       );
     load();

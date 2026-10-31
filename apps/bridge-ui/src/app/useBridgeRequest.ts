@@ -11,16 +11,19 @@ export type BridgeRequest = (action: BridgeAction) => void;
  */
 export function useBridgeRequest(status: BridgeStatus | null): BridgeRequest {
   const expectRestart = useRef(false);
-  const startedAt = useRef(status?.startedAt);
-  if (status?.control?.update) expectRestart.current = true;
-  useEffect(() => {
-    if (!status || status.startedAt === startedAt.current) return;
-    const restarted = startedAt.current !== undefined;
-    startedAt.current = status.startedAt;
-    if (restarted && expectRestart.current) location.reload();
-  }, [status?.startedAt]);
-  // An update that left the bridge script as it was doesn't restart it, but the installer still replaced this page
   const update = status?.control?.update;
+  useEffect(() => {
+    if (update) expectRestart.current = true;
+  }, [update]);
+  const runStartedAt = status?.startedAt;
+  const startedAt = useRef(runStartedAt);
+  useEffect(() => {
+    if (runStartedAt === undefined || runStartedAt === startedAt.current) return;
+    const restarted = startedAt.current !== undefined;
+    startedAt.current = runStartedAt;
+    if (restarted && expectRestart.current) location.reload();
+  }, [runStartedAt]);
+  // An update that left the bridge script as it was doesn't restart it, but the installer still replaced this page
   useEffect(() => {
     if (update?.state !== 'done' || DEMO) return;
     const key = `mcp-bridge-reloaded-${update.startedAt}`;

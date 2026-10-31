@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act, useLayoutEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isString, useUrlState, type UrlStateDispatch } from './url-state.js';
@@ -18,10 +18,14 @@ let setView: UrlStateDispatch<string>;
 let query: string;
 let setQuery: UrlStateDispatch<string>;
 
+// Hands the hook's current values to the test after each render
 function Page() {
-  [range, setRange] = useUrlState('range', '30m', { validate: isRange });
-  [view, setView] = useUrlState('view', 'calls', { validate: isString });
-  [query, setQuery] = useUrlState('q', '', { validate: isString, navigationMode: 'replace', debounceMs: 50 });
+  const [r, setR] = useUrlState('range', '30m', { validate: isRange });
+  const [v, setV] = useUrlState('view', 'calls', { validate: isString });
+  const [q, setQ] = useUrlState('q', '', { validate: isString, navigationMode: 'replace', debounceMs: 50 });
+  useLayoutEffect(() => {
+    [range, setRange, view, setView, query, setQuery] = [r, setR, v, setV, q, setQ];
+  });
   return null;
 }
 

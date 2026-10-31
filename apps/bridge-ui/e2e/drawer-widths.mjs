@@ -49,6 +49,9 @@ const browser = await chromium.launch();
 try {
   for (const [label, share] of WIDTHS) {
     const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+    // The page's own outside calls (GitHub's release check, LoreKit, usage statistics) get an empty answer: a rate
+    // limited GitHub API would otherwise log a 403 as a console error and fail the run
+    await ctx.route((url) => url.origin !== origin, (route) => route.fulfill({ status: 204 }));
     if (share !== null) await ctx.addInitScript((s) => localStorage.setItem('mcp_bridge.drawer_width', String(s)), share);
     const page = await ctx.newPage();
     page.on('console', (m) => { if (m.type() === 'error') failures.push(`${label}: console error: ${m.text()}`); });

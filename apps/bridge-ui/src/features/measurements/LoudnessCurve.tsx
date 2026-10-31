@@ -22,7 +22,8 @@ export function LoudnessCurve({ m, was }: { m: Extract<Measurement, { kind: 'cur
   const floor = Math.max(-60, Math.floor(Math.min(top - 18, ...audible) / 6) * 6);
   const y = (v: number) => ((top - Math.min(top, Math.max(floor, v))) / (top - floor)) * CH;
   const x = (t: number) => ((t - m.start) / dur) * CW;
-  const path = (vals: number[], s = step, start = m.start) =>
+  const origin = m.start;
+  const path = (vals: number[], s = step, start = origin) =>
     `M${vals.map((v, i) => `${((((start + i * s) - m.start) / dur) * CW).toFixed(1)},${y(v).toFixed(1)}`).join('L')}`;
   const onMove = (ev: PointerEvent<SVGSVGElement>) => {
     const r = ev.currentTarget.getBoundingClientRect();

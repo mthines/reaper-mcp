@@ -34,11 +34,13 @@ export function Record({ v }: { v: Extract<EditView, { kind: "record" }> }) {
     const w = wasOf(r, i);
     return w && w.some((x, i) => x !== r[i]);
   });
+  const modeNotes = [PUNCH_ON[v.mode] && `Auto-punch on the ${PUNCH_ON[v.mode]}`, modeChanged && was && `Was ${RECORD_MODE[was.mode] ?? was.mode}`].filter(Boolean);
+  const modeTitle = modeNotes.length ? modeNotes.join(" · ") : undefined;
   return (
     <>
       <div className={chartStyles.measureReadouts}>
         <Measurement.Readout label="Record mode" value={RECORD_MODE[v.mode] ?? v.mode} word={modeChanged ? "new" : ""}
-          title={[PUNCH_ON[v.mode] && `Auto-punch on the ${PUNCH_ON[v.mode]}`, modeChanged && was && `Was ${RECORD_MODE[was.mode] ?? was.mode}`].filter(Boolean).join(" · ") || undefined} />
+          title={modeTitle} />
         {(v.mode === "time_selection" || v.punch) && (
           <Measurement.Readout label="Punch" value={punchText(v.punch)} word={punchChanged ? "new" : !v.punch ? "none" : ""}
             zone={!v.punch ? "hot" : "ok"}

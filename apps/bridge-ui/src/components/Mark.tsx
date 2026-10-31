@@ -20,10 +20,7 @@ export function Mark({ active }: { active: boolean }) {
   useEffect(() => () => window.clearTimeout(blinkTimer.current), []);
 
   useEffect(() => {
-    if (!watching) {
-      setLook({ x: 0, y: 0 });
-      return;
-    }
+    if (!watching) return;
     let last = 0;
     let timer = 0;
     let pending: PointerEvent | null = null;
@@ -54,12 +51,15 @@ export function Mark({ active }: { active: boolean }) {
 
   const onClick = () => {
     setWatching((w) => !w);
+    setLook({ x: 0, y: 0 }); // each watch starts from the middle
     setBlinks((n) => n + 1); // remounts the lid so back-to-back clicks each blink
     setBlinking(true);
     window.clearTimeout(blinkTimer.current);
     blinkTimer.current = window.setTimeout(() => setBlinking(false), 260);
   };
 
+  // The eye rests in the middle unless it is following the cursor
+  const eye = watching ? look : { x: 0, y: 0 };
   return (
     <button className={styles.markBtn} onClick={onClick} aria-label="reaper-mcp" aria-pressed={watching}>
       <svg className={cx(styles.mark, active ? styles.markActive : '', blinking ? styles.markBlink : '')} viewBox="0 0 512 512" aria-hidden>
@@ -85,7 +85,7 @@ export function Mark({ active }: { active: boolean }) {
         <rect className={styles.markGlow} width="512" height="512" rx="116" fill="url(#mark-glow)" />
         <rect x="4" y="4" width="504" height="504" rx="112" fill="none" stroke="#fff" strokeOpacity="0.08" strokeWidth="8" />
         <path className={styles.markArc} d="M100 330 A156 156 0 0 1 412 330" fill="none" strokeWidth="56" strokeLinecap="round" />
-        <g className={styles.markEye} style={{ transform: `translate(${look.x * EYE_REACH_X}px, ${look.y * EYE_REACH_Y}px)` }}>
+        <g className={styles.markEye} style={{ transform: `translate(${eye.x * EYE_REACH_X}px, ${eye.y * EYE_REACH_Y}px)` }}>
           <circle className={styles.markDot} cx="256" cy="318" r="58" />
           {/* Eyelid: parked just above the dot, drops over it on a blink */}
           <g clipPath="url(#mark-eye)">

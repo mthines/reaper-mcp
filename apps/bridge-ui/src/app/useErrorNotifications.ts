@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { load, save } from '../lib/storage.js';
 import { sessionName, type Session } from '../lib/sessions.js';
 import { outcomeOf, type CommandEntry } from '../lib/commands.js';
@@ -9,6 +9,7 @@ export function useErrorNotifications(log: CommandEntry[], sessions: Map<string,
   const [enabled, setEnabled] = useState(() => load(NOTIFY_KEY) === '1' && notificationPermission() === 'granted');
   const notifiedThrough = useRef(log[0]?.n ?? 0);
 
+  const nameOf = useEffectEvent((id: string) => sessionName(sessions.get(id) ?? { id }));
   useEffect(() => {
     const newest = log[0]?.n ?? 0;
     if (enabled) {
@@ -19,7 +20,7 @@ export function useErrorNotifications(log: CommandEntry[], sessions: Map<string,
         new Notification(`MCP Bridge: ${fresh.length} commands failed`, { body: fresh[0].e, tag: 'mcp-bridge-errors' });
       } else {
         for (const e of fresh.reverse()) {
-          const who = e.s ? ` · ${sessionName(sessions.get(e.s) ?? { id: e.s })}` : '';
+          const who = e.s ? ` · ${nameOf(e.s)}` : '';
           new Notification(`${e.c} failed${who}`, { body: e.e, tag: `mcp-bridge-${e.n}` });
         }
       }

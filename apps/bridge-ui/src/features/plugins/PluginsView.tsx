@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { track } from '../../lib/analytics.js';
 import { contributable, contribution } from './contribute.js';
 import { groupByCreator, notInstalled, pluginCoverage, type Coverage, type KnowledgeFeed, type PluginRecord, type PluginRow } from './plugins.js';
@@ -59,37 +59,6 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
   const open = useMemo(() => (openName === null ? null : (rows.find((r) => r.fx.name === openName) ?? null)), [rows, openName]);
   const setOpen = (r: PluginRow | null, mode?: 'push' | 'replace') => setOpenName(r ? r.fx.name : null, mode);
   const elsewhere = useMemo(() => (feed ? notInstalled(feed) : []), [feed]);
-  const visibleRef = useRef<PluginRow[]>([]);
-  const openRef = useRef(open);
-  openRef.current = open;
-
-  // ↑/↓ step through the list while a plugin is open, like the Calls tab
-  useEffect(() => {
-    const onKey = (ev: KeyboardEvent) => {
-      if ((ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') || !openRef.current) return;
-      if (ev.target instanceof HTMLElement && ev.target.closest('input, textarea, [role="separator"], [role="menu"]')) return;
-      ev.preventDefault();
-      const list = visibleRef.current;
-      const i = list.findIndex((r) => r.fx.name === openRef.current?.fx.name);
-      const next = list[i + (ev.key === 'ArrowDown' ? 1 : -1)];
-      if (next) setOpenName(next.fx.name, 'replace'); // stepping through rows doesn't add history
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-
-  useEffect(() => {
-    if (open) document.querySelector(`[data-fx="${CSS.escape(open.fx.name)}"]`)?.scrollIntoView({ block: 'nearest' });
-  }, [open]);
-
-  if (!feed) {
-    return (
-      <div className={listStyles.rows}>
-        <div className={listStyles.empty}>Plugin knowledge isn’t available from this bridge yet.</div>
-      </div>
-    );
-  }
-
   const count = (c: Coverage) => rows.filter((r) => r.coverage === c).length;
   const usedRows = rows.filter((r) => r.used > 0);
   const q = query.trim().toLowerCase();
@@ -105,7 +74,34 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
   // Groups start collapsed; a search opens them all, and the group of the open plugin stays open
   const isOpen = (creator: string) => Boolean(q) || creator === open?.creator || toggled.has(creator);
   const shown = grouped ? groups.flatMap((g) => (isOpen(g.creator) ? g.rows : [])) : matching;
-  visibleRef.current = shown;
+
+  // ↑/↓ step through the list while a plugin is open, like the Calls tab
+  const onKey = useEffectEvent((ev: KeyboardEvent) => {
+    if ((ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') || !open) return;
+    if (ev.target instanceof HTMLElement && ev.target.closest('input, textarea, [role="separator"], [role="menu"]')) return;
+    ev.preventDefault();
+    const i = shown.findIndex((r) => r.fx.name === open.fx.name);
+    const next = shown[i + (ev.key === 'ArrowDown' ? 1 : -1)];
+    if (next) setOpenName(next.fx.name, 'replace'); // stepping through rows doesn't add history
+  });
+  useEffect(() => {
+    const listener = (ev: KeyboardEvent) => onKey(ev);
+    window.addEventListener('keydown', listener);
+    return () => window.removeEventListener('keydown', listener);
+  }, []);
+
+  useEffect(() => {
+    if (open) document.querySelector(`[data-fx="${CSS.escape(open.fx.name)}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [open]);
+
+  if (!feed) {
+    return (
+      <div className={listStyles.rows}>
+        <div className={listStyles.empty}>Plugin knowledge isn’t available from this bridge yet.</div>
+      </div>
+    );
+  }
+
   const known = rows.length - count('unknown');
   const unknownShown = matching.filter((r) => r.coverage === 'unknown');
   const unknownInProject = usedRows.filter((r) => r.coverage === 'unknown');
@@ -127,8 +123,9 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
   const chooseGrouped = (on: boolean) => {
     if (on !== grouped) track({ name: 'plugins_grouped', grouped: on });
     setGrouped(on);
+    const stored = on ? '1' : '0';
     try {
-      localStorage.setItem(GROUP_KEY, on ? '1' : '0');
+      localStorage.setItem(GROUP_KEY, stored);
     } catch {
       // per-viewer convenience only
     }

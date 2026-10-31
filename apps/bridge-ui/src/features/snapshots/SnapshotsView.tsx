@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 import type { RequestState, RowMode, SnapshotInfo, SnapshotOp, SnapshotsFeed } from './snapshots.js';
 import { EditForm } from './EditForm.js';
 import { SaveForm } from './SaveForm.js';
@@ -47,24 +47,21 @@ export function SnapshotsView({
   const load = (s: SnapshotInfo) => {
     if (!blocked) onSend('restore', s.name);
   };
-  const loadRef = useRef(load);
-  loadRef.current = load;
-  const shownRef = useRef(shown);
-  shownRef.current = shown;
+  const onKey = useEffectEvent((ev: KeyboardEvent) => {
+    const el = document.activeElement;
+    // A held key auto-repeats: load once, not once per repeat (each load is an undo point)
+    if (ev.repeat || ev.metaKey || ev.ctrlKey || ev.altKey || (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'))) return;
+    const n = Number(ev.key);
+    const snap = Number.isInteger(n) && n >= 1 ? shown[n - 1] : undefined;
+    if (!snap) return;
+    ev.preventDefault();
+    load(snap);
+  });
   useEffect(() => {
     if (!keys) return;
-    const onKey = (ev: KeyboardEvent) => {
-      const el = document.activeElement;
-      // A held key auto-repeats: load once, not once per repeat (each load is an undo point)
-      if (ev.repeat || ev.metaKey || ev.ctrlKey || ev.altKey || (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'))) return;
-      const n = Number(ev.key);
-      const snap = Number.isInteger(n) && n >= 1 ? shownRef.current[n - 1] : undefined;
-      if (!snap) return;
-      ev.preventDefault();
-      loadRef.current(snap);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    const listener = (ev: KeyboardEvent) => onKey(ev);
+    window.addEventListener('keydown', listener);
+    return () => window.removeEventListener('keydown', listener);
   }, [keys]);
 
   return (

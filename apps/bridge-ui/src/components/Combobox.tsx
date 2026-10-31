@@ -201,7 +201,7 @@ export function GroupedCombobox({
     if (open) document.getElementById(`${id}-opt-${highlight}`)?.scrollIntoView({ block: 'nearest' });
   }, [open, highlight, id]);
 
-  let index = 0;
+  const firstIndex = shown.map((_, gi) => shown.slice(0, gi).reduce((n, g) => n + g.items.length, 0));
   return (
     <div className={cx(styles.combo, className)} ref={rootRef}>
       <button
@@ -246,13 +246,13 @@ export function GroupedCombobox({
             else hide(ev.key === 'Escape');
           }}
         >
-          {shown.map((g) => (
+          {shown.map((g, gi) => (
             <div key={g.label} role="group" aria-labelledby={`${id}-g-${g.label}`} className={styles.comboGroup}>
               <div id={`${id}-g-${g.label}`} role="presentation" className={styles.comboHeading}>
                 {g.label}
               </div>
-              {g.items.map((it) => {
-                const i = index++;
+              {g.items.map((it, ii) => {
+                const i = firstIndex[gi] + ii;
                 return (
                   <div
                     key={it.key}

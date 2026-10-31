@@ -9,13 +9,14 @@
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node apps/bridge-ui/build.mjs",
+        "command": "vite build apps/bridge-ui",
         "cwd": "{workspaceRoot}"
       },
       "inputs": [
         "default",
         "{workspaceRoot}/apps/reaper-mcp-server/package.json",
-        "{workspaceRoot}/apps/reaper-mcp-server/src/tools/knowledge.ts"
+        "{workspaceRoot}/apps/reaper-mcp-server/src/tools/knowledge.ts",
+        "{workspaceRoot}/apps/reaper-mcp-server/src/telemetry-consent.ts"
       ],
       "outputs": [
         "{workspaceRoot}/dist/apps/bridge-ui"
