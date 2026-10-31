@@ -232,7 +232,7 @@ export function registerMixingTools(server: McpServer): void {
       itemIndex: z.coerce.number().int().min(0),
       grid: z.coerce.number().positive().max(16).describe('Grid in quarter notes: 1 = quarter, 0.5 = 8th, 0.25 = 16th'),
       strength: z.coerce.number().min(0).max(1).optional().default(1).describe('0..1, how far each hit moves toward its line'),
-      window: z.coerce.number().positive().max(1).optional().default(1).describe('0..1 of half a grid step; hits further from a line stay put'),
+      window: z.coerce.number().positive().max(1).optional().default(1).describe('0..1 of half a grid step (times 1 + swing, as quantize_midi); hits further from a line stay put'),
       swing: z.coerce.number().min(0).max(0.9).optional().default(0),
       sensitivity: z.coerce.number().min(0).max(1).optional().default(0.5).describe('Hit detection: higher finds softer hits'),
       minGapMs: z.coerce.number().min(5).max(2000).optional().default(60),

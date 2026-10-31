@@ -2012,17 +2012,18 @@ function Pins({ v }: { v: Extract<EditView, { kind: "pins" }> }) {
   const changed = write && (v.chWas !== undefined || JSON.stringify(v.in) !== JSON.stringify(v.inWas) || JSON.stringify(v.out) !== JSON.stringify(v.outWas));
   const side = (title: string, now: number[][], was: number[][] | undefined, names?: string[]) => (
     <>
-      <div className="ev-pins-side">{title}</div>
+      <div className="ev-pins-side" role="row"><span role="rowheader">{title}</span></div>
       {now.map((pin, p) => (
-        <div key={`${title}${p}`} className="ev-pins-row">
-          <span className="ev-pins-name mono" title={names?.[p] || `${title} pin ${p + 1}`}>{names?.[p] || `${p + 1}`}</span>
+        <div key={`${title}${p}`} className="ev-pins-row" role="row">
+          <span className="ev-pins-name mono" role="rowheader" title={names?.[p] || `${title} pin ${p + 1}`}>{names?.[p] || `${p + 1}`}</span>
           {chans.map((c) => {
             const on = pin.includes(c);
             const before = was ? (was[p] ?? []).includes(c) : on;
             const cls = on && !before ? "ev-pin ev-pin-new" : !on && before ? "ev-pin ev-pin-gone" : on ? "ev-pin ev-pin-on" : "ev-pin";
             return (
-              <span key={c} className={`${cls} ${c > v.ch ? "ev-pin-out" : ""}`}
-                title={`${title} pin ${p + 1} · channel ${c}${on ? " · connected" : ""}${on !== before ? (on ? " (new)" : " (removed)") : ""}`} />
+              <span key={c} className={`${cls} ${c > v.ch ? "ev-pin-out" : ""}`} role="cell"
+                title={`${title} pin ${p + 1} · channel ${c}${on ? " · connected" : ""}${on !== before ? (on ? " (new)" : " (removed)") : ""}`}
+                aria-label={`channel ${c}${on ? ", connected" : ""}${on !== before ? (on ? " (new)" : " (removed)") : ""}`} />
             );
           })}
         </div>
@@ -2036,10 +2037,10 @@ function Pins({ v }: { v: Extract<EditView, { kind: "pins" }> }) {
         <Readout label="Track channels" value={v.chWas !== undefined && v.chWas !== v.ch ? `${v.chWas} → ${v.ch}` : String(v.ch)} />
       </div>
       <div className="ev-pins" style={{ "--cols": cols } as CSSProperties} role="table" aria-label="Pin matrix: pins by track channel">
-        <div className="ev-pins-row ev-pins-chans">
-          <span className="ev-pins-name" />
+        <div className="ev-pins-row ev-pins-chans" role="row">
+          <span className="ev-pins-name" role="columnheader" aria-label="Pin" />
           {chans.map((c) => (
-            <span key={c} className="ev-pin-ch mono">{c}</span>
+            <span key={c} className="ev-pin-ch mono" role="columnheader">{c}</span>
           ))}
         </div>
         {side("In", v.in, v.inWas, v.names)}
