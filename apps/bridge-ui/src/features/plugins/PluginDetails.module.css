@@ -1,0 +1,13 @@
+.knOpen { display: flex; align-items: center; justify-content: center; text-decoration: none; color: var(--accent); }
+.covBadge:where([data-coverage='learned']) { color: var(--live); background: rgba(74, 222, 128, 0.09); border: 1px solid rgba(74, 222, 128, 0.25); }
+.covBadge:where([data-coverage='built-in']) { color: var(--accent); background: rgba(124, 196, 255, 0.08); border: 1px solid rgba(124, 196, 255, 0.25); }
+.covBadge:where([data-coverage='unknown']) { color: var(--muted); border: 1px solid var(--line-2); }
+
+/* The record box takes the drawer's remaining height and scrolls inside it (facts and the LoreKit link stay put) */
+.knRecord { flex: 1 1 auto; min-height: 160px; display: flex; flex-direction: column; }
+.knRecord .knMd { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+/* Rendered record Markdown (markdown.tsx) */
+.knMd { padding: 4px 12px 12px; font-size: 12.5px; line-height: 1.55; color: var(--text); user-select: text; overflow-wrap: anywhere; }
+.knPrompt { white-space: pre-wrap; overflow-wrap: anywhere; }
+.knTeachDrawer { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; color: var(--accent); border-color: rgba(124, 196, 255, 0.3); }

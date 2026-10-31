@@ -1,0 +1,57 @@
+.evTimeline { display: flex; flex-direction: column; gap: 6px; }
+.evLane { position: relative; }
+.evLaneMarkers { height: 22px; }
+.evLaneMarkers.evLaneContext { height: 8px; }
+.evMarker { position: absolute; top: 0; bottom: -30px; display: flex; gap: 4px; align-items: flex-start; pointer-events: auto; }
+.evMarker i { width: 1px; height: 100%; background: var(--mk, var(--hold)); opacity: 0.8; }
+.evMarker b { margin-top: -1px; font: 10.5px var(--mono); color: var(--muted); white-space: nowrap; max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+.evMarker.evNew b { color: var(--text); border-bottom: 1.5px solid var(--accent); }
+.evMarker.evGone i { background: none; border-left: 1px dashed var(--muted); }
+.evMarker.evGone b { color: var(--faint); text-decoration: line-through; }
+.evLaneRegions { height: 22px; }
+/* A region narrower than its padding at the end of the song stays inside the lane */
+.evLaneRegions { overflow: hidden; }
+.evRegion {
+  position: absolute; top: 0; bottom: 0; overflow: hidden; padding: 0 5px; border-radius: 2px;
+  font-size: 10px; line-height: 22px; color: var(--text); white-space: nowrap; text-overflow: ellipsis;
+  background: color-mix(in srgb, var(--rg, var(--accent)) 22%, transparent); box-shadow: inset 2px 0 var(--rg, var(--accent));
+}
+.evRegion.evNew { outline: 1.5px solid var(--accent); outline-offset: -1.5px; }
+.evRegion.evGone { background: none; box-shadow: none; border: 1px dashed var(--muted); }
+.evLaneItems { height: 22px; }
+.evItem { position: absolute; top: 0; bottom: 0; overflow: hidden; border-radius: 3px; border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.evItemMidi { border-color: color-mix(in srgb, var(--h1) 60%, transparent); background: color-mix(in srgb, var(--h1) 18%, transparent); }
+.evItemMuted { opacity: 0.4; }
+.evItem i { position: absolute; top: 0; bottom: 0; }
+.evFadeIn { left: 0; background: linear-gradient(to top right, transparent calc(50% - 0.5px), var(--muted) 50%, transparent calc(50% + 0.5px)); }
+.evFadeOut { right: 0; background: linear-gradient(to top left, transparent calc(50% - 0.5px), var(--muted) 50%, transparent calc(50% + 0.5px)); }
+.evTempo { position: relative; margin-top: 16px; }
+.evTempo svg { display: block; width: 100%; height: 40px; }
+.evTempoLabel { position: absolute; top: -12px; left: 0; font-size: 10px; color: var(--faint); }
+.evLaneName { font-size: 10.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Items per track, and the time selection / edit cursor across the whole timeline */
+.evTimeline { position: relative; }
+.evLaneWrap { display: flex; flex-direction: column; gap: 2px; }
+.evItem.evNew { outline: 1.5px solid var(--accent); outline-offset: -1.5px; }
+.evItem.evGone { background: none; border: 1px dashed var(--muted); }
+.evLaneEmpty { position: absolute; left: 0; line-height: 22px; }
+.evSel { position: absolute; top: -3px; bottom: -3px; z-index: 1; pointer-events: none; border-inline: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.evSelWas { border: 1px dashed var(--muted); background: none; }
+.evCur { position: absolute; top: -5px; bottom: -5px; z-index: 2; width: 0; margin-left: -1px; border-left: 2px solid var(--hold); pointer-events: none; }
+.evCurWas { border-left: 1px dashed var(--muted); }
+
+/* Narrow drawer (the card under ~300px): two readouts a row so values and zone words are not cut off,
+   marker labels that would collide show on hover, and the mixer drops its pan column (pan is in the row's tooltip) */
+.evMarker.evQuiet { padding: 0 4px; margin-left: -4px; }
+.evMarker.evQuiet b { display: none; }
+.evMarker.evQuiet:hover { z-index: 2; }
+.evMarker.evQuiet:hover b { display: block; padding: 0 3px; border-radius: 2px; background: var(--panel); max-width: none; }
+
+/* Arrangement edits: the time an edit opened, cut or copied to (hatched), the source it copied from (outlined),
+   and a normalized item's new gain */
+.evSpan { position: absolute; top: -3px; bottom: -3px; z-index: 0; pointer-events: none; border-inline: 1px solid var(--accent);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent) 0 3px, transparent 3px 7px); }
+.evSpan:where([data-span='cut']) { border-color: var(--bad); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--bad) 20%, transparent) 0 3px, transparent 3px 7px); }
+.evSpan:where([data-span='source']) { border: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); background: none; }
+.evItemGain { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; }

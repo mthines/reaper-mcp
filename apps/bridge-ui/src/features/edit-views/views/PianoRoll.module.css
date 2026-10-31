@@ -1,0 +1,11 @@
+.evRoll { position: relative; cursor: crosshair; }
+.evRoll svg { display: block; width: 100%; height: 120px; }
+.evRollBlack { fill: var(--bg); opacity: 0.55; }
+.evNote { fill: var(--muted); }
+.evNoteNew { fill: var(--accent); }
+.evNoteGone { fill: none; stroke: var(--bad); stroke-width: 1; stroke-dasharray: 2 2; }
+.evVel { display: block; width: 100%; height: 28px; }
+.evVelNew { stroke: var(--accent); stroke-width: 1.5; }
+.evVelOld { stroke: var(--muted); stroke-width: 1.5; opacity: 0.5; }
+.evBars { position: relative; height: 14px; font-size: 10.5px; color: var(--faint); }
+.evBars span { position: absolute; padding-left: 3px; }

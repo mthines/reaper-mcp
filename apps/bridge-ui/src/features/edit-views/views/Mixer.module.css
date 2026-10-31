@@ -1,0 +1,67 @@
+.evFillHot { background: var(--warn); }
+.evMix { display: flex; flex-direction: column; }
+.evTrk { display: grid; grid-template-columns: 8px minmax(0, 96px) minmax(0, 1fr) 40px 30px 47px; gap: 8px; align-items: center; padding: 4px 0; font-size: 12px; }
+.evTrk + .evTrk { border-top: 1px solid var(--line); }
+.evTrkMuted { opacity: 0.5; }
+.evTrkMaster { border-top-color: var(--line-2) !important; padding-top: 7px; }
+.evSw { width: 8px; height: 14px; border-radius: 2px; }
+.evTn { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
+
+/* The name gives way, never the change word next to it */
+.evTnText { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.evTn .evMark { flex-shrink: 0; }
+.evTnFolder { color: var(--muted); font-weight: 500; }
+.evFader { grid-column: auto; }
+.evTv { font-size: 11px; text-align: right; color: var(--muted); }
+.evTv[data-zone='hot'] { color: var(--warn); }
+.evPan { position: relative; height: 12px; }
+.evPan::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--line-2); }
+.evPanC { position: absolute; left: 50%; top: 2px; bottom: 2px; width: 1px; background: var(--faint); }
+.evPanD { position: absolute; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: var(--hold); }
+.evChips { display: flex; gap: 3px; justify-content: flex-end; }
+.evChip { width: 13px; border-radius: 3px; border: 1px solid var(--line-2); font: 600 9px/13px var(--mono); text-align: center; color: var(--faint); }
+.evChip:where([data-chip='m']) { background: var(--warn); border-color: var(--warn); color: var(--panel-2); }
+.evChip:where([data-chip='s']) { background: var(--live); border-color: var(--live); color: var(--panel-2); }
+.evChip:where([data-chip='r']) { background: var(--bad); border-color: var(--bad); color: var(--panel-2); }
+
+/* What a call did to a row of a list (FX slot, track, route): added, moved, changed in place, removed */
+.evMark { margin-left: 6px; padding: 0 4px; border-radius: 3px; font-size: 10px; font-weight: 500; line-height: 15px; white-space: nowrap; }
+.evMark:where([data-change='new']) { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.evMark:where([data-change='moved']) { color: var(--h1); background: color-mix(in srgb, var(--h1) 14%, transparent); }
+.evMark:where([data-change='changed']) { color: var(--muted); background: var(--panel-2); }
+.evMark:where([data-change='gone']) { color: var(--faint); border: 1px dashed var(--line-2); }
+:is(.evSlot, .evTrk):where([data-change='new']) { box-shadow: inset 2px 0 var(--accent); }
+:is(.evSlot, .evTrk):where([data-change='moved']) { box-shadow: inset 2px 0 var(--h1); }
+:is(.evSlot, .evTrk):where([data-change='changed']) { box-shadow: inset 2px 0 var(--muted); }
+.evTrk:is(.evSlot, .evTrk):where([data-change='new']), .evTrk:is(.evSlot, .evTrk):where([data-change='moved']), .evTrk:is(.evSlot, .evTrk):where([data-change='changed']) { padding-left: 5px; }
+:is(.evSlot, .evTrk):where([data-change='gone']) .evSlotName, :is(.evSlot, .evTrk):where([data-change='gone']) .evTn { color: var(--faint); text-decoration: line-through; }
+:is(.evSlot, .evTrk):where([data-change='gone']) .evFader, :is(.evSlot, .evTrk):where([data-change='gone']) .evPan, :is(.evSlot, .evTrk):where([data-change='gone']) .evChips, :is(.evSlot, .evTrk):where([data-change='gone']) .evTv { opacity: 0.35; }
+
+/* Change words sit on mixer and route rows when the drawer is wide; narrower, the row keeps its
+   coloured edge (the word is in its tooltip) and one legend under the list names the colours */
+.evMarkLegend { display: none; margin-top: 8px; }
+
+@container (max-width: 460px) {
+  .evTrk .evMark, .evRoute .evMark { display: none; }
+  .evMarkLegend { display: flex; }
+}
+.evSlots { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.evSlot { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 6px 0 6px 4px; font-size: 12px; }
+.evSlot + .evSlot { border-top: 1px solid var(--line); }
+.evSlotName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.evSlotName small { margin-left: 6px; font-size: 11px; color: var(--faint); }
+.evSlotState { display: flex; align-items: baseline; font-size: 11px; color: var(--warn); white-space: nowrap; }
+.evSlotBypassed .evSlotName { color: var(--muted); }
+.evSlotOffline .evSlotName { color: var(--faint); font-style: italic; }
+.evSlotOffline .evSlotState { color: var(--faint); }
+
+/* Routing: the mixer row with a direction instead of a colour swatch */
+.evRoute { grid-template-columns: 14px minmax(0, 1fr) minmax(40px, 1fr) 40px 30px 13px; }
+.evRouteKind { font-size: 12px; color: var(--faint); text-align: center; }
+.evRoute .evTn { display: flex; align-items: baseline; min-width: 0; }
+
+@container (max-width: 300px) {
+  .evTrk { grid-template-columns: 8px minmax(0, 1fr) minmax(36px, 0.8fr) 38px 47px; gap: 7px; }
+  .evTrk .evPan { display: none; }
+  .evRoute { grid-template-columns: 14px minmax(0, 1fr) minmax(36px, 0.8fr) 38px 13px; }
+}

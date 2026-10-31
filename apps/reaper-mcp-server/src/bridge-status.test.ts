@@ -11,7 +11,7 @@ const REAPER_DIR = join(__dirname, '../../../reaper');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
 const SCRIPTS = '/reaper/Scripts/';
 const BRIDGE_DIR = `${SCRIPTS}mcp_bridge_data/`;
-const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua'];
+const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_arrange_lib.lua', 'mcp_midi_lib.lua'];
 
 interface Entry { n: number; t: number; c: string; ok: boolean; s?: string; p?: string; e?: string; r?: Record<string, unknown> }
 type Row = [number, number, number, number, number];
@@ -331,6 +331,120 @@ describe('edit views in the log', () => {
     });
   });
 
+  it('render view in the log: one row per file with its levels, waveform slices and the targets', async () => {
+    const setup = `
+      api.project.strings.RENDER_FILE = "/out"
+      api.project.strings.RENDER_PATTERN = "mix"
+      api.project.info.RENDER_NORMALIZE = 1 | 64
+      api.project.info.RENDER_NORMALIZE_TARGET = 10 ^ (-14 / 20)
+      api.project.info.RENDER_BRICKWALL = 10 ^ (-1 / 20)
+      local render = api.Main_OnCommand
+      api.Main_OnCommand = function(id, flag)
+        render(id, flag)
+        if id == 42230 then for path in pairs(api.rendered) do local f = io.open(path, "w"); f:write("RIFF"); f:close() end end
+      end
+      api.new_array = function() return {} end
+      api.GetMediaSourceNumChannels = function() return 2 end
+      api.PCM_Source_BuildPeaks = function() return 0 end
+      api.PCM_Source_GetPeaks = function(src, rate, start, ch, n, extra, buf)
+        for i = 0, n - 1 do
+          for c = 1, ch do buf[i * ch + c] = 0.5; buf[n * ch + i * ch + c] = -0.25 end
+        end
+        return n
+      end
+    `;
+    const bridge = await startBridge(setup, { '/out/.keep': '' });
+    const res = await bridge.send('render_project', {});
+    expect(res.error ?? 'ok').toBe('ok');
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({ fmt: 'wav', src: 'master', norm: 'lufs_i', nt: -14, lim: -1, tp: false });
+    const row = (r as { groups: Array<{ v: string; f: unknown[][] }> }).groups[0].f[0];
+    expect(row.slice(0, 5)).toEqual(['mix.wav', 12.5, -14, -1, -1.5]);
+    expect((row[5] as number[]).length).toBe(60);
+    expect((row[5] as number[])[0]).toBe(0.5);
+    expect((row[6] as number[])[0]).toBe(-0.25);
+  });
+
+  it('render view in the log: peaks built only for the waveform are not left beside the rendered file', async () => {
+    const setup = `
+      api.project.strings.RENDER_FILE = "/out"
+      api.project.strings.RENDER_PATTERN = "mix"
+      local render = api.Main_OnCommand
+      api.Main_OnCommand = function(id, flag)
+        render(id, flag)
+        if id == 42230 then for path in pairs(api.rendered) do local f = io.open(path, "w"); f:write("RIFF"); f:close() end end
+      end
+      api.new_array = function() return {} end
+      api.GetMediaSourceNumChannels = function() return 2 end
+      local create = api.PCM_Source_CreateFromFile
+      api.PCM_Source_CreateFromFile = function(path) peaks_for = path; return create and create(path) or { path = path } end
+      api.GetPeakFileName = function(path) return path .. ".reapeaks" end
+      api.PCM_Source_BuildPeaks = function(_, mode)
+        if mode == 2 then local f = io.open(peaks_for .. ".reapeaks", "w"); f:write("RPKN"); f:close() end
+        return mode == 0 and 1 or 0
+      end
+      api.PCM_Source_GetPeaks = function(src, rate, start, ch, n, extra, buf)
+        for i = 0, n * ch * 2 do buf[i] = 0.5 end
+        return n
+      end
+    `;
+    const bridge = await startBridge(setup, { '/out/.keep': '' });
+    expect((await bridge.send('render_project', {})).error ?? 'ok').toBe('ok');
+    const row = ((await bridge.status()).recent[0].r as { groups: Array<{ f: unknown[][] }> }).groups[0].f[0];
+    expect((row[5] as number[]).length).toBe(60);
+    expect(await bridge.eval('(function() local f = io.open("/out/mix.wav.reapeaks", "rb"); if f then f:close() end; return f ~= nil end)()')).toBe(false);
+  });
+
+  it('render view in the log: once waveforms took a second, the remaining files are listed without one', async () => {
+    const setup = `
+      api.project.strings.RENDER_FILE = "/out"
+      api.project.strings.RENDER_PATTERN = "song"
+      local render = api.Main_OnCommand
+      api.Main_OnCommand = function(id, flag)
+        render(id, flag)
+        if id == 42230 then for path in pairs(api.rendered) do local f = io.open(path, "w"); f:write("RIFF"); f:close() end end
+      end
+      fake_now = 0
+      api.time_precise = function() return fake_now end
+      api.new_array = function() return {} end
+      api.GetMediaSourceNumChannels = function() return 2 end
+      -- Each waveform takes 0.6 s of the main thread
+      api.PCM_Source_BuildPeaks = function(_, mode) if mode == 2 then fake_now = fake_now + 0.6 end return mode == 0 and 1 or 0 end
+      api.PCM_Source_GetPeaks = function(src, rate, start, ch, n, extra, buf)
+        for i = 0, n * ch * 2 do buf[i] = 0.5 end
+        return n
+      end
+      api.tracks[2] = { name = "Vocals", guid = "{v}", vals = {}, fx = {}, sends = {}, chunk = "" }
+    `;
+    const bridge = await startBridge(setup, { '/out/.keep': '' });
+    const res = await bridge.send('render_versions', { versions: JSON.stringify([{ name: 'A' }, { name: 'B', mute: ['Vocals'] }, { name: 'C', mute: ['Vocals'] }]) });
+    expect(res.error ?? 'ok').toBe('ok');
+    const groups = ((await bridge.status()).recent[0].r as { groups: Array<{ f: unknown[][] }> }).groups;
+    expect(groups.map((g) => (g.f[0][5] as number[]).length)).toEqual([60, 60, 0]);
+  });
+
+  it('render view in the log: versions are grouped, each with its muted tracks', async () => {
+    const setup = `
+      api.tracks[2] = { name = "Vocals", guid = "{v}", vals = {}, fx = {}, sends = {}, chunk = "" }
+      api.project.strings.RENDER_FILE = "/out"
+      api.project.strings.RENDER_PATTERN = "song"
+      local render = api.Main_OnCommand
+      api.Main_OnCommand = function(id, flag)
+        render(id, flag)
+        if id == 42230 then for path in pairs(api.rendered) do local f = io.open(path, "w"); f:write("RIFF"); f:close() end end
+      end
+    `;
+    const bridge = await startBridge(setup, { '/out/.keep': '' });
+    const res = await bridge.send('render_versions', { versions: JSON.stringify([{ name: 'Full' }, { name: 'Instrumental', mute: ['Vocals'] }]) });
+    expect(res.error ?? 'ok').toBe('ok');
+    const { r } = (await bridge.status()).recent[0];
+    const groups = (r as { groups: Array<{ v: string; m: string[]; f: unknown[][] }> }).groups;
+    expect(groups.map((g) => [g.v, g.m, g.f[0][0]])).toEqual([
+      ['Full', [], 'song-Full.wav'],
+      ['Instrumental', ['Vocals'], 'song-Instrumental.wav'],
+    ]);
+  });
+
   it('shows a track change as before and after, in dB', async () => {
     const bridge = await startBridge('api.tracks[1].vals.D_VOL = 1');
     await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -6 });
@@ -373,6 +487,47 @@ describe('edit views in the log', () => {
     await bridge.send('delete_midi_note', { trackIndex: 0, itemIndex: 0, noteIndex: 0 });
     r = (await bridge.status()).recent[0].r;
     expect(r).toMatchObject({ total: 2, gone: [[36, 0, 1, 100]] });
+  });
+
+  it('every note and CC edit is its own undo point, not merged into the previous MIDI one', async () => {
+    const bridge = await startBridge(`${MIDI_ITEM}
+      ccs = { { 0, 0xB0, 0, 7, 100 } }
+      api.MIDI_CountEvts = function() return true, #notes, #ccs, 0 end
+      api.MIDI_GetCC = function(_, i) local c = ccs[i + 1] if not c then return false end return true, false, false, c[1], c[2], c[3], c[4], c[5] end
+      api.MIDI_InsertCC = function(_, _, _, ppq, chanmsg, chan, msg2, msg3) ccs[#ccs + 1] = { ppq, chanmsg, chan, msg2, msg3 } return true end
+      api.MIDI_DeleteCC = function(_, i) table.remove(ccs, i + 1) return true end
+    `);
+    const edits: [string, Record<string, unknown>][] = [
+      ['insert_midi_note', { pitch: 42, velocity: 80, startPosition: 1, duration: 0.5 }],
+      ['insert_midi_notes', { notes: JSON.stringify([{ pitch: 43, velocity: 80, startPosition: 2, duration: 0.5 }]) }],
+      ['edit_midi_note', { noteIndex: 0, velocity: 90 }],
+      ['edit_midi_notes', { edits: JSON.stringify([{ noteIndex: 1, velocity: 70 }]) }],
+      ['delete_midi_note', { noteIndex: 0 }],
+      ['insert_midi_cc', { ccNumber: 1, value: 64, position: 1 }],
+      ['delete_midi_cc', { ccIndex: 0 }],
+    ];
+    for (const [type, params] of edits) {
+      const before = Number(await bridge.eval('#reaper.undo'));
+      const res = await bridge.send(type, { trackIndex: 0, itemIndex: 0, ...params });
+      expect(res.error ?? 'ok', type).toBe('ok');
+      expect(Number(await bridge.eval('#reaper.undo')), type).toBe(before + 1);
+    }
+  });
+
+  it('shows a quantize as the notes before and after, through the MIDI library', async () => {
+    const bridge = await startBridge(`${MIDI_ITEM}
+      notes[2][1] = 1950 -- a late snare
+      api.MIDI_GetProjQNFromPPQPos = function(_, ppq) return ppq / 960 end
+      api.MIDI_GetPPQPosFromProjQN = function(_, qn) return qn * 960 end
+    `);
+    await bridge.send('quantize_midi', { trackIndex: 0, itemIndex: 0, grid: 1 });
+    const { r, ok } = (await bridge.status()).recent[0];
+    expect(ok).toBe(true);
+    expect(r).toMatchObject({
+      total: 2,
+      notes: [[36, 0, 1, 100, 0], [38, 2, 0.969, 90, 1]],
+      gone: [[38, 2.031, 0.969, 90]],
+    });
   });
 
   it('summarises a MIDI analysis per pitch', async () => {
@@ -541,6 +696,72 @@ describe('edit views in the log', () => {
   });
 });
 
+describe('arrangement view in the log', () => {
+  const SONG = `
+    api.tracks[1].items = { { vals = { D_POSITION = 2, D_LENGTH = 4 }, takes = {} }, { vals = { D_POSITION = 10, D_LENGTH = 2 }, takes = {} } }
+    api.DeleteTrackMediaItem = function(tr, it)
+      for i, x in ipairs(tr.items) do if x == it then table.remove(tr.items, i) return true end end
+    end
+  `;
+
+  it('arrangement view in the log: insert time shows the opened span and the items before and after', async () => {
+    const bridge = await startBridge(SONG);
+    const res = await bridge.send('insert_time', { position: 8, length: 4 });
+    expect(res.success).toBe(true);
+    const r = (await bridge.status()).recent[0].r;
+    expect(r).toMatchObject({
+      op: 'insert', span: [8, 12],
+      lanes: [{ t: 'Kick', items: [[2, 4, 0, 0, 0, 0], [14, 2, 0, 0, 0, 0]], was: [[2, 4, 0, 0, 0, 0], [10, 2, 0, 0, 0, 0]] }],
+      len: 16,
+    });
+    expect(r).toHaveProperty('was');
+  });
+
+  it('arrangement view in the log: remove time shows the cut span, with the items it deleted as before', async () => {
+    const bridge = await startBridge(SONG);
+    expect((await bridge.send('remove_time', { start: 1, end: 7 })).success).toBe(true);
+    const r = (await bridge.status()).recent[0].r;
+    expect(r).toMatchObject({
+      op: 'remove', span: [1, 7],
+      lanes: [{ t: 'Kick', items: [[4, 2, 0, 0, 0, 0]], was: [[2, 4, 0, 0, 0, 0], [10, 2, 0, 0, 0, 0]] }],
+    });
+  });
+
+  it('arrangement view in the log: processing items on six tracks draws four lanes and counts the other two', async () => {
+    const bridge = await startBridge(`
+      for t = 1, 6 do
+        api.tracks[t] = api.tracks[t] or { name = "T" .. t, guid = "{T" .. t .. "}", vals = {}, fx = {}, sends = {}, chunk = "" }
+        api.tracks[t].items = { { vals = { D_POSITION = t, D_LENGTH = 1 }, takes = {} } }
+      end
+      api.Main_OnCommand = function() end
+      local function all() local l = {} for _, tr in ipairs(api.tracks) do for _, it in ipairs(tr.items or {}) do l[#l + 1] = it end end return l end
+      api.CountMediaItems = function() return #all() end
+      api.GetMediaItem = function(_, i) return all()[i + 1] end
+      api.IsMediaItemSelected = function(it) return it.selected == true end
+      api.SetMediaItemSelected = function(it, on) it.selected = on end
+      api.SelectAllMediaItems = function(_, on) for _, it in ipairs(all()) do it.selected = on end end
+      api.ValidatePtr2 = api.ValidatePtr2 or function() return true end
+      api.GetMediaItem_Track = function(it)
+        for _, tr in ipairs(api.tracks) do for _, x in ipairs(tr.items or {}) do if x == it then return tr end end end
+      end
+    `);
+    const items = [0, 1, 2, 3, 4, 5].map((t) => ({ trackIndex: t, itemIndex: 0 }));
+    const res = await bridge.send('process_items', { operation: 'glue', items: JSON.stringify(items) });
+    expect(res.success, res.error).toBe(true);
+    const r = (await bridge.status()).recent[0].r;
+    expect(r).toMatchObject({ moreTracks: 2 });
+    expect(r?.lanes).toHaveLength(4);
+  });
+
+  it('arrangement view in the log: a refused edit keeps no view', async () => {
+    const bridge = await startBridge(SONG);
+    const res = await bridge.send('remove_time', { start: 5, end: 1 });
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('nothing changed');
+    expect((await bridge.status()).recent[0].r).toBeUndefined();
+  });
+});
+
 describe('bridge settings from the status page', () => {
   it('pause rejects agent commands but still answers internal ones', async () => {
     const bridge = await startBridge();
@@ -549,6 +770,10 @@ describe('bridge settings from the status page', () => {
     expect(res.success).toBe(false);
     expect(res.error).toMatch(/paused by user/i);
     expect((await bridge.send('_session', {}, A)).success).toBe(true);
+    // detect_key reads MIDI through an internal command; pause stops it like the audio path
+    const key = await bridge.send('_midi_pitch_profile', { trackIndex: 0 }, A);
+    expect(key.success).toBe(false);
+    expect(key.error).toMatch(/paused by user/i);
 
     await bridge.set('cfg_paused', '0');
     expect((await bridge.send('get_project_info', {}, A)).success).toBe(true);

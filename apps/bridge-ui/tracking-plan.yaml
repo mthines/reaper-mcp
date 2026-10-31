@@ -1,5 +1,5 @@
 # Usage statistics of the bridge status page (mcp_bridge.html).
-# Source of truth for every event the page sends; src/analytics.ts (TrackEvent) must match it.
+# Source of truth for every event the page sends; src/lib/analytics.ts (TrackEvent) must match it.
 # Sent through the Dash0 Web SDK to the server telemetry's destination (dataset reaper-mcp),
 # service.name reaper-mcp-bridge-ui. Consent and promises: TELEMETRY.md, "The bridge page".
 #
@@ -43,6 +43,7 @@ events:
   log_cleared: {}
   log_entry_opened:
     ok: boolean
+    view: string             # the drawer's edit view kind (timeline, mixer, envelope, …) or none; bounded by editViewOf()
   session_filtered: {}
   tools_sorted:
     sort: string

@@ -19,7 +19,9 @@ name: Plugin contributions
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled]
-    paths: ['knowledge/contributions/**']
+    # Runs only when a PR touches the folder; its README is documentation, so a PR that only edits it never runs this.
+    # A run that finds no added records passes without a label or comment (see `check`).
+    paths: ['knowledge/contributions/**', '!knowledge/contributions/README.md']
   workflow_dispatch:
     inputs:
       dry_run:
@@ -58,10 +60,16 @@ jobs:
         run: |
           set +e
           bash scripts/fetch-pr-contributions.sh "$REPO" "$PR" "$HEAD_SHA" "$RUNNER_TEMP/contrib" > "$RUNNER_TEMP/files.txt"
-          echo "status=$?" >> "$GITHUB_OUTPUT"
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          # Optional: a PR that adds no records (it only removes files here) is no contribution, so pass quietly.
+          # A refused or unreadable file (non-zero status) still runs the check, so it fails with a comment.
+          if [ -s "$RUNNER_TEMP/files.txt" ]; then echo "records=1" >> "$GITHUB_OUTPUT"
+          elif [ "$status" = "0" ]; then echo "No plugin records added; nothing to check." >> "$GITHUB_STEP_SUMMARY"; fi
 
       - name: Check records
         id: check
+        if: steps.fetch.outputs.records == '1' || steps.fetch.outputs.status != '0'
         env:
           CONTRIBUTION_ROOT: ${{ runner.temp }}/contrib/
           OUTSIDE: ${{ steps.fetch.outputs.status }}
@@ -74,9 +82,8 @@ jobs:
           set +e
           xargs -r node scripts/publish-plugin-contributions.mjs --summary "$RUNNER_TEMP/comment.md" < "$RUNNER_TEMP/files.txt" > /dev/null
           ok=$?
-          [ -s "$RUNNER_TEMP/files.txt" ] || { echo "No contribution files in this PR." >> "$RUNNER_TEMP/comment.md"; ok=1; }
           if [ "$OUTSIDE" != "0" ]; then
-            printf '\nThis PR also changes files outside `knowledge/contributions/`. A contribution PR can only add records; please open code changes separately.\n' >> "$RUNNER_TEMP/comment.md"
+            printf '\nThis PR changes files outside `knowledge/contributions/`, or a contribution file could not be read (an unexpected file name; see the [workflow run](%s)). A contribution PR can only add records named `knowledge/contributions/<name>.md`; please open code changes separately.\n' "$GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID" >> "$RUNNER_TEMP/comment.md"
             ok=1
           fi
           if [ "$ok" = "0" ]; then

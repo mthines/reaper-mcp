@@ -2497,6 +2497,7 @@ function handlers.insert_midi_note(params)
   reaper.Undo_BeginBlock()
   reaper.MIDI_InsertNote(take, false, false, start_ppq, end_ppq, chan, pitch, vel, false)
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Insert MIDI note", -1)
 
   reaper.UpdateArrange()
@@ -2540,6 +2541,7 @@ function handlers.insert_midi_notes(params)
     end
   end
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Insert " .. inserted .. " MIDI notes", -1)
 
   reaper.UpdateArrange()
@@ -2589,6 +2591,7 @@ function handlers.edit_midi_note(params)
   reaper.Undo_BeginBlock()
   reaper.MIDI_SetNote(take, note_idx, sel, muted, new_start_ppq, new_end_ppq, new_chan, new_pitch, new_vel, false)
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Edit MIDI note " .. note_idx, -1)
 
   reaper.UpdateArrange()
@@ -2647,6 +2650,7 @@ function handlers.edit_midi_notes(params)
   end
 
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Batch edit " .. edited .. " MIDI notes", -1)
   reaper.UpdateArrange()
 
@@ -2669,6 +2673,7 @@ function handlers.delete_midi_note(params)
 
   reaper.Undo_BeginBlock()
   reaper.MIDI_DeleteNote(take, note_idx)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Delete MIDI note " .. note_idx, -1)
 
   reaper.UpdateArrange()
@@ -2728,6 +2733,7 @@ function handlers.insert_midi_cc(params)
   -- chanmsg 176 = 0xB0 = CC message
   reaper.MIDI_InsertCC(take, false, false, ppq, 176, chan, cc_num, value)
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Insert MIDI CC " .. cc_num, -1)
 
   reaper.UpdateArrange()
@@ -2751,6 +2757,7 @@ function handlers.delete_midi_cc(params)
 
   reaper.Undo_BeginBlock()
   reaper.MIDI_DeleteCC(take, cc_idx)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Delete MIDI CC " .. cc_idx, -1)
 
   reaper.UpdateArrange()
@@ -3685,11 +3692,28 @@ function handlers.get_render_settings(params)
 end
 
 function handlers.set_render_settings(params)
-  return with_project_lib(function() return project_lib.set_render(reaper, params) end)
+  return with_project_lib(function()
+    local p, err = project_lib.decode_json_fields(params, plan_lib_ok and plan_lib.json_decode or function() return nil end)
+    if not p then return nil, err end
+    return project_lib.set_render(reaper, p, plan_lib_ok and plan_lib.resolve_track or nil)
+  end)
 end
 
 function handlers.render_project(params)
-  return with_project_lib(function() return project_lib.render(reaper, params, project_fs) end)
+  return with_project_lib(function()
+    local p, err = project_lib.decode_json_fields(params, plan_lib_ok and plan_lib.json_decode or function() return nil end)
+    if not p then return nil, err end
+    return project_lib.render(reaper, p, project_fs, plan_lib_ok and plan_lib.resolve_track or nil)
+  end)
+end
+
+function handlers.render_versions(params)
+  if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup`" end
+  return with_project_lib(function()
+    local p, err = project_lib.decode_json_fields(params, plan_lib.json_decode)
+    if not p then return nil, err end
+    return project_lib.render_versions(reaper, p, project_fs, plan_lib.resolve_track)
+  end)
 end
 
 function handlers.get_project_settings(params)
@@ -4110,6 +4134,81 @@ function handlers.set_automation_item(params) return env_ext.run("set_item", par
 function handlers.delete_automation_item(params) return env_ext.run("delete_item", params) end
 
 -- =============================================================================
+-- MIDI composition: quantize, transform, file import, pitch profile
+-- =============================================================================
+
+-- Logic in mcp_midi_lib.lua; one table for the 200-locals limit. Nested params (note
+-- indexes, the velocity/humanize/length objects, an import's tracks) travel as JSON strings.
+-- Lib wrappers added since the main chunk reached the 200-locals limit live here, one field each
+local ext = {}
+ext.midi = {}
+ext.midi.ok, ext.midi.lib = pcall(dofile, script_dir .. "mcp_midi_lib.lua")
+
+function ext.midi.run(name, params)
+  if not ext.midi.ok then
+    return nil, "mcp_midi_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(ext.midi.lib) .. ")"
+  end
+  local p = {}
+  for k, v in pairs(params) do p[k] = v end
+  for _, k in ipairs({ "notes", "velocity", "humanize", "length", "tracks" }) do
+    if type(p[k]) == "string" then
+      if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed — run `reaper-mcp setup`" end
+      local val, err = plan_lib.json_decode(p[k])
+      if type(val) ~= "table" then return nil, k .. " is not valid JSON" .. (err and (" (" .. tostring(err) .. ")") or "") .. " — nothing changed" end
+      p[k] = val
+    end
+  end
+  local ok, res, err = pcall(ext.midi.lib[name], reaper, p)
+  if not ok then return nil, "Handler error: " .. tostring(res) end
+  return res, err
+end
+
+function handlers.quantize_midi(params) return ext.midi.run("quantize", params) end
+function handlers.transform_midi(params) return ext.midi.run("transform", params) end
+function handlers.import_midi_file(params) return ext.midi.run("import", params) end
+-- Internal (detect_key on a MIDI track): not logged, not counted, but refused while paused,
+-- since it answers an agent's tool call (a read, so read-only mode allows it)
+handlers["_midi_pitch_profile"] = function(params) return ext.midi.run("pitch_profile", params) end
+ext.paused_too = { _midi_pitch_profile = true }
+
+-- =============================================================================
+-- Arrangement: copy items, insert/remove time, copy a section, process items
+-- =============================================================================
+
+-- Logic in mcp_arrange_lib.lua (one table, like env_ext: the main chunk is at the locals limit)
+ext.arrange = {}
+ext.arrange.ok, ext.arrange.lib = pcall(dofile, script_dir .. "mcp_arrange_lib.lua")
+plan_ctx.arrange = ext.arrange.ok and ext.arrange.lib or nil
+
+-- `items` / `tracks` arrive as JSON strings (the bridge decodes only the top level)
+function ext.arrange.run(name, params)
+  if not ext.arrange.ok then
+    return nil, "mcp_arrange_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(ext.arrange.lib) .. ")"
+  end
+  for _, key in ipairs({ "items", "tracks" }) do
+    if type(params[key]) == "string" then
+      if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua" end
+      local ok, v = pcall(plan_lib.json_decode, params[key])
+      if not ok or type(v) ~= "table" then return nil, key .. " is not a JSON array — nothing changed" end
+      params[key] = v
+    end
+  end
+  local ok, res, err = pcall(ext.arrange.lib[name], reaper, params)
+  if not ok then return nil, "Handler error: " .. tostring(res) end
+  return res, err
+end
+
+function handlers.copy_media_items(params) return ext.arrange.run("copy_items", params) end
+
+function handlers.insert_time(params) return ext.arrange.run("insert_time", params) end
+
+function handlers.remove_time(params) return ext.arrange.run("remove_time", params) end
+
+function handlers.copy_section(params) return ext.arrange.run("copy_section", params) end
+
+function handlers.process_items(params) return ext.arrange.run("process_items", params) end
+
+-- =============================================================================
 -- Live MIDI output handlers
 -- =============================================================================
 
@@ -4301,6 +4400,9 @@ function handlers.render_track_to_wav(params)
   local saved_end      = reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     0, false)
   local saved_srate    = reaper.GetSetProjectInfo(0, "RENDER_SRATE",      0, false)
   local saved_channels = reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   0, false)
+  -- Delivery processing set_render_settings stores in the project: an analysis render must hear the raw mix
+  local saved_normalize = reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE", 0, false)
+  local saved_dither    = reaper.GetSetProjectInfo(0, "RENDER_DITHER",    0, false)
 
   -- Save solo and selection states for all tracks
   local track_count = reaper.CountTracks(0)
@@ -4337,6 +4439,8 @@ function handlers.render_track_to_wav(params)
     reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT", "evaw", true)
     reaper.GetSetProjectInfo(0, "RENDER_SRATE",    sample_rate, true)
     reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", 2,           true)
+    reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE", 0, true)
+    reaper.GetSetProjectInfo(0, "RENDER_DITHER",    0, true)
 
     -- Unsolo all tracks, then solo only the target track (master: none)
     for i = 0, track_count - 1 do
@@ -4366,6 +4470,8 @@ function handlers.render_track_to_wav(params)
     reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     saved_end,      true)
     reaper.GetSetProjectInfo(0, "RENDER_SRATE",      saved_srate,    true)
     reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   saved_channels, true)
+    reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE",  saved_normalize, true)
+    reaper.GetSetProjectInfo(0, "RENDER_DITHER",     saved_dither,    true)
     for i = 0, track_count - 1 do
       local t = reaper.GetTrack(0, i)
       reaper.SetMediaTrackInfo_Value(t, "I_SOLO", saved_solo_states[i] or 0)
@@ -4860,15 +4966,15 @@ local HISTORY_TIERS = {
 for _, tier in ipairs(HISTORY_TIERS) do tier.b = {} end
 local HISTORY_SLOW_MS = 100
 -- Commands whose duration is the work itself (renders, plugin loads, project IO, proxies that run
--- arbitrary work): never counted as slow. Mirrors LONG_RUNNING in apps/bridge-ui/src/status.ts.
+-- arbitrary work): never counted as slow. Mirrors LONG_RUNNING in apps/bridge-ui/src/lib/commands.ts.
 local LONG_RUNNING = {}
 for _, c in ipairs({
-  "render_project", "render_track_to_wav", "run_plan", "run_action", "save_project", "undo_project",
+  "render_project", "render_track_to_wav", "render_versions", "run_plan", "run_action", "save_project", "undo_project",
   "redo_project", "add_fx", "add_take_fx", "setup_fx_chain", "copy_fx", "move_fx", "set_fx_offline",
   "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
   "insert_audio_file", "snapshot_save", "snapshot_restore", "snapshot_edit",
   "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
-  "detect_transients", "create_transient_automation", "insert_stem_tracks",
+  "detect_transients", "create_transient_automation", "insert_stem_tracks", "detect_key", "import_midi_file", "process_items",
   "analyze_loudness_curve", "analyze_stereo_bands", "measure_masking", "separate_stems",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
@@ -5076,7 +5182,7 @@ local function record_command(cmd, handler_ms, ok, err, data, before)
   end
   -- Only system errors count as errors. A refused request ("Track 9 not found") is a
   -- warning: the caller asked for something that can't be done. Same prefixes as
-  -- classifyBridgeError() in bridge.ts and SYSTEM_ERROR_PREFIXES in the page's status.ts.
+  -- classifyBridgeError() in bridge.ts and SYSTEM_ERROR_PREFIXES in the page's lib/commands.ts.
   local e_str = err and tostring(err) or ""
   local failed = not ok and (e_str:find("^Handler error:") or e_str:find("^Unknown command type")
     or e_str:find("^Internal error:")) ~= nil
@@ -5197,7 +5303,7 @@ local function run_command(cmd)
 
   local internal = type(cmd.type) == "string" and cmd.type:sub(1, 1) == "_"
   local blocked
-  if not internal and cfg("cfg_paused") then
+  if (not internal or ext.paused_too[cmd.type]) and cfg("cfg_paused") then
     blocked = "Paused by user in the MCP Bridge window. Ask the user to resume agent control."
   elseif not internal and cfg("cfg_readonly") and not readonly_allows(cmd.type) then
     blocked = "Read-only mode is on in the MCP Bridge window: '" .. tostring(cmd.type)

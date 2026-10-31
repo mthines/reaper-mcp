@@ -1,0 +1,35 @@
+/* Range combo box (pattern: LoreKit's Combobox) */
+.combo { position: relative; }
+.comboTrigger {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 8px 3px 10px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line);
+  font-size: 11.5px; color: var(--text);
+}
+.comboTrigger:hover, .comboTrigger[aria-expanded='true'] { border-color: var(--line-2); }
+.comboTrigger:focus-visible, .comboList:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.comboChevron { width: 12px; height: 12px; color: var(--muted); }
+.comboList {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 10;
+  min-width: 190px; max-height: 320px; overflow-y: auto;
+  margin: 0; padding: 4px; list-style: none;
+  background: #0b0c0e; border: 1px solid var(--line-2); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.comboOption {
+  display: flex; align-items: flex-start; gap: 6px;
+  padding: 5px 8px 5px 4px; border-radius: 6px; cursor: pointer;
+}
+.comboOptionHl { background: var(--panel-2); }
+.comboCheck { flex: none; width: 14px; height: 14px; margin-top: 1px; color: var(--accent); }
+.comboCheck svg { width: 14px; height: 14px; display: block; }
+.comboText { display: grid; }
+.comboLabel { font-size: 12px; color: var(--text); }
+.comboHint { font-size: 10.5px; color: var(--faint); }
+.comboTriggerText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comboListFixed { position: fixed; right: auto; max-height: none; min-width: 200px; }
+.comboGroup + .comboGroup { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
+.comboHeading { padding: 4px 8px 2px 24px; font-size: 10.5px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; }
+.comboOptionOff { cursor: default; opacity: 0.45; }
+.comboLabel :global(.sdot) { margin-right: 6px; }
+.comboLabel :global(.count) { margin-left: 6px; }

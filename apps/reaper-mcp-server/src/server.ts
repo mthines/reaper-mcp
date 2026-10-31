@@ -23,12 +23,14 @@ import { registerBatchTools } from './tools/batch.js';
 import { registerPlanTools } from './tools/plan.js';
 import { registerActionTools } from './tools/actions.js';
 import { registerItemTools } from './tools/items.js';
+import { registerArrangeTools } from './tools/arrange.js';
 import { registerFxHousekeepingTools } from './tools/fx-housekeeping.js';
 import { registerCategoryTools } from './tools/categories.js';
 import { registerAestheticsTools } from './tools/aesthetics.js';
 import { registerOfflineTools } from './tools/offline.js';
 import { registerTransientTools } from './tools/transients.js';
 import { registerMixcheckTools } from './tools/mixcheck.js';
+import { registerCompositionTools } from './tools/composition.js';
 import { registerKnowledgeTools } from './tools/knowledge.js';
 
 // Cap for free-text error messages on span status (full text goes to the log).
@@ -150,12 +152,14 @@ export function createServer(): McpServer {
   registerPlanTools(server);
   registerActionTools(server);
   registerItemTools(server);
+  registerArrangeTools(server);
   registerFxHousekeepingTools(server);
   registerCategoryTools(server);
   registerAestheticsTools(server);
   registerOfflineTools(server);
   registerTransientTools(server);
   registerMixcheckTools(server);
+  registerCompositionTools(server);
   registerKnowledgeTools(server);
 
   return server;

@@ -152,11 +152,11 @@ describe('category tools', () => {
       expect(text).toContain('Available categories:');
     });
 
-    it('returns midi category with all 17 tools (14 editing + 3 live output)', async () => {
+    it('returns midi category with all 20 tools (14 editing + 3 composition + 3 live output)', async () => {
       const result = await tools['enable_tool_category'].handler({ category: 'midi' });
       const content = (result as { content: Array<{ text: string }> }).content[0].text;
       const parsed = JSON.parse(content) as { toolCount: number };
-      expect(parsed.toolCount).toBe(17);
+      expect(parsed.toolCount).toBe(20);
     });
   });
 
@@ -186,5 +186,11 @@ describe('category tools', () => {
       const text = (result as { content: Array<{ text: string }> }).content[0].text;
       expect(text).toContain('Unknown category "unknown_cat"');
     });
+  });
+
+  it('list_tool_categories names every category in its description, so a new one is never missing', () => {
+    let description = '';
+    registerCategoryTools({ tool: (name: string, desc: string) => { if (name === 'list_tool_categories') description = desc; } } as unknown as McpServer);
+    for (const name of Object.keys(TOOL_CATEGORIES)) expect(description).toContain(name);
   });
 });

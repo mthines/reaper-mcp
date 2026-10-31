@@ -419,6 +419,26 @@ def handle_separation_status(request_id: Any, params: dict) -> str:
     return _ok(request_id, {"installed": separation.is_installed(), "message": separation.NOT_INSTALLED})
 
 
+def handle_chroma(request_id: Any, params: dict) -> str:
+    """
+    Pitch-class energy of a file (C first, largest = 1), for key detection.
+
+    params: path, startTime?, endTime? (seconds into the file)
+    """
+    import analysis
+
+    error = _check_file(request_id, params, "path")
+    if error:
+        return error
+    try:
+        audio, sr = analysis.load_audio(params["path"], float(params.get("startTime", 0)), params.get("endTime"))
+        if audio.shape[1] < int(0.5 * sr):
+            return _err(request_id, -32000, "Audio too short: need at least 0.5 s")
+        return _ok(request_id, analysis.chroma(audio, sr))
+    except Exception as exc:  # noqa: BLE001
+        return _err(request_id, -32000, f"Chroma failed: {exc}")
+
+
 # JSON-RPC method names must stay in sync with the TypeScript client.
 # When adding a method here, also reference it from apps/reaper-mcp-server/src/sidecar.ts.
 METHODS = {
@@ -426,6 +446,7 @@ METHODS = {
     "analyze_audio": handle_analyze_audio,
     "align": handle_align,
     "transients": handle_transients,
+    "chroma": handle_chroma,
     "loudness_curve": handle_loudness_curve,
     "stereo_bands": handle_stereo_bands,
     "masking": handle_masking,

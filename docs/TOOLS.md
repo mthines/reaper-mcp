@@ -74,8 +74,9 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 |------|-------------|
 | `undo_project` / `redo_project` | Undo / redo, reporting the undo label |
 | `save_project` | Save in place, or write a copy to a `.rpp` path — never opens a dialog |
-| `get_render_settings` / `set_render_settings` | Output dir, pattern, format, bounds, sample rate, channels |
-| `render_project` | Render with the current settings (refuses to overwrite unless asked) |
+| `get_render_settings` / `set_render_settings` | Output dir, pattern, format, bit depth / MP3 bitrate, dither, source (master, stems, selected items, region matrix), bounds, normalize to LUFS / limit, metadata (title, artist, ISRC, BWF), sample rate, channels |
+| `render_project` | Render with the current settings, optionally for given tracks; returns each file's length, LUFS-I and true peak (refuses to overwrite unless asked) |
+| `render_versions` | Several versions in one call (full, instrumental, TV mix): mute a set of tracks per version, render, restore |
 | `get_project_settings` / `set_project_settings` | Sample rate, title, author, notes, repeat, metronome |
 
 ### Envelopes / Automation
@@ -141,6 +142,15 @@ Workflow: [knowledge/workflows/transient-lighting.md](../knowledge/workflows/tra
 | `get_midi_cc` / `insert_midi_cc` / `delete_midi_cc` | CC event management |
 | `get_midi_item_properties` / `set_midi_item_properties` | MIDI item props |
 
+### Composition (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `quantize_midi` | Snap notes to the grid with strength, swing and a window; keep or quantize lengths |
+| `transform_midi` | Transpose, velocity (set/scale/add/clamp), humanize (seeded), lengths (set/scale/legato) |
+| `import_midi_file` | Import a .mid file as MIDI items, one call, no dialog |
+| `detect_key` | The key of a MIDI track, a rendered track or an audio file, with confidence and the chroma |
+
 ### Media Item Editing (11 tools)
 
 | Tool | Description |
@@ -151,6 +161,18 @@ Workflow: [knowledge/workflows/transient-lighting.md](../knowledge/workflows/tra
 | `split_media_item` | Split at position, returns left/right info |
 | `delete_media_item` / `move_media_item` / `trim_media_item` | Edit operations |
 | `add_stretch_marker` / `get_stretch_markers` / `delete_stretch_marker` | Time-stretching |
+
+### Arrangement (5 tools)
+
+Each is one bridge call and one undo point; a refused request changes nothing. Time edits move everything in the project (items, markers, regions, tempo, envelope points, automation items) without depending on REAPER's ripple settings.
+
+| Tool | Description |
+|------|-------------|
+| `copy_media_items` | Copy or repeat items, keeping their spacing (`times`, `position`, `trackIndex`, `pooled`) |
+| `insert_time` | Open time at a position; spanning items split, spanning regions grow |
+| `remove_time` | Cut a range and close the gap; the tempo after the cut is kept |
+| `copy_section` | Copy a region (or start/end) to a position, items trimmed to it plus automation (points and pooled automation items); `insert` opens time first |
+| `process_items` | `normalize` (peak, true peak, LUFS, RMS target via item gain), `reverse`, `glue` |
 
 ### Snapshots (A/B Testing)
 

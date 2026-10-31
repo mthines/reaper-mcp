@@ -65,6 +65,7 @@ reaper-mcp/
         selection.ts          # get/set_selected_tracks, set_selected_items, get/set_time_selection
         actions.ts            # search_actions, get_action, run_action (logic in reaper/mcp_actions_lib.lua)
         items.ts              # insert_audio_file, takes, take FX, item color/fades (logic in reaper/mcp_items_lib.lua)
+        arrange.ts            # copy_media_items, insert/remove_time, copy_section, process_items (logic in reaper/mcp_arrange_lib.lua)
         fx-housekeeping.ts    # move/copy/rename_fx, .RfxChain save/load, track templates (logic in reaper/mcp_items_lib.lua)
         markers.ts            # list_markers, list_regions, add_marker, add_region, delete_marker, delete_region, edit_marker, edit_region
         tempo.ts              # get_tempo_map, add/edit/delete_tempo_marker, set_project_tempo
@@ -72,6 +73,7 @@ reaper-mcp/
         aesthetics.ts         # analyze_track_aesthetics (requires Python sidecar)
         offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment (sidecar, no model)
         transients.ts         # detect_transients, create_transient_automation (sidecar onsets → envelope pulses, e.g. lighting)
+        composition.ts        # quantize_midi, transform_midi, import_midi_file (SMF parsed in smf.ts), detect_key (key.ts; logic in reaper/mcp_midi_lib.lua)
         mixcheck.ts           # analyze_loudness_curve, analyze_stereo_bands, measure_masking, separate_stems (sidecar)
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
 
@@ -90,8 +92,20 @@ reaper-mcp/
       responses.ts            # BridgeResponse, ProjectInfo, TrackInfo, FxInfo, etc.
 
   apps/bridge-ui/             # Bridge status page (React → one self-contained mcp_bridge.html)
-    src/status.ts             # Parses ExtState MCPBridge/status, liveness, log merge (unit-tested)
-    src/App.tsx               # Status, latency strip, searchable/filterable command log
+    src/main.tsx              # Entry: renders app/App.tsx, registers the service worker
+    src/app/                  # The page shell: App, Header, Notices, Offline + the hooks that poll the bridge
+    src/components/           # Shared UI with no bridge knowledge: Combobox (+ .Grouped), Toggle, Notice, Mark, ResizeHandle, Markdown, Icon.*
+    src/features/<feature>/   # One folder per area: log, stats, timeline, settings, measurements, edit-views, plugins, snapshots
+                              # Each folder's index.ts exports a composite, namespaced component (Log.Rows, Log.Details,
+                              # Measurement.Loudness, EditView.Section, Snapshots.SaveForm, Plugins.Details, Settings.LoreKit,
+                              # Stats.Sparkline) plus its public functions; code outside a folder imports only its index
+    src/lib/                  # Pure logic + small hooks: status (feed parsing), commands, log, timeline, sessions, search, format, url-state, analytics
+    src/demo/                 # ?demo's fake bridge and the fixed examples the stories draw (examples.ts, feed.ts)
+    src/styles.css            # Root stylesheet: CSS variables (tokens), base element styles and global utility classes only
+    src/styles/               # CSS modules shared across features: drawer, list (segmented tabs, chips, rows), chart (measure card, readouts, legends, bars)
+                              # Every component's own styles: <Name>.module.css beside it (styles.x, joined with cx() from lib/cx.ts)
+    src/test/stories.test.tsx # Runs every story's play function as a vitest test (jsdom)
+    .storybook/               # Storybook (React + Vite): pnpm storybook, nx build-storybook bridge-ui
     build.mjs                 # esbuild bundle inlined into dist/apps/bridge-ui/mcp_bridge.html
     build-config.mjs          # esbuild options + HTML template shared by build.mjs and dev.mjs
     dev.mjs                   # pnpm dev:bridge: live-reload page, /_/ proxied over one socket, reaper/ installed on save
@@ -114,7 +128,7 @@ reaper-mcp/
 
   scripts/
     sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (primary install model)
-    plugin-list.mjs           # Rebuild docs/PLUGINS.md's built-in plugin table from LoreKit (logic: apps/bridge-ui/src/plugin-list.mjs)
+    plugin-list.mjs           # Rebuild docs/PLUGINS.md's built-in plugin table from LoreKit (logic: apps/bridge-ui/src/features/plugins/plugin-list.mjs)
 
   reaper/                     # Files installed INTO REAPER (copied by setup command)
     mcp_tracks_lib.lua        # Pure track-structure + routing logic (wasmoon-tested), loaded by the bridge
@@ -124,7 +138,9 @@ reaper-mcp/
     mcp_actions_lib.lua       # Action proxy + selection setters (pure Lua, unit-tested via wasmoon)
     mcp_project_lib.lua       # Project ops, tempo map + marker editing (pure Lua, unit-tested via wasmoon)
     mcp_envelopes_lib.lua     # Envelopes, points (dB through the envelope's scaling) and pooled automation items (pure Lua, unit-tested via wasmoon)
+    mcp_midi_lib.lua          # Quantize, transform, MIDI file import, pitch-class profile (pure Lua, unit-tested via wasmoon)
     mcp_items_lib.lua         # Items, takes, take FX, FX move/copy/rename, FX chains, track templates (pure Lua, unit-tested via wasmoon)
+    mcp_arrange_lib.lua       # Copy items, insert/remove time, copy a section, normalize/reverse/glue (pure Lua, unit-tested via wasmoon)
     mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
     mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
@@ -153,7 +169,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (151 total)
+## MCP Tools (162 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -221,6 +237,15 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `get_midi_item_properties` | `tools/midi.ts` | Get MIDI item properties (position, length, note/CC count, mute, loop) |
 | `set_midi_item_properties` | `tools/midi.ts` | Set MIDI item properties (position, length, mute, loop source) |
 
+### Composition (4)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `quantize_midi` | `tools/composition.ts` | Snap notes to the project grid: grid (beats), strength, swing, window, `lengths` keep/quantize; all notes or a selection (indexes, pitch range, channel) |
+| `transform_midi` | `tools/composition.ts` | Transpose (refused out of 0-127), velocity set/scale/add + clamp, humanize (seeded), length set/scale/legato |
+| `import_midi_file` | `tools/composition.ts` | Import a .mid (type 0/1, ≤5 MB, ≤20000 notes) without REAPER's dialog: merged onto a track or one new named track per file track; file tempo reported, not applied |
+| `detect_key` | `tools/composition.ts` | Key from a track's MIDI notes (drums skipped) or rendered audio / an audio file (sidecar chroma): key, confidence, relative, top 3, 12-bin chroma |
+
 ### Live MIDI Output (3)
 
 | Tool | File | Description |
@@ -244,6 +269,16 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `add_stretch_marker` | `tools/media.ts` | Add a stretch marker for time-stretching audio |
 | `get_stretch_markers` | `tools/media.ts` | List stretch markers with positions and source positions |
 | `delete_stretch_marker` | `tools/media.ts` | Delete a stretch marker by index |
+
+### Arrangement Tools (5)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `copy_media_items` | `tools/arrange.ts` | Copy/repeat items keeping their spacing (`times`, `position`, `trackIndex`); fresh GUIDs, MIDI unpooled unless `pooled` |
+| `insert_time` | `tools/arrange.ts` | Open time across the project: items, markers, regions, tempo, envelope points and automation items after it move; spanning items split |
+| `remove_time` | `tools/arrange.ts` | Cut a range out of the project and close the gap; crossing items trimmed, regions shrink, the tempo after the cut kept |
+| `copy_section` | `tools/arrange.ts` | Copy a region (or start/end) to a position: items trimmed to it plus automation (points, and pooled copies of automation items inside it), optional `insert` and `tracks` |
+| `process_items` | `tools/arrange.ts` | `normalize` (item gain to a peak/true-peak/LUFS/RMS target), `reverse` (toggles), `glue` (whole items); selection kept |
 
 ### Selection & Navigation Tools (5)
 
@@ -389,16 +424,17 @@ other tenancy it does, and the owning account must keep nothing private in that 
 | `get_action` | `tools/actions.ts` | One action's details; a `Custom:` macro's steps by name, or a script's path (from `reaper-kb.ini`) |
 | `run_action` | `tools/actions.ts` | Run an action by id, named id or exact name in an undo block; returns the toggle state after. Dialog actions need `allowDialog`; quit/close/open project are always refused |
 
-### Project Operations (8)
+### Project Operations (9)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `undo_project` | `tools/project.ts` | Undo the last undo point; reports its label and the next undo/redo labels |
 | `redo_project` | `tools/project.ts` | Redo the last undone point; reports its label |
 | `save_project` | `tools/project.ts` | Save in place, or write a copy to an absolute `.rpp` `path` (the open project keeps its path; `savedAsCopy`). Never opens a dialog: a never-saved project without `path` is refused |
-| `get_render_settings` | `tools/project.ts` | Output dir, file pattern, format, bounds, start/end, sample rate, channels, and the resolved target files |
-| `set_render_settings` | `tools/project.ts` | Set any render setting (format and secondaryFormat: wav/aiff/flac/mp3/ogg/opus, secondary also none); all validated before any write |
-| `render_project` | `tools/project.ts` | Render with the current settings (synchronous action 42230); refuses to overwrite existing targets unless `overwrite` |
+| `get_render_settings` | `tools/project.ts` | Output dir, file pattern, format + bit depth/bitrate, source, bounds, normalize/limit, dither, metadata, region matrix, and the resolved target files |
+| `set_render_settings` | `tools/project.ts` | Set any render setting: format/secondaryFormat (wav/aiff/flac/mp3/ogg/opus, secondary also none), `source` (master, stems, master_and_stems, selected_via_master, selected_items, selected_items_via_master, region_matrix + `regionMatrix`), `bitDepth`/`mp3Bitrate`, dither, normalize/limit, `metadata`; all validated before any write, one undo point |
+| `render_project` | `tools/project.ts` | Render with the current settings (synchronous action 42230), optionally for `tracks` (selected for the render, selection restored); returns each file's length, LUFS-I, true peak and peak; refuses to overwrite existing targets unless `overwrite` |
+| `render_versions` | `tools/project.ts` | Render up to 16 versions in one call (e.g. full, instrumental, TV): each mutes its tracks, renders to `<pattern>-<name>`, and mutes and pattern are restored even when one fails; all targets checked before the first render |
 | `get_project_settings` | `tools/project.ts` | Sample rate (+ forced flag), title, author, notes, repeat, metronome |
 | `set_project_settings` | `tools/project.ts` | Set any of those; metronome is a global REAPER option (not undoable, not stored in the project) |
 
@@ -435,11 +471,11 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 151 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 162 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
-Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`, `takes`, `fx_files`, `knowledge`
+Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`, `takes`, `fx_files`, `knowledge`
 
 ### MIDI Editing Concepts
 
@@ -449,6 +485,9 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 - **Channel**: 0-15 (default 0; channel 9 = drums in General MIDI)
 - **Batch operations** (`insert_midi_notes`, `edit_midi_notes`): Pass a JSON array of note objects for efficient multi-note operations
 - The Lua bridge includes a fallback JSON array parser for REAPER versions without `CF_Json_Parse`
+- **Undo**: a MIDI API edit (`MIDI_SetNote`, `MIDI_InsertNote`, …) leaves the item unmarked, so REAPER folds it into the previous MIDI undo point. Every MIDI write calls `MarkTrackItemsDirty(track, item)` before `Undo_EndBlock` (seen in REAPER 7.40)
+- **Composition** (`mcp_midi_lib.lua`): quantize snaps to the project's beats, not the item start; swing pushes every second grid line later. Humanize is reproducible from `seed`. `detect_key` correlates the 12-bin profile with the Krumhansl-Kessler key profiles (`key.ts`); confidence is the gap to the best key that is not the relative key, scaled down for a flat profile and by the best key's correlation
+- **A MIDI or arrangement write that fails half way is undone** (an import leaves no new tracks). The failed block is closed under its own `… (failed — reverting)` label and undone only when that label is on top, so a failure that wrote nothing never undoes an earlier edit, the same rule as `run_plan`.
 
 ### Media Item Editing Concepts
 
@@ -458,10 +497,19 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 - **Move**: Validates destination track upfront; moves to new track first, then adjusts position
 - **Stretch markers**: Define time-stretch points mapping item position to source audio position
 
+### Arrangement Concepts
+
+- **Logic lives in `reaper/mcp_arrange_lib.lua`** (pure Lua over an injected API, unit-tested via wasmoon in `arrange-lib.test.ts` against `__fixtures__/fake_timeline.lua`); the bridge handlers decode `items`/`tracks` (JSON strings) and pass `reaper` in.
+- **Time edits are done by hand, not with REAPER's ripple actions**, so the result never depends on the user's ripple or "move envelope points with items" options. Tempo markers change first; markers, envelopes and items are then set from absolute times read before any change (a beat-timebase item would otherwise follow the tempo edit on its own).
+- **remove_time keeps the tempo after the cut**: the last tempo marker inside the range moves to the cut's start (unless one sits on its end). Automation items fully inside are deleted (selected alone and removed with action 42086, the user's other selected items kept); ones crossing an edge are trimmed like media items (`automationItemsTrimmed`: the part after the cut moves to its start with a later start offset, a tail inside the cut is dropped); one spanning the whole cut cannot lose its middle, so it stays and is counted (`automationItemsKept`).
+- **Tempo ramps across a time edit keep their timing**: a linear marker whose ramp runs across the edit point would change slope once its end moves, shifting every beat before the edit. insert_time ends the ramp at the position with a marker at its tempo there and holds that tempo through the opened time (`tempoMarkersAdded: 2`); remove_time pins the ramp before the cut 1 ms short of it and starts the tempo after the cut where it stood at the cut's end, ramping on as before.
+- **Normalize** measures what the item plays (`CalculateNormalization` over its take's start offset and length) and sets item gain (`D_VOL`), so the take gain and source stay untouched. Reverse (41051, a toggle: a reversed take plays forward again) and glue (40362, ignoring the time selection; 41588 would glue only inside it) run on the named items only, then put the user's selection back; a glued item is selected when one of its sources was.
+- **run_plan ops** `copy_items`, `insert_time`, `remove_time`: `copy_items` names items by index in the project as it is before the plan, so it is refused after an op that adds tracks or moves items (`add_track`, `copy_items`, `insert_time`, `remove_time`).
+
 ### Plan Executor Concepts (`run_plan`)
 
 - **Use it for any multi-step edit**: one LLM turn and one bridge round trip instead of N sequential tool calls.
-- **Op types**: `add_track`, `set_track` (volume dB, pan, mute, solo, recordArm, phase, input, name), `add_fx` (optional `params`, `enabled`, `position`), `set_fx_params`, `add_send` (volume dB, pan, mute), `graft_fxchain`, `select_tracks` (`tracks`, `mode`), `run_action` (`action`, `section`, `allowDialog` — same resolution and safety rules as the `run_action` tool, checked in the validate pass). Only `run_action` ops may follow a `run_action`: targets resolve before anything runs, and an action can add, delete or reorder tracks.
+- **Op types**: `add_track`, `set_track` (volume dB, pan, mute, solo, recordArm, phase, input, name), `add_fx` (optional `params`, `enabled`, `position`), `set_fx_params`, `add_send` (volume dB, pan, mute), `graft_fxchain`, `select_tracks` (`tracks`, `mode`), `run_action` (`action`, `section`, `allowDialog` — same resolution and safety rules as the `run_action` tool, checked in the validate pass), and the arrangement ops `copy_items`, `insert_time`, `remove_time` (same parameters as the tools). Only `run_action` ops may follow a `run_action`: targets resolve before anything runs, and an action can add, delete or reorder tracks.
 - **Targets**: tracks by 0-based index, exact name (then case-insensitive), `"{GUID}"`, or a `"$ref"` bound by an earlier `add_track`/`add_fx` via `as: "$name"`. A digit string matches a track name first, then the index. FX by index, unique name substring, or `$ref`. A numeric FX index means the slot when that op runs, so after `add_fx` with `position: 0` the older FX have moved up one; use a name or an `as` ref to pin a specific FX. Validation checks FX refs against each track's chain as earlier ops (`add_fx`, `graft_fxchain`) change it.
 - **Two passes**: every target is resolved before anything is written; an unknown/ambiguous track or an undefined `$ref` rejects the whole plan. If an op fails mid-apply, the undo block is closed and undone (only when the top undo entry is the plan's own), so no partial edit remains.
 - **`dryRun: true`** returns the resolved op list, `conflicts`, and `warnings` (e.g. an FX name not found in the installed-FX list) without writing.
@@ -480,7 +528,11 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 ### Project Operations Concepts
 
 - **No dialogs**: `save_project` without `path` on a never-saved project is refused (REAPER would open Save As) — the same rule `run_action` applies to `File: Save…`. `render_project` refuses when a target file exists (REAPER would ask to overwrite) unless `overwrite: true`, which deletes those files first, and when `bounds` is `time_selection` with no time selection.
-- **Render formats**: `format` and `secondaryFormat` (a second file from the same render; `none` disables it) take wav/aiff/flac/mp3/ogg/opus with REAPER's default options. `render_project` refuses when either is another encoder (seen live: a template's video secondary format left a modal dialog open) — set `secondaryFormat: "none"`.
+- **Render formats**: `format` and `secondaryFormat` (a second file from the same render; `none` disables it) take wav/aiff/flac/mp3/ogg/opus, with REAPER's default options except the bit depth or MP3 bitrate `bitDepth` / `mp3Bitrate` set. `render_project` refuses when either is another encoder (seen live: a template's video secondary format left a modal dialog open) — set `secondaryFormat: "none"`.
+- **Render source and encodings** (probed in REAPER 7.40): `source` maps to `RENDER_SETTINGS` (master 0, master_and_stems 1, stems 3 = stems of the *selected* tracks, selected_via_master 128, region_matrix 8, which needs region bounds, selected_items 32, selected_items_via_master 64; 2 renders nothing in REAPER 7). Bit depth lives in the `RENDER_FORMAT` blob (wav `evaw`+int16 bits, 32-bit int is 0x21 and float 0x20; aiff `ffia`; flac `calf`+int32 bits+compression), MP3 bitrate at bytes 4 and 24 of `l3pm`. Normalize target and limit ceiling are given in dB and stored linear (`RENDER_NORMALIZE_TARGET`, `RENDER_BRICKWALL`); REAPER hits both exactly.
+- **Render analysis**: each rendered file (up to 16) is measured with `CalculateNormalization` (target 0 dB, so the gain is the level): LUFS-I, true peak, sample peak; `analyze: false` skips it.
+- **Render metadata**: `metadata` fields (title, artist, album, genre, year, isrc, comment, description) write the matching ID3/INFO/VORBIS/AXML/BWF keys of `RENDER_METADATA`; `metadataRaw` sets any `SCHEME:KEY`; an empty value removes the key. Setting metadata turns on embedding (`RENDER_SETTINGS` &512) unless `embedMetadata: false`.
+- **Render versions**: `render_versions` mutes each version's tracks on top of the current mutes and renders to the version's pattern; mutes and the pattern are always restored (the selection is never touched). Use it for instrumental / a cappella / TV mixes instead of muting by hand.
 - **Render is synchronous**: action 42230 blocks REAPER (and the bridge) until the render finishes. Keep renders short (a time selection or custom bounds). `targets` in `get_render_settings` are the files REAPER will write (`RENDER_TARGETS`).
 - **Undo**: every edit by these tools is one undo point labelled `MCP: …`, so `undo_project` reverts exactly that edit. Repeat and metronome changes are not undoable in REAPER.
 - **Validation first**: invalid input (unknown marker/region/tempo index, BPM <= 0, unsupported format, end <= start) is refused before anything is written.
@@ -727,7 +779,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   connection); it stays in CLOSE_WAIT/CLOSED, and near 100 the server stops answering until REAPER restarts. The
   bridge counts them every 30 s (`web_watch` in `mcp_bridge.lua`: `lsof` in the background into
   `mcp_bridge_data/web_sockets`, macOS/Linux) and publishes `status.web = { stuck, limit }`; the page warns from 50%
-  (`webSocketLevel()` in `status.ts`) and the bridge prints one console line at 90%. Test scripts that hit the web
+  (`webSocketLevel()` in `src/lib/status.ts`) and the bridge prints one console line at 90%. Test scripts that hit the web
   server reuse one connection (one `curl` with several URLs), or each request leaks a socket.
 
 - The bridge publishes JSON to **non-persistent ExtState** `MCPBridge/status` (in memory, no disk IO): counters,
@@ -748,7 +800,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   Calls and Tools views (and their counts) show the range too; older matches end the list with a button that widens
   the range to the next one that includes them.
 - URL state: navigation state lives in the query string via `useUrlState(key, default, { validate })` in
-  `src/url-state.ts` (a History API port of LoreKit web's hook: JSON values, a value equal to the default is dropped,
+  `src/lib/url-state.ts` (a History API port of LoreKit web's hook: JSON values, a value equal to the default is dropped,
   changes in one tick become one history entry), so Back/Forward step through it and a link or reload reopens it.
   Params: `view`, `range`, `span` (dragged timeline span), `filter` (all/errors), `q` (search; replaces, never pushes),
   `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, and on Plugins `coverage`, `inProject`, `plugin`
@@ -757,27 +809,27 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   state a viewer would want to go back to or share (tabs, filters, an open drawer); keep transient UI (hover, drag,
   copied flags) and per-viewer preferences (grouping, tokens) in `useState`/localStorage. Give each param a
   `validate` guard so a stale or hand-edited link falls back to the default, and keep keys unique across views.
-- Search (`parseQuery()` / `matchesQuery()` in `status.ts`): space-separated terms, all must match. A word matches the
+- Search (`parseQuery()` / `matchesQuery()` in `src/lib/search.ts`): space-separated terms, all must match. A word matches the
   command name, error or params text; `key:value` matches one param exactly (`trackIndex:6` is not 16; quote values
   with spaces, `fxName:"VST3: Pro-Q 3"`). Selecting text in a command's Params offers **Filter** (the whole param when
   the selection is on one `"key": value` line, `termFromSelection()`), which adds the term to `q` with a push.
 - Measurement results: the bridge keeps a compact result `r` (built in `reaper/mcp_edit_views_lib.lua`, which keeps
   `mcp_bridge.lua` under Lua's 200-locals limit) on meters/LUFS/correlation/crest/spectrum entries
   (`RESULT_FIELDS`, 48 spectrum bands) and, for `render_track_to_wav`, a waveform read from the WAV before the server
-  deletes it (`wav_waveform()`: 120 min/max slices, peak/RMS dBFS, clipped sample count; drawn on a dB scale to −48). `Measurement.tsx` draws them,
+  deletes it (`wav_waveform()`: 120 min/max slices, peak/RMS dBFS, clipped sample count; drawn on a dB scale to −48). `src/features/measurements/` draws them (one component per kind),
   colored by value (amber from −6 dB, red at 0), with the previous call on the same track ghosted (dashed/hollow) and
   its headline value and change in a "Previous call" line. Add a measuring command in `RESULT_FIELDS`, `MEASUREMENTS`
-  (`status.ts`) and a `Measurement` kind together.
+  (`src/lib/commands.ts`), a `Measurement` kind and an example in `src/demo/examples.ts` together.
   Sidecar tools the server composes itself (`analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment`,
   `analyze_track_aesthetics`, and the mix checks) never pass through a bridge handler, so the server logs each result with the internal
-  `_log_result` command (`src/tool-log.ts`, fire-and-forget; `r` travels as a JSON string), which the bridge records as
+  `_log_result` command (`apps/reaper-mcp-server/src/tool-log.ts`, fire-and-forget; `r` travels as a JSON string), which the bridge records as
   an entry for that tool (`record_tool_result()`). Their compact `r` is built by `offlineSummary()` /
   `alignmentSummary()` / `aestheticsSummary()` and drawn as the `offline` / `alignment` / `aesthetics` measurements;
   the mix checks by `curveSummary()` / `stereoBandsSummary()` / `maskingSummary()` / `stemsSummary()` as `curve` (the
   short-term line against the target, spans over it shaded), `stereo` (correlation per band on −1…+1), `masking` (a
   pairs × bands heat map) and `stems` (each stem's LUFS, speed, inserted tracks).
 - Edit views: writes and listings also keep an `r` (`M.summary` in `mcp_edit_views_lib.lua`), drawn by
-  `EditViews.tsx` from `editViewOf()` (`src/edit-views.ts`). A write reads the state it touches before its handler
+  `src/features/edit-views/` (`EditViews.tsx`, one view per kind in `views/`) from `editViewOf()` (`edit-views.ts`). A write reads the state it touches before its handler
   runs (`M.before`) and again after, so the drawer shows before → after: track and FX parameter changes (the
   plugin's own readout), the automation window an edit touched (padded 25%, at least 4 s; automation items drawn as blocks tinted by
   pool with their name and shared curve, moved/deleted items and a changed pool's old curve dashed), MIDI notes as a piano
@@ -787,13 +839,18 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   FX GUID), item edits as one lane per touched track with the items before dashed, track structure edits on the mixer
   (tracks diffed by GUID), routing (sends/receives/hardware outs with level bars, the old level ghosted), the time
   selection and edit cursor, MIDI CC as a stepped lane in beats (the automation view, unit `cc`), and
-  `get_fx_parameters` as readout bars. List diffs share `listDiff()` in `edit-views.ts`. Lists are capped so
-  an entry stays a few KB. Add a command in `M.summary`, `KIND_OF` (`edit-views.ts`) and a gallery story together;
+  `get_fx_parameters` as readout bars; `render_project` / `render_versions` as a render result (one row per file,
+  ≤8: mini waveform from `PCM_Source_GetPeaks`, LUFS-I against the normalize target, true peak against the limit
+  ceiling, length; versions grouped with their muted tracks; format, source and target as readouts); and arrangement
+  edits (`op`, the `span` they opened, cut or copied from
+  hatched or outlined, where they copied `to`, a lane for up to 4 touched tracks plus `moreTracks`, normalized items
+  with their gain as a 7th item field). List diffs share `listDiff()` in `edit-views.ts`. Lists are capped so
+  an entry stays a few KB. Add a command in `M.summary`, `KIND_OF` (`edit-views.ts`) and an example in `src/demo/examples.ts` together;
   behaviour tests run the real bridge in wasmoon (`bridge-status.test.ts`, "edit views in the log").
 - Short windows (≤ 640px tall, an app window docked beside REAPER): the log is the page. Stats, timeline and footer
   hide; the header's Rebuild & reload, Settings and GitHub fold into a ⋯ menu (`HeaderMenu`, dotted when a rebuild
   is available) with a **Stats & timeline** toggle (`mcp-bridge-overview` in localStorage). The log's toolbar is one row: a grouped combo box
-  (`GroupedCombobox` in `Combobox.tsx`, LoreKit's Combobox in headed groups: View, Show, Agent, Actions) and the search box. CSS switches it: `@media (max-height: 640px)`.
+  (`Combobox.Grouped`, LoreKit's Combobox in headed groups: View, Show, Agent, Actions) and the search box. CSS switches it: `@media (max-height: 640px)`.
 - Narrow drawer: the drawer is resizable, so its content answers to its own width with container queries
   (`.drawer-body` and `.measure` are `inline-size` containers), never `@media`. Under ~300px readouts go two a row,
   the mixer drops its pan column, and what gives way stays reachable (the ISO timestamp is the When row's tooltip,
@@ -801,31 +858,51 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   views, where markers are only context, every marker name waits for hover). Under ~460px mixer and
   route rows drop their added/moved/changed word for a coloured edge plus one legend (`ChangeLegend`), so names stay
   readable. Structure edits in a big project draw a 64-row window around the change (`from`). Check new views at
-  ~300px in the gallery.
-- Component gallery (`?gallery`, like Storybook): the page's real components from fixed example data, every
-  state side by side (`src/Gallery.tsx`, stories in `src/gallery-stories.ts`). Opens only from a local build
-  (`file://`) or when the bridge runs in developer mode (`galleryAllowed()`; while REAPER is unreachable, the mode it last reported, `developerMode()`); otherwise the page opens as usual.
-  Shift-click the logo to get there. Add a story with every new component or state; `gallery-stories.test.ts`
-  fails when a measuring command or an edit view kind has no story.
+  ~300px with their `Narrow` story.
+- Components: a feature's parts nest under its main component (`Object.assign(LogView, { Rows, Details, … })` in the
+  folder's `index.ts`), or under a plain object when there is no main one (`EditView.Section`, `Icon.Gear`). Add a new
+  part to its folder's namespace, and import a feature from its `index.ts` only, never its files (inside a folder,
+  files import each other directly; an index importing a sibling feature's index is fine, a cycle is not).
+- Styles: CSS modules (esbuild `local-css` in the page build, Vite in Storybook and vitest). A component imports its
+  own `<Name>.module.css` as `styles` and any other module as `<name>Styles` (`chartStyles`, `drawerStyles`), and joins
+  classes with `cx(styles.row, selected && styles.rowSelected)`. State that picks a colour or a variant is a data
+  attribute styled from the module, never a class built from a string: `data-outcome`, `data-zone`, `data-change`,
+  `data-tone`, `data-state`, `data-coverage`, `data-kind`, `data-speed`, `data-align` (as `.row:where([data-outcome="error"])`,
+  so a variant weighs what a one-class modifier would and a later `.rowSelected` still wins). `src/styles.css` keeps only tokens,
+  base element styles and utilities used everywhere (`mono`, `muted`, `count`, `btn`/`btn-sm`/`icon-btn`/`link-btn`,
+  `sdot`/`hue-N`, `kdot`, `tone-*`); add to it only what is truly global. A module styles only its own classes: to
+  restyle another component's part, give that part a class of your own (`cx(chartStyles.evFill, styles.offAlignFill)`)
+  or reach a global with `:global(.mono)`. Order is the cascade: `main.tsx` (and `.storybook/preview.tsx`) imports the
+  root sheet, then the shared `styles/` modules, then each component brings its own, so a component's class wins a tie
+  with a shared one.
+- Storybook (`pnpm storybook`, port 6006; `nx build-storybook bridge-ui` → `dist/storybook/bridge-ui`): every component
+  in `src/components/` and `src/features/` has a sibling `<Name>.stories.tsx`, written against the namespace (`component: Measurement.Loudness`) (a `Default` story with every state side
+  by side, and a `Playground` with controls); behaviour lives in `<Name>.test.stories.tsx` (title `…/Tests`,
+  `tags: ['test']`) as play functions. `src/test/stories.test.tsx` runs every story and play function in vitest
+  (`composeStories`, jsdom), so the stories are the components' tests: assert what a viewer sees and can do (roles,
+  names, text), never CSS classes or internal state. Stories draw fixed data: `src/demo/examples.ts` (measurements,
+  edit views, drawer, Snapshots states; `measuredExamples()` / `editExamples()` per kind) and `exampleFeed()` in
+  `src/demo/feed.ts` (the `?demo` bridge on a frozen clock and seeded dice). `examples.test.ts` fails when a measuring
+  command or an edit view kind has no example.
 - Slow (≥100 ms) / very slow (≥500 ms) marks skip commands that are slow by nature (renders, plugin loads, project
-  IO, `run_plan`/`run_action`): `LONG_RUNNING` in `status.ts` and `mcp_bridge.lua`, kept equal by `status.test.ts`.
+  IO, `run_plan`/`run_action`): `LONG_RUNNING` in `src/lib/commands.ts` and `mcp_bridge.lua`, kept equal by `status.test.ts`.
 - Installable PWA: `apps/bridge-ui/public/` (manifest, service worker, icons) is copied next to the page; every file is
   `mcp_bridge*` and the service worker is scoped to `/mcp_bridge` so REAPER's other web remotes are untouched.
 - Sessions: each `reaper-mcp serve` process tags every command with flat top-level `sessionId` / `sessionDir` /
   `sessionClient` (from Claude Code's `CLAUDE_CODE_SESSION_ID` / `CLAUDE_PROJECT_DIR`, else `pid-<n>` / cwd — no hook
-  needed) and pings `_session` every 20s plus a goodbye on exit (`src/session.ts`). The bridge keeps the last hour of
+  needed) and pings `_session` every 20s plus a goodbye on exit (`apps/reaper-mcp-server/src/session.ts`). The bridge keeps the last hour of
   sessions in the status; the page shows connected agents, per-session chips, and Calls / Tools / Sessions views.
   Entries also carry `s` (session) and `p` (params JSON, truncated to 400 chars).
 - Settings the page writes via `/_/SET/EXTSTATE[PERSIST]/MCPBridge/<key>/<0|1>`, echoed back in `status.settings`:
   `cfg_paused` (in-memory: every non-`_` command fails until resumed or REAPER restarts), `cfg_readonly` (persistent:
   only `get_`/`list_`/`read_`/`analyze_`/`search_`/`measure_` + transport/navigation pass — `readonly_allows()`,
-  mirrored by `commandKind()` in `status.ts`), `cfg_open_on_start` (persistent, overrides `OPEN_UI_ON_START`).
+  mirrored by `commandKind()` in `src/lib/commands.ts`), `cfg_open_on_start` (persistent, overrides `OPEN_UI_ON_START`).
   Desktop error notifications are page-side (Notification API + localStorage).
 - `status.health` (re-checked every 10s): SWS present, JSFX installed in `Effects/reaper-mcp/`, and `outdated` when the
   installed `mcp_bridge.lua` differs from the running copy (setup ran; restart the script). Tested in wasmoon by
   `bridge-status.test.ts`.
 - One-click update and restart (`status.control`): the page checks GitHub's latest release (cached 6h in
-  localStorage, `src/update.ts`) and offers **Update**; the outdated notice offers **Restart bridge**. The page writes
+  localStorage, `src/lib/update.ts`) and offers **Update**; the outdated notice offers **Restart bridge**. The page writes
   `/_/SET/EXTSTATE/MCPBridge/request/<update|restart>-<token>`; the token is random per bridge run and only readable
   from the status feed (REAPER's web server sends no CORS headers), so other sites can fire the request but never with
   a valid token. Update runs `<clone>/scripts/update.sh` (`git pull --ff-only` + `install.sh`; refuses on local changes)
@@ -849,14 +926,14 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   only with their own `lk_ro_` token from Settings (kept in localStorage, never sent to the bridge). Records link into
   LoreKit by row id. The tab stays hidden until the bridge has published its list. **Contribute N** (with a token, when you have
   `user::` records) opens GitHub's new-file page with them as one file under `knowledge/contributions/` (format and
-  checks: `apps/bridge-ui/src/plugin-contributions.mjs`), so GitHub forks and opens the PR. The `plugin-contributions`
+  checks: `apps/bridge-ui/src/features/plugins/plugin-contributions.mjs`), so GitHub forks and opens the PR. The `plugin-contributions`
   workflow (`pull_request_target`, never runs PR code) comments what would be published; the maintainer's
   `publish-to-lorekit` label writes them to the built-in layer with secret `LOREKIT_PUBLISH_TOKEN` (`lk_rw_`, a
   writer in the `reaper-mcp` org) and closes the PR. Files a maintainer commits straight to `main` are published by
   running the workflow by hand (`workflow_dispatch`, job `publish-main`, optional `dry_run`): it publishes every file
   in the folder and removes them in one bot commit. Records too long for the URL open with a paste prompt
-  (`PASTE_HERE` in `src/contribute.ts`) and are on the clipboard. Client: `src/lorekit.ts`,
-  hook: `src/useKnowledge.ts`, matching: `src/plugins.ts`.
+  (`PASTE_HERE` in `src/features/plugins/contribute.ts`) and are on the clipboard. Client: `src/features/plugins/lorekit.ts`,
+  hook: `src/features/plugins/useKnowledge.ts`, matching: `src/features/plugins/plugins.ts`.
   Members of the `reaper-mcp` LoreKit org can skip GitHub: an `lk_rw_` token under
   Settings → **Publish to built-in** (localStorage, separate from the read token) adds a **Publish to built-in** button
   to their own records. It runs the same `parseContribution` checks, `POST /memories` with `org: reaper-mcp`, then
@@ -864,7 +941,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   them to the org as a member. With that token the header's **Contribute N** becomes **Publish N to built-in**: one
   inline confirm, then each record in turn (`publishAll()`, carries on past a failure, offers Retry for the failed).
   Settings links non-members to ask on Discord or through the `contributor-request` GitHub issue form
-  (`.github/ISSUE_TEMPLATE/contributor-request.yml`). Logic: `publishRecord()` in `src/lorekit.ts`; `?demo` fakes it.
+  (`.github/ISSUE_TEMPLATE/contributor-request.yml`). Logic: `publishRecord()` in `src/features/plugins/lorekit.ts`; `?demo` fakes it.
   One plugin installed in several formats (same title and vendor, e.g. `VST3i:`/`CLAPi:`/`VSTi: Vital (Vital Audio)`)
   is one row (`PluginRow.variants`, VST3 preferred for the Teach prompt), counting the instances of every format.
 - Snapshots tab (`view=snapshots`, shown when `status.control.snapshots`): lists the project's snapshots, loads one
@@ -880,15 +957,15 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   (`run_command()`), so it is logged (entry `src: "page"`), one undo point, and refused while read-only or paused,
   then answers in `snapshots.result` (echoing `id`). A successful restore from anywhere becomes `current`
   (ExtState `MCP_Snapshots/current_name`, which the next/prev actions continue from). Logic:
-  `reaper/mcp_snapshots_ui_lib.lua`; page: `src/snapshots.ts`, `src/useSnapshots.ts`, `src/SnapshotsView.tsx`;
+  `reaper/mcp_snapshots_ui_lib.lua`; page: `src/features/snapshots/` (`snapshots.ts`, `useSnapshots.ts`, `SnapshotsView.tsx`);
   tests: `bridge-snapshots.test.ts` (wasmoon), `snapshots.test.ts`. `snapshot_save` writes metadata (name,
   description, timestamp, trackCount, scoped, fullChunk) ahead of `mixerState`.
-- Usage statistics: `src/analytics.ts` is the only module that imports `@dash0/sdk-web` (pinned); components call
+- Usage statistics: `src/lib/analytics.ts` is the only module that imports `@dash0/sdk-web` (pinned); components call
   `track()` / `trackView()` with a typed `TrackEvent`. Events are listed in `apps/bridge-ui/tracking-plan.yaml`; add an
   event there and in `TrackEvent` together, never with names, search text, tokens or paths. The destination is the
   server's `DEFAULT_DESTINATION` (read by `build.mjs` from `telemetry-consent.ts`), service `reaper-mcp-bridge-ui`.
   On by default, off via Settings → Privacy, GPC/DNT, or `?demo`; fetch/xhr tracing stays off (the page polls the bridge).
-- Payload shapes live in `apps/bridge-ui/src/status.ts` (`BridgeStatus`, `BridgeHistory`, `LongHistory`) and
+- Payload shapes live in `apps/bridge-ui/src/lib/status.ts` (`BridgeStatus`) and `src/lib/timeline.ts` (`BridgeHistory`, `LongHistory`) and
   `publish_status()` / `publish_history()` / `publish_log()` in `mcp_bridge.lua` — change both together.
 
 ## Platform-Specific Paths
@@ -924,7 +1001,9 @@ ESLint enforces dependency rules via `@nx/enforce-module-boundaries`:
     what the tool returned instead.
   - Name tests after the behaviour (`"refuses an unknown marker index and changes nothing"`), not the function.
 - **Test files**: `tools/*.test.ts` (tool responses with `sendCommand()` stubbed), `*-lib.test.ts` and
-  `bridge-*.test.ts` (the real Lua libraries and bridge running in wasmoon against a fake `reaper` API)
+  `bridge-*.test.ts` (the real Lua libraries and bridge running in wasmoon against a fake `reaper` API); in the
+  bridge page, `*.test.stories.tsx` play functions (what a viewer sees and does, run by `src/test/stories.test.tsx`)
+  and `*.test.ts` next to the pure modules in `src/lib/` and `src/features/*/` (bridge and LoreKit payloads, URLs)
 - **Validate changes with tests**: Always write small, simple, and effective tests to validate your changes. Prefer focused tests that check one behaviour well. If modifying existing code, add or update tests to cover the change before considering it complete.
 
 ## Running the MCP Server

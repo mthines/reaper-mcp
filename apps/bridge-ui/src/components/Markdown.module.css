@@ -1,0 +1,21 @@
+.md > :first-child { margin-top: 8px; }
+.md p, .md ul, .md ol, .md blockquote, .md .mdTable, .md pre { margin: 8px 0; }
+.md h3, .md h4, .md h5, .md h6 { margin: 16px 0 6px; font-size: 12px; font-weight: 600; color: var(--text); }
+.md h3 { font-size: 13px; }
+.md h5, .md h6 { color: var(--muted); }
+.md ul, .md ol { padding-left: 18px; }
+.md li { margin: 3px 0; }
+.md li > ul { margin: 3px 0; }
+.md strong { font-weight: 600; color: var(--text); }
+.md em { color: var(--muted); }
+.md code { font-family: var(--mono); font-size: 11.5px; padding: 1px 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.06); }
+.md pre { padding: 8px 10px; border-radius: 7px; background: var(--bg); overflow-x: auto; max-height: none; }
+.md pre code { padding: 0; background: none; }
+.md a { color: var(--accent); }
+.md blockquote { padding-left: 10px; border-left: 2px solid var(--line-2); color: var(--muted); }
+.md hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+.mdTable { overflow-x: auto; }
+.md table { border-collapse: collapse; width: 100%; font-size: 11.5px; }
+.md th, .md td { padding: 4px 8px; border: 1px solid var(--line); text-align: left; vertical-align: top; overflow-wrap: normal; word-break: normal; hyphens: auto; }
+.md th { white-space: nowrap; }
+.md th { color: var(--muted); font-weight: 600; background: rgba(255, 255, 255, 0.02); }

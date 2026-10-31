@@ -1,0 +1,33 @@
+/* Hairline levels: a 3px line for the value, a tick for the peak hold, the value at the end */
+.hlLevel { display: grid; grid-template-columns: 14px minmax(0, 1fr) 52px; align-items: center; gap: 8px; }
+.hlLabel { font-size: 11px; color: var(--muted); }
+.hlValue { font-size: 12px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.hlValue[data-zone='hot'] { color: var(--warn); }
+.hlValue[data-zone='over'] { color: var(--bad); }
+.hlTrack { position: relative; height: 12px; }
+.hlTrack::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--line-2); }
+.hlFill { position: absolute; top: 50%; height: 3px; margin-top: -1.5px; border-radius: 2px; background: var(--accent); }
+.hlHold { position: absolute; top: 0; bottom: 0; width: 1.5px; margin-left: -0.75px; background: var(--hold); }
+.hlZero { position: absolute; top: 2px; bottom: 2px; width: 1px; background: var(--faint); }
+.hlCentre { position: absolute; left: 50%; top: 1px; bottom: 1px; width: 1px; background: var(--faint); }
+.hlDot { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--hold); box-shadow: 0 0 0 2px var(--panel); }
+.hlHold[data-zone='hot'] { background: var(--warn); }
+.hlHold[data-zone='over'], .hlDot[data-zone='over'] { background: var(--bad); }
+
+/* The previous call, ghosted in the same dashed muted ink as the spectrum's previous line */
+.hlWas { position: absolute; top: -2px; bottom: -2px; width: 0; border-left: 1px dashed var(--muted); opacity: 0.8; }
+.hlWasHold { position: absolute; top: -1px; bottom: -1px; width: 3px; margin-left: -1.5px; border: 1px solid var(--muted); border-radius: 1px; opacity: 0.8; }
+.hlWasDot { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; border: 1.5px solid var(--muted); background: var(--panel); box-sizing: border-box; }
+
+/* Painted across the whole −60..+6 dB track and clipped to the value, so color tracks the level:
+   accent to −12 dB (72.7%), amber by −6 (81.8%), red at 0 dB (90.9%) and over */
+.hlFillLevel {
+  left: 0; right: 0;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent) 72.7%, var(--warn) 81.8%, var(--bad) 90.9%, var(--bad) 100%);
+}
+
+/* Correlation: red toward −1 (out of phase), neutral at 0, accent toward +1 */
+.hlFillCorrelation {
+  left: 0; right: 0;
+  background: linear-gradient(90deg, var(--bad) 0%, color-mix(in srgb, var(--bad) 45%, var(--muted)) 45%, var(--muted) 50%, var(--accent) 70%, var(--accent) 100%);
+}
