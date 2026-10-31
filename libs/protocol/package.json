@@ -1,6 +1,6 @@
 {
   "name": "@reaper-mcp/protocol",
-  "version": "0.64.3",
+  "version": "0.65.0",
   "private": true,
   "type": "module",
   "main": "src/index.ts",
