@@ -63,7 +63,7 @@ export type Measurement =
    *  [a, b, Hz, score, suggestion] */
   | { kind: 'masking'; tracks: string[]; hz: number[]; pairs: [string, string, number, number[]][]; conflicts: [string, string, number | null, number | null, string][] }
   /** Stem separation (sidecar, Demucs): each stem [name, LUFS, peak dBFS], speed, and the tracks it inserted */
-  | { kind: 'stems'; name?: string; model?: string; device?: string; secs?: number; proc?: number; inserted?: number; folder?: string; stems: [string, number | null, number | null][] };
+  | { kind: 'stems'; name?: string; model?: string; device?: string; secs?: number; proc?: number; inserted?: number; folder?: string; muted?: number; stems: [string, number | null, number | null][] };
 
 const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[] }> = {
   read_track_meters: { kind: 'meters', fields: ['peakL', 'peakR', 'rmsL', 'rmsR'] },
@@ -81,7 +81,7 @@ const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[]
   analyze_loudness_curve: { kind: 'curve', fields: ['lufs', 'tp', 'lra', 'plr', 'maxM', 'target', 'overS', 'start', 'step'] },
   analyze_stereo_bands: { kind: 'stereo', fields: ['dur'] },
   measure_masking: { kind: 'masking', fields: [] },
-  separate_stems: { kind: 'stems', fields: ['secs', 'proc', 'inserted'] },
+  separate_stems: { kind: 'stems', fields: ['secs', 'proc', 'inserted', 'muted'] },
 };
 
 /** Every command the drawer draws a result for */

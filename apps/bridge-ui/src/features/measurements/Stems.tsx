@@ -38,7 +38,7 @@ export function Stems({ m }: { m: Extract<Measurement, { kind: 'stems' }> }) {
         <span>
           {m.name ?? 'Source'}
           {m.secs !== undefined ? `, ${Math.round(m.secs)} s` : ''}
-          {m.inserted ? ` · ${m.inserted} tracks added under “${m.folder ?? 'Stems'}”` : ' · written to disk, not added to the project'}
+          {m.inserted ? ` · ${m.inserted} tracks added under “${m.folder ?? 'Stems'}”${m.muted ? ', muted: they sum back to the source' : ''}` : ' · written to disk, not added to the project'}
           {m.stems.some(([, , p]) => p !== null && p > 0) && '. A stem peaking over 0 is kept unclipped (32-bit float).'}
         </span>
       </div>

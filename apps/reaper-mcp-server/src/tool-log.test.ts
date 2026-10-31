@@ -61,6 +61,10 @@ describe('tool results for the status page', () => {
     expect(r['conflicts']).toEqual([['A', 'B', 100, 0.9, 'cut A around 100 Hz']]);
   });
 
+  it('says when the inserted stems folder starts muted', () => {
+    expect(stemsSummary('Mix', { stems: [], inserted: { folderName: 'Mix stems', muted: true, tracks: [{}, {}] } })).toMatchObject({ inserted: 2, muted: 1 });
+  });
+
   it('keeps each stem\'s loudness and peak, and how many tracks were inserted', () => {
     expect(stemsSummary('Mix', { model: 'htdemucs', device: 'mps', seconds: 20, processingSeconds: 8, stems: [{ stem: 'drums', lufs: -16, peakDbfs: -1 }], inserted: { folderName: 'Mix stems', tracks: [{}] } }))
       .toEqual({ name: 'Mix', model: 'htdemucs', device: 'mps', secs: 20, proc: 8, stems: [['drums', -16, -1]], inserted: 1, folder: 'Mix stems' });
