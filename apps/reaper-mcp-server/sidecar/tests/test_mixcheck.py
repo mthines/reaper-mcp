@@ -135,3 +135,29 @@ def test_masking_suggests_cutting_the_track_the_band_matters_less_to():
 def test_masking_needs_two_tracks():
     with pytest.raises(ValueError):
         mixcheck.masking([("Solo", stereo(noise(1, 1), noise(1, 1)))], SR)
+
+
+# --- speed ------------------------------------------------------------------
+# Bounds sit ~10× over what these take on a laptop (900 s curve ≈ 1.6 s, stereo ≈ 1.4 s, masking ≈ 0.15 s),
+# so only a real regression (a per-sample loop, a quadratic step) trips them.
+
+
+def test_the_longest_inputs_each_check_accepts_finish_in_seconds():
+    import time
+
+    song = stereo(noise(900, 1), noise(900, 2))
+    t0 = time.perf_counter()
+    curve = mixcheck.loudness_curve(song, SR, -14)
+    curve_s = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    bands = mixcheck.band_correlation(song, SR)
+    bands_s = time.perf_counter() - t0
+    tracks = [(f"T{i}", stereo(noise(60, 10 + i), noise(60, 20 + i))) for i in range(8)]
+    t0 = time.perf_counter()
+    masking = mixcheck.masking(tracks, SR)
+    masking_s = time.perf_counter() - t0
+
+    assert len(curve["shortTerm"]["lufs"]) <= 240
+    assert len(bands["bands"]) == 5
+    assert len(masking["pairs"]) == 28
+    assert curve_s < 20 and bands_s < 20 and masking_s < 5, (curve_s, bands_s, masking_s)
