@@ -104,7 +104,7 @@ export function Render({ v }: { v: Extract<EditView, { kind: 'render' }> }) {
           </div>
         ))}
       </div>
-      {(v.more ?? 0) > 0 && <div className={chartStyles.evMore}>+{plural(v.more ?? 0, 'more file')} not listed</div>}
+      {v.more ? <div className={chartStyles.evMore}>+{plural(v.more, 'more file')} not listed</div> : null}
       {lufsTarget !== undefined && <Legend items={[[chartStyles.lgTick, `On target (±1 LU of ${fmt(lufsTarget)})`], [chartStyles.lgWarn, 'Off target']]} />}
     </>
   );
