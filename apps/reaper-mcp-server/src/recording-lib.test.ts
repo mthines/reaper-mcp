@@ -245,13 +245,18 @@ describe('mcp_recording_lib.lua (wasmoon)', () => {
     `);
   });
 
-  it('set_record_mode reports a mode switch REAPER did not make as an error and undoes the rest', async () => {
+  it('set_record_mode reports a mode switch REAPER did not make as an error and leaves the punch range and path alone', async () => {
     await runLua(`
       local api = fake{}
       api.Main_OnCommand = function() end -- the toggle action does nothing
-      local r, err = rec.set_record_mode(api, { mode = "time_selection", punchStart = 12, punchEnd = 20 })
+      local before = { api.GetSet_LoopTimeRange(false, false, 0, 0, false) }
+      local r, err = rec.set_record_mode(api, { mode = "time_selection", punchStart = 12, punchEnd = 20, recordPath = "Takes" })
       assert(r == nil and err:find("did not switch the record mode to time_selection %(it reads normal%)"), tostring(err))
-      assert(api.undone == "MCP: Set record mode" and #api.undo == 0, "the punch range set with it is undone")
+      local s, e = api.GetSet_LoopTimeRange(false, false, 0, 0, false)
+      assert(s == before[1] and e == before[2], "the time selection is left as it was")
+      local _, path = api.GetSetProjectInfo_String(0, "RECORD_PATH", "", false)
+      assert(path ~= "Takes", "the record path is left as it was")
+      assert(#api.undo == 0, "no undo point")
     `);
   });
 
