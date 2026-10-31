@@ -23,8 +23,15 @@ local function with_undo(api, label, fn)
   api.Undo_BeginBlock()
   local ok, res, err = pcall(fn)
   api.Undo_EndBlock(label, -1)
+  -- A failure half way (an import that made some tracks) leaves no partial edit: undo the
+  -- block, but only when the top entry is ours
+  local failed = not ok or res == nil
+  local undone = failed and api.Undo_CanUndo2 and api.Undo_CanUndo2(0) == label
+  if undone then api.Undo_DoUndo2(0) end
   api.UpdateArrange()
-  if not ok then return nil, "Handler error: " .. tostring(res) end
+  local suffix = undone and " — the edit was undone" or ""
+  if not ok then return nil, "Handler error: " .. tostring(res) .. suffix end
+  if res == nil then return nil, tostring(err) .. suffix end
   return res, err
 end
 

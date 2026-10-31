@@ -248,6 +248,18 @@ describe('mcp_midi_lib.lua import', () => {
     `);
   });
 
+  it('an import that fails half way leaves no new tracks behind', async () => {
+    await runLua(`
+      local api = new_midi_fake{ tracks = { { name = "A" }, { name = "B" } } }
+      api.fail_create_at = 2
+      local r, err = midi.import(api, { trackIndex = 1, newTracks = true, position = 0, lengthQN = 4, tracks = {
+        { name = "Bass", notes = { { 0, 1, 0, 36, 100 } } }, { name = "Lead", notes = { { 1, 1, 0, 76, 100 } } } } })
+      assert(r == nil and err:find("undone"), tostring(err))
+      assert(#api.tracks == 2 and api.tracks[1].name == "A" and api.tracks[2].name == "B", #api.tracks .. " tracks")
+      assert(#api.undo == 0)
+    `);
+  });
+
   it('merges a file with more tracks than may become new tracks', async () => {
     await runLua(`
       local api = new_midi_fake{ tracks = { { name = "A" } } }

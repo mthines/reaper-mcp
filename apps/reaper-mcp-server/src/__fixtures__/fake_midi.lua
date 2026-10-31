@@ -110,6 +110,9 @@ function new_midi_fake(spec)
     return false, ""
   end
   function api.CreateNewMIDIItemInProj(tr, startQN, endQN, _qn)
+    -- Test hook: the Nth item creation raises, like a REAPER call failing half way
+    api.creates = (api.creates or 0) + 1
+    if api.fail_create_at == api.creates then error("CreateNewMIDIItemInProj failed") end
     w()
     api.dirty = true
     local item = new_item(tr, { pos = startQN / QN_PER_SEC, len = (endQN - startQN) / QN_PER_SEC })
@@ -118,10 +121,28 @@ function new_midi_fake(spec)
     return item
   end
 
-  function api.Undo_BeginBlock() end
+  -- Undo: each block keeps a copy of the tracks from before it
+  local function copy(v, seen)
+    if type(v) ~= "table" then return v end
+    if seen[v] then return seen[v] end
+    local out = {}
+    seen[v] = out
+    for k, x in pairs(v) do out[copy(k, seen)] = copy(x, seen) end
+    return out
+  end
+  local before, saved = nil, {}
+  function api.Undo_BeginBlock() before = copy(api.tracks, {}) end
   function api.Undo_EndBlock(label)
-    if api.dirty then api.undo[#api.undo + 1] = label end
+    if api.dirty then api.undo[#api.undo + 1] = label; saved[#api.undo] = before end
     api.dirty = false
+  end
+  function api.Undo_CanUndo2(_) return api.undo[#api.undo] end
+  function api.Undo_DoUndo2(_)
+    local n = #api.undo
+    if n == 0 then return 0 end
+    api.tracks = saved[n]
+    api.undo[n], saved[n] = nil, nil
+    return 1
   end
   function api.UpdateArrange() end
 
