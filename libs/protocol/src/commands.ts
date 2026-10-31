@@ -77,6 +77,21 @@ export type CommandType =
   | 'insert_automation_item'
   | 'set_automation_item'
   | 'delete_automation_item'
+  // Mixing depth
+  | 'set_automation_mode'
+  | 'get_fx_param_modulation'
+  | 'set_fx_param_modulation'
+  | 'get_fx_pins'
+  | 'set_fx_pins'
+  | 'list_monitoring_fx'
+  | 'add_monitoring_fx'
+  | 'set_monitoring_fx'
+  | 'remove_monitoring_fx'
+  | 'freeze_tracks'
+  | 'unfreeze_tracks'
+  | 'apply_fx_to_items'
+  | 'add_stretch_markers'
+  | 'quantize_audio'
   // MIDI editing
   | 'create_midi_item'
   | 'list_midi_items'
@@ -125,6 +140,13 @@ export type CommandType =
   | 'run_action'
   | 'set_selected_tracks'
   | 'set_selected_items'
+  // Recording setup, fixed lanes and comping
+  | 'get_record_setup'
+  | 'set_track_record'
+  | 'set_record_mode'
+  | 'get_track_lanes'
+  | 'set_track_lanes'
+  | 'comp_lanes'
   // Track structure + routing setters
   | 'add_track'
   | 'delete_track'
@@ -138,6 +160,7 @@ export type CommandType =
   | 'add_hardware_output'
   // Items, takes, take FX and FX housekeeping
   | 'insert_audio_file'
+  | 'insert_stem_tracks'
   | 'list_takes'
   | 'set_active_take'
   | 'get_take_fx'
@@ -180,6 +203,26 @@ export type CommandType =
   | 'render_track_to_wav'
   // Removes the meters measure_tracks / read_track_* inserted
   | 'remove_mcp_meters';
+
+/**
+ * Tools the server composes itself (sidecar analysis) and logs on the bridge's status page with `_log_result`
+ * (`logToolResult()` in the server's `tool-log.ts`), so the page's log shows them like bridge commands.
+ */
+export type LoggedTool =
+  | 'analyze_track_offline'
+  | 'analyze_audio_file'
+  | 'measure_track_alignment'
+  | 'analyze_track_aesthetics'
+  | 'analyze_loudness_curve'
+  | 'analyze_stereo_bands'
+  | 'measure_masking'
+  | 'separate_stems'
+  | 'detect_key'
+  | 'detect_transients'
+  | 'create_transient_automation';
+
+/** Every command the bridge's log can show: the bridge's own commands and the tools the server logs there */
+export type LoggedCommand = CommandType | LoggedTool;
 
 // --- Per-command param types ---
 
@@ -625,6 +668,7 @@ export interface CreateTrackEnvelopeParams {
   envelopeName?: string;    // Built-in: "Volume", "Pan", "Mute", "Width", "Trim Volume"
   fxIndex?: number;         // For FX parameter envelopes
   paramIndex?: number;      // For FX parameter envelopes (required if fxIndex provided)
+  sendIndex?: number;       // A send's envelope (envelopeName Volume, Pan or Mute)
 }
 
 export interface SetEnvelopePropertiesParams {
@@ -896,6 +940,62 @@ export interface SetSelectedItemsParams {
   mode?: SelectionMode;
 }
 
+// Recording setup, fixed lanes and comping (logic in reaper/mcp_recording_lib.lua).
+
+/** A track's record input: an audio channel (1-based, stereo = that channel and the next), a MIDI device or none */
+export type RecordInput =
+  | { kind: 'audio'; channel: number; stereo?: boolean }
+  | { kind: 'midi'; device?: number | 'all' | 'vkb'; channel?: number }
+  | { kind: 'none' };
+
+export interface GetRecordSetupParams {
+  /** List every track, not only the armed ones. */
+  all?: boolean;
+}
+
+export interface TrackRecordUpdate {
+  track: PlanTrackRef;
+  arm?: boolean;
+  input?: RecordInput;
+  monitor?: 'off' | 'on' | 'auto';
+  mode?: string;
+  monitorItems?: boolean;
+}
+
+export interface SetTrackRecordParams {
+  /** JSON-encoded TrackRecordUpdate[]. */
+  tracks: string;
+}
+
+export interface SetRecordModeParams {
+  mode?: 'normal' | 'time_selection' | 'selected_items';
+  punchStart?: number;
+  punchEnd?: number;
+  recordPath?: string;
+}
+
+export interface GetTrackLanesParams {
+  track: PlanTrackRef;
+}
+
+export interface SetTrackLanesParams {
+  track: PlanTrackRef;
+  fixedLanes?: boolean;
+  laneCount?: number;
+  /** JSON-encoded { lane, name }[]. */
+  names?: string;
+  /** JSON-encoded lane number (plays alone) or lane array (layered). */
+  play?: string;
+}
+
+export interface CompLanesParams {
+  track: PlanTrackRef;
+  /** JSON-encoded { start, end, lane }[] (seconds). */
+  ranges: string;
+  crossfadeMs?: number;
+  name?: string;
+}
+
 // Track structure + routing setters. Track refs: index (-1 = master), exact name, "{GUID}" or "master".
 
 export interface AddTrackParams {
@@ -1118,6 +1218,17 @@ export interface InsertAudioFileParams {
   position?: number;
 }
 
+export interface InsertStemTracksParams {
+  /** Stems as a JSON string of [{name, path}] (nested params travel as JSON). */
+  files: string;
+  /** Seconds; where each stem item starts (default 0). */
+  position?: number;
+  /** Insert the folder after this track index (-1 = at the top; default: at the end). */
+  afterTrack?: number;
+  /** Name of the folder track holding the stems (default "Stems"). */
+  folderName?: string;
+}
+
 export interface ItemRefParams {
   trackIndex: number;
   itemIndex: number;
@@ -1215,4 +1326,89 @@ export interface InsertTrackTemplateParams {
   name: string;
   /** 0-based insert position; defaults to the end. */
   index?: number;
+}
+
+// --- Mixing depth -----------------------------------------------------------
+// Nested values travel as JSON strings: the bridge decodes only the top level.
+
+export type AutomationMode = 'trim' | 'read' | 'touch' | 'write' | 'latch' | 'latch_preview';
+
+export interface SetAutomationModeParams {
+  /** JSON array of track refs (index, name, "{GUID}", "master") */
+  tracks?: string;
+  mode?: AutomationMode;
+  globalOverride?: AutomationMode | 'none' | 'bypass';
+}
+
+export interface FxParamRef {
+  trackIndex: number;
+  fxIndex: number;
+  paramIndex?: number;
+}
+
+export interface SetFxParamModulationParams extends FxParamRef {
+  paramIndex: number;
+  /** false turns all modulation of the parameter off */
+  enabled?: boolean;
+  /** 0..1, the value the modulation moves around */
+  baseline?: number;
+  /** JSON: { enabled?, shape?, speed?, strength?, phase?, tempoSync?, direction? } */
+  lfo?: string;
+  /** JSON: { enabled?, attackMs?, releaseMs?, minDb?, maxDb?, strength?, channel?, direction? } */
+  audio?: string;
+  /** JSON: { enabled?, fxIndex, paramIndex, scale?, offset? } */
+  link?: string;
+}
+
+export interface SetFxPinsParams {
+  trackIndex: number;
+  fxIndex: number;
+  /** JSON: channel lists by pin ([[1],[2]]) or [{ pin, channels }] */
+  inputs?: string;
+  outputs?: string;
+  trackChannels?: number;
+}
+
+export interface AddMonitoringFxParams {
+  fxName: string;
+  /** JSON: [{ paramIndex, value 0..1 }] */
+  params?: string;
+}
+
+export interface SetMonitoringFxParams {
+  fxIndex: number;
+  enabled?: boolean;
+  offline?: boolean;
+  params?: string;
+}
+
+export interface FreezeTracksParams {
+  /** JSON array of track refs */
+  tracks: string;
+  mode?: 'stereo' | 'mono' | 'multichannel';
+}
+
+export interface ApplyFxToItemsParams {
+  /** JSON: [{ trackIndex, itemIndex }] */
+  items: string;
+  mode?: 'stereo' | 'mono' | 'multichannel';
+}
+
+export interface AddStretchMarkersParams {
+  trackIndex: number;
+  itemIndex: number;
+  /** JSON: [{ position (s from the item start), sourcePosition? }] */
+  markers: string;
+}
+
+export interface QuantizeAudioParams {
+  trackIndex: number;
+  itemIndex: number;
+  /** JSON: hit times in seconds of the item's source file */
+  hits: string;
+  /** Grid in quarter notes */
+  grid: number;
+  strength?: number;
+  swing?: number;
+  window?: number;
 }

@@ -1,0 +1,4 @@
+/* Stereo per band: a band that cancels in mono turns red */
+.bad .val b { color: var(--bad); }
+.bad .fill { background: var(--bad); }
+.wordBad { color: var(--bad); }

@@ -16,6 +16,7 @@ import { registerAnalysisTools } from './tools/analysis.js';
 import { registerMidiTools } from './tools/midi.js';
 import { registerMediaTools } from './tools/media.js';
 import { registerSelectionTools } from './tools/selection.js';
+import { registerRecordingTools } from './tools/recording.js';
 import { registerMarkerTools } from './tools/markers.js';
 import { registerTempoTools } from './tools/tempo.js';
 import { registerEnvelopeTools } from './tools/envelopes.js';
@@ -29,6 +30,8 @@ import { registerCategoryTools } from './tools/categories.js';
 import { registerAestheticsTools } from './tools/aesthetics.js';
 import { registerOfflineTools } from './tools/offline.js';
 import { registerTransientTools } from './tools/transients.js';
+import { registerMixcheckTools } from './tools/mixcheck.js';
+import { registerMixingTools } from './tools/mixing.js';
 import { registerCompositionTools } from './tools/composition.js';
 import { registerKnowledgeTools } from './tools/knowledge.js';
 
@@ -144,6 +147,7 @@ export function createServer(): McpServer {
   registerMidiTools(server);
   registerMediaTools(server);
   registerSelectionTools(server);
+  registerRecordingTools(server);
   registerMarkerTools(server);
   registerTempoTools(server);
   registerEnvelopeTools(server);
@@ -157,6 +161,8 @@ export function createServer(): McpServer {
   registerAestheticsTools(server);
   registerOfflineTools(server);
   registerTransientTools(server);
+  registerMixcheckTools(server);
+  registerMixingTools(server);
   registerCompositionTools(server);
   registerKnowledgeTools(server);
 

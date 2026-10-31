@@ -25,6 +25,11 @@ export const clock = (s: number, digits = 0) => {
   return `${m}:${sec.toFixed(digits).padStart(digits ? digits + 3 : 2, "0")}`;
 };
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+/** A number with at most two decimals and a real minus sign */
+export const plain = (n: number) => String(+n.toFixed(2)).replace("-", "−");
+/** "VST3: Pro-Q 3 (FabFilter)" → "Pro-Q 3"; the full name stays in the tooltip */
+export const fxShort = (name: string) =>
+  name.replace(/^[A-Z0-9]+i?:\s*/, "").replace(/\s*\([^()]*\)$/, "") || name;
 /** A mark's own colour, else one of the page's six hues by position */
 export const hueOf = (hex: string, i: number) => hex || `var(--h${i % 6})`;
 
@@ -35,13 +40,12 @@ export const CHANGE_WORD: Record<SlotChange, string> = {
   changed: "changed",
 };
 /** "+1 −1" when the call added or removed entries, else how many it changed or moved */
-export const changedText = (added: number, removed: number, touched: number) =>
-  added || removed ? `+${added} −${removed}` : String(touched);
 const BOOL_WORDS: Record<string, [string, string]> = {
   mute: ["on", "muted"],
   solo: ["off", "soloed"],
   recordArm: ["off", "armed"],
   phase: ["normal", "inverted"],
+  Freeze: ["live", "frozen"],
 };
 export const PROP_LABEL: Record<string, string> = {
   volume: "Volume",
@@ -68,7 +72,7 @@ export function valueText(
     case "pan":
       return panText(v);
     case "bool":
-      return (BOOL_WORDS[r.p] ?? ["off", "on"])[v ? 1 : 0];
+      return text || (BOOL_WORDS[r.p] ?? ["off", "on"])[v ? 1 : 0];
     case "norm":
       return text || `${Math.round(v * 100)}%`;
   }

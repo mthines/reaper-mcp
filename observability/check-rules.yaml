@@ -64,6 +64,53 @@ spec:
           annotations:
             summary: reaper-mcp-server logged an ERROR (handler crash, server crash, or bridge timeout).
 
+        - alert: ReaperMcpCompUndone
+          # comp_lanes undoes itself when it fails after writing; refusals (gaps,
+          # overlaps) are input errors and never log this. Log event names are not a
+          # queryable label, so match the log's error.type attribute.
+          expr: >-
+            sum(increase({otel_metric_name="dash0.logs", service_name="reaper-mcp-server",
+              error_type="comp_undone"}[1h])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: comp_lanes failed half way and undid itself — a bug in the comp path.
+
+        - alert: ReaperMcpSeparationSlow
+          # Demucs runs several times faster than real time on MPS/CUDA; under 1x there means it
+          # silently fell back to CPU (an upgrade broke the accelerator path).
+          expr: >-
+            histogram_quantile(0.5, sum(increase(
+              {otel_metric_name="reaper.audio.separation.speed", reaper_separation_device=~"mps|cuda"}[1d]))) < 1
+          labels:
+            severity: info
+          annotations:
+            summary: Stem separation on an accelerator runs slower than real time — it likely fell back to CPU.
+
+        - alert: ReaperMcpSeparationFellBack
+          # The accelerator raised and the separation re-ran on CPU (device label cpu_fallback);
+          # the warning log carries the error.
+          expr: >-
+            sum(histogram_count(increase(
+              {otel_metric_name="reaper.audio.separation.speed", reaper_separation_device="cpu_fallback"}[1d]))) > 0
+          labels:
+            severity: info
+          annotations:
+            summary: Stem separation fell back to CPU after the accelerator failed — see the separate_stems warning log.
+
+        - alert: ReaperMcpQuantizeOffGrid
+          # quantize_audio records each call's average hit distance from the grid before
+          # and after; after is ~0 at strength 1 (a softer strength leaves some offset
+          # by design, hence info). A rise means hit detection or marker placement regressed.
+          expr: >-
+            histogram_quantile(0.5, sum(rate(
+              {otel_metric_name="reaper.audio.quantize.offset", reaper_quantize_stage="after"}[1h])))
+            > 0.005
+          for: 1h
+          labels:
+            severity: info
+          annotations:
+            summary: Median off-grid offset after quantize_audio is above 5 ms — audio quantize stopped landing hits on the grid.
         - alert: ReaperMcpArrangeTimeout
           # A timed-out arrange edit may still finish in REAPER, and a retry would apply it twice.
           expr: >-

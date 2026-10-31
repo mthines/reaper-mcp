@@ -98,6 +98,8 @@ export const REAPER_ASSETS = [
   'mcp_items_lib.lua',
   'mcp_arrange_lib.lua',
   'mcp_envelopes_lib.lua',
+  'mcp_recording_lib.lua',
+  'mcp_mixing_lib.lua',
   'mcp_midi_lib.lua',
   'mcp_edit_views_lib.lua',
   'mcp_snapshots_ui_lib.lua',
@@ -298,6 +300,13 @@ export const MCP_TOOL_NAMES = [
   'run_action',
   'set_selected_tracks',
   'set_selected_items',
+  // recording setup, fixed lanes and comping
+  'get_record_setup',
+  'set_track_record',
+  'set_record_mode',
+  'get_track_lanes',
+  'set_track_lanes',
+  'comp_lanes',
   // track structure + routing setters
   'add_track',
   'delete_track',
@@ -356,10 +365,30 @@ export const MCP_TOOL_NAMES = [
   'measure_track_alignment',
   'detect_transients',
   'create_transient_automation',
+  // mixing depth
+  'set_automation_mode',
+  'get_fx_param_modulation',
+  'set_fx_param_modulation',
+  'get_fx_pins',
+  'set_fx_pins',
+  'list_monitoring_fx',
+  'add_monitoring_fx',
+  'set_monitoring_fx',
+  'remove_monitoring_fx',
+  'freeze_tracks',
+  'unfreeze_tracks',
+  'apply_fx_to_items',
+  'add_stretch_markers',
+  'quantize_audio',
+  'analyze_loudness_curve',
+  'analyze_stereo_bands',
+  'measure_masking',
+  'separate_stems',
   // built-in mix knowledge (read-only LoreKit proxy)
   'list_builtin_knowledge',
   'get_builtin_knowledge',
-  // Note: 'render_track_to_wav' and 'remove_mcp_meters' (measure_tracks cleanup) are internal
+  // Note: 'render_track_to_wav', 'remove_mcp_meters' (measure_tracks cleanup) and 'insert_stem_tracks'
+  // (the insertTracks option of separate_stems) are internal
   // Lua bridge commands, NOT public MCP tools.
   // They must NOT be listed here — MCP_TOOL_NAMES drives the Claude Code allowlist.
 ] as const;

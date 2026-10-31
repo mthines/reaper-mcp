@@ -405,6 +405,42 @@ export function getSidecarDurationHistogram(): Histogram {
   return _sidecarDuration;
 }
 
+let _compSegments: Histogram | null = null;
+
+/** Segments (one per take switch, plus one) in each comp comp_lanes builds. */
+export function getCompSegmentsHistogram(): Histogram {
+  _compSegments ??= getMeter().createHistogram('reaper.comp.segments', {
+    description: 'Segments in one comp built by comp_lanes',
+    unit: '{segment}',
+    advice: { explicitBucketBoundaries: [1, 2, 4, 8, 16, 32, 64, 128, 200] },
+  });
+  return _compSegments;
+}
+
+let _separationSpeed: Histogram | null = null;
+
+/** Seconds of audio separate_stems splits per second of processing (`reaper.separation.device`, `reaper.separation.model`). */
+export function getSeparationSpeedHistogram(): Histogram {
+  _separationSpeed ??= getMeter().createHistogram('reaper.audio.separation.speed', {
+    description: 'Seconds of audio one separate_stems call split per second of processing',
+    unit: '1',
+    advice: { explicitBucketBoundaries: [0.1, 0.25, 0.5, 1, 2, 3, 5, 10, 20] },
+  });
+  return _separationSpeed;
+}
+
+let _quantizeOffset: Histogram | null = null;
+
+/** Average distance of an audio item's hits from the grid, before and after quantize_audio (`reaper.quantize.stage`). */
+export function getQuantizeOffsetHistogram(): Histogram {
+  _quantizeOffset ??= getMeter().createHistogram('reaper.audio.quantize.offset', {
+    description: 'Average distance of the hits from their grid lines in one quantize_audio call, before and after it',
+    unit: 's',
+    advice: { explicitBucketBoundaries: [0, 0.001, 0.0025, 0.005, 0.01, 0.02, 0.04, 0.08, 0.16] },
+  });
+  return _quantizeOffset;
+}
+
 let _midiNotesChanged: Histogram | null = null;
 
 /** Notes one MIDI composition edit (quantize, transform, import) changed or created. */

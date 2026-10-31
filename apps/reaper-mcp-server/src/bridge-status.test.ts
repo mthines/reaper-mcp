@@ -11,7 +11,7 @@ const REAPER_DIR = join(__dirname, '../../../reaper');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
 const SCRIPTS = '/reaper/Scripts/';
 const BRIDGE_DIR = `${SCRIPTS}mcp_bridge_data/`;
-const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_arrange_lib.lua', 'mcp_midi_lib.lua'];
+const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_recording_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_arrange_lib.lua', 'mcp_midi_lib.lua', 'mcp_mixing_lib.lua'];
 
 interface Entry { n: number; t: number; c: string; ok: boolean; s?: string; p?: string; e?: string; r?: Record<string, unknown> }
 type Row = [number, number, number, number, number];
@@ -318,6 +318,151 @@ const POOLED_ENVELOPE = `${VOLUME_ENVELOPE}
 `;
 
 describe('edit views in the log', () => {
+  it('shows a record change per track with the input, monitoring and mode before it', async () => {
+    const bridge = await startBridge(`
+      api.GetNumAudioInputs = function() return 8 end
+      api.GetInputChannelName = function(i) return "Input " .. (i + 1) end
+      api.GetNumMIDIInputs = function() return 0 end
+      api.GetMIDIInputName = function() return false, "" end
+      api.tracks[1].vals.I_RECINPUT = 0
+    `);
+    const res = await bridge.send('set_track_record', {
+      tracks: JSON.stringify([{ track: 'Kick', arm: true, input: { kind: 'audio', channel: 3, stereo: true }, monitor: 'auto' }]),
+    });
+    expect(res.success).toBe(true);
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({
+      mode: 'normal',
+      rows: [['Kick', 1, 'In 3/4', 'auto', 'input']],
+      was: { rows: [['Kick', 0, 'In 1 · Input 1', 'off', 'input']] },
+    });
+  });
+
+  it('says how many armed tracks the record view leaves out, also between 33 and 64', async () => {
+    const bridge = await startBridge(`
+      api.GetNumAudioInputs = function() return 8 end
+      api.GetInputChannelName = function(i) return "Input " .. (i + 1) end
+      api.GetNumMIDIInputs = function() return 0 end
+      api.GetMIDIInputName = function() return false, "" end
+      api.tracks[1].vals.I_RECARM = 1
+      for i = 2, 40 do
+        api.tracks[i] = { name = "T" .. i, guid = string.format("{T%d}", i), vals = { I_RECARM = 1 }, fx = {}, sends = {}, chunk = "<TRACK>" }
+      end
+    `);
+    expect((await bridge.send('get_record_setup', {})).success).toBe(true);
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({ more: 8 });
+    expect((r as { rows: unknown[] }).rows).toHaveLength(32);
+  });
+
+  it('shows the lanes of a track with what played before a lane switch', async () => {
+    const bridge = await startBridge(`
+      local tr = api.tracks[1]
+      tr.vals.I_FREEMODE = 2
+      tr.vals.I_NUMFIXEDLANES = 2
+      tr.vals["C_LANEPLAYS:0"] = 1
+      local function item(pos, lane, name)
+        local it = { vals = { D_POSITION = pos, D_LENGTH = 4, I_FIXEDLANE = lane }, takes = {}, active = 1 }
+        it.takes[1] = { name = name, item = it }
+        return it
+      end
+      tr.items = { item(0, 0, "Take 1"), item(0, 1, "Take 2") }
+      local plain = api.GetSetMediaTrackInfo_String
+      api.GetSetMediaTrackInfo_String = function(t, k, v, set)
+        local n = k:match("^P_LANENAME:(%d+)")
+        if not n then return plain(t, k, v, set) end
+        t.lane_names = t.lane_names or {}
+        if set then t.lane_names[n] = v end
+        return true, t.lane_names[n] or ""
+      end
+    `);
+    const res = await bridge.send('set_track_lanes', { track: 'Kick', play: '1' });
+    expect(res.success).toBe(true);
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({
+      t: 'Kick', fixed: 1,
+      lanes: [['', 0], ['', 1]],
+      items: [[0, 4, 0, 0], [0, 4, 1, 0]],
+      was: { lanes: [['', 1], ['', 0]] },
+      len: 4,
+    });
+  });
+
+  it('shows a comp as a new lane built from parts of the takes', async () => {
+    const bridge = await startBridge(`
+      local tr = api.tracks[1]
+      tr.vals.I_FREEMODE = 2
+      tr.vals.I_NUMFIXEDLANES = 2
+      tr.vals["C_LANEPLAYS:0"] = 1
+      local function item(lane, name)
+        local it = { vals = { D_POSITION = 0, D_LENGTH = 8, I_FIXEDLANE = lane }, takes = {}, active = 1 }
+        it.takes[1] = { name = name, item = it }
+        return it
+      end
+      tr.items = { item(0, "Take 1"), item(1, "Take 2") }
+      api.GetItemStateChunk = function(it) return true, "<ITEM\\nNAME " .. ((it.takes[1] or {}).name or "") .. "\\n>" end
+      api.SetItemStateChunk = function(it, chunk)
+        it.takes = { { name = chunk:match("NAME ([^\\n]*)") or "", item = it, vals = { D_PLAYRATE = 1, D_STARTOFFS = 0 } } }
+        it.active = 1
+        return true
+      end
+      api.GetMediaItemTakeInfo_Value = function(tk, k) return (tk.vals or {})[k] or (k == "D_PLAYRATE" and 1 or 0) end
+      api.SetMediaItemTakeInfo_Value = function(tk, k, v) tk.vals = tk.vals or {}; tk.vals[k] = v; return true end
+      local plain = api.GetSetMediaTrackInfo_String
+      api.GetSetMediaTrackInfo_String = function(t, k, v, set)
+        local n = k:match("^P_LANENAME:(%d+)")
+        if not n then return plain(t, k, v, set) end
+        t.lane_names = t.lane_names or {}
+        if set then t.lane_names[n] = v end
+        return true, t.lane_names[n] or ""
+      end
+    `);
+    const res = await bridge.send('comp_lanes', {
+      track: 'Kick', crossfadeMs: 10, ranges: JSON.stringify([{ start: 0, end: 4, lane: 0 }, { start: 4, end: 8, lane: 1 }]),
+    });
+    expect(res).toMatchObject({ success: true });
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({
+      t: 'Kick', comp: 2,
+      lanes: [['', 0], ['', 0], ['Comp', 1]],
+      segs: [[0, 4, 0], [4, 8, 1]],
+      items: [[0, 8, 0, 0], [0, 8, 1, 0], [0, 4.01, 2, 0], [4, 4, 2, 0]],
+      was: { lanes: [['', 1], ['', 0]] },
+    });
+  });
+
+  it('shows the record mode and punch range a mode change set', async () => {
+    const bridge = await startBridge(`
+      local toggles = {}
+      api.GetToggleCommandState = function(id) return toggles[id] or 0 end
+      api.Main_OnCommand = function(id) for k in pairs(toggles) do toggles[k] = 0 end; toggles[id] = 1 end
+      local sel = { 0, 0 }
+      api.GetSet_LoopTimeRange = function(set, _, s, e) if set then sel = { s, e } end; return sel[1], sel[2] end
+    `);
+    expect((await bridge.send('set_record_mode', { mode: 'time_selection', punchStart: 4, punchEnd: 12 })).success).toBe(true);
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({ mode: 'time_selection', punch: [4, 12], was: { mode: 'normal' } });
+  });
+
+  it('draws the first 32 lanes of a track and counts the rest', async () => {
+    const bridge = await startBridge(`
+      local tr = api.tracks[1]
+      tr.vals.I_FREEMODE = 2
+      tr.vals.I_NUMFIXEDLANES = 40
+      tr.vals["C_LANEPLAYS:0"] = 1
+      local function item(lane)
+        local it = { vals = { D_POSITION = 0, D_LENGTH = 4, I_FIXEDLANE = lane }, takes = {}, active = 1 }
+        it.takes[1] = { name = "Take", item = it }
+        return it
+      end
+      tr.items = { item(0), item(35) }
+    `);
+    expect((await bridge.send('get_track_lanes', { track: 'Kick' })).success).toBe(true);
+    const { r } = (await bridge.status()).recent[0];
+    expect((r as { lanes: unknown[] }).lanes).toHaveLength(32);
+    expect(r).toMatchObject({ more: 8, items: [[0, 4, 0, 0]] });
+  });
+
   it('draws pooled automation items with their shared curve, the new one marked', async () => {
     const bridge = await startBridge(POOLED_ENVELOPE);
     await bridge.send('insert_automation_item', { trackIndex: 0, envelopeIndex: 0, position: 30, length: 4, poolId: 7 });
@@ -329,6 +474,31 @@ describe('edit views in the log', () => {
       ai: 1,
       wasAis: [[10, 4, 7, 'Vox Chorus']],
     });
+  });
+
+  it('shows an automation mode change per track, from the old mode to the new one', async () => {
+    const bridge = await startBridge('api.tracks[1].vals.I_AUTOMODE = 1');
+    await bridge.send('set_automation_mode', { tracks: '[0]', mode: 'latch' });
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({ rows: [{ t: 'Kick', at: 'read', bt: 'latch' }] });
+  });
+
+  it('shows a global automation override change as a change, and an untouched one as no change', async () => {
+    const bridge = await startBridge(`
+      local override = -1
+      api.GetGlobalAutomationOverride = function() return override end
+      api.SetGlobalAutomationOverride = function(v) override = v end
+    `);
+    await bridge.send('set_automation_mode', { globalOverride: 'bypass' });
+    const changed = (await bridge.status()).recent[0].r as { rows: { p: string; a: number; b: number; at: string; bt: string }[] };
+    const row = changed.rows.find((x) => x.p === 'Global override');
+    expect(row).toMatchObject({ at: 'none', bt: 'bypass' });
+    expect(row?.a).not.toBe(row?.b);
+
+    await bridge.send('set_automation_mode', { globalOverride: 'bypass' });
+    const same = (await bridge.status()).recent[0].r as { rows: { p: string; a: number; b: number }[] };
+    const again = same.rows.find((x) => x.p === 'Global override');
+    expect(again?.a).toBe(again?.b);
   });
 
   it('render view in the log: one row per file with its levels, waveform slices and the targets', async () => {

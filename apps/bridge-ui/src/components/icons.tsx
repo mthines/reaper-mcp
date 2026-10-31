@@ -64,3 +64,22 @@ export function ShareIcon() {
     </svg>
   );
 }
+
+/** Zoom to the change: corner brackets around a point */
+export function FocusIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M2 5.5V2h3.5M10.5 2H14v3.5M14 10.5V14h-3.5M5.5 14H2v-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="8" cy="8" r="1.8" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** The whole length: arrows out to both ends */
+export function WholeIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M1.5 3v10M14.5 3v10M4 8h8M6 5.5L3.8 8 6 10.5M10 5.5l2.2 2.5-2.2 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

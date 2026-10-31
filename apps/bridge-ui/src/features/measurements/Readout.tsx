@@ -24,7 +24,7 @@ export function Readout({ label, value, unit, zone = 'ok', word, title }: { labe
  * Hairline level: the line is the value (RMS), the tick the peak hold; each takes the zone of what it shows.
  * `was` ghosts the previous call: a faint mark where its RMS ended and a hollow tick at its peak.
  */
-export function Level({ label, value, hold, was }: { label: string; value?: number; hold?: number; was?: { value?: number; hold?: number } | null }) {
+export function Level({ label, value, hold, was, showValue = true }: { label: string; value?: number; hold?: number; was?: { value?: number; hold?: number } | null; showValue?: boolean }) {
   return (
     <div className={styles.hlLevel}>
       <span className={cx(styles.hlLabel, 'mono')}>{label}</span>
@@ -35,7 +35,7 @@ export function Level({ label, value, hold, was }: { label: string; value?: numb
         {was?.hold !== undefined && <span className={styles.hlWasHold} style={{ left: `${pct(was.hold, -60, 6)}%` }} title={`Previous call peak ${fmt(was.hold)} dB`} />}
         {hold !== undefined && <span className={styles.hlHold} data-zone={zoneOf(hold)} style={{ left: `${pct(hold, -60, 6)}%` }} />}
       </div>
-      <span className={cx(styles.hlValue, 'mono')} data-zone={zoneOf(hold ?? value)}>{fmt(hold ?? value)}</span>
+      {showValue && <span className={cx(styles.hlValue, 'mono')} data-zone={zoneOf(hold ?? value)}>{fmt(hold ?? value)}</span>}
     </div>
   );
 }

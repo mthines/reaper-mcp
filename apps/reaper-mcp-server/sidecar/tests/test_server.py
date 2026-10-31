@@ -391,3 +391,74 @@ def test_transients_method_refuses_an_unknown_band(tmp_path):
         "params": {"path": str(path), "band": "treble"},
     })))
     assert "band must be one of" in resp["error"]["message"]
+
+
+def _call(method: str, params: dict) -> dict:
+    return parse_response(server.dispatch(json.dumps({"jsonrpc": "2.0", "id": 20, "method": method, "params": params})))
+
+
+def test_loudness_curve_method_reports_windows_in_project_time(tmp_path):
+    import numpy as np
+    import soundfile as sf
+
+    sr = 44100
+    t = np.arange(sr * 12) / sr
+    level = np.where(t < 6, 10 ** (-30 / 20), 10 ** (-12 / 20))
+    x = (level * np.sin(2 * np.pi * 1000 * t)).astype("float32")
+    path = tmp_path / "song.wav"
+    sf.write(str(path), np.stack([x, x], axis=1), sr)
+
+    result = _call("loudness_curve", {"path": str(path), "startTime": 2, "targetLufs": -14})["result"]
+    assert result["loudest"]["start"] >= 6 + 0, "after the step, shifted by startTime"
+    assert result["overTarget"] and result["overTarget"][0]["start"] >= 5
+    assert result["startTime"] == 2
+
+
+def test_stereo_bands_method_refuses_a_mono_file(tmp_path):
+    import numpy as np
+    import soundfile as sf
+
+    path = tmp_path / "mono.wav"
+    sf.write(str(path), (0.1 * np.random.default_rng(1).standard_normal(44100)).astype("float32"), 44100)
+    resp = _call("stereo_bands", {"path": str(path)})
+    assert "stereo" in resp["error"]["message"]
+
+
+def test_masking_method_needs_two_to_eight_tracks_and_reports_conflicts(tmp_path):
+    a, b = tmp_path / "a.wav", tmp_path / "b.wav"
+    _write_sine(a, -12)
+    _write_sine(b, -13)
+    result = _call("masking", {"tracks": [{"name": "Gtr", "path": str(a)}, {"name": "Keys", "path": str(b)}]})["result"]
+    assert result["tracks"] == ["Gtr", "Keys"]
+    assert any(c["hz"] == 1000 for c in result["conflicts"])
+
+    assert "2 to 8" in _call("masking", {"tracks": [{"name": "Gtr", "path": str(a)}]})["error"]["message"]
+    missing = _call("masking", {"tracks": [{"name": "Gtr", "path": str(a)}, {"name": "X", "path": str(tmp_path / "nope.wav")}]})
+    assert "not found" in missing["error"]["message"]
+
+
+def test_separate_method_refuses_an_unknown_stem_before_loading_anything(tmp_path):
+    path = tmp_path / "mix.wav"
+    _write_sine(path, -12)
+    resp = _call("separate", {"path": str(path), "outDir": str(tmp_path / "out"), "stems": ["kazoo"]})
+    assert "has no stem kazoo" in resp["error"]["message"]
+    assert not (tmp_path / "out").exists()
+
+
+def test_separation_status_reports_a_missing_demucs_with_how_to_install(monkeypatch):
+    import separation
+
+    monkeypatch.setattr(separation, "is_installed", lambda: False)
+    resp = _call("separation_status", {})
+    assert resp["result"]["installed"] is False
+    assert "setup-sidecar --with-separation" in resp["result"]["message"]
+
+
+def test_separate_method_says_how_to_install_when_demucs_is_missing(tmp_path, monkeypatch):
+    import separation
+
+    monkeypatch.setattr(separation, "is_installed", lambda: False)
+    path = tmp_path / "mix.wav"
+    _write_sine(path, -12)
+    resp = _call("separate", {"path": str(path), "outDir": str(tmp_path / "out")})
+    assert "setup-sidecar --with-separation" in resp["error"]["message"]

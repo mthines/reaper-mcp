@@ -4,6 +4,12 @@ export const fmt = (v: number | undefined, digits = 1) =>
   v === undefined ? '–' : v <= -149 ? '−∞' : (v > 0 ? `+${v.toFixed(digits)}` : v.toFixed(digits)).replace('-', '−');
 export const pct = (v: number, min: number, max: number) => Math.min(100, Math.max(0, ((v - min) / (max - min)) * 100));
 
+/** Seconds as m:ss */
+export const secs = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+/** A frequency as 63, 250, 1k, 16k */
+export const hzLabel = (hz: number) => (hz >= 1000 ? `${+(hz / 1000).toFixed(hz >= 10_000 ? 0 : 1)}k` : `${Math.round(hz)}`);
+
 export type Zone = 'ok' | 'hot' | 'over';
 /** Level zones: amber from −6 dB, red over 0 dB */
 export const zoneOf = (db: number | undefined): Zone => (db === undefined ? 'ok' : db > 0 ? 'over' : db > -6 ? 'hot' : 'ok');

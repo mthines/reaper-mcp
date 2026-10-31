@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type PointerEvent } from 'react';
 import type { EditView, Note } from '../edit-views.js';
+import { Counts } from './Counts.js';
 import { Legend } from './ChangeLegend.js';
 import { EH, EW } from './Envelope.js';
 import { noteName, pct, plural } from './format.js';
@@ -56,7 +57,7 @@ export function PianoRoll({ v }: { v: Extract<EditView, { kind: "midi" }> }) {
           unit="beats"
         />
         {v.gone ? (
-          <Measurement.Readout label="Changed" value={`+${changed} −${gone.length}`} />
+          <Counts added={changed} removed={gone.length} />
         ) : (
           <Measurement.Readout
             label="Range"

@@ -1,4 +1,3 @@
-import { PreviousLegend } from './Measurement.js';
 import { Readout } from './Readout.js';
 import { pct, type Zone } from './format.js';
 import type { Measurement } from '../../lib/commands.js';
@@ -23,7 +22,7 @@ export function Key({ m, was }: { m: Extract<Measurement, { kind: 'key' }>; was:
         <Readout label="Key" value={m.key ?? '–'} />
         <Readout label="Confidence" value={conf === undefined ? '–' : `${Math.round(conf * 100)}`} unit="%" zone={zone} word={zone === 'hot' ? 'low' : undefined}
           title="How far this key stands out from the next one that is not its relative key, scaled by how well it fits" />
-        <Readout label="Relative" value={m.rel ?? '–'} />
+        <Readout label="Relative key" value={m.rel ?? '–'} />
       </div>
       <div className={styles.bars} role="img" aria-label={`Pitch classes: ${PITCH_CLASSES.map((p, i) => `${p} ${Math.round(m.chroma[i] * 100)}%`).join(', ')}`}>
         {PITCH_CLASSES.map((pc, i) => {
@@ -41,12 +40,17 @@ export function Key({ m, was }: { m: Extract<Measurement, { kind: 'key' }>; was:
           );
         })}
       </div>
-      {was && <PreviousLegend />}
+      <div className={chartStyles.measureLegend}>
+        {tonic >= 0 && <span><i className={styles.lgTonic} /> Tonic</span>}
+        {tonic >= 0 && <span><i className={styles.lgIn} /> In the key</span>}
+        <span><i className={styles.lgOut} /> {tonic >= 0 ? 'Outside the key' : 'Pitch class'}</span>
+        {was && <span><i className={chartStyles.lgPrevious} /> Previous call</span>}
+      </div>
       <div className={chartStyles.offHints}>
         <span>
           {m.name ? `${m.name}, ` : ''}from {m.src === 'midi' ? 'MIDI notes' : m.src === 'file' ? 'an audio file' : 'the rendered audio'}
-          {m.r !== undefined && ` · r ${m.r.toFixed(2)}`}
-          {m.alt.length > 0 && <> · next: {m.alt.map(([k, r]) => `${k} (${r.toFixed(2)})`).join(', ')}</>}
+          {m.r !== undefined && ` · fit ${m.r.toFixed(2)}`}
+          {m.alt.length > 0 && <> · next closest: {m.alt.map(([k, r]) => `${k} (${r.toFixed(2)})`).join(', ')}</>}
         </span>
       </div>
     </>

@@ -1,0 +1,3 @@
+# Source separation (separate_stems) — opt-in: reaper-mcp setup-sidecar --with-separation
+# Demucs (Meta, MIT). Its audio I/O is not used (the sidecar reads and writes with soundfile).
+demucs==4.0.1

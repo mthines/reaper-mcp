@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { EXAMPLE_NOW } from '../../demo/examples.js';
 import { exampleFeed } from '../../demo/feed.js';
@@ -30,8 +31,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-// A call row is a pressable button named with the time of the call
-const callRows = (canvas: ReturnType<typeof within>) => canvas.queryAllByRole('button', { pressed: false, name: /\d{2}:\d{2}:\d{2}/ });
+// A call row is a pressable button showing the time of the call. Matched on its text: a `name` query computes the
+// accessible name of every button in the log on each retry, which alone outran the test timeout on a busy machine
+const callRows = (canvas: ReturnType<typeof within>) =>
+  canvas.queryAllByRole('button', { pressed: false }).filter((b: HTMLElement) => /\d{2}:\d{2}:\d{2}/.test(b.textContent ?? ''));
 
 export const FiltersTheCallsBySearch: Story = {
   play: async ({ canvasElement }) => {
@@ -67,5 +70,29 @@ export const PausesAndClears: Story = {
     await expect(args.onTogglePause).toHaveBeenCalled();
     await userEvent.click(canvas.getByRole('button', { name: /Clear/ }));
     await expect(args.onClear).toHaveBeenCalled();
+  },
+};
+
+// The view is the page's state; a stateful wrapper lets the tabs switch it
+function SwitchingViews(props: React.ComponentProps<typeof Log>) {
+  const [view, setView] = useState(props.view);
+  return <Log {...props} view={view} onView={setView} />;
+}
+
+export const KeepsASearchPerView: Story = {
+  render: (args) => <SwitchingViews {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const search = canvas.getByPlaceholderText('Filter commands or errors');
+    await userEvent.clear(search);
+    await userEvent.type(search, 'read_track_lufs');
+    await userEvent.click(canvas.getByRole('tab', { name: 'Tools' }));
+    // The calls' search doesn't filter the tools
+    await expect(canvas.getByPlaceholderText('Filter tools')).toHaveValue('');
+    await userEvent.type(canvas.getByPlaceholderText('Filter tools'), 'snapshot');
+    await userEvent.click(canvas.getByRole('tab', { name: 'Calls' }));
+    await expect(canvas.getByPlaceholderText('Filter commands or errors')).toHaveValue('read_track_lufs');
+    await userEvent.click(canvas.getByRole('tab', { name: 'Tools' }));
+    await expect(canvas.getByPlaceholderText('Filter tools')).toHaveValue('snapshot');
   },
 };

@@ -42,6 +42,29 @@ export type Route = ['s' | 'r' | 'h', string, number, number, string];
 /** One track's items for an item edit; `was` is the lane before it */
 export interface ItemLane { t: string; items: Item[]; was?: Item[] }
 
+/** A track's record state: [name, 1 = armed, input ("In 3/4"), monitor (off/on/auto), record mode] */
+export type RecordRow = [string, number, string, string, string];
+export interface RecordState { mode: string; path?: string; punch?: [number, number]; rows?: RecordRow[] }
+/** A fixed lane: [name, plays: 0 off / 1 alone / 2 layered] */
+export type Lane = [string, number];
+/** An item on a lane: [position s, length s, lane, 1 = MIDI] */
+export type LaneItem = [number, number, number, number];
+/** A comp segment: [start s, end s, source lane] */
+export type CompSeg = [number, number, number];
+
+/**
+ * One modulated FX parameter: name, baseline and value 0..1, and its sources —
+ * lfo [shape, speed, strength, phase, direction −1/0/1, 1 = tempo sync],
+ * acs (audio control signal) [attack ms, release ms, min dB, max dB, strength, channel, direction],
+ * link [source "FX / param", scale, offset]. `off` = modulation turned off; `was` = before a write (false = none).
+ */
+export interface ModRow {
+  p: string; base: number; v: number; off?: number;
+  lfo?: [string, number, number, number, number, number];
+  acs?: [number, number, number, number, number, number, number];
+  link?: [string, number, number];
+  was?: ModRow | false;
+}
 /** A rendered file: [name, duration s (−1 unknown), LUFS-I, true peak, sample peak (−150 unmeasured or silent), waveform maxima, minima] */
 export type RenderFile = [string, number, number, number, number, number[], number[]];
 /** One version of a render (`v` "" for a plain render), the tracks it muted and its files */
@@ -71,6 +94,23 @@ export type EditView =
   | { kind: 'fxChain'; chains: FxChain[] }
   | { kind: 'routing'; t: string; routes: Route[]; was?: Route[] }
   | { kind: 'plan'; ops: [string, string][]; total: number; dryRun?: boolean }
+  | ({ kind: 'record'; more?: number; was?: RecordState } & RecordState)
+  | {
+      kind: 'lanes'; t: string; fixed: boolean; lanes: Lane[]; items: LaneItem[]; len: number;
+      /** lanes past the drawn ones (the bridge sends at most 32) */
+      more?: number;
+      /** comp_lanes: the new lane and each segment's source lane */
+      comp?: number; segs?: CompSeg[];
+      was?: { lanes: Lane[]; items: LaneItem[]; fixed: boolean };
+    }
+  | { kind: 'modulation'; fx: string; rows: ModRow[]; total?: number }
+  /** FX pins: the track channels (1-based) each input / output pin connects to, now and before a write */
+  | { kind: 'pins'; fx: string; ch: number; in: number[][]; out: number[][]; names?: string[]; chWas?: number; inWas?: number[][]; outWas?: number[][] }
+  /**
+   * Stretch markers on an item, seconds from its start: quantize moves [from, to] over the grid lines with the
+   * average offset from the grid before/after (ms); a batch add shows the markers now and before
+   */
+  | { kind: 'stretch'; len: number; moves?: [number, number][]; more?: number; grid?: number[]; off?: [number, number]; marks?: number[]; was?: number[] }
   | {
       kind: 'render'; fmt: string; src: string; groups: RenderGroup[]; more?: number;
       /** Bit depth or MP3 kbps, the normalize mode and target (dB), and the limiter ceiling (dB, `tp` true peak) */
@@ -79,7 +119,10 @@ export type EditView =
 
 const KIND_OF: Record<string, EditView['kind']> = {};
 const kinds: Array<[EditView['kind'], string[]]> = [
-  ['changes', ['set_track_property', 'set_multiple_track_properties', 'set_fx_parameter', 'set_multiple_fx_parameters', 'get_fx_parameters']],
+  ['changes', [
+    'set_track_property', 'set_multiple_track_properties', 'set_fx_parameter', 'set_multiple_fx_parameters', 'get_fx_parameters',
+    'set_automation_mode', 'freeze_tracks', 'unfreeze_tracks', 'apply_fx_to_items',
+  ]],
   ['envelope', [
     'insert_envelope_point', 'insert_envelope_points', 'edit_envelope_points', 'delete_envelope_point', 'remove_envelope_points', 'clear_envelope', 'get_envelope_points',
     'list_automation_items', 'insert_automation_item', 'set_automation_item', 'delete_automation_item',
@@ -100,9 +143,15 @@ const kinds: Array<[EditView['kind'], string[]]> = [
   ['fxChain', [
     'add_fx', 'remove_fx', 'move_fx', 'copy_fx', 'set_fx_enabled', 'set_fx_offline', 'setup_fx_chain', 'load_fx_chain',
     'rename_fx', 'set_fx_preset', 'get_track_properties',
+    'list_monitoring_fx', 'add_monitoring_fx', 'set_monitoring_fx', 'remove_monitoring_fx',
   ]],
   ['routing', ['get_track_routing', 'add_send', 'set_send', 'remove_send', 'add_hardware_output']],
   ['plan', ['run_plan']],
+  ['record', ['get_record_setup', 'set_track_record', 'set_record_mode']],
+  ['lanes', ['get_track_lanes', 'set_track_lanes', 'comp_lanes']],
+  ['modulation', ['get_fx_param_modulation', 'set_fx_param_modulation']],
+  ['pins', ['get_fx_pins', 'set_fx_pins']],
+  ['stretch', ['add_stretch_markers', 'quantize_audio']],
   ['render', ['render_project', 'render_versions']],
 ];
 for (const [kind, commands] of kinds) for (const c of commands) KIND_OF[c] = kind;
@@ -133,9 +182,34 @@ const MIX_ROW = [str, num, str, num, num, str];
 const ITEM = [num, num, num, num, num, num];
 const FX_SLOT = [str, str, str, str];
 const ROUTE = [(v: unknown) => v === 's' || v === 'r' || v === 'h', str, num, num, str];
+const RECORD_ROW = [str, num, str, str, str];
+const LANE = [str, num];
+const LANE_ITEM = [num, num, num, num];
+function recordState(r: Record<string, unknown>): RecordState | null {
+  if (!str(r.mode)) return null;
+  return {
+    mode: r.mode,
+    ...(str(r.path) ? { path: r.path } : {}),
+    ...(pair(r.punch) ? { punch: r.punch } : {}),
+    ...(Array.isArray(r.rows) ? { rows: tuples<RecordRow>(r.rows, RECORD_ROW) } : {}),
+  };
+}
 const numbers = (v: unknown): v is number[] => Array.isArray(v) && v.every(num);
 const RENDER_FILE = [str, num, num, num, num, numbers, numbers];
 const pair = (v: unknown): v is [number, number] => Array.isArray(v) && v.length === 2 && num(v[0]) && num(v[1]);
+const channelLists = (v: unknown): number[][] => (Array.isArray(v) ? v.map((p) => (numbers(p) ? p : [])) : []);
+function modRow(v: unknown, depth = 0): ModRow | null {
+  if (!v || typeof v !== 'object') return null;
+  const r = v as Record<string, unknown>;
+  if (!str(r.p)) return null;
+  const row: ModRow = { p: r.p, base: num(r.base) ? r.base : 0, v: num(r.v) ? r.v : 0 };
+  if (r.off === 1) row.off = 1;
+  if (Array.isArray(r.lfo) && str(r.lfo[0]) && r.lfo.slice(1, 6).every(num)) row.lfo = r.lfo.slice(0, 6) as ModRow['lfo'];
+  if (Array.isArray(r.acs) && r.acs.length >= 7 && r.acs.every(num)) row.acs = r.acs.slice(0, 7) as ModRow['acs'];
+  if (Array.isArray(r.link) && str(r.link[0]) && num(r.link[1]) && num(r.link[2])) row.link = [r.link[0], r.link[1], r.link[2]];
+  if (depth === 0 && r.was !== undefined) row.was = r.was === false ? false : (modRow(r.was, 1) ?? false);
+  return row;
+}
 const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(str);
 
 /** Items, keeping a gain only when it is a number */
@@ -250,6 +324,25 @@ export function editViewOf(e: CommandEntry): EditView | null {
       if (!str(r.t) || !Array.isArray(r.routes)) return null;
       return { kind, t: r.t, routes: tuples<Route>(r.routes, ROUTE), ...(Array.isArray(r.was) ? { was: tuples<Route>(r.was, ROUTE) } : {}) };
     }
+    case 'record': {
+      const now = recordState(r);
+      if (!now) return null;
+      const was = r.was && typeof r.was === 'object' ? recordState(r.was as Record<string, unknown>) : null;
+      return { kind, ...now, ...(num(r.more) && r.more > 0 ? { more: r.more } : {}), ...(was ? { was } : {}) };
+    }
+    case 'lanes': {
+      if (!str(r.t) || !Array.isArray(r.lanes)) return null;
+      const w = r.was && typeof r.was === 'object' ? (r.was as Record<string, unknown>) : undefined;
+      return {
+        kind, t: r.t, fixed: r.fixed === 1 || r.fixed === true, len: num(r.len) ? r.len : 0,
+        lanes: tuples<Lane>(r.lanes, LANE), items: tuples<LaneItem>(r.items, LANE_ITEM),
+        ...(num(r.comp) ? { comp: r.comp, segs: tuples<CompSeg>(r.segs, [num, num, num]) } : {}),
+        ...(num(r.more) && r.more > 0 ? { more: r.more } : {}),
+        ...(w && Array.isArray(w.lanes)
+          ? { was: { lanes: tuples<Lane>(w.lanes, LANE), items: tuples<LaneItem>(w.items, LANE_ITEM), fixed: w.fixed === 1 || w.fixed === true } }
+          : {}),
+      };
+    }
     case 'render': {
       if (!Array.isArray(r.groups)) return null;
       const groups = (r.groups as unknown[]).flatMap((g): RenderGroup[] => {
@@ -270,6 +363,31 @@ export function editViewOf(e: CommandEntry): EditView | null {
       const ops = tuples<[string, string]>(r.ops, [str, str]);
       if (!ops.length) return null;
       return { kind, ops, total: num(r.total) ? r.total : ops.length, ...(r.dryRun === true ? { dryRun: true } : {}) };
+    }
+    case 'modulation': {
+      const rows = Array.isArray(r.rows) ? (r.rows as unknown[]).map((x) => modRow(x)).filter((x): x is ModRow => !!x) : [];
+      return { kind, fx: str(r.fx) ? r.fx : '', rows, ...(num(r.total) ? { total: r.total } : {}) };
+    }
+    case 'pins': {
+      if (!num(r.ch) || !Array.isArray(r.in)) return null;
+      return {
+        kind, fx: str(r.fx) ? r.fx : '', ch: r.ch, in: channelLists(r.in), out: channelLists(r.out),
+        ...(strings(r.names) ? { names: r.names } : {}),
+        ...(num(r.chWas) ? { chWas: r.chWas } : {}),
+        ...(Array.isArray(r.inWas) ? { inWas: channelLists(r.inWas), outWas: channelLists(r.outWas) } : {}),
+      };
+    }
+    case 'stretch': {
+      if (!num(r.len) || r.len <= 0) return null;
+      return {
+        kind, len: r.len,
+        ...(Array.isArray(r.moves) ? { moves: (r.moves as unknown[]).filter(pair) } : {}),
+        ...(num(r.more) && r.more > 0 ? { more: r.more } : {}),
+        ...(numbers(r.grid) ? { grid: r.grid } : {}),
+        ...(pair(r.off) ? { off: r.off } : {}),
+        ...(numbers(r.marks) ? { marks: r.marks } : {}),
+        ...(numbers(r.was) ? { was: r.was } : {}),
+      };
     }
   }
 }
@@ -372,4 +490,39 @@ export function routeIds(routes: Route[]): string[] {
     seen.set(k, n);
     return `${k}#${n}`;
   });
+}
+
+/**
+ * The part of a timeline a call changed, padded so the music around it shows: half the change's length on each
+ * side, at least 8 s. Arrangement edits focus on the span they opened, cut or copied to; item edits on the item
+ * edges that moved (trimming a long item focuses on its new edge, not the whole item). Null when nothing changed
+ * or the change already fills most of the project: the drawer then shows it all.
+ */
+export function focusOf(v: Extract<EditView, { kind: 'timeline' }>, len: number): [number, number] | null {
+  const points: number[] = [];
+  const span = (s?: [number, number]) => s && points.push(s[0], s[1]);
+  span(v.span);
+  span(v.to);
+  if (!v.op) {
+    for (const lane of v.lanes ?? []) {
+      if (!lane.was) continue;
+      const { added, removed } = timelineDiff<Item>(lane.items, lane.was);
+      const edges = (items: Iterable<Item>) => [...items].flatMap((it) => [it[0], it[0] + it[1]]);
+      const now = edges(added);
+      const before = edges(removed);
+      const near = (xs: number[], x: number) => xs.some((y) => Math.abs(x - y) < 1e-3);
+      points.push(...now.filter((x) => !near(before, x)), ...before.filter((x) => !near(now, x)));
+    }
+    for (const [now, was] of [[v.regions, v.was?.regions], [v.markers, v.was?.markers], [v.tempo, v.was?.tempo]] as const) {
+      const { added, removed } = timelineDiff(now as (Region | Marker | Tempo)[], was as (Region | Marker | Tempo)[] | undefined);
+      for (const t of [...added, ...removed]) points.push(t[0]);
+    }
+  }
+  if (!points.length) return null;
+  const lo = Math.min(...points);
+  const hi = Math.max(...points);
+  const pad = Math.max(8, (hi - lo) / 2);
+  const a = Math.max(0, lo - pad);
+  const b = Math.min(len, hi + pad);
+  return b - a >= len * 0.8 ? null : [a, b];
 }

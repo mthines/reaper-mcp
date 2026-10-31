@@ -21,7 +21,8 @@ type Story = StoryObj<typeof meta>;
 
 export const ShowsAWriteAsBeforeAndAfter: Story = {
   play: async ({ canvasElement }) => {
-    const card = within(canvasElement).getByRole('region', { name: 'Change' });
+    const card = within(canvasElement).getByRole('region', { name: 'Settings' });
+    await expect(within(card).getByText('before → after')).toBeInTheDocument();
     await expect(card.textContent).toMatch(/Kick\s*Volume\s*−6\.0 dB\s*→\s*−4\.5 dB/);
   },
 };
@@ -29,7 +30,8 @@ export const ShowsAWriteAsBeforeAndAfter: Story = {
 export const ShowsAListingAsAResult: Story = {
   args: { entry: example('Mixer') },
   play: async ({ canvasElement }) => {
-    const card = within(canvasElement).getByRole('region', { name: 'Result' });
+    const card = within(canvasElement).getByRole('region', { name: 'Tracks' });
+    await expect(within(card).getByText('as it is now')).toBeInTheDocument();
     await expect(within(card).getByText('Kick')).toBeInTheDocument();
   },
 };
@@ -100,7 +102,7 @@ export const MarksAFileOffAnIntegratedLoudnessTarget: Story = {
   args: { entry: entry('render_project', { ...loud, norm: 'lufs_i' }) },
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByRole('group', { name: /^song\.wav/ })).toHaveAccessibleName(/−10\.0 LUFS-I \(off target\)/);
-    await expect(within(canvasElement).getByText(/Off target/)).toBeInTheDocument();
+    await expect(within(canvasElement).getByText(/loudness more than 1 LU from/)).toBeInTheDocument();
   },
 };
 

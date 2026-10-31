@@ -1,3 +1,5 @@
 .evSame { opacity: 0.55; }
 .evFillRest { opacity: 0.3; }
 .evFillDown { background: color-mix(in srgb, var(--accent) 55%, var(--muted)); }
+.lgUp { width: 12px; height: 3px; border-radius: 2px; background: var(--accent); }
+.lgDown { width: 12px; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--accent) 55%, var(--muted)); }

@@ -74,11 +74,17 @@ reaper-mcp/
         offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment (sidecar, no model)
         transients.ts         # detect_transients, create_transient_automation (sidecar onsets → envelope pulses, e.g. lighting)
         composition.ts        # quantize_midi, transform_midi, import_midi_file (SMF parsed in smf.ts), detect_key (key.ts; logic in reaper/mcp_midi_lib.lua)
+        mixcheck.ts           # analyze_loudness_curve, analyze_stereo_bands, measure_masking, separate_stems (sidecar)
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
+        recording.ts          # record setup (inputs, monitoring, punch), fixed lanes, comp_lanes (logic in reaper/mcp_recording_lib.lua)
+        mixing.ts             # automation mode, FX modulation + pins, monitoring FX, freeze, render in place, stretch markers, quantize_audio (logic in reaper/mcp_mixing_lib.lua)
 
     sidecar/                  # Python sidecar for semantic audio analysis (opt-in)
       server.py               # JSON-RPC server (Meta Audiobox Aesthetics, CC-BY 4.0)
+      mixcheck.py             # Loudness curve, stereo correlation per band, masking between tracks
+      separation.py           # Stem separation with Demucs (opt-in: setup-sidecar --with-separation)
       requirements.txt        # Pinned Python deps
+      requirements-separation.txt # Demucs, installed only by --with-separation
       tests/test_server.py    # pytest unit tests for the sidecar
 
   libs/protocol/              # Shared TypeScript types (compiled with tsc)
@@ -96,7 +102,8 @@ reaper-mcp/
                               # Measurement.Loudness, EditView.Section, Snapshots.SaveForm, Plugins.Details, Settings.LoreKit,
                               # Stats.Sparkline) plus its public functions; code outside a folder imports only its index
     src/lib/                  # Pure logic + small hooks: status (feed parsing), commands, log, timeline, sessions, search, format, url-state, analytics
-    src/demo/                 # ?demo's fake bridge and the fixed examples the stories draw (examples.ts, feed.ts)
+    src/demo/                 # ?demo's fake bridge and the fixed examples the stories draw (examples.ts, feed.ts);
+                              # demo-calls.ts: one demo call per logged command (DEMO_CALLS, typed by LoggedCommand)
     src/styles.css            # Root stylesheet: CSS variables (tokens), base element styles and global utility classes only
     src/styles/               # CSS modules shared across features: drawer, list (segmented tabs, chips, rows), chart (measure card, readouts, legends, bars)
                               # Every component's own styles: <Name>.module.css beside it (styles.x, joined with cx() from lib/cx.ts)
@@ -134,8 +141,10 @@ reaper-mcp/
     mcp_actions_lib.lua       # Action proxy + selection setters (pure Lua, unit-tested via wasmoon)
     mcp_project_lib.lua       # Project ops, tempo map + marker editing (pure Lua, unit-tested via wasmoon)
     mcp_envelopes_lib.lua     # Envelopes, points (dB through the envelope's scaling) and pooled automation items (pure Lua, unit-tested via wasmoon)
+    mcp_mixing_lib.lua        # Automation mode, FX modulation/pins, monitoring FX, freeze, apply FX, stretch markers + audio quantize (pure Lua, unit-tested via wasmoon)
     mcp_midi_lib.lua          # Quantize, transform, MIDI file import, pitch-class profile (pure Lua, unit-tested via wasmoon)
     mcp_items_lib.lua         # Items, takes, take FX, FX move/copy/rename, FX chains, track templates (pure Lua, unit-tested via wasmoon)
+    mcp_recording_lib.lua     # Record inputs/monitoring/modes, punch, fixed lanes and comping (pure Lua, unit-tested via wasmoon)
     mcp_arrange_lib.lua       # Copy items, insert/remove time, copy a section, normalize/reverse/glue (pure Lua, unit-tested via wasmoon)
     mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
     mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
@@ -165,7 +174,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (157 total)
+## MCP Tools (181 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -315,7 +324,7 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 
 | Tool | File | Description |
 |------|------|-------------|
-| `create_track_envelope` | `tools/envelopes.ts` | Create/show an envelope on a track (Volume, Pan, Mute, Width, Trim Volume via native actions, selection kept; or FX parameter); `created: false` when it existed |
+| `create_track_envelope` | `tools/envelopes.ts` | Create/show an envelope on a track (Volume, Pan, Mute, Width, Trim Volume via native actions, selection kept; FX parameter; or a send's Volume/Pan/Mute with `sendIndex`, starting at the send's current value); `created: false` when it existed |
 | `get_track_envelopes` | `tools/envelopes.ts` | List envelopes on a track (name, point and automation item counts, active/visible/armed); send envelopes carry `send` (index, destination track) |
 | `get_envelope_points` | `tools/envelopes.ts` | Get automation points with pagination (time, raw value, `db` on volume envelopes, shape, tension) |
 | `insert_envelope_point` | `tools/envelopes.ts` | Insert an automation point (`value` or `db`) with shape/tension |
@@ -380,6 +389,47 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `measure_track_alignment` | `tools/offline.ts` | Render two tracks over the same window (≤30 s) and cross-correlate: delay (ms, samples), polarity, correlation, and absolute `suggestedPlayOffsetMs` / `suggestedPhase` for `set_track_property` (include the track's current offset and polarity) |
 | `detect_transients` | `tools/transients.ts` | Hits in a track (rendered, ≤900 s) or an audio file (MP3 too; `filePosition` maps it to project time): time, strength 0..1, dominant band (low/mid/high), peakDb, plus tempo, per-band counts and per-section density; filter by `band`/`bands`/`sensitivity`/`minGapMs`/`minStrength`, paginated |
 | `create_transient_automation` | `tools/transients.ts` | Detect, then write one pulse per hit (attack, hold, exponential/linear decay, scaled by strength) onto an existing envelope — e.g. lighting that flashes on the kicks. Replaces the range's points (REAPER keeps an envelope's last point on a range delete; it becomes the first pulse point), `dryRun` returns the points. TS-composed over `remove_envelope_points` / `insert_envelope_points` |
+
+### Recording & Comping (6)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `get_record_setup` | `tools/recording.ts` | Global record mode (normal / time-selection or item auto-punch) with punch range and record path; armed tracks (or `all`, max 64) with input label, monitoring, record mode; the audio and MIDI inputs |
+| `set_track_record` | `tools/recording.ts` | Arm, record input (`audio` channel/stereo, `midi` device/channel, `none`), monitoring (off/on/auto), record mode, monitor-items for up to 64 tracks; all checked first, one undo point |
+| `set_record_mode` | `tools/recording.ts` | Global record mode, punch range (time-selection mode) and record path |
+| `get_track_lanes` | `tools/recording.ts` | Fixed lanes: on/off, each lane's name, playing state (exclusive/layered/off) and items (100 per lane) |
+| `set_track_lanes` | `tools/recording.ts` | Fixed lanes on/off, lane count, names, which lane plays alone or which lanes play layered |
+| `comp_lanes` | `tools/recording.ts` | Comp from lanes: `{start, end, lane}` ranges (max 200, no overlaps) copied onto a new exclusive comp lane with crossfades; a range a lane has no audio for is refused with the gap |
+
+### Mixing Depth (14)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `set_automation_mode` | `tools/mixing.ts` | Tracks' automation mode (trim, read, touch, write, latch, latch_preview) and/or the global override (`none`/`bypass`); returns before and after |
+| `get_fx_param_modulation` | `tools/mixing.ts` | One parameter's modulation (baseline, LFO, audio control signal, link), or every modulated parameter of an FX |
+| `set_fx_param_modulation` | `tools/mixing.ts` | LFO (shape, speed, strength, phase, tempo sync), audio follower (channel, attack/release, dB range) and/or parameter link; only given fields change, all validated first |
+| `get_fx_pins` | `tools/mixing.ts` | Each input/output pin's track channels (1-based) and the track's channel count |
+| `set_fx_pins` | `tools/mixing.ts` | Connect pins to channels (e.g. a sidechain on 3/4); widens the track to the highest channel used, never narrows it |
+| `list_monitoring_fx` | `tools/mixing.ts` | The monitoring FX chain (heard in the monitors, never rendered; global, not in the project) |
+| `add_monitoring_fx` | `tools/mixing.ts` | Add a monitoring FX, with optional normalized parameters |
+| `set_monitoring_fx` | `tools/mixing.ts` | Bypass, offline or set parameters of a monitoring FX |
+| `remove_monitoring_fx` | `tools/mixing.ts` | Remove a monitoring FX |
+| `freeze_tracks` | `tools/mixing.ts` | Freeze tracks to stereo/mono/multichannel (native actions 41223/40901/40877), selection kept; not the master |
+| `unfreeze_tracks` | `tools/mixing.ts` | Restore one freeze layer (41644); refuses a track that is not frozen |
+| `apply_fx_to_items` | `tools/mixing.ts` | Render in place: track + take FX to a new active take (40209/40361/41993); the old take stays |
+| `add_stretch_markers` | `tools/mixing.ts` | Many stretch markers on an audio item in one call and one undo point |
+| `quantize_audio` | `tools/mixing.ts` | Hits from the sidecar (`transients`), then stretch markers moved toward the grid (strength, window, swing); returns the timing offset before/after (TS-composed over `get_media_item_properties` + the `quantize_audio` bridge command) |
+
+### Mix Checks (4) — Requires Python Sidecar
+
+Each takes a track (rendered post-FX, `-1` = master) or a file `path`; `measure_masking` takes 2-8 tracks.
+
+| Tool | File | Description |
+|------|------|-------------|
+| `analyze_loudness_curve` | `tools/mixcheck.ts` | Short-term and momentary LUFS over time (≤240 points each, every point its slice's loudest), integrated, true peak, LRA, PLR, loudest/quietest 3 s windows, and with `targetLufs` the spans over target + `toleranceLu`; times in project time for a track, file seconds for a `path` |
+| `analyze_stereo_bands` | `tools/mixcheck.ts` | Correlation per band (low <120 Hz, lowMid, mid, high 2-8 kHz, air): overall, worst, out-of-phase share, side-to-mid dB, a 60-point series; flags a wide/out-of-phase low end or any band below 0 |
+| `measure_masking` | `tools/mixcheck.ts` | Renders 2-8 tracks over the same range (≤60 s) and scores each pair per K-weighted third-octave band (both loud there and within ~6 dB); pairs with their worst bands, top conflicts with which track to cut (the one the band matters less to) |
+| `separate_stems` | `tools/mixcheck.ts` | Demucs (`htdemucs` 4 stems, `htdemucs_6s` adds guitar/piano) to 32-bit float WAVs in `outDir` (default `<project media>/Stems/<name>-<time>`), ≤600 s; `insertTracks` adds them under a new, muted folder (they sum back to the source) in one undo point via the internal `insert_stem_tracks` (after a folder source's last child, lined up with the range). Needs `setup-sidecar --with-separation` (pre-downloads `htdemucs`; the first `htdemucs_6s` call downloads ~80 MB) |
 
 ### Plan Executor (1)
 
@@ -456,11 +506,11 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 157 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 181 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
-Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`, `takes`, `fx_files`, `knowledge`
+Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`, `takes`, `fx_files`, `knowledge`, `recording`
 
 ### MIDI Editing Concepts
 
@@ -532,11 +582,28 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, 
 - **Files stay inside REAPER's resource folder**: `save_fx_chain` / `save_track_template` take a name (subfolders allowed) under `FXChains/` or `TrackTemplates/`; absolute paths, drive letters and `..` are refused, and an existing file is only replaced with `overwrite: true`. Loads also accept an absolute path with the right extension.
 - **Chunks, like `graft_fxchain`**: loading a chain or inserting a template edits track state chunks with `mcp_plan_lib.lua`'s helpers, regenerating FXIDs (and TRACKID/item GUIDs for templates). A saved template drops receives (`AUXRECV`) and folder state (`ISBUS`), which depend on the surrounding tracks.
 
+### Recording & Comping Concepts
+
+- **Logic lives in `reaper/mcp_recording_lib.lua`** (pure Lua over an injected API, unit-tested via wasmoon in `recording-lib.test.ts`).
+- **Inputs** travel as objects, never raw `I_RECINPUT` numbers: `{kind:"audio", channel (1-based), stereo}`, `{kind:"midi", device ("all", "vkb" or an index), channel (0 = all)}`, `{kind:"none"}`. An audio channel the device does not have is refused; with no audio device open (0 inputs) it is a warning instead. Answers carry a label ("In 3/4", "MIDI: all MIDI inputs, all channels").
+- **Punch**: `set_record_mode` `time_selection` records only inside the time selection (`punchStart`/`punchEnd` set it); `selected_items` punches on the selected items. Global toggles 40252/40076/40253.
+- **Fixed lanes** (REAPER 7): `C_LANEPLAYS` 1 = exclusive (the others go silent), 2 = layered. Turning lanes off puts every item on one lane, all playing (warned; `undo_project` restores). REAPER can drop the names of empty lanes, so name lanes once takes are on them.
+- **Comping** copies item chunks (GUIDs stripped), trims each copy to its range (take start offset moved by the play rate), extends the left part by the crossfade as far as its source reaches, and keeps the source fades at real item edges. Source lanes stay untouched and silent. A failure after the first write undoes the whole comp (`reaper.comp.undone` log).
+
+### Mixing Depth Concepts
+
+- **Logic lives in `reaper/mcp_mixing_lib.lua`** (pure Lua over an injected API, unit-tested via wasmoon in `mixing-lib.test.ts`); the bridge handlers decode the nested JSON params and pass `reaper` in.
+- **Modulation** goes through `TrackFX_Get/SetNamedConfigParm` keys `param.N.{mod,lfo,acs,plink}.*` (REAPER 6.37+). Reads fail until a parameter has modulation; an unknown key's write fails, so every write is checked and the whole edit is one undo point (seen live: undo removes it).
+- **Pins** are bit masks per pin (`TrackFX_Get/SetPinMappings`, low and high 32 channels). ReaComp has 4 inputs; pins 2/3 (0-based) are its sidechain and default to channels 3/4.
+- **Freeze and apply FX are native actions on the selection**: the lib selects the targets, runs the action, then restores the selection. Both block REAPER while they render (`LONG_RUNNING`). A freeze adds a `<FREEZE` block to the track chunk per layer; that is how `unfreeze_tracks` knows a track is frozen.
+- **Quantize**: hits arrive in source seconds and map to item positions as `(source - startOffset) / playRate`. Each hit moves toward its nearest grid line (with swing) when within `window × (1 + swing) × grid / 2` (as quantize_midi); hits at the item edges, crossing a neighbour or landing on a line another hit took are skipped. Existing stretch markers are replaced, and anchors at 0 and the item end keep its length. A stretch marker's position is take time at play rate 1 (seen live: source = start offset + position), so the lib multiplies item seconds by the play rate on the way in and divides on the way out; the tools speak item seconds. No hit inside the item is refused, so the item's own markers are never wiped.
+- **Monitoring FX** live on the master at index `0x1000000 + i` (`TrackFX_GetRecCount`). They are global to REAPER, not saved with the project.
+
 ### Envelope / Automation Concepts
 
 - **Creating envelopes**: Use `create_track_envelope` before adding points. Built-in envelopes use `envelopeName` ("Volume", "Pan", "Mute", "Width", "Trim Volume"). FX parameter envelopes use `fxIndex` + `paramIndex`.
 - **Logic lives in `reaper/mcp_envelopes_lib.lua`** (pure Lua over an injected API, unit-tested via wasmoon in `envelopes-lib.test.ts`); the bridge handlers only pass `reaper` in.
-- **Envelope values**: give `db` on volume envelopes (Volume, Trim Volume, Send Volume). REAPER's own Volume envelope is fader-scaled (716.2 = 0 dB, not 1.0); `db` is converted with the envelope's scaling mode (`ScaleToEnvelopeMode`). Raw `value`: Pan -1.0 to 1.0, Mute 0 or 1, FX parameters 0..1.
+- **Envelope values**: give `db` on volume envelopes (Volume, Trim Volume, Send Volume). REAPER's own Volume envelope is fader-scaled (716.2 = 0 dB, not 1.0); `db` is converted with the envelope's scaling mode (`ScaleToEnvelopeMode`). Raw `value`: Pan -1.0 to 1.0 in REAPER's envelope sign (positive is left: a track or send panned 50% left starts its pan envelope at +0.5), Mute 0 or 1, FX parameters 0..1.
 - **Automation items**: instances of one pool share their points, so editing one edits every instance; pool ids are project-wide, so pools reach across tracks. Point calls use the item index with `0x10000000` (one loop iteration = the pool's own points), except `SetEnvelopePointEx`, which ignores a flagged index (REAPER 7.40) and takes the plain one. A new pool's `D_POOL_QNLEN` is set to the item's length, since REAPER can make it shorter and drops pool points past it without an error; a point at the item end is kept 1 ms inside, and points outside an item are refused.
 - **Section levels** (opinionated): pooled automation items on the Volume envelope, one pool per section type, never item gain (`knowledge/workflows/section-levels.md`).
 - **Transient-driven automation** (lighting): `create_transient_automation` from a track render (a warped item's file is read without its stretch markers), onto a new muted track's plugin envelope (`knowledge/workflows/transient-lighting.md`).
@@ -598,7 +665,7 @@ pnpm nx affected --target=build     # Build only affected by changes
 
 ## Adding New MCP Tools
 
-To add a new tool, touch these 6 places:
+To add a new tool, touch these 8 places:
 
 1. **`libs/protocol/src/commands.ts`** -- Add command type to `CommandType` union, add params interface
 2. **`libs/protocol/src/responses.ts`** -- Add response data interface if needed
@@ -606,6 +673,8 @@ To add a new tool, touch these 6 places:
 4. **`apps/reaper-mcp-server/src/cli.ts`** -- Add tool name to `MCP_TOOL_NAMES` array (used by `ensureClaudeSettings()` to auto-allow tools)
 5. **`apps/reaper-mcp-server/src/tools/categories.ts`** -- Add tool name to a category in `TOOL_CATEGORIES` (the bridge-coverage test fails on an uncategorized tool)
 6. **`reaper/mcp_bridge.lua`** -- Add handler function in the `handlers` table
+7. **`apps/bridge-ui/src/demo/demo-calls.ts`** -- Add the command to `DEMO_CALLS`, so `?demo` logs it: the params an agent would send, or `'example'` when an example in `src/demo/examples.ts` draws it (a measurement or edit view). The map is a `Record<LoggedCommand, …>`, so typecheck fails until it is there. A tool the server composes and logs itself with `logToolResult()` goes in `LoggedTool` (`libs/protocol/src/commands.ts`) first
+8. **`apps/bridge-ui/src/features/log/tools.ts`** -- Add the command to `TOOLS`: a plain `title` ("Delete a track") and a `did` sentence ("deleted the track “Old Vox”") that the bridge page's drawer leads with. Also a `Record<LoggedCommand, …>`. How the drawer shows a call (summary, card, legend, zoom) is in `.claude/rules/bridge-drawer.md`
 
 **Important:** Always use `z.coerce.number()` instead of `z.number()` for numeric parameters. MCP clients may pass numbers as strings (e.g. `"39"` instead of `39`), and `z.coerce` handles the conversion automatically.
 
@@ -673,10 +742,11 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 
 - **Opt-in**: The sidecar is installed separately via `setup-sidecar`. `pnpm install` and `pnpm nx build` never touch Python.
 - **Lazy spawn**: The sidecar process spawns on the first sidecar tool call, not at server startup; the aesthetics model loads only on the first `analyze` request.
-- **JSON-RPC methods**: `analyze` (aesthetics, with optional `normalizeLufs`), `analyze_audio` (loudness/spectrum/reference, `sidecar/analysis.py`), `align` (cross-correlation delay + polarity), `transients` (per-band spectral-flux onsets: low <150 Hz, mid, high >4 kHz, each band scaled to its own 99th percentile so a kick counts as much as a hat; dominant band by mean per-bin log rise; tempo from the onset autocorrelation).
+- **JSON-RPC methods**: `analyze` (aesthetics, with optional `normalizeLufs`), `analyze_audio` (loudness/spectrum/reference, `sidecar/analysis.py`), `align` (cross-correlation delay + polarity), `loudness_curve` / `stereo_bands` / `masking` (`sidecar/mixcheck.py`), `separate` (Demucs, `sidecar/separation.py`: model loaded once per process, CUDA/MPS/CPU with a CPU fallback, `REAPER_MCP_SEPARATION_DEVICE` overrides; a separation call gets its own timeout, ~90 s + 3 s per audio second), `transients` (per-band spectral-flux onsets: low <150 Hz, mid, high >4 kHz, each band scaled to its own 99th percentile so a kick counts as much as a hat; dominant band by mean per-bin log rise; tempo from the onset autocorrelation).
 - **Audio loading**: always `soundfile` (`analysis.load_audio`). torchaudio 2.9+ removed `info()` and moved `load()` to torchcodec, so never call `torchaudio.load`/`torchaudio.info`; `torchaudio.functional` (filters, resampling) is fine.
 - **Loudness**: `analysis.py` implements ITU-R BS.1770-4 (K-weighting, 400 ms blocks, -70/-10 gates, channels summed) and EBU 3342 LRA; `tests/test_analysis.py` checks them against the EBU 3341/3342 reference signals.
 - **Lifecycle**: Sidecar receives SIGTERM when the MCP server receives SIGINT/SIGTERM. Managed via `getSidecarClient().shutdown()` in `main.ts`.
+- **One request at a time**: `sidecar.ts` queues requests, so a timeout counts only that request's work; one that waited `QUEUE_WAIT_MS` (5 min) behind an earlier request (a long separation) is refused as busy (`error.type=busy`) and the sidecar keeps running.
 - **Auto-restart**: If the sidecar crashes, one restart is attempted automatically. If restart fails, the tool returns a clear error.
 - **Script refresh**: every sidecar spawn first copies the build's `server.py` and modules over the installed ones, so an update (which never re-runs `setup-sidecar`) cannot leave an old `server.py` without the new methods.
 - **Install location**: Venv at `~/.reaper-mcp/sidecar-venv/`, scripts at `~/.reaper-mcp/sidecar/` (`server.py` plus `SIDECAR_MODULES` in `setup-sidecar.ts`, e.g. `analysis.py` — add a new module there).
@@ -694,6 +764,9 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 | `apps/reaper-mcp-server/src/tools/aesthetics.ts` | `analyze_track_aesthetics` tool registration |
 | `apps/reaper-mcp-server/src/tools/offline.ts` | `analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment` |
 | `apps/reaper-mcp-server/src/tools/transients.ts` | `detect_transients`, `create_transient_automation` (pulse generation in `pulsePoints()`) |
+| `apps/reaper-mcp-server/sidecar/mixcheck.py` | Loudness curve, per-band stereo correlation, third-octave masking (numpy only) |
+| `apps/reaper-mcp-server/sidecar/separation.py` | Demucs stem separation (soundfile I/O, never demucs's torchaudio I/O) |
+| `apps/reaper-mcp-server/src/tools/mixcheck.ts` | `analyze_loudness_curve`, `analyze_stereo_bands`, `measure_masking`, `separate_stems` |
 
 ### Render Pipeline
 
@@ -731,10 +804,12 @@ REAPER's web interface by adding `csurf_N=HTTP 0 8099 '' 'mcp_bridge.html' 0 ''`
 `REAPER_WEB_PORT`; an existing HTTP surface is kept). It only edits `reaper.ini` while REAPER is closed — REAPER
 rewrites it from memory on exit. On start the bridge opens the page as a small Chromium `--app` window (falls back to
 the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript console when the web interface is missing.
-`?demo` previews the page with fake data.
+`?demo` previews the page with fake data: a fake bridge whose log holds a call of every command (`DEMO_CALLS`) and every
+example, with new calls drawn from them.
 
 **Developing the page or the bridge: run `pnpm dev:bridge`** (`apps/bridge-ui/dev.mjs`) and open
-`http://localhost:8098/mcp_bridge.html`, never REAPER's own `:8099` page.
+`http://localhost:8098/mcp_bridge.html`, never REAPER's own `:8099` page. Without REAPER, open
+`http://localhost:8098/mcp_bridge.html?demo` (every tool and view in the log). It prints both URLs on start.
 
 - It rebuilds the page on every save (unminified, inline sourcemap) and reloads each open tab over `/__dev/events`.
 - It proxies `/_/*` to REAPER over one keep-alive socket (`http.Agent`, `maxSockets: 1`) and never aborts an upstream
@@ -783,7 +858,8 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
 - URL state: navigation state lives in the query string via `useUrlState(key, default, { validate })` in
   `src/lib/url-state.ts` (a History API port of LoreKit web's hook: JSON values, a value equal to the default is dropped,
   changes in one tick become one history entry), so Back/Forward step through it and a link or reload reopens it.
-  Params: `view`, `range`, `span` (dragged timeline span), `filter` (all/errors), `q` (search; replaces, never pushes),
+  Params: `view`, `range`, `span` (dragged timeline span), `filter` (all/errors), `q` (search; replaces, never pushes, written to the URL 300 ms after typing pauses via
+  `debounceMs` while the page updates at once; each view keeps its own search, so switching views never carries one over),
   `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, and on Plugins `coverage`, `inProject`, `plugin`
   (open plugin by FX name). Opening, closing or switching a drawer by click (a row, "Previous call") pushes; ↑/↓ between rows replaces. `view` and `range` default
   to the last pick in localStorage, so the bridge's bare `mcp_bridge.html` opens where you left off. Use it for any new
@@ -802,10 +878,13 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   its headline value and change in a "Previous call" line. Add a measuring command in `RESULT_FIELDS`, `MEASUREMENTS`
   (`src/lib/commands.ts`), a `Measurement` kind and an example in `src/demo/examples.ts` together.
   Sidecar tools the server composes itself (`analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment`,
-  `analyze_track_aesthetics`) never pass through a bridge handler, so the server logs each result with the internal
+  `analyze_track_aesthetics`, and the mix checks) never pass through a bridge handler, so the server logs each result with the internal
   `_log_result` command (`apps/reaper-mcp-server/src/tool-log.ts`, fire-and-forget; `r` travels as a JSON string), which the bridge records as
   an entry for that tool (`record_tool_result()`). Their compact `r` is built by `offlineSummary()` /
-  `alignmentSummary()` / `aestheticsSummary()` and drawn as the `offline` / `alignment` / `aesthetics` measurements.
+  `alignmentSummary()` / `aestheticsSummary()` and drawn as the `offline` / `alignment` / `aesthetics` measurements;
+  the mix checks by `curveSummary()` / `stereoBandsSummary()` / `maskingSummary()` / `stemsSummary()` as `curve` (the
+  short-term line against the target, spans over it shaded), `stereo` (correlation per band on −1…+1), `masking` (a
+  pairs × bands heat map) and `stems` (each stem's LUFS, speed, inserted tracks).
 - Edit views: writes and listings also keep an `r` (`M.summary` in `mcp_edit_views_lib.lua`), drawn by
   `src/features/edit-views/` (`EditViews.tsx`, one view per kind in `views/`) from `editViewOf()` (`edit-views.ts`). A write reads the state it touches before its handler
   runs (`M.before`) and again after, so the drawer shows before → after: track and FX parameter changes (the
@@ -822,7 +901,9 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   ceiling, length; versions grouped with their muted tracks; format, source and target as readouts); and arrangement
   edits (`op`, the `span` they opened, cut or copied from
   hatched or outlined, where they copied `to`, a lane for up to 4 touched tracks plus `moreTracks`, normalized items
-  with their gain as a 7th item field). List diffs share `listDiff()` in `edit-views.ts`. Lists are capped so
+  with their gain as a 7th item field); FX modulation (LFO path, audio-follower band, link, the old baseline ghosted), FX pins as a
+  pin × channel grid (new connections marked, track widening shown), stretch markers and `quantize_audio` (grid lines, hits
+  before dashed, offset before → after), freeze / automation mode / apply FX as change rows, record setup as one row per armed track (input, monitoring, record mode; the old value struck through, ≤32 plus `more`) under the global mode and punch range, and fixed lanes as one row per lane (≤32 plus `more`) with which lanes play and, for `comp_lanes`, each comp part tinted by the take it came from. List diffs share `listDiff()` in `edit-views.ts`. Lists are capped so
   an entry stays a few KB. Add a command in `M.summary`, `KIND_OF` (`edit-views.ts`) and an example in `src/demo/examples.ts` together;
   behaviour tests run the real bridge in wasmoon (`bridge-status.test.ts`, "edit views in the log").
 - Short windows (≤ 640px tall, an app window docked beside REAPER): the log is the page. Stats, timeline and footer
@@ -982,6 +1063,12 @@ ESLint enforces dependency rules via `@nx/enforce-module-boundaries`:
   `bridge-*.test.ts` (the real Lua libraries and bridge running in wasmoon against a fake `reaper` API); in the
   bridge page, `*.test.stories.tsx` play functions (what a viewer sees and does, run by `src/test/stories.test.tsx`)
   and `*.test.ts` next to the pure modules in `src/lib/` and `src/features/*/` (bridge and LoreKit payloads, URLs)
+- **Bridge page in a real browser**: `node apps/bridge-ui/e2e/drawer-widths.mjs` (after `pnpm nx build bridge-ui`) opens every
+  command in `e2e/fixtures/status.json`, a status feed recorded from the real bridge, in the built page at the narrowest (320 px),
+  default and widest drawer, and fails on anything drawn outside the drawer or a console error. CI runs it. Add an entry
+  to the fixture when you add a view (record it by running the commands through the wasmoon bridge and saving `MCPBridge/status`).
+- **Sidecar tests in CI**: the `sidecar` job runs `test_analysis.py` and `test_mixcheck.py` with CPU torch (Demucs and
+  the aesthetics model are not installed there).
 - **Validate changes with tests**: Always write small, simple, and effective tests to validate your changes. Prefer focused tests that check one behaviour well. If modifying existing code, add or update tests to cover the change before considering it complete.
 
 ## Running the MCP Server
@@ -1016,7 +1103,7 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 |---------|-------------|
 | `serve` (default) | Start MCP server in stdio mode for Claude Code |
 | `setup` | Install Lua bridge + JSFX analyzers into REAPER |
-| `setup-sidecar` | Install Python sidecar for perceptual audio analysis (opt-in, ~831 MB). Requires Python 3.10+. Installs venv at `~/.reaper-mcp/sidecar-venv/`, downloads Audiobox Aesthetics weights. |
+| `setup-sidecar` | Install Python sidecar for perceptual audio analysis (opt-in, ~831 MB). Requires Python 3.10+. Installs venv at `~/.reaper-mcp/sidecar-venv/`, downloads Audiobox Aesthetics weights. `--with-separation` also installs Demucs and its htdemucs model (~80 MB) for `separate_stems`; on an existing install only that step runs. |
 | `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` that runs the clone's built `main.js` (copy-free) |
 | `doctor` | Verify all components are configured correctly (includes 4 sidecar sub-checks) |
 | `status` | Check if Lua bridge is running in REAPER |

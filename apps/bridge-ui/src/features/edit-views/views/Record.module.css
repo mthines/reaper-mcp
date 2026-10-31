@@ -1,0 +1,21 @@
+/* Record setup: arm dot, name, input, monitoring, mode; changed fields show what they were struck through */
+.rec { display: grid; grid-template-columns: 10px minmax(0, 96px) minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 4px 0; font-size: 12px; }
+.rec + .rec { border-top: 1px solid var(--line); }
+.off .name { color: var(--muted); }
+.arm { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--faint); }
+.arm.on { background: var(--bad); border-color: var(--bad); }
+.field { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.input { color: var(--text); font-family: var(--mono); }
+.field.changed { display: flex; flex-direction: column; line-height: 1.25; }
+.now, .was { overflow: hidden; text-overflow: ellipsis; }
+.was { color: var(--faint); font-size: 10px; }
+.changed .now { color: var(--text); border-bottom: 1.5px solid var(--accent); align-self: flex-start; max-width: 100%; }
+.arm.changed { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+/* Five columns need room: under ~420px the input and record mode go on lines of their own */
+@container (max-width: 420px) {
+  .rec { grid-template-columns: 10px minmax(0, 1fr) auto; row-gap: 2px; }
+  .input { grid-column: 2 / 4; grid-row: 2; }
+  .mode { grid-column: 2 / 4; grid-row: 3; }
+}
+.lgArmed { width: 9px; height: 9px; border-radius: 50% !important; background: var(--bad); }
+.lgUnarmed { width: 9px; height: 9px; border-radius: 50% !important; border: 1.5px solid var(--faint); box-sizing: border-box; }

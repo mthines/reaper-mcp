@@ -1,6 +1,6 @@
 import { lufsPct } from './Loudness.js';
 import { Readout, Scale } from './Readout.js';
-import { fmt, pct, tpWord, tpZone } from './format.js';
+import { fmt, pct, tpWord, tpZone, secs } from './format.js';
 import type { Measurement } from '../../lib/commands.js';
 import { cx } from '../../lib/cx.js';
 import loudnessStyles from './Loudness.module.css';
@@ -9,7 +9,6 @@ import styles from './OfflineAnalysis.module.css';
 
 const BAND_NAMES = ['Sub', 'Bass', 'Low mid', 'Mid', 'Upper mid', 'Presence', 'Brilliance'];
 const BAND_RANGES = ['20–60 Hz', '60–250 Hz', '250–500 Hz', '500 Hz–2 kHz', '2–4 kHz', '4–6 kHz', '6–20 kHz'];
-const secs = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 /** Offline loudness of a render or a file: the integrated number first, then how it moves and where the energy sits */
 export function Offline({ m, was }: { m: Extract<Measurement, { kind: 'offline' }>; was?: number }) {
@@ -33,9 +32,14 @@ export function Offline({ m, was }: { m: Extract<Measurement, { kind: 'offline' 
         {m.lufs !== undefined && <span className={loudnessStyles.lufsNeedle} style={{ left: `${lufsPct(m.lufs)}%` }} />}
       </div>
       <Scale ticks={[-40, -30, -20, -10, 0]} min={-40} max={0} />
+      <div className={chartStyles.measureLegend}>
+        <span><i className={chartStyles.lgNeedle} /> Integrated</span>
+        {m.ref?.lufs !== undefined && <span><i className={styles.lgRef} /> Reference</span>}
+        {was !== undefined && was > -149 && <span><i className={chartStyles.lgWas} /> Previous call</span>}
+      </div>
       <div className={chartStyles.measureReadouts}>
-        <Readout label="Range (LRA)" value={m.lra === undefined ? '–' : m.lra.toFixed(1)} unit="LU" />
-        <Readout label="True peak" value={fmt(m.tp)} unit="dBTP" zone={tpZone(m.tp)} word={tpWord(m.tp)} />
+        <Readout label="Range" value={m.lra === undefined ? '–' : m.lra.toFixed(1)} unit="LU" title="Loudness range (LRA): how much the loudness moves" />
+        <Readout label="Peak" value={fmt(m.tp)} unit="dBTP" zone={tpZone(m.tp)} word={tpWord(m.tp)} />
         <Readout label="Crest" value={m.crest === undefined ? '–' : m.crest.toFixed(1)} unit="dB" />
       </div>
       {m.sections.length > 1 && (
@@ -51,6 +55,11 @@ export function Offline({ m, was }: { m: Extract<Measurement, { kind: 'offline' 
             <span>{secs(m.sections[0][0])}</span>
             <span>{secs(m.sections[m.sections.length - 1][1])}</span>
           </div>
+          <div className={chartStyles.measureLegend}>
+            <span><i className={styles.lgSection} /> Section</span>
+            {m.sections.some((s) => s[2] > (m.lufs ?? 0) + 3) && <span><i className={styles.lgSectionLoud} /> Over 3 LU above integrated</span>}
+            {m.lufs !== undefined && <span><i className={styles.lgIntegrated} /> Integrated</span>}
+          </div>
         </div>
       )}
       {m.bands.some((b) => b !== null) && (
@@ -65,7 +74,7 @@ export function Offline({ m, was }: { m: Extract<Measurement, { kind: 'offline' 
                   <span className={chartStyles.evName}>{BAND_NAMES[i]}</span>
                   <span className={cx(chartStyles.evVal, 'mono')}>
                     <b>{b === null ? '–' : fmt(b)}</b>
-                    {d !== null && <span className={off ? chartStyles.evWord : ''}> · {fmt(d)} vs ref</span>}
+                    {d !== null && <span className={off ? chartStyles.evWord : ''}> · {fmt(d)} vs reference</span>}
                   </span>
                   <span className={chartStyles.evBar}>
                     <span className={chartStyles.evFill} style={{ left: 0, width: `${b === null ? 0 : pct(b, -40, 0)}%` }} />
@@ -77,7 +86,7 @@ export function Offline({ m, was }: { m: Extract<Measurement, { kind: 'offline' 
           </div>
           {hasRef && (
             <div className={chartStyles.measureLegend}>
-              <span><i className={chartStyles.lgLine} /> This audio</span>
+              <span><i className={chartStyles.lgRange} /> This audio</span>
               <span><i className={chartStyles.lgWas} /> Reference</span>
             </div>
           )}

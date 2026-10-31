@@ -1,0 +1,11 @@
+/* Stretch markers: grid lines, the hits before (dashed) and where they moved to */
+.stretch { display: block; width: 100%; height: 56px; }
+.item { fill: var(--panel-2); stroke: var(--line-2); stroke-width: 1; }
+.grid { stroke: var(--line-2); stroke-width: 1; }
+.was { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 2; }
+.move { stroke: var(--accent); stroke-width: 1; opacity: 0.6; }
+.mark { stroke: var(--accent); stroke-width: 1.6; }
+.kept { stroke: var(--muted); stroke-width: 1.4; }
+.lgGrid { width: 2px; height: 10px; background: var(--line-2); }
+.lgKept { width: 2px; height: 10px; background: var(--muted); }
+.lgMove { width: 12px; height: 2px; background: var(--accent); opacity: 0.6; }

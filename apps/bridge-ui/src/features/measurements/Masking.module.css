@@ -1,0 +1,21 @@
+/* Masking: pairs × third-octave bands as a heat map */
+.mask { display: flex; flex-direction: column; gap: 3px; }
+.row { display: grid; grid-template-columns: minmax(64px, 30%) minmax(0, 1fr) 32px; gap: 8px; align-items: center; }
+.name { font-size: 11.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cells { display: grid; gap: 1px; height: 14px; }
+.cells > span { border-radius: 1px; background: var(--accent); }
+.cells > span.hot { background: var(--warn); }
+.score { font-size: 11px; color: var(--muted); text-align: right; }
+.axis { height: 14px; }
+.marks { position: relative; height: 14px; }
+.marks > span { position: absolute; transform: translateX(-50%); font: 10px var(--mono); color: var(--faint); }
+.marks > span.markEnd { right: 0; transform: none; }
+@container (max-width: 300px) {
+  .mask { gap: 8px; }
+  .row { grid-template-columns: minmax(0, 1fr) 30px; row-gap: 2px; }
+  .name { grid-column: 1 / -1; }
+  .axis .name { display: none; }
+}
+.lgFaint { width: 10px; height: 10px; background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.lgStrong { width: 10px; height: 10px; background: var(--accent); }
+.lgHot { width: 10px; height: 10px; background: var(--warn); }

@@ -35,6 +35,8 @@ const VENV_PYTHON = join(SIDECAR_VENV_PATH, VENV_BIN, VENV_PYTHON_NAME);
  * Values ≤ 0 or non-numeric are ignored and the default is used. */
 const _rawTimeout = Number(process.env['REAPER_MCP_SIDECAR_TIMEOUT_MS']);
 const ANALYZE_TIMEOUT_MS = Number.isFinite(_rawTimeout) && _rawTimeout > 0 ? _rawTimeout : 60_000;
+/** Longest a request waits behind earlier ones (a long separation) before it is refused as busy. */
+export const QUEUE_WAIT_MS = 5 * 60_000;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -93,6 +95,39 @@ export interface TransientsParams {
   minGapMs?: number;
 }
 
+/** Params of the sidecar's loudness_curve method. */
+export interface LoudnessCurveParams {
+  path: string;
+  startTime?: number;
+  endTime?: number;
+  targetLufs?: number;
+  toleranceLu?: number;
+}
+
+/** Params of the sidecar's stereo_bands method. */
+export interface StereoBandsParams {
+  path: string;
+  startTime?: number;
+  endTime?: number;
+}
+
+/** Params of the sidecar's masking method: renders of the same range, 2-8 of them. */
+export interface MaskingParams {
+  tracks: { name: string; path: string }[];
+}
+
+/** Params of the sidecar's separate method (Demucs, opt-in). */
+export interface SeparateParams {
+  path: string;
+  outDir: string;
+  model?: 'htdemucs' | 'htdemucs_6s';
+  stems?: string[];
+  startTime?: number;
+  endTime?: number;
+  /** Refuse audio longer than this (seconds) before loading the model */
+  maxSeconds?: number;
+}
+
 export interface SidecarClient {
   /** True if the sidecar is installed (script + venv exist). Does NOT guarantee it's running. */
   isAvailable(): boolean;
@@ -104,6 +139,16 @@ export interface SidecarClient {
   align(params: AlignParams): Promise<Record<string, unknown>>;
   /** Transient (onset) times with strength, dominant band and a tempo estimate. */
   transients(params: TransientsParams): Promise<Record<string, unknown>>;
+  /** Short-term and momentary loudness over time, loudest/quietest windows, spans over a target. */
+  loudnessCurve(params: LoudnessCurveParams): Promise<Record<string, unknown>>;
+  /** Stereo correlation and width per frequency band. */
+  stereoBands(params: StereoBandsParams): Promise<Record<string, unknown>>;
+  /** Where tracks compete for the same third-octave bands. */
+  masking(params: MaskingParams): Promise<Record<string, unknown>>;
+  /** Whether Demucs is installed (setup-sidecar --with-separation), with the install hint. */
+  separationStatus(): Promise<{ installed: boolean; message: string }>;
+  /** Split a file into stems (Demucs). Runs for minutes on long audio: pass a timeout. */
+  separate(params: SeparateParams, timeoutMs: number): Promise<Record<string, unknown>>;
   /** 12 pitch-class energies, C first, normalized so the largest is 1. */
   chroma(params: ChromaParams): Promise<{ chroma: number[]; durationSeconds: number; frames: number }>;
   /** Terminate the sidecar process. Safe to call even if not running. */
@@ -135,6 +180,13 @@ class SidecarClientImpl implements SidecarClient {
   private restartAttempted = false;
   /** Cached spawn promise — prevents double-spawn on concurrent cold-start calls. */
   private spawnPromise: Promise<void> | null = null;
+  /**
+   * The sidecar answers one request at a time, so requests are sent one at a time too:
+   * a request's timeout then counts its own work, never a long separation queued ahead of it.
+   * Waiting is capped by QUEUE_WAIT_MS, so a quick call never hangs for a whole separation.
+   */
+  private queue: Promise<unknown> = Promise.resolve();
+  private activeMethod = '';
 
   isAvailable(): boolean {
     return existsSync(SIDECAR_SCRIPT_PATH) && existsSync(VENV_PYTHON);
@@ -158,6 +210,26 @@ class SidecarClientImpl implements SidecarClient {
     return this.call('transients', { ...params }) as Promise<Record<string, unknown>>;
   }
 
+  loudnessCurve(params: LoudnessCurveParams): Promise<Record<string, unknown>> {
+    return this.call('loudness_curve', { ...params }) as Promise<Record<string, unknown>>;
+  }
+
+  stereoBands(params: StereoBandsParams): Promise<Record<string, unknown>> {
+    return this.call('stereo_bands', { ...params }) as Promise<Record<string, unknown>>;
+  }
+
+  masking(params: MaskingParams): Promise<Record<string, unknown>> {
+    return this.call('masking', { ...params }) as Promise<Record<string, unknown>>;
+  }
+
+  separationStatus(): Promise<{ installed: boolean; message: string }> {
+    return this.call('separation_status', {}) as Promise<{ installed: boolean; message: string }>;
+  }
+
+  separate(params: SeparateParams, timeoutMs: number): Promise<Record<string, unknown>> {
+    return this.call('separate', { ...params }, Math.max(timeoutMs, ANALYZE_TIMEOUT_MS)) as Promise<Record<string, unknown>>;
+  }
+
   chroma(params: ChromaParams): Promise<{ chroma: number[]; durationSeconds: number; frames: number }> {
     return this.call('chroma', { ...params }) as Promise<{ chroma: number[]; durationSeconds: number; frames: number }>;
   }
@@ -166,7 +238,7 @@ class SidecarClientImpl implements SidecarClient {
    * CLIENT span `sidecar/<method>` (JSON-RPC conventions) around the request,
    * plus `reaper.sidecar.request.duration` by `rpc.method` and `error.type`.
    */
-  private call(method: string, params: Record<string, unknown>): Promise<unknown> {
+  private call(method: string, params: Record<string, unknown>, timeoutMs = ANALYZE_TIMEOUT_MS): Promise<unknown> {
     const startMs = Date.now();
     return getTracer().startActiveSpan(
       `sidecar/${method}`,
@@ -177,7 +249,7 @@ class SidecarClientImpl implements SidecarClient {
       async (span) => {
         const metricAttrs: Record<string, string> = { 'rpc.method': method };
         try {
-          const result = await this.callUntraced(method, params);
+          const result = await this.callUntraced(method, params, timeoutMs);
           const modelVersion = (result as { modelVersion?: unknown } | null)?.modelVersion;
           if (typeof modelVersion === 'string') span.setAttribute('reaper.sidecar.model.version', modelVersion);
           return result;
@@ -185,13 +257,15 @@ class SidecarClientImpl implements SidecarClient {
           const message = err instanceof Error ? err.message : String(err);
           const errorType = message.startsWith('Sidecar timeout')
             ? 'timeout'
-            : message.startsWith('Audio understanding sidecar not installed')
+            : message.startsWith('Sidecar busy')
+              ? 'busy'
+              : message.startsWith('Audio understanding sidecar not installed')
               ? 'not_installed'
               : 'sidecar_error';
           metricAttrs['error.type'] = errorType;
           span.setAttribute('error.type', errorType);
           span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(message) });
-          emitLog(errorType === 'not_installed' ? 'warn' : 'error', `Sidecar ${method} failed: ${message}`, {
+          emitLog(errorType === 'not_installed' || errorType === 'busy' ? 'warn' : 'error', `Sidecar ${method} failed: ${message}`, {
             'rpc.method': method,
             'error.type': errorType,
           });
@@ -204,7 +278,27 @@ class SidecarClientImpl implements SidecarClient {
     );
   }
 
-  private async callUntraced(method: string, params: Record<string, unknown>): Promise<unknown> {
+  private callUntraced(method: string, params: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
+    let gaveUp = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const busy = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        gaveUp = true;
+        reject(new Error(`Sidecar busy: waited ${QUEUE_WAIT_MS / 1000} s behind ${this.activeMethod || 'an earlier request'} — retry when it finishes`));
+      }, QUEUE_WAIT_MS);
+      timer.unref?.();
+    });
+    const run = this.queue.then(async () => {
+      clearTimeout(timer);
+      if (gaveUp) return undefined;
+      this.activeMethod = method;
+      return this.send(method, params, timeoutMs);
+    });
+    this.queue = run.catch(() => undefined);
+    return Promise.race([run, busy]);
+  }
+
+  private async send(method: string, params: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
     if (!this.isAvailable()) {
       throw new Error(
         'Audio understanding sidecar not installed. ' +
@@ -224,18 +318,18 @@ class SidecarClientImpl implements SidecarClient {
       // request and kill the process so the next call gets a fresh sidecar.
       const timer = setTimeout(() => {
         if (this.pending.delete(id)) {
-          emitLog('error', `Sidecar ${method}() timed out after ${ANALYZE_TIMEOUT_MS}ms — killing process`, {
-            'reaper.sidecar.timeout_ms': ANALYZE_TIMEOUT_MS,
+          emitLog('error', `Sidecar ${method}() timed out after ${timeoutMs}ms — killing process`, {
+            'reaper.sidecar.timeout_ms': timeoutMs,
           }, { eventName: 'reaper.sidecar.timeout' });
           if (this.process) {
             this.process.kill('SIGKILL');
             this.process = null;
           }
           reject(new Error(
-            `Sidecar timeout after ${ANALYZE_TIMEOUT_MS}ms. Override with REAPER_MCP_SIDECAR_TIMEOUT_MS env var.`
+            `Sidecar timeout after ${timeoutMs}ms. Override with REAPER_MCP_SIDECAR_TIMEOUT_MS env var.`
           ));
         }
-      }, ANALYZE_TIMEOUT_MS);
+      }, timeoutMs);
 
       this.pending.set(id, {
         resolve: (r) => { clearTimeout(timer); resolve(r); },

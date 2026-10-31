@@ -1,3 +1,4 @@
+import type { LoggedTool } from '@reaper-mcp/protocol';
 import { sendCommand } from './bridge.js';
 
 /**
@@ -5,7 +6,7 @@ import { sendCommand } from './bridge.js';
  * command: the bridge records `_log_result` as an entry for `command`, with `r` drawn by the page's measurement views.
  * Best-effort and in the background, so a slow or missing bridge never delays the tool's answer.
  */
-export function logToolResult(command: string, params: Record<string, unknown>, startedAt: number, r: Record<string, unknown> | null, error?: string): void {
+export function logToolResult(command: LoggedTool, params: Record<string, unknown>, startedAt: number, r: Record<string, unknown> | null, error?: string): void {
   void sendCommand('_log_result' as Parameters<typeof sendCommand>[0], {
     command,
     ms: Date.now() - startedAt,
@@ -79,5 +80,78 @@ export function aestheticsSummary(data: Obj): Obj {
     cu: num(data['contentUsefulness']),
     lufs: num(data['normalizedToLufs']),
     dur: num(data['durationSeconds']),
+  };
+}
+
+const nums = (v: unknown): number[] => (Array.isArray(v) ? v.map((x) => (typeof x === 'number' && Number.isFinite(x) ? x : -70)) : []);
+const span3 = (v: unknown) => {
+  const s = obj(v);
+  const [a, b, l] = [num(s['start']), num(s['end']), num(s['lufs'] ?? s['maxLufs'])];
+  return a !== undefined && b !== undefined ? [a, b, l ?? null] : null;
+};
+const MAX_CURVE_POINTS = 240;
+const MAX_MASKING_PAIRS = 10;
+
+/** analyze_loudness_curve: the short-term curve (momentary when the clip is too short), headline numbers and spans */
+export function curveSummary(name: string, data: Obj): Obj {
+  const curve = obj(data['shortTerm'] ?? data['momentary']);
+  return {
+    name,
+    lufs: num(data['integratedLufs']),
+    tp: num(data['truePeakDbtp']),
+    lra: num(data['loudnessRangeLu']),
+    plr: num(data['plrDb']),
+    maxM: num(data['maxMomentaryLufs']),
+    target: num(data['targetLufs']),
+    overS: num(data['overTargetSeconds']),
+    start: num(data['startTime']) ?? 0,
+    step: num(curve['step']),
+    term: data['shortTerm'] ? 's' : 'm',
+    curve: nums(curve['lufs']).slice(0, MAX_CURVE_POINTS),
+    loud: span3(data['loudest']),
+    quiet: span3(data['quietest']),
+    over: (Array.isArray(data['overTarget']) ? (data['overTarget'] as unknown[]) : []).slice(0, 20).flatMap((s) => {
+      const t = span3(s);
+      return t ? [t] : [];
+    }),
+  };
+}
+
+/** analyze_stereo_bands: per band [name, correlation, worst, out-of-phase share, side-to-mid dB], and the flags */
+export function stereoBandsSummary(name: string, data: Obj): Obj {
+  const bands = Array.isArray(data['bands']) ? (data['bands'] as Obj[]) : [];
+  return {
+    name,
+    bands: bands.map((b) => [b['band'], num(b['correlation']) ?? null, num(b['worst']) ?? null, num(b['negativeShare']) ?? null, num(b['sideToMidDb']) ?? null]),
+    flags: (Array.isArray(data['flags']) ? (data['flags'] as unknown[]) : []).slice(0, 5).map(String),
+    dur: num(data['durationSeconds']),
+  };
+}
+
+/** measure_masking: the track names, band centres, the most masked pairs with their per-band scores, top conflicts */
+export function maskingSummary(result: Obj): Obj {
+  const pairs = Array.isArray(result['pairs']) ? (result['pairs'] as Obj[]) : [];
+  const conflicts = Array.isArray(result['conflicts']) ? (result['conflicts'] as Obj[]) : [];
+  return {
+    tracks: Array.isArray(result['tracks']) ? result['tracks'] : [],
+    hz: nums(result['bandsHz']),
+    pairs: [...pairs].sort((x, y) => (num(y['overall']) ?? 0) - (num(x['overall']) ?? 0)).slice(0, MAX_MASKING_PAIRS)
+      .map((p) => [p['a'], p['b'], num(p['overall']) ?? 0, nums(p['scores'])]),
+    conflicts: conflicts.slice(0, 5).map((c) => [c['a'], c['b'], num(c['hz']) ?? null, num(c['score']) ?? null, c['suggestion']]),
+  };
+}
+
+/** separate_stems: the model, device, speed and each stem's loudness and peak */
+export function stemsSummary(name: string, data: Obj): Obj {
+  const stems = Array.isArray(data['stems']) ? (data['stems'] as Obj[]) : [];
+  const inserted = obj(data['inserted']);
+  return {
+    name,
+    model: data['model'],
+    device: data['device'],
+    secs: num(data['seconds']),
+    proc: num(data['processingSeconds']),
+    stems: stems.map((s) => [s['stem'], num(s['lufs']) ?? null, num(s['peakDbfs']) ?? null]),
+    ...(Array.isArray(inserted['tracks']) ? { inserted: (inserted['tracks'] as unknown[]).length, folder: inserted['folderName'], ...(inserted['muted'] === true ? { muted: 1 } : {}) } : {}),
   };
 }

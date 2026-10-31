@@ -114,6 +114,59 @@ function measurementExampleList(): Example[] {
   const aesthetics = call('analyze_track_aesthetics', { trackIndex: -1, startTime: 60 }, {
     name: 'Master', pq: 7.42, pc: 5.81, ce: 6.66, cu: 7.05, lufs: -18, dur: 30,
   }, { ms: 6_400 });
+  // A song's short-term loudness, one point a second: quiet verses, loud choruses
+  const song = (lift: number) => SONG_SECTIONS.flatMap(([, , l], i) =>
+    Array.from({ length: 15 }, (_, k) => Math.round((l + lift + Math.sin((i * 15 + k) / 2.3) * 0.9 - (k < 2 && i > 0 ? 1.5 : 0)) * 10) / 10));
+  const curveR = {
+    name: 'Master', lufs: -10.4, tp: -0.6, lra: 6.8, plr: 9.8, maxM: -6.9, target: -14, overS: 86, start: 0, step: 1, term: 's',
+    curve: song(0), loud: [124, 127, -7.8], quiet: [176, 179, -19.3],
+    over: [[30, 76, -8.6], [105, 150, -7.8]],
+  };
+  const curve = call('analyze_loudness_curve', { trackIndex: -1, endTime: 180, targetLufs: -14 }, curveR, { ms: 9_800 });
+  const curveShort = call('analyze_loudness_curve', { path: '/bounces/Hook.wav' }, {
+    name: 'Hook', lufs: -16.8, tp: -3.2, lra: 1.4, plr: 13.6, start: 0, step: 0.1, term: 'm',
+    curve: Array.from({ length: 24 }, (_, i) => -17 + Math.sin(i / 2) * 2), loud: null, quiet: null, over: [],
+  }, { ms: 410 });
+  const stereoR = {
+    name: 'Master', dur: 180, flags: ['low end wide (correlation 0.42): mono the bass below 120 Hz'],
+    bands: [['low', 0.42, -0.31, 0.08, -6.2], ['lowMid', 0.71, 0.12, 0.01, -9.4], ['mid', 0.55, -0.12, 0.04, -7.1], ['high', 0.38, -0.22, 0.09, -4.8], ['air', 0.21, -0.4, 0.18, -3.1]],
+  };
+  const stereo = call('analyze_stereo_bands', { trackIndex: -1, endTime: 180 }, stereoR, { ms: 8_200 });
+  const stereoPhase = call('analyze_stereo_bands', { trackIndex: 4 }, {
+    name: 'Synth Pad', dur: 60, flags: ['low end out of phase (correlation −0.62): it cancels in mono', 'the low mids (120–500 Hz) out of phase overall (correlation −0.18): it cancels in mono'],
+    bands: [['low', -0.62, -0.91, 0.84, 4.1], ['lowMid', -0.18, -0.7, 0.61, 1.2], ['mid', 0.34, -0.3, 0.22, -3.3], ['high', 0.51, 0.02, 0.05, -5.6], ['air', null, null, null, null]],
+  }, { ms: 3_100 });
+  const MASK_HZ = [40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000];
+  const bump = (centre: number, width: number, peak: number) => MASK_HZ.map((_, k) => Math.round(Math.max(0, peak * (1 - Math.abs(k - centre) / width)) * 100) / 100);
+  const maskingR = {
+    tracks: ['Kick', 'Bass', 'Keys', 'Vocal'], hz: MASK_HZ,
+    pairs: [
+      ['Kick', 'Bass', 0.31, bump(4, 4, 0.92)],
+      ['Keys', 'Vocal', 0.24, bump(13, 5, 0.74)],
+      ['Bass', 'Keys', 0.12, bump(8, 3, 0.48)],
+      ['Kick', 'Keys', 0.03, bump(19, 2, 0.21)],
+      ['Kick', 'Vocal', 0.01, bump(20, 1, 0.1)],
+      ['Bass', 'Vocal', 0, bump(0, 0, 0)],
+    ],
+    conflicts: [
+      ['Kick', 'Bass', 100, 0.92, 'cut Bass around 100 Hz (it matters more to Kick)'],
+      ['Keys', 'Vocal', 800, 0.74, 'cut Keys around 800 Hz (it matters more to Vocal)'],
+      ['Bass', 'Keys', 250, 0.48, 'cut Keys around 250 Hz (it matters more to Bass)'],
+    ],
+  };
+  const masking = call('measure_masking', { tracks: [0, 1, 5, 9], startTime: 48, durationSeconds: 20 }, maskingR, { ms: 6_900 });
+  const maskingClear = call('measure_masking', { tracks: [0, 12], startTime: 48 }, {
+    tracks: ['Kick', 'Hi-hat'], hz: MASK_HZ, pairs: [['Kick', 'Hi-hat', 0, bump(0, 0, 0)]], conflicts: [],
+  }, { ms: 2_400 });
+  const stemsR = {
+    name: 'Master', model: 'htdemucs', device: 'mps', secs: 180, proc: 61.4, inserted: 4, folder: 'Master stems', muted: 1,
+    stems: [['drums', -14.2, -1.8], ['bass', -16.9, -4.1], ['other', -15.3, -2.6], ['vocals', -13.1, 0.7]],
+  };
+  const stems = call('separate_stems', { trackIndex: -1, endTime: 180, insertTracks: true }, stemsR, { ms: 64_200 });
+  const stems6 = call('separate_stems', { path: '/refs/Live Take.flac', model: 'htdemucs_6s', stems: ['guitar', 'piano', 'vocals'] }, {
+    name: 'Live Take', model: 'htdemucs_6s', device: 'cpu', secs: 45, proc: 52.3,
+    stems: [['vocals', -17.4, -5.2], ['guitar', -19.8, -7.9], ['piano', null, -61.2]],
+  }, { ms: 54_800 });
 
   const key = call('detect_key', { trackIndex: 7 }, {
     name: undefined, src: 'midi', key: 'A minor', tonic: 'A', mode: 'minor', r: 0.89, conf: 0.62, rel: 'C major',
@@ -150,6 +203,17 @@ function measurementExampleList(): Example[] {
     example('Aesthetics', aesthetics, 'Four scores on 0–10; previous call ghosted', earlier(aesthetics, { name: 'Master', pq: 7.18, pc: 5.9, ce: 6.4, cu: 6.95, lufs: -18, dur: 30 })),
     example('Key · MIDI', key, 'A minor from the notes: scale tones lit, the tonic strongest', earlier(key, { src: 'midi', key: 'C major', tonic: 'C', mode: 'major', r: 0.8, conf: 0.4, rel: 'A minor', alt: [], chroma: [1, 0.04, 0.4, 0.06, 0.7, 0.35, 0.03, 0.8, 0.05, 0.6, 0.07, 0.2] })),
     example('Key · audio, unsure', keyAudio, 'A dense guitar bus: low confidence flagged'),
+    example('Loudness curve', curve, 'Short-term loudness against −14 LUFS: spans over target shaded, previous call dashed; hover for values',
+      earlier(curve, { ...curveR, lufs: -9.1, curve: song(1.3), over: [[28, 80, -7.3], [100, 165, -6.5]] })),
+    example('Loudness curve · short clip', curveShort, 'Under 3 s: momentary only, no target'),
+    example('Stereo per band', stereo, 'A wide low end flagged; previous call ghosted',
+      earlier(stereo, { ...stereoR, bands: stereoR.bands.map(([b, c, ...rest]) => [b, Math.min(1, (c as number) + 0.3), ...rest]) })),
+    example('Stereo per band · out of phase', stereoPhase, 'Bands below 0 cancel in mono: red, named; a silent band says so'),
+    example('Masking', masking, 'Pairs by band: Kick × Bass fight at 100 Hz; which to cut',
+      earlier(masking, { ...maskingR, pairs: maskingR.pairs.map(([a, b, o, sc]) => [a, b, (o as number) * 1.4, sc]) })),
+    example('Masking · clear', maskingClear, 'Nothing masks'),
+    example('Stems', stems, 'Four stems inserted under a folder; vocals peak over 0 kept as float', earlier(stems, { ...stemsR, proc: 58.2 })),
+    example('Stems · 6-stem model on a CPU', stems6, 'Three of six stems written to disk only; a silent stem'),
   ];
 }
 
@@ -283,6 +347,13 @@ function editExampleList(): Example[] {
     was: { tracks: MIX, ids: MIX_IDS },
     master: ['Master', 0, '', -0.3, 0, ''],
   });
+  const trackDeleted = call('delete_track', { track: 'Old Vox' }, {
+    total: 5,
+    tracks: MIX.slice(0, 5),
+    ids: MIX_IDS.slice(0, 5),
+    was: { tracks: MIX, ids: MIX_IDS },
+    master: ['Master', 0, '', -0.3, 0, ''],
+  });
   const VOX_CHAIN = [
     ['VST3: Pro-Q 3 (FabFilter)', '', 'a1', ''], ['VST3: Pro-C 2 (FabFilter)', '', 'b2', 'Vocal Leveler'],
     ['JS: De-esser', '', 'c3', ''], ['VST3: Saturn 2 (FabFilter)', '', 'd4', ''],
@@ -309,6 +380,32 @@ function editExampleList(): Example[] {
   });
   const routingListed = call('get_track_routing', track(10), {
     t: 'Verb', routes: [['r', 'Vox', -12, 0, ''], ['r', 'Gtr L', -18, -0.6, ''], ['r', 'Gtr R', -18, 0.6, ''], ['r', 'Snare', -20, 0, 'M']],
+  });
+  const ARMED = [
+    ['Lead Vox', 1, 'In 1 · Shure SM7B', 'auto', 'input'],
+    ['Gtr DI', 1, 'In 3/4', 'off', 'input'],
+    ['Keys', 1, 'MIDI: all MIDI inputs, all channels', 'on', 'midi_overdub'],
+  ];
+  const recordSetup = call('get_record_setup', {}, { mode: 'time_selection', path: 'Audio', punch: [62.5, 78], rows: ARMED });
+  const trackArmed = call('set_track_record', { tracks: [{ track: 'Lead Vox', arm: true, input: { kind: 'audio', channel: 1 }, monitor: 'auto' }] }, {
+    mode: 'normal', path: 'Audio', rows: [ARMED[0], ['Gtr DI', 0, 'In 3/4', 'off', 'stereo_out']],
+    was: { mode: 'normal', path: 'Audio', rows: [['Lead Vox', 0, 'In 2', 'off', 'input'], ['Gtr DI', 0, 'In 3/4', 'off', 'stereo_out']] },
+  });
+  const recordMode = call('set_record_mode', { mode: 'time_selection', punchStart: 62.5, punchEnd: 78 }, {
+    mode: 'time_selection', path: 'Audio', punch: [62.5, 78], was: { mode: 'normal', path: 'media' },
+  });
+  const TAKES = [['Take 1', 1], ['Take 2', 0], ['Take 3', 0]];
+  const TAKE_ITEMS = [[60, 32, 0, 0], [60, 32, 1, 0], [60, 14, 2, 0], [77, 15, 2, 0]];
+  const lanesListed = call('get_track_lanes', { track: 'Lead Vox' }, { t: 'Lead Vox', fixed: 1, lanes: TAKES, items: TAKE_ITEMS, len: 92 });
+  const lanesLayered = call('set_track_lanes', { track: 'Lead Vox', play: [0, 2] }, {
+    t: 'Lead Vox', fixed: 1, lanes: [['Take 1', 2], ['Take 2', 0], ['Take 3', 2]], items: TAKE_ITEMS, len: 92,
+    was: { fixed: 1, lanes: TAKES, items: TAKE_ITEMS },
+  });
+  const comp = call('comp_lanes', { track: 'Lead Vox', ranges: [{ start: 60, end: 68, lane: 0 }, { start: 68, end: 81, lane: 1 }, { start: 81, end: 92, lane: 2 }] }, {
+    t: 'Lead Vox', fixed: 1, lanes: [['Take 1', 0], ['Take 2', 0], ['Take 3', 0], ['Comp', 1]],
+    items: [...TAKE_ITEMS, [60, 8.01, 3, 0], [68, 9, 3, 0], [77, 4.01, 3, 0], [81, 11, 3, 0]],
+    comp: 3, segs: [[60, 68, 0], [68, 77, 1], [77, 81, 1], [81, 92, 2]], len: 92,
+    was: { fixed: 1, lanes: TAKES, items: TAKE_ITEMS },
   });
   const ITEMS = [[16, 30, 0.5, 2, 0, 0], [48, 31, 0, 0.5, 0, 0], [112, 31, 0, 0, 0, 0]];
   const itemMoved = call('move_media_item', track(4, { itemIndex: 1, newTrackIndex: 5, newPosition: 82 }), {
@@ -399,6 +496,50 @@ function editExampleList(): Example[] {
     total: 4, dryRun: true,
     ops: [['add_track', 'Vox Bus'], ['add_fx', '$bus · VST3: Pro-C 2'], ['add_send', 'Vox → $bus'], ['set_track', 'Vox']],
   });
+  const autoMode = call('set_automation_mode', { tracks: '["Vox","Bass"]', mode: 'latch' }, {
+    rows: [
+      { t: 'Vox', p: 'Automation', s: 'bool', a: 1, b: 4, at: 'read', bt: 'latch' },
+      { t: 'Bass', p: 'Automation', s: 'bool', a: 0, b: 4, at: 'trim', bt: 'latch' },
+    ],
+  });
+  const modLfo = call('set_fx_param_modulation', track(3, { fxIndex: 0, paramIndex: 4 }), {
+    fx: 'VST3: Pro-Q 3 (FabFilter)',
+    rows: [{ p: 'Band 2 Frequency', base: 0.42, v: 0.5, lfo: ['triangle', 0.25, 0.3, 0, 0, 1], was: { p: 'Band 2 Frequency', base: 0.42, v: 0.42 } }],
+  });
+  const modListed = call('get_fx_param_modulation', track(6, { fxIndex: 1 }), {
+    fx: 'ReaComp (Cockos)', total: 2,
+    rows: [
+      { p: 'Threshold', base: 0.55, v: 0.4, acs: [5, 180, -42, -12, 0.35, 3, -1] },
+      { p: 'Ratio', base: 0.3, v: 0.36, link: ['ReaEQ / Gain-Band 1', -0.5, 0.1] },
+    ],
+  });
+  const pins = call('set_fx_pins', track(6, { fxIndex: 1 }), {
+    fx: 'ReaComp (Cockos)', ch: 4, chWas: 2,
+    names: ['L in', 'R in', 'Aux L in', 'Aux R in'],
+    in: [[1], [2], [3], [4]], out: [[1], [2]],
+    inWas: [[1], [2], [], []], outWas: [[1], [2]],
+  });
+  const pinsListed = call('get_fx_pins', track(2, { fxIndex: 0 }), {
+    fx: 'VST3: Pro-L 2 (FabFilter)', ch: 2, names: ['Input L', 'Input R'], in: [[1], [2]], out: [[1], [2]],
+  });
+  const QUANT_MOVES: [number, number][] = [[0.52, 0.5], [1.03, 1], [1.47, 1.5], [2.02, 2], [2.55, 2.5], [2.98, 3], [3.49, 3.5]];
+  const audioQuantized = call('quantize_audio', { trackIndex: 1, itemIndex: 0, grid: 0.5 }, {
+    len: 4, moves: QUANT_MOVES, grid: [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4], off: [23.6, 0],
+  });
+  const markers2 = call('add_stretch_markers', { trackIndex: 1, itemIndex: 0, markers: '[…]' }, {
+    len: 4, marks: [0.5, 1, 1.5, 2, 3], was: [2, 3],
+  });
+  const frozen = call('freeze_tracks', { tracks: '["Synth","Pad"]', mode: 'stereo' }, {
+    rows: [
+      { t: 'Synth', p: 'Freeze', s: 'bool', a: 0, b: 1, at: 'live', bt: 'frozen · stereo' },
+      { t: 'Synth', p: 'FX', s: 'norm', a: 0.375, b: 0, at: '6', bt: '0' },
+      { t: 'Pad', p: 'Freeze', s: 'bool', a: 0, b: 1, at: 'live', bt: 'frozen · stereo' },
+      { t: 'Pad', p: 'FX', s: 'norm', a: 0.25, b: 0, at: '4', bt: '0' },
+    ],
+  });
+  const monitor = call('add_monitoring_fx', { fxName: 'VST3: SoundID Reference' }, {
+    chains: [{ t: 'Monitoring FX', fx: [['VST3: SoundID Reference (Sonarworks)', '', 'm1', ''], ['JS: Mono check', 'B', 'm2', '']], was: [['JS: Mono check', 'B', 'm2', '']] }],
+  });
   const renderMaster = call('render_project', { overwrite: true }, {
     fmt: 'wav', bd: '24', src: 'master', norm: 'lufs_i', nt: -14, lim: -1, tp: true,
     groups: [{ v: '', m: [], f: [renderFile('Night Drive (Master).wav', 214.6, -14.1, -1.02, -1.4, 0.8)] }],
@@ -421,6 +562,144 @@ function editExampleList(): Example[] {
       { v: 'Instrumental', m: ['Lead Vox', 'Vox Dbl', 'Backing Vox'], f: [renderFile('song-Instrumental.mp3', 214.6, -14.2, -1.05, -1.3, 0.7)] },
       { v: 'TV', m: ['Lead Vox'], f: [renderFile('song-TV.mp3', 214.6, -13.9, -1.2, -1.5, 0.72)] },
     ],
+  });
+  // One example per remaining command with a view, drawn from the same song and session
+  const fxParam = call('set_fx_parameter', track(8, { fxIndex: 0, paramIndex: 4, value: 0.42 }), {
+    rows: [{ t: 'Vox · Pro-Q 3', p: 'Band 2 Gain', s: 'norm', a: 0.47, b: 0.42, at: '−1.8 dB', bt: '−3.6 dB' }],
+  });
+  const unfrozen = call('unfreeze_tracks', { tracks: '["Synth"]' }, {
+    rows: [
+      { t: 'Synth', p: 'Freeze', s: 'bool', a: 1, b: 0, at: 'frozen', bt: 'live' },
+      { t: 'Synth', p: 'FX', s: 'norm', a: 0, b: 0.375, at: '0', bt: '6' },
+    ],
+  });
+  const fxApplied = call('apply_fx_to_items', { items: '[{"trackIndex":2,"itemIndex":0}]', mode: 'stereo' }, {
+    rows: [{ t: 'Track 3 · item 1', p: 'Active take', s: 'norm', a: 0.125, b: 0.25, at: 'Synth Pad', bt: 'Synth Pad render 001' }],
+  });
+  const pointAdded = call('insert_envelope_point', track(4, { envelopeIndex: 0, time: 20, db: -3 }), {
+    env: 'Volume', unit: 'dB', from: 19, to: 21, count: 10,
+    pts: [[17.5, -1.5, 0], [20, -3, 0], [24, -1.5, 2]], was: [[16, -6, 2], [17.5, -1.5, 0], [24, -1.5, 2], [26, 2, 0]],
+  });
+  const pointDeleted = call('delete_envelope_point', track(4, { envelopeIndex: 0, pointIndex: 3 }), {
+    env: 'Volume', unit: 'dB', from: 12.5, to: 14.5, count: 8,
+    pts: [[8, 0, 0], [12, -2.5, 2], [16, -6, 2], [17.5, -1.5, 0]], was: [[12, -2.5, 2], [13.5, -6, 0], [16, -6, 2]],
+  });
+  const PAN_POINTS = Array.from({ length: 9 }, (_, i) => [16 + i * 2, i % 2 ? -0.6 : 0.6, 2]);
+  const cleared = call('clear_envelope', track(6, { envelopeIndex: 1 }), {
+    env: 'Pan', unit: 'pan', from: 12, to: 36, count: 0, pts: [], was: PAN_POINTS,
+  });
+  const POOLS = [[1, VERSE], [2, CHORUS], [3, [[0, -2, 0], [16, -2, 0]]]];
+  const aisListed = call('list_automation_items', track(79, { envelopeIndex: 0 }), {
+    env: 'Volume', unit: 'dB', from: 0, to: 391, count: 1, pts: [[0, 0, 0]], ais: sections, pools: POOLS,
+  });
+  const aiLonger = call('set_automation_item', track(79, { envelopeIndex: 0, automationItemIndex: 4, length: 24, loop: true }), {
+    env: 'Volume', unit: 'dB', from: 230, to: 266, count: 1, pts: [[0, 0, 0]], was: [[0, 0, 0]], ai: 4,
+    ais: sections.map((s, i) => (i === 4 ? [236, 24, 3, 'Vox C'] : s)), pools: POOLS, wasAis: sections, wasPools: POOLS,
+  });
+  const CC_LANE = [[0, 64, 1], [2, 80, 1], [4, 96, 1], [6, 110, 1], [8, 100, 1], [10, 72, 1], [12, 30, 1], [14, 48, 1], [15.5, 90, 1]];
+  const ccListed = call('get_midi_cc', { trackIndex: 7, itemIndex: 0, ccNumber: 11 }, {
+    env: 'CC 11 · Expression', unit: 'cc', beats: 1, from: 0, to: 17, count: 9, otherCcs: 2, pts: CC_LANE,
+  });
+  const ccDeleted = call('delete_midi_cc', { trackIndex: 7, itemIndex: 0, ccIndex: 6 }, {
+    env: 'CC 11 · Expression', unit: 'cc', beats: 1, from: 0, to: 17, count: 8, otherCcs: 2,
+    pts: CC_LANE.filter((p) => p[0] !== 12), was: CC_LANE,
+  });
+  const noteAdded = call('insert_midi_note', { trackIndex: 7, itemIndex: 0, pitch: 69, velocity: 80, startPosition: 12, duration: 4 }, {
+    total: CHORDS.length + 1, beats: 16, ts: [4, 4], more: 0, gone: [], notes: [...CHORDS, [69, 12, 4, 80, 1]],
+  });
+  const noteEdited = call('edit_midi_note', { trackIndex: 7, itemIndex: 0, noteIndex: 9, velocity: 96 }, {
+    total: CHORDS.length, beats: 16, ts: [4, 4], more: 0, gone: [[55, 12, 4, 72]],
+    notes: CHORDS.map((n, i) => (i === 9 ? [55, 12, 4, 96, 1] : n)),
+  });
+  const notesEdited = call('edit_midi_notes', { trackIndex: 7, itemIndex: 0, edits: '[{"noteIndex":3,"velocity":90},{"noteIndex":4,"velocity":90}]' }, {
+    total: CHORDS.length, beats: 16, ts: [4, 4], more: 0, gone: [[53, 4, 4, 72], [57, 4, 4, 72]],
+    notes: CHORDS.map((n, i) => (i === 3 || i === 4 ? [n[0], n[1], n[2], 90, 1] : n)),
+  });
+  const PLAIN_MELODY = MELODY.map((n) => n.slice(0, 4));
+  const transformed = call('transform_midi', { trackIndex: 8, itemIndex: 0, transpose: 12, velocity: '{"scale":0.9}' }, {
+    total: MELODY.length, beats: 16, ts: [4, 4], more: 0, gone: PLAIN_MELODY,
+    notes: PLAIN_MELODY.map(([p, s, l, v]) => [p + 12, s, l, Math.round(v * 0.9), 1]),
+  });
+  const timeline = (regions: unknown[], markers: unknown[], tempo: unknown[], was: Record<string, unknown> | undefined, len = 200) =>
+    ({ regions, markers, tempo, len, ...(was ? { was } : {}) });
+  const SONG = { regions: SONG_REGIONS, markers: SONG_MARKERS, tempo: SONG_TEMPO };
+  const noBridgeRegion = SONG_REGIONS.filter((r) => r[2] !== 'Bridge');
+  const regionAdded = call('add_region', { start: 144, end: 160, name: 'Bridge' }, timeline(SONG_REGIONS, SONG_MARKERS, SONG_TEMPO, { ...SONG, regions: noBridgeRegion }));
+  const markerEdited = call('edit_marker', { markerIndex: 1, name: 'Vox enters' }, timeline(SONG_REGIONS, [[18, 'Vox enters', '', 1], SONG_MARKERS[1]], SONG_TEMPO, SONG));
+  const regionEdited = call('edit_region', { regionIndex: 8, end: 208 }, timeline(SONG_REGIONS.map((r) => (r[2] === 'Outro' ? [192, 208, 'Outro', '', 8] : r)), SONG_MARKERS, SONG_TEMPO, SONG, 208));
+  const markerDeleted = call('delete_marker', { markerIndex: 3 }, timeline(SONG_REGIONS, [SONG_MARKERS[0]], SONG_TEMPO, SONG));
+  const regionDeleted = call('delete_region', { regionIndex: 6 }, timeline(noBridgeRegion, SONG_MARKERS, SONG_TEMPO, SONG));
+  const BRIDGE_TEMPO = [...SONG_TEMPO, [144, 88, 3, 4, 0], [160, 92, 4, 4, 0]];
+  const tempoEdited = call('edit_tempo_marker', { index: 1, bpm: 84 }, timeline(SONG_REGIONS, SONG_MARKERS, [...SONG_TEMPO, [144, 84, 3, 4, 0], [160, 92, 4, 4, 0]], { ...SONG, tempo: BRIDGE_TEMPO }));
+  const tempoDeleted = call('delete_tempo_marker', { index: 1 }, timeline(SONG_REGIONS, SONG_MARKERS, [...SONG_TEMPO, [160, 92, 4, 4, 0]], { ...SONG, tempo: BRIDGE_TEMPO }));
+  const tempoSet = call('set_project_tempo', { bpm: 96 }, timeline(SONG_REGIONS, SONG_MARKERS, [[0, 96, 4, 4, 0]], SONG));
+  const regionsListed = call('list_regions', {}, timeline(SONG_REGIONS, SONG_MARKERS, SONG_TEMPO, undefined));
+  const tempoMap = call('get_tempo_map', {}, timeline(SONG_REGIONS, SONG_MARKERS, BRIDGE_TEMPO, undefined));
+  const gtrL = (items: unknown[], was: unknown[] = ITEMS) => ({ ...timeline(SONG_REGIONS, SONG_MARKERS, SONG_TEMPO, undefined), lanes: [{ t: 'Gtr L', items, was }] });
+  const itemTrimmed = call('trim_media_item', track(4, { itemIndex: 1, trimStart: 2 }), gtrL([ITEMS[0], [50, 29, 0, 0.5, 0, 0], ITEMS[2]]));
+  const itemDeleted = call('delete_media_item', track(4, { itemIndex: 2 }), gtrL([ITEMS[0], ITEMS[1]]));
+  const itemChanged = call('set_media_item_properties', track(4, { itemIndex: 1, volume: -2.5, fadeInLength: 0.5 }), gtrL([ITEMS[0], [48, 31, 0.5, 0.5, 0, 0], ITEMS[2]]));
+  const itemsMuted = call('set_media_items_properties', { items: '[{"trackIndex":4,"itemIndex":0,"mute":1},{"trackIndex":4,"itemIndex":1,"mute":1}]' },
+    gtrL([[16, 30, 0.5, 2, 0, 1], [48, 31, 0, 0.5, 0, 1], ITEMS[2]]));
+  const fadesSet = call('set_item_fades', track(4, { itemIndex: 0, fadeInLength: 0.02, fadeOutLength: 0.5, fadeOutShape: 2 }), gtrL([[16, 30, 0.02, 0.5, 0, 0], ITEMS[1], ITEMS[2]]));
+  const fileInserted = call('insert_audio_file', track(4, { filePath: '/Users/you/Music/Samples/riser.wav', position: 44 }), gtrL([ITEMS[0], [44, 4, 0, 0, 0, 0], ITEMS[1], ITEMS[2]]));
+  const selectionRead = call('get_time_selection', {}, { ...timeline(SONG_REGIONS, SONG_MARKERS, SONG_TEMPO, undefined), sel: [48, 80], cur: 48 });
+  const cursorMoved = call('set_cursor_position', { position: 64.5 }, {
+    ...timeline(SONG_REGIONS, SONG_MARKERS, SONG_TEMPO, undefined), sel: [48, 80], cur: 64.5, wasSel: [48, 80], wasCur: 48,
+  });
+  const MASTER = ['Master', 0, '', -0.3, 0, ''];
+  const trackMoved = call('move_track', { track: 'Bass', toIndex: 0 }, {
+    total: 6, tracks: [MIX[3], MIX[0], MIX[1], MIX[2], MIX[4], MIX[5]], ids: ['b4', 'd1', 'k2', 's3', 'v5', 'o6'],
+    was: { tracks: MIX, ids: MIX_IDS }, master: MASTER,
+  });
+  const folderMade = call('set_track_folder', { track: 'Vox', mode: 'folder' }, {
+    total: 6, tracks: [...MIX.slice(0, 4), ['Vox', 0, '#7cc4ff', 1.5, 0, 'F'], ['Old Vox', 1, '', -9, 0, 'M']], ids: MIX_IDS,
+    was: { tracks: MIX, ids: MIX_IDS }, master: MASTER,
+  });
+  const trackRenamed = call('set_track_info', { track: 'Vox', name: 'Lead Vocal', color: '#E86A5A' }, {
+    total: 6, tracks: [...MIX.slice(0, 4), ['Lead Vocal', 0, '#E86A5A', 1.5, 0, ''], MIX[5]], ids: MIX_IDS,
+    was: { tracks: MIX, ids: MIX_IDS }, master: MASTER,
+  });
+  const DBL_CHAIN = [['VST3: Pro-Q 3 (FabFilter)', 'O', 'f6', '']];
+  const fxRemoved = call('remove_fx', track(8, { fxIndex: 2 }), { chains: [{ t: 'Vox', fx: [VOX_CHAIN[0], VOX_CHAIN[1], VOX_CHAIN[3]], was: VOX_CHAIN }] });
+  const fxCopied = call('copy_fx', track(8, { fxIndex: 1, toTrackIndex: 9 }), {
+    chains: [
+      { t: 'Vox', fx: VOX_CHAIN, was: VOX_CHAIN },
+      { t: 'Vox Dbl', fx: [...DBL_CHAIN, ['VST3: Pro-C 2 (FabFilter)', '', 'g7', 'Vocal Leveler']], was: DBL_CHAIN },
+    ],
+  });
+  const fxOffline = call('set_fx_offline', track(8, { fxIndex: 3, offline: true }), {
+    chains: [{ t: 'Vox', fx: [...VOX_CHAIN.slice(0, 3), ['VST3: Saturn 2 (FabFilter)', 'O', 'd4', '']], was: VOX_CHAIN }],
+  });
+  const chainSetUp = call('setup_fx_chain', track(3, { plugins: [{ fxName: 'ReaEQ' }, { fxName: 'ReaComp', parameters: [{ index: 0, value: 0.35 }] }] }), {
+    chains: [{ t: 'Bass', fx: [['VST: ReaEQ (Cockos)', '', 'h8', ''], ['VST: ReaComp (Cockos)', '', 'i9', '']], was: [] }],
+  });
+  const chainLoaded = call('load_fx_chain', track(9, { name: 'Vocals/Lead chain', mode: 'append' }), {
+    chains: [{
+      t: 'Vox Dbl',
+      fx: [...DBL_CHAIN, ['VST3: Pro-Q 3 (FabFilter)', '', 'j1', ''], ['VST3: Pro-C 2 (FabFilter)', '', 'j2', 'Vocal Leveler'], ['JS: De-esser', '', 'j3', ''], ['VST3: Saturn 2 (FabFilter)', '', 'j4', '']],
+      was: DBL_CHAIN,
+    }],
+  });
+  const fxRenamed = call('rename_fx', track(8, { fxIndex: 0, name: 'Vox EQ' }), { chains: [{ t: 'Vox', fx: [['Vox EQ', '', 'a1', ''], ...VOX_CHAIN.slice(1)], was: VOX_CHAIN }] });
+  const presetSet = call('set_fx_preset', track(8, { fxIndex: 0, presetName: 'Vocal Presence' }), {
+    chains: [{ t: 'Vox', fx: [['VST3: Pro-Q 3 (FabFilter)', '', 'a1', 'Vocal Presence'], ...VOX_CHAIN.slice(1)], was: VOX_CHAIN }],
+  });
+  const MONITOR = [['VST3: SoundID Reference (Sonarworks)', '', 'm1', ''], ['JS: Mono check', 'B', 'm2', '']];
+  const monitorListed = call('list_monitoring_fx', {}, { chains: [{ t: 'Monitoring FX', fx: MONITOR }] });
+  const monitorBypassed = call('set_monitoring_fx', { fxIndex: 0, enabled: false }, {
+    chains: [{ t: 'Monitoring FX', fx: [['VST3: SoundID Reference (Sonarworks)', 'B', 'm1', ''], MONITOR[1]], was: MONITOR }],
+  });
+  const monitorRemoved = call('remove_monitoring_fx', { fxIndex: 1 }, { chains: [{ t: 'Monitoring FX', fx: [MONITOR[0]], was: MONITOR }] });
+  const VOX_ROUTES = [['s', 'Verb', -12, 0, ''], ['s', 'Vox Bus', -6, 0, ''], ['s', 'Delay', -16, -0.3, 'M'], ['h', 'Out 3/4', 0, 0, '']];
+  const sendSet = call('set_send', { track: 'Vox', index: 0, volume: -9 }, {
+    t: 'Vox', routes: [['s', 'Verb', -9, 0, ''], ...VOX_ROUTES.slice(1)], was: VOX_ROUTES,
+  });
+  const sendRemoved = call('remove_send', { track: 'Vox', category: 'send', index: 2 }, {
+    t: 'Vox', routes: [VOX_ROUTES[0], VOX_ROUTES[1], VOX_ROUTES[3]], was: VOX_ROUTES,
+  });
+  const hardwareAdded = call('add_hardware_output', { track: 'Click', outputChannel: 3, mono: true }, {
+    t: 'Click', routes: [['h', 'Out 3', 0, 0, '']], was: [],
   });
   return [
     example('Track volume', volume, 'One track, before → after'),
@@ -445,6 +724,7 @@ function editExampleList(): Example[] {
     example('Items listed', items, 'Fades, a muted item, a MIDI item'),
     example('Mixer', mixer, 'Folders, mute, solo, arm, a hot fader'),
     example('Tracks changed', structure, 'Added, moved and removed tracks marked'),
+    example('Track deleted', trackDeleted, 'The deleted track stays, dashed, where it was'),
     example('FX bypassed', fxBypass, 'The chain after, the bypassed slot marked'),
     example('FX added', fxAdded, 'Inserted mid-chain; the removed one struck through'),
     example('FX moved to another track', fxMoved, 'Both chains, before → after'),
@@ -468,6 +748,69 @@ function editExampleList(): Example[] {
     example('Render · off target', renderOver, 'Louder than the target, true peak over 0'),
     example('Render · stems', renderStems, 'One file per selected track, 32-bit float, no target'),
     example('Render · versions', renderVersions, 'Full, instrumental and TV mix in one call; muted tracks named'),
+    example('Record setup', recordSetup, 'Armed tracks with input, monitoring and mode; auto-punch on a time selection'),
+    example('Track armed', trackArmed, 'Arm, input and monitoring changed: old values struck through'),
+    example('Record mode set', recordMode, 'Normal → auto-punch with a punch range and a new record path'),
+    example('Lanes listed', lanesListed, 'Three takes on fixed lanes; the first plays'),
+    example('Lanes layered', lanesLayered, 'Two lanes play together; the play marks were changed'),
+    example('Comp built', comp, 'A new Comp lane, each part tinted by the take it came from; the takes go silent'),
+    example('Automation mode', autoMode, 'Two tracks to latch'),
+    example('Modulation · LFO', modLfo, 'A tempo-synced LFO around the baseline; none before'),
+    example('Modulation listed', modListed, 'An audio follower on 3 (band) and a parameter link'),
+    example('Pins · sidechain', pins, 'Aux pins routed to 3/4; the track widened to 4 channels'),
+    example('Pins listed', pinsListed, 'A stereo limiter'),
+    example('Audio quantized', audioQuantized, 'Hits moved onto the 8th grid; where they were dashed'),
+    example('Stretch markers added', markers2, 'Three new markers beside the two kept'),
+    example('Tracks frozen', frozen, 'Two tracks frozen, their FX taken out'),
+    example('Monitoring FX added', monitor, 'Room correction ahead of a bypassed mono check'),
+    example('FX parameter', fxParam, 'One parameter, the plugin’s readout before → after'),
+    example('Tracks unfrozen', unfrozen, 'Live again, its FX back'),
+    example('FX applied to an item', fxApplied, 'Rendered to a new active take; the old take stays'),
+    example('Automation point added', pointAdded, 'One new point; the curve before dashed'),
+    example('Automation point deleted', pointDeleted, 'The removed point dashed'),
+    example('Automation cleared', cleared, 'Every point removed, the old curve dashed'),
+    example('Automation items listed', aisListed, 'Every item with its pool'),
+    example('Automation item changed', aiLonger, 'The C section’s item made longer; where it ended dashed'),
+    example('MIDI CC listed', ccListed, 'One controller lane, no before'),
+    example('MIDI CC deleted', ccDeleted, 'The removed event dashed'),
+    example('Note added', noteAdded, 'One new note over the chords'),
+    example('Note edited', noteEdited, 'A louder note; the old one dashed'),
+    example('Notes edited', notesEdited, 'Two notes at once'),
+    example('MIDI transformed', transformed, 'An octave up, 10% softer'),
+    example('Region added', regionAdded, 'The bridge region added'),
+    example('Marker edited', markerEdited, 'A marker renamed'),
+    example('Region edited', regionEdited, 'The outro made longer'),
+    example('Marker deleted', markerDeleted, 'The removed marker dashed'),
+    example('Region deleted', regionDeleted, 'The bridge region removed'),
+    example('Tempo marker edited', tempoEdited, 'The bridge slowed to 84 BPM'),
+    example('Tempo marker deleted', tempoDeleted, 'The 3/4 bridge marker removed'),
+    example('Project tempo', tempoSet, '92 → 96 BPM at the start'),
+    example('Regions listed', regionsListed, 'The song’s sections'),
+    example('Tempo map', tempoMap, 'A 3/4 bridge at 88 BPM'),
+    example('Item trimmed', itemTrimmed, 'The left edge moved in 2 s'),
+    example('Item deleted', itemDeleted, 'The last item gone, dashed'),
+    example('Item changed', itemChanged, 'A fade-in added'),
+    example('Items changed', itemsMuted, 'Two items muted'),
+    example('Item fades', fadesSet, 'A short fade-in and a shorter fade-out'),
+    example('Audio file inserted', fileInserted, 'A riser before the chorus'),
+    example('Time selection read', selectionRead, 'Selection and cursor, as they are'),
+    example('Cursor moved', cursorMoved, 'The edit cursor into the chorus'),
+    example('Track moved', trackMoved, 'Bass to the top'),
+    example('Folder made', folderMade, 'Vox became a folder over Old Vox'),
+    example('Track renamed', trackRenamed, 'New name and colour'),
+    example('FX removed', fxRemoved, 'The de-esser struck through'),
+    example('FX copied', fxCopied, 'The compressor copied with its preset to the double'),
+    example('FX offline', fxOffline, 'One slot taken offline'),
+    example('FX chain set up', chainSetUp, 'An EQ and a compressor on an empty chain'),
+    example('FX chain loaded', chainLoaded, 'A saved chain appended'),
+    example('FX renamed', fxRenamed, 'The EQ renamed'),
+    example('Preset loaded', presetSet, 'A preset on the EQ'),
+    example('Monitoring FX listed', monitorListed, 'Room correction and a bypassed mono check'),
+    example('Monitoring FX bypassed', monitorBypassed, 'Room correction bypassed'),
+    example('Monitoring FX removed', monitorRemoved, 'The mono check struck through'),
+    example('Send changed', sendSet, 'The reverb send up 3 dB; its old level ghosted'),
+    example('Send removed', sendRemoved, 'The delay send struck through'),
+    example('Hardware output added', hardwareAdded, 'The click to output 3, mono'),
   ];
 }
 

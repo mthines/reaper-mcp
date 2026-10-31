@@ -7,7 +7,12 @@ import { MidiStats } from './views/MidiStats.js';
 import { Mixer } from './views/Mixer.js';
 import { PianoRoll } from './views/PianoRoll.js';
 import { Plan } from './views/Plan.js';
+import { Lanes } from './views/Lanes.js';
+import { Record } from './views/Record.js';
+import { Modulation } from './views/Modulation.js';
+import { Pins } from './views/Pins.js';
 import { Render } from './views/Render.js';
+import { Stretch } from './views/Stretch.js';
 import { Routing } from './views/Routing.js';
 import { Timeline } from './views/Timeline.js';
 import type { CommandEntry } from '../../lib/commands.js';
@@ -24,12 +29,34 @@ export function EditViewSection({ entry }: { entry: CommandEntry }) {
   if (!v) return null;
   const write = !LISTINGS.has(entry.c) && !(v.kind === "plan" && v.dryRun);
   return (
-    <section className={chartStyles.measure} aria-label={write ? "Change" : "Result"}>
-      <div className={chartStyles.measureHead}>{write ? "Change" : "Result"}</div>
+    <section className={chartStyles.measure} aria-label={TITLE[v.kind]}>
+      <div className={chartStyles.measureHead}>
+        <span>{TITLE[v.kind]}</span>
+        <span className={chartStyles.measureHeadNote}>{write ? "before → after" : "as it is now"}</span>
+      </div>
       <div className={chartStyles.measureBody}>{render(v)}</div>
     </section>
   );
 }
+
+/** Each card is titled by what it shows; the note says whether it's a change or a look: a new kind fails typecheck until it has a title */
+const TITLE: Record<EditView["kind"], string> = {
+  changes: "Settings",
+  envelope: "Automation",
+  midi: "Notes",
+  midiStats: "Velocity by pitch",
+  timeline: "Timeline",
+  mixer: "Tracks",
+  fxChain: "Plugin chain",
+  routing: "Routing",
+  plan: "Plan",
+  record: "Record setup",
+  lanes: "Lanes",
+  modulation: "Modulation",
+  pins: "Plugin pins",
+  stretch: "Stretch markers",
+  render: "Rendered files",
+};
 
 /** Listings show what is there; every other edit view is a write that shows before and after */
 const LISTINGS = new Set([
@@ -49,6 +76,11 @@ const LISTINGS = new Set([
   "get_track_routing",
   "get_time_selection",
   "get_fx_parameters",
+  "get_record_setup",
+  "get_track_lanes",
+  "get_fx_param_modulation",
+  "get_fx_pins",
+  "list_monitoring_fx",
 ]);
 
 function render(v: EditView): ReactNode {
@@ -73,5 +105,15 @@ function render(v: EditView): ReactNode {
       return <Routing v={v} />;
     case "render":
       return <Render v={v} />;
+    case "record":
+      return <Record v={v} />;
+    case "lanes":
+      return <Lanes v={v} />;
+    case "modulation":
+      return <Modulation v={v} />;
+    case "pins":
+      return <Pins v={v} />;
+    case "stretch":
+      return <Stretch v={v} />;
   }
 }

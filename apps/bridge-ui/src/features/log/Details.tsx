@@ -10,6 +10,7 @@ import { Icon, ResizeHandle, useDrawerWidth } from '../../components/index.js';
 import { EditView } from '../edit-views/index.js';
 import { Measurement } from '../measurements/index.js';
 import { cx } from '../../lib/cx.js';
+import { summaryOf, toolTitle } from './tools.js';
 import drawerStyles from '../../styles/drawer.module.css';
 import logRowsStyles from './LogRows.module.css';
 import styles from './Details.module.css';
@@ -44,6 +45,10 @@ export function Details({
   const time = new Date(e.t);
   const speed = SPEED_LABEL[speedOf(e.c, e.ms)];
   const params = formatParams(e.p);
+  const outcome = outcomeOf(e);
+  // Who did it: the agent's session, else this page (a snapshot loaded from Snapshots)
+  const agent = session ? sessionName(session) : e.src === 'page' ? 'You' : 'The agent';
+  const summary = summaryOf(e, agent, { previous: history.find((h) => h.n < e.n), now });
 
   const copy = async (what: 'error' | 'params', text: string) => {
     track({ name: 'log_copied', what });
@@ -60,63 +65,38 @@ export function Details({
     <aside className={drawerStyles.drawer} aria-label={`Details for ${e.c}`} style={width.style}>
       <ResizeHandle fraction={width.fraction} onCommit={width.setFraction} />
       <div className={drawerStyles.drawerHead}>
-        <div className={drawerStyles.drawerTitle}>
-          <span className={logRowsStyles.statusDot} data-outcome={outcomeOf(e)} />
-          <span className={styles.tipAnchor}>
-            <button
-              className={cx(styles.drawerFilter, 'mono', filtered && styles.active)}
-              onClick={onFilter}
-              aria-pressed={filtered}
-              aria-describedby="drawer-filter-tip"
-            >
-              {e.c}
-            </button>
-            <span id="drawer-filter-tip" role="tooltip" className={styles.tip}>
-              {filtered ? 'Click to show all commands again' : `Click to show only ${e.c} calls`}
+        <div className={styles.headText}>
+          <h2 className={styles.title}>
+            <span className={logRowsStyles.statusDot} data-outcome={outcome} />
+            <span>{toolTitle(e.c)}</span>
+          </h2>
+          <div className={styles.headSub}>
+            <span className={styles.tipAnchor}>
+              <button
+                className={cx(styles.drawerFilter, 'mono', filtered && styles.active)}
+                onClick={onFilter}
+                aria-pressed={filtered}
+                aria-describedby="drawer-filter-tip"
+              >
+                {e.c}
+              </button>
+              <span id="drawer-filter-tip" role="tooltip" className={styles.tip}>
+                {filtered ? 'Click to show all commands again' : `Click to show only ${e.c} calls`}
+              </span>
             </span>
-          </span>
+            <span className={styles.headWhen} title={time.toISOString()}>{formatAgo(now - e.t)}</span>
+          </div>
         </div>
         <button className="icon-btn" onClick={onClose} aria-label="Close details" title="Close (Esc)">
           <Icon.Close />
         </button>
       </div>
       <div className={drawerStyles.drawerBody}>
-        <div className={drawerStyles.resultBadge} data-outcome={outcomeOf(e)}>{OUTCOME_LABEL[outcomeOf(e)]}</div>
-
-        <dl className={drawerStyles.facts}>
-          <dt>Handler time</dt>
-          <dd>
-            <span className="mono">{e.ms} ms</span> <span className="muted">· {speed}</span>
-          </dd>
-          <dt>When</dt>
-          <dd title={time.toISOString()}>
-            {formatDay(e.t, now)} {time.toLocaleTimeString([], { hour12: false })}.{String(time.getMilliseconds()).padStart(3, '0')}{' '}
-            <span className="muted">· {formatAgo(now - e.t)}</span>
-          </dd>
-          {session && (
-            <>
-              <dt>Session</dt>
-              <dd>
-                <span className={cx(styles.sessionInline, styles.sessionFact)} title={[sessionName(session), session.client].filter(Boolean).join(' · ')}>
-                  <i className={`sdot hue-${sessionHue(session.id)}`} />
-                  <span className={styles.sessionFactName}>{sessionName(session)}</span>
-                  {session.client && <span className={cx(styles.sessionFactClient, 'muted')}> · {session.client}</span>}
-                </span>
-                <span className={cx(styles.sessionSub, 'mono muted')}>{session.id}</span>
-              </dd>
-            </>
-          )}
-          {e.src === 'page' && (
-            <>
-              <dt>Sent from</dt>
-              <dd>This page (Snapshots)</dd>
-            </>
-          )}
-          <dt className={drawerStyles.factWide}>Timestamp</dt>
-          <dd className={cx(drawerStyles.factWide, 'mono')}>{time.toISOString()}</dd>
-          <dt>Sequence</dt>
-          <dd className="mono">#{e.n}</dd>
-        </dl>
+        <p className={styles.summary} data-outcome={outcome}>
+          {session && <i className={`sdot hue-${sessionHue(session.id)}`} />}
+          <span className={styles.summaryText}>{summary}</span>
+          {outcome !== 'ok' && <span className={drawerStyles.resultBadge} data-outcome={outcome}>{OUTCOME_LABEL[outcome]}</span>}
+        </p>
 
         {e.e && (
           <div className={styles.errorBlock}>
@@ -144,6 +124,44 @@ export function Details({
           </div>
           {params ? <ParamsText text={params} onAddTerm={onAddTerm} /> : <pre><span className="muted">No params</span></pre>}
         </div>
+
+        <details className={styles.more}>
+          <summary>Details</summary>
+          <dl className={drawerStyles.facts}>
+            <dt>Handler time</dt>
+            <dd>
+              <span className="mono">{e.ms} ms</span> <span className="muted">· {speed}</span>
+            </dd>
+            <dt>When</dt>
+            <dd title={time.toISOString()}>
+              {formatDay(e.t, now)} {time.toLocaleTimeString([], { hour12: false })}.{String(time.getMilliseconds()).padStart(3, '0')}{' '}
+              <span className="muted">· {formatAgo(now - e.t)}</span>
+            </dd>
+            {session && (
+              <>
+                <dt>Session</dt>
+                <dd>
+                  <span className={cx(styles.sessionInline, styles.sessionFact)} title={[sessionName(session), session.client].filter(Boolean).join(' · ')}>
+                    <i className={`sdot hue-${sessionHue(session.id)}`} />
+                    <span className={styles.sessionFactName}>{sessionName(session)}</span>
+                    {session.client && <span className={cx(styles.sessionFactClient, 'muted')}> · {session.client}</span>}
+                  </span>
+                  <span className={cx(styles.sessionSub, 'mono muted')}>{session.id}</span>
+                </dd>
+              </>
+            )}
+            {e.src === 'page' && (
+              <>
+                <dt>Sent from</dt>
+                <dd>This page (Snapshots)</dd>
+              </>
+            )}
+            <dt className={drawerStyles.factWide}>Timestamp</dt>
+            <dd className={cx(drawerStyles.factWide, 'mono')}>{time.toISOString()}</dd>
+            <dt>Sequence</dt>
+            <dd className="mono">#{e.n}</dd>
+          </dl>
+        </details>
 
         <p className={drawerStyles.drawerHint}>
           <kbd>↑</kbd> <kbd>↓</kbd> to move between commands · select a param to filter by it · <kbd>Esc</kbd> to close

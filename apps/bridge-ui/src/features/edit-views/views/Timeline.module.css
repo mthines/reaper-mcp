@@ -55,3 +55,7 @@
 .evSpan:where([data-span='cut']) { border-color: var(--bad); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--bad) 20%, transparent) 0 3px, transparent 3px 7px); }
 .evSpan:where([data-span='source']) { border: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); background: none; }
 .evItemGain { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; }
+
+/* Which part of the project the lanes show: around the change by default, with the switch to all of it */
+.zoomBar { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+.zoomBar > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
