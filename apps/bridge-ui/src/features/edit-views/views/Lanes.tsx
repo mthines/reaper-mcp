@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { EditView, Lane, LaneItem } from '../edit-views.js';
 import { ChangeMark, Legend } from './ChangeLegend.js';
-import { clock, pct } from './format.js';
+import { clock, pct, plural } from './format.js';
 import { Measurement } from '../../measurements/index.js';
 import { cx } from '../../../lib/cx.js';
 import chartStyles from '../../../styles/chart.module.css';
@@ -33,7 +33,7 @@ export function Lanes({ v }: { v: Extract<EditView, { kind: "lanes" }> }) {
     <>
       <div className={chartStyles.measureReadouts}>
         <Measurement.Readout label="Track" value={v.t} />
-        <Measurement.Readout label="Lanes" value={v.fixed ? String(v.lanes.length) : "off"}
+        <Measurement.Readout label="Lanes" value={v.fixed ? String(v.lanes.length + (v.more ?? 0)) : "off"}
           word={v.was && v.was.fixed !== v.fixed ? (v.fixed ? "turned on" : "turned off") : ""} />
         <Measurement.Readout label="Playing" value={playing.length === 0 ? "–" : playing.length === 1 ? laneName(playing[0][0], playing[0][1]) : `${playing.length} lanes`}
           word={playing.length > 1 ? "layered" : ""} title={playing.map(([l, i]) => laneName(l, i)).join(" + ") || undefined} />
@@ -76,6 +76,7 @@ export function Lanes({ v }: { v: Extract<EditView, { kind: "lanes" }> }) {
           <span className={cx(styles.axis, 'mono')}><span>{clock(from)}</span><span>{clock(len)}</span></span>
         </div>
       </div>
+      {v.more !== undefined && v.more > 0 && <div className={chartStyles.evMore}>+{plural(v.more, "more lane")} not drawn</div>}
       {v.was && (gone.length > 0 || v.lanes.some((l, i) => wasLanes?.[i] && wasLanes[i][1] !== l[1])) && (
         <Legend items={[[chartStyles.lgGoneMark, "Before"], [chartStyles.lgNewMark, "Added or changed"]]} />
       )}

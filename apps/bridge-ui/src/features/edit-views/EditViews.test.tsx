@@ -23,4 +23,9 @@ describe('edit views in the drawer', () => {
     expect(pins).toContain('Result');
     expect(pins).not.toContain('>Change<');
   });
+  it('counts the lanes past the drawn ones', () => {
+    const html = drawer('get_track_lanes', { t: 'Vox', fixed: 1, lanes: [['Take 1', 1], ['Take 2', 0]], items: [], len: 4, more: 8 });
+    expect(html).toContain('+8 more lanes not drawn');
+    expect(html).toContain('>10<');
+  });
 });

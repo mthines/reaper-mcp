@@ -388,6 +388,26 @@ describe('edit views in the log', () => {
     });
   });
 
+  it('draws the first 32 lanes of a track and counts the rest', async () => {
+    const bridge = await startBridge(`
+      local tr = api.tracks[1]
+      tr.vals.I_FREEMODE = 2
+      tr.vals.I_NUMFIXEDLANES = 40
+      tr.vals["C_LANEPLAYS:0"] = 1
+      local function item(lane)
+        local it = { vals = { D_POSITION = 0, D_LENGTH = 4, I_FIXEDLANE = lane }, takes = {}, active = 1 }
+        it.takes[1] = { name = "Take", item = it }
+        return it
+      end
+      tr.items = { item(0), item(35) }
+    `);
+    expect((await bridge.send('get_track_lanes', { track: 'Kick' })).success).toBe(true);
+    const { r } = (await bridge.status()).recent[0] as { r: { lanes: unknown[]; items: unknown[]; more: number } };
+    expect(r.lanes).toHaveLength(32);
+    expect(r.more).toBe(8);
+    expect(r.items).toEqual([[0, 4, 0, 0]]);
+  });
+
   it('draws pooled automation items with their shared curve, the new one marked', async () => {
     const bridge = await startBridge(POOLED_ENVELOPE);
     await bridge.send('insert_automation_item', { trackIndex: 0, envelopeIndex: 0, position: 30, length: 4, poolId: 7 });

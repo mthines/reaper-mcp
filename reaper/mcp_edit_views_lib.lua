@@ -1215,13 +1215,16 @@ local PLAYS_CODE = { off = 0, exclusive = 1, layered = 2 }
 local function lane_snapshot(tr)
   local st = ctx.recording.lanes_state(api, tr)
   local lanes, items = {}, {}
+  -- Lanes past EDIT_MAX_ROWS are counted in `more`, their items left out (they have no row to sit on)
   for i, l in ipairs(st.lanes) do
-    if i <= EDIT_MAX_ROWS then lanes[i] = { l.name, PLAYS_CODE[l.plays] or 0 } end
+    if i > EDIT_MAX_ROWS then break end
+    lanes[i] = { l.name, PLAYS_CODE[l.plays] or 0 }
     for _, it in ipairs(l.items) do
       if #items < EDIT_MAX_NOTES / 2 then items[#items + 1] = { round2(it.position) or 0, round2(it.length) or 0, l.lane, it.midi and 1 or 0 } end
     end
   end
-  return { t = st.name, fixed = st.fixedLanes and 1 or 0, lanes = lanes, items = items }
+  local more = #st.lanes - #lanes
+  return { t = st.name, fixed = st.fixedLanes and 1 or 0, lanes = lanes, items = items, more = more > 0 and more or nil }
 end
 
 local function lane_track(params)

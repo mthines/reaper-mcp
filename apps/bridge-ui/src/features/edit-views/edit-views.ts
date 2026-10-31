@@ -97,6 +97,8 @@ export type EditView =
   | ({ kind: 'record'; more?: number; was?: RecordState } & RecordState)
   | {
       kind: 'lanes'; t: string; fixed: boolean; lanes: Lane[]; items: LaneItem[]; len: number;
+      /** lanes past the drawn ones (the bridge sends at most 32) */
+      more?: number;
       /** comp_lanes: the new lane and each segment's source lane */
       comp?: number; segs?: CompSeg[];
       was?: { lanes: Lane[]; items: LaneItem[]; fixed: boolean };
@@ -335,6 +337,7 @@ export function editViewOf(e: CommandEntry): EditView | null {
         kind, t: r.t, fixed: r.fixed === 1 || r.fixed === true, len: num(r.len) ? r.len : 0,
         lanes: tuples<Lane>(r.lanes, LANE), items: tuples<LaneItem>(r.items, LANE_ITEM),
         ...(num(r.comp) ? { comp: r.comp, segs: tuples<CompSeg>(r.segs, [num, num, num]) } : {}),
+        ...(num(r.more) && r.more > 0 ? { more: r.more } : {}),
         ...(w && Array.isArray(w.lanes)
           ? { was: { lanes: tuples<Lane>(w.lanes, LANE), items: tuples<LaneItem>(w.items, LANE_ITEM), fixed: w.fixed === 1 || w.fixed === true } }
           : {}),
