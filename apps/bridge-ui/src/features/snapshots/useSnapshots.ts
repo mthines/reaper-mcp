@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { track } from '../../lib/analytics.js';
+import { fetchText } from '../../lib/fetch-text.js';
 import { demoSnapshots, parseSnapshotsReply, replacedBy, settle, snapshotRequestUrl, snapshotsPollUrl, timeSnapshotName, type RequestState, type SnapshotOp, type SnapshotsFeed } from './snapshots.js';
 
 const POLL_MS = 1_000;
@@ -39,28 +40,23 @@ function report(req: RequestState, meta: RequestMeta) {
  * `send` restores or saves with the bridge's per-run control token; only the latest request is tracked.
  */
 export function useSnapshots(enabled: boolean, token: string | undefined, demo: boolean): SnapshotsHook {
-  const [feed, setFeed] = useState<SnapshotsFeed | null>(null);
+  // The demo's list exists from the start; the bridge's arrives with the first poll
+  const [feed, setFeed] = useState<SnapshotsFeed | null>(() => (demo ? demoSnapshots(Date.now()) : null));
   const [request, setRequest] = useState<RequestState | null>(null);
   const meta = useRef<RequestMeta>({ replaced: false, described: false, named: true });
   const seq = useRef(0);
 
   useEffect(() => {
     if (!enabled) return;
-    if (demo) {
-      setFeed((f) => f ?? demoSnapshots(Date.now()));
-      return;
-    }
+    if (demo) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const tick = async () => {
       if (!document.hidden) {
-        try {
-          const res = await fetch(snapshotsPollUrl(Date.now()), { cache: 'no-store' });
-          const next = parseSnapshotsReply(await res.text());
-          if (!cancelled && next) setFeed(next);
-        } catch {
-          // bridge unreachable: keep the last list
-        }
+        // null: bridge unreachable, keep the last list
+        const body = await fetchText(snapshotsPollUrl(Date.now()));
+        const next = body === null ? null : parseSnapshotsReply(body);
+        if (!cancelled && next) setFeed(next);
       }
       if (!cancelled) timer = setTimeout(tick, POLL_MS);
     };
@@ -72,20 +68,18 @@ export function useSnapshots(enabled: boolean, token: string | undefined, demo: 
   }, [enabled, demo]);
 
   // Settle the pending request from each new feed, and time it out if the bridge never answers
-  const latest = useRef({ request, feed });
-  latest.current = { request, feed };
+  const check = useEffectEvent(() => {
+    const next = settle(request, feed, Date.now());
+    if (!next || next === request) return;
+    setRequest(next);
+    if (next.state !== 'pending') report(next, meta.current);
+  });
   useEffect(() => {
     if (request?.state !== 'pending') return;
-    const check = () => {
-      const r = latest.current.request;
-      const next = settle(r, latest.current.feed, Date.now());
-      if (!next || next === r) return;
-      latest.current.request = next;
-      setRequest(next);
-      if (next.state !== 'pending') report(next, meta.current);
-    };
+    // The answer comes from the bridge's feed (an outside system), so it is read here as each feed arrives
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     check();
-    const id = setInterval(check, 1_000);
+    const id = setInterval(() => check(), 1_000);
     return () => clearInterval(id);
   }, [feed, request?.state]);
 

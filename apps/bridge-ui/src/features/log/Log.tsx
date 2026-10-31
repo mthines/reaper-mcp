@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { track } from '../../lib/analytics.js';
 import { isNumberOrNull, isString, isStringOrNull, useUrlState } from '../../lib/url-state.js';
 import { Details } from './Details.js';
@@ -106,29 +106,6 @@ export function Log({
     if (v !== 'calls') setSelected(null);
   };
 
-  useEffect(() => {
-    const onKey = (ev: KeyboardEvent) => {
-      if (ev.key === '/' && document.activeElement !== searchRef.current) {
-        ev.preventDefault();
-        searchRef.current?.focus();
-      } else if (ev.key === 'Escape') {
-        // Close the details sidebar first, then clear the chart selection, then the filter
-        if (selectedRef.current) setSelected(null);
-        else if (!clearChartSelection.current()) {
-          setQuery('');
-          searchRef.current?.blur();
-        }
-      } else if ((ev.key === 'ArrowDown' || ev.key === 'ArrowUp') && selectedRef.current) {
-        ev.preventDefault();
-        const list = rowsRef.current;
-        const i = list.findIndex((e) => e.n === selectedRef.current?.n);
-        const next = list[i + (ev.key === 'ArrowDown' ? 1 : -1)];
-        if (next) setSelected(next, 'replace'); // stepping through rows doesn't add history
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   // Sessions seen in this window's log, plus any the bridge knows about
   const sessionIds = useMemo(() => {
@@ -166,27 +143,47 @@ export function Log({
     return RANGES.find((r) => r.ms > range.ms && next.t >= now - r.ms) ?? RANGES[RANGES.length - 1];
   }, [matches, rows.length, range, now]);
 
-  const selectedRef = useRef(selected);
-  selectedRef.current = selected;
   // Esc clears the chart selection where its banner shows; true when there was one to clear
-  const clearChartSelection = useRef((): boolean => false);
-  clearChartSelection.current = () => {
+  const clearChartSelection = (): boolean => {
     if (!selection || view === 'plugins' || view === 'snapshots') return false;
     track({ name: 'timeline_span_selected', selected: false });
     onClearSelection();
     return true;
   };
-  const rowsRef = useRef(rows);
-  rowsRef.current = rows;
+
+  // Read when a key is pressed, so it always sees this render's selection and rows
+  const onKey = useEffectEvent((ev: KeyboardEvent) => {
+    if (ev.key === '/' && document.activeElement !== searchRef.current) {
+      ev.preventDefault();
+      searchRef.current?.focus();
+    } else if (ev.key === 'Escape') {
+      // Close the details sidebar first, then clear the chart selection, then the filter
+      if (selected) setSelected(null);
+      else if (!clearChartSelection()) {
+        setQuery('');
+        searchRef.current?.blur();
+      }
+    } else if ((ev.key === 'ArrowDown' || ev.key === 'ArrowUp') && selected) {
+      ev.preventDefault();
+      const i = rows.findIndex((e) => e.n === selected.n);
+      const next = rows[i + (ev.key === 'ArrowDown' ? 1 : -1)];
+      if (next) setSelected(next, 'replace'); // stepping through rows doesn't add history
+    }
+  });
+  useEffect(() => {
+    const listener = (ev: KeyboardEvent) => onKey(ev);
+    window.addEventListener('keydown', listener);
+    return () => window.removeEventListener('keydown', listener);
+  }, []);
 
   const selectRow = useCallback(
     (e: CommandEntry) => {
-      const open = selectedRef.current?.n === e.n;
+      const open = selected?.n === e.n;
       if (!open) track({ name: 'log_entry_opened', ok: e.ok, view: editViewOf(e)?.kind ?? 'none' });
       // Every click is a step Back undoes (opening, closing or switching rows); only ↑/↓ replaces
       setSelected(open ? null : e, 'push');
     },
-    [setSelected],
+    [selected, setSelected],
   );
   // Start of today: the rows only need to re-render when "Today" becomes "Yesterday"
   const today = new Date(now).setHours(0, 0, 0, 0);

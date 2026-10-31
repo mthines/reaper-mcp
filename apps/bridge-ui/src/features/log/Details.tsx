@@ -177,7 +177,9 @@ export function Details({
  */
 function ParamsText({ text, onAddTerm }: { text: string; onAddTerm: (term: string) => void }) {
   const pre = useRef<HTMLPreElement>(null);
-  const [pick, setPick] = useState<{ term: string; x: number; y: number } | null>(null);
+  // The offer belongs to the text it was made from, so opening another entry hides it
+  const [offer, setPick] = useState<{ term: string; x: number; y: number; text: string } | null>(null);
+  const pick = offer?.text === text ? offer : null;
 
   const read = () => {
     const el = pre.current;
@@ -191,7 +193,7 @@ function ParamsText({ text, onAddTerm }: { text: string; onAddTerm: (term: strin
     const term = termFromSelection(text, start, start + range.toString().length);
     const box = range.getBoundingClientRect();
     const host = el.getBoundingClientRect();
-    setPick(term ? { term, x: box.left + box.width / 2 - host.left, y: box.top - host.top } : null);
+    setPick(term ? { term, x: box.left + box.width / 2 - host.left, y: box.top - host.top, text } : null);
   };
 
   useEffect(() => {
@@ -203,7 +205,6 @@ function ParamsText({ text, onAddTerm }: { text: string; onAddTerm: (term: strin
     document.addEventListener('selectionchange', onChange);
     return () => document.removeEventListener('selectionchange', onChange);
   }, []);
-  useEffect(() => setPick(null), [text]);
 
   return (
     <div className={styles.paramsText}>

@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useState, useSyncExternalStore } from 'react';
 
 /**
  * useState-compatible state kept in a URL search param, so browser back/forward step through it and a
@@ -111,20 +111,21 @@ const getSearch = () => pending?.search ?? location.search;
  */
 export function useUrlState<T>(key: string, defaultValue: T, options: UseUrlStateOptions<T> = {}): [T, UrlStateDispatch<T>] {
   const { navigationMode = 'push', validate, debounceMs = 0 } = options;
+  // The default is stable by contract: the first one is kept, so an inline literal doesn't renew setState
+  const [fallback] = useState(defaultValue);
   const search = useSyncExternalStore(subscribe, getSearch);
-  const parsed = deserialise<unknown>(new URLSearchParams(search).get(key), defaultValue);
-  const value = !validate || validate(parsed) ? (parsed as T) : defaultValue;
+  const parsed = deserialise<unknown>(new URLSearchParams(search).get(key), fallback);
+  const value = !validate || validate(parsed) ? (parsed as T) : fallback;
 
   const setState = useCallback<UrlStateDispatch<T>>(
     (valueOrUpdater, mode = navigationMode) => {
-      const raw = deserialise<unknown>(new URLSearchParams(pending?.search ?? location.search).get(key), defaultValue);
-      const prev = !validate || validate(raw) ? (raw as T) : defaultValue;
+      const raw = deserialise<unknown>(new URLSearchParams(pending?.search ?? location.search).get(key), fallback);
+      const prev = !validate || validate(raw) ? (raw as T) : fallback;
       const next = typeof valueOrUpdater === 'function' ? (valueOrUpdater as (p: T) => T)(prev) : valueOrUpdater;
       if (serialise(next) === serialise(prev)) return;
-      write(key, next, defaultValue, mode, debounceMs);
+      write(key, next, fallback, mode, debounceMs);
     },
-    // defaultValue is stable by contract; compared by value so an inline literal is fine too
-    [key, serialise(defaultValue), navigationMode, validate, debounceMs],
+    [key, fallback, navigationMode, validate, debounceMs],
   );
 
   return [value, setState];

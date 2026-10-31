@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import { prependedCount, scrollToRow, visibleRows } from './virtual-list.js';
 import { SPEED_LABEL, latencyScale } from './speed.js';
 import { formatAgo, formatDay, formatMs } from '../../lib/format.js';
@@ -19,6 +19,11 @@ const ROWS_OVERSCAN = 10;
  * selected row in view (↑/↓ in the details sidebar) and keeps the reader's place when new commands
  * arrive above while they're scrolled down.
  */
+/** The React Compiler treats a node reached through a ref as frozen inside a component; the scroll position is set here. */
+function scrollTo(el: HTMLElement, top: number) {
+  el.scrollTop = top;
+}
+
 export function LogRows({
   rows,
   today,
@@ -56,16 +61,17 @@ export function LogRows({
     const el = ref.current?.parentElement;
     const added = prependedCount(firstN.current, rows.map((e) => e.n));
     firstN.current = rows[0]?.n;
-    if (el && added > 0 && el.scrollTop > 0) el.scrollTop += added * ROW_HEIGHT;
+    if (el && added > 0 && el.scrollTop > 0) scrollTo(el, el.scrollTop + added * ROW_HEIGHT);
   }, [rows]);
 
-  useLayoutEffect(() => {
+  // Only when the selection moves, not on every new row
+  const revealSelected = useEffectEvent(() => {
     const el = ref.current?.parentElement;
     if (!el || selectedN === undefined) return;
     const i = rows.findIndex((e) => e.n === selectedN);
-    if (i >= 0) el.scrollTop = scrollToRow(el.scrollTop, el.clientHeight, ROW_HEIGHT, i, ROWS_PAD);
-    // Only when the selection moves, not on every new row
-  }, [selectedN]);
+    if (i >= 0) scrollTo(el, scrollToRow(el.scrollTop, el.clientHeight, ROW_HEIGHT, i, ROWS_PAD));
+  });
+  useLayoutEffect(() => revealSelected(), [selectedN]);
 
   const { start, end } = visibleRows(view.top, view.height, ROW_HEIGHT, rows.length, ROWS_OVERSCAN, ROWS_PAD);
   return (

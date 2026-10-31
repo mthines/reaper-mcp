@@ -7,9 +7,14 @@ import { cx } from '../../../lib/cx.js';
 import chartStyles from '../../../styles/chart.module.css';
 import styles from './Pins.module.css';
 
-export function Pins({ v }: { v: Extract<EditView, { kind: "pins" }> }) {
+/** Every channel a pin uses, before or after, and the track's own, up to 64 */
+function columnCount(v: Extract<EditView, { kind: "pins" }>): number {
   const used = [...v.in, ...v.out, ...(v.inWas ?? []), ...(v.outWas ?? [])].flat();
-  const cols = Math.min(64, Math.max(v.ch, v.chWas ?? 0, ...used, 2));
+  return Math.min(64, Math.max(v.ch, v.chWas ?? 0, ...used, 2));
+}
+
+export function Pins({ v }: { v: Extract<EditView, { kind: "pins" }> }) {
+  const cols = columnCount(v);
   const chans = Array.from({ length: cols }, (_, i) => i + 1);
   // Which pin states the grid draws, so the legend names only those
   const states = (now: number[][], was: number[][] | undefined) => now.flatMap((pin, p) => chans.map((c) => [pin.includes(c), was ? (was[p] ?? []).includes(c) : pin.includes(c)]));

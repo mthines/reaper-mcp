@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { parseExtStateReply, parseHistoryReply, parseLogReply, parseLongHistoryReply, statusRequestUrl, type BridgeStatus } from '../lib/status.js';
 import { DEMO } from './demo-mode.js';
 import { load, save } from '../lib/storage.js';
+import { fetchText } from '../lib/fetch-text.js';
 import { mergeLog, restoreLog, type SavedLog } from '../lib/log.js';
 import type { BridgeHistory, LongHistory } from '../lib/timeline.js';
 import type { CommandEntry } from '../lib/commands.js';
@@ -31,7 +32,9 @@ const CLEARED_AT_KEY = 'mcp-bridge-cleared-at';
 export function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; clearedAt: number } {
   const [feed, setFeed] = useState<Feed>({ status: null, history: null, longHistory: null, reachable: true, lastChangeAt: 0, log: [] });
   const pausedRef = useRef(paused);
-  pausedRef.current = paused;
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
   // Highest sequence number cleared by the user. Numbers continue across bridge restarts and the
   // bridge keeps its log, so this is remembered too, or a reload would bring cleared entries back.
   const clearedThroughRef = useRef(Number(load(CLEARED_KEY)) || 0);
@@ -105,9 +108,9 @@ export function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; c
         const ask = wantLog && (!logWantRef.current || now - logWantRef.current.at > 5000);
         if (ask) logWantRef.current = { req: now, at: now };
         const extra = [...(wantLong ? ['history_long'] : []), ...(wantLog ? ['log'] : [])];
-        try {
-          const res = await fetch(statusRequestUrl(now, extra, ask ? now : undefined), { cache: 'no-store' });
-          const body = await res.text();
+        const body = await fetchText(statusRequestUrl(now, extra, ask ? now : undefined));
+        if (body === null) apply(null, null, false);
+        else {
           if (wantLong) lastLongPoll = now;
           apply(
             parseExtStateReply(body),
@@ -116,8 +119,6 @@ export function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; c
             wantLong ? parseLongHistoryReply(body) : undefined,
             wantLog ? parseLogReply(body) : undefined,
           );
-        } catch {
-          apply(null, null, false);
         }
       }
       if (!cancelled) timer = setTimeout(tick, document.hidden ? HIDDEN_POLL_MS : POLL_MS);

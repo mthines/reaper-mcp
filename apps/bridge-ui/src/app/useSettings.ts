@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { settingUrl, type BridgeSettings, type BridgeStatus, type SettingKey } from '../lib/status.js';
 import { DEMO } from './demo-mode.js';
 
@@ -17,13 +17,14 @@ export function useSettings(status: BridgeStatus | null): [BridgeSettings | null
   const [pending, setPending] = useState<Partial<BridgeSettings>>({});
   const echoed = status?.settings ?? null;
 
-  useEffect(() => {
-    if (!echoed) return;
-    setPending((p) => {
-      const left = Object.fromEntries(Object.entries(p).filter(([k, v]) => echoed[k as keyof BridgeSettings] !== v));
-      return Object.keys(left).length === Object.keys(p).length ? p : left;
-    });
-  }, [echoed?.paused, echoed?.readonly, echoed?.openOnStart, echoed?.dev]);
+  // Each new echo drops the clicks the bridge has confirmed (adjusted while rendering, as React suggests)
+  const echoedKey = echoed && `${echoed.paused}/${echoed.readonly}/${echoed.openOnStart}/${echoed.dev}`;
+  const [seenEcho, setSeenEcho] = useState(echoedKey);
+  if (echoed && echoedKey !== seenEcho) {
+    setSeenEcho(echoedKey);
+    const left = Object.fromEntries(Object.entries(pending).filter(([k, v]) => echoed[k as keyof BridgeSettings] !== v));
+    if (Object.keys(left).length !== Object.keys(pending).length) setPending(left);
+  }
 
   const set = (key: SettingKey, on: boolean) => {
     setPending((p) => ({ ...p, [SETTING_FIELD[key]]: on }));

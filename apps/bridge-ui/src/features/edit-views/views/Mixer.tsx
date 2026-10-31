@@ -21,6 +21,7 @@ function MixerRow({
   const [name, depth, color, db, pan, flags] = row;
   const hot = db > 0;
   const folder = flags.includes("F");
+  const states = [["M", "muted"], ["S", "soloed"], ["R", "armed"]].filter(([f]) => flags.includes(f)).map(([, word]) => word);
   return (
     <div
       className={cx(styles.evTrk, master && styles.evTrkMaster, flags.includes("M") && styles.evTrkMuted)}
@@ -70,15 +71,7 @@ function MixerRow({
       </span>
       <span
         className={styles.evChips}
-        aria-label={
-          [
-            flags.includes("M") && "muted",
-            flags.includes("S") && "soloed",
-            flags.includes("R") && "armed",
-          ]
-            .filter(Boolean)
-            .join(", ") || undefined
-        }
+        aria-label={states.length ? states.join(", ") : undefined}
       >
         {(["M", "S", "R"] as const).map((f) => (
           <span
