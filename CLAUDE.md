@@ -65,6 +65,7 @@ reaper-mcp/
         selection.ts          # get/set_selected_tracks, set_selected_items, get/set_time_selection
         actions.ts            # search_actions, get_action, run_action (logic in reaper/mcp_actions_lib.lua)
         items.ts              # insert_audio_file, takes, take FX, item color/fades (logic in reaper/mcp_items_lib.lua)
+        arrange.ts            # copy_media_items, insert/remove_time, copy_section, process_items (logic in reaper/mcp_arrange_lib.lua)
         fx-housekeeping.ts    # move/copy/rename_fx, .RfxChain save/load, track templates (logic in reaper/mcp_items_lib.lua)
         markers.ts            # list_markers, list_regions, add_marker, add_region, delete_marker, delete_region, edit_marker, edit_region
         tempo.ts              # get_tempo_map, add/edit/delete_tempo_marker, set_project_tempo
@@ -72,6 +73,7 @@ reaper-mcp/
         aesthetics.ts         # analyze_track_aesthetics (requires Python sidecar)
         offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment (sidecar, no model)
         transients.ts         # detect_transients, create_transient_automation (sidecar onsets → envelope pulses, e.g. lighting)
+        composition.ts        # quantize_midi, transform_midi, import_midi_file (SMF parsed in smf.ts), detect_key (key.ts; logic in reaper/mcp_midi_lib.lua)
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
         mixing.ts             # automation mode, FX modulation + pins, monitoring FX, freeze, render in place, stretch markers, quantize_audio (logic in reaper/mcp_mixing_lib.lua)
 
@@ -122,7 +124,9 @@ reaper-mcp/
     mcp_project_lib.lua       # Project ops, tempo map + marker editing (pure Lua, unit-tested via wasmoon)
     mcp_envelopes_lib.lua     # Envelopes, points (dB through the envelope's scaling) and pooled automation items (pure Lua, unit-tested via wasmoon)
     mcp_mixing_lib.lua        # Automation mode, FX modulation/pins, monitoring FX, freeze, apply FX, stretch markers + audio quantize (pure Lua, unit-tested via wasmoon)
+    mcp_midi_lib.lua          # Quantize, transform, MIDI file import, pitch-class profile (pure Lua, unit-tested via wasmoon)
     mcp_items_lib.lua         # Items, takes, take FX, FX move/copy/rename, FX chains, track templates (pure Lua, unit-tested via wasmoon)
+    mcp_arrange_lib.lua       # Copy items, insert/remove time, copy a section, normalize/reverse/glue (pure Lua, unit-tested via wasmoon)
     mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
     mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
@@ -151,7 +155,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (161 total)
+## MCP Tools (171 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -219,6 +223,15 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `get_midi_item_properties` | `tools/midi.ts` | Get MIDI item properties (position, length, note/CC count, mute, loop) |
 | `set_midi_item_properties` | `tools/midi.ts` | Set MIDI item properties (position, length, mute, loop source) |
 
+### Composition (4)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `quantize_midi` | `tools/composition.ts` | Snap notes to the project grid: grid (beats), strength, swing, window, `lengths` keep/quantize; all notes or a selection (indexes, pitch range, channel) |
+| `transform_midi` | `tools/composition.ts` | Transpose (refused out of 0-127), velocity set/scale/add + clamp, humanize (seeded), length set/scale/legato |
+| `import_midi_file` | `tools/composition.ts` | Import a .mid (type 0/1, ≤5 MB, ≤20000 notes) without REAPER's dialog: merged onto a track or one new named track per file track; file tempo reported, not applied |
+| `detect_key` | `tools/composition.ts` | Key from a track's MIDI notes (drums skipped) or rendered audio / an audio file (sidecar chroma): key, confidence, relative, top 3, 12-bin chroma |
+
 ### Live MIDI Output (3)
 
 | Tool | File | Description |
@@ -242,6 +255,16 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `add_stretch_marker` | `tools/media.ts` | Add a stretch marker for time-stretching audio |
 | `get_stretch_markers` | `tools/media.ts` | List stretch markers with positions and source positions |
 | `delete_stretch_marker` | `tools/media.ts` | Delete a stretch marker by index |
+
+### Arrangement Tools (5)
+
+| Tool | File | Description |
+|------|------|-------------|
+| `copy_media_items` | `tools/arrange.ts` | Copy/repeat items keeping their spacing (`times`, `position`, `trackIndex`); fresh GUIDs, MIDI unpooled unless `pooled` |
+| `insert_time` | `tools/arrange.ts` | Open time across the project: items, markers, regions, tempo, envelope points and automation items after it move; spanning items split |
+| `remove_time` | `tools/arrange.ts` | Cut a range out of the project and close the gap; crossing items trimmed, regions shrink, the tempo after the cut kept |
+| `copy_section` | `tools/arrange.ts` | Copy a region (or start/end) to a position: items trimmed to it plus automation (points, and pooled copies of automation items inside it), optional `insert` and `tracks` |
+| `process_items` | `tools/arrange.ts` | `normalize` (item gain to a peak/true-peak/LUFS/RMS target), `reverse` (toggles), `glue` (whole items); selection kept |
 
 ### Selection & Navigation Tools (5)
 
@@ -395,16 +418,17 @@ other tenancy it does, and the owning account must keep nothing private in that 
 | `get_action` | `tools/actions.ts` | One action's details; a `Custom:` macro's steps by name, or a script's path (from `reaper-kb.ini`) |
 | `run_action` | `tools/actions.ts` | Run an action by id, named id or exact name in an undo block; returns the toggle state after. Dialog actions need `allowDialog`; quit/close/open project are always refused |
 
-### Project Operations (8)
+### Project Operations (9)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `undo_project` | `tools/project.ts` | Undo the last undo point; reports its label and the next undo/redo labels |
 | `redo_project` | `tools/project.ts` | Redo the last undone point; reports its label |
 | `save_project` | `tools/project.ts` | Save in place, or write a copy to an absolute `.rpp` `path` (the open project keeps its path; `savedAsCopy`). Never opens a dialog: a never-saved project without `path` is refused |
-| `get_render_settings` | `tools/project.ts` | Output dir, file pattern, format, bounds, start/end, sample rate, channels, and the resolved target files |
-| `set_render_settings` | `tools/project.ts` | Set any render setting (format and secondaryFormat: wav/aiff/flac/mp3/ogg/opus, secondary also none); all validated before any write |
-| `render_project` | `tools/project.ts` | Render with the current settings (synchronous action 42230); refuses to overwrite existing targets unless `overwrite` |
+| `get_render_settings` | `tools/project.ts` | Output dir, file pattern, format + bit depth/bitrate, source, bounds, normalize/limit, dither, metadata, region matrix, and the resolved target files |
+| `set_render_settings` | `tools/project.ts` | Set any render setting: format/secondaryFormat (wav/aiff/flac/mp3/ogg/opus, secondary also none), `source` (master, stems, master_and_stems, selected_via_master, selected_items, selected_items_via_master, region_matrix + `regionMatrix`), `bitDepth`/`mp3Bitrate`, dither, normalize/limit, `metadata`; all validated before any write, one undo point |
+| `render_project` | `tools/project.ts` | Render with the current settings (synchronous action 42230), optionally for `tracks` (selected for the render, selection restored); returns each file's length, LUFS-I, true peak and peak; refuses to overwrite existing targets unless `overwrite` |
+| `render_versions` | `tools/project.ts` | Render up to 16 versions in one call (e.g. full, instrumental, TV): each mutes its tracks, renders to `<pattern>-<name>`, and mutes and pattern are restored even when one fails; all targets checked before the first render |
 | `get_project_settings` | `tools/project.ts` | Sample rate (+ forced flag), title, author, notes, repeat, metronome |
 | `set_project_settings` | `tools/project.ts` | Set any of those; metronome is a global REAPER option (not undoable, not stored in the project) |
 
@@ -441,11 +465,11 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 161 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 171 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
-Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`, `takes`, `fx_files`, `knowledge`
+Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`, `takes`, `fx_files`, `knowledge`
 
 ### MIDI Editing Concepts
 
@@ -455,6 +479,9 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 - **Channel**: 0-15 (default 0; channel 9 = drums in General MIDI)
 - **Batch operations** (`insert_midi_notes`, `edit_midi_notes`): Pass a JSON array of note objects for efficient multi-note operations
 - The Lua bridge includes a fallback JSON array parser for REAPER versions without `CF_Json_Parse`
+- **Undo**: a MIDI API edit (`MIDI_SetNote`, `MIDI_InsertNote`, …) leaves the item unmarked, so REAPER folds it into the previous MIDI undo point. Every MIDI write calls `MarkTrackItemsDirty(track, item)` before `Undo_EndBlock` (seen in REAPER 7.40)
+- **Composition** (`mcp_midi_lib.lua`): quantize snaps to the project's beats, not the item start; swing pushes every second grid line later. Humanize is reproducible from `seed`. `detect_key` correlates the 12-bin profile with the Krumhansl-Kessler key profiles (`key.ts`); confidence is the gap to the best key that is not the relative key, scaled down for a flat profile and by the best key's correlation
+- **A MIDI or arrangement write that fails half way is undone** (an import leaves no new tracks). The failed block is closed under its own `… (failed — reverting)` label and undone only when that label is on top, so a failure that wrote nothing never undoes an earlier edit, the same rule as `run_plan`.
 
 ### Media Item Editing Concepts
 
@@ -464,10 +491,19 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 - **Move**: Validates destination track upfront; moves to new track first, then adjusts position
 - **Stretch markers**: Define time-stretch points mapping item position to source audio position
 
+### Arrangement Concepts
+
+- **Logic lives in `reaper/mcp_arrange_lib.lua`** (pure Lua over an injected API, unit-tested via wasmoon in `arrange-lib.test.ts` against `__fixtures__/fake_timeline.lua`); the bridge handlers decode `items`/`tracks` (JSON strings) and pass `reaper` in.
+- **Time edits are done by hand, not with REAPER's ripple actions**, so the result never depends on the user's ripple or "move envelope points with items" options. Tempo markers change first; markers, envelopes and items are then set from absolute times read before any change (a beat-timebase item would otherwise follow the tempo edit on its own).
+- **remove_time keeps the tempo after the cut**: the last tempo marker inside the range moves to the cut's start (unless one sits on its end). Automation items fully inside are deleted (selected alone and removed with action 42086, the user's other selected items kept); ones crossing an edge are trimmed like media items (`automationItemsTrimmed`: the part after the cut moves to its start with a later start offset, a tail inside the cut is dropped); one spanning the whole cut cannot lose its middle, so it stays and is counted (`automationItemsKept`).
+- **Tempo ramps across a time edit keep their timing**: a linear marker whose ramp runs across the edit point would change slope once its end moves, shifting every beat before the edit. insert_time ends the ramp at the position with a marker at its tempo there and holds that tempo through the opened time (`tempoMarkersAdded: 2`); remove_time pins the ramp before the cut 1 ms short of it and starts the tempo after the cut where it stood at the cut's end, ramping on as before.
+- **Normalize** measures what the item plays (`CalculateNormalization` over its take's start offset and length) and sets item gain (`D_VOL`), so the take gain and source stay untouched. Reverse (41051, a toggle: a reversed take plays forward again) and glue (40362, ignoring the time selection; 41588 would glue only inside it) run on the named items only, then put the user's selection back; a glued item is selected when one of its sources was.
+- **run_plan ops** `copy_items`, `insert_time`, `remove_time`: `copy_items` names items by index in the project as it is before the plan, so it is refused after an op that adds tracks or moves items (`add_track`, `copy_items`, `insert_time`, `remove_time`).
+
 ### Plan Executor Concepts (`run_plan`)
 
 - **Use it for any multi-step edit**: one LLM turn and one bridge round trip instead of N sequential tool calls.
-- **Op types**: `add_track`, `set_track` (volume dB, pan, mute, solo, recordArm, phase, input, name), `add_fx` (optional `params`, `enabled`, `position`), `set_fx_params`, `add_send` (volume dB, pan, mute), `graft_fxchain`, `select_tracks` (`tracks`, `mode`), `run_action` (`action`, `section`, `allowDialog` — same resolution and safety rules as the `run_action` tool, checked in the validate pass). Only `run_action` ops may follow a `run_action`: targets resolve before anything runs, and an action can add, delete or reorder tracks.
+- **Op types**: `add_track`, `set_track` (volume dB, pan, mute, solo, recordArm, phase, input, name), `add_fx` (optional `params`, `enabled`, `position`), `set_fx_params`, `add_send` (volume dB, pan, mute), `graft_fxchain`, `select_tracks` (`tracks`, `mode`), `run_action` (`action`, `section`, `allowDialog` — same resolution and safety rules as the `run_action` tool, checked in the validate pass), and the arrangement ops `copy_items`, `insert_time`, `remove_time` (same parameters as the tools). Only `run_action` ops may follow a `run_action`: targets resolve before anything runs, and an action can add, delete or reorder tracks.
 - **Targets**: tracks by 0-based index, exact name (then case-insensitive), `"{GUID}"`, or a `"$ref"` bound by an earlier `add_track`/`add_fx` via `as: "$name"`. A digit string matches a track name first, then the index. FX by index, unique name substring, or `$ref`. A numeric FX index means the slot when that op runs, so after `add_fx` with `position: 0` the older FX have moved up one; use a name or an `as` ref to pin a specific FX. Validation checks FX refs against each track's chain as earlier ops (`add_fx`, `graft_fxchain`) change it.
 - **Two passes**: every target is resolved before anything is written; an unknown/ambiguous track or an undefined `$ref` rejects the whole plan. If an op fails mid-apply, the undo block is closed and undone (only when the top undo entry is the plan's own), so no partial edit remains.
 - **`dryRun: true`** returns the resolved op list, `conflicts`, and `warnings` (e.g. an FX name not found in the installed-FX list) without writing.
@@ -486,7 +522,11 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `selection`
 ### Project Operations Concepts
 
 - **No dialogs**: `save_project` without `path` on a never-saved project is refused (REAPER would open Save As) — the same rule `run_action` applies to `File: Save…`. `render_project` refuses when a target file exists (REAPER would ask to overwrite) unless `overwrite: true`, which deletes those files first, and when `bounds` is `time_selection` with no time selection.
-- **Render formats**: `format` and `secondaryFormat` (a second file from the same render; `none` disables it) take wav/aiff/flac/mp3/ogg/opus with REAPER's default options. `render_project` refuses when either is another encoder (seen live: a template's video secondary format left a modal dialog open) — set `secondaryFormat: "none"`.
+- **Render formats**: `format` and `secondaryFormat` (a second file from the same render; `none` disables it) take wav/aiff/flac/mp3/ogg/opus, with REAPER's default options except the bit depth or MP3 bitrate `bitDepth` / `mp3Bitrate` set. `render_project` refuses when either is another encoder (seen live: a template's video secondary format left a modal dialog open) — set `secondaryFormat: "none"`.
+- **Render source and encodings** (probed in REAPER 7.40): `source` maps to `RENDER_SETTINGS` (master 0, master_and_stems 1, stems 3 = stems of the *selected* tracks, selected_via_master 128, region_matrix 8, which needs region bounds, selected_items 32, selected_items_via_master 64; 2 renders nothing in REAPER 7). Bit depth lives in the `RENDER_FORMAT` blob (wav `evaw`+int16 bits, 32-bit int is 0x21 and float 0x20; aiff `ffia`; flac `calf`+int32 bits+compression), MP3 bitrate at bytes 4 and 24 of `l3pm`. Normalize target and limit ceiling are given in dB and stored linear (`RENDER_NORMALIZE_TARGET`, `RENDER_BRICKWALL`); REAPER hits both exactly.
+- **Render analysis**: each rendered file (up to 16) is measured with `CalculateNormalization` (target 0 dB, so the gain is the level): LUFS-I, true peak, sample peak; `analyze: false` skips it.
+- **Render metadata**: `metadata` fields (title, artist, album, genre, year, isrc, comment, description) write the matching ID3/INFO/VORBIS/AXML/BWF keys of `RENDER_METADATA`; `metadataRaw` sets any `SCHEME:KEY`; an empty value removes the key. Setting metadata turns on embedding (`RENDER_SETTINGS` &512) unless `embedMetadata: false`.
+- **Render versions**: `render_versions` mutes each version's tracks on top of the current mutes and renders to the version's pattern; mutes and the pattern are always restored (the selection is never touched). Use it for instrumental / a cappella / TV mixes instead of muting by hand.
 - **Render is synchronous**: action 42230 blocks REAPER (and the bridge) until the render finishes. Keep renders short (a time selection or custom bounds). `targets` in `get_render_settings` are the files REAPER will write (`RENDER_TARGETS`).
 - **Undo**: every edit by these tools is one undo point labelled `MCP: …`, so `undo_project` reverts exactly that edit. Repeat and metronome changes are not undoable in REAPER.
 - **Validation first**: invalid input (unknown marker/region/tempo index, BPM <= 0, unsupported format, end <= start) is refused before anything is written.
@@ -795,7 +835,12 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   FX GUID), item edits as one lane per touched track with the items before dashed, track structure edits on the mixer
   (tracks diffed by GUID), routing (sends/receives/hardware outs with level bars, the old level ghosted), the time
   selection and edit cursor, MIDI CC as a stepped lane in beats (the automation view, unit `cc`), and
-  `get_fx_parameters` as readout bars; FX modulation (LFO path, audio-follower band, link, the old baseline ghosted), FX pins as a
+  `get_fx_parameters` as readout bars; `render_project` / `render_versions` as a render result (one row per file,
+  ≤8: mini waveform from `PCM_Source_GetPeaks`, LUFS-I against the normalize target, true peak against the limit
+  ceiling, length; versions grouped with their muted tracks; format, source and target as readouts); and arrangement
+  edits (`op`, the `span` they opened, cut or copied from
+  hatched or outlined, where they copied `to`, a lane for up to 4 touched tracks plus `moreTracks`, normalized items
+  with their gain as a 7th item field); FX modulation (LFO path, audio-follower band, link, the old baseline ghosted), FX pins as a
   pin × channel grid (new connections marked, track widening shown), stretch markers and `quantize_audio` (grid lines, hits
   before dashed, offset before → after), and freeze / automation mode / apply FX as change rows. List diffs share `listDiff()` in `edit-views.ts`. Lists are capped so
   an entry stays a few KB. Add a command in `M.summary`, `KIND_OF` (`edit-views.ts`) and a gallery story together;

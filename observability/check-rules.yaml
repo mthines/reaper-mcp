@@ -77,3 +77,12 @@ spec:
             severity: info
           annotations:
             summary: Median off-grid offset after quantize_audio is above 5 ms — audio quantize stopped landing hits on the grid.
+        - alert: ReaperMcpArrangeTimeout
+          # A timed-out arrange edit may still finish in REAPER, and a retry would apply it twice.
+          expr: >-
+            sum(histogram_count(increase({otel_metric_name="reaper.bridge.command.duration",
+              error_type="timeout", rpc_method=~"insert_time|remove_time|copy_section|copy_media_items|process_items"}[15m]))) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: An arrange edit (time, section, item copy or process) timed out — check the project before retrying.

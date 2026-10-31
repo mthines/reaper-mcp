@@ -26,7 +26,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
     tools: [
       'get_project_info',
       'undo_project', 'redo_project', 'save_project',
-      'get_render_settings', 'set_render_settings', 'render_project',
+      'get_render_settings', 'set_render_settings', 'render_project', 'render_versions',
       'get_project_settings', 'set_project_settings',
     ],
   },
@@ -51,11 +51,11 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   midi: {
     name: 'midi',
-    description: 'MIDI item editing: create items, insert/edit/delete notes and CC events, batch operations, analysis, plus live MIDI output (send_midi_cc/pc/note). Use analyze_midi first for large items; paginate with get_midi_notes offset/limit.',
+    description: 'MIDI item editing: create items, insert/edit/delete notes and CC events, batch operations, quantize, transform (transpose/velocity/humanize/length), MIDI file import, analysis, plus live MIDI output (send_midi_cc/pc/note). Use analyze_midi first for large items; paginate with get_midi_notes offset/limit.',
     tools: [
       'create_midi_item', 'list_midi_items', 'get_midi_notes', 'analyze_midi',
       'insert_midi_note', 'insert_midi_notes', 'edit_midi_note', 'edit_midi_notes',
-      'delete_midi_note', 'get_midi_cc', 'insert_midi_cc', 'delete_midi_cc',
+      'delete_midi_note', 'quantize_midi', 'transform_midi', 'import_midi_file', 'get_midi_cc', 'insert_midi_cc', 'delete_midi_cc',
       'get_midi_item_properties', 'set_midi_item_properties',
       'send_midi_cc', 'send_midi_pc', 'send_midi_note',
     ],
@@ -68,6 +68,11 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
       'split_media_item', 'delete_media_item', 'move_media_item', 'trim_media_item',
       'add_stretch_marker', 'get_stretch_markers', 'delete_stretch_marker', 'add_stretch_markers', 'quantize_audio', 'apply_fx_to_items',
     ],
+  },
+  arrange: {
+    name: 'arrange',
+    description: 'Arrangement: copy or repeat items, insert or remove time across the whole project (items, markers, regions, tempo, automation), copy a section to another position, normalize/reverse/glue items',
+    tools: ['copy_media_items', 'insert_time', 'remove_time', 'copy_section', 'process_items'],
   },
   selection: {
     name: 'selection',
@@ -97,8 +102,8 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   analysis: {
     name: 'analysis',
-    description: 'Audio metering and analysis: peak/RMS meters, FFT spectrum, LUFS loudness, stereo correlation, crest factor, one-call multi-metric measurement (measure_tracks), perceptual aesthetics scores, offline render-based loudness/LRA/true-peak/spectrum with reference comparison, multi-mic time alignment, transient detection and transient-driven automation e.g. for lighting (the last six need the Python sidecar)',
-    tools: ['read_track_meters', 'read_track_spectrum', 'read_track_lufs', 'read_track_correlation', 'read_track_crest', 'measure_tracks', 'analyze_track_aesthetics', 'analyze_track_offline', 'analyze_audio_file', 'measure_track_alignment', 'detect_transients', 'create_transient_automation'],
+    description: 'Audio metering and analysis: peak/RMS meters, FFT spectrum, LUFS loudness, stereo correlation, crest factor, one-call multi-metric measurement (measure_tracks), perceptual aesthetics scores, offline render-based loudness/LRA/true-peak/spectrum with reference comparison, multi-mic time alignment, transient detection and transient-driven automation e.g. for lighting (the last six need the Python sidecar), musical key detection (MIDI notes, or audio via the sidecar)',
+    tools: ['read_track_meters', 'read_track_spectrum', 'read_track_lufs', 'read_track_correlation', 'read_track_crest', 'measure_tracks', 'analyze_track_aesthetics', 'analyze_track_offline', 'analyze_audio_file', 'measure_track_alignment', 'detect_transients', 'create_transient_automation', 'detect_key'],
   },
   discovery: {
     name: 'discovery',
@@ -153,7 +158,8 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
 export function registerCategoryTools(server: McpServer): void {
   server.tool(
     'list_tool_categories',
-    'List all available tool categories with descriptions and tool names. Use this to discover what tools are available without loading all 72+ tool schemas. Categories: project, tracks, fx, transport, midi, media, selection, markers, tempo, envelopes, analysis, discovery, snapshots, routing, plan, actions, takes, fx_files.',
+    'List all available tool categories with descriptions and tool names. Use this to discover what tools are available without loading every tool schema. ' +
+      `Categories: ${Object.keys(TOOL_CATEGORIES).join(', ')}.`,
     {},
     async () => {
       const categories = Object.values(TOOL_CATEGORIES).map((cat) => ({

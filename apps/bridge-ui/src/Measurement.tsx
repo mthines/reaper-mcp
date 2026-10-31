@@ -84,6 +84,8 @@ function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | un
       return <Alignment m={m} />;
     case 'aesthetics':
       return <Aesthetics m={m} was={same('aesthetics', previous)} />;
+    case 'key':
+      return <Key m={m} was={same('key', previous)} />;
     case 'correlation': {
       const c = m.correlation;
       const wc = same('correlation', previous)?.correlation;
@@ -340,6 +342,8 @@ function headline(m: Measurement): { value: number; label: string; unit: string;
       return v(m.delayMs, 'Delay', 'ms');
     case 'aesthetics':
       return v(m.pq, 'Quality', '/ 10', true);
+    case 'key':
+      return v(m.conf === undefined ? undefined : m.conf * 100, 'Confidence', '%', true);
   }
 }
 
@@ -349,9 +353,9 @@ function Previous({ m, previous, now, onPick }: { m: Measurement; previous: Comm
   const cur = headline(m);
   const was = p && headline(p);
   if (!was) return null;
-  const digits = was.unit ? 1 : 2;
+  const digits = was.unit === '%' ? 0 : was.unit ? 1 : 2;
   const delta = cur ? cur.value - was.value : null;
-  const flat = delta === null || Math.abs(delta) < (digits === 1 ? 0.05 : 0.005);
+  const flat = delta === null || Math.abs(delta) < 0.5 / 10 ** digits;
   return (
     <button className="measure-previous" onClick={() => onPick(previous)} title="Open the previous call (↓)">
       <span>Previous call · {formatAgo(now - previous.t)}</span>
@@ -629,6 +633,53 @@ function Aesthetics({ m, was }: { m: Extract<Measurement, { kind: 'aesthetics' }
           {m.dur !== undefined ? `, ${Math.round(m.dur)} s` : ''}
           {m.lufs !== undefined ? `, scored at ${fmt(m.lufs, 0)} LUFS` : ', scored as rendered'}
           .{m.dur !== undefined && ` Differences under ~${m.dur >= 30 ? '0.1' : '0.4'} are render noise at this length.`}
+        </span>
+      </div>
+    </>
+  );
+}
+
+const PITCH_CLASSES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+const SCALE_STEPS: Record<string, number[]> = { major: [0, 2, 4, 5, 7, 9, 11], minor: [0, 2, 3, 5, 7, 8, 10] };
+const DEGREE: Record<string, string[]> = { major: ['1', '2', '3', '4', '5', '6', '7'], minor: ['1', '2', '♭3', '4', '5', '♭6', '♭7'] };
+
+/** The key: how much of each pitch class there is, the key's scale lit, its tonic strongest; the previous call ghosted */
+function Key({ m, was }: { m: Extract<Measurement, { kind: 'key' }>; was: Extract<Measurement, { kind: 'key' }> | null }) {
+  const tonic = PITCH_CLASSES.indexOf(m.tonic ?? '');
+  const steps = SCALE_STEPS[m.mode ?? ''] ?? [];
+  const degreeOf = (pc: number) => (tonic < 0 ? -1 : steps.indexOf((pc - tonic + 12) % 12));
+  const conf = m.conf;
+  const zone: Zone = conf === undefined || conf >= 0.25 ? 'ok' : 'hot';
+  return (
+    <>
+      <div className="measure-readouts">
+        <Readout label="Key" value={m.key ?? '–'} />
+        <Readout label="Confidence" value={conf === undefined ? '–' : `${Math.round(conf * 100)}`} unit="%" zone={zone} word={zone === 'hot' ? 'low' : undefined}
+          title="How far this key stands out from the next one that is not its relative key, scaled by how well it fits" />
+        <Readout label="Relative" value={m.rel ?? '–'} />
+      </div>
+      <div className="key-bars" role="img" aria-label={`Pitch classes: ${PITCH_CLASSES.map((p, i) => `${p} ${Math.round(m.chroma[i] * 100)}%`).join(', ')}`}>
+        {PITCH_CLASSES.map((pc, i) => {
+          const d = degreeOf(i);
+          const w = was?.chroma[i];
+          return (
+            <div key={pc} className={`key-col${d === 0 ? ' key-tonic' : d > 0 ? ' key-in' : ''}`} title={`${pc}: ${Math.round(m.chroma[i] * 100)}%${d >= 0 ? ` · scale degree ${DEGREE[m.mode ?? 'major']?.[d] ?? ''}` : ' · outside the key'}`}>
+              <span className="key-track">
+                <span className="key-fill" style={{ height: `${pct(m.chroma[i], 0, 1)}%` }} />
+                {w !== undefined && <span className="key-was" style={{ bottom: `${pct(w, 0, 1)}%` }} />}
+              </span>
+              <span className="key-pc mono">{pc}</span>
+              <span className="key-deg mono">{d >= 0 ? DEGREE[m.mode ?? 'major']?.[d] : ''}</span>
+            </div>
+          );
+        })}
+      </div>
+      {was && <PreviousLegend />}
+      <div className="off-hints">
+        <span>
+          {m.name ? `${m.name}, ` : ''}from {m.src === 'midi' ? 'MIDI notes' : m.src === 'file' ? 'an audio file' : 'the rendered audio'}
+          {m.r !== undefined && ` · r ${m.r.toFixed(2)}`}
+          {m.alt.length > 0 && <> · next: {m.alt.map(([k, r]) => `${k} (${r.toFixed(2)})`).join(', ')}</>}
         </span>
       </div>
     </>

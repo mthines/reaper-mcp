@@ -24,8 +24,11 @@ export type Region = [number, number, string, string, number];
 export type Marker = [number, string, string, number];
 /** [position s, BPM, numerator, denominator (−1 = unchanged), 1 = linear ramp] */
 export type Tempo = [number, number, number, number, number];
-/** [position s, length s, fade-in s, fade-out s, 1 = MIDI, 1 = muted] */
-export type Item = [number, number, number, number, number, number];
+/** [position s, length s, fade-in s, fade-out s, 1 = MIDI, 1 = muted, item gain dB (normalize only)] */
+export type Item = [number, number, number, number, number, number, number?];
+/** What an arrangement edit did: copied items or a section, opened or cut time, or processed items */
+export type ArrangeOp = 'copy' | 'section' | 'insert' | 'remove' | 'normalize' | 'reverse' | 'glue';
+const ARRANGE_OPS: readonly string[] = ['copy', 'section', 'insert', 'remove', 'normalize', 'reverse', 'glue'];
 /** [name, folder depth, "#rrggbb" or "", volume dB, pan −1..1, flags: M mute, S solo, R armed, F folder] */
 export type MixRow = [string, number, string, number, number, string];
 
@@ -52,6 +55,10 @@ export interface ModRow {
   link?: [string, number, number];
   was?: ModRow | false;
 }
+/** A rendered file: [name, duration s (−1 unknown), LUFS-I, true peak, sample peak (−150 unmeasured or silent), waveform maxima, minima] */
+export type RenderFile = [string, number, number, number, number, number[], number[]];
+/** One version of a render (`v` "" for a plain render), the tracks it muted and its files */
+export interface RenderGroup { v: string; m: string[]; f: RenderFile[] }
 
 export type EditView =
   | { kind: 'changes'; rows: ChangeRow[]; more?: number }
@@ -62,7 +69,7 @@ export type EditView =
       /** Automation items on the envelope, each pool's points once, the item this call touched, and both before a write */
       ais?: AutoItem[]; pools?: Pool[]; ai?: number; aisMore?: number; wasAis?: AutoItem[]; wasPools?: Pool[];
     }
-  | { kind: 'midi'; total: number; beats?: number; ts?: [number, number]; notes: Note[]; more: number; gone?: Note[] }
+  | { kind: 'midi'; total: number; beats?: number; ts?: [number, number]; notes: Note[]; more: number; gone?: Note[]; items?: number }
   | { kind: 'midiStats'; total?: number; beats?: number; pitches: PitchStats[]; hist?: number[] }
   | ({
       kind: 'timeline'; items?: Item[]; len: number; was?: TimelineState;
@@ -70,6 +77,8 @@ export type EditView =
       lanes?: ItemLane[];
       /** Time selection [start, end] and edit cursor, now and before a write */
       sel?: [number, number]; cur?: number; wasSel?: [number, number] | null; wasCur?: number;
+      /** Arrangement edits: the op, the span it copied from / opened / cut, where it copied to, and tracks without a lane */
+      op?: ArrangeOp; span?: [number, number]; to?: [number, number]; moreTracks?: number;
     } & TimelineState)
   | { kind: 'mixer'; tracks: MixRow[]; total: number; from?: number; master?: MixRow; ids?: string[]; was?: { tracks: MixRow[]; ids: string[] } }
   | { kind: 'fxChain'; chains: FxChain[] }
@@ -82,7 +91,12 @@ export type EditView =
    * Stretch markers on an item, seconds from its start: quantize moves [from, to] over the grid lines with the
    * average offset from the grid before/after (ms); a batch add shows the markers now and before
    */
-  | { kind: 'stretch'; len: number; moves?: [number, number][]; more?: number; grid?: number[]; off?: [number, number]; marks?: number[]; was?: number[] };
+  | { kind: 'stretch'; len: number; moves?: [number, number][]; more?: number; grid?: number[]; off?: [number, number]; marks?: number[]; was?: number[] }
+  | {
+      kind: 'render'; fmt: string; src: string; groups: RenderGroup[]; more?: number;
+      /** Bit depth or MP3 kbps, the normalize mode and target (dB), and the limiter ceiling (dB, `tp` true peak) */
+      bd?: string; kbps?: number; norm?: string; nt?: number; lim?: number; tp?: boolean;
+    };
 
 const KIND_OF: Record<string, EditView['kind']> = {};
 const kinds: Array<[EditView['kind'], string[]]> = [
@@ -95,7 +109,7 @@ const kinds: Array<[EditView['kind'], string[]]> = [
     'list_automation_items', 'insert_automation_item', 'set_automation_item', 'delete_automation_item',
     'get_midi_cc', 'insert_midi_cc', 'delete_midi_cc',
   ]],
-  ['midi', ['insert_midi_note', 'insert_midi_notes', 'edit_midi_note', 'edit_midi_notes', 'delete_midi_note', 'get_midi_notes']],
+  ['midi', ['insert_midi_note', 'insert_midi_notes', 'edit_midi_note', 'edit_midi_notes', 'delete_midi_note', 'get_midi_notes', 'quantize_midi', 'transform_midi', 'import_midi_file']],
   ['midiStats', ['analyze_midi']],
   ['timeline', [
     'add_marker', 'add_region', 'edit_marker', 'edit_region', 'delete_marker', 'delete_region',
@@ -104,6 +118,7 @@ const kinds: Array<[EditView['kind'], string[]]> = [
     'move_media_item', 'split_media_item', 'trim_media_item', 'delete_media_item', 'set_media_item_properties',
     'set_media_items_properties', 'set_item_fades', 'insert_audio_file', 'list_midi_items',
     'set_time_selection', 'get_time_selection', 'set_cursor_position',
+    'copy_media_items', 'insert_time', 'remove_time', 'copy_section', 'process_items',
   ]],
   ['mixer', ['list_tracks', 'add_track', 'delete_track', 'move_track', 'set_track_folder', 'set_track_info']],
   ['fxChain', [
@@ -116,6 +131,7 @@ const kinds: Array<[EditView['kind'], string[]]> = [
   ['modulation', ['get_fx_param_modulation', 'set_fx_param_modulation']],
   ['pins', ['get_fx_pins', 'set_fx_pins']],
   ['stretch', ['add_stretch_markers', 'quantize_audio']],
+  ['render', ['render_project', 'render_versions']],
 ];
 for (const [kind, commands] of kinds) for (const c of commands) KIND_OF[c] = kind;
 
@@ -145,6 +161,8 @@ const MIX_ROW = [str, num, str, num, num, str];
 const ITEM = [num, num, num, num, num, num];
 const FX_SLOT = [str, str, str, str];
 const ROUTE = [(v: unknown) => v === 's' || v === 'r' || v === 'h', str, num, num, str];
+const numbers = (v: unknown): v is number[] => Array.isArray(v) && v.every(num);
+const RENDER_FILE = [str, num, num, num, num, numbers, numbers];
 const pair = (v: unknown): v is [number, number] => Array.isArray(v) && v.length === 2 && num(v[0]) && num(v[1]);
 const nums = (v: unknown): v is number[] => Array.isArray(v) && v.every(num);
 const channelLists = (v: unknown): number[][] => (Array.isArray(v) ? v.map((p) => (nums(p) ? p : [])) : []);
@@ -161,6 +179,11 @@ function modRow(v: unknown, depth = 0): ModRow | null {
   return row;
 }
 const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(str);
+
+/** Items, keeping a gain only when it is a number */
+function items(v: unknown): Item[] {
+  return tuples<Item>(v, ITEM).map((it) => (num(it[6]) ? [...it.slice(0, 6), it[6]] : it.slice(0, 6)) as Item);
+}
 
 function timelineState(r: Record<string, unknown>): TimelineState {
   return {
@@ -208,6 +231,7 @@ export function editViewOf(e: CommandEntry): EditView | null {
         total: num(r.total) ? r.total : notes.length,
         beats: num(r.beats) && r.beats > 0 ? r.beats : undefined,
         more: num(r.more) ? r.more : 0,
+        ...(num(r.items) && r.items > 0 ? { items: r.items } : {}),
         ...(Array.isArray(r.gone) ? { gone: tuples<Note>(r.gone, NOTE).map((n) => [n[0], n[1], n[2], n[3], 0] as Note) } : {}),
       };
     }
@@ -224,7 +248,7 @@ export function editViewOf(e: CommandEntry): EditView | null {
         ? (r.lanes as unknown[]).flatMap((l): ItemLane[] => {
             if (!l || typeof l !== 'object' || !str((l as ItemLane).t)) return [];
             const lane = l as Record<string, unknown>;
-            return [{ t: lane.t as string, items: tuples<Item>(lane.items, ITEM), ...(Array.isArray(lane.was) ? { was: tuples<Item>(lane.was, ITEM) } : {}) }];
+            return [{ t: lane.t as string, items: items(lane.items), ...(Array.isArray(lane.was) ? { was: items(lane.was) } : {}) }];
           })
         : undefined;
       return {
@@ -237,6 +261,10 @@ export function editViewOf(e: CommandEntry): EditView | null {
         // A write that started from no selection says so with null
         ...(pair(r.wasSel) ? { wasSel: r.wasSel } : num(r.wasCur) ? { wasSel: null } : {}),
         ...(num(r.wasCur) ? { wasCur: r.wasCur } : {}),
+        ...(str(r.op) && ARRANGE_OPS.includes(r.op) ? { op: r.op as ArrangeOp } : {}),
+        ...(pair(r.span) ? { span: r.span } : {}),
+        ...(pair(r.to) ? { to: r.to } : {}),
+        ...(num(r.moreTracks) && r.moreTracks > 0 ? { moreTracks: r.moreTracks } : {}),
       };
     }
     case 'mixer': {
@@ -263,6 +291,22 @@ export function editViewOf(e: CommandEntry): EditView | null {
     case 'routing': {
       if (!str(r.t) || !Array.isArray(r.routes)) return null;
       return { kind, t: r.t, routes: tuples<Route>(r.routes, ROUTE), ...(Array.isArray(r.was) ? { was: tuples<Route>(r.was, ROUTE) } : {}) };
+    }
+    case 'render': {
+      if (!Array.isArray(r.groups)) return null;
+      const groups = (r.groups as unknown[]).flatMap((g): RenderGroup[] => {
+        if (!g || typeof g !== 'object') return [];
+        const x = g as Record<string, unknown>;
+        return [{ v: str(x.v) ? x.v : '', m: strings(x.m) ? x.m : [], f: tuples<RenderFile>(x.f, RENDER_FILE) }];
+      });
+      if (!groups.some((g) => g.f.length)) return null;
+      return {
+        kind, fmt: str(r.fmt) ? r.fmt : '', src: str(r.src) ? r.src : 'master', groups,
+        ...(num(r.more) && r.more > 0 ? { more: r.more } : {}),
+        ...(str(r.bd) ? { bd: r.bd } : {}), ...(num(r.kbps) ? { kbps: r.kbps } : {}),
+        ...(str(r.norm) ? { norm: r.norm, ...(num(r.nt) ? { nt: r.nt } : {}) } : {}),
+        ...(num(r.lim) ? { lim: r.lim, tp: r.tp === true } : {}),
+      };
     }
     case 'plan': {
       const ops = tuples<[string, string]>(r.ops, [str, str]);
@@ -295,6 +339,19 @@ export function editViewOf(e: CommandEntry): EditView | null {
       };
     }
   }
+}
+
+/**
+ * Gains a normalize changed, as [after, before] dB: normalize never moves an item, so its
+ * before is the one at the same position and length; items whose gain stayed are left out.
+ */
+export function normalizedGains(lanes: ItemLane[]): Array<[number, number]> {
+  return lanes.flatMap((l) =>
+    l.items.flatMap((it): Array<[number, number]> => {
+      const was = (l.was ?? []).find((w) => w[0] === it[0] && w[1] === it[1]);
+      return it[6] !== undefined && was?.[6] !== undefined && was[6] !== it[6] ? [[it[6], was[6]]] : [];
+    }),
+  );
 }
 
 /** What changed on the timeline: the marks (or items) this call added, moved or renamed, and the ones it removed */

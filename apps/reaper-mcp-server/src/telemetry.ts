@@ -417,6 +417,35 @@ export function getQuantizeOffsetHistogram(): Histogram {
   return _quantizeOffset;
 }
 
+let _midiNotesChanged: Histogram | null = null;
+
+/** Notes one MIDI composition edit (quantize, transform, import) changed or created. */
+export function getMidiNotesHistogram(): Histogram {
+  _midiNotesChanged ??= getMeter().createHistogram('reaper.midi.notes_changed', {
+    description: 'Notes changed or created by one MIDI composition edit (quantize_midi, transform_midi, import_midi_file)',
+    unit: '{note}',
+    advice: { explicitBucketBoundaries: [0, 1, 5, 10, 50, 100, 500, 1000, 5000, 20000] },
+  });
+  return _midiNotesChanged;
+}
+
+let _arrangeItems: Histogram | null = null;
+
+/**
+ * Items one arrangement edit touched (moved, split, trimmed, deleted, copied or
+ * processed). Insert/remove time walk the whole project, so their duration scales
+ * with this: read it beside `reaper.bridge.handler.duration` for the same method.
+ * Attributes: `gen_ai.tool.name` and `reaper.arrange.operation` (7 values).
+ */
+export function getArrangeItemsHistogram(): Histogram {
+  _arrangeItems ??= getMeter().createHistogram('reaper.arrange.items_changed', {
+    description: 'Media items changed by one arrangement edit',
+    unit: '{item}',
+    advice: { explicitBucketBoundaries: [0, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 2500] },
+  });
+  return _arrangeItems;
+}
+
 // ---------------------------------------------------------------------------
 // Bridge health gauges
 // ---------------------------------------------------------------------------

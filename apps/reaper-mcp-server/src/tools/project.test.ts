@@ -6,6 +6,7 @@ vi.mock('../bridge.js', () => ({
 
 import { sendCommand } from '../bridge.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod/v4';
 import { registerProjectTools } from './project.js';
 
 const mockedSendCommand = vi.mocked(sendCommand);
@@ -106,5 +107,56 @@ describe('project ops tools', () => {
     mockedSendCommand.mockResolvedValue({ id: 't', success: false, error: 'refused: nope', timestamp: 0 });
     const result = await tools[name].handler(params);
     expect(result).toEqual({ content: [{ type: 'text', text: 'Error: refused: nope' }], isError: true });
+  });
+});
+
+describe('render tools', () => {
+  beforeEach(() => vi.clearAllMocks());
+  const ok = (data: unknown) => mockedSendCommand.mockResolvedValue({ id: 't', success: true, data, timestamp: 0 });
+
+  it('render tools: set_render_settings sends nested metadata and the region matrix as JSON the bridge can decode', async () => {
+    const tools = captureTools();
+    ok({ source: 'region_matrix' });
+    await tools['set_render_settings'].handler({
+      source: 'region_matrix', bounds: 'all_regions', bitDepth: '24', normalize: 'lufs_i', normalizeTarget: -14,
+      metadata: { title: 'Night Drive', isrc: 'USABC2600001' }, regionMatrix: [{ regionIndex: 1, tracks: ['Drums', 'master'] }],
+    });
+    const [, sent] = mockedSendCommand.mock.calls[0] as [string, Record<string, unknown>];
+    expect(sent).toMatchObject({ source: 'region_matrix', bitDepth: '24', normalize: 'lufs_i', normalizeTarget: -14 });
+    expect(JSON.parse(sent.metadata as string)).toEqual({ title: 'Night Drive', isrc: 'USABC2600001' });
+    expect(JSON.parse(sent.regionMatrix as string)).toEqual([{ regionIndex: 1, tracks: ['Drums', 'master'] }]);
+    expect(sent).not.toHaveProperty('metadataRaw');
+  });
+
+  it('render tools: render_project returns the measured files and allows a long render', async () => {
+    const tools = captureTools();
+    const data = { rendered: true, files: ['/tmp/out/Drums.wav'], analysis: [{ file: '/tmp/out/Drums.wav', durationSeconds: 184.2, lufsIntegrated: -14.1, truePeak: -1 }] };
+    ok(data);
+    const result = await tools['render_project'].handler({ tracks: ['Drums'], overwrite: true });
+    const [type, sent, timeout] = mockedSendCommand.mock.calls[0] as [string, Record<string, unknown>, number];
+    expect(type).toBe('render_project');
+    expect(JSON.parse(sent.tracks as string)).toEqual(['Drums']);
+    expect(timeout).toBeGreaterThanOrEqual(300_000);
+    expect(result).toEqual({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
+  });
+
+  it('render tools: render_versions sends the versions and passes a refusal through', async () => {
+    const tools = captureTools();
+    ok({ rendered: true, versions: [{ name: 'Instrumental', files: ['/tmp/out/song-Instrumental.wav'] }] });
+    await tools['render_versions'].handler({ versions: [{ name: 'Instrumental', mute: ['Vocals'] }] });
+    const [type, sent] = mockedSendCommand.mock.calls[0] as [string, Record<string, unknown>];
+    expect(type).toBe('render_versions');
+    expect(JSON.parse(sent.versions as string)).toEqual([{ name: 'Instrumental', mute: ['Vocals'] }]);
+    mockedSendCommand.mockResolvedValue({ id: 't', success: false, error: "versions[1].mute: track 'Nope' not found — nothing rendered", timestamp: 0 });
+    const refused = await tools['render_versions'].handler({ versions: [{ name: 'X', mute: ['Nope'] }] });
+    expect(refused).toEqual({ content: [{ type: 'text', text: "Error: versions[1].mute: track 'Nope' not found — nothing rendered" }], isError: true });
+  });
+
+  it('keeps a track named with digits as a name, so the bridge resolves it name-first', () => {
+    const schemas: Record<string, z.ZodObject> = {};
+    registerProjectTools({ tool: (name: string, _d: string, shape: z.ZodRawShape) => { schemas[name] = z.object(shape); } } as unknown as McpServer);
+    const versions = schemas['render_versions'].parse({ versions: [{ name: 'No 808', mute: ['808', 'Lead Vox', 3] }] });
+    expect((versions as { versions: { mute: unknown[] }[] }).versions[0].mute).toEqual(['808', 'Lead Vox', 3]);
+    expect(schemas['render_project'].parse({ tracks: ['2024'] }).tracks).toEqual(['2024']);
   });
 });

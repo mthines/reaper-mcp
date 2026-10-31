@@ -1200,6 +1200,18 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
 .ev-vel-new { stroke: var(--accent); stroke-width: 1.5; }
 .ev-vel-old { stroke: var(--muted); stroke-width: 1.5; opacity: 0.5; }
 .ev-bars { position: relative; height: 14px; font-size: 10.5px; color: var(--faint); }
+/* detect_key: one column per pitch class; scale tones lit, the tonic strongest, the previous call as a dashed tick */
+.key-bars { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; margin: 10px 0 4px; }
+.key-col { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; text-align: center; }
+.key-track { position: relative; height: 84px; border-bottom: 1px solid var(--line-2); }
+.key-fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 2px 2px 0 0; background: var(--faint); opacity: 0.45; }
+.key-in .key-fill { background: var(--accent); opacity: 0.55; }
+.key-tonic .key-fill { background: var(--accent); opacity: 1; }
+.key-was { position: absolute; left: 10%; right: 10%; height: 0; border-top: 1px dashed var(--muted); }
+.key-pc { font-size: 10.5px; color: var(--muted); overflow: hidden; }
+.key-tonic .key-pc { color: var(--accent); font-weight: 600; }
+.key-deg { min-height: 1.2em; font-size: 9.5px; color: var(--faint); }
+@container (max-width: 300px) { .key-deg { display: none; } .key-bars { gap: 2px; } }
 .ev-bars span { position: absolute; padding-left: 3px; }
 .ev-hist { display: flex; align-items: flex-end; gap: 2px; height: 28px; border-bottom: 1px solid var(--line-2); }
 .ev-hist span { flex: 1; min-height: 1px; border-radius: 1px 1px 0 0; background: var(--bar); }
@@ -1533,4 +1545,47 @@ body:has(.resize-handle[data-resizing]) { cursor: col-resize; user-select: none;
   .ev-mod-head { flex-direction: column; align-items: flex-start; gap: 0; }
   .ev-mod-src { white-space: normal; }
   .ev-pins-row { grid-template-columns: 36px repeat(var(--cols), minmax(12px, 1fr)); }
+}
+
+/* Arrangement edits: the time an edit opened, cut or copied to (hatched), the source it copied from (outlined),
+   and a normalized item's new gain */
+.ev-span { position: absolute; top: -3px; bottom: -3px; z-index: 0; pointer-events: none; border-inline: 1px solid var(--accent);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent) 0 3px, transparent 3px 7px); }
+.ev-span-cut { border-color: var(--bad); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--bad) 20%, transparent) 0 3px, transparent 3px 7px); }
+.ev-span-src { border: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); background: none; }
+.lg-span { width: 12px; height: 8px; border-inline: 1px solid var(--accent); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 45%, transparent) 0 2px, transparent 2px 4px); }
+.lg-span-cut { border-color: var(--bad); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--bad) 45%, transparent) 0 2px, transparent 2px 4px); }
+.lg-span-src { width: 12px; height: 8px; border: 1px dashed var(--accent); }
+.ev-item-gain { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; }
+/* A region narrower than its padding at the end of the song stays inside the lane */
+.ev-lane-regions { overflow: hidden; }
+/* Render results: one row per file, the version (if any) above its files */
+.lg-warn { width: 8px; height: 8px; border-radius: 2px; background: var(--warn); }
+.ev-render-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+.ev-render-tag { padding: 1px 7px; border: 1px solid var(--line-2); border-radius: 999px; font: 500 10.5px/16px var(--mono); color: var(--muted); }
+.ev-render { display: flex; flex-direction: column; margin-top: 10px; }
+.ev-render-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(48px, 1.1fr) 42px 38px 38px; gap: 8px; align-items: center; padding: 5px 0; font-size: 12px; }
+.ev-render-row + .ev-render-row, .ev-render-group + .ev-render-group { border-top: 1px solid var(--line); }
+.ev-render-head { padding-top: 0; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); }
+.ev-render-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-render-wave { display: block; width: 100%; height: 22px; }
+.ev-render-shape { fill: var(--accent); stroke: var(--accent); stroke-width: 0.5px; opacity: 0.85; }
+.ev-render-v { font-size: 11px; text-align: right; color: var(--muted); }
+.ev-render-v.zone-hot { color: var(--warn); }
+.ev-render-v.zone-over { color: var(--bad); }
+.ev-render-version { display: flex; gap: 8px; align-items: baseline; padding: 8px 0 2px; font-size: 12px; min-width: 0; }
+.ev-render-version .muted { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+/* Narrow drawer: name and length on one line, the waveform under them across the width, the levels last */
+@container (max-width: 300px) {
+  .ev-render-row { grid-template-columns: minmax(0, 1fr) 40px 40px; grid-template-areas: 'name name dur' 'wave wave wave' '. lufs tp'; row-gap: 3px; }
+  .ev-render-name { grid-area: name; }
+  .ev-render-wave { grid-area: wave; }
+  .ev-render-lufs { grid-area: lufs; }
+  .ev-render-tp { grid-area: tp; }
+  .ev-render-dur { grid-area: dur; }
+  .ev-render-head { display: none; }
+  .ev-render-lufs::after { content: ' LUFS'; color: var(--faint); }
+  .ev-render-tp::after { content: ' TP'; color: var(--faint); }
+  .ev-render-lufs, .ev-render-tp { white-space: nowrap; }
+  .ev-render-row { grid-template-columns: minmax(0, 1fr) 72px 56px; }
 }
