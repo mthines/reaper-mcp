@@ -157,6 +157,29 @@ local function tempo_markers(api)
   return out
 end
 
+-- The tempo at t: a linear marker ramps to the next one
+local function bpm_at(tempo, t)
+  local prev
+  for i, m in ipairs(tempo) do if m.t <= t + EPS then prev = i end end
+  if not prev then return tempo[1] and tempo[1].bpm end
+  local m, n = tempo[prev], tempo[prev + 1]
+  if m.linear and n and n.t > m.t + EPS then return m.bpm + (n.bpm - m.bpm) * (t - m.t) / (n.t - m.t) end
+  return m.bpm
+end
+
+-- The linear marker whose ramp runs across t (starts before it, its next marker after it)
+local function ramp_across(tempo, t)
+  for i, m in ipairs(tempo) do
+    local n = tempo[i + 1]
+    if m.linear and m.t < t - EPS and n and n.t > t + EPS then return m end
+  end
+end
+
+-- A new tempo marker (0 = no time signature change)
+local function add_tempo(api, t, bpm, linear)
+  api.SetTempoTimeSigMarker(0, -1, t, -1, -1, bpm, 0, 0, linear)
+end
+
 -- Selected items project-wide, so an action that works on the selection can be pointed at
 -- a few items and the user's selection put back afterwards
 local function save_item_selection(api)
@@ -319,12 +342,21 @@ local function apply_insert(api, c)
   end
 
   local tempo = tempo_markers(api)
+  -- A ramp across the position would change slope (and so the timing before it) once its end moves
+  local ramp = ramp_across(tempo, at)
+  local ramp_bpm = ramp and bpm_at(tempo, at)
   for i = #tempo, 1, -1 do
     local m = tempo[i]
     if m.t >= at - EPS then
       api.SetTempoTimeSigMarker(0, i - 1, m.t + len, -1, -1, m.bpm, m.num, m.den, m.linear)
       r.tempoMarkersMoved = r.tempoMarkersMoved + 1
     end
+  end
+  if ramp then
+    -- End the ramp at the position, hold its tempo across the opened time, then carry on as before
+    add_tempo(api, at, ramp_bpm, false)
+    add_tempo(api, at + len, ramp_bpm, true)
+    r.tempoMarkersAdded = 2
   end
   retime(api)
 
@@ -437,6 +469,14 @@ local function apply_remove(api, c)
   -- Tempo: markers inside go, except the last one, which moves to the cut so the tempo after
   -- the cut stays what it was (unless a marker sits on the cut's end already)
   local tempo = tempo_markers(api)
+  -- Ramps across the cut's edges: before it, the ramp keeps its slope up to the cut; after it,
+  -- the tempo starts where it stood at the cut's end and ramps on as it did
+  local ramp_in = ramp_across(tempo, s)
+  local bpm_in = ramp_in and bpm_at(tempo, s - PIN)
+  local bpm_out = bpm_at(tempo, e)
+  local in_force_out
+  for _, m in ipairs(tempo) do if m.t <= e + EPS then in_force_out = m end end
+  local ramp_out = in_force_out and in_force_out.linear and math.abs(in_force_out.t - e) > EPS and ramp_across(tempo, e) ~= nil
   local inside, at_end = {}, false
   for i, m in ipairs(tempo) do
     if m.t >= s - EPS and m.t < e - EPS then inside[#inside + 1] = i end
@@ -469,6 +509,18 @@ local function apply_remove(api, c)
       r.tempoMarkersMoved = r.tempoMarkersMoved + 1
     end
   end
+  if ramp_out then
+    local placed = false
+    for i, m in ipairs(tempo_markers(api)) do
+      if math.abs(m.t - s) < EPS then
+        api.SetTempoTimeSigMarker(0, i - 1, s, -1, -1, bpm_out, m.num, m.den, true)
+        placed = true
+        break
+      end
+    end
+    if not placed then add_tempo(api, s, bpm_out, true) end
+  end
+  if ramp_in then add_tempo(api, s - PIN, bpm_in, true) end
   retime(api)
 
   for _, m in ipairs(snap.markers) do

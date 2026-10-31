@@ -197,6 +197,29 @@ describe('mcp_arrange_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('insert and remove time: a tempo ramp across the edit keeps its tempo before the edit and its slope after', async () => {
+    await runLua(`
+      -- 100 → 200 BPM over 0..100 s: 150 at 50 s
+      local function ramp() return new_timeline{ tempo = { { t = 0, bpm = 100, linear = true }, { t = 100, bpm = 200 } } } end
+      local function bpm(api, t)
+        local prev
+        for i, m in ipairs(api.tempo) do if m.t <= t + 1e-9 then prev = i end end
+        local m, n = api.tempo[prev], api.tempo[prev + 1]
+        if m.linear and n then return m.bpm + (n.bpm - m.bpm) * (t - m.t) / (n.t - m.t) end
+        return m.bpm
+      end
+      local api = ramp()
+      assert(arrange.insert_time(api, { position = 50, length = 10 }))
+      assert(near(bpm(api, 25), 125) and near(bpm(api, 55), 150) and near(bpm(api, 85), 175) and near(bpm(api, 110), 200),
+        bpm(api, 25) .. " " .. bpm(api, 55) .. " " .. bpm(api, 85))
+      api = ramp()
+      assert(arrange.remove_time(api, { start = 40, ["end"] = 60 }))
+      -- Before the cut as it was; after it, 160 at the cut and on to 200 at 80
+      assert(near(bpm(api, 20), 120) and near(bpm(api, 40), 160) and near(bpm(api, 60), 180) and near(bpm(api, 80), 200),
+        bpm(api, 20) .. " " .. bpm(api, 40) .. " " .. bpm(api, 60))
+    `);
+  });
+
   it('remove time: deletes automation items inside the cut and keeps the user\'s other selected items', async () => {
     await runLua(`
       local api = new_timeline{ tracks = { { envs = { { ais = { { pos = 1, len = 1, sel = true }, { pos = 4, len = 1 }, { pos = 10, len = 1, sel = true } } } } } } }

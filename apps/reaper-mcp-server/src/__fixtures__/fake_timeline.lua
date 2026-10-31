@@ -54,7 +54,7 @@ function new_timeline(spec)
     next_num[rgn] = next_num[rgn] + 1
     markers[#markers + 1] = { rgn = rgn, pos = m.pos, rend = m.rend or 0, name = m.name or "", num = m.num or next_num[rgn], color = 0 }
   end
-  for _, m in ipairs(spec.tempo or {}) do tempo[#tempo + 1] = { t = m.t, bpm = m.bpm, num = m.num or 4, den = m.den or 4, linear = false } end
+  for _, m in ipairs(spec.tempo or {}) do tempo[#tempo + 1] = { t = m.t, bpm = m.bpm, num = m.num or 4, den = m.den or 4, linear = m.linear or false } end
   api.tracks, api.master, api.markers, api.tempo = tracks, master, markers, tempo
 
   api.genGuid = function() return guid() end
@@ -320,6 +320,14 @@ function new_timeline(spec)
     return true, m.t, 0, 0, m.bpm, m.num, m.den, m.linear
   end
   api.SetTempoTimeSigMarker = function(_, idx, t, _, _, bpm, num, den, linear)
+    if idx == -1 then
+      -- A new marker (one already at t is replaced)
+      for k, x in ipairs(tempo) do if math.abs(x.t - t) < 1e-9 then table.remove(tempo, k) break end end
+      tempo[#tempo + 1] = { t = t, bpm = bpm, num = num, den = den, linear = linear }
+      table.sort(tempo, function(a, b) return a.t < b.t end)
+      write()
+      return true
+    end
     local m = tempo[idx + 1]
     if not m then return false end
     for k, x in ipairs(tempo) do
