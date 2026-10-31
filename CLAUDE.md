@@ -109,9 +109,10 @@ reaper-mcp/
                               # Every component's own styles: <Name>.module.css beside it (styles.x, joined with cx() from lib/cx.ts)
     src/test/stories.test.tsx # Runs every story's play function as a vitest test (jsdom)
     .storybook/               # Storybook (React + Vite): pnpm storybook, nx build-storybook bridge-ui
-    build.mjs                 # esbuild bundle inlined into dist/apps/bridge-ui/mcp_bridge.html
-    build-config.mjs          # esbuild options + HTML template shared by build.mjs and dev.mjs
-    dev.mjs                   # pnpm dev:bridge: live-reload page, /_/ proxied over one socket, reaper/ installed on save
+    mcp_bridge.html           # The page's HTML template (Vite entry)
+    vite.config.ts            # Vite + React Compiler, inlined into one dist/apps/bridge-ui/mcp_bridge.html (vite-plugin-singlefile)
+    build-config.mjs          # Build-time constants (version, LoreKit, Dash0) + the React Compiler's Babel options, shared by Vite, vitest and Storybook
+    vite-reaper-dev.mjs       # pnpm dev:bridge's REAPER side: /_/ proxied over one socket, reaper/ installed on save
 
   .claude/skills/             # Mix skills (one dir per skill, each with SKILL.md), symlinked into ~/.claude/skills by scripts/sync-symlinks.sh
     mixer/SKILL.md            # /mixer — executes mixes (live session, reads/writes memory)
@@ -171,7 +172,7 @@ reaper-mcp/
 |---------|----------|-------|---------|
 | `@mthines/reaper-mcp` | `/` (root) | -- | Workspace root, scripts |
 | `@mthines/reaper-mcp-server` | `apps/reaper-mcp-server` | `@nx/esbuild` (ESM bundle) | MCP server application |
-| `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | `build.mjs` (esbuild → single HTML) | Bridge status page served by REAPER's web interface |
+| `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | Vite + React Compiler → single HTML | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
 ## MCP Tools (181 total)
@@ -807,19 +808,26 @@ the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript cons
 `?demo` previews the page with fake data: a fake bridge whose log holds a call of every command (`DEMO_CALLS`) and every
 example, with new calls drawn from them.
 
-**Developing the page or the bridge: run `pnpm dev:bridge`** (`apps/bridge-ui/dev.mjs`) and open
-`http://localhost:8098/mcp_bridge.html`, never REAPER's own `:8099` page. Without REAPER, open
-`http://localhost:8098/mcp_bridge.html?demo` (every tool and view in the log). It prints both URLs on start.
+**Developing the page or the bridge: run `pnpm dev:bridge`** (Vite's dev server on `apps/bridge-ui/vite.config.ts`, plus
+`vite-reaper-dev.mjs`) and open `http://localhost:8098/mcp_bridge.html`, never REAPER's own `:8099` page. Without
+REAPER, open `http://localhost:8098/mcp_bridge.html?demo` (every tool and view in the log). It prints both URLs on start.
 
-- It rebuilds the page on every save (unminified, inline sourcemap) and reloads each open tab over `/__dev/events`.
+- Vite hot-reloads components on save (React Fast Refresh), and reloads the page for anything else.
 - It proxies `/_/*` to REAPER over one keep-alive socket (`http.Agent`, `maxSockets: 1`) and never aborts an upstream
   request. Aborting closes the socket from the client side, the one close REAPER's web server never frees (see Stuck
   sockets below); a browser talking to REAPER directly hangs up on every reload, idle drop, and devtools refresh.
+  This is why it is a middleware of its own, not Vite's `server.proxy`, which passes each client hang-up on to REAPER.
 - A saved `reaper/` file listed in `REAPER_ASSETS` (`cli.ts`, read as text) is copied into REAPER: Lua into
   `Scripts/`, then the running bridge is asked to restart with the token from its status feed; JSFX into
   `Effects/reaper-mcp/`, where it loads only when the plugin is re-added.
-- `build.mjs` and `dev.mjs` share the esbuild options and HTML template in `build-config.mjs`; change the page's build
-  there so production and dev stay the same.
+- Production (`nx build bridge-ui`), dev, vitest and Storybook all compile with the React Compiler and read the same
+  constants from `build-config.mjs`; Storybook inherits `vite.config.ts` and drops only the single-file and REAPER plugins.
+- React Compiler: write plain components, no `useMemo`/`useCallback`/`memo` for speed. `eslint-plugin-react-hooks`
+  (recommended) enforces the Rules of React it relies on: no state set in an effect body (derive it while rendering),
+  no ref read or written while rendering, `useEffectEvent` for an effect's latest-value callback. A component the
+  compiler cannot handle is skipped silently and runs uncompiled; known triggers are a conditional (`?:`, `&&`, `?.`)
+  inside a `try` block (use `fetchText()` from `src/lib/fetch-text.ts`), a variable incremented inside a callback,
+  and `a && "x"` lists inside JSX attributes (build them before `return`).
 - Overrides: `BRIDGE_DEV_PORT` (8098), `REAPER_WEB_PORT` (8099), `REAPER_RESOURCE_PATH`.
 
 ```bash
@@ -922,7 +930,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   folder's `index.ts`), or under a plain object when there is no main one (`EditView.Section`, `Icon.Gear`). Add a new
   part to its folder's namespace, and import a feature from its `index.ts` only, never its files (inside a folder,
   files import each other directly; an index importing a sibling feature's index is fine, a cycle is not).
-- Styles: CSS modules (esbuild `local-css` in the page build, Vite in Storybook and vitest). A component imports its
+- Styles: CSS modules (Vite, in the page build, Storybook and vitest alike). A component imports its
   own `<Name>.module.css` as `styles` and any other module as `<name>Styles` (`chartStyles`, `drawerStyles`), and joins
   classes with `cx(styles.row, selected && styles.rowSelected)`. State that picks a colour or a variant is a data
   attribute styled from the module, never a class built from a string: `data-outcome`, `data-zone`, `data-change`,
@@ -981,7 +989,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   project state changes; the page polls `used` every 5s and `installed` every 30s. Rows group by creator (record vendor,
   else REAPER's `(Vendor)` suffix), project plugins first, with Teach prompts per row, per creator and for all. Plugin records come straight from LoreKit's **REST** API
   (`GET /memories`, which allows browser origins — the server's `/mcp` endpoint does not): the built-in layer with the
-  public token, which `build.mjs` reads out of `tools/knowledge.ts` at build time, and the viewer's own `user::` records
+  public token, which `build-config.mjs` reads out of `tools/knowledge.ts` at build time, and the viewer's own `user::` records
   only with their own `lk_ro_` token from Settings (kept in localStorage, never sent to the bridge). Records link into
   LoreKit by row id. The tab stays hidden until the bridge has published its list. **Contribute N** (with a token, when you have
   `user::` records) opens GitHub's new-file page with them as one file under `knowledge/contributions/` (format and
@@ -1022,7 +1030,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
 - Usage statistics: `src/lib/analytics.ts` is the only module that imports `@dash0/sdk-web` (pinned); components call
   `track()` / `trackView()` with a typed `TrackEvent`. Events are listed in `apps/bridge-ui/tracking-plan.yaml`; add an
   event there and in `TrackEvent` together, never with names, search text, tokens or paths. The destination is the
-  server's `DEFAULT_DESTINATION` (read by `build.mjs` from `telemetry-consent.ts`), service `reaper-mcp-bridge-ui`.
+  server's `DEFAULT_DESTINATION` (read by `build-config.mjs` from `telemetry-consent.ts`), service `reaper-mcp-bridge-ui`.
   On by default, off via Settings → Privacy, GPC/DNT, or `?demo`; fetch/xhr tracing stays off (the page polls the bridge).
 - Payload shapes live in `apps/bridge-ui/src/lib/status.ts` (`BridgeStatus`) and `src/lib/timeline.ts` (`BridgeHistory`, `LongHistory`) and
   `publish_status()` / `publish_history()` / `publish_log()` in `mcp_bridge.lua` — change both together.

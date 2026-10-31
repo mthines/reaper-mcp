@@ -188,8 +188,9 @@ Run the bridge dev server while you work on `reaper/` or `apps/bridge-ui/`:
 pnpm dev:bridge        # → http://localhost:8098/mcp_bridge.html
 ```
 
-- **Status page:** rebuilt on every save, and every open tab reloads. Open this URL, not REAPER's own
-  `http://localhost:8099/mcp_bridge.html`.
+- **Status page:** Vite's dev server, so a saved component hot-reloads in place (anything else reloads the page). Open
+  this URL, not REAPER's own `http://localhost:8099/mcp_bridge.html`. `pnpm nx build bridge-ui` builds the single
+  `mcp_bridge.html` that setup installs, with the React Compiler on (as in dev, tests and Storybook).
 - **Lua scripts:** a saved file in `reaper/` that setup installs is copied into REAPER's `Scripts/` folder, and the
   running bridge is asked to restart into it.
 - **JSFX:** copied into `Effects/reaper-mcp/`; remove and re-add the plugin to load the new code.
