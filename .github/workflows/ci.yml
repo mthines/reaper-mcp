@@ -165,6 +165,33 @@ jobs:
       - name: Test all projects
         run: pnpm nx run-many --target=test
 
+      - name: Install Chromium for the bridge page check
+        run: pnpm --filter @mthines/reaper-bridge-ui exec playwright install --with-deps chromium
+
+      - name: Bridge page views fit their drawer (real browser, 320 / 400 / 980 px)
+        run: node apps/bridge-ui/e2e/drawer-widths.mjs
+
+  # Sidecar analysis + mix checks (correctness against EBU reference signals, and time bounds).
+  # CPU torch only; Demucs and the aesthetics model are not installed, so their tests are not run here.
+  sidecar:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.changed == 'true' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install CPU torch, numpy, soundfile, pytest
+        run: |
+          pip install --index-url https://download.pytorch.org/whl/cpu torch torchaudio
+          pip install numpy soundfile pytest
+
+      - name: Sidecar analysis and mix-check tests
+        run: python -m pytest apps/reaper-mcp-server/sidecar/tests/test_analysis.py apps/reaper-mcp-server/sidecar/tests/test_mixcheck.py -q
+
   # =============================================================================
   # Step 3: Calculate version and create tag
   # =============================================================================
