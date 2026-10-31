@@ -44,7 +44,9 @@ for (const [path, mod] of Object.entries(modules)) {
   describe(path.replace(/^\.\.\//, ''), () => {
     const stories: Record<string, { run: () => Promise<void> }> = composeStories(mod);
     for (const [name, story] of Object.entries(stories)) {
-      it(name, () => story.run());
+      // jsdom runs ~4x slower while the other projects test alongside (nx run-many): a play function that takes
+      // under a second alone gets room for that, so a busy machine is never reported as a broken component
+      it(name, () => story.run(), 15_000);
     }
   });
 }

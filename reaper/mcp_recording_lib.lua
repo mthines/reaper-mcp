@@ -291,11 +291,16 @@ function M.set_record_mode(api, params)
 
   api.Undo_BeginBlock()
   if mode and global_mode(api) ~= mode then api.Main_OnCommand(M.RECORD_MODES[mode], 0) end
+  local now = global_mode(api)
+  -- The mode is a toggle action REAPER may not run (another section focused, a newer action id): never report
+  -- a switch that did not happen, and stop before the punch range and path are written
+  if mode and now ~= mode then
+    api.Undo_EndBlock("MCP: Set record mode (failed)", -1)
+    return nil, "REAPER did not switch the record mode to " .. mode .. " (it reads " .. now .. ") — nothing changed"
+  end
   if ps then api.GetSet_LoopTimeRange(true, false, ps, pe, false) end
   if path then api.GetSetProjectInfo_String(0, "RECORD_PATH", path, true) end
   api.Undo_EndBlock("MCP: Set record mode", -1)
-
-  local now = global_mode(api)
   return {
     mode = now,
     punch = now == "selected_items" and nil or (now == "time_selection" and time_selection(api) or nil),

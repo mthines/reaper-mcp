@@ -388,6 +388,62 @@ describe('edit views in the log', () => {
     });
   });
 
+  it('shows a comp as a new lane built from parts of the takes', async () => {
+    const bridge = await startBridge(`
+      local tr = api.tracks[1]
+      tr.vals.I_FREEMODE = 2
+      tr.vals.I_NUMFIXEDLANES = 2
+      tr.vals["C_LANEPLAYS:0"] = 1
+      local function item(lane, name)
+        local it = { vals = { D_POSITION = 0, D_LENGTH = 8, I_FIXEDLANE = lane }, takes = {}, active = 1 }
+        it.takes[1] = { name = name, item = it }
+        return it
+      end
+      tr.items = { item(0, "Take 1"), item(1, "Take 2") }
+      api.GetItemStateChunk = function(it) return true, "<ITEM\\nNAME " .. ((it.takes[1] or {}).name or "") .. "\\n>" end
+      api.SetItemStateChunk = function(it, chunk)
+        it.takes = { { name = chunk:match("NAME ([^\\n]*)") or "", item = it, vals = { D_PLAYRATE = 1, D_STARTOFFS = 0 } } }
+        it.active = 1
+        return true
+      end
+      api.GetMediaItemTakeInfo_Value = function(tk, k) return (tk.vals or {})[k] or (k == "D_PLAYRATE" and 1 or 0) end
+      api.SetMediaItemTakeInfo_Value = function(tk, k, v) tk.vals = tk.vals or {}; tk.vals[k] = v; return true end
+      local plain = api.GetSetMediaTrackInfo_String
+      api.GetSetMediaTrackInfo_String = function(t, k, v, set)
+        local n = k:match("^P_LANENAME:(%d+)")
+        if not n then return plain(t, k, v, set) end
+        t.lane_names = t.lane_names or {}
+        if set then t.lane_names[n] = v end
+        return true, t.lane_names[n] or ""
+      end
+    `);
+    const res = await bridge.send('comp_lanes', {
+      track: 'Kick', crossfadeMs: 10, ranges: JSON.stringify([{ start: 0, end: 4, lane: 0 }, { start: 4, end: 8, lane: 1 }]),
+    });
+    expect(res).toMatchObject({ success: true });
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({
+      t: 'Kick', comp: 2,
+      lanes: [['', 0], ['', 0], ['Comp', 1]],
+      segs: [[0, 4, 0], [4, 8, 1]],
+      items: [[0, 8, 0, 0], [0, 8, 1, 0], [0, 4.01, 2, 0], [4, 4, 2, 0]],
+      was: { lanes: [['', 1], ['', 0]] },
+    });
+  });
+
+  it('shows the record mode and punch range a mode change set', async () => {
+    const bridge = await startBridge(`
+      local toggles = {}
+      api.GetToggleCommandState = function(id) return toggles[id] or 0 end
+      api.Main_OnCommand = function(id) for k in pairs(toggles) do toggles[k] = 0 end; toggles[id] = 1 end
+      local sel = { 0, 0 }
+      api.GetSet_LoopTimeRange = function(set, _, s, e) if set then sel = { s, e } end; return sel[1], sel[2] end
+    `);
+    expect((await bridge.send('set_record_mode', { mode: 'time_selection', punchStart: 4, punchEnd: 12 })).success).toBe(true);
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({ mode: 'time_selection', punch: [4, 12], was: { mode: 'normal' } });
+  });
+
   it('draws the first 32 lanes of a track and counts the rest', async () => {
     const bridge = await startBridge(`
       local tr = api.tracks[1]

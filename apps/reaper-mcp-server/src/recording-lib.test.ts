@@ -245,6 +245,21 @@ describe('mcp_recording_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('set_record_mode reports a mode switch REAPER did not make as an error and leaves the punch range and path alone', async () => {
+    await runLua(`
+      local api = fake{}
+      api.Main_OnCommand = function() end -- the toggle action does nothing
+      local before = { api.GetSet_LoopTimeRange(false, false, 0, 0, false) }
+      local r, err = rec.set_record_mode(api, { mode = "time_selection", punchStart = 12, punchEnd = 20, recordPath = "Takes" })
+      assert(r == nil and err:find("did not switch the record mode to time_selection %(it reads normal%)"), tostring(err))
+      local s, e = api.GetSet_LoopTimeRange(false, false, 0, 0, false)
+      assert(s == before[1] and e == before[2], "the time selection is left as it was")
+      local _, path = api.GetSetProjectInfo_String(0, "RECORD_PATH", "", false)
+      assert(path ~= "Takes", "the record path is left as it was")
+      assert(#api.undo == 0, "no undo point")
+    `);
+  });
+
   it('get_track_lanes groups items by lane with names and play state', async () => {
     await runLua(`
       local api = fake${TAKES}
@@ -346,6 +361,33 @@ describe('mcp_recording_lib.lua (wasmoon)', () => {
       local r, err = rec.comp_lanes(api, { track = "Vox", ranges = { { start = 10, ["end"] = 13, lane = 0 }, { start = 13, ["end"] = 20, lane = 1 } } }, R)
       assert(r == nil and err:find("undone") and err:find("disk full"), err)
       assert(api.undone == "MCP: Comp lanes", "the partial comp was undone")
+    `);
+  });
+
+  // Bounds sit ~50× over what these take in wasmoon (comp 200 ranges ≈ 7 ms), so only a real
+  // regression (quadratic scans, a lane rebuilt per range) trips them
+  it('stays fast on a big session: 60 lanes × 20 takes comped from 200 ranges, 64 armed tracks', async () => {
+    await runLua(`
+      local items = {}
+      for lane = 0, 59 do
+        for k = 0, 19 do items[#items + 1] = { pos = k * 10, len = 10, lane = lane, name = "Take " .. lane .. "." .. k } end
+      end
+      local tracks = { { name = "Vox", vals = { I_FREEMODE = 2, I_NUMFIXEDLANES = 60 }, items = items } }
+      for i = 2, 64 do tracks[i] = { name = "T" .. i, vals = { I_RECARM = 1, I_RECINPUT = i, I_RECMON = 1 } } end
+      local api = fake{ tracks = tracks }
+      local ranges = {}
+      for i = 0, 199 do ranges[#ranges + 1] = { start = i, ["end"] = i + 1, lane = i % 60 } end
+      local function timed(fn)
+        local t0 = os.clock(); local r, err = fn(); return assert(r, err), (os.clock() - t0) * 1000
+      end
+      local setup, setup_ms = timed(function() return rec.get_record_setup(api, {}, R) end)
+      assert(#setup.tracks == 63, "every armed track listed")
+      local lanes, lanes_ms = timed(function() return rec.get_track_lanes(api, { track = "Vox" }, R) end)
+      assert(#lanes.lanes == 60)
+      local comp, comp_ms = timed(function() return rec.comp_lanes(api, { track = "Vox", crossfadeMs = 10, ranges = ranges }, R) end)
+      assert(#comp.segments == 200 and comp.laneCount == 61)
+      assert(setup_ms < 250 and lanes_ms < 250 and comp_ms < 500,
+        string.format("too slow: get_record_setup %.1f ms, get_track_lanes %.1f ms, comp_lanes %.1f ms", setup_ms, lanes_ms, comp_ms))
     `);
   });
 });

@@ -151,6 +151,6 @@ export function stemsSummary(name: string, data: Obj): Obj {
     secs: num(data['seconds']),
     proc: num(data['processingSeconds']),
     stems: stems.map((s) => [s['stem'], num(s['lufs']) ?? null, num(s['peakDbfs']) ?? null]),
-    ...(Array.isArray(inserted['tracks']) ? { inserted: (inserted['tracks'] as unknown[]).length, folder: inserted['folderName'] } : {}),
+    ...(Array.isArray(inserted['tracks']) ? { inserted: (inserted['tracks'] as unknown[]).length, folder: inserted['folderName'], ...(inserted['muted'] === true ? { muted: 1 } : {}) } : {}),
   };
 }

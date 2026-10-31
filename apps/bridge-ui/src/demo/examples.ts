@@ -159,7 +159,7 @@ function measurementExampleList(): Example[] {
     tracks: ['Kick', 'Hi-hat'], hz: MASK_HZ, pairs: [['Kick', 'Hi-hat', 0, bump(0, 0, 0)]], conflicts: [],
   }, { ms: 2_400 });
   const stemsR = {
-    name: 'Master', model: 'htdemucs', device: 'mps', secs: 180, proc: 61.4, inserted: 4, folder: 'Master stems',
+    name: 'Master', model: 'htdemucs', device: 'mps', secs: 180, proc: 61.4, inserted: 4, folder: 'Master stems', muted: 1,
     stems: [['drums', -14.2, -1.8], ['bass', -16.9, -4.1], ['other', -15.3, -2.6], ['vocals', -13.1, 0.7]],
   };
   const stems = call('separate_stems', { trackIndex: -1, endTime: 180, insertTracks: true }, stemsR, { ms: 64_200 });
