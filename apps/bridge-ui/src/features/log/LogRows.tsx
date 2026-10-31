@@ -14,15 +14,16 @@ const ROWS_PAD = 4;
 /** Rows rendered above and below the viewport, so fast scrolling doesn't show blank space */
 const ROWS_OVERSCAN = 10;
 
+/** The React Compiler treats a node reached through a ref as frozen inside a component; the scroll position is set here. */
+function scrollTo(el: HTMLElement, top: number) {
+  el.scrollTop = top;
+}
+
 /**
  * The command log, windowed: only the rows in (and near) the viewport are in the DOM. Keeps the
  * selected row in view (↑/↓ in the details sidebar) and keeps the reader's place when new commands
  * arrive above while they're scrolled down.
  */
-/** The React Compiler treats a node reached through a ref as frozen inside a component; the scroll position is set here. */
-function scrollTo(el: HTMLElement, top: number) {
-  el.scrollTop = top;
-}
 
 export function LogRows({
   rows,

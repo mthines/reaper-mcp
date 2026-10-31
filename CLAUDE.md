@@ -641,7 +641,7 @@ When adding new tools that could return large datasets, always implement both a 
 | `lint` | `@nx/eslint/plugin` | ESLint with typescript-eslint + Nx module boundaries |
 | `test` | `@nx/vite/plugin` | Vitest (watch: false, passWithNoTests: true) |
 | `typecheck` | `@nx/vite/plugin` | `tsc --noEmit` |
-| `serve` | project.json (explicit) | Run the built server |
+| `serve` | project.json (explicit) | Run the built server (reaper-mcp-server); for bridge-ui, `@nx/vite/plugin` infers `serve`/`dev`/`preview` from `vite.config.ts`, but the page's dev server is `pnpm dev:bridge` |
 
 ### Common Commands
 
@@ -825,7 +825,7 @@ REAPER, open `http://localhost:8098/mcp_bridge.html?demo` (every tool and view i
 - React Compiler: write plain components, no `useMemo`/`useCallback`/`memo` for speed. `eslint-plugin-react-hooks`
   (recommended) enforces the Rules of React it relies on: no state set in an effect body (derive it while rendering),
   no ref read or written while rendering, `useEffectEvent` for an effect's latest-value callback. A component the
-  compiler cannot handle is skipped silently and runs uncompiled; known triggers are a conditional (`?:`, `&&`, `?.`)
+  compiler cannot handle fails the build and tests (`panicThreshold: 'all_errors'` in `build-config.mjs`); known triggers are a conditional (`?:`, `&&`, `?.`)
   inside a `try` block (use `fetchText()` from `src/lib/fetch-text.ts`), a variable incremented inside a callback,
   and `a && "x"` lists inside JSX attributes (build them before `return`).
 - Overrides: `BRIDGE_DEV_PORT` (8098), `REAPER_WEB_PORT` (8099), `REAPER_RESOURCE_PATH`.

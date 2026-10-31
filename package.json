@@ -28,7 +28,6 @@
     "@nx/js": "^20.0.0",
     "@nx/vite": "^20.8.4",
     "@storybook/react-vite": "9.1.21",
-    "@testing-library/react": "16.3.3",
     "@types/node": "^22.0.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

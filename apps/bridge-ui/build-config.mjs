@@ -36,5 +36,8 @@ export function buildConstants() {
   };
 }
 
-/** Babel options for @vitejs/plugin-react that turn on the React Compiler: the page, its tests and Storybook alike. */
-export const reactCompilerBabel = { plugins: [['babel-plugin-react-compiler', {}]] };
+/**
+ * Babel options for @vitejs/plugin-react that turn on the React Compiler: the page, its tests and Storybook alike.
+ * `all_errors` fails the build and tests on a component the compiler would otherwise skip without a word.
+ */
+export const reactCompilerBabel = { plugins: [['babel-plugin-react-compiler', { panicThreshold: 'all_errors' }]] };
