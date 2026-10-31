@@ -164,8 +164,7 @@ const ROUTE = [(v: unknown) => v === 's' || v === 'r' || v === 'h', str, num, nu
 const numbers = (v: unknown): v is number[] => Array.isArray(v) && v.every(num);
 const RENDER_FILE = [str, num, num, num, num, numbers, numbers];
 const pair = (v: unknown): v is [number, number] => Array.isArray(v) && v.length === 2 && num(v[0]) && num(v[1]);
-const nums = (v: unknown): v is number[] => Array.isArray(v) && v.every(num);
-const channelLists = (v: unknown): number[][] => (Array.isArray(v) ? v.map((p) => (nums(p) ? p : [])) : []);
+const channelLists = (v: unknown): number[][] => (Array.isArray(v) ? v.map((p) => (numbers(p) ? p : [])) : []);
 function modRow(v: unknown, depth = 0): ModRow | null {
   if (!v || typeof v !== 'object') return null;
   const r = v as Record<string, unknown>;
@@ -332,10 +331,10 @@ export function editViewOf(e: CommandEntry): EditView | null {
         kind, len: r.len,
         ...(Array.isArray(r.moves) ? { moves: (r.moves as unknown[]).filter(pair) } : {}),
         ...(num(r.more) && r.more > 0 ? { more: r.more } : {}),
-        ...(nums(r.grid) ? { grid: r.grid } : {}),
+        ...(numbers(r.grid) ? { grid: r.grid } : {}),
         ...(pair(r.off) ? { off: r.off } : {}),
-        ...(nums(r.marks) ? { marks: r.marks } : {}),
-        ...(nums(r.was) ? { was: r.was } : {}),
+        ...(numbers(r.marks) ? { marks: r.marks } : {}),
+        ...(numbers(r.was) ? { was: r.was } : {}),
       };
     }
   }
