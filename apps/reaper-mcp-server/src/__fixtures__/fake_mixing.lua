@@ -59,7 +59,7 @@ function new_fake(spec)
     return true, s .. ">"
   end
 
-  -- Undo: every block is an undo point, labelled
+  -- Undo: a block that changed something is an undo point, labelled (like REAPER, one that wrote nothing is not)
   -- Undo restores every FX's named config (what a modulation edit changes) to the block's start
   local function cfg_copy()
     local out = {}
@@ -73,8 +73,12 @@ function new_fake(spec)
     return out
   end
   local saved = {}
-  function api.Undo_BeginBlock() api.depth = api.depth + 1; saved[#api.undo + 1] = cfg_copy() end
-  function api.Undo_EndBlock(label) api.depth = api.depth - 1; api.undo[#api.undo + 1] = label end
+  local writes_at_begin
+  function api.Undo_BeginBlock() api.depth = api.depth + 1; saved[#api.undo + 1] = cfg_copy(); writes_at_begin = api.writes end
+  function api.Undo_EndBlock(label)
+    api.depth = api.depth - 1
+    if api.writes ~= writes_at_begin then api.undo[#api.undo + 1] = label end
+  end
   function api.Undo_CanUndo2() return api.undo[#api.undo] end
   function api.Undo_DoUndo2()
     local n = #api.undo

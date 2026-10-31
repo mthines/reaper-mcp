@@ -115,6 +115,18 @@ describe('mcp_mixing_lib.lua: FX parameter modulation', () => {
     `);
   });
 
+  it('a modulation refused before any write keeps the last modulation edit', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { fx = { {} } } } }
+      mix.set_modulation(api, { trackIndex = 0, fxIndex = 0, paramIndex = 0 }, { lfo = { shape = "sine", speed = 2 } })
+      local undo_before = #api.undo
+      api.TrackFX_SetNamedConfigParm = function() return false end
+      local ok, err = pcall(mix.set_modulation, api, { trackIndex = 0, fxIndex = 0, paramIndex = 1 }, { lfo = { shape = "sine", speed = 3 } })
+      assert(not ok and not tostring(err):find("undone") and api.undone == nil, tostring(err))
+      assert(#api.undo == undo_before and next(api.tracks[1].fx[1].cfg) ~= nil, "the first modulation stays")
+    `);
+  });
+
   it('turns modulation off again', async () => {
     await runLua(`
       local api = new_fake{ tracks = { { fx = { {} } } } }
