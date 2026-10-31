@@ -47,6 +47,7 @@ const BOOL_WORDS: Record<string, [string, string]> = {
   solo: ["off", "soloed"],
   recordArm: ["off", "armed"],
   phase: ["normal", "inverted"],
+  Freeze: ["live", "frozen"],
 };
 export const PROP_LABEL: Record<string, string> = {
   volume: "Volume",
@@ -73,7 +74,7 @@ export function valueText(
     case "pan":
       return panText(v);
     case "bool":
-      return (BOOL_WORDS[r.p] ?? ["off", "on"])[v ? 1 : 0];
+      return text || (BOOL_WORDS[r.p] ?? ["off", "on"])[v ? 1 : 0];
     case "norm":
       return text || `${Math.round(v * 100)}%`;
   }

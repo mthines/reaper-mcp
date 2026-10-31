@@ -52,6 +52,9 @@ const LISTINGS = new Set([
   "get_track_routing",
   "get_time_selection",
   "get_fx_parameters",
+  "get_fx_param_modulation",
+  "get_fx_pins",
+  "list_monitoring_fx",
 ]);
 
 function render(v: EditView): ReactNode {
