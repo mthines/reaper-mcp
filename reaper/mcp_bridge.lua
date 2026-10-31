@@ -3692,11 +3692,28 @@ function handlers.get_render_settings(params)
 end
 
 function handlers.set_render_settings(params)
-  return with_project_lib(function() return project_lib.set_render(reaper, params) end)
+  return with_project_lib(function()
+    local p, err = project_lib.decode_json_fields(params, plan_lib_ok and plan_lib.json_decode or function() return nil end)
+    if not p then return nil, err end
+    return project_lib.set_render(reaper, p, plan_lib_ok and plan_lib.resolve_track or nil)
+  end)
 end
 
 function handlers.render_project(params)
-  return with_project_lib(function() return project_lib.render(reaper, params, project_fs) end)
+  return with_project_lib(function()
+    local p, err = project_lib.decode_json_fields(params, plan_lib_ok and plan_lib.json_decode or function() return nil end)
+    if not p then return nil, err end
+    return project_lib.render(reaper, p, project_fs, plan_lib_ok and plan_lib.resolve_track or nil)
+  end)
+end
+
+function handlers.render_versions(params)
+  if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup`" end
+  return with_project_lib(function()
+    local p, err = project_lib.decode_json_fields(params, plan_lib.json_decode)
+    if not p then return nil, err end
+    return project_lib.render_versions(reaper, p, project_fs, plan_lib.resolve_track)
+  end)
 end
 
 function handlers.get_project_settings(params)
@@ -4114,12 +4131,14 @@ function handlers.delete_automation_item(params) return env_ext.run("delete_item
 
 -- Logic in mcp_midi_lib.lua; one table for the 200-locals limit. Nested params (note
 -- indexes, the velocity/humanize/length objects, an import's tracks) travel as JSON strings.
-local midi_ext = {}
-midi_ext.ok, midi_ext.lib = pcall(dofile, script_dir .. "mcp_midi_lib.lua")
+-- Lib wrappers added since the main chunk reached the 200-locals limit live here, one field each
+local ext = {}
+ext.midi = {}
+ext.midi.ok, ext.midi.lib = pcall(dofile, script_dir .. "mcp_midi_lib.lua")
 
-function midi_ext.run(name, params)
-  if not midi_ext.ok then
-    return nil, "mcp_midi_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(midi_ext.lib) .. ")"
+function ext.midi.run(name, params)
+  if not ext.midi.ok then
+    return nil, "mcp_midi_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(ext.midi.lib) .. ")"
   end
   local p = {}
   for k, v in pairs(params) do p[k] = v end
@@ -4131,16 +4150,53 @@ function midi_ext.run(name, params)
       p[k] = val
     end
   end
-  local ok, res, err = pcall(midi_ext.lib[name], reaper, p)
+  local ok, res, err = pcall(ext.midi.lib[name], reaper, p)
   if not ok then return nil, "Handler error: " .. tostring(res) end
   return res, err
 end
 
-function handlers.quantize_midi(params) return midi_ext.run("quantize", params) end
-function handlers.transform_midi(params) return midi_ext.run("transform", params) end
-function handlers.import_midi_file(params) return midi_ext.run("import", params) end
+function handlers.quantize_midi(params) return ext.midi.run("quantize", params) end
+function handlers.transform_midi(params) return ext.midi.run("transform", params) end
+function handlers.import_midi_file(params) return ext.midi.run("import", params) end
 -- Internal (detect_key on a MIDI track): not logged, not counted
-handlers["_midi_pitch_profile"] = function(params) return midi_ext.run("pitch_profile", params) end
+handlers["_midi_pitch_profile"] = function(params) return ext.midi.run("pitch_profile", params) end
+
+-- =============================================================================
+-- Arrangement: copy items, insert/remove time, copy a section, process items
+-- =============================================================================
+
+-- Logic in mcp_arrange_lib.lua (one table, like env_ext: the main chunk is at the locals limit)
+ext.arrange = {}
+ext.arrange.ok, ext.arrange.lib = pcall(dofile, script_dir .. "mcp_arrange_lib.lua")
+plan_ctx.arrange = ext.arrange.ok and ext.arrange.lib or nil
+
+-- `items` / `tracks` arrive as JSON strings (the bridge decodes only the top level)
+function ext.arrange.run(name, params)
+  if not ext.arrange.ok then
+    return nil, "mcp_arrange_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(ext.arrange.lib) .. ")"
+  end
+  for _, key in ipairs({ "items", "tracks" }) do
+    if type(params[key]) == "string" then
+      if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua" end
+      local ok, v = pcall(plan_lib.json_decode, params[key])
+      if not ok or type(v) ~= "table" then return nil, key .. " is not a JSON array — nothing changed" end
+      params[key] = v
+    end
+  end
+  local ok, res, err = pcall(ext.arrange.lib[name], reaper, params)
+  if not ok then return nil, "Handler error: " .. tostring(res) end
+  return res, err
+end
+
+function handlers.copy_media_items(params) return ext.arrange.run("copy_items", params) end
+
+function handlers.insert_time(params) return ext.arrange.run("insert_time", params) end
+
+function handlers.remove_time(params) return ext.arrange.run("remove_time", params) end
+
+function handlers.copy_section(params) return ext.arrange.run("copy_section", params) end
+
+function handlers.process_items(params) return ext.arrange.run("process_items", params) end
 
 -- =============================================================================
 -- Live MIDI output handlers
@@ -4334,6 +4390,9 @@ function handlers.render_track_to_wav(params)
   local saved_end      = reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     0, false)
   local saved_srate    = reaper.GetSetProjectInfo(0, "RENDER_SRATE",      0, false)
   local saved_channels = reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   0, false)
+  -- Delivery processing set_render_settings stores in the project: an analysis render must hear the raw mix
+  local saved_normalize = reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE", 0, false)
+  local saved_dither    = reaper.GetSetProjectInfo(0, "RENDER_DITHER",    0, false)
 
   -- Save solo and selection states for all tracks
   local track_count = reaper.CountTracks(0)
@@ -4370,6 +4429,8 @@ function handlers.render_track_to_wav(params)
     reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT", "evaw", true)
     reaper.GetSetProjectInfo(0, "RENDER_SRATE",    sample_rate, true)
     reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", 2,           true)
+    reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE", 0, true)
+    reaper.GetSetProjectInfo(0, "RENDER_DITHER",    0, true)
 
     -- Unsolo all tracks, then solo only the target track (master: none)
     for i = 0, track_count - 1 do
@@ -4399,6 +4460,8 @@ function handlers.render_track_to_wav(params)
     reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     saved_end,      true)
     reaper.GetSetProjectInfo(0, "RENDER_SRATE",      saved_srate,    true)
     reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   saved_channels, true)
+    reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE",  saved_normalize, true)
+    reaper.GetSetProjectInfo(0, "RENDER_DITHER",     saved_dither,    true)
     for i = 0, track_count - 1 do
       local t = reaper.GetTrack(0, i)
       reaper.SetMediaTrackInfo_Value(t, "I_SOLO", saved_solo_states[i] or 0)
@@ -4896,12 +4959,12 @@ local HISTORY_SLOW_MS = 100
 -- arbitrary work): never counted as slow. Mirrors LONG_RUNNING in apps/bridge-ui/src/status.ts.
 local LONG_RUNNING = {}
 for _, c in ipairs({
-  "render_project", "render_track_to_wav", "run_plan", "run_action", "save_project", "undo_project",
+  "render_project", "render_track_to_wav", "render_versions", "run_plan", "run_action", "save_project", "undo_project",
   "redo_project", "add_fx", "add_take_fx", "setup_fx_chain", "copy_fx", "move_fx", "set_fx_offline",
   "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
   "insert_audio_file", "snapshot_save", "snapshot_restore", "snapshot_edit",
   "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
-  "detect_transients", "create_transient_automation", "detect_key", "import_midi_file",
+  "detect_transients", "create_transient_automation", "detect_key", "import_midi_file", "process_items",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
 local HISTORY_LONG_PUBLISH_INTERVAL = 10

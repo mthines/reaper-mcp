@@ -43,6 +43,7 @@ events:
   log_cleared: {}
   log_entry_opened:
     ok: boolean
+    view: string             # the drawer's edit view kind (timeline, mixer, envelope, …) or none; bounded by editViewOf()
   session_filtered: {}
   tools_sorted:
     sort: string

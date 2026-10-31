@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { editViewOf, fittingLabels, listDiff, routeIds, timelineDiff, type Marker, type Route } from './edit-views.js';
+import { editViewOf, fittingLabels, listDiff, normalizedGains, routeIds, timelineDiff, type Marker, type Route } from './edit-views.js';
 import type { CommandEntry } from './status.js';
 
 const entry = (c: string, r: Record<string, unknown> | undefined, ok = true): CommandEntry => ({ n: 1, t: 0, c, ms: 1, ok, r });
@@ -32,6 +32,21 @@ describe('edit views from the log', () => {
     expect(editViewOf(entry('set_track_property', { rows: [{ t: 'Kick', p: 'volume', s: 'db', b: 0 }] }, false))).toBeNull();
     expect(editViewOf(entry('get_project_info', { rows: [] }))).toBeNull();
     expect(editViewOf(entry('list_tracks', undefined))).toBeNull();
+  });
+
+  it('render view: reads a render as file rows with their targets, versions grouped', () => {
+    const f = ['mix.wav', 184.2, -14.1, -1, -1.4, [0.5, 0.6], [-0.5, -0.6]];
+    expect(editViewOf(entry('render_project', { fmt: 'wav', bd: '24', src: 'master', norm: 'lufs_i', nt: -14, lim: -1, tp: true, groups: [{ v: '', m: [], f: [f, ['bad']] }] }))).toEqual({
+      kind: 'render', fmt: 'wav', bd: '24', src: 'master', norm: 'lufs_i', nt: -14, lim: -1, tp: true, groups: [{ v: '', m: [], f: [f] }],
+    });
+    const v = editViewOf(entry('render_versions', { fmt: 'mp3', kbps: 320, src: 'master', groups: [{ v: 'Instrumental', m: ['Vox'], f: [f] }], more: 2 }));
+    expect(v).toMatchObject({ kind: 'render', kbps: 320, more: 2, groups: [{ v: 'Instrumental', m: ['Vox'] }] });
+    expect(v).not.toHaveProperty('norm');
+  });
+
+  it('render view: draws nothing when no file came back', () => {
+    expect(editViewOf(entry('render_project', { fmt: 'wav', groups: [{ v: '', m: [], f: [] }] }))).toBeNull();
+    expect(editViewOf(entry('render_project', { fmt: 'wav' }))).toBeNull();
   });
 
   it('drops malformed rows and keeps the rest', () => {
@@ -126,6 +141,33 @@ describe('new edit views', () => {
     expect(v).toMatchObject({ kind: 'timeline', lanes: [{ t: 'Gtr', items: [[4, 2, 0, 0, 0, 0]], was: [[0, 2, 0, 0, 0, 0]] }] });
     const t = editViewOf(entry('set_cursor_position', { tempo: [[0, 120, 4, 4, 0]], len: 20, cur: 8, wasCur: 2 }));
     expect(t).toMatchObject({ cur: 8, wasCur: 2, wasSel: null });
+  });
+
+  it('arrangement view: reads the op, the span, where it copied to and the item gains', () => {
+    const v = editViewOf(entry('copy_section', {
+      tempo: [[0, 120, 4, 4, 0]], len: 64, op: 'section', span: [8, 16], to: [32, 40], moreTracks: 3,
+      lanes: [{ t: 'Gtr', items: [[8, 8, 0, 0, 0, 0], [32, 8, 0, 0, 0, 0]], was: [[8, 8, 0, 0, 0, 0]] }],
+    }));
+    expect(v).toMatchObject({ kind: 'timeline', op: 'section', span: [8, 16], to: [32, 40], moreTracks: 3 });
+    const n = editViewOf(entry('process_items', {
+      tempo: [[0, 120, 4, 4, 0]], len: 10, op: 'normalize',
+      lanes: [{ t: 'Gtr', items: [[0, 4, 0, 0, 0, 0, 11]], was: [[0, 4, 0, 0, 0, 0, 'x']] }],
+    }));
+    expect(n).toMatchObject({ op: 'normalize', lanes: [{ items: [[0, 4, 0, 0, 0, 0, 11]], was: [[0, 4, 0, 0, 0, 0]] }] });
+  });
+
+  it('arrangement view: a normalize reports only the gains it changed, each with its before', () => {
+    const gains = normalizedGains([
+      { t: 'Gtr', items: [[0, 4, 0, 0, 0, 0, 11], [8, 4, 0, 0, 0, 0, 12], [16, 4, 0, 0, 0, 0, 5]], was: [[0, 4, 0, 0, 0, 0, 0], [8, 4, 0, 0, 0, 0, 12], [16, 4, 0, 0, 0, 0, -1]] },
+      { t: 'Bass', items: [[2, 2, 0, 0, 0, 0]], was: [[2, 2, 0, 0, 0, 0]] },
+    ]);
+    expect(gains).toEqual([[11, 0], [5, -1]]);
+  });
+
+  it('arrangement view: drops an unknown op and a malformed span', () => {
+    const v = editViewOf(entry('insert_time', { tempo: [[0, 120, 4, 4, 0]], len: 10, op: 'explode', span: [1] }));
+    expect(v).not.toHaveProperty('op');
+    expect(v).not.toHaveProperty('span');
   });
 
   it('diffs a structure edit only when ids match the tracks', () => {

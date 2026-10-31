@@ -13,6 +13,7 @@ import {
   listDiff,
   newPoints,
   routeIds,
+  normalizedGains,
   timelineDiff,
   type AutoItem,
   type ChangeRow,
@@ -21,12 +22,14 @@ import {
   type FxChain,
   type FxSlot,
   type Item,
+  type ArrangeOp,
   type Route,
   type SlotChange,
   type Marker,
   type MixRow,
   type Note,
   type Region,
+  type RenderFile,
   type Tempo,
 } from "./edit-views.js";
 import type { CommandEntry } from "./status.js";
@@ -94,6 +97,8 @@ export function EditViewSection({ entry }: { entry: CommandEntry }) {
 
 /** Listings show what is there; every other edit view is a write that shows before and after */
 const LISTINGS = new Set([
+  "render_project",
+  "render_versions",
   "get_envelope_points",
   "get_midi_cc",
   "get_midi_notes",
@@ -130,6 +135,8 @@ function render(v: EditView): ReactNode {
       return <FxChains v={v} />;
     case "routing":
       return <Routing v={v} />;
+    case "render":
+      return <Render v={v} />;
   }
 }
 
@@ -991,6 +998,54 @@ function MidiStats({ v }: { v: Extract<EditView, { kind: "midiStats" }> }) {
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
 
+const ARRANGE_LABEL: Record<ArrangeOp, string> = {
+  copy: "Copy items",
+  section: "Copy section",
+  insert: "Insert time",
+  remove: "Remove time",
+  normalize: "Normalize",
+  reverse: "Reverse",
+  glue: "Glue",
+};
+// What the hatched band is, per op
+const SPAN_LABEL: Partial<Record<ArrangeOp, string>> = { insert: "Opened", remove: "Cut", copy: "Copied to", section: "Copied to" };
+
+const signedDb = (g: number) => `${g > 0 ? "+" : ""}${g.toFixed(1)}`;
+const dbRange = (gains: number[]) => {
+  if (!gains.length) return "–";
+  const lo = Math.min(...gains);
+  const hi = Math.max(...gains);
+  return lo === hi ? signedDb(lo) : `${signedDb(lo)}…${signedDb(hi)}`;
+};
+
+/** Readouts of an arrangement edit: what it did, where, and what it changed */
+function ArrangeReadouts({ v, added, removed }: { v: Extract<EditView, { kind: "timeline" }>; added: number; removed: number }) {
+  const lanes = v.lanes ?? [];
+  const tracks = lanes.map((l) => l.t).join(", ") + (v.moreTracks ? ` +${v.moreTracks}` : "");
+  const normalized = normalizedGains(lanes);
+  const range = v.to ?? v.span;
+  return (
+    <div className="measure-readouts">
+      <Readout label="Edit" value={v.op ? ARRANGE_LABEL[v.op] : "–"} />
+      {v.op === "normalize" ? (
+        <>
+          <Readout label="Gain" value={dbRange(normalized.map(([g]) => g))} unit="dB" />
+          <Readout label="Before" value={dbRange(normalized.map(([, w]) => w))} unit="dB" />
+        </>
+      ) : range ? (
+        <>
+          <Readout label={v.op === "remove" ? "From" : "At"} value={clock(range[0], 1)} />
+          <Readout label="Length" value={(range[1] - range[0]).toFixed(1)} unit="s" />
+          <Readout label="Changed" value={`+${added} −${removed}`} />
+        </>
+      ) : (
+        <Readout label="Changed" value={`+${added} −${removed}`} />
+      )}
+      <Readout label="Tracks" value={String(lanes.length + (v.moreTracks ?? 0))} title={tracks} />
+    </div>
+  );
+}
+
 function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
   const len = Math.max(1, v.len);
   const at = (t: number) => `${pct(t, 0, len)}%`;
@@ -1000,6 +1055,8 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
   const bpms = [...v.tempo, ...tempos.removed].map((t) => t[1]);
   const varies = new Set(bpms).size > 1;
   const first = v.tempo[0];
+  // The hatched band: the time opened or cut, else where a copy landed
+  const band = v.op === "insert" || v.op === "remove" ? v.span : v.to;
   const sig = first && first[2] > 0 ? `${first[2]}/${first[3]}` : "–";
   const changed = regions.added.size + markers.added.size + tempos.added.size;
   const removed =
@@ -1030,7 +1087,9 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
   const itemWrite = lanes.some((l) => l.was);
   return (
     <>
-      {time ? (
+      {v.op ? (
+        <ArrangeReadouts v={v} added={itemsAdded} removed={itemsRemoved} />
+      ) : time ? (
         <div className="measure-readouts">
           <Readout label="Selection" value={v.sel ? clock(v.sel[0], 1) : "none"} />
           <Readout label="End" value={v.sel ? clock(v.sel[1], 1) : "–"} />
@@ -1082,6 +1141,20 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
       </div>
       )}
       <div className="ev-timeline" ref={laneRef}>
+        {v.span && (v.op === "copy" || v.op === "section") && (
+          <span
+            className="ev-span ev-span-src"
+            style={{ left: at(v.span[0]), width: `${pct(v.span[1], 0, len) - pct(v.span[0], 0, len)}%` }}
+            title={`Source ${clock(v.span[0], 1)}–${clock(v.span[1], 1)}`}
+          />
+        )}
+        {band && (
+          <span
+            className={`ev-span ${v.op === "remove" ? "ev-span-cut" : ""}`}
+            style={{ left: at(band[0]), width: `${pct(band[1], 0, len) - pct(band[0], 0, len)}%` }}
+            title={`${v.op ? SPAN_LABEL[v.op] : ""} ${clock(band[0], 1)}–${clock(band[1], 1)}`}
+          />
+        )}
         {v.wasSel && (
           <span
             className="ev-sel ev-sel-was"
@@ -1172,6 +1245,11 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
             name={lane.t}
           />
         ))}
+        {v.moreTracks ? (
+          <span className="ev-more">
+            +{v.moreTracks} more {v.moreTracks === 1 ? "track" : "tracks"} changed the same way
+          </span>
+        ) : null}
         {(varies || tempos.added.size > 0 || tempos.removed.length > 0) && (
           <TempoLane
             tempo={v.tempo}
@@ -1186,10 +1264,12 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
         <span>{clock(len / 2)}</span>
         <span>{clock(len)}</span>
       </div>
-      {(itemsAdded > 0 || itemsRemoved > 0) && (
+      {(itemsAdded > 0 || itemsRemoved > 0 || v.op) && (
         <Legend
           items={[
-            ["lg-new-mark", "Added or changed"],
+            ...(v.op === "copy" || v.op === "section" ? [["lg-span-src", "Source"] as [string, string]] : []),
+            ...(SPAN_LABEL[v.op!] && (v.to || v.span) ? [[v.op === "remove" ? "lg-span lg-span-cut" : "lg-span", SPAN_LABEL[v.op!]!] as [string, string]] : []),
+            ["lg-new-mark", v.op === "normalize" ? "New gain" : "Added or changed"],
             ["lg-gone-mark", "Before"],
           ]}
         />
@@ -1202,7 +1282,7 @@ function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
           ]}
         />
       )}
-      {v.was && (changed > 0 || removed > 0) && (
+      {v.was && !v.op && (changed > 0 || removed > 0) && (
         <Legend
           items={[
             ["lg-new-mark", "Added or changed"],
@@ -1442,6 +1522,111 @@ function Plan({ v }: { v: Extract<EditView, { kind: "plan" }> }) {
   );
 }
 
+// ── Render results ───────────────────────────────────────────────────────────
+
+const SOURCE_LABEL: Record<string, string> = {
+  master: "Master",
+  stems: "Stems",
+  master_and_stems: "Mix + stems",
+  selected_via_master: "Via master",
+  region_matrix: "Regions",
+  selected_items: "Items",
+  selected_items_via_master: "Items via mix",
+};
+const NORM_LABEL: Record<string, [string, string]> = {
+  lufs_i: ["LUFS-I", "LUFS"],
+  lufs_m_max: ["LUFS-M max", "LUFS"],
+  lufs_s_max: ["LUFS-S max", "LUFS"],
+  rms: ["RMS", "dB"],
+  peak: ["Peak", "dBFS"],
+  true_peak: ["True peak", "dBTP"],
+};
+/** −150 marks a level REAPER could not measure (silence, or an older bridge) */
+const measured = (db: number) => db > -150;
+const RENDER_W = 120;
+const RENDER_H = 22;
+/** The same dB scale as the full waveform: −48 dB at the centre line, full scale at the edges */
+const renderWaveY = (v: number) => {
+  const a = Math.min(1, Math.abs(v));
+  const h = a > 0 ? Math.max(0, (20 * Math.log10(a) + 48) / 48) : 0;
+  return ((1 - (v < 0 ? -h : h)) / 2) * RENDER_H;
+};
+
+function RenderWave({ hi, lo }: { hi: number[]; lo: number[] }) {
+  if (hi.length < 2 || lo.length !== hi.length) return <span className="ev-render-wave ev-render-wave-none" />;
+  const at = (vals: number[]) => vals.map((v, i) => `${((i / (vals.length - 1)) * RENDER_W).toFixed(1)},${renderWaveY(v).toFixed(1)}`);
+  return (
+    <svg className="ev-render-wave" viewBox={`0 0 ${RENDER_W} ${RENDER_H}`} preserveAspectRatio="none" aria-hidden="true">
+      <line className="spectrum-base" x1={0} x2={RENDER_W} y1={RENDER_H / 2} y2={RENDER_H / 2} vectorEffect="non-scaling-stroke" />
+      <path className="ev-render-shape" d={`M${at(hi).join("L")}L${at(lo).reverse().join("L")}Z`} vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+function Render({ v }: { v: Extract<EditView, { kind: "render" }> }) {
+  const files = v.groups.reduce((n, g) => n + g.f.length, 0) + (v.more ?? 0);
+  const [normName, normUnit] = (v.norm && NORM_LABEL[v.norm]) || ["", ""];
+  // Only an integrated target grades a file's integrated loudness; a momentary or short-term max target does not
+  const lufsTarget = v.norm === "lufs_i" && v.nt !== undefined ? v.nt : undefined;
+  const encoding = [v.fmt.toUpperCase() || "–", v.bd ?? (v.kbps ? String(v.kbps) : "")].filter(Boolean).join(" ");
+  /** On target within 1 LU (accent), off target (amber); plain without a LUFS target */
+  const lufsZone = (db: number) => (lufsTarget === undefined || !measured(db) ? "ok" : Math.abs(db - lufsTarget) <= 1 ? "ok" : "hot");
+  const tpZone = (db: number) => (!measured(db) ? "ok" : db > 0 ? "over" : v.lim !== undefined ? (db > v.lim + 0.05 ? "hot" : "ok") : db > -1 ? "hot" : "ok");
+  const row = (f: RenderFile, key: string) => {
+    const [name, dur, lufs, tp, peak, hi, lo] = f;
+    const label = `${name} · ${dur >= 0 ? clock(dur, 1) : "length unknown"}${measured(lufs) ? ` · ${fmt(lufs)} LUFS-I` : ""}${measured(tp) ? ` · true peak ${fmt(tp)} dBTP` : ""}${measured(peak) ? ` · sample peak ${fmt(peak)} dBFS` : ""}`;
+    return (
+      <div className="ev-render-row" key={key} role="group" aria-label={label} title={label}>
+        <span className="ev-render-name">{name}</span>
+        <RenderWave hi={hi} lo={lo} />
+        <span className={`ev-render-v ev-render-lufs mono zone-${lufsZone(lufs)}`}>{measured(lufs) ? fmt(lufs) : "–"}</span>
+        <span className={`ev-render-v ev-render-tp mono zone-${tpZone(tp)}`}>{measured(tp) ? fmt(tp) : "–"}</span>
+        <span className="ev-render-v ev-render-dur mono">{dur >= 0 ? clock(dur) : "–"}</span>
+      </div>
+    );
+  };
+  return (
+    <>
+      <div className="measure-readouts">
+        <Readout label="Files" value={String(files)} />
+        <Readout label="Format" value={encoding} title={v.bd ? `${v.fmt.toUpperCase()} ${v.bd === "32f" ? "32-bit float" : `${v.bd}-bit`}` : v.kbps ? `${v.fmt.toUpperCase()} ${v.kbps} kbps` : undefined} />
+        <Readout label="Source" value={SOURCE_LABEL[v.src] ?? v.src} />
+        <Readout label="Target" value={v.nt !== undefined && v.norm ? fmt(v.nt) : "None"} unit={v.norm ? normUnit : undefined} title={v.norm ? `Normalized by ${normName}` : "Not normalized"} />
+      </div>
+      {(v.norm || v.lim !== undefined) && (
+        <div className="ev-render-tags">
+          {v.norm && <span className="ev-render-tag">Normalize {normName} {v.nt !== undefined ? fmt(v.nt) : ""}</span>}
+          {v.lim !== undefined && <span className="ev-render-tag">Limit {fmt(v.lim)} {v.tp ? "dBTP" : "dBFS"}</span>}
+        </div>
+      )}
+      <div className="ev-render" role="group" aria-label="Rendered files">
+        <div className="ev-render-row ev-render-head" aria-hidden="true">
+          <span>File</span>
+          <span className="ev-render-wave-h">Waveform</span>
+          <span className="ev-render-v">LUFS-I</span>
+          <span className="ev-render-v">TP</span>
+          <span className="ev-render-v ev-render-dur">Len</span>
+        </div>
+        {v.groups.map((g, gi) => (
+          <div className="ev-render-group" key={gi}>
+            {g.v && (
+              <div className="ev-render-version">
+                <b>{g.v}</b>
+                <span className="muted" title={g.m.join(", ")}>{g.m.length ? `muted ${g.m.join(", ")}` : "full mix"}</span>
+              </div>
+            )}
+            {g.f.map((f, i) => row(f, `${gi}:${i}`))}
+          </div>
+        ))}
+      </div>
+      {(v.more ?? 0) > 0 && <div className="ev-more">+{plural(v.more ?? 0, "more file")} not listed</div>}
+      {lufsTarget !== undefined && (
+        <Legend items={[["lg-tick", `On target (±1 LU of ${fmt(lufsTarget)})`], ["lg-warn", "Off target"]]} />
+      )}
+    </>
+  );
+}
+
 // ── FX chain ─────────────────────────────────────────────────────────────────
 
 /** "VST3: Pro-Q 3 (FabFilter)" → "Pro-Q 3"; the full name stays in the tooltip */
@@ -1665,8 +1850,9 @@ function ItemsLane({
             key={i}
             className={`ev-item ${it[4] ? "ev-item-midi" : ""} ${it[5] ? "ev-item-muted" : ""} ${added.has(it) ? "ev-new" : ""}`}
             style={{ left: at(it[0]), width: width(it) }}
-            title={`${it[4] ? "MIDI" : "Audio"} item · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}${it[5] ? " · muted" : ""}`}
+            title={`${it[4] ? "MIDI" : "Audio"} item · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}${it[5] ? " · muted" : ""}${it[6] !== undefined ? ` · gain ${signedDb(it[6])} dB` : ""}`}
           >
+            {it[6] !== undefined && added.has(it) && <b className="ev-item-gain mono">{signedDb(it[6])}</b>}
             {it[2] > 0 && (
               <i className="ev-fade-in" style={{ width: `${(it[2] / it[1]) * 100}%` }} />
             )}

@@ -443,8 +443,8 @@ local function fx_chain_view(params, before)
   return #chains > 0 and { chains = chains } or nil
 end
 
--- Media items of a track, in the timeline's item shape
-local function track_items(tr)
+-- Media items of a track, in the timeline's item shape; `gain` adds the item's gain in dB
+local function track_items(tr, gain)
   local out = {}
   for i = 0, math.min(api.CountTrackMediaItems(tr) or 0, EDIT_MAX_MARKS) - 1 do
     local it = api.GetTrackMediaItem(tr, i)
@@ -454,6 +454,10 @@ local function track_items(tr)
       round2(api.GetMediaItemInfo_Value(it, "D_FADEINLEN")) or 0, round2(api.GetMediaItemInfo_Value(it, "D_FADEOUTLEN")) or 0,
       (take and api.TakeIsMIDI and api.TakeIsMIDI(take)) and 1 or 0, api.GetMediaItemInfo_Value(it, "B_MUTE") ~= 0 and 1 or 0,
     }
+    if gain then
+      local v = api.GetMediaItemInfo_Value(it, "D_VOL") or 1
+      out[#out][7] = v > 0 and round2(20 * math.log(v, 10)) or -150
+    end
   end
   return out
 end
@@ -464,17 +468,21 @@ local ITEM_COMMANDS = {
   list_midi_items = true,
 }
 
--- Up to four tracks an item command touches, by index
+-- The first four tracks the items are on (one lane each), and how many tracks that is in all
 local function item_tracks(params)
-  local out, seen = {}, {}
+  local out, seen, n = {}, {}, 0
   local function add(idx)
     idx = tonumber(idx)
-    if idx and not seen[idx] and #out < 4 and api.GetTrack(0, idx) then seen[idx] = true; out[#out + 1] = idx end
+    if idx and not seen[idx] and api.GetTrack(0, idx) then
+      seen[idx] = true
+      n = n + 1
+      if #out < 4 then out[#out + 1] = idx end
+    end
   end
   add(params.trackIndex)
   add(params.newTrackIndex)
   for _, it in ipairs(decode_param_list(params.items) or {}) do if type(it) == "table" then add(it.trackIndex) end end
-  return out
+  return out, n
 end
 
 local function item_lanes(params)
@@ -605,6 +613,120 @@ local function item_view(params, before)
     for _, it in ipairs(lane.was or {}) do all[#all + 1] = it end
   end
   r.len = project_length(r, all)
+  return r
+end
+
+-- Arrangement edits: the whole timeline before and after, a lane for up to four tracks the
+-- edit touches, and the span it worked on (copied from, opened, cut) and where it copied to
+local ARRANGE = {}
+ARRANGE.OPS = { copy_media_items = "copy", insert_time = "insert", remove_time = "remove", copy_section = "section" }
+
+-- The section a copy_section call copies, from a region index or start/end
+function ARRANGE.section(params)
+  local idx = tonumber(params.regionIndex)
+  if idx == nil then return tonumber(params.start), tonumber(params["end"]) end
+  local _, nm, nr = api.CountProjectMarkers(0)
+  for i = 0, (nm or 0) + (nr or 0) - 1 do
+    local _, isrgn, pos, rend, _, num = api.EnumProjectMarkers3(0, i)
+    if isrgn and num == idx then return pos, rend end
+  end
+end
+
+-- Track indexes for the lanes (at most four) and how many tracks the edit touches
+function ARRANGE.tracks(cmd_type, params)
+  if cmd_type == "copy_media_items" or cmd_type == "process_items" then
+    return item_tracks(params)
+  end
+  local only = cmd_type == "copy_section" and decode_param_list(params.tracks)
+  local s, e
+  if cmd_type == "insert_time" then s, e = tonumber(params.position), math.huge
+  elseif cmd_type == "remove_time" then s, e = tonumber(params.start), math.huge
+  else s, e = ARRANGE.section(params) end
+  if not s or not e then return {}, 0 end
+  local out, n = {}, 0
+  local function consider(t)
+    local tr = api.GetTrack(0, t)
+    if not tr then return end
+    for i = 0, (api.CountTrackMediaItems(tr) or 0) - 1 do
+      local it = api.GetTrackMediaItem(tr, i)
+      local pos = api.GetMediaItemInfo_Value(it, "D_POSITION")
+      if pos < e and pos + api.GetMediaItemInfo_Value(it, "D_LENGTH") > s then
+        n = n + 1
+        if #out < 4 then out[#out + 1] = t end
+        return
+      end
+    end
+  end
+  if type(only) == "table" then
+    for _, t in ipairs(only) do if tonumber(t) then consider(tonumber(t)) end end
+  else
+    for t = 0, (api.CountTracks(0) or 0) - 1 do consider(t) end
+  end
+  return out, n
+end
+
+function ARRANGE.before(cmd_type, params)
+  local idx, n = ARRANGE.tracks(cmd_type, params)
+  local gain = cmd_type == "process_items" and params.operation == "normalize"
+  local b = { idx = idx, n = n, tl = timeline_snapshot(), lanes = {} }
+  for i, t in ipairs(idx) do b.lanes[i] = track_items(api.GetTrack(0, t), gain) end
+  if cmd_type == "copy_media_items" then
+    -- The sources' span, read before the copies land
+    local first, last
+    for _, ref in ipairs(decode_param_list(params.items) or {}) do
+      local tr = type(ref) == "table" and api.GetTrack(0, tonumber(ref.trackIndex) or -2)
+      local it = tr and api.GetTrackMediaItem(tr, tonumber(ref.itemIndex) or -1)
+      if it then
+        local pos = api.GetMediaItemInfo_Value(it, "D_POSITION")
+        first = math.min(first or pos, pos)
+        last = math.max(last or pos, pos + api.GetMediaItemInfo_Value(it, "D_LENGTH"))
+      end
+    end
+    if first then b.span = { round2(first), round2(last) } end
+  end
+  return b
+end
+
+function ARRANGE.view(cmd_type, params, data, before)
+  if type(before) ~= "table" or type(data) ~= "table" then return nil end
+  local r = timeline_snapshot()
+  r.was = before.tl
+  r.op = ARRANGE.OPS[cmd_type] or params.operation
+  local gain = cmd_type == "process_items" and params.operation == "normalize"
+  r.lanes = {}
+  local all = {}
+  for i, t in ipairs(before.idx) do
+    local tr = api.GetTrack(0, t)
+    if tr then
+      local lane = { t = name_of(tr), items = track_items(tr, gain), was = before.lanes[i] }
+      r.lanes[#r.lanes + 1] = lane
+      for _, it in ipairs(lane.items) do all[#all + 1] = it end
+      for _, it in ipairs(lane.was) do all[#all + 1] = it end
+    end
+  end
+  if before.n > #r.lanes then r.moreTracks = before.n - #r.lanes end
+  local num = function(v) return tonumber(v) end
+  if cmd_type == "insert_time" and num(data.position) and num(data.length) then
+    r.span = { data.position, round2(data.position + data.length) }
+  elseif cmd_type == "remove_time" and num(data.start) then
+    r.span = { data.start, data["end"] }
+  elseif cmd_type == "copy_section" and num(data.start) then
+    r.span = { data.start, data["end"] }
+    -- An insert at or before the section moved it along
+    if data.inserted and data.position <= data.start then r.span = { round2(data.start + data.length), round2(data["end"] + data.length) } end
+    r.to = { data.position, round2(data.position + data.length) }
+  elseif cmd_type == "copy_media_items" then
+    r.span = before.span
+    local first, last
+    for _, c in ipairs(type(data.copies) == "table" and data.copies or {}) do
+      first = math.min(first or c.position, c.position)
+      last = math.max(last or c.position, c.position + c.length)
+    end
+    if first then r.to = { round2(first), round2(last) } end
+  end
+  r.len = math.max(project_length(r, all), project_length(before.tl))
+  for _, v in ipairs({ r.span and r.span[2], r.to and r.to[2] }) do r.len = math.max(r.len, v or 0) end
+  r.len = round2(r.len) or 0
   return r
 end
 
@@ -799,6 +921,106 @@ local function wav_waveform(path)
   return { hi = hi, lo = lo, peakDb = db(peak), rmsDb = db(math.sqrt(sum / count)), clipped = clipped, channels = channels }
 end
 
+-- Render results: one row per file written, with a few waveform slices read through REAPER's peak API
+-- (any format REAPER reads). At most RENDER_MAX_FILES files get a row; the rest are counted.
+local RENDER_MAX_FILES = 8
+-- Waveforms are built on REAPER's main thread after the render already blocked it: once this much
+-- time went to them in one call, the remaining files get rows without a waveform
+local RENDER_PEAKS_BUDGET_S = 1.0
+local RENDER_SLICES = 60
+
+-- The .reapeaks file REAPER would build for path (nil when it cannot say)
+local function peak_file(path)
+  if not api.GetPeakFileName then return nil end
+  local a, b = api.GetPeakFileName(path, "")
+  local name = type(b) == "string" and b ~= "" and b or a
+  return type(name) == "string" and name ~= "" and name or nil
+end
+local function exists(path)
+  local f = path and io.open(path, "rb")
+  if f then f:close() end
+  return f ~= nil
+end
+
+local function file_peaks(path)
+  if not (api.PCM_Source_CreateFromFile and api.PCM_Source_GetPeaks and api.new_array) then return nil end
+  local src = api.PCM_Source_CreateFromFile(path)
+  if not src then return nil end
+  -- Peaks built only for this view are removed again, so no .reapeaks lands beside a delivered file
+  local pk = peak_file(path)
+  local had_peaks = exists(pk)
+  local ok, hi, lo = pcall(function()
+    local len = api.GetMediaSourceLength(src)
+    if type(len) ~= "number" or len <= 0 then return nil end
+    local ch = math.min(2, math.max(1, math.floor(api.GetMediaSourceNumChannels(src) or 1)))
+    if api.PCM_Source_BuildPeaks and api.PCM_Source_BuildPeaks(src, 0) ~= 0 then
+      local guard = 0
+      while api.PCM_Source_BuildPeaks(src, 1) ~= 0 and guard < 1000000 do guard = guard + 1 end
+      api.PCM_Source_BuildPeaks(src, 2)
+    end
+    local n = RENDER_SLICES
+    local buf = api.new_array(n * ch * 2)
+    -- The buffer holds n * ch maxima, then n * ch minima, channels interleaved
+    local got = math.floor(api.PCM_Source_GetPeaks(src, n / len, 0, ch, n, 0, buf)) & 0xFFFFF
+    if got <= 0 then return nil end
+    local hi, lo = {}, {}
+    for i = 0, math.min(got, n) - 1 do
+      local mx, mn = 0, 0
+      for c = 1, ch do
+        local a, b = buf[i * ch + c], buf[n * ch + i * ch + c]
+        if a and a > mx then mx = a end
+        if b and b < mn then mn = b end
+      end
+      hi[#hi + 1], lo[#lo + 1] = round2(mx), round2(mn)
+    end
+    return hi, lo
+  end)
+  api.PCM_Source_Destroy(src)
+  if pk and not had_peaks and exists(pk) then os.remove(pk) end
+  if ok and hi then return hi, lo end
+end
+
+local function base_name(path) return (tostring(path):match("([^/\\]+)$")) or tostring(path) end
+
+-- [name, duration s, LUFS-I, true peak, sample peak, hi[], lo[]] per file
+local function render_rows(files, analysis, budget)
+  local by_file = {}
+  for _, a in ipairs(analysis or {}) do by_file[a.file] = a end
+  local rows = {}
+  for _, f in ipairs(files or {}) do
+    if budget.left <= 0 then budget.more = budget.more + 1 else
+      budget.left = budget.left - 1
+      local a = by_file[f] or {}
+      local hi, lo
+      local clock = api.time_precise
+      if not clock or clock() - budget.started < RENDER_PEAKS_BUDGET_S then hi, lo = file_peaks(f) end
+      rows[#rows + 1] = { base_name(f), round2(a.durationSeconds) or -1, round2(a.lufsIntegrated) or -150, round2(a.truePeak) or -150,
+        round2(a.samplePeak) or -150, hi or {}, lo or {} }
+    end
+  end
+  return rows
+end
+
+local function render_view(cmd_type, data)
+  if type(data) ~= "table" then return nil end
+  local budget = { left = RENDER_MAX_FILES, more = 0, started = api.time_precise and api.time_precise() or 0 }
+  local groups = {}
+  if cmd_type == "render_versions" then
+    for _, v in ipairs(data.versions or {}) do
+      groups[#groups + 1] = { v = tostring(v.name), m = v.muted or {}, f = render_rows(v.files, v.analysis, budget) }
+    end
+  else
+    groups[1] = { v = "", m = {}, f = render_rows(data.files, data.analysis, budget) }
+  end
+  local r = { fmt = data.format or "", src = data.source or "master", groups = groups }
+  if data.bitDepth then r.bd = tostring(data.bitDepth) end
+  if data.mp3Bitrate then r.kbps = data.mp3Bitrate end
+  if data.normalize then r.norm, r.nt = data.normalize, round2(data.normalizeTarget) end
+  if data.limitCeiling then r.lim, r.tp = round2(data.limitCeiling), data.limitTruePeak == true end
+  if budget.more > 0 then r.more = budget.more end
+  return r
+end
+
 -- The state a write is about to change, read before its handler runs (nil for every other command)
 function M.before(cmd_type, params)
   if cmd_type == "set_track_property" or cmd_type == "set_multiple_track_properties" then
@@ -821,6 +1043,8 @@ function M.before(cmd_type, params)
     return fx_chains(params)
   elseif ITEM_COMMANDS[cmd_type] and cmd_type ~= "list_midi_items" then
     return item_lanes(params)
+  elseif ARRANGE.OPS[cmd_type] or cmd_type == "process_items" then
+    return ARRANGE.before(cmd_type, params)
   elseif cmd_type == "set_time_selection" or cmd_type == "set_cursor_position" then
     return time_state()
   elseif ROUTING_COMMANDS[cmd_type] and cmd_type ~= "get_track_routing" then
@@ -861,6 +1085,8 @@ function M.summary(cmd_type, params, data, before)
     return fx_chain_view(params, before)
   elseif ITEM_COMMANDS[cmd_type] then
     return item_view(params, before)
+  elseif ARRANGE.OPS[cmd_type] or cmd_type == "process_items" then
+    return ARRANGE.view(cmd_type, params, data, before)
   elseif TIME_COMMANDS[cmd_type] then
     return time_view(before)
   elseif ROUTING_COMMANDS[cmd_type] then
@@ -872,6 +1098,8 @@ function M.summary(cmd_type, params, data, before)
     return fx_param_rows(params)
   elseif cmd_type == "run_plan" then
     return plan_view(params, data)
+  elseif cmd_type == "render_project" or cmd_type == "render_versions" then
+    return render_view(cmd_type, data)
   end
   local fields = RESULT_FIELDS[cmd_type]
   if not fields or type(data) ~= "table" then return nil end

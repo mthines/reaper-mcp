@@ -380,11 +380,16 @@ local KNOWN_OPS = {
   add_track = true, set_track = true, add_fx = true,
   set_fx_params = true, add_send = true, graft_fxchain = true,
   run_action = true, select_tracks = true,
+  copy_items = true, insert_time = true, remove_time = true,
 }
+-- Ops that add or move items, or add tracks: item and track indexes after them differ from
+-- the project the plan was checked against
+local SHIFTS_ITEMS = { add_track = true, copy_items = true, insert_time = true, remove_time = true }
 
 --- Validate every op without writing. Returns resolved ops and conflicts.
 --- ctx.actions (mcp_actions_lib.lua) is required only for run_action and select_tracks ops;
 --- ctx.kb_text (reaper-kb.ini) lets it check the steps of a Custom: macro.
+--- ctx.arrange (mcp_arrange_lib.lua) is required only for copy_items, insert_time and remove_time.
 function M.validate(api, ops, ctx)
   ctx = ctx or {}
   local refs = {}       -- "$name" -> { kind = "track" | "fx", op = i }
@@ -393,6 +398,7 @@ function M.validate(api, ops, ctx)
   local warnings = {}
   local macros          -- Custom: macros from ctx.kb_text, parsed on first run_action
   local action_at       -- index of the first run_action: later ops can't trust resolved targets
+  local shifted_at      -- index of the first op that adds tracks or adds/moves items
   -- Track (or "$ref") -> the lowercased FX names it will hold at this point
   -- of the plan: its own chain, then whatever earlier add_fx / graft ops change.
   local chains = {}
@@ -512,6 +518,15 @@ function M.validate(api, ops, ctx)
             r.tracks[k] = res
           end
         end
+      elseif ctx.arrange == nil and (t == "copy_items" or t == "insert_time" or t == "remove_time") then
+        conflict(i, op, "mcp_arrange_lib.lua is not loaded")
+      elseif t == "copy_items" and shifted_at then
+        -- Item indexes are read from the project as it is now
+        conflict(i, op, "copy_items names items by index, and op " .. (shifted_at - 1) .. " (" .. ops[shifted_at].op
+          .. ") changes them first; put copy_items earlier or send it as a new plan")
+      elseif t == "copy_items" or t == "insert_time" or t == "remove_time" then
+        local err = ctx.arrange.check_op(api, op)
+        if err then conflict(i, op, err) end
       elseif t == "run_action" then
         action_at = action_at or i
         local actions = ctx.actions
@@ -534,6 +549,8 @@ function M.validate(api, ops, ctx)
           end
         end
       end
+
+      if SHIFTS_ITEMS[t] then shifted_at = shifted_at or i end
 
       if op.as ~= nil then
         if type(op.as) ~= "string" or op.as:sub(1, 1) ~= "$" then
@@ -668,6 +685,9 @@ local function apply_op(api, r, bound, ctx)
     local a = r.action
     local toggle = ctx.actions.exec(api, a.id, a.section)
     return { id = a.id, name = a.name, toggle = toggle }
+
+  elseif ctx.arrange and ctx.arrange.PLAN_OPS[t] then
+    return ctx.arrange.apply_op(api, op)
   end
 end
 

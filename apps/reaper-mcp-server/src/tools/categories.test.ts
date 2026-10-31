@@ -187,4 +187,10 @@ describe('category tools', () => {
       expect(text).toContain('Unknown category "unknown_cat"');
     });
   });
+
+  it('list_tool_categories names every category in its description, so a new one is never missing', () => {
+    let description = '';
+    registerCategoryTools({ tool: (name: string, desc: string) => { if (name === 'list_tool_categories') description = desc; } } as unknown as McpServer);
+    for (const name of Object.keys(TOOL_CATEGORIES)) expect(description).toContain(name);
+  });
 });
