@@ -1,0 +1,46 @@
+/* Snapshots view: load a saved mix with one click (or 1–9), save the current one. Narrow widths answer
+   to the view's own width (container query), not the window. */
+.snaps { container-type: inline-size; padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.snapBlocked { margin: 0; padding: 8px 10px; border-radius: 7px; font-size: 12.5px; color: var(--warn); background: rgba(245, 184, 75, 0.07); border: 1px solid rgba(245, 184, 75, 0.25); }
+.snapResult { padding: 8px 10px; border-radius: 7px; font-size: 12.5px; border: 1px solid var(--line-2); background: var(--panel-2); overflow-wrap: anywhere; }
+.snapResult:where([data-tone='ok']) { color: var(--live); border-color: rgba(74, 222, 128, 0.3); }
+.snapResult:where([data-tone='warn']) { color: var(--warn); border-color: rgba(245, 184, 75, 0.3); }
+.snapResult:where([data-tone='bad']) { color: var(--bad); border-color: rgba(248, 113, 113, 0.3); }
+.snapResult:where([data-tone='info']) { color: var(--muted); }
+.snapWarnings { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
+.snapList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.snapRow {
+  width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel);
+  color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.snapRow:hover:not(:disabled) { border-color: var(--line-2); background: var(--panel-2); }
+.snapRow:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.snapRow:disabled { cursor: default; opacity: 0.6; }
+.snapCurrent { border-color: rgba(74, 222, 128, 0.45); background: rgba(74, 222, 128, 0.05); }
+.snapLoading { border-color: rgba(124, 196, 255, 0.5); }
+.snapKey { min-width: 20px; text-align: center; }
+.snapMain { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.snapName { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snapDesc { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snapMeta { display: flex; gap: 10px; font-size: 12px; color: var(--faint); white-space: nowrap; }
+.snapState { font-size: 12px; color: var(--muted); min-width: 64px; text-align: right; }
+.snapCurrent .snapState { color: var(--live); }
+.snapLoading .snapState { color: var(--accent); }
+.snapFoot { margin: 0; font-size: 12px; }
+.snapItem { display: flex; align-items: center; gap: 6px; }
+.snapItem .snapRow { flex: 1; min-width: 0; }
+.snapActions { display: flex; align-items: center; gap: 4px; flex: none; }
+.snapActions :global(.btn-sm) { color: var(--muted); }
+.snapActions :global(.btn-sm):global(.btn-warn) { color: var(--warn); }
+.snapConfirmText { font-size: 12px; color: var(--warn); margin-right: 2px; }
+
+@container (max-width: 420px) {
+  .snapItem { flex-wrap: wrap; justify-content: flex-end; }
+  .snapItem .snapRow { flex-basis: 100%; }
+  .snapRow { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; }
+  .snapKey { display: none; }
+  .snapMeta { grid-column: 1; grid-row: 2; }
+  .snapState { grid-row: 1 / span 2; grid-column: 2; }
+  .snapDesc { white-space: normal; }
+}

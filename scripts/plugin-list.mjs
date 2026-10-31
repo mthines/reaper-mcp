@@ -9,7 +9,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { updatePluginList } from '../apps/bridge-ui/src/plugin-list.mjs';
+import { updatePluginList } from '../apps/bridge-ui/src/features/plugins/plugin-list.mjs';
 
 const SCOPE = 'project::reaper-mcp';
 

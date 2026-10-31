@@ -5008,7 +5008,7 @@ local HISTORY_TIERS = {
 for _, tier in ipairs(HISTORY_TIERS) do tier.b = {} end
 local HISTORY_SLOW_MS = 100
 -- Commands whose duration is the work itself (renders, plugin loads, project IO, proxies that run
--- arbitrary work): never counted as slow. Mirrors LONG_RUNNING in apps/bridge-ui/src/status.ts.
+-- arbitrary work): never counted as slow. Mirrors LONG_RUNNING in apps/bridge-ui/src/lib/commands.ts.
 local LONG_RUNNING = {}
 for _, c in ipairs({
   "render_project", "render_track_to_wav", "render_versions", "run_plan", "run_action", "save_project", "undo_project",
@@ -5224,7 +5224,7 @@ local function record_command(cmd, handler_ms, ok, err, data, before)
   end
   -- Only system errors count as errors. A refused request ("Track 9 not found") is a
   -- warning: the caller asked for something that can't be done. Same prefixes as
-  -- classifyBridgeError() in bridge.ts and SYSTEM_ERROR_PREFIXES in the page's status.ts.
+  -- classifyBridgeError() in bridge.ts and SYSTEM_ERROR_PREFIXES in the page's lib/commands.ts.
   local e_str = err and tostring(err) or ""
   local failed = not ok and (e_str:find("^Handler error:") or e_str:find("^Unknown command type")
     or e_str:find("^Internal error:")) ~= nil

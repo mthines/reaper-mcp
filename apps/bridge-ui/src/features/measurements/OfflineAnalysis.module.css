@@ -1,0 +1,7 @@
+/* Sidecar analysis results: sections, band balance, alignment axis */
+.offBlock { display: flex; flex-direction: column; gap: 6px; }
+.offTitle { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.offSections { position: relative; display: flex; align-items: flex-end; gap: 2px; height: 48px; border-bottom: 1px solid var(--line-2); }
+.offSections > span:not(.offIntegrated) { flex: 1; min-width: 2px; border-radius: 1px 1px 0 0; background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.offSections > span.offLoud { background: var(--warn); }
+.offIntegrated { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--hold); pointer-events: none; }

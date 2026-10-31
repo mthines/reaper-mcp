@@ -1,0 +1,9 @@
+.offAlign { position: relative; height: 40px; margin-block: 14px 10px; }
+.offAlign::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--line-2); }
+.offAlign .offAlignFill { top: 50%; }
+.offAlignRef, .offAlignTrk { position: absolute; top: 4px; bottom: 4px; width: 2px; margin-left: -1px; background: var(--muted); }
+.offAlignTrk { background: var(--hold); }
+.offAlignTrk.offInv { background: var(--warn); }
+.offAlignRef b, .offAlignTrk b { position: absolute; left: 50%; transform: translateX(-50%); font: 10.5px var(--mono); font-weight: 400; color: var(--muted); white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.offAlignRef b { top: -14px; }
+.offAlignTrk b { bottom: -14px; color: var(--text); }

@@ -1,0 +1,25 @@
+.evEnv { position: relative; cursor: crosshair; }
+.evEnv svg { display: block; width: 100%; height: 110px; }
+.evEnvArea { fill: var(--accent); fill-opacity: 0.08; }
+.evEnvLine { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; }
+
+/* Automation items: they override the envelope where they sit, so each covers it; tint and curve take the pool's colour */
+.evAiCover { fill: var(--panel); fill-opacity: 0.85; }
+.evAi { fill-opacity: 0.12; stroke-opacity: 0.55; stroke-width: 1; }
+.evAiTouched { fill-opacity: 0.2; stroke-opacity: 1; stroke-width: 2; }
+.evAiGone { fill: none; stroke-width: 1; stroke-dasharray: 3 3; stroke-opacity: 0.7; }
+.evAiLine { fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+.evAiLabel {
+  position: absolute; top: 2px; padding: 0 4px; box-sizing: border-box;
+  font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.evAiLabelTouched { color: var(--text); }
+.evGutter { padding-left: 30px; }
+.evPlot { position: relative; }
+.evY { position: absolute; left: 0; transform: translateY(-50%); font-size: 10px; color: var(--faint); pointer-events: none; }
+.evDot {
+  position: absolute; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%;
+  background: var(--panel); border: 1.5px solid var(--muted); pointer-events: none;
+}
+.evDotNew { width: 8px; height: 8px; margin: -4px 0 0 -4px; background: var(--accent); border: 2px solid var(--panel); }
+.evDotGone { border: 1px dashed var(--bad); background: transparent; }
