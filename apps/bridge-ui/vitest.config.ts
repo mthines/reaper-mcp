@@ -1,11 +1,12 @@
 import { defineConfig } from 'vitest/config';
-import { buildConstants } from './build-config.mjs';
-
-// The page's build-time constants (version, LoreKit token, Dash0 destination), the same values build.mjs bakes in
-const constants = buildConstants();
+import react from '@vitejs/plugin-react';
+import { buildConstants, reactCompilerBabel } from './build-config.mjs';
 
 export default defineConfig({
-  define: constants,
+  // Components run as the page ships them: through the React Compiler
+  plugins: [react({ babel: reactCompilerBabel })],
+  // The page's build-time constants (version, LoreKit token, Dash0 destination), the same values vite.config.ts bakes in
+  define: buildConstants(),
   test: {
     globals: true,
     environment: 'node',
