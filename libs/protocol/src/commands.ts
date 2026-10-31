@@ -204,6 +204,26 @@ export type CommandType =
   // Removes the meters measure_tracks / read_track_* inserted
   | 'remove_mcp_meters';
 
+/**
+ * Tools the server composes itself (sidecar analysis) and logs on the bridge's status page with `_log_result`
+ * (`logToolResult()` in the server's `tool-log.ts`), so the page's log shows them like bridge commands.
+ */
+export type LoggedTool =
+  | 'analyze_track_offline'
+  | 'analyze_audio_file'
+  | 'measure_track_alignment'
+  | 'analyze_track_aesthetics'
+  | 'analyze_loudness_curve'
+  | 'analyze_stereo_bands'
+  | 'measure_masking'
+  | 'separate_stems'
+  | 'detect_key'
+  | 'detect_transients'
+  | 'create_transient_automation';
+
+/** Every command the bridge's log can show: the bridge's own commands and the tools the server logs there */
+export type LoggedCommand = CommandType | LoggedTool;
+
 // --- Per-command param types ---
 
 export type GetProjectInfoParams = Record<string, never>;

@@ -1,5 +1,6 @@
 import { listDiff, routeIds, type EditView, type Route, type SlotChange } from '../edit-views.js';
 import { ChangeLegend, ChangeMark, Legend } from './ChangeLegend.js';
+import { ChipLegend } from './Mixer.js';
 import { CHANGE_WORD, panText, pct } from './format.js';
 import { Measurement, fmt } from '../../measurements/index.js';
 import { cx } from '../../../lib/cx.js';
@@ -23,6 +24,8 @@ export function Routing({ v }: { v: Extract<EditView, { kind: "routing" }> }) {
     (r) => r[0],
     (a, b) => sameRoute(a[1], b[1]),
   );
+  // A changed route whose level moved draws its old level as a hollow mark
+  const levelMoved = v.routes.some((r, i) => diff.change.get(i) === "changed" && v.was?.[wasIds.indexOf(ids[i])]?.[2] !== r[2]);
   const count = (k: Route[0]) => v.routes.filter((r) => r[0] === k).length;
   return (
     <>
@@ -45,12 +48,20 @@ export function Routing({ v }: { v: Extract<EditView, { kind: "routing" }> }) {
           ))}
         </div>
       )}
+      {v.routes.length + diff.removed.length > 0 && (
+        <div className={chartStyles.measureLegend}>
+          {(["s", "r", "h"] as const).filter((k) => [...v.routes, ...diff.removed.map(([, r]) => r[1])].some((r) => r[0] === k)).map((k) => (
+            <span key={k}><b className="mono">{ROUTE_KIND[k][0]}</b> {ROUTE_KIND[k][1].replace(/ (to|from)$/, "")}</span>
+          ))}
+        </div>
+      )}
+      <ChipLegend flags={v.routes.map((r) => r[4])} />
       {v.was && <ChangeLegend change={diff.change} removed={diff.removed.length} />}
-      {v.was && diff.change.size + diff.removed.length > 0 && (
+      {levelMoved && (
         <Legend
           items={[
             [chartStyles.lgWas, "Before"],
-            [chartStyles.lgTick, "After"],
+            [chartStyles.lgRange, "Now"],
           ]}
         />
       )}

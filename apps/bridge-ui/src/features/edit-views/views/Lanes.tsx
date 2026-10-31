@@ -77,9 +77,14 @@ export function Lanes({ v }: { v: Extract<EditView, { kind: "lanes" }> }) {
         </div>
       </div>
       {v.more !== undefined && v.more > 0 && <div className={chartStyles.evMore}>+{plural(v.more, "more lane")} not drawn</div>}
-      {v.was && (gone.length > 0 || v.lanes.some((l, i) => wasLanes?.[i] && wasLanes[i][1] !== l[1])) && (
-        <Legend items={[[chartStyles.lgGoneMark, "Before"], [chartStyles.lgNewMark, "Added or changed"]]} />
-      )}
+      <Legend items={[
+        ...(v.lanes.some((l) => l[1] === 1) ? [[styles.lgPlays, "Plays"]] : []),
+        ...(v.lanes.some((l) => l[1] === 2) ? [[styles.lgLayered, "Plays layered"]] : []),
+        ...(v.lanes.some((l) => !l[1]) ? [[styles.lgSilent, "Silent"]] : []),
+        ...(v.comp !== undefined && v.segs?.length ? [[styles.lgComp, "Comp part, in the colour of its lane"]] : []),
+        ...(v.was && gone.length > 0 ? [[chartStyles.lgGoneMark, "Before"]] : []),
+        ...(v.was && v.comp === undefined && v.items.some(fresh) ? [[chartStyles.lgNewMark, "Added"]] : []),
+      ] as Array<[string, string]>} />
     </>
   );
 }

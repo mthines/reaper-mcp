@@ -5,3 +5,7 @@
 .offSections > span:not(.offIntegrated) { flex: 1; min-width: 2px; border-radius: 1px 1px 0 0; background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .offSections > span.offLoud { background: var(--warn); }
 .offIntegrated { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--hold); pointer-events: none; }
+.lgRef { width: 3px; height: 10px; border: 1px solid var(--target); border-radius: 1px; background: var(--panel); }
+.lgSection { width: 8px; height: 10px; border-radius: 1px 1px 0 0; background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.lgSectionLoud { width: 8px; height: 10px; border-radius: 1px 1px 0 0; background: var(--warn); }
+.lgIntegrated { width: 12px; height: 0; border-top: 1px dashed var(--hold); }

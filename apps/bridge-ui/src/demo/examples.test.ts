@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { MEASURED_COMMANDS, measurementOf } from '../lib/commands.js';
 import { DRAWER_EXAMPLES, EDIT_EXAMPLES, MEASUREMENT_EXAMPLES, SNAPSHOT_EXAMPLES } from './examples.js';
 import { editKindOf, editViewOf } from '../features/edit-views/index.js';
+import { DEMO_CALLS } from './demo-calls.js';
+import { createDemo, seededRandom } from './demo.js';
 
 // The stories draw these examples, so a new measuring command or view state without one is missing from Storybook
 describe('the examples the stories draw', () => {
@@ -23,6 +25,14 @@ describe('the examples the stories draw', () => {
     expect(EDIT_EXAMPLES.every((x) => editViewOf(x.entry) !== null)).toBe(true);
   });
 
+  it('cover every command with an edit view, each drawn as one', () => {
+    const drawn = new Set(EDIT_EXAMPLES.filter((x) => editViewOf(x.entry) !== null).map((x) => x.entry.c));
+    // Every command the log can show is in DEMO_CALLS, so these are all the commands with a view
+    const withView = Object.keys(DEMO_CALLS).filter((c) => editKindOf(c) !== undefined);
+    expect(withView.length).toBeGreaterThan(100);
+    expect(withView.filter((c) => !drawn.has(c))).toEqual([]);
+  });
+
   it('show the Snapshots view in every request state, blocked, empty and before the list arrives', () => {
     const states = new Set(SNAPSHOT_EXAMPLES.map((x) => (x.request ? (x.request.state === 'done' ? `done-${x.request.result.ok}` : x.request.state) : 'none')));
     expect([...states].sort()).toEqual(['done-false', 'done-true', 'lost', 'none', 'pending']);
@@ -35,5 +45,24 @@ describe('the examples the stories draw', () => {
   it('show the drawer for a failed call and a successful one', () => {
     expect(DRAWER_EXAMPLES.some((x) => !x.entry.ok && x.entry.e)).toBe(true);
     expect(DRAWER_EXAMPLES.some((x) => x.entry.ok)).toBe(true);
+  });
+});
+
+describe('the ?demo tour', () => {
+  it('has an example for every command it marks as drawn by one', () => {
+    const drawn = new Set([...MEASUREMENT_EXAMPLES, ...EDIT_EXAMPLES, ...DRAWER_EXAMPLES].map((x) => x.entry.c));
+    const missing = Object.entries(DEMO_CALLS).filter(([c, call]) => call === 'example' && !drawn.has(c)).map(([c]) => c);
+    expect(missing).toEqual([]);
+  });
+
+  it('logs a call of every command, each tool once at least', () => {
+    const { log = [] } = createDemo({ tour: true, random: seededRandom(1) }).tick();
+    const logged = new Set(log.map((e) => e.c));
+    expect(Object.keys(DEMO_CALLS).filter((c) => !logged.has(c))).toEqual([]);
+  });
+
+  it('logs the calls in time order, newest first', () => {
+    const { log = [] } = createDemo({ tour: true, random: seededRandom(1) }).tick();
+    expect(log.every((e, i) => i === 0 || log[i - 1].t >= e.t)).toBe(true);
   });
 });

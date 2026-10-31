@@ -38,8 +38,8 @@ export function Alignment({ m }: { m: Extract<Measurement, { kind: 'alignment' }
         m.offset !== undefined && (
           <div className={chartStyles.offHints}>
             <span>
-              Fix <span className="mono">playOffsetMs {fmt(m.offset, 2)}{m.phase !== undefined ? ` · phase ${m.phase ? 'inverted' : 'normal'}` : ''}</span>
-              {m.cur !== undefined && m.cur !== 0 && <span className="mono"> (now {fmt(m.cur, 2)})</span>}
+              Fix: play offset <span className="mono">{m.cur !== undefined && m.cur !== 0 ? `${fmt(m.cur, 2)} → ` : ''}{fmt(m.offset, 2)} ms</span>
+              {m.phase !== undefined && <>, polarity <span className="mono">{m.phase ? 'inverted' : 'normal'}</span></>}
             </span>
           </div>
         )

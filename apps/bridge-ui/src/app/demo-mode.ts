@@ -1,3 +1,4 @@
-import { createDemo } from '../demo/demo.js';
+import { createDemo, seededRandom } from '../demo/demo.js';
 
-export const DEMO = new URLSearchParams(location.search).has('demo') ? createDemo() : null;
+// Seeded dice: every load logs the same calls under the same numbers, so a link to one (`entry`) opens it again
+export const DEMO = new URLSearchParams(location.search).has('demo') ? createDemo({ tour: true, random: seededRandom(42) }) : null;

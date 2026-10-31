@@ -10,3 +10,6 @@
 .col:where([data-scale='tonic']) .pc { color: var(--accent); font-weight: 600; }
 .deg { min-height: 1.2em; font-size: 9.5px; color: var(--faint); }
 @container (max-width: 300px) { .deg { display: none; } .bars { gap: 2px; } }
+.lgTonic { width: 8px; height: 10px; border-radius: 2px 2px 0 0; background: var(--accent); }
+.lgIn { width: 8px; height: 10px; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.lgOut { width: 8px; height: 10px; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--faint) 45%, transparent); }

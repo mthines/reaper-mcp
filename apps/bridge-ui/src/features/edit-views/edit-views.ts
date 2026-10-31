@@ -491,3 +491,38 @@ export function routeIds(routes: Route[]): string[] {
     return `${k}#${n}`;
   });
 }
+
+/**
+ * The part of a timeline a call changed, padded so the music around it shows: half the change's length on each
+ * side, at least 8 s. Arrangement edits focus on the span they opened, cut or copied to; item edits on the item
+ * edges that moved (trimming a long item focuses on its new edge, not the whole item). Null when nothing changed
+ * or the change already fills most of the project: the drawer then shows it all.
+ */
+export function focusOf(v: Extract<EditView, { kind: 'timeline' }>, len: number): [number, number] | null {
+  const points: number[] = [];
+  const span = (s?: [number, number]) => s && points.push(s[0], s[1]);
+  span(v.span);
+  span(v.to);
+  if (!v.op) {
+    for (const lane of v.lanes ?? []) {
+      if (!lane.was) continue;
+      const { added, removed } = timelineDiff<Item>(lane.items, lane.was);
+      const edges = (items: Iterable<Item>) => [...items].flatMap((it) => [it[0], it[0] + it[1]]);
+      const now = edges(added);
+      const before = edges(removed);
+      const near = (xs: number[], x: number) => xs.some((y) => Math.abs(x - y) < 1e-3);
+      points.push(...now.filter((x) => !near(before, x)), ...before.filter((x) => !near(now, x)));
+    }
+    for (const [now, was] of [[v.regions, v.was?.regions], [v.markers, v.was?.markers], [v.tempo, v.was?.tempo]] as const) {
+      const { added, removed } = timelineDiff(now as (Region | Marker | Tempo)[], was as (Region | Marker | Tempo)[] | undefined);
+      for (const t of [...added, ...removed]) points.push(t[0]);
+    }
+  }
+  if (!points.length) return null;
+  const lo = Math.min(...points);
+  const hi = Math.max(...points);
+  const pad = Math.max(8, (hi - lo) / 2);
+  const a = Math.max(0, lo - pad);
+  const b = Math.min(len, hi + pad);
+  return b - a >= len * 0.8 ? null : [a, b];
+}

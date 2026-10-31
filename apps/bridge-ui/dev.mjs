@@ -5,7 +5,7 @@
 // answering until REAPER restarts. A browser hangs up all the time while you develop (reloads, idle drops,
 // devtools), so here the browser only talks to this server, and REAPER sees one connection for the session.
 //
-//   pnpm dev:bridge      → http://localhost:8098/mcp_bridge.html
+//   pnpm dev:bridge      → http://localhost:8098/mcp_bridge.html (live), …/mcp_bridge.html?demo (fake bridge)
 //   BRIDGE_DEV_PORT, REAPER_WEB_PORT and REAPER_RESOURCE_PATH override the defaults.
 import { context } from 'esbuild';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, watch } from 'node:fs';
@@ -170,7 +170,17 @@ http
     res.writeHead(404).end();
   })
   .listen(PORT, '127.0.0.1', () => {
-    log(`http://localhost:${PORT}/mcp_bridge.html  (REAPER on ${REAPER_PORT}, one connection; installs into ${resource})`);
+    const page = `http://localhost:${PORT}/mcp_bridge.html`;
+    console.log(
+      [
+        '',
+        '  MCP Bridge page (dev)',
+        `  Live:  ${page}         REAPER's web interface on ${REAPER_PORT}, one connection`,
+        `  Demo:  ${page}?demo    no REAPER needed: a fake bridge with every tool view in the log`,
+        `  Lua/JSFX saves install into ${resource}`,
+        '',
+      ].join('\n'),
+    );
   });
 
 function log(message) {

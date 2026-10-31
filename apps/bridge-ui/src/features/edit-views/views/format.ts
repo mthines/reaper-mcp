@@ -40,8 +40,6 @@ export const CHANGE_WORD: Record<SlotChange, string> = {
   changed: "changed",
 };
 /** "+1 −1" when the call added or removed entries, else how many it changed or moved */
-export const changedText = (added: number, removed: number, touched: number) =>
-  added || removed ? `+${added} −${removed}` : String(touched);
 const BOOL_WORDS: Record<string, [string, string]> = {
   mute: ["on", "muted"],
   solo: ["off", "soloed"],

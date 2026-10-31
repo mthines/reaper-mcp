@@ -1,6 +1,7 @@
+import { Counts } from './Counts.js';
 import { listDiff, type EditView, type FxChain, type FxSlot } from '../edit-views.js';
 import { ChangeMark } from './ChangeLegend.js';
-import { changedText, fxShort } from './format.js';
+import { fxShort } from './format.js';
 import { Measurement } from '../../measurements/index.js';
 import { cx } from '../../../lib/cx.js';
 import chartStyles from '../../../styles/chart.module.css';
@@ -31,9 +32,9 @@ export function FxChains({ v }: { v: Extract<EditView, { kind: "fxChain" }> }) {
           label={v.chains.length > 1 ? "Tracks" : "Track"}
           value={v.chains.map((c) => c.t).join(" → ")}
         />
-        <Measurement.Readout label="FX" value={String(all.length)} />
+        <Measurement.Readout label="Plugins" value={String(all.length)} />
         {write ? (
-          <Measurement.Readout label="Changed" value={changedText(added, removed, touched)} />
+          <Counts added={added} removed={removed} changed={touched} />
         ) : (
           <Measurement.Readout
             label="Bypassed"
@@ -64,7 +65,7 @@ function FxChainList({
     <div className={styles.evChain}>
       {named && <div className={timelineStyles.evLaneName}>{chain.t}</div>}
       {chain.fx.length === 0 && diff.removed.length === 0 && (
-        <div className={chartStyles.evMore}>No FX on this track</div>
+        <div className={chartStyles.evMore}>No plugins on this track</div>
       )}
       <ol className={mixerStyles.evSlots}>
         {chain.fx.map((f, i) => {

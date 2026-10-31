@@ -42,6 +42,8 @@ function acsBand(row: ModRow): [number, number] | null {
   return [Math.max(0, lo), Math.min(1, lo + strength)];
 }
 
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 const sourcesText = (r: ModRow) =>
   [r.lfo && "LFO", r.acs && "audio", r.link && "link"].filter(Boolean).join(" + ") || "baseline only";
 
@@ -50,7 +52,7 @@ export function Modulation({ v }: { v: Extract<EditView, { kind: "modulation" }>
   return (
     <>
       <div className={chartStyles.measureReadouts}>
-        <Measurement.Readout label="FX" value={v.fx ? fxShort(v.fx) : "–"} />
+        <Measurement.Readout label="Plugin" value={v.fx ? fxShort(v.fx) : "–"} />
         {!write && <Measurement.Readout label="Modulated" value={String(v.total ?? v.rows.length)} unit="params" />}
       </div>
       {v.rows.length === 0 ? (
@@ -62,11 +64,13 @@ export function Modulation({ v }: { v: Extract<EditView, { kind: "modulation" }>
           ))}
         </div>
       )}
-      {write && (
+      {v.rows.some((r) => !r.off) && (
         <Legend
           items={[
-            [chartStyles.lgWas, "Before"],
-            [chartStyles.lgTick, "After"],
+            [styles.lgBaseline, "Baseline (the setting's own value)"],
+            ...(v.rows.some((r) => r.lfo) ? [[chartStyles.lgLine, "LFO swing"] as [string, string]] : []),
+            ...(v.rows.some((r) => r.acs) ? [[styles.lgBand, "Audio follower range"] as [string, string]] : []),
+            ...(v.rows.some((r) => r.was && (r.was.lfo || r.was.base !== r.base)) ? [[chartStyles.lgPrevious, "Before"] as [string, string]] : []),
           ]}
         />
       )}
@@ -98,19 +102,21 @@ function ModulationRow({ r }: { r: ModRow }) {
         </svg>
       )}
       <div className={`${styles.facts} mono`}>
-        {!r.off && <span>base {Math.round(r.base * 100)}%</span>}
+        {!r.off && <span>Baseline {Math.round(r.base * 100)}%</span>}
         {r.lfo && (
           <>
-            <span>{r.lfo[0].replace("_", " ")}</span>
-            <span>{plain(r.lfo[1])} {r.lfo[5] ? "QN" : "Hz"}</span>
-            <span>depth {Math.round(r.lfo[2] * 100)}%</span>
+            <span>{cap(r.lfo[0].replace("_", " "))} LFO</span>
+            <span title={r.lfo[5] ? "Cycle length in quarter notes, synced to the tempo" : "Cycles per second"}>
+              {r.lfo[5] ? `${plain(r.lfo[1])} QN cycle` : `${plain(r.lfo[1])} Hz`}
+            </span>
+            <span>Depth {Math.round(r.lfo[2] * 100)}%</span>
           </>
         )}
         {r.acs && (
           <>
-            <span>follows ch {r.acs[5]}</span>
-            <span>{plain(r.acs[2])}…{plain(r.acs[3])} dB</span>
-            <span>{plain(r.acs[0])}/{plain(r.acs[1])} ms</span>
+            <span>Follows channel {r.acs[5]}</span>
+            <span>{plain(r.acs[2])} to {plain(r.acs[3])} dB</span>
+            <span title="Attack / release">{plain(r.acs[0])} / {plain(r.acs[1])} ms</span>
           </>
         )}
         {r.link && (

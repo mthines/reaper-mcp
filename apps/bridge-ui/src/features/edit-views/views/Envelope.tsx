@@ -1,5 +1,6 @@
 import { useState, type PointerEvent } from 'react';
 import { newPoints, type AutoItem, type EditView, type EnvPoint } from '../edit-views.js';
+import { Counts } from './Counts.js';
 import { Legend } from './ChangeLegend.js';
 import { dot } from './PianoRoll.js';
 import { clock, plural } from './format.js';
@@ -155,10 +156,7 @@ export function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) 
           />
         )}
         {v.was && (added.size > 0 || removed.length > 0 || !v.ais) && (
-          <Measurement.Readout
-            label="Changed"
-            value={`+${added.size} −${removed.length}`}
-          />
+          <Counts added={added.size} removed={removed.length} />
         )}
       </div>
       <div className={cx(styles.evEnv, styles.evGutter)}>

@@ -1,6 +1,7 @@
+import { Counts } from './Counts.js';
 import { listDiff, type EditView, type SlotChange, type MixRow } from '../edit-views.js';
 import { ChangeLegend, ChangeMark } from './ChangeLegend.js';
-import { CHANGE_WORD, changedText, panText, pct, plural } from './format.js';
+import { CHANGE_WORD, panText, pct, plural } from './format.js';
 import { Measurement, fmt } from '../../measurements/index.js';
 import { cx } from '../../../lib/cx.js';
 import chartStyles from '../../../styles/chart.module.css';
@@ -93,6 +94,23 @@ function MixerRow({
   );
 }
 
+const CHIP_WORD = { M: "muted", S: "soloed", R: "armed" } as const;
+
+/** Names the lit M / S / R chips, only those some row shows */
+export function ChipLegend({ flags }: { flags: string[] }) {
+  const lit = (["M", "S", "R"] as const).filter((f) => flags.some((x) => x.includes(f)));
+  if (!lit.length) return null;
+  return (
+    <div className={chartStyles.measureLegend}>
+      {lit.map((f) => (
+        <span key={f}>
+          <span className={styles.evChip} data-chip={f.toLowerCase()}>{f}</span> {CHIP_WORD[f]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function Mixer({ v }: { v: Extract<EditView, { kind: "mixer" }> }) {
   // Structure edits carry each track's id before and after, so added, removed and moved tracks can be told apart
   const was = v.ids && v.was ? v.was : undefined;
@@ -109,7 +127,7 @@ export function Mixer({ v }: { v: Extract<EditView, { kind: "mixer" }> }) {
       {was && (
         <div className={chartStyles.measureReadouts}>
           <Measurement.Readout label="Tracks" value={String(v.total)} />
-          <Measurement.Readout label="Changed" value={changedText(added, d.removed.length, d.change.size + d.removed.length)} />
+          <Counts added={added} removed={d.removed.length} changed={d.change.size} />
         </div>
       )}
       {(v.from ?? 0) > 0 && <div className={chartStyles.evMore}>{plural(v.from ?? 0, "track")} above</div>}
@@ -123,6 +141,7 @@ export function Mixer({ v }: { v: Extract<EditView, { kind: "mixer" }> }) {
         {v.master && <MixerRow row={v.master} master />}
       </div>
       {was && <ChangeLegend change={d.change} removed={d.removed.length} />}
+      <ChipLegend flags={[...v.tracks, ...(v.master ? [v.master] : [])].map((t) => t[5])} />
       {v.total > (v.from ?? 0) + v.tracks.length && (
         <div className={chartStyles.evMore}>
           +{v.total - (v.from ?? 0) - v.tracks.length} more tracks not drawn

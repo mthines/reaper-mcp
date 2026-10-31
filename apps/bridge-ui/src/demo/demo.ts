@@ -1,7 +1,8 @@
 import type { BridgeSettings, BridgeStatus, SettingKey } from '../lib/status.js';
 
+import { DEMO_CALLS } from './demo-calls.js';
 import { DEMO_KNOWLEDGE } from './demo-plugins.js';
-import { EDIT_EXAMPLES } from './examples.js';
+import { DRAWER_EXAMPLES, EDIT_EXAMPLES, MEASUREMENT_EXAMPLES, type Example } from './examples.js';
 import { LOG_MAX } from '../lib/log.js';
 import { commandKind, speedOf, type CommandEntry } from '../lib/commands.js';
 import type { BridgeHistory, LongHistory } from '../lib/timeline.js';
@@ -107,8 +108,19 @@ export interface Demo {
   set(key: SettingKey, on: boolean): void;
 }
 
-/** `now` and `random` are the clock and dice the fake bridge runs on: the real ones for ?demo, fixed ones for stories */
-export function createDemo({ now = Date.now, random = Math.random }: { now?: () => number; random?: () => number } = {}): Demo {
+/** Every example the stories draw: each measurement and edit view (in each of its states) and the drawer's states */
+const TOUR: Example[] = [...MEASUREMENT_EXAMPLES, ...EDIT_EXAMPLES, ...DRAWER_EXAMPLES];
+/** The commands no example draws: a plain call each, with the params an agent would send */
+const PLAIN_CALLS: CommandEntry[] = Object.entries(DEMO_CALLS).flatMap(([c, params]) =>
+  params === 'example' ? [] : [{ n: 0, t: 0, c, ms: 2.4, ok: true, p: JSON.stringify(params) }],
+);
+
+/**
+ * `now` and `random` are the clock and dice the fake bridge runs on: the real ones for ?demo, fixed ones for stories.
+ * `tour` puts a call of every command (`DEMO_CALLS`) and every example (each with its previous call) in the log and
+ * keeps drawing new calls from them, so every tool and every view the page can show is one click away.
+ */
+export function createDemo({ now = Date.now, random = Math.random, tour = false }: { now?: () => number; random?: () => number; tour?: boolean } = {}): Demo {
   const startedAt = now() - 47 * 60_000;
   let n = 0;
   let errors = 0;
@@ -133,13 +145,14 @@ export function createDemo({ now = Date.now, random = Math.random }: { now?: () 
     { id: 'pid-48213', dir: '/Users/you/Workspace/mix-scripts', client: 'cursor', first: startedAt + 5 * 60_000, last: 0, commands: 0, errors: 0 },
   ];
 
-  const push = (t: number) => {
-    const [c, base, params] = COMMANDS[Math.floor(random() * COMMANDS.length)];
+  /** One call at `t`: a random one of COMMANDS, or `from` (an example's call: its params, result, outcome and time) */
+  const push = (t: number, from?: CommandEntry) => {
+    const [c, base, params] = from ? [from.c, from.ms, undefined] : COMMANDS[Math.floor(random() * COMMANDS.length)];
     // The first session does most of the work; the third went quiet after ~25 minutes
     const r = random();
     const session = t - startedAt > 25 * 60_000 && r > 0.75 ? sessions[1] : r > 0.9 && t - startedAt < 25 * 60_000 ? sessions[2] : sessions[0];
-    let ok = random() > 0.06;
-    let e = ok ? undefined : ERRORS[Math.floor(random() * ERRORS.length)];
+    let ok = from ? from.ok : random() > 0.06;
+    let e = from ? from.e : ok ? undefined : ERRORS[Math.floor(random() * ERRORS.length)];
     if (settings.paused) {
       ok = false;
       e = 'Paused by user in the MCP Bridge window. Ask the user to resume agent control.';
@@ -149,16 +162,20 @@ export function createDemo({ now = Date.now, random = Math.random }: { now?: () 
     }
     n += 1;
     if (!ok) errors += 1;
-    const ms = ok || !settings.paused ? Math.round(base * (0.5 + random() * 1.5) * 100) / 100 : 0.01;
-    const entry: CommandEntry = { n, t, c, ms, ok, s: session.id, p: JSON.stringify(params) };
-    const result = ok ? fakeResult(c, random) : undefined;
+    const ms = from && !settings.paused ? base : ok || !settings.paused ? Math.round(base * (0.5 + random() * 1.5) * 100) / 100 : 0.01;
+    const entry: CommandEntry = from?.src
+      ? { n, t, c, ms, ok, src: from.src, p: from.p }
+      : { n, t, c, ms, ok, s: session.id, p: from ? from.p : JSON.stringify(params) };
+    const result = ok ? (from ? from.r : fakeResult(c, random)) : undefined;
     if (result) entry.r = result;
     if (e) entry.e = e;
     recent = [entry, ...recent].slice(0, 50);
     saved = [entry, ...saved].slice(0, LOG_MAX);
-    session.last = t;
-    session.commands += 1;
-    if (!ok) session.errors += 1;
+    if (!entry.src) {
+      session.last = t;
+      session.commands += 1;
+      if (!ok) session.errors += 1;
+    }
     const slow = ok && !['fast', 'long'].includes(speedOf(c, entry.ms)) ? 1 : 0;
     count(buckets, BUCKET_MS, t, 1, ok ? 0 : 1, slow, entry.ms);
     long.forEach((map, i) => count(map, LONG_SIZES[i], t, 1, ok ? 0 : 1, slow, entry.ms));
@@ -174,8 +191,16 @@ export function createDemo({ now = Date.now, random = Math.random }: { now?: () 
     long.forEach((map, i) => count(map, LONG_SIZES[i], t, total, errs, random() < 0.2 ? 1 : 0, total * 6));
   }
 
-  // Seed the last 47 minutes with bursty agent sessions separated by quiet stretches
+  // The tour: every command over the last five minutes, each example after its previous call so the drawer can compare
+  const calls = tour ? [...PLAIN_CALLS, ...TOUR.flatMap((x) => [...x.history].reverse())] : [];
+  const tourStart = now() - 5 * 60_000;
+  let next = 0;
+
+  // Seed the last 47 minutes with bursty agent sessions separated by quiet stretches, the tour among them in time order
   for (let t = startedAt; t < now(); t += 1000) {
+    for (; next < calls.length && tourStart + Math.floor((next / calls.length) * 5 * 60_000) <= t; next++) {
+      push(tourStart + Math.floor((next / calls.length) * 5 * 60_000), calls[next]);
+    }
     const minute = Math.floor((t - startedAt) / 60_000);
     const busy = minute % 9 < 4 || minute > 40;
     const rate = busy ? 0.25 + 0.45 * Math.abs(Math.sin(minute)) : 0.02;
@@ -183,9 +208,12 @@ export function createDemo({ now = Date.now, random = Math.random }: { now?: () 
   }
   sessions[2].ended = true;
 
+  for (; next < calls.length; next++) push(tourStart + Math.floor((next / calls.length) * 5 * 60_000), calls[next]);
+  const exampleCalls = tour ? [...PLAIN_CALLS, ...TOUR.map((x) => x.entry)] : [];
+
   return {
     tick() {
-      if (random() < 0.35) push(now());
+      if (random() < 0.35) push(now(), exampleCalls.length && random() < 0.5 ? exampleCalls[Math.floor(random() * exampleCalls.length)] : undefined);
       const log = first ? saved : undefined;
       first = false;
       // Idle agents still ping every 20s

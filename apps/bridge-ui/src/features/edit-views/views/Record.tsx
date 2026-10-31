@@ -1,4 +1,5 @@
 import type { EditView, RecordRow } from '../edit-views.js';
+import { Legend } from './ChangeLegend.js';
 import { clock, plural } from './format.js';
 import { Measurement } from '../../measurements/index.js';
 import { cx } from '../../../lib/cx.js';
@@ -6,14 +7,14 @@ import chartStyles from '../../../styles/chart.module.css';
 import mixerStyles from './Mixer.module.css';
 import styles from './Record.module.css';
 
-const RECORD_MODE: Record<string, string> = { normal: "Normal", time_selection: "Punch: time", selected_items: "Punch: items" };
+const RECORD_MODE: Record<string, string> = { normal: "Normal", time_selection: "Punch in time", selected_items: "Punch on items" };
 const PUNCH_ON: Record<string, string> = { time_selection: "time selection", selected_items: "selected items" };
 const MODE_WORD: Record<string, string> = {
-  input: "input", none: "monitor only", stereo_out: "output (stereo)", stereo_out_latency: "output (stereo, latency comp.)",
-  mono_out: "output (mono)", mono_out_latency: "output (mono, latency comp.)", midi_out: "MIDI output",
+  input: "input", none: "monitor only", stereo_out: "output (stereo)", stereo_out_latency: "output (stereo, latency compensated)",
+  mono_out: "output (mono)", mono_out_latency: "output (mono, latency compensated)", midi_out: "MIDI output",
   midi_overdub: "MIDI overdub", midi_replace: "MIDI replace", midi_touch_replace: "MIDI touch-replace",
   midi_latch_replace: "MIDI latch-replace", multichannel_out: "output (multichannel)",
-  multichannel_out_latency: "output (multichannel, latency comp.)", input_mono: "input (mono)",
+  multichannel_out_latency: "output (multichannel, latency compensated)", input_mono: "input (mono)",
   input_stereo: "input (stereo)", input_multichannel: "input (multichannel)", input_midi: "input (MIDI)",
 };
 const punchText = (p?: [number, number]) => (p ? `${clock(p[0])}–${clock(p[1])}` : "–");
@@ -36,7 +37,7 @@ export function Record({ v }: { v: Extract<EditView, { kind: "record" }> }) {
   return (
     <>
       <div className={chartStyles.measureReadouts}>
-        <Measurement.Readout label="Mode" value={RECORD_MODE[v.mode] ?? v.mode} word={modeChanged ? "new" : ""}
+        <Measurement.Readout label="Record mode" value={RECORD_MODE[v.mode] ?? v.mode} word={modeChanged ? "new" : ""}
           title={[PUNCH_ON[v.mode] && `Auto-punch on the ${PUNCH_ON[v.mode]}`, modeChanged && was && `Was ${RECORD_MODE[was.mode] ?? was.mode}`].filter(Boolean).join(" · ") || undefined} />
         {(v.mode === "time_selection" || v.punch) && (
           <Measurement.Readout label="Punch" value={punchText(v.punch)} word={punchChanged ? "new" : !v.punch ? "none" : ""}
@@ -44,7 +45,7 @@ export function Record({ v }: { v: Extract<EditView, { kind: "record" }> }) {
             title={punchChanged ? `Was ${punchText(was?.punch)}` : !v.punch ? "No time selection: nothing records" : undefined} />
         )}
         {v.path !== undefined && (
-          <Measurement.Readout label="Path" value={v.path || "project folder"} word={pathChanged ? "new" : ""}
+          <Measurement.Readout label="Record path" value={v.path || "project folder"} word={pathChanged ? "new" : ""}
             title={pathChanged ? `Was ${was?.path || "project folder"}` : undefined} />
         )}
       </div>
@@ -56,6 +57,12 @@ export function Record({ v }: { v: Extract<EditView, { kind: "record" }> }) {
         </div>
       ))}
       {v.more !== undefined && v.more > 0 && <div className={chartStyles.evMore}>+{plural(v.more, "more track")} not drawn</div>}
+      {rows.length > 0 && (
+        <Legend items={[
+          ...(rows.some((r) => r[1]) ? [[styles.lgArmed, "Armed"]] : []),
+          ...(rows.some((r) => !r[1]) ? [[styles.lgUnarmed, "Not armed"]] : []),
+        ] as Array<[string, string]>} />
+      )}
       {rowChanged && <div className={chartStyles.evMore}>Changed values are underlined, with what they were beneath</div>}
     </>
   );
@@ -79,7 +86,7 @@ function RecordTrack({ r, was }: { r: RecordRow; was?: RecordRow }) {
       <span className={cx(styles.arm, !!armed && styles.on, armChanged && styles.changed)} role="img" aria-label={armed ? "armed" : "not armed"} />
       <span className={mixerStyles.evTn}><span className={cx(mixerStyles.evTnText, styles.name)}>{name}</span></span>
       {field(2, input, styles.input, (w) => w[2])}
-      {field(3, `mon ${monitor}`, undefined, (w) => `mon ${w[3]}`)}
+      {field(3, `monitor ${monitor}`, undefined, (w) => `monitor ${w[3]}`)}
       {field(4, MODE_WORD[mode] ?? mode, styles.mode, (w) => MODE_WORD[w[4]] ?? w[4])}
     </div>
   );

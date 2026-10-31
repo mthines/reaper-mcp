@@ -1,3 +1,4 @@
+import type { LoggedTool } from '@reaper-mcp/protocol';
 import { sendCommand } from './bridge.js';
 
 /**
@@ -5,7 +6,7 @@ import { sendCommand } from './bridge.js';
  * command: the bridge records `_log_result` as an entry for `command`, with `r` drawn by the page's measurement views.
  * Best-effort and in the background, so a slow or missing bridge never delays the tool's answer.
  */
-export function logToolResult(command: string, params: Record<string, unknown>, startedAt: number, r: Record<string, unknown> | null, error?: string): void {
+export function logToolResult(command: LoggedTool, params: Record<string, unknown>, startedAt: number, r: Record<string, unknown> | null, error?: string): void {
   void sendCommand('_log_result' as Parameters<typeof sendCommand>[0], {
     command,
     ms: Date.now() - startedAt,

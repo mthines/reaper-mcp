@@ -15,3 +15,7 @@
 @container (max-width: 300px) {
   .lane { grid-template-columns: minmax(0, 64px) minmax(0, 1fr); }
 }
+.lgPlays, .lgLayered, .lgSilent { width: 8px; height: 8px; border-radius: 2px; border: 1px solid var(--muted); }
+.lgPlays { background: var(--muted); }
+.lgLayered { background: linear-gradient(135deg, var(--muted) 50%, transparent 50%); }
+.lgComp { width: 12px; height: 8px; border-radius: 2px; background: linear-gradient(90deg, var(--h0) 0 50%, var(--h1) 50% 100%); opacity: 0.6; }

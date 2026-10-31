@@ -63,7 +63,7 @@ export const DrawsNothingForAnAnalysisWithoutLoudness: Story = {
 export const SuggestsTheAlignmentFixOnlyWhenSure: Story = {
   args: of('Alignment'),
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByText(/playOffsetMs −0\.84 · phase inverted/)).toBeInTheDocument();
+    await expect(within(canvasElement).getByText(/Fix: play offset/).textContent).toMatch(/−0\.84 ms, polarity inverted/);
   },
 };
 
@@ -72,7 +72,7 @@ export const SaysWhenAnAlignmentIsTooUnsure: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText(/no fix suggested/)).toBeInTheDocument();
-    await expect(canvas.queryByText(/playOffsetMs/)).toBeNull();
+    await expect(canvas.queryByText(/Fix: play offset/)).toBeNull();
   },
 };
 
@@ -94,7 +94,7 @@ export const ShowsTheKeysPreviousConfidenceInPercent: Story = {
   args: { entry: keyCall(2, 0.6), history: [keyCall(2, 0.6), keyCall(1, 0.45)] },
   play: async ({ canvasElement }) => {
     const previous = within(canvasElement).getByRole('button', { name: /Previous call/ });
-    await expect(previous.textContent).toMatch(/Confidence 45 %\s*\+15/);
+    await expect(previous.textContent).toMatch(/Confidence 45 → 60 %\s*▲ 15 %/);
     await expect(previous.textContent).not.toMatch(/0\.45/);
   },
 };

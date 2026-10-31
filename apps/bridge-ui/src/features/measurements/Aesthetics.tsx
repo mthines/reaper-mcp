@@ -1,4 +1,3 @@
-import { PreviousLegend } from './Measurement.js';
 import { fmt, pct } from './format.js';
 import type { Measurement } from '../../lib/commands.js';
 import { cx } from '../../lib/cx.js';
@@ -24,7 +23,7 @@ export function Aesthetics({ m, was }: { m: Extract<Measurement, { kind: 'aesthe
               <span className={chartStyles.evName}>{label}</span>
               <span className={cx(chartStyles.evVal, 'mono')}>
                 <b>{v === undefined ? '–' : v.toFixed(1)}</b> / 10
-                {w !== undefined && v !== undefined && Math.abs(v - w) >= 0.05 && <span> · {v > w ? '+' : '−'}{Math.abs(v - w).toFixed(1)}</span>}
+                {w !== undefined && v !== undefined && Math.abs(v - w) >= 0.05 && <span> {v > w ? '▲' : '▼'} {Math.abs(v - w).toFixed(1)}</span>}
               </span>
               <span className={chartStyles.evBar}>
                 <span className={chartStyles.evFill} style={{ left: 0, width: `${v === undefined ? 0 : pct(v, 0, 10)}%` }} />
@@ -34,7 +33,12 @@ export function Aesthetics({ m, was }: { m: Extract<Measurement, { kind: 'aesthe
           );
         })}
       </div>
-      {was && <PreviousLegend />}
+      {was && (
+        <div className={chartStyles.measureLegend}>
+          <span><i className={chartStyles.lgRange} /> This call</span>
+          <span><i className={chartStyles.lgWas} /> Previous call</span>
+        </div>
+      )}
       <div className={chartStyles.offHints}>
         <span>
           {m.name ?? 'Clip'}

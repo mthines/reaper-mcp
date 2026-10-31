@@ -1,5 +1,4 @@
 import { useId, useState, type PointerEvent } from 'react';
-import { PreviousLegend } from './Measurement.js';
 import { Readout } from './Readout.js';
 import { fmt, zoneOf, hzLabel } from './format.js';
 import type { Measurement } from '../../lib/commands.js';
@@ -41,7 +40,7 @@ export function Spectrum({ m, previous }: { m: Extract<Measurement, { kind: 'spe
       <div className={chartStyles.measureReadouts}>
         <Readout label="Peak" value={fmt(m.peakDb)} unit="dB" zone={zoneOf(m.peakDb)} />
         <Readout label="RMS" value={fmt(m.rmsDb)} unit="dB" />
-        {m.fftSize !== undefined && <Readout label="FFT" value={String(m.fftSize)} />}
+        {m.fftSize !== undefined && <Readout label="FFT size" value={String(m.fftSize)} unit="bins" />}
       </div>
       <div className={styles.spectrum}>
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" onPointerMove={onMove} onPointerLeave={() => setHover(null)} role="img" aria-label="Frequency spectrum, 20 Hz to 20 kHz">
@@ -81,7 +80,12 @@ export function Spectrum({ m, previous }: { m: Extract<Measurement, { kind: 'spe
           </span>
         ))}
       </div>
-      {previous && <PreviousLegend />}
+      <div className={chartStyles.measureLegend}>
+        <span><i className={chartStyles.lgLine} /> This call</span>
+        {previous && <span><i className={chartStyles.lgPrevious} /> Previous call</span>}
+        {Math.max(...bands) > -6 && <span><i className={chartStyles.lgWarn} /> Within 6 dB of 0</span>}
+        {Math.max(...bands) >= 0 && <span><i className={chartStyles.lgBad} /> Over 0 dB</span>}
+      </div>
     </>
   );
 }

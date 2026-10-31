@@ -13,3 +13,6 @@
 @container (max-width: 300px) {
   .row { grid-template-columns: 36px repeat(var(--cols), minmax(12px, 1fr)); }
 }
+.lgOn { width: 8px; height: 8px; border-radius: 50% !important; background: var(--text); }
+.lgNew { width: 8px; height: 8px; border-radius: 50% !important; background: var(--accent); }
+.lgGone { width: 8px; height: 8px; border-radius: 50% !important; border: 1px dashed var(--muted); box-sizing: border-box; }

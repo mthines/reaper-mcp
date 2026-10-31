@@ -82,8 +82,8 @@ export function Log({
   now: number;
 }) {
   const [filter, setFilter] = useUrlState<Filter>('filter', 'all', { validate: isFilter });
-  // Typing replaces the history entry instead of adding one per keystroke
-  const [query, setQuery] = useUrlState('q', '', { validate: isString, navigationMode: 'replace' });
+  // Typing replaces the history entry instead of adding one per keystroke, and the URL follows once typing pauses
+  const [query, setQuery] = useUrlState('q', '', { validate: isString, navigationMode: 'replace', debounceMs: 300 });
   const [sessionFilter, setSessionFilter] = useUrlState<string | null>('agent', null, { validate: isStringOrNull });
   // The open command, by sequence number: it opens once the log holds it (also after a reload)
   const [selectedN, setSelectedN] = useUrlState<number | null>('entry', null, { validate: isNumberOrNull });
@@ -95,7 +95,13 @@ export function Log({
   const [copied, setCopied] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const choose = (v: View) => {
+  // Each view keeps its own search: switching saves this view's and brings back the next one's (`carry` sets it instead)
+  const queries = useRef(new Map<View, string>());
+  const choose = (v: View, carry?: string) => {
+    if (v !== view) {
+      queries.current.set(view, query);
+      setQuery(carry ?? queries.current.get(v) ?? '');
+    }
     onView(v);
     if (v !== 'calls') setSelected(null);
   };
@@ -222,10 +228,9 @@ export function Log({
   const agentsShown = multiSession && (view === 'calls' || view === 'tools');
 
   const showCalls = (opts: { tool?: string; session?: string; errors?: boolean }) => {
-    if (opts.tool !== undefined) setQuery(opts.tool);
     if (opts.session !== undefined) setSessionFilter(opts.session);
     setFilter(opts.errors ? 'errors' : 'all');
-    choose('calls');
+    choose('calls', opts.tool);
   };
 
   return (
