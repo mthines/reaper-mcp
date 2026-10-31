@@ -88,14 +88,18 @@ local function pick(notes, p)
 end
 
 local function write_notes(api, t, changed)
-  for _, n in ipairs(changed) do
-    api.MIDI_SetNote(t.take, n.i, nil, nil, api.MIDI_GetPPQPosFromProjQN(t.take, n.nqs),
-      api.MIDI_GetPPQPosFromProjQN(t.take, n.nqe), nil, n.npitch, n.nvel, true)
-  end
+  local ok, err = pcall(function()
+    for _, n in ipairs(changed) do
+      api.MIDI_SetNote(t.take, n.i, nil, nil, api.MIDI_GetPPQPosFromProjQN(t.take, n.nqs),
+        api.MIDI_GetPPQPosFromProjQN(t.take, n.nqe), nil, n.npitch, n.nvel, true)
+    end
+  end)
   api.MIDI_Sort(t.take)
   -- MIDI API edits leave the item unmarked; without this REAPER folds the edit into the previous
-  -- MIDI undo point and undo restores a mixed state (seen in REAPER 7.40)
+  -- MIDI undo point and undo restores a mixed state (seen in REAPER 7.40). Marked even when a
+  -- write failed half way, so the failed block has an undo point for with_undo to revert
   api.MarkTrackItemsDirty(t.track, t.item)
+  if not ok then error(err, 0) end
 end
 
 -- -----------------------------------------------------------------------------

@@ -57,6 +57,9 @@ function new_midi_fake(spec)
     return true, n.sel, n.muted, n.s, n.e, n.chan, n.pitch, n.vel
   end
   function api.MIDI_SetNote(take, i, sel, muted, s, e, chan, pitch, vel, _noSort)
+    -- Test hook: the Nth note write raises
+    api.setnotes = (api.setnotes or 0) + 1
+    if api.fail_setnote_at == api.setnotes then error("MIDI_SetNote failed") end
     local n = take.notes[i + 1]
     if not n then return false end
     w()

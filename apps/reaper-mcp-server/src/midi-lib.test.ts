@@ -81,6 +81,17 @@ describe('mcp_midi_lib.lua quantize', () => {
     `);
   });
 
+  it('a quantize that fails half way through its notes is undone', async () => {
+    await runLua(`
+      local api = keys({ { s = 0.1, e = 0.6, pitch = 60 }, { s = 1.1, e = 1.6, pitch = 62 }, { s = 2.1, e = 3, pitch = 64 } })
+      local before = api.notes_of(0, 0)
+      api.fail_setnote_at = 2
+      local r, err = midi.quantize(api, { trackIndex = 0, itemIndex = 0, grid = 1 })
+      assert(r == nil and err:find("undone"), tostring(err))
+      assert(api.notes_of(0, 0) == before and #api.undo == 0, api.notes_of(0, 0))
+    `);
+  });
+
   it('gives each of two edits in a row its own undo point', async () => {
     await runLua(`
       local api = keys({ { s = 0.1, e = 0.5, pitch = 60 } })
