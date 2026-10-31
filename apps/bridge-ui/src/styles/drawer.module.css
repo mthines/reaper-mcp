@@ -25,9 +25,9 @@
   padding: 3px 9px; border-radius: 999px;
   font-size: 11.5px; font-weight: 600;
 }
-.resultBadge[data-outcome='ok'] { color: var(--live); background: rgba(74, 222, 128, 0.09); border: 1px solid rgba(74, 222, 128, 0.25); }
-.resultBadge[data-outcome='error'] { color: var(--bad); background: rgba(248, 113, 113, 0.09); border: 1px solid rgba(248, 113, 113, 0.28); }
-.resultBadge[data-outcome='refused'] { color: var(--warn); background: rgba(245, 184, 75, 0.08); border: 1px solid rgba(245, 184, 75, 0.28); }
+.resultBadge:where([data-outcome='ok']) { color: var(--live); background: rgba(74, 222, 128, 0.09); border: 1px solid rgba(74, 222, 128, 0.25); }
+.resultBadge:where([data-outcome='error']) { color: var(--bad); background: rgba(248, 113, 113, 0.09); border: 1px solid rgba(248, 113, 113, 0.28); }
+.resultBadge:where([data-outcome='refused']) { color: var(--warn); background: rgba(245, 184, 75, 0.08); border: 1px solid rgba(245, 184, 75, 0.28); }
 .facts { display: grid; grid-template-columns: 104px 1fr; gap: 9px 12px; margin: 0; font-size: 12.5px; }
 
 /* The drawer's content answers to the drawer's own width (it is resizable), not the window's */

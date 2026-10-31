@@ -67,9 +67,9 @@
 .knPref { height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .knPref span { display: block; height: 100%; background: var(--bar); }
 .knState { font-size: 11.5px; text-align: right; white-space: nowrap; }
-.knState[data-coverage='learned'] { color: var(--live); }
-.knState[data-coverage='built-in'] { color: var(--accent); }
-.knState[data-coverage='unknown'] { color: var(--faint); }
+.knState:where([data-coverage='learned']) { color: var(--live); }
+.knState:where([data-coverage='built-in']) { color: var(--accent); }
+.knState:where([data-coverage='unknown']) { color: var(--faint); }
 .knElsewhere { padding: 12px 14px 4px; font-size: 11.5px; color: var(--faint); }
 
 @media (max-width: 720px) {

@@ -3,10 +3,10 @@
 .snaps { container-type: inline-size; padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 .snapBlocked { margin: 0; padding: 8px 10px; border-radius: 7px; font-size: 12.5px; color: var(--warn); background: rgba(245, 184, 75, 0.07); border: 1px solid rgba(245, 184, 75, 0.25); }
 .snapResult { padding: 8px 10px; border-radius: 7px; font-size: 12.5px; border: 1px solid var(--line-2); background: var(--panel-2); overflow-wrap: anywhere; }
-.snapResult[data-tone='ok'] { color: var(--live); border-color: rgba(74, 222, 128, 0.3); }
-.snapResult[data-tone='warn'] { color: var(--warn); border-color: rgba(245, 184, 75, 0.3); }
-.snapResult[data-tone='bad'] { color: var(--bad); border-color: rgba(248, 113, 113, 0.3); }
-.snapResult[data-tone='info'] { color: var(--muted); }
+.snapResult:where([data-tone='ok']) { color: var(--live); border-color: rgba(74, 222, 128, 0.3); }
+.snapResult:where([data-tone='warn']) { color: var(--warn); border-color: rgba(245, 184, 75, 0.3); }
+.snapResult:where([data-tone='bad']) { color: var(--bad); border-color: rgba(248, 113, 113, 0.3); }
+.snapResult:where([data-tone='info']) { color: var(--muted); }
 .snapWarnings { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
 .snapList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .snapRow {

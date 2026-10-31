@@ -75,8 +75,8 @@
   pointer-events: none; z-index: 3;
   display: grid; gap: 3px;
 }
-.ttip[data-align='center'] { transform: translateX(-50%); }
-.ttip[data-align='end'] { transform: translateX(-100%); }
+.ttip:where([data-align='center']) { transform: translateX(-50%); }
+.ttip:where([data-align='end']) { transform: translateX(-100%); }
 .ttipTime { color: var(--faint); font-size: 10.5px; font-variant-numeric: tabular-nums; margin-bottom: 1px; }
 .ttipRow { display: flex; align-items: center; gap: 2px; white-space: nowrap; }
 .ttipRow b { color: var(--text); margin-right: 4px; }

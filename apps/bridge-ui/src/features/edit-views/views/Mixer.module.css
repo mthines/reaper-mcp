@@ -20,22 +20,22 @@
 .evPanD { position: absolute; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: var(--hold); }
 .evChips { display: flex; gap: 3px; justify-content: flex-end; }
 .evChip { width: 13px; border-radius: 3px; border: 1px solid var(--line-2); font: 600 9px/13px var(--mono); text-align: center; color: var(--faint); }
-.evChip[data-chip='m'] { background: var(--warn); border-color: var(--warn); color: var(--panel-2); }
-.evChip[data-chip='s'] { background: var(--live); border-color: var(--live); color: var(--panel-2); }
-.evChip[data-chip='r'] { background: var(--bad); border-color: var(--bad); color: var(--panel-2); }
+.evChip:where([data-chip='m']) { background: var(--warn); border-color: var(--warn); color: var(--panel-2); }
+.evChip:where([data-chip='s']) { background: var(--live); border-color: var(--live); color: var(--panel-2); }
+.evChip:where([data-chip='r']) { background: var(--bad); border-color: var(--bad); color: var(--panel-2); }
 
 /* What a call did to a row of a list (FX slot, track, route): added, moved, changed in place, removed */
 .evMark { margin-left: 6px; padding: 0 4px; border-radius: 3px; font-size: 10px; font-weight: 500; line-height: 15px; white-space: nowrap; }
-.evMark[data-change='new'] { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
-.evMark[data-change='moved'] { color: var(--h1); background: color-mix(in srgb, var(--h1) 14%, transparent); }
-.evMark[data-change='changed'] { color: var(--muted); background: var(--panel-2); }
-.evMark[data-change='gone'] { color: var(--faint); border: 1px dashed var(--line-2); }
-:is(.evSlot, .evTrk)[data-change='new'] { box-shadow: inset 2px 0 var(--accent); }
-:is(.evSlot, .evTrk)[data-change='moved'] { box-shadow: inset 2px 0 var(--h1); }
-:is(.evSlot, .evTrk)[data-change='changed'] { box-shadow: inset 2px 0 var(--muted); }
-.evTrk:is(.evSlot, .evTrk)[data-change='new'], .evTrk:is(.evSlot, .evTrk)[data-change='moved'], .evTrk:is(.evSlot, .evTrk)[data-change='changed'] { padding-left: 5px; }
-:is(.evSlot, .evTrk)[data-change='gone'] .evSlotName, :is(.evSlot, .evTrk)[data-change='gone'] .evTn { color: var(--faint); text-decoration: line-through; }
-:is(.evSlot, .evTrk)[data-change='gone'] .evFader, :is(.evSlot, .evTrk)[data-change='gone'] .evPan, :is(.evSlot, .evTrk)[data-change='gone'] .evChips, :is(.evSlot, .evTrk)[data-change='gone'] .evTv { opacity: 0.35; }
+.evMark:where([data-change='new']) { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.evMark:where([data-change='moved']) { color: var(--h1); background: color-mix(in srgb, var(--h1) 14%, transparent); }
+.evMark:where([data-change='changed']) { color: var(--muted); background: var(--panel-2); }
+.evMark:where([data-change='gone']) { color: var(--faint); border: 1px dashed var(--line-2); }
+:is(.evSlot, .evTrk):where([data-change='new']) { box-shadow: inset 2px 0 var(--accent); }
+:is(.evSlot, .evTrk):where([data-change='moved']) { box-shadow: inset 2px 0 var(--h1); }
+:is(.evSlot, .evTrk):where([data-change='changed']) { box-shadow: inset 2px 0 var(--muted); }
+.evTrk:is(.evSlot, .evTrk):where([data-change='new']), .evTrk:is(.evSlot, .evTrk):where([data-change='moved']), .evTrk:is(.evSlot, .evTrk):where([data-change='changed']) { padding-left: 5px; }
+:is(.evSlot, .evTrk):where([data-change='gone']) .evSlotName, :is(.evSlot, .evTrk):where([data-change='gone']) .evTn { color: var(--faint); text-decoration: line-through; }
+:is(.evSlot, .evTrk):where([data-change='gone']) .evFader, :is(.evSlot, .evTrk):where([data-change='gone']) .evPan, :is(.evSlot, .evTrk):where([data-change='gone']) .evChips, :is(.evSlot, .evTrk):where([data-change='gone']) .evTv { opacity: 0.35; }
 
 /* Change words sit on mixer and route rows when the drawer is wide; narrower, the row keeps its
    coloured edge (the word is in its tooltip) and one legend under the list names the colours */

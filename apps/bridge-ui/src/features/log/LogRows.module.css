@@ -1,12 +1,12 @@
 .rowsWindow { position: relative; }
 .row { border-left: 2px solid transparent; }
 .row:hover { background: rgba(255, 255, 255, 0.02); }
-.row[data-outcome='error'] { border-left-color: var(--bad); background: rgba(248, 113, 113, 0.04); }
+.row:where([data-outcome='error']) { border-left-color: var(--bad); background: rgba(248, 113, 113, 0.04); }
 .rowSelected { background: rgba(124, 196, 255, 0.07); border-left-color: var(--accent); }
-.row[data-outcome='error'].rowSelected { border-left-color: var(--bad); }
-.row[data-outcome='refused'] { border-left-color: var(--warn); background: rgba(245, 184, 75, 0.035); }
-.row[data-outcome='refused'].rowSelected { border-left-color: var(--warn); }
-.row[data-outcome='refused'] .rowErrInline { color: var(--warn); }
+.row:where([data-outcome='error']).rowSelected { border-left-color: var(--bad); }
+.row:where([data-outcome='refused']) { border-left-color: var(--warn); background: rgba(245, 184, 75, 0.035); }
+.row:where([data-outcome='refused']).rowSelected { border-left-color: var(--warn); }
+.row:where([data-outcome='refused']) .rowErrInline { color: var(--warn); }
 .rowMain {
   width: 100%;
   display: flex; align-items: center; gap: 12px;

@@ -4,10 +4,10 @@
 .sparkLine { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .sparkBar { fill: currentColor; opacity: 0.75; }
 .sparkBarHover { opacity: 1; }
-.sparkWrap[data-tone='accent'] { color: var(--accent); }
-.sparkWrap[data-tone='bad'] { color: var(--bad); }
-.sparkWrap[data-tone='warn'] { color: var(--warn); }
-.sparkWrap[data-tone='muted'] { color: var(--muted); }
+.sparkWrap:where([data-tone='accent']) { color: var(--accent); }
+.sparkWrap:where([data-tone='bad']) { color: var(--bad); }
+.sparkWrap:where([data-tone='warn']) { color: var(--warn); }
+.sparkWrap:where([data-tone='muted']) { color: var(--muted); }
 .sparkGuide {
   position: absolute; top: -2px; bottom: 0; width: 1px;
   background: var(--line-2);
@@ -30,5 +30,5 @@
   pointer-events: none; z-index: 2;
 }
 .sparkTip b { color: var(--text); font-weight: 600; }
-.sparkTip[data-align='center'] { transform: translateX(-50%); }
-.sparkTip[data-align='end'] { transform: translateX(-100%); }
+.sparkTip:where([data-align='center']) { transform: translateX(-50%); }
+.sparkTip:where([data-align='end']) { transform: translateX(-100%); }

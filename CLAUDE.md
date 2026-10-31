@@ -800,7 +800,8 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   own `<Name>.module.css` as `styles` and any other module as `<name>Styles` (`chartStyles`, `drawerStyles`), and joins
   classes with `cx(styles.row, selected && styles.rowSelected)`. State that picks a colour or a variant is a data
   attribute styled from the module, never a class built from a string: `data-outcome`, `data-zone`, `data-change`,
-  `data-tone`, `data-state`, `data-coverage`, `data-kind`, `data-speed`, `data-align`. `src/styles.css` keeps only tokens,
+  `data-tone`, `data-state`, `data-coverage`, `data-kind`, `data-speed`, `data-align` (as `.row:where([data-outcome="error"])`,
+  so a variant weighs what a one-class modifier would and a later `.rowSelected` still wins). `src/styles.css` keeps only tokens,
   base element styles and utilities used everywhere (`mono`, `muted`, `count`, `btn`/`btn-sm`/`icon-btn`/`link-btn`,
   `sdot`/`hue-N`, `kdot`, `tone-*`); add to it only what is truly global. A module styles only its own classes: to
   restyle another component's part, give that part a class of your own (`cx(chartStyles.evFill, styles.offAlignFill)`)

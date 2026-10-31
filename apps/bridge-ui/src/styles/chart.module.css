@@ -79,9 +79,9 @@
 .evZero { position: absolute; top: 2px; bottom: 2px; width: 1px; background: var(--faint); }
 .lgAi { width: 12px; height: 8px; border: 1px solid var(--h0); background: color-mix(in srgb, var(--h0) 15%, transparent); }
 .lgEdge { width: 2px; height: 10px; }
-.lgEdge[data-change='new'] { background: var(--accent); }
-.lgEdge[data-change='moved'] { background: var(--h1); }
-.lgEdge[data-change='changed'] { background: var(--muted); }
+.lgEdge:where([data-change='new']) { background: var(--accent); }
+.lgEdge:where([data-change='moved']) { background: var(--h1); }
+.lgEdge:where([data-change='changed']) { background: var(--muted); }
 .lgStruck { text-decoration: line-through; color: var(--faint); }
 .lgSel { width: 12px; height: 8px; border-inline: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 25%, transparent); }
 
