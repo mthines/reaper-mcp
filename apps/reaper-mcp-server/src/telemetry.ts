@@ -405,6 +405,18 @@ export function getSidecarDurationHistogram(): Histogram {
   return _sidecarDuration;
 }
 
+let _midiNotesChanged: Histogram | null = null;
+
+/** Notes one MIDI composition edit (quantize, transform, import) changed or created. */
+export function getMidiNotesHistogram(): Histogram {
+  _midiNotesChanged ??= getMeter().createHistogram('reaper.midi.notes_changed', {
+    description: 'Notes changed or created by one MIDI composition edit (quantize_midi, transform_midi, import_midi_file)',
+    unit: '{note}',
+    advice: { explicitBucketBoundaries: [0, 1, 5, 10, 50, 100, 500, 1000, 5000, 20000] },
+  });
+  return _midiNotesChanged;
+}
+
 let _arrangeItems: Histogram | null = null;
 
 /**

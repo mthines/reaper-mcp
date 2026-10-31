@@ -29,6 +29,7 @@ import { registerCategoryTools } from './tools/categories.js';
 import { registerAestheticsTools } from './tools/aesthetics.js';
 import { registerOfflineTools } from './tools/offline.js';
 import { registerTransientTools } from './tools/transients.js';
+import { registerCompositionTools } from './tools/composition.js';
 import { registerKnowledgeTools } from './tools/knowledge.js';
 
 // Cap for free-text error messages on span status (full text goes to the log).
@@ -156,6 +157,7 @@ export function createServer(): McpServer {
   registerAestheticsTools(server);
   registerOfflineTools(server);
   registerTransientTools(server);
+  registerCompositionTools(server);
   registerKnowledgeTools(server);
 
   return server;

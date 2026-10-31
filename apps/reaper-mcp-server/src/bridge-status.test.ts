@@ -11,7 +11,7 @@ const REAPER_DIR = join(__dirname, '../../../reaper');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
 const SCRIPTS = '/reaper/Scripts/';
 const BRIDGE_DIR = `${SCRIPTS}mcp_bridge_data/`;
-const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_arrange_lib.lua'];
+const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_arrange_lib.lua', 'mcp_midi_lib.lua'];
 
 interface Entry { n: number; t: number; c: string; ok: boolean; s?: string; p?: string; e?: string; r?: Record<string, unknown> }
 type Row = [number, number, number, number, number];
@@ -489,6 +489,47 @@ describe('edit views in the log', () => {
     expect(r).toMatchObject({ total: 2, gone: [[36, 0, 1, 100]] });
   });
 
+  it('every note and CC edit is its own undo point, not merged into the previous MIDI one', async () => {
+    const bridge = await startBridge(`${MIDI_ITEM}
+      ccs = { { 0, 0xB0, 0, 7, 100 } }
+      api.MIDI_CountEvts = function() return true, #notes, #ccs, 0 end
+      api.MIDI_GetCC = function(_, i) local c = ccs[i + 1] if not c then return false end return true, false, false, c[1], c[2], c[3], c[4], c[5] end
+      api.MIDI_InsertCC = function(_, _, _, ppq, chanmsg, chan, msg2, msg3) ccs[#ccs + 1] = { ppq, chanmsg, chan, msg2, msg3 } return true end
+      api.MIDI_DeleteCC = function(_, i) table.remove(ccs, i + 1) return true end
+    `);
+    const edits: [string, Record<string, unknown>][] = [
+      ['insert_midi_note', { pitch: 42, velocity: 80, startPosition: 1, duration: 0.5 }],
+      ['insert_midi_notes', { notes: JSON.stringify([{ pitch: 43, velocity: 80, startPosition: 2, duration: 0.5 }]) }],
+      ['edit_midi_note', { noteIndex: 0, velocity: 90 }],
+      ['edit_midi_notes', { edits: JSON.stringify([{ noteIndex: 1, velocity: 70 }]) }],
+      ['delete_midi_note', { noteIndex: 0 }],
+      ['insert_midi_cc', { ccNumber: 1, value: 64, position: 1 }],
+      ['delete_midi_cc', { ccIndex: 0 }],
+    ];
+    for (const [type, params] of edits) {
+      const before = Number(await bridge.eval('#reaper.undo'));
+      const res = await bridge.send(type, { trackIndex: 0, itemIndex: 0, ...params });
+      expect(res.error ?? 'ok', type).toBe('ok');
+      expect(Number(await bridge.eval('#reaper.undo')), type).toBe(before + 1);
+    }
+  });
+
+  it('shows a quantize as the notes before and after, through the MIDI library', async () => {
+    const bridge = await startBridge(`${MIDI_ITEM}
+      notes[2][1] = 1950 -- a late snare
+      api.MIDI_GetProjQNFromPPQPos = function(_, ppq) return ppq / 960 end
+      api.MIDI_GetPPQPosFromProjQN = function(_, qn) return qn * 960 end
+    `);
+    await bridge.send('quantize_midi', { trackIndex: 0, itemIndex: 0, grid: 1 });
+    const { r, ok } = (await bridge.status()).recent[0];
+    expect(ok).toBe(true);
+    expect(r).toMatchObject({
+      total: 2,
+      notes: [[36, 0, 1, 100, 0], [38, 2, 0.969, 90, 1]],
+      gone: [[38, 2.031, 0.969, 90]],
+    });
+  });
+
   it('summarises a MIDI analysis per pitch', async () => {
     const bridge = await startBridge(MIDI_ITEM);
     await bridge.send('analyze_midi', { trackIndex: 0, itemIndex: 0 });
@@ -729,6 +770,10 @@ describe('bridge settings from the status page', () => {
     expect(res.success).toBe(false);
     expect(res.error).toMatch(/paused by user/i);
     expect((await bridge.send('_session', {}, A)).success).toBe(true);
+    // detect_key reads MIDI through an internal command; pause stops it like the audio path
+    const key = await bridge.send('_midi_pitch_profile', { trackIndex: 0 }, A);
+    expect(key.success).toBe(false);
+    expect(key.error).toMatch(/paused by user/i);
 
     await bridge.set('cfg_paused', '0');
     expect((await bridge.send('get_project_info', {}, A)).success).toBe(true);

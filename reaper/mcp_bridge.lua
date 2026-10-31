@@ -2497,6 +2497,7 @@ function handlers.insert_midi_note(params)
   reaper.Undo_BeginBlock()
   reaper.MIDI_InsertNote(take, false, false, start_ppq, end_ppq, chan, pitch, vel, false)
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Insert MIDI note", -1)
 
   reaper.UpdateArrange()
@@ -2540,6 +2541,7 @@ function handlers.insert_midi_notes(params)
     end
   end
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Insert " .. inserted .. " MIDI notes", -1)
 
   reaper.UpdateArrange()
@@ -2589,6 +2591,7 @@ function handlers.edit_midi_note(params)
   reaper.Undo_BeginBlock()
   reaper.MIDI_SetNote(take, note_idx, sel, muted, new_start_ppq, new_end_ppq, new_chan, new_pitch, new_vel, false)
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Edit MIDI note " .. note_idx, -1)
 
   reaper.UpdateArrange()
@@ -2647,6 +2650,7 @@ function handlers.edit_midi_notes(params)
   end
 
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Batch edit " .. edited .. " MIDI notes", -1)
   reaper.UpdateArrange()
 
@@ -2669,6 +2673,7 @@ function handlers.delete_midi_note(params)
 
   reaper.Undo_BeginBlock()
   reaper.MIDI_DeleteNote(take, note_idx)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Delete MIDI note " .. note_idx, -1)
 
   reaper.UpdateArrange()
@@ -2728,6 +2733,7 @@ function handlers.insert_midi_cc(params)
   -- chanmsg 176 = 0xB0 = CC message
   reaper.MIDI_InsertCC(take, false, false, ppq, 176, chan, cc_num, value)
   reaper.MIDI_Sort(take)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Insert MIDI CC " .. cc_num, -1)
 
   reaper.UpdateArrange()
@@ -2751,6 +2757,7 @@ function handlers.delete_midi_cc(params)
 
   reaper.Undo_BeginBlock()
   reaper.MIDI_DeleteCC(take, cc_idx)
+  reaper.MarkTrackItemsDirty(track, item) -- else REAPER merges this into the previous MIDI undo point
   reaper.Undo_EndBlock("MCP: Delete MIDI CC " .. cc_idx, -1)
 
   reaper.UpdateArrange()
@@ -4119,18 +4126,56 @@ function handlers.set_automation_item(params) return env_ext.run("set_item", par
 function handlers.delete_automation_item(params) return env_ext.run("delete_item", params) end
 
 -- =============================================================================
+-- MIDI composition: quantize, transform, file import, pitch profile
+-- =============================================================================
+
+-- Logic in mcp_midi_lib.lua; one table for the 200-locals limit. Nested params (note
+-- indexes, the velocity/humanize/length objects, an import's tracks) travel as JSON strings.
+-- Lib wrappers added since the main chunk reached the 200-locals limit live here, one field each
+local ext = {}
+ext.midi = {}
+ext.midi.ok, ext.midi.lib = pcall(dofile, script_dir .. "mcp_midi_lib.lua")
+
+function ext.midi.run(name, params)
+  if not ext.midi.ok then
+    return nil, "mcp_midi_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(ext.midi.lib) .. ")"
+  end
+  local p = {}
+  for k, v in pairs(params) do p[k] = v end
+  for _, k in ipairs({ "notes", "velocity", "humanize", "length", "tracks" }) do
+    if type(p[k]) == "string" then
+      if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed — run `reaper-mcp setup`" end
+      local val, err = plan_lib.json_decode(p[k])
+      if type(val) ~= "table" then return nil, k .. " is not valid JSON" .. (err and (" (" .. tostring(err) .. ")") or "") .. " — nothing changed" end
+      p[k] = val
+    end
+  end
+  local ok, res, err = pcall(ext.midi.lib[name], reaper, p)
+  if not ok then return nil, "Handler error: " .. tostring(res) end
+  return res, err
+end
+
+function handlers.quantize_midi(params) return ext.midi.run("quantize", params) end
+function handlers.transform_midi(params) return ext.midi.run("transform", params) end
+function handlers.import_midi_file(params) return ext.midi.run("import", params) end
+-- Internal (detect_key on a MIDI track): not logged, not counted, but refused while paused,
+-- since it answers an agent's tool call (a read, so read-only mode allows it)
+handlers["_midi_pitch_profile"] = function(params) return ext.midi.run("pitch_profile", params) end
+ext.paused_too = { _midi_pitch_profile = true }
+
+-- =============================================================================
 -- Arrangement: copy items, insert/remove time, copy a section, process items
 -- =============================================================================
 
 -- Logic in mcp_arrange_lib.lua (one table, like env_ext: the main chunk is at the locals limit)
-local arrange_ext = {}
-arrange_ext.ok, arrange_ext.lib = pcall(dofile, script_dir .. "mcp_arrange_lib.lua")
-plan_ctx.arrange = arrange_ext.ok and arrange_ext.lib or nil
+ext.arrange = {}
+ext.arrange.ok, ext.arrange.lib = pcall(dofile, script_dir .. "mcp_arrange_lib.lua")
+plan_ctx.arrange = ext.arrange.ok and ext.arrange.lib or nil
 
 -- `items` / `tracks` arrive as JSON strings (the bridge decodes only the top level)
-function arrange_ext.run(name, params)
-  if not arrange_ext.ok then
-    return nil, "mcp_arrange_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(arrange_ext.lib) .. ")"
+function ext.arrange.run(name, params)
+  if not ext.arrange.ok then
+    return nil, "mcp_arrange_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(ext.arrange.lib) .. ")"
   end
   for _, key in ipairs({ "items", "tracks" }) do
     if type(params[key]) == "string" then
@@ -4140,20 +4185,20 @@ function arrange_ext.run(name, params)
       params[key] = v
     end
   end
-  local ok, res, err = pcall(arrange_ext.lib[name], reaper, params)
+  local ok, res, err = pcall(ext.arrange.lib[name], reaper, params)
   if not ok then return nil, "Handler error: " .. tostring(res) end
   return res, err
 end
 
-function handlers.copy_media_items(params) return arrange_ext.run("copy_items", params) end
+function handlers.copy_media_items(params) return ext.arrange.run("copy_items", params) end
 
-function handlers.insert_time(params) return arrange_ext.run("insert_time", params) end
+function handlers.insert_time(params) return ext.arrange.run("insert_time", params) end
 
-function handlers.remove_time(params) return arrange_ext.run("remove_time", params) end
+function handlers.remove_time(params) return ext.arrange.run("remove_time", params) end
 
-function handlers.copy_section(params) return arrange_ext.run("copy_section", params) end
+function handlers.copy_section(params) return ext.arrange.run("copy_section", params) end
 
-function handlers.process_items(params) return arrange_ext.run("process_items", params) end
+function handlers.process_items(params) return ext.arrange.run("process_items", params) end
 
 -- =============================================================================
 -- Live MIDI output handlers
@@ -4921,7 +4966,7 @@ for _, c in ipairs({
   "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
   "insert_audio_file", "snapshot_save", "snapshot_restore", "snapshot_edit",
   "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
-  "detect_transients", "create_transient_automation", "process_items",
+  "detect_transients", "create_transient_automation", "detect_key", "import_midi_file", "process_items",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
 local HISTORY_LONG_PUBLISH_INTERVAL = 10
@@ -5249,7 +5294,7 @@ local function run_command(cmd)
 
   local internal = type(cmd.type) == "string" and cmd.type:sub(1, 1) == "_"
   local blocked
-  if not internal and cfg("cfg_paused") then
+  if (not internal or ext.paused_too[cmd.type]) and cfg("cfg_paused") then
     blocked = "Paused by user in the MCP Bridge window. Ask the user to resume agent control."
   elseif not internal and cfg("cfg_readonly") and not readonly_allows(cmd.type) then
     blocked = "Read-only mode is on in the MCP Bridge window: '" .. tostring(cmd.type)

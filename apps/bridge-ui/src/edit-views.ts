@@ -56,7 +56,7 @@ export type EditView =
       /** Automation items on the envelope, each pool's points once, the item this call touched, and both before a write */
       ais?: AutoItem[]; pools?: Pool[]; ai?: number; aisMore?: number; wasAis?: AutoItem[]; wasPools?: Pool[];
     }
-  | { kind: 'midi'; total: number; beats?: number; ts?: [number, number]; notes: Note[]; more: number; gone?: Note[] }
+  | { kind: 'midi'; total: number; beats?: number; ts?: [number, number]; notes: Note[]; more: number; gone?: Note[]; items?: number }
   | { kind: 'midiStats'; total?: number; beats?: number; pitches: PitchStats[]; hist?: number[] }
   | ({
       kind: 'timeline'; items?: Item[]; len: number; was?: TimelineState;
@@ -85,7 +85,7 @@ const kinds: Array<[EditView['kind'], string[]]> = [
     'list_automation_items', 'insert_automation_item', 'set_automation_item', 'delete_automation_item',
     'get_midi_cc', 'insert_midi_cc', 'delete_midi_cc',
   ]],
-  ['midi', ['insert_midi_note', 'insert_midi_notes', 'edit_midi_note', 'edit_midi_notes', 'delete_midi_note', 'get_midi_notes']],
+  ['midi', ['insert_midi_note', 'insert_midi_notes', 'edit_midi_note', 'edit_midi_notes', 'delete_midi_note', 'get_midi_notes', 'quantize_midi', 'transform_midi', 'import_midi_file']],
   ['midiStats', ['analyze_midi']],
   ['timeline', [
     'add_marker', 'add_region', 'edit_marker', 'edit_region', 'delete_marker', 'delete_region',
@@ -189,6 +189,7 @@ export function editViewOf(e: CommandEntry): EditView | null {
         total: num(r.total) ? r.total : notes.length,
         beats: num(r.beats) && r.beats > 0 ? r.beats : undefined,
         more: num(r.more) ? r.more : 0,
+        ...(num(r.items) && r.items > 0 ? { items: r.items } : {}),
         ...(Array.isArray(r.gone) ? { gone: tuples<Note>(r.gone, NOTE).map((n) => [n[0], n[1], n[2], n[3], 0] as Note) } : {}),
       };
     }

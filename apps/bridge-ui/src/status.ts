@@ -41,7 +41,13 @@ export type Measurement =
   /** Track alignment (sidecar): the delay against a reference track, polarity, and the playOffsetMs / phase that fix it */
   | { kind: 'alignment'; ref?: string; name?: string; delayMs?: number; samples?: number; corr?: number; inv?: number; cur?: number; offset?: number; phase?: number; warn?: number }
   /** Audiobox Aesthetics scores (0-10) and the level the clip was scored at */
-  | { kind: 'aesthetics'; name?: string; pq?: number; pc?: number; ce?: number; cu?: number; lufs?: number; dur?: number };
+  | { kind: 'aesthetics'; name?: string; pq?: number; pc?: number; ce?: number; cu?: number; lufs?: number; dur?: number }
+  /** Detected key: 12-bin chroma (C first, largest 1), the key, its correlation, confidence 0..1, relative key and
+   *  the next candidates [key, r]; src is midi (notes), audio (rendered track) or file */
+  | {
+      kind: 'key'; name?: string; src?: string; key?: string; tonic?: string; mode?: string; rel?: string; r?: number; conf?: number;
+      chroma: number[]; alt: [string, number][];
+    };
 
 const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[] }> = {
   read_track_meters: { kind: 'meters', fields: ['peakL', 'peakR', 'rmsL', 'rmsR'] },
@@ -55,6 +61,7 @@ const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[]
   analyze_audio_file: { kind: 'offline', fields: ['lufs', 'lra', 'tp', 'peak', 'crest', 'dur', 'sib'] },
   measure_track_alignment: { kind: 'alignment', fields: ['delayMs', 'samples', 'corr', 'inv', 'cur', 'offset', 'phase', 'warn'] },
   analyze_track_aesthetics: { kind: 'aesthetics', fields: ['pq', 'pc', 'ce', 'cu', 'lufs', 'dur'] },
+  detect_key: { kind: 'key', fields: ['r', 'conf'] },
 };
 
 /** Every command the drawer draws a result for */
@@ -120,6 +127,14 @@ export function measurementOf(e: CommandEntry): Measurement | null {
         bands: bands(ref.bands),
       };
     }
+  }
+  if (spec.kind === 'key') {
+    const { chroma, alt } = e.r;
+    if (!Array.isArray(chroma) || chroma.length !== 12 || !chroma.every((x) => typeof x === 'number')) return null;
+    for (const f of ['name', 'src', 'key', 'tonic', 'mode', 'rel']) if (typeof e.r[f] === 'string') out[f] = e.r[f];
+    if (typeof out.key !== 'string') return null;
+    out.chroma = chroma;
+    out.alt = Array.isArray(alt) ? alt.filter((a): a is [string, number] => Array.isArray(a) && typeof a[0] === 'string' && typeof a[1] === 'number') : [];
   }
   if (spec.kind === 'waveform') {
     const { hi, lo } = e.r;
@@ -608,6 +623,8 @@ export const LONG_RUNNING = new Set([
   'create_transient_automation',
   'process_items',
   'analyze_track_aesthetics',
+  'detect_key',
+  'import_midi_file',
   'render_project',
   'render_track_to_wav',
   'render_versions',

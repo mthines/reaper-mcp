@@ -138,6 +138,17 @@ function measurementStories(): Story[] {
     name: 'Master', pq: 7.42, pc: 5.81, ce: 6.66, cu: 7.05, lufs: -18, dur: 30,
   }, { ms: 6_400 });
 
+  const key = call('detect_key', { trackIndex: 7 }, {
+    name: undefined, src: 'midi', key: 'A minor', tonic: 'A', mode: 'minor', r: 0.89, conf: 0.62, rel: 'C major',
+    alt: [['C major', 0.82], ['D minor', 0.71], ['F major', 0.66]],
+    chroma: [0.81, 0.04, 0.38, 0.06, 0.74, 0.31, 0.03, 0.47, 0.05, 1, 0.07, 0.22],
+  }, { ms: 140 });
+  const keyAudio = call('detect_key', { trackIndex: 3, endTime: 60 }, {
+    name: 'Gtr Bus', src: 'audio', key: 'D major', tonic: 'D', mode: 'major', r: 0.61, conf: 0.14, rel: 'B minor',
+    alt: [['G major', 0.58], ['A major', 0.55], ['E minor', 0.52]],
+    chroma: [0.55, 0.42, 1, 0.38, 0.71, 0.49, 0.83, 0.77, 0.44, 0.92, 0.4, 0.58],
+  }, { ms: 4_820 });
+
   return [
     story('Meters', meters, 'Comfortable levels'),
     story('Meters · hot', metersHot, 'Peaks above −6 dB turn amber, previous call ghosted', earlier(metersHot, { peakL: -6.8, peakR: -7.4, rmsL: -18.2, rmsR: -18.9 })),
@@ -160,6 +171,8 @@ function measurementStories(): Story[] {
     story('Alignment', align, 'Bottom mic 0.84 ms late and inverted; the fix', earlier(align, { ref: 'Snare Top', name: 'Snare Btm', delayMs: 0.02, samples: 1, corr: 0.95, inv: 0, cur: -0.84, offset: -0.84, phase: 1 })),
     story('Alignment · unsure', alignUnsure, 'Low correlation: no fix suggested'),
     story('Aesthetics', aesthetics, 'Four scores on 0–10; previous call ghosted', earlier(aesthetics, { name: 'Master', pq: 7.18, pc: 5.9, ce: 6.4, cu: 6.95, lufs: -18, dur: 30 })),
+    story('Key · MIDI', key, 'A minor from the notes: scale tones lit, the tonic strongest', earlier(key, { src: 'midi', key: 'C major', tonic: 'C', mode: 'major', r: 0.8, conf: 0.4, rel: 'A minor', alt: [], chroma: [1, 0.04, 0.4, 0.06, 0.7, 0.35, 0.03, 0.8, 0.05, 0.6, 0.07, 0.2] })),
+    story('Key · audio, unsure', keyAudio, 'A dense guitar bus: low confidence flagged'),
   ];
 }
 
@@ -230,6 +243,14 @@ function editStories(): Story[] {
   });
   const melody = call('insert_midi_notes', { trackIndex: 7, itemIndex: 0, notes: '[…]' }, {
     total: CHORDS.length + MELODY.length, beats: 16, ts: [4, 4], more: 0, gone: [], notes: [...CHORDS, ...MELODY],
+  });
+  // A played-in line, a little early and late, snapped to 8ths at full strength
+  const LOOSE = MELODY.map(([p, s, l, v], i) => [p, s + [0.06, -0.08, 0.11, -0.04, 0.09, -0.07, 0.05, 0.12][i], l, v]);
+  const quantized = call('quantize_midi', { trackIndex: 7, itemIndex: 0, grid: 0.5 }, {
+    total: CHORDS.length + MELODY.length, beats: 16, ts: [4, 4], more: 0, notes: [...CHORDS, ...MELODY], gone: LOOSE,
+  });
+  const imported = call('import_midi_file', { path: '/Users/me/Sketches/hook.mid', trackIndex: 7, position: 0 }, {
+    total: CHORDS.length + MELODY.length, beats: 16, ts: [4, 4], more: 0, gone: [], notes: [...CHORDS, ...MELODY].map((n) => [...n.slice(0, 4), 1]),
   });
   const deleted = call('delete_midi_note', { trackIndex: 7, itemIndex: 0, noteIndex: 3 }, {
     total: CHORDS.length - 1, beats: 16, ts: [4, 4], more: 0, gone: [[53, 4, 4, 72]], notes: CHORDS.filter((n) => !(n[0] === 53 && n[1] === 4)),
@@ -436,6 +457,8 @@ function editStories(): Story[] {
     story('Automation item deleted', aiGone, 'The C section’s item gone, its place dashed'),
     story('Notes added', melody, 'A melody over the chords it kept'),
     story('Note deleted', deleted, 'The removed note dashed'),
+    story('MIDI quantized', quantized, 'A played-in melody snapped to 8ths: where each note was, dashed'),
+    story('MIDI file imported', imported, 'Every note new, from a .mid without REAPER’s dialog'),
     story('Large MIDI item', big, 'First 256 of 2044 notes'),
     story('MIDI analysis', drums, 'Velocity per pitch, machine gun on the hi-hat'),
     story('Markers listed', markers, 'Regions and markers'),
