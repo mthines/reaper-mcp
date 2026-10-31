@@ -184,7 +184,8 @@ end
 
 -- Stems from separate_stems: a folder track holding one track per stem, each with its
 -- file at `position`, inserted after `afterTrack` (default: at the end) in one undo point.
--- Every file is checked before anything is written.
+-- Every file is checked before anything is written. The folder starts muted: the stems
+-- sum back to their source, so playing both would double the level.
 function M.insert_stems(api, p, ctx)
   local files = p.files
   if type(files) ~= "table" or #files == 0 then return nil, "files required: a list of {name, path}" end
@@ -224,6 +225,7 @@ function M.insert_stems(api, p, ctx)
     local folder = api.GetTrack(0, at)
     api.GetSetMediaTrackInfo_String(folder, "P_NAME", folder_name, true)
     api.SetMediaTrackInfo_Value(folder, "I_FOLDERDEPTH", 1)
+    api.SetMediaTrackInfo_Value(folder, "B_MUTE", 1)
     local tracks = {}
     for i, s in ipairs(sources) do
       local idx = at + i
@@ -240,7 +242,7 @@ function M.insert_stems(api, p, ctx)
       if i == #sources then api.SetMediaTrackInfo_Value(tr, "I_FOLDERDEPTH", -1) end
       tracks[#tracks + 1] = { trackIndex = idx, name = s.name, position = position, length = s.length }
     end
-    return { folderIndex = at, folderName = folder_name, tracks = tracks }
+    return { folderIndex = at, folderName = folder_name, muted = true, tracks = tracks }
   end)
 end
 

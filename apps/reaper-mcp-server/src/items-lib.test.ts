@@ -74,6 +74,7 @@ describe('mcp_items_lib.lua (wasmoon)', () => {
       for _, t in ipairs(api.tracks) do n[#n + 1] = t.name end
       assert(names(n) == "Mix,Mix stems,drums,bass,Keys", names(n))
       assert(api.tracks[2].vals.I_FOLDERDEPTH == 1 and api.tracks[4].vals.I_FOLDERDEPTH == -1, "drums and bass inside the folder")
+      assert(api.tracks[2].vals.B_MUTE == 1 and r.muted, "the folder starts muted, so the stems never play on top of their source")
       local item = api.tracks[3].items[1]
       assert(item.vals.D_POSITION == 12 and item.vals.D_LENGTH == 30 and item.takes[1].src.path == "/st/drums.wav")
       assert(r.folderIndex == 1 and r.tracks[2].trackIndex == 3 and r.tracks[2].name == "bass")

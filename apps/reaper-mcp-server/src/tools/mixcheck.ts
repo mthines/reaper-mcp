@@ -302,8 +302,9 @@ export function registerMixcheckTools(server: McpServer): void {
     'bass, other, vocals; htdemucs_6s adds guitar and piano. Writes one 32-bit float WAV per stem to outDir (default: ' +
     'a new folder under the project\'s Stems folder) and returns each stem\'s path, LUFS and peak. With insertTracks, ' +
     'adds them as tracks under a new folder in one undo point, lined up with the source (a track: after it, at ' +
-    'startTime; a file: at filePosition + startTime). Slow: about real time on a CPU, several times faster on Apple ' +
-    `silicon or CUDA (max ${MAX_SEPARATION_SECONDS} s per call). Needs \`reaper-mcp setup-sidecar --with-separation\`.`,
+    'startTime; a file: at filePosition + startTime); the folder starts muted, since the stems sum back to the source. Slow: about real time on a CPU, several times faster on Apple ' +
+    `silicon or CUDA (max ${MAX_SEPARATION_SECONDS} s per call). Needs \`reaper-mcp setup-sidecar --with-separation\` ` +
+    '(which downloads htdemucs; the first htdemucs_6s call downloads its ~80 MB weights).',
     {
       ...sourceSchema,
       endTime: z.coerce.number().min(0).optional()
@@ -314,7 +315,7 @@ export function registerMixcheckTools(server: McpServer): void {
         .describe('Write only these stems (default: all the model gives)'),
       outDir: z.string().min(1).optional().describe('Absolute folder for the stem WAVs (created if missing)'),
       insertTracks: z.boolean().optional().default(false)
-        .describe('Insert the stems as tracks under a new folder track'),
+        .describe('Insert the stems as tracks under a new folder track (muted)'),
       filePosition: z.coerce.number().min(0).optional()
         .describe('With path and insertTracks: project time where the file starts (default 0)'),
     },
