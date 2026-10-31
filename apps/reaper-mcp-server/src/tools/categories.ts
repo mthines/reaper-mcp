@@ -32,13 +32,17 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   tracks: {
     name: 'tracks',
-    description: 'Track management: list, inspect, and set properties (volume, pan, mute, solo, record arm, phase, input), including batch set. Structure: add, delete, move, folders, name/color/channels, groups and VCAs. trackIndex -1 (or "master") is the master track.',
-    tools: ['list_tracks', 'get_track_properties', 'set_track_property', 'set_multiple_track_properties', 'add_track', 'delete_track', 'move_track', 'set_track_folder', 'set_track_info', 'set_track_group'],
+    description: 'Track management: list, inspect, and set properties (volume, pan, mute, solo, record arm, phase, input), including batch set. Structure: add, delete, move, folders, name/color/channels, groups and VCAs. Freeze/unfreeze tracks to free CPU. trackIndex -1 (or "master") is the master track.',
+    tools: ['list_tracks', 'get_track_properties', 'set_track_property', 'set_multiple_track_properties', 'add_track', 'delete_track', 'move_track', 'set_track_folder', 'set_track_info', 'set_track_group', 'freeze_tracks', 'unfreeze_tracks'],
   },
   fx: {
     name: 'fx',
-    description: 'FX chain management: add, remove, inspect, and set parameters. Includes batch setup of an entire FX chain and batch parameter updates across multiple plugins.',
-    tools: ['add_fx', 'remove_fx', 'get_fx_parameters', 'analyze_fx', 'set_fx_parameter', 'set_fx_enabled', 'set_fx_offline', 'setup_fx_chain', 'set_multiple_fx_parameters'],
+    description: 'FX chain management: add, remove, inspect, and set parameters. Includes batch setup of an entire FX chain and batch parameter updates across multiple plugins, parameter modulation (LFO, audio control signal/sidechain follower, parameter link), pin mappings (sidechain on 3/4), and the monitoring FX chain (heard, never rendered).',
+    tools: [
+      'add_fx', 'remove_fx', 'get_fx_parameters', 'analyze_fx', 'set_fx_parameter', 'set_fx_enabled', 'set_fx_offline', 'setup_fx_chain', 'set_multiple_fx_parameters',
+      'get_fx_param_modulation', 'set_fx_param_modulation', 'get_fx_pins', 'set_fx_pins',
+      'list_monitoring_fx', 'add_monitoring_fx', 'set_monitoring_fx', 'remove_monitoring_fx',
+    ],
   },
   transport: {
     name: 'transport',
@@ -58,11 +62,11 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   media: {
     name: 'media',
-    description: 'Media item editing: list, inspect, set properties, split, delete, move, trim, stretch markers. Includes batch set for multiple items at once.',
+    description: 'Media item editing: list, inspect, set properties, split, delete, move, trim, stretch markers (batch add, quantize audio to the grid), render in place (apply FX to items as a new take). Includes batch set for multiple items at once.',
     tools: [
       'list_media_items', 'get_media_item_properties', 'set_media_item_properties', 'set_media_items_properties',
       'split_media_item', 'delete_media_item', 'move_media_item', 'trim_media_item',
-      'add_stretch_marker', 'get_stretch_markers', 'delete_stretch_marker',
+      'add_stretch_marker', 'get_stretch_markers', 'delete_stretch_marker', 'add_stretch_markers', 'quantize_audio', 'apply_fx_to_items',
     ],
   },
   arrange: {
@@ -87,12 +91,13 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   envelopes: {
     name: 'envelopes',
-    description: 'Automation envelopes: create, inspect, insert/edit/delete points (dB on volume envelopes), clear, batch insert, set properties, and pooled automation items (one pool per repeated section). Supports volume, pan, mute, width, trim volume, and FX parameter envelopes.',
+    description: 'Automation envelopes: create, inspect, insert/edit/delete points (dB on volume envelopes), clear, batch insert, set properties, and pooled automation items (one pool per repeated section). Supports volume, pan, mute, width, trim volume, send volume/pan/mute, and FX parameter envelopes, plus track automation modes and the global override.',
     tools: [
       'create_track_envelope', 'get_track_envelopes', 'get_envelope_points',
       'insert_envelope_point', 'insert_envelope_points', 'delete_envelope_point',
       'clear_envelope', 'remove_envelope_points', 'set_envelope_properties', 'edit_envelope_points',
       'list_automation_items', 'insert_automation_item', 'set_automation_item', 'delete_automation_item',
+      'set_automation_mode',
     ],
   },
   analysis: {

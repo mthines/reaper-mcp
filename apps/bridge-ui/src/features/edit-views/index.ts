@@ -8,11 +8,14 @@ import { MidiStats } from './views/MidiStats.js';
 import { Mixer } from './views/Mixer.js';
 import { PianoRoll } from './views/PianoRoll.js';
 import { Plan } from './views/Plan.js';
+import { Modulation } from './views/Modulation.js';
+import { Pins } from './views/Pins.js';
 import { Render } from './views/Render.js';
+import { Stretch } from './views/Stretch.js';
 import { Routing } from './views/Routing.js';
 import { Timeline } from './views/Timeline.js';
 
 /** `EditView.Section` is the drawer's card for a call; the rest draw one kind of view each */
-export const EditView = { Section: EditViewSection, Changes, Envelope, PianoRoll, MidiStats, Timeline, Mixer, Plan, FxChains, Routing, Render, ChangeMark, ChangeLegend, Legend };
+export const EditView = { Section: EditViewSection, Changes, Envelope, PianoRoll, MidiStats, Timeline, Mixer, Plan, FxChains, Routing, Render, Modulation, Pins, Stretch, ChangeMark, ChangeLegend, Legend };
 
 export { editKindOf, editViewOf, type EditView as EditViewData, type SlotChange } from './edit-views.js';

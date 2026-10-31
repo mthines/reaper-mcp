@@ -399,6 +399,50 @@ function editExampleList(): Example[] {
     total: 4, dryRun: true,
     ops: [['add_track', 'Vox Bus'], ['add_fx', '$bus · VST3: Pro-C 2'], ['add_send', 'Vox → $bus'], ['set_track', 'Vox']],
   });
+  const autoMode = call('set_automation_mode', { tracks: '["Vox","Bass"]', mode: 'latch' }, {
+    rows: [
+      { t: 'Vox', p: 'Automation', s: 'bool', a: 1, b: 4, at: 'read', bt: 'latch' },
+      { t: 'Bass', p: 'Automation', s: 'bool', a: 0, b: 4, at: 'trim', bt: 'latch' },
+    ],
+  });
+  const modLfo = call('set_fx_param_modulation', track(3, { fxIndex: 0, paramIndex: 4 }), {
+    fx: 'VST3: Pro-Q 3 (FabFilter)',
+    rows: [{ p: 'Band 2 Frequency', base: 0.42, v: 0.5, lfo: ['triangle', 0.25, 0.3, 0, 0, 1], was: { p: 'Band 2 Frequency', base: 0.42, v: 0.42 } }],
+  });
+  const modListed = call('get_fx_param_modulation', track(6, { fxIndex: 1 }), {
+    fx: 'ReaComp (Cockos)', total: 2,
+    rows: [
+      { p: 'Threshold', base: 0.55, v: 0.4, acs: [5, 180, -42, -12, 0.35, 3, -1] },
+      { p: 'Ratio', base: 0.3, v: 0.36, link: ['ReaEQ / Gain-Band 1', -0.5, 0.1] },
+    ],
+  });
+  const pins = call('set_fx_pins', track(6, { fxIndex: 1 }), {
+    fx: 'ReaComp (Cockos)', ch: 4, chWas: 2,
+    names: ['L in', 'R in', 'Aux L in', 'Aux R in'],
+    in: [[1], [2], [3], [4]], out: [[1], [2]],
+    inWas: [[1], [2], [], []], outWas: [[1], [2]],
+  });
+  const pinsListed = call('get_fx_pins', track(2, { fxIndex: 0 }), {
+    fx: 'VST3: Pro-L 2 (FabFilter)', ch: 2, names: ['Input L', 'Input R'], in: [[1], [2]], out: [[1], [2]],
+  });
+  const QUANT_MOVES: [number, number][] = [[0.52, 0.5], [1.03, 1], [1.47, 1.5], [2.02, 2], [2.55, 2.5], [2.98, 3], [3.49, 3.5]];
+  const audioQuantized = call('quantize_audio', { trackIndex: 1, itemIndex: 0, grid: 0.5 }, {
+    len: 4, moves: QUANT_MOVES, grid: [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4], off: [23.6, 0],
+  });
+  const markers2 = call('add_stretch_markers', { trackIndex: 1, itemIndex: 0, markers: '[…]' }, {
+    len: 4, marks: [0.5, 1, 1.5, 2, 3], was: [2, 3],
+  });
+  const frozen = call('freeze_tracks', { tracks: '["Synth","Pad"]', mode: 'stereo' }, {
+    rows: [
+      { t: 'Synth', p: 'Freeze', s: 'bool', a: 0, b: 1, at: 'live', bt: 'frozen · stereo' },
+      { t: 'Synth', p: 'FX', s: 'norm', a: 0.375, b: 0, at: '6', bt: '0' },
+      { t: 'Pad', p: 'Freeze', s: 'bool', a: 0, b: 1, at: 'live', bt: 'frozen · stereo' },
+      { t: 'Pad', p: 'FX', s: 'norm', a: 0.25, b: 0, at: '4', bt: '0' },
+    ],
+  });
+  const monitor = call('add_monitoring_fx', { fxName: 'VST3: SoundID Reference' }, {
+    chains: [{ t: 'Monitoring FX', fx: [['VST3: SoundID Reference (Sonarworks)', '', 'm1', ''], ['JS: Mono check', 'B', 'm2', '']], was: [['JS: Mono check', 'B', 'm2', '']] }],
+  });
   const renderMaster = call('render_project', { overwrite: true }, {
     fmt: 'wav', bd: '24', src: 'master', norm: 'lufs_i', nt: -14, lim: -1, tp: true,
     groups: [{ v: '', m: [], f: [renderFile('Night Drive (Master).wav', 214.6, -14.1, -1.02, -1.4, 0.8)] }],
@@ -468,6 +512,15 @@ function editExampleList(): Example[] {
     example('Render · off target', renderOver, 'Louder than the target, true peak over 0'),
     example('Render · stems', renderStems, 'One file per selected track, 32-bit float, no target'),
     example('Render · versions', renderVersions, 'Full, instrumental and TV mix in one call; muted tracks named'),
+    example('Automation mode', autoMode, 'Two tracks to latch'),
+    example('Modulation · LFO', modLfo, 'A tempo-synced LFO around the baseline; none before'),
+    example('Modulation listed', modListed, 'An audio follower on 3 (band) and a parameter link'),
+    example('Pins · sidechain', pins, 'Aux pins routed to 3/4; the track widened to 4 channels'),
+    example('Pins listed', pinsListed, 'A stereo limiter'),
+    example('Audio quantized', audioQuantized, 'Hits moved onto the 8th grid; where they were dashed'),
+    example('Stretch markers added', markers2, 'Three new markers beside the two kept'),
+    example('Tracks frozen', frozen, 'Two tracks frozen, their FX taken out'),
+    example('Monitoring FX added', monitor, 'Room correction ahead of a bypassed mono check'),
   ];
 }
 

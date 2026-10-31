@@ -405,6 +405,18 @@ export function getSidecarDurationHistogram(): Histogram {
   return _sidecarDuration;
 }
 
+let _quantizeOffset: Histogram | null = null;
+
+/** Average distance of an audio item's hits from the grid, before and after quantize_audio (`reaper.quantize.stage`). */
+export function getQuantizeOffsetHistogram(): Histogram {
+  _quantizeOffset ??= getMeter().createHistogram('reaper.audio.quantize.offset', {
+    description: 'Average distance of the hits from their grid lines in one quantize_audio call, before and after it',
+    unit: 's',
+    advice: { explicitBucketBoundaries: [0, 0.001, 0.0025, 0.005, 0.01, 0.02, 0.04, 0.08, 0.16] },
+  });
+  return _quantizeOffset;
+}
+
 let _midiNotesChanged: Histogram | null = null;
 
 /** Notes one MIDI composition edit (quantize, transform, import) changed or created. */

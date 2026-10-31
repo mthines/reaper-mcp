@@ -248,6 +248,10 @@ namespace belongs to the official MCP conventions). Durations are in seconds.
 | `sidecar/analyze` | CLIENT | `rpc.system=jsonrpc`, `rpc.method`, `error.type` |
 | `reaper-mcp startup`, `poll bridge diagnostics` | INTERNAL | root spans for headless work |
 
+Mixing tools add attributes to their `tools/call` span: `reaper.quantize.hits` / `.moved` / `.skipped`
+(`quantize_audio`), `reaper.freeze.mode` / `reaper.freeze.track_count` (`freeze_tracks`), `reaper.fx.pins.widened`
+(`set_fx_pins`) and `reaper.fx.modulation.kind` (`set_fx_param_modulation`, e.g. `lfo,link`).
+
 **Metrics** — error rate is each histogram's count filtered on `error.type`:
 
 | Metric | Unit | Attributes |
@@ -261,6 +265,7 @@ namespace belongs to the official MCP conventions). Durations are in seconds.
 | `reaper.arrange.items_changed` | {item} | `gen_ai.tool.name`, `reaper.arrange.operation` (copy/insert/remove/section/normalize/reverse/glue) — items one arrangement edit moved, split, trimmed, deleted, copied or processed; also on the tool span with `reaper.arrange.length_s` |
 | `reaper.bridge.up` | 1 | gauge: 1 while REAPER's heartbeat is fresh, 0 when the bridge is down |
 | `reaper.bridge.defer.interval`, `reaper.bridge.scan.duration` | s | `reaper.statistic` (p50/p95, avg/max) |
+| `reaper.audio.quantize.offset` | s | `reaper.quantize.stage` (`before`/`after`) — a `quantize_audio` call's average hit distance from the grid |
 
 **Logs** — trace-correlated OTLP log records (also mirrored as JSON lines on stderr), with event names:
 
@@ -284,6 +289,8 @@ resource (`service.instance.id`, `deployment.environment.name`). Count them per 
 - p95 of `reaper.bridge.command.duration` > 0.5 s — the defer loop is starved (heavy project, blocking render).
 - `mcp.server.operation.duration{error.type!=""}` / total > 5 % per `gen_ai.tool.name` — a tool regressed.
 - Any `reaper.bridge.handler_error` or `reaper.server.crash` log — a bug, not a user error.
+- p50 of `reaper.audio.quantize.offset{reaper.quantize.stage="after"}` > 5 ms — `quantize_audio` stopped landing hits on the grid
+  (detection or marker placement regressed); compare with the `before` stage, which stays at the material's own looseness.
 - p95 of `reaper.bridge.handler.duration{rpc.method="import_midi_file"}` against `reaper.midi.notes_changed` — a large import blocks REAPER's main thread; the server waits 60 s for it, and one that runs past that is reported as failed while REAPER may still finish it, so a retry imports twice.
 - p95 of `reaper.bridge.handler.duration{rpc.method=~"insert_time|remove_time|copy_section"}` rising while
   `reaper.arrange.items_changed` stays flat — the whole-project walk got slower per item. Any
