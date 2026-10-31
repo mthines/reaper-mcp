@@ -30,8 +30,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-// A call row is a pressable button named with the time of the call
-const callRows = (canvas: ReturnType<typeof within>) => canvas.queryAllByRole('button', { pressed: false, name: /\d{2}:\d{2}:\d{2}/ });
+// A call row is a pressable button showing the time of the call. Matched on its text: a `name` query computes the
+// accessible name of every button in the log on each retry, which alone outran the test timeout on a busy machine
+const callRows = (canvas: ReturnType<typeof within>) =>
+  canvas.queryAllByRole('button', { pressed: false }).filter((b: HTMLElement) => /\d{2}:\d{2}:\d{2}/.test(b.textContent ?? ''));
 
 export const FiltersTheCallsBySearch: Story = {
   play: async ({ canvasElement }) => {
