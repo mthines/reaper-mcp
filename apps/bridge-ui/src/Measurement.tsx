@@ -655,7 +655,7 @@ function Key({ m, was }: { m: Extract<Measurement, { kind: 'key' }>; was: Extrac
       <div className="measure-readouts">
         <Readout label="Key" value={m.key ?? '–'} />
         <Readout label="Confidence" value={conf === undefined ? '–' : `${Math.round(conf * 100)}`} unit="%" zone={zone} word={zone === 'hot' ? 'low' : undefined}
-          title="How far this key stands out from the next one that is not its relative key" />
+          title="How far this key stands out from the next one that is not its relative key, scaled by how well it fits" />
         <Readout label="Relative" value={m.rel ?? '–'} />
       </div>
       <div className="key-bars" role="img" aria-label={`Pitch classes: ${PITCH_CLASSES.map((p, i) => `${p} ${Math.round(m.chroma[i] * 100)}%`).join(', ')}`}>

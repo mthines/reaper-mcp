@@ -221,7 +221,7 @@ export function registerCompositionTools(server: McpServer): void {
     'Detect the musical key (e.g. "A minor") of a track or an audio file: from a track\'s MIDI notes (note time ' +
     'weighted by velocity, drums on channel 10 ignored) or, for audio, from its rendered chroma (Python sidecar). ' +
     'Returns the key, confidence 0..1 (how far it stands out from the next candidate that is not its relative ' +
-    'key), the relative key, the top 3 alternatives with their correlation, and the 12-bin chroma (C first). ' +
+    'key, scaled down for a flat profile and by how well the key fits — its correlation), the relative key, the top 3 alternatives with their correlation, and the 12-bin chroma (C first). ' +
     'Use it before writing parts, choosing a pitch-correction scale or a harmonizer key.',
     {
       trackIndex: z.coerce.number().int().min(-1).optional().describe('Track to analyze (-1 = master). Give this or path'),
