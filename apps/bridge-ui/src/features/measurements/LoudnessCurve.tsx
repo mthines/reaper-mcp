@@ -46,9 +46,9 @@ export function LoudnessCurve({ m, was }: { m: Extract<Measurement, { kind: 'cur
         )}
       </div>
       <div className={chartStyles.measureReadouts}>
-        <Readout label="True peak" value={fmt(m.tp)} unit="dBTP" zone={tpZone(m.tp)} word={m.tp !== undefined && m.tp > 0 ? 'over 0' : ''} title={tpWord(m.tp) ? `True peak ${tpWord(m.tp)} dBTP` : undefined} />
-        <Readout label="Range (LRA)" value={m.lra === undefined ? '–' : m.lra.toFixed(1)} unit="LU" />
-        <Readout label="PLR" value={m.plr === undefined ? '–' : m.plr.toFixed(1)} unit="dB" title="True peak minus integrated loudness: how much dynamic headroom is left" />
+        <Readout label="Peak" value={fmt(m.tp)} unit="dBTP" zone={tpZone(m.tp)} word={m.tp !== undefined && m.tp > 0 ? 'over 0' : ''} title={tpWord(m.tp) ? `True peak ${tpWord(m.tp)} dBTP` : undefined} />
+        <Readout label="Range" value={m.lra === undefined ? '–' : m.lra.toFixed(1)} unit="LU" title="Loudness range (LRA): how much the loudness moves" />
+        <Readout label="Dynamics" value={m.plr === undefined ? '–' : m.plr.toFixed(1)} unit="dB" title="Peak to loudness ratio (PLR): true peak minus integrated loudness" />
       </div>
       <div className={spectrumStyles.spectrum}>
         <svg viewBox={`0 0 ${CW} ${CH}`} preserveAspectRatio="none" onPointerMove={onMove} onPointerLeave={() => setHover(null)} role="img"
@@ -78,7 +78,9 @@ export function LoudnessCurve({ m, was }: { m: Extract<Measurement, { kind: 'cur
         <span><i className={chartStyles.lgLine} /> {m.term === 'm' ? 'Momentary' : 'Short-term'}</span>
         {m.target !== undefined && <span><i className={styles.lgTarget} /> Target</span>}
         {m.over.length > 0 && <span><i className={styles.lgOver} /> Over target</span>}
+        {m.lufs !== undefined && <span><i className={styles.lgIntegrated} /> Integrated</span>}
         {m.loud && <span><i className={styles.lgLoud} /> Loudest 3 s</span>}
+        {m.quiet && <span><i className={styles.lgQuiet} /> Quietest 3 s</span>}
         {was && <span><i className={chartStyles.lgPrevious} /> Previous call</span>}
       </div>
       {(m.loud || m.quiet) && (

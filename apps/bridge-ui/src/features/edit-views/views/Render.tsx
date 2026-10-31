@@ -47,7 +47,6 @@ function RenderWave({ hi, lo }: { hi: number[]; lo: number[] }) {
 
 /** A render's files: a mini waveform each, LUFS-I against the normalize target, true peak against the limiter; versions grouped */
 export function Render({ v }: { v: Extract<EditView, { kind: 'render' }> }) {
-  const files = v.groups.reduce((n, g) => n + g.f.length, 0) + (v.more ?? 0);
   const [normName, normUnit] = (v.norm && NORM_LABEL[v.norm]) || ['', ''];
   // Only an integrated target grades a file's integrated loudness; a momentary or short-term max target does not
   const lufsTarget = v.norm === 'lufs_i' && v.nt !== undefined ? v.nt : undefined;
@@ -55,6 +54,12 @@ export function Render({ v }: { v: Extract<EditView, { kind: 'render' }> }) {
   /** On target within 1 LU (accent), off target (amber); plain without a LUFS target */
   const lufsZone = (db: number) => (lufsTarget === undefined || !measured(db) ? 'ok' : Math.abs(db - lufsTarget) <= 1 ? 'ok' : 'hot');
   const tpZone = (db: number) => (!measured(db) ? 'ok' : db > 0 ? 'over' : v.lim !== undefined ? (db > v.lim + 0.05 ? 'hot' : 'ok') : db > -1 ? 'hot' : 'ok');
+  const all = v.groups.flatMap((g) => g.f);
+  const offWords = [
+    all.some((f) => lufsZone(f[2]) === 'hot') && `loudness more than 1 LU from ${fmt(lufsTarget)}`,
+    all.some((f) => tpZone(f[3]) === 'hot') && (v.lim !== undefined ? 'peak over the limit' : 'peak within 1 dB of 0'),
+  ].filter(Boolean);
+  const over = all.some((f) => tpZone(f[3]) === 'over');
   const row = (f: RenderFile, key: string) => {
     const [name, dur, lufs, tp, peak, hi, lo] = f;
     const lz = lufsZone(lufs);
@@ -73,14 +78,12 @@ export function Render({ v }: { v: Extract<EditView, { kind: 'render' }> }) {
   return (
     <>
       <div className={chartStyles.measureReadouts}>
-        <Measurement.Readout label="Files" value={String(files)} />
         <Measurement.Readout label="Format" value={encoding} title={v.bd ? `${v.fmt.toUpperCase()} ${v.bd === '32f' ? '32-bit float' : `${v.bd}-bit`}` : v.kbps ? `${v.fmt.toUpperCase()} ${v.kbps} kbps` : undefined} />
         <Measurement.Readout label="Source" value={SOURCE_LABEL[v.src] ?? v.src} />
-        <Measurement.Readout label="Target" value={v.nt !== undefined && v.norm ? fmt(v.nt) : 'None'} unit={v.norm ? normUnit : undefined} title={v.norm ? `Normalized by ${normName}` : 'Not normalized'} />
+        <Measurement.Readout label="Target" value={v.nt !== undefined && v.norm ? fmt(v.nt) : 'off'} unit={v.norm ? normUnit : undefined} title={v.norm ? `Normalized by ${normName}` : 'Not normalized'} />
       </div>
-      {(v.norm || v.lim !== undefined) && (
+      {v.lim !== undefined && (
         <div className={styles.tags}>
-          {v.norm && <span className={styles.tag}>Normalize {normName} {v.nt !== undefined ? fmt(v.nt) : ''}</span>}
           {v.lim !== undefined && <span className={styles.tag}>Limit {fmt(v.lim)} {v.tp ? 'dBTP' : 'dBFS'}</span>}
         </div>
       )}
@@ -88,9 +91,9 @@ export function Render({ v }: { v: Extract<EditView, { kind: 'render' }> }) {
         <div className={cx(styles.row, styles.head)} aria-hidden="true">
           <span>File</span>
           <span>Waveform</span>
-          <span className={styles.v}>LUFS-I</span>
-          <span className={styles.v}>TP</span>
-          <span className={cx(styles.v, styles.dur)}>Len</span>
+          <span className={styles.v} title="Integrated loudness, LUFS">LUFS</span>
+          <span className={styles.v} title="True peak, dBTP">Peak</span>
+          <span className={cx(styles.v, styles.dur)}>Length</span>
         </div>
         {v.groups.map((g, gi) => (
           <div className={styles.group} key={gi}>
@@ -105,7 +108,10 @@ export function Render({ v }: { v: Extract<EditView, { kind: 'render' }> }) {
         ))}
       </div>
       {v.more ? <div className={chartStyles.evMore}>+{plural(v.more, 'more file')} not listed</div> : null}
-      {lufsTarget !== undefined && <Legend items={[[chartStyles.lgTick, `On target (±1 LU of ${fmt(lufsTarget)})`], [chartStyles.lgWarn, 'Off target']]} />}
+      <Legend items={[
+        ...(offWords.length ? [[chartStyles.lgWarn, `Off: ${offWords.join(', ')}`]] : []),
+        ...(over ? [[chartStyles.lgBad, 'True peak over 0 dB']] : []),
+      ] as Array<[string, string]>} />
     </>
   );
 }

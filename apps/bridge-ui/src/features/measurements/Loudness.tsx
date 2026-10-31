@@ -22,9 +22,7 @@ export function Loudness({ m, target, was }: { m: Extract<Measurement, { kind: '
       </div>
       <div className={styles.lufsTrack} role="img" aria-label={`Integrated ${fmt(i)} LUFS, short-term ${fmt(m.shortTerm)}, momentary ${fmt(m.momentary)}${target !== null ? `, target ${fmt(target, 0)}` : ''}`}>
         {target !== null && (
-          <span className={styles.lufsTarget} style={{ left: `${lufsPct(target - 1)}%`, width: `${lufsPct(target + 1) - lufsPct(target - 1)}%` }}>
-            <span className={cx(styles.lufsTargetLabel, 'mono')}>target {fmt(target, 0)}</span>
-          </span>
+          <span className={styles.lufsTarget} style={{ left: `${lufsPct(target - 1)}%`, width: `${lufsPct(target + 1) - lufsPct(target - 1)}%` }} />
         )}
         {m.shortTerm !== undefined && <span className={styles.lufsShort} style={{ width: `${lufsPct(m.shortTerm)}%` }} />}
         {m.momentary !== undefined && <span className={styles.lufsMomentary} style={{ left: `${lufsPct(m.momentary)}%` }} />}
@@ -36,8 +34,8 @@ export function Loudness({ m, target, was }: { m: Extract<Measurement, { kind: '
         <span><i className={chartStyles.lgNeedle} /> Integrated</span>
         <span><i className={chartStyles.lgShort} /> Short-term</span>
         <span><i className={chartStyles.lgMomentary} /> Momentary</span>
-        {target !== null && <span><i className={chartStyles.lgTarget} /> Target ±1</span>}
-        {was !== undefined && was > -149 && <span><i className={chartStyles.lgPrevious} /> Previous call</span>}
+        {target !== null && <span><i className={chartStyles.lgTarget} /> Target {fmt(target, 0)} ±1 LU</span>}
+        {was !== undefined && was > -149 && <span><i className={chartStyles.lgWas} /> Previous call</span>}
       </div>
       <div className={chartStyles.measureReadouts}>
         <Readout label="Short-term" value={fmt(m.shortTerm)} unit="LUFS" />

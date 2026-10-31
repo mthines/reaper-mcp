@@ -11,8 +11,12 @@ export function Pins({ v }: { v: Extract<EditView, { kind: "pins" }> }) {
   const used = [...v.in, ...v.out, ...(v.inWas ?? []), ...(v.outWas ?? [])].flat();
   const cols = Math.min(64, Math.max(v.ch, v.chWas ?? 0, ...used, 2));
   const chans = Array.from({ length: cols }, (_, i) => i + 1);
-  const write = v.inWas !== undefined;
-  const changed = write && (v.chWas !== undefined || JSON.stringify(v.in) !== JSON.stringify(v.inWas) || JSON.stringify(v.out) !== JSON.stringify(v.outWas));
+  // Which pin states the grid draws, so the legend names only those
+  const states = (now: number[][], was: number[][] | undefined) => now.flatMap((pin, p) => chans.map((c) => [pin.includes(c), was ? (was[p] ?? []).includes(c) : pin.includes(c)]));
+  const all = [...states(v.in, v.inWas), ...states(v.out, v.outWas)];
+  const kept = all.some(([on, before]) => on && before);
+  const added = all.some(([on, before]) => on && !before);
+  const dropped = all.some(([on, before]) => !on && before);
   const side = (title: string, now: number[][], was: number[][] | undefined, names?: string[]) => (
     <>
       <div className={styles.side} role="row"><span role="rowheader">{title}</span></div>
@@ -37,7 +41,7 @@ export function Pins({ v }: { v: Extract<EditView, { kind: "pins" }> }) {
   return (
     <>
       <div className={chartStyles.measureReadouts}>
-        <Measurement.Readout label="FX" value={v.fx ? fxShort(v.fx) : "–"} />
+        <Measurement.Readout label="Plugin" value={v.fx ? fxShort(v.fx) : "–"} />
         <Measurement.Readout label="Track channels" value={v.chWas !== undefined && v.chWas !== v.ch ? `${v.chWas} → ${v.ch}` : String(v.ch)} />
       </div>
       <div className={styles.pins} style={{ "--cols": cols } as CSSProperties} role="table" aria-label="Pin matrix: pins by track channel">
@@ -50,14 +54,13 @@ export function Pins({ v }: { v: Extract<EditView, { kind: "pins" }> }) {
         {side("In", v.in, v.inWas, v.names)}
         {side("Out", v.out, v.outWas)}
       </div>
-      {changed && (
-        <Legend
-          items={[
-            [chartStyles.lgNew, "Connected now"],
-            [chartStyles.lgWas, "Disconnected"],
-          ]}
-        />
-      )}
+      <Legend
+        items={[
+          ...(kept ? [[styles.lgOn, "Connected"]] : []),
+          ...(added ? [[styles.lgNew, "Newly connected"]] : []),
+          ...(dropped ? [[styles.lgGone, "Disconnected"]] : []),
+        ] as Array<[string, string]>}
+      />
     </>
   );
 }

@@ -1,24 +1,18 @@
 import type { CSSProperties } from 'react';
-import { fittingLabels, normalizedGains, timelineDiff, type ArrangeOp, type EditView, type Item, type Marker, type Region, type Tempo } from '../edit-views.js';
+import { fittingLabels, focusOf, normalizedGains, timelineDiff, type ArrangeOp, type EditView, type Item, type Marker, type Region, type Tempo } from '../edit-views.js';
+import { Counts } from './Counts.js';
 import { Legend } from './ChangeLegend.js';
 import { EW } from './Envelope.js';
 import { clock, hueOf, pct } from './format.js';
 import { useWidth } from '../../../lib/useWidth.js';
+import { useZoom } from '../../../lib/zoom.js';
+import { ZoomSwitch } from './ZoomSwitch.js';
 import { Measurement } from '../../measurements/index.js';
 import { cx } from '../../../lib/cx.js';
 import chartStyles from '../../../styles/chart.module.css';
 import envelopeStyles from './Envelope.module.css';
 import styles from './Timeline.module.css';
 
-const ARRANGE_LABEL: Record<ArrangeOp, string> = {
-  copy: "Copy items",
-  section: "Copy section",
-  insert: "Insert time",
-  remove: "Remove time",
-  normalize: "Normalize",
-  reverse: "Reverse",
-  glue: "Glue",
-};
 // What the hatched band is, per op
 const SPAN_LABEL: Partial<Record<ArrangeOp, string>> = { insert: "Opened", remove: "Cut", copy: "Copied to", section: "Copied to" };
 
@@ -38,7 +32,6 @@ function ArrangeReadouts({ v, added, removed }: { v: Extract<EditView, { kind: "
   const range = v.to ?? v.span;
   return (
     <div className={chartStyles.measureReadouts}>
-      <Measurement.Readout label="Edit" value={v.op ? ARRANGE_LABEL[v.op] : "–"} />
       {v.op === "normalize" ? (
         <>
           <Measurement.Readout label="Gain" value={dbRange(normalized.map(([g]) => g))} unit="dB" />
@@ -48,10 +41,10 @@ function ArrangeReadouts({ v, added, removed }: { v: Extract<EditView, { kind: "
         <>
           <Measurement.Readout label={v.op === "remove" ? "From" : "At"} value={clock(range[0], 1)} />
           <Measurement.Readout label="Length" value={(range[1] - range[0]).toFixed(1)} unit="s" />
-          <Measurement.Readout label="Changed" value={`+${added} −${removed}`} />
+          <Measurement.Readout label="Items" value={String(Math.max(added, removed))} title={`${added} items where they are now, ${removed} where they were`} />
         </>
       ) : (
-        <Measurement.Readout label="Changed" value={`+${added} −${removed}`} />
+        <Measurement.Readout label="Items" value={String(Math.max(added, removed))} title={`${added} items where they are now, ${removed} where they were`} />
       )}
       <Measurement.Readout label="Tracks" value={String(lanes.length + (v.moreTracks ?? 0))} title={tracks} />
     </div>
@@ -60,7 +53,14 @@ function ArrangeReadouts({ v, added, removed }: { v: Extract<EditView, { kind: "
 
 export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) {
   const len = Math.max(1, v.len);
-  const at = (t: number) => `${pct(t, 0, len)}%`;
+  // Zoomed to the change by default, so a big project still shows what moved; one click shows it all
+  const focus = focusOf(v, len);
+  const [zoom, setZoom] = useZoom();
+  const win: [number, number] = focus && zoom === "change" ? focus : [0, len];
+  const span = win[1] - win[0];
+  const inView = (t: number) => t >= win[0] && t <= win[1];
+  const at = (t: number) => `${pct(t, win[0], win[1])}%`;
+  const wide = (a: number, b: number) => pct(b, win[0], win[1]) - pct(a, win[0], win[1]);
   const regions = timelineDiff<Region>(v.regions, v.was?.regions);
   const markers = timelineDiff<Marker>(v.markers, v.was?.markers);
   const tempos = timelineDiff<Tempo>(v.tempo, v.was?.tempo);
@@ -78,7 +78,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
   const [laneRef, laneW] = useWidth<HTMLDivElement>();
   const marks = [...markers.removed, ...v.markers];
   const labelled = fittingLabels(
-    marks.map((m) => [pct(m[0], 0, len) / 100, String(m[1] || m[3])]),
+    marks.map((m) => [inView(m[0]) ? pct(m[0], win[0], win[1]) / 100 : m[0] < win[0] ? -10 : 10, String(m[1] || m[3])]),
     laneW || 1e6,
     new Set(
       marks.flatMap((m, i) =>
@@ -92,7 +92,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
   const quiet = (i: number) => !(!context && labelled.has(i));
   // A region too narrow for a letter or two shows its colour only
   const roomy = (r: Region) =>
-    !laneW || ((r[1] - r[0]) / len) * laneW >= 28;
+    !laneW || ((Math.min(r[1], win[1]) - Math.max(r[0], win[0])) / span) * laneW >= 28;
   const lanes = v.lanes ?? [];
   const laneDiffs = lanes.map((l) => timelineDiff<Item>(l.items, l.was));
   const itemsAdded = laneDiffs.reduce((n, d) => n + d.added.size, 0);
@@ -120,7 +120,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
             value={String(lanes.reduce((n, l) => n + l.items.length, 0))}
           />
           {itemWrite ? (
-            <Measurement.Readout label="Changed" value={`+${itemsAdded} −${itemsRemoved}`} />
+            <Measurement.Readout label="Items" value={String(Math.max(itemsAdded, itemsRemoved))} title={`${itemsAdded} items where they are now, ${itemsRemoved} where they were`} />
           ) : (
             <Measurement.Readout
               label="MIDI"
@@ -144,7 +144,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
         />
         <Measurement.Readout label="Time sig" value={sig} />
         {v.was ? (
-          <Measurement.Readout label="Changed" value={`+${changed} −${removed}`} />
+          <Counts added={changed} removed={removed} />
         ) : (
           <>
             <Measurement.Readout label="Regions" value={String(v.regions.length)} />
@@ -153,12 +153,18 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
         )}
       </div>
       )}
+      {focus && (
+        <div className={styles.zoomBar}>
+          <span>{zoom === "whole" ? `0:00–${clock(len)}, the whole project` : `${clock(win[0])}–${clock(win[1])} of ${clock(len)}`}</span>
+          <ZoomSwitch zoom={zoom} onChange={setZoom} span={`${clock(focus[0])}–${clock(focus[1])}`} total={clock(len)} />
+        </div>
+      )}
       <div className={styles.evTimeline} ref={laneRef}>
         {v.span && (v.op === "copy" || v.op === "section") && (
           <span
             className={styles.evSpan}
             data-span="source"
-            style={{ left: at(v.span[0]), width: `${pct(v.span[1], 0, len) - pct(v.span[0], 0, len)}%` }}
+            style={{ left: at(v.span[0]), width: `${wide(v.span[0], v.span[1])}%` }}
             title={`Source ${clock(v.span[0], 1)}–${clock(v.span[1], 1)}`}
           />
         )}
@@ -166,21 +172,21 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
           <span
             className={styles.evSpan}
             data-span={v.op === "remove" ? "cut" : undefined}
-            style={{ left: at(band[0]), width: `${pct(band[1], 0, len) - pct(band[0], 0, len)}%` }}
+            style={{ left: at(band[0]), width: `${wide(band[0], band[1])}%` }}
             title={`${spanLabel || ""} ${clock(band[0], 1)}–${clock(band[1], 1)}`}
           />
         )}
         {v.wasSel && (
           <span
             className={cx(styles.evSel, styles.evSelWas)}
-            style={{ left: at(v.wasSel[0]), width: `${pct(v.wasSel[1], 0, len) - pct(v.wasSel[0], 0, len)}%` }}
+            style={{ left: at(v.wasSel[0]), width: `${wide(v.wasSel[0], v.wasSel[1])}%` }}
             title={`Selection before: ${clock(v.wasSel[0], 1)}–${clock(v.wasSel[1], 1)}`}
           />
         )}
         {v.sel && (
           <span
             className={styles.evSel}
-            style={{ left: at(v.sel[0]), width: `${pct(v.sel[1], 0, len) - pct(v.sel[0], 0, len)}%` }}
+            style={{ left: at(v.sel[0]), width: `${wide(v.sel[0], v.sel[1])}%` }}
             title={`Selection ${clock(v.sel[0], 1)}–${clock(v.sel[1], 1)}`}
           />
         )}
@@ -196,6 +202,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
               <span
                 key={`r${m[3]}${m[0]}`}
                 className={cx(styles.evMarker, styles.evGone, quiet(i) && styles.evQuiet)}
+                hidden={!inView(m[0])}
                 style={{ left: at(m[0]) }}
                 title={`Removed: ${m[1] || `Marker ${m[3]}`} at ${clock(m[0], 1)}`}
               >
@@ -207,6 +214,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
               <span
                 key={`${m[3]}${m[0]}`}
                 className={cx(styles.evMarker, markers.added.has(m) && styles.evNew, quiet(markers.removed.length + i) && styles.evQuiet)}
+                hidden={!inView(m[0])}
                 style={
                   {
                     left: at(m[0]),
@@ -228,7 +236,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
               className={cx(styles.evRegion, styles.evGone)}
               style={{
                 left: at(r[0]),
-                width: `calc(${pct(r[1], 0, len) - pct(r[0], 0, len)}% - 1px)`,
+                width: `calc(${wide(r[0], r[1])}% - 1px)`,
               }}
               title={`Removed: ${r[2] || `Region ${r[4]}`}`}
             />
@@ -240,7 +248,7 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
               style={
                 {
                   left: at(r[0]),
-                  width: `calc(${pct(r[1], 0, len) - pct(r[0], 0, len)}% - 1px)`,
+                  width: `calc(${wide(r[0], r[1])}% - 1px)`,
                   "--rg": hueOf(r[3], i),
                 } as CSSProperties
               }
@@ -250,13 +258,13 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
             </span>
           ))}
         </div>
-        {v.items && <ItemsLane items={v.items} len={len} />}
+        {v.items && <ItemsLane items={v.items} win={win} />}
         {v.lanes?.map((lane, i) => (
           <ItemsLane
             key={i}
             items={lane.items}
             was={lane.was}
-            len={len}
+            win={win}
             name={lane.t}
           />
         ))}
@@ -270,14 +278,14 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
             tempo={v.tempo}
             removed={tempos.removed}
             added={tempos.added}
-            len={len}
+            win={win}
           />
         )}
       </div>
       <div className={cx(chartStyles.measureScaleWords, 'mono')}>
-        <span>0:00</span>
-        <span>{clock(len / 2)}</span>
-        <span>{clock(len)}</span>
+        <span>{clock(win[0])}</span>
+        <span>{clock(win[0] + span / 2)}</span>
+        <span>{clock(win[1])}</span>
       </div>
       {(itemsAdded > 0 || itemsRemoved > 0 || v.op) && (
         <Legend
@@ -317,17 +325,18 @@ function TempoLane({
   tempo,
   removed,
   added,
-  len,
+  win,
 }: {
   tempo: Tempo[];
   removed: Tempo[];
   added: Set<Tempo>;
-  len: number;
+  /** The seconds drawn, start to end */
+  win: [number, number];
 }) {
   const bpms = [...tempo, ...removed].map((t) => t[1]);
   const top = Math.max(...bpms) + 2;
   const bottom = Math.min(...bpms) - 2;
-  const x = (t: number) => (t / len) * EW;
+  const x = (t: number) => ((t - win[0]) / (win[1] - win[0])) * EW;
   const y = (bpm: number) => ((top - bpm) / (top - bottom)) * TH;
   const path = (ts: Tempo[]) => {
     const sorted = [...ts].sort((a, b) => a[0] - b[0]);
@@ -370,6 +379,7 @@ function TempoLane({
         <span
           key={i}
           className={cx(envelopeStyles.evDot, added.has(t) ? envelopeStyles.evDotNew : '')}
+          hidden={t[0] < win[0] || t[0] > win[1]}
           style={{
             left: `${(x(t[0]) / EW) * 100}%`,
             top: `${(y(t[1]) / TH) * 100}%`,
@@ -387,17 +397,18 @@ function TempoLane({
 function ItemsLane({
   items,
   was,
-  len,
+  win,
   name,
 }: {
   items: Item[];
   was?: Item[];
-  len: number;
+  /** The seconds drawn, start to end: items outside it are clipped */
+  win: [number, number];
   name?: string;
 }) {
-  const at = (t: number) => `${pct(t, 0, len)}%`;
+  const at = (t: number) => `${pct(t, win[0], win[1])}%`;
   const width = (it: Item) =>
-    `calc(${pct(it[0] + it[1], 0, len) - pct(it[0], 0, len)}% - 1px)`;
+    `calc(${pct(it[0] + it[1], win[0], win[1]) - pct(it[0], win[0], win[1])}% - 1px)`;
   const { added, removed } = timelineDiff<Item>(items, was);
   return (
     <div className={styles.evLaneWrap}>

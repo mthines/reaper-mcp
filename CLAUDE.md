@@ -102,7 +102,8 @@ reaper-mcp/
                               # Measurement.Loudness, EditView.Section, Snapshots.SaveForm, Plugins.Details, Settings.LoreKit,
                               # Stats.Sparkline) plus its public functions; code outside a folder imports only its index
     src/lib/                  # Pure logic + small hooks: status (feed parsing), commands, log, timeline, sessions, search, format, url-state, analytics
-    src/demo/                 # ?demo's fake bridge and the fixed examples the stories draw (examples.ts, feed.ts)
+    src/demo/                 # ?demo's fake bridge and the fixed examples the stories draw (examples.ts, feed.ts);
+                              # demo-calls.ts: one demo call per logged command (DEMO_CALLS, typed by LoggedCommand)
     src/styles.css            # Root stylesheet: CSS variables (tokens), base element styles and global utility classes only
     src/styles/               # CSS modules shared across features: drawer, list (segmented tabs, chips, rows), chart (measure card, readouts, legends, bars)
                               # Every component's own styles: <Name>.module.css beside it (styles.x, joined with cx() from lib/cx.ts)
@@ -664,7 +665,7 @@ pnpm nx affected --target=build     # Build only affected by changes
 
 ## Adding New MCP Tools
 
-To add a new tool, touch these 6 places:
+To add a new tool, touch these 8 places:
 
 1. **`libs/protocol/src/commands.ts`** -- Add command type to `CommandType` union, add params interface
 2. **`libs/protocol/src/responses.ts`** -- Add response data interface if needed
@@ -672,6 +673,8 @@ To add a new tool, touch these 6 places:
 4. **`apps/reaper-mcp-server/src/cli.ts`** -- Add tool name to `MCP_TOOL_NAMES` array (used by `ensureClaudeSettings()` to auto-allow tools)
 5. **`apps/reaper-mcp-server/src/tools/categories.ts`** -- Add tool name to a category in `TOOL_CATEGORIES` (the bridge-coverage test fails on an uncategorized tool)
 6. **`reaper/mcp_bridge.lua`** -- Add handler function in the `handlers` table
+7. **`apps/bridge-ui/src/demo/demo-calls.ts`** -- Add the command to `DEMO_CALLS`, so `?demo` logs it: the params an agent would send, or `'example'` when an example in `src/demo/examples.ts` draws it (a measurement or edit view). The map is a `Record<LoggedCommand, …>`, so typecheck fails until it is there. A tool the server composes and logs itself with `logToolResult()` goes in `LoggedTool` (`libs/protocol/src/commands.ts`) first
+8. **`apps/bridge-ui/src/features/log/tools.ts`** -- Add the command to `TOOLS`: a plain `title` ("Delete a track") and a `did` sentence ("deleted the track “Old Vox”") that the bridge page's drawer leads with. Also a `Record<LoggedCommand, …>`. How the drawer shows a call (summary, card, legend, zoom) is in `.claude/rules/bridge-drawer.md`
 
 **Important:** Always use `z.coerce.number()` instead of `z.number()` for numeric parameters. MCP clients may pass numbers as strings (e.g. `"39"` instead of `39`), and `z.coerce` handles the conversion automatically.
 
@@ -801,10 +804,12 @@ REAPER's web interface by adding `csurf_N=HTTP 0 8099 '' 'mcp_bridge.html' 0 ''`
 `REAPER_WEB_PORT`; an existing HTTP surface is kept). It only edits `reaper.ini` while REAPER is closed — REAPER
 rewrites it from memory on exit. On start the bridge opens the page as a small Chromium `--app` window (falls back to
 the default browser; toggle `OPEN_UI_ON_START`) and only uses the ReaScript console when the web interface is missing.
-`?demo` previews the page with fake data.
+`?demo` previews the page with fake data: a fake bridge whose log holds a call of every command (`DEMO_CALLS`) and every
+example, with new calls drawn from them.
 
 **Developing the page or the bridge: run `pnpm dev:bridge`** (`apps/bridge-ui/dev.mjs`) and open
-`http://localhost:8098/mcp_bridge.html`, never REAPER's own `:8099` page.
+`http://localhost:8098/mcp_bridge.html`, never REAPER's own `:8099` page. Without REAPER, open
+`http://localhost:8098/mcp_bridge.html?demo` (every tool and view in the log). It prints both URLs on start.
 
 - It rebuilds the page on every save (unminified, inline sourcemap) and reloads each open tab over `/__dev/events`.
 - It proxies `/_/*` to REAPER over one keep-alive socket (`http.Agent`, `maxSockets: 1`) and never aborts an upstream
@@ -853,7 +858,8 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
 - URL state: navigation state lives in the query string via `useUrlState(key, default, { validate })` in
   `src/lib/url-state.ts` (a History API port of LoreKit web's hook: JSON values, a value equal to the default is dropped,
   changes in one tick become one history entry), so Back/Forward step through it and a link or reload reopens it.
-  Params: `view`, `range`, `span` (dragged timeline span), `filter` (all/errors), `q` (search; replaces, never pushes),
+  Params: `view`, `range`, `span` (dragged timeline span), `filter` (all/errors), `q` (search; replaces, never pushes, written to the URL 300 ms after typing pauses via
+  `debounceMs` while the page updates at once; each view keeps its own search, so switching views never carries one over),
   `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, and on Plugins `coverage`, `inProject`, `plugin`
   (open plugin by FX name). Opening, closing or switching a drawer by click (a row, "Previous call") pushes; ↑/↓ between rows replaces. `view` and `range` default
   to the last pick in localStorage, so the bridge's bare `mcp_bridge.html` opens where you left off. Use it for any new

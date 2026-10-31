@@ -16,3 +16,6 @@
   .name { grid-column: 1 / -1; }
   .axis .name { display: none; }
 }
+.lgFaint { width: 10px; height: 10px; background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.lgStrong { width: 10px; height: 10px; background: var(--accent); }
+.lgHot { width: 10px; height: 10px; background: var(--warn); }

@@ -6,6 +6,8 @@ import chartStyles from '../../../styles/chart.module.css';
 import styles from './Changes.module.css';
 
 export function Changes({ rows, more = 0 }: { rows: ChangeRow[]; more?: number }) {
+  // Rows whose bar draws a before mark: a number that changed
+  const moved = rows.filter((r) => r.s !== "bool" && r.a !== undefined && r.b !== undefined && r.a !== r.b);
   return (
     <>
       <div className={chartStyles.evRows}>
@@ -50,11 +52,13 @@ export function Changes({ rows, more = 0 }: { rows: ChangeRow[]; more?: number }
       {more > 0 && (
         <div className={chartStyles.evMore}>+{plural(more, "more parameter")} not drawn</div>
       )}
-      {rows.some((r) => r.a !== undefined && r.a !== r.b) && (
+      {moved.length > 0 && (
         <Legend
           items={[
             [chartStyles.lgWas, "Before"],
-            [chartStyles.lgTick, "After"],
+            [chartStyles.lgTick, "Now"],
+            ...(moved.some((r) => (r.b ?? 0) > (r.a ?? 0)) ? [[styles.lgUp, "Raised"] as [string, string]] : []),
+            ...(moved.some((r) => (r.b ?? 0) < (r.a ?? 0)) ? [[styles.lgDown, "Lowered"] as [string, string]] : []),
           ]}
         />
       )}

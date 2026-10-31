@@ -8,3 +8,5 @@
 .lgTarget { width: 12px; height: 0; border-top: 1px dashed var(--target); }
 .lgOver { width: 10px; height: 8px; background: color-mix(in srgb, var(--warn) 30%, transparent); }
 .lgLoud { width: 10px; height: 8px; background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.lgIntegrated { width: 12px; height: 0; border-top: 1px dotted var(--hold); }
+.lgQuiet { width: 10px; height: 8px; background: color-mix(in srgb, var(--muted) 18%, transparent); }

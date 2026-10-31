@@ -34,6 +34,12 @@ export function Masking({ m }: { m: Extract<Measurement, { kind: 'masking' }> })
           </div>
         </div>
       )}
+      {m.pairs.length > 0 && (
+        <div className={chartStyles.measureLegend}>
+          <span><i className={styles.lgFaint} /><i className={styles.lgStrong} /> Little → a lot of overlap</span>
+          {m.pairs.some(([, , , scores]) => scores.some((s) => s >= 0.6)) && <span><i className={styles.lgHot} /> They fight here</span>}
+        </div>
+      )}
       <div className={chartStyles.offHints}>
         {m.conflicts.length === 0 ? (
           <span>No band where two of these tracks are both loud and within a few dB: nothing masks.</span>

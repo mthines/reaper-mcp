@@ -15,10 +15,13 @@ let range: string;
 let setRange: UrlStateDispatch<string>;
 let view: string;
 let setView: UrlStateDispatch<string>;
+let query: string;
+let setQuery: UrlStateDispatch<string>;
 
 function Page() {
   [range, setRange] = useUrlState('range', '30m', { validate: isRange });
   [view, setView] = useUrlState('view', 'calls', { validate: isString });
+  [query, setQuery] = useUrlState('q', '', { validate: isString, navigationMode: 'replace', debounceMs: 50 });
   return null;
 }
 
@@ -52,11 +55,11 @@ describe('state kept in the URL', () => {
 
   it('writes a change to the URL, keeping the other params, and drops a value equal to the default', async () => {
     open('/mcp_bridge.html?demo');
-    setRange('1h');
+    act(() => setRange('1h'));
     await settle();
     expect(range).toBe('1h');
     expect(location.search).toBe('?demo=&range=%221h%22');
-    setRange('30m');
+    act(() => setRange('30m'));
     await settle();
     expect(location.search).toBe('?demo=');
   });
@@ -64,8 +67,10 @@ describe('state kept in the URL', () => {
   it('steps back through changes, one history entry per tick', async () => {
     open('/mcp_bridge.html');
     const before = history.length;
-    setRange('1h');
-    setView('tools'); // same tick: one entry
+    act(() => {
+      setRange('1h');
+      setView('tools'); // same tick: one entry
+    });
     await settle();
     expect(history.length).toBe(before + 1);
     await back();
@@ -75,9 +80,41 @@ describe('state kept in the URL', () => {
   it('replaces the entry when asked, so Back skips it', async () => {
     open('/mcp_bridge.html');
     const before = history.length;
-    setView('tools', 'replace');
+    act(() => setView('tools', 'replace'));
     await settle();
     expect(history.length).toBe(before);
     expect(view).toBe('tools');
+  });
+
+  it('shows a debounced change at once and writes the URL once typing pauses', async () => {
+    open('/mcp_bridge.html');
+    await act(async () => {
+      setQuery('r');
+      setQuery('re');
+      setQuery('read');
+    });
+    expect(query).toBe('read');
+    expect(location.search).toBe('');
+    await act(() => new Promise((resolve) => setTimeout(resolve, 80)));
+    expect(location.search).toBe('?q=%22read%22');
+  });
+
+  it('writes a debounced change with the next change that is not, as one history entry', async () => {
+    open('/mcp_bridge.html');
+    await act(async () => setQuery('lufs'));
+    await act(async () => setView('tools'));
+    expect(location.search).toBe('?q=%22lufs%22&view=%22tools%22');
+    await back();
+    expect([view, query]).toEqual(['calls', '']);
+  });
+
+  it('drops a debounced change still waiting when Back is pressed', async () => {
+    open('/mcp_bridge.html');
+    act(() => setView('tools'));
+    await settle();
+    await act(async () => setQuery('lufs'));
+    await back();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 80)));
+    expect([view, query, location.search]).toEqual(['calls', '', '']);
   });
 });

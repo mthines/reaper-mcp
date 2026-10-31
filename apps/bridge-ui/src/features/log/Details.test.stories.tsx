@@ -37,3 +37,16 @@ export const ClosesWithItsButton: Story = {
     await expect(args.onClose).toHaveBeenCalled();
   },
 };
+
+export const SaysWhatTheAgentDidFirstAndKeepsTheDebugFactsClosed: Story = {
+  args: { entry: { n: 7, t: EXAMPLE_NOW - 5000, c: 'delete_track', ms: 2, ok: true, s: 'a1', p: '{"track":"Old Vox"}' }, session: { id: 'a1', dir: '/Users/you/Music/midnight-drive', first: 0, last: 0, commands: 1, errors: 0 } },
+  play: async ({ canvasElement }) => {
+    const drawer = within(canvasElement).getByRole('complementary', { name: 'Details for delete_track' });
+    await expect(within(drawer).getByRole('heading', { name: 'Delete a track' })).toBeInTheDocument();
+    await expect(within(drawer).getByText('midnight-drive deleted the track “Old Vox”.')).toBeInTheDocument();
+    // Timing and ids wait behind Details
+    await expect(within(drawer).getByText('Handler time')).not.toBeVisible();
+    await userEvent.click(within(drawer).getByText('Details'));
+    await expect(within(drawer).getByText('Handler time')).toBeVisible();
+  },
+};

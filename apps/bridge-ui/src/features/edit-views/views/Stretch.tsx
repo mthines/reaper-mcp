@@ -15,24 +15,32 @@ export function Stretch({ v }: { v: Extract<EditView, { kind: "stretch" }> }) {
   const x = (t: number) => (Math.min(v.len, Math.max(0, t)) / v.len) * SW;
   const moves = v.moves ?? [];
   const moved = moves.filter(([a, b]) => Math.abs(a - b) > 0.0005).length;
-  const legend: Array<[string, string]> = [
-    ...(v.grid ? ([[styles.lgGrid, "Grid"]] as Array<[string, string]>) : []),
+  const legend = [
+    ...(v.grid?.length ? [[styles.lgGrid, "Grid line"]] : []),
     ...(v.marks && v.was
-      ? ([[styles.lgKept, "Kept"], [chartStyles.lgTick, "Added"], ...(v.was.some((t) => !near(v.marks, t)) ? [[chartStyles.lgWas, "Removed"]] : [])] as Array<[string, string]>)
-      : ([[chartStyles.lgWas, "Before"], [chartStyles.lgTick, "After"]] as Array<[string, string]>)),
-  ];
+      ? [
+          ...(v.marks.some((t) => near(v.was, t)) ? [[styles.lgKept, "Kept"]] : []),
+          ...(v.marks.some((t) => !near(v.was, t)) ? [[chartStyles.lgTick, "Added"]] : []),
+          ...(v.was.some((t) => !near(v.marks, t)) ? [[chartStyles.lgWas, "Removed"]] : []),
+        ]
+      : [
+          ...(moved > 0 ? [[chartStyles.lgWas, "Before"]] : []),
+          [chartStyles.lgTick, moves.length ? "Now" : "Marker"],
+          ...(moved > 0 ? [[styles.lgMove, "Moved"]] : []),
+        ]),
+  ] as Array<[string, string]>;
   return (
     <>
       <div className={chartStyles.measureReadouts}>
         {v.off ? (
           <>
-            <Measurement.Readout label="Hits moved" value={`${moved}/${moves.length + (v.more ?? 0)}`} />
-            <Measurement.Readout label="Off the grid" value={`${Math.round(v.off[0])} → ${Math.round(v.off[1])}`} unit="ms avg" zone={v.off[1] > 10 ? "hot" : "ok"} />
+            <Measurement.Readout label="Hits moved" value={`${moved} of ${moves.length + (v.more ?? 0)}`} />
+            <Measurement.Readout label="Timing off" title="Average distance of the hits from the grid" value={`${Math.round(v.off[0])} → ${Math.round(v.off[1])}`} unit="ms" zone={v.off[1] > 10 ? "hot" : "ok"} word="" />
           </>
         ) : (
           <Measurement.Readout label="Markers" value={v.was ? `${v.was.length} → ${(v.marks ?? []).length}` : String((v.marks ?? []).length)} />
         )}
-        <Measurement.Readout label="Item" value={clock(v.len, 2)} />
+        <Measurement.Readout label="Item length" value={clock(v.len, 2)} />
       </div>
       <svg viewBox={`0 0 ${SW} ${SH}`} preserveAspectRatio="none" className={styles.stretch} role="img"
         aria-label={v.off ? `${moved} hits moved toward the grid` : `${(v.marks ?? []).length} stretch markers`}>

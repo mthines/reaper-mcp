@@ -1,0 +1,10 @@
+/* A compact segmented switch: the side in use is raised, like the page's view tabs */
+.switch { flex: none; display: inline-flex; padding: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; }
+.switch button {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border: 0; border-radius: 5px; background: none;
+  font: inherit; font-size: 11px; color: var(--muted); cursor: pointer;
+}
+.switch button:hover { color: var(--text); }
+.switch button[aria-pressed='true'] { background: var(--panel-2); color: var(--text); box-shadow: 0 0 0 1px var(--line-2); }
+.switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

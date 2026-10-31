@@ -2,7 +2,7 @@
 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
 .tag { padding: 1px 7px; border: 1px solid var(--line-2); border-radius: 999px; font: 500 10.5px/16px var(--mono); color: var(--muted); }
 .files { display: flex; flex-direction: column; margin-top: 10px; }
-.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(48px, 1.1fr) 42px 38px 38px; gap: 8px; align-items: center; padding: 5px 0; font-size: 12px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(48px, 1.1fr) 42px 44px 46px; gap: 8px; align-items: center; padding: 5px 0; font-size: 12px; }
 .row + .row, .group + .group { border-top: 1px solid var(--line); }
 .head { padding-top: 0; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); }
 .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -23,6 +23,6 @@
   .dur { grid-area: dur; }
   .head { display: none; }
   .lufs::after { content: ' LUFS'; color: var(--faint); }
-  .tp::after { content: ' TP'; color: var(--faint); }
+  .tp::after { content: ' dBTP'; color: var(--faint); }
   .lufs, .tp { white-space: nowrap; }
 }

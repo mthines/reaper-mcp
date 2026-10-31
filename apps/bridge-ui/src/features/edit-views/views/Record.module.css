@@ -11,8 +11,11 @@
 .was { color: var(--faint); font-size: 10px; }
 .changed .now { color: var(--text); border-bottom: 1.5px solid var(--accent); align-self: flex-start; max-width: 100%; }
 .arm.changed { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
-@container (max-width: 300px) {
+/* Five columns need room: under ~420px the input and record mode go on lines of their own */
+@container (max-width: 420px) {
   .rec { grid-template-columns: 10px minmax(0, 1fr) auto; row-gap: 2px; }
   .input { grid-column: 2 / 4; grid-row: 2; }
   .mode { grid-column: 2 / 4; grid-row: 3; }
 }
+.lgArmed { width: 9px; height: 9px; border-radius: 50% !important; background: var(--bad); }
+.lgUnarmed { width: 9px; height: 9px; border-radius: 50% !important; border: 1.5px solid var(--faint); box-sizing: border-box; }

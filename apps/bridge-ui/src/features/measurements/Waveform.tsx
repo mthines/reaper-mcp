@@ -1,5 +1,4 @@
 import { useId, useState, type PointerEvent } from 'react';
-import { PreviousLegend } from './Measurement.js';
 import { Readout } from './Readout.js';
 import { fmt, zoneOf } from './format.js';
 import { parseParams, type CommandEntry, type Measurement } from '../../lib/commands.js';
@@ -96,7 +95,12 @@ export function Waveform({ m, entry, previous }: { m: Extract<Measurement, { kin
         <span>{start.toFixed(1)} s</span>
         <span>{end.toFixed(1)} s</span>
       </div>
-      {previous && <PreviousLegend />}
+      <div className={chartStyles.measureLegend}>
+        <span><i className={chartStyles.lgLine} /> This call</span>
+        {previous && <span><i className={chartStyles.lgPrevious} /> Previous call</span>}
+        {(m.peakDb ?? -150) > -6 && <span><i className={chartStyles.lgWarn} /> Within 6 dB of clipping</span>}
+        {clipped && <span><i className={chartStyles.lgBad} /> Clipping</span>}
+      </div>
     </>
   );
 }

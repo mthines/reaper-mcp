@@ -8,8 +8,8 @@ export function Plan({ v }: { v: Extract<EditView, { kind: "plan" }> }) {
   return (
     <>
       <div className={chartStyles.measureReadouts}>
-        <Measurement.Readout label="Ops" value={String(v.total)} />
-        <Measurement.Readout label="Mode" value={v.dryRun ? "Dry run" : "Applied"} />
+        <Measurement.Readout label="Steps" value={String(v.total)} />
+        <Measurement.Readout label="Result" value={v.dryRun ? "Dry run" : "Applied"} />
       </div>
       <ol className={styles.evPlan}>
         {v.ops.map(([op, what], i) => (
@@ -24,7 +24,7 @@ export function Plan({ v }: { v: Extract<EditView, { kind: "plan" }> }) {
       </ol>
       {v.total > v.ops.length && (
         <div className={chartStyles.evMore}>
-          +{v.total - v.ops.length} more ops not listed
+          +{v.total - v.ops.length} more steps not listed
         </div>
       )}
       {v.dryRun && (

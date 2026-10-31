@@ -8,3 +8,4 @@
 .kept { stroke: var(--muted); stroke-width: 1.4; }
 .lgGrid { width: 2px; height: 10px; background: var(--line-2); }
 .lgKept { width: 2px; height: 10px; background: var(--muted); }
+.lgMove { width: 12px; height: 2px; background: var(--accent); opacity: 0.6; }

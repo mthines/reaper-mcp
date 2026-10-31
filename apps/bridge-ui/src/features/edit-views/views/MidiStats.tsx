@@ -64,7 +64,7 @@ export function MidiStats({ v }: { v: Extract<EditView, { kind: "midiStats" }> }
         ))}
       </div>
       <div className={cx(chartStyles.measureScaleWords, 'mono')}>
-        <span>vel 1</span>
+        <span>velocity 1</span>
         <span>64</span>
         <span>127</span>
       </div>
@@ -87,6 +87,7 @@ export function MidiStats({ v }: { v: Extract<EditView, { kind: "midiStats" }> }
         items={[
           [chartStyles.lgRange, "Velocity range"],
           [chartStyles.lgTick, "Average"],
+          ...(v.hist && v.hist.length > 1 ? [[styles.lgHist, "Notes per velocity"] as [string, string]] : []),
         ]}
       />
     </>

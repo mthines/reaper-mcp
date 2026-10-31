@@ -22,7 +22,7 @@ paths: ["**/*.ts", "**/*.json"]
 
 ## Adding MCP Tools
 
-Every new tool requires changes in 6 places (always update all 6):
+Every new tool requires changes in 8 places (always update all 8):
 
 1. `libs/protocol/src/commands.ts` -- Add to `CommandType` union + params interface
 2. `libs/protocol/src/responses.ts` -- Add response data interface if needed
@@ -30,6 +30,8 @@ Every new tool requires changes in 6 places (always update all 6):
 4. `apps/reaper-mcp-server/src/cli.ts` -- Add tool name to `MCP_TOOL_NAMES`
 5. `apps/reaper-mcp-server/src/tools/categories.ts` -- Add tool name to a category in `TOOL_CATEGORIES`
 6. `reaper/mcp_bridge.lua` -- Add handler to the `handlers` table
+7. `apps/bridge-ui/src/demo/demo-calls.ts` -- Add the command to `DEMO_CALLS` (params, or `'example'` when `src/demo/examples.ts` draws it) so the bridge page's `?demo` logs it; typed `Record<LoggedCommand, …>`, so typecheck fails without it
+8. `apps/bridge-ui/src/features/log/tools.ts` -- Add the command to `TOOLS` (`title` + `did` sentence for the drawer; rules in `.claude/rules/bridge-drawer.md`); also typed `Record<LoggedCommand, …>`
 
 If you miss any of these, the tool will either not compile, not be registered, or silently fail at runtime.
 
