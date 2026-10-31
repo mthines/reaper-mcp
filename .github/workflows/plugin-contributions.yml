@@ -19,7 +19,8 @@ name: Plugin contributions
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled]
-    paths: ['knowledge/contributions/**']
+    # The folder's README is documentation: a PR that only edits it (or edits it alongside code) is no contribution
+    paths: ['knowledge/contributions/**', '!knowledge/contributions/README.md']
   workflow_dispatch:
     inputs:
       dry_run:
