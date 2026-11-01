@@ -220,6 +220,14 @@ describe('settings and params', () => {
     expect(measurementOf({ ...base, c: 'separate_stems', r: { stems: [] } })).toBeNull();
   });
 
+  it('reads detected chords: spans with a chord name, else nothing', () => {
+    const base = { n: 1, t: 0, ms: 1, ok: true, c: 'detect_chords' };
+    expect(measurementOf({ ...base, r: { key: 'A minor', src: 'midi', per: 'bar', start: 0, end: 4, ch: [[0, 2, 'Am', 'i'], [2, 4, 'F'], 'junk', [4, 'x', 'C', '']] } })).toEqual({
+      kind: 'chords', key: 'A minor', src: 'midi', per: 'bar', start: 0, end: 4, ch: [[0, 2, 'Am', 'i'], [2, 4, 'F', '']],
+    });
+    expect(measurementOf({ ...base, r: { key: 'A minor', ch: [] } })).toBeNull();
+  });
+
   it('reads a detected key: twelve chroma bins and the key, else nothing', () => {
     const base = { n: 1, t: 0, ms: 1, ok: true, c: 'detect_key' };
     const chroma = [1, 0, 0.4, 0, 0.7, 0.3, 0, 0.8, 0, 0.5, 0, 0.2];

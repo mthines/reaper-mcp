@@ -77,12 +77,22 @@ export interface AlignParams {
   maxLagMs?: number;
 }
 
-/** Params of the sidecar's chroma method (pitch-class energy, for detect_key). */
+/** Params of the sidecar's chroma method (pitch-class energy, for detect_key and detect_chords). */
 export interface ChromaParams {
   path: string;
   /** Seconds into the file */
   startTime?: number;
   endTime?: number;
+  /** [start, end] in seconds from startTime: each segment's chroma too (detect_chords) */
+  segments?: [number, number][];
+}
+
+export interface ChromaResult {
+  chroma: number[];
+  durationSeconds: number;
+  frames: number;
+  /** One 12-bin chroma per requested segment (12 zeros for a silent one) */
+  segments?: number[][];
 }
 
 /** Params of the sidecar's transients method. */
@@ -150,7 +160,7 @@ export interface SidecarClient {
   /** Split a file into stems (Demucs). Runs for minutes on long audio: pass a timeout. */
   separate(params: SeparateParams, timeoutMs: number): Promise<Record<string, unknown>>;
   /** 12 pitch-class energies, C first, normalized so the largest is 1. */
-  chroma(params: ChromaParams): Promise<{ chroma: number[]; durationSeconds: number; frames: number }>;
+  chroma(params: ChromaParams): Promise<ChromaResult>;
   /** Terminate the sidecar process. Safe to call even if not running. */
   shutdown(): void;
 }
@@ -230,8 +240,8 @@ class SidecarClientImpl implements SidecarClient {
     return this.call('separate', { ...params }, Math.max(timeoutMs, ANALYZE_TIMEOUT_MS)) as Promise<Record<string, unknown>>;
   }
 
-  chroma(params: ChromaParams): Promise<{ chroma: number[]; durationSeconds: number; frames: number }> {
-    return this.call('chroma', { ...params }) as Promise<{ chroma: number[]; durationSeconds: number; frames: number }>;
+  chroma(params: ChromaParams): Promise<ChromaResult> {
+    return this.call('chroma', { ...params }) as Promise<ChromaResult>;
   }
 
   /**

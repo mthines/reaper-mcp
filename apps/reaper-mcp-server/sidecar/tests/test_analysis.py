@@ -234,3 +234,16 @@ def test_chroma_skips_silence_and_returns_zeros_for_it():
     result = analysis.chroma(audio, 44100)
     assert result["chroma"] == [0.0] * 12
     assert result["frames"] == 0
+
+
+def test_chroma_per_segment_follows_a_chord_change_and_zeros_a_silent_segment():
+    # Two seconds of C major (C E G), two of A minor (A C E), then a second of silence
+    c_major, sr = _tones([261.63, 329.63, 392.00], seconds=2.0)
+    a_minor, _ = _tones([220.0, 261.63, 329.63], seconds=2.0)
+    audio = np.concatenate([c_major, a_minor, np.zeros((2, sr), dtype=np.float32)], axis=1)
+    result = analysis.chroma(audio, sr, segments=[[0.2, 1.8], [2.2, 3.8], [4.2, 4.9]])
+    first, second, silent = result["segments"]
+    assert sorted(sorted(range(12), key=lambda i: -first[i])[:3]) == [0, 4, 7]
+    assert sorted(sorted(range(12), key=lambda i: -second[i])[:3]) == [0, 4, 9]
+    assert silent == [0.0] * 12
+    assert len(result["chroma"]) == 12

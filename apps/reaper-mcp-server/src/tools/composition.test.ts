@@ -135,3 +135,91 @@ describe('detect_key', () => {
     expect(silent.content[0].text).toMatch(/No pitched content/);
   });
 });
+
+describe('detect_key with itemIndex', () => {
+  it("reads the key over the item's own range", async () => {
+    let profileRange: Record<string, unknown> = {};
+    sendCommandMock.mockImplementation(async (type, params) => {
+      if ((type as string) === '_item_range') return ok({ startTime: 8, endTime: 16 });
+      if ((type as string) === '_midi_pitch_profile') {
+        profileRange = params as Record<string, unknown>;
+        return ok({ chroma: C_MAJOR, notes: 12, midiItems: 1, audioItems: 0 });
+      }
+      return ok({});
+    });
+    const res = json(await tool('detect_key')({ trackIndex: 2, itemIndex: 1 }));
+    expect(res.key).toBe('C major');
+    expect(profileRange).toMatchObject({ startTime: 8, endTime: 16 });
+  });
+
+  it('refuses an item on the master or together with a time range', async () => {
+    expect((await tool('detect_key')({ trackIndex: -1, itemIndex: 0 })).content[0].text).toMatch(/master holds no items/);
+    expect((await tool('detect_key')({ trackIndex: 0, itemIndex: 0, startTime: 2 })).content[0].text).toMatch(/not both/);
+  });
+});
+
+describe('detect_chords', () => {
+  const tri = (...pcs: number[]) => Array.from({ length: 12 }, (_, i) => (pcs.includes(i) ? 4 : 0));
+  const grid = (n: number, start = 0) => Array.from({ length: n }, (_, i) => ({ start: start + i * 2, end: start + i * 2 + 2, bar: i + 1, beat: 1 }));
+
+  it('reads the chords of a MIDI track bar by bar, with the key, roman numerals and bass notes', async () => {
+    sendCommandMock.mockImplementation(async (type) => (type as string) === '_chord_grid'
+      ? ok({ startTime: 0, endTime: 8, segments: grid(4), notes: 30, midiItems: 1, audioItems: 0,
+        profiles: [tri(9, 0, 4), tri(2, 5, 9), tri(4, 8, 11), tri(9, 0, 4)], bass: [45, 50, 56, 45] })
+      : ok({}));
+    const res = json(await tool('detect_chords')({ trackIndex: 0 }));
+    expect(res).toMatchObject({ source: 'midi', per: 'bar', startTime: 0, endTime: 8, progression: 'Am Dm E/Ab Am', total: 4, hasMore: false });
+    expect(res.key.key).toBe('A minor');
+    expect(res.chords[0]).toMatchObject({ chord: 'Am', roman: 'i', bar: 1, bassMidi: 33 });
+    expect(res.chords[1]).toMatchObject({ chord: 'Dm', roman: 'iv' });
+    expect(res.chords[2]).toMatchObject({ chord: 'E/Ab', roman: 'V', bass: 'Ab', bassMidi: 32 });
+  });
+
+  it('pages through the chord spans', async () => {
+    sendCommandMock.mockImplementation(async (type) => (type as string) === '_chord_grid'
+      ? ok({ startTime: 0, endTime: 8, segments: grid(4), notes: 30, profiles: [tri(9, 0, 4), tri(5, 9, 0), tri(0, 4, 7), tri(7, 11, 2)], bass: [-1, -1, -1, -1] })
+      : ok({}));
+    const res = json(await tool('detect_chords')({ trackIndex: 0, offset: 1, limit: 2 }));
+    expect(res.chords.map((c: { chord: string }) => c.chord)).toEqual(['F', 'C']);
+    expect(res).toMatchObject({ total: 4, offset: 1, hasMore: true });
+  });
+
+  it('renders the audio and reads each bar from the sidecar when the track has no MIDI', async () => {
+    const chroma = vi.fn().mockResolvedValue({ chroma: tri(2, 6, 9, 7, 11), durationSeconds: 4, frames: 40, segments: [tri(2, 6, 9), tri(7, 11, 2)] });
+    vi.mocked(getSidecarClient).mockReturnValue({ isAvailable: () => true, chroma } as never);
+    sendCommandMock.mockImplementation(async (type) => {
+      if ((type as string) === '_chord_grid') return ok({ startTime: 10, endTime: 14, segments: grid(2, 10), notes: 0 });
+      if (type === 'render_track_to_wav') return ok({ wavPath: join(dir, 'missing-render.wav'), trackName: 'Gtr', durationSeconds: 4 });
+      return ok({});
+    });
+    const res = json(await tool('detect_chords')({ trackIndex: 1, itemIndex: 3 }));
+    expect(res).toMatchObject({ source: 'audio', name: 'Gtr', itemIndex: 3, progression: 'D G' });
+    // The sidecar is asked for the bars relative to the render's start
+    expect(chroma.mock.calls[0][0].segments).toEqual([[0, 2], [2, 4]]);
+  });
+
+  it('cuts an audio file into bars at its tempo, ending at the file end', async () => {
+    const chroma = vi.fn().mockResolvedValue({ chroma: tri(0, 4, 7, 5, 9), durationSeconds: 5, frames: 50,
+      segments: [tri(0, 4, 7), tri(5, 9, 0), tri(0, 4, 7), new Array(12).fill(0)] });
+    vi.mocked(getSidecarClient).mockReturnValue({ isAvailable: () => true, chroma } as never);
+    const res = json(await tool('detect_chords')({ path: join(dir, 'song.wav'), bpm: 120, endTime: 8 }));
+    expect(chroma.mock.calls[0][0].segments).toEqual([[0, 2], [2, 4], [4, 6], [6, 8]]);
+    // The file is 5 s long: the bar starting at 6 s is past its end
+    expect(res).toMatchObject({ source: 'file', name: 'song.wav', per: 'bar', startTime: 0, endTime: 5, progression: 'C F C' });
+    expect(res.chords[2]).toMatchObject({ start: 4, end: 5, bar: 3 });
+  });
+
+  it('says what is missing: a source, the sidecar for audio, MIDI notes, or too fine a grid', async () => {
+    expect((await tool('detect_chords')({})).content[0].text).toMatch(/exactly one of trackIndex or path/);
+    expect((await tool('detect_chords')({ trackIndex: 0, itemIndex: 0, endTime: 3 })).content[0].text).toMatch(/not both/);
+    vi.mocked(getSidecarClient).mockReturnValue({ isAvailable: () => false } as never);
+    sendCommandMock.mockResolvedValue(ok({ startTime: 0, endTime: 4, segments: grid(2), notes: 0 }));
+    expect((await tool('detect_chords')({ trackIndex: 0 })).content[0].text).toMatch(/sidecar/);
+    expect((await tool('detect_chords')({ trackIndex: 0, source: 'midi' })).content[0].text).toMatch(/no MIDI notes/);
+    vi.mocked(getSidecarClient).mockReturnValue({ isAvailable: () => true } as never);
+    const fine = await tool('detect_chords')({ path: join(dir, 'song.wav'), windowSeconds: 0.1 });
+    expect(fine.content[0].text).toMatch(/More than 4000 segments/);
+    sendCommandMock.mockResolvedValue(fail('track 9 not found'));
+    expect((await tool('detect_chords')({ trackIndex: 9 })).content[0].text).toMatch(/track 9 not found/);
+  });
+});

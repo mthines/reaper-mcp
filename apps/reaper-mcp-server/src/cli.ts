@@ -232,6 +232,7 @@ export const MCP_TOOL_NAMES = [
   'transform_midi',
   'import_midi_file',
   'detect_key',
+  'detect_chords',
   'get_midi_cc',
   'insert_midi_cc',
   'delete_midi_cc',

@@ -254,14 +254,17 @@ def _stft_power(audio: np.ndarray, sample_rate: int, n_fft: int = 4096) -> tuple
 CHROMA_LOW_HZ, CHROMA_HIGH_HZ = 110.0, 4200.0
 
 
-def chroma(audio: np.ndarray, sample_rate: int, n_fft: int = 8192) -> dict:
+def chroma(audio: np.ndarray, sample_rate: int, n_fft: int = 8192, segments: list | None = None) -> dict:
     """
-    Pitch-class energy (C first), for key detection.
+    Pitch-class energy (C first), for key and chord detection.
 
     Each STFT bin from 110 Hz to 4.2 kHz adds its magnitude to the pitch class nearest its
     frequency; every frame is normalized to its own largest class so loud passages do not
     outweigh quiet ones, frames more than 60 dB under the loudest are skipped as silence,
     and the average is scaled so the largest class is 1.
+
+    With `segments` ([start, end] seconds into `audio`), also each segment's chroma: the same
+    average over the frames whose centre falls inside it (12 zeros for a silent segment).
     """
     power, freqs = _stft_power(audio, sample_rate, n_fft)
     band = (freqs >= CHROMA_LOW_HZ) & (freqs <= CHROMA_HIGH_HZ)
@@ -272,13 +275,21 @@ def chroma(audio: np.ndarray, sample_rate: int, n_fft: int = 8192) -> dict:
         frames[pc] = mags[classes == pc].sum(axis=0)
     energy = power[band].sum(axis=0)
     loud = energy > (energy.max() * 1e-6 if energy.size and energy.max() > 0 else np.inf)
-    out = [0.0] * 12
-    if loud.any():
-        kept = frames[:, loud]
-        avg = (kept / np.maximum(kept.max(axis=0, keepdims=True), 1e-12)).mean(axis=1)
+    normed = frames / np.maximum(frames.max(axis=0, keepdims=True), 1e-12)
+
+    def average(mask: np.ndarray) -> list[float]:
+        if not mask.any():
+            return [0.0] * 12
+        avg = normed[:, mask].mean(axis=1)
         top = avg.max()
-        out = [_round(float(v / top), 4) if top > 0 else 0.0 for v in avg]
-    return {"chroma": out, "frames": int(loud.sum()), "durationSeconds": _round(audio.shape[1] / sample_rate, 3)}
+        return [_round(float(v / top), 4) if top > 0 else 0.0 for v in avg]
+
+    out = {"chroma": average(loud), "frames": int(loud.sum()), "durationSeconds": _round(audio.shape[1] / sample_rate, 3)}
+    if segments is not None:
+        hop = n_fft // 2
+        centres = (np.arange(frames.shape[1]) * hop + n_fft / 2) / sample_rate
+        out["segments"] = [average(loud & (centres >= float(a)) & (centres < float(b))) for a, b in segments]
+    return out
 
 
 def band_balance(avg_power: np.ndarray, freqs: np.ndarray) -> dict[str, float | None]:

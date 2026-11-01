@@ -142,14 +142,15 @@ Workflow: [knowledge/workflows/transient-lighting.md](../knowledge/workflows/tra
 | `get_midi_cc` / `insert_midi_cc` / `delete_midi_cc` | CC event management |
 | `get_midi_item_properties` / `set_midi_item_properties` | MIDI item props |
 
-### Composition (4 tools)
+### Composition (5 tools)
 
 | Tool | Description |
 |------|-------------|
 | `quantize_midi` | Snap notes to the grid with strength, swing and a window; keep or quantize lengths |
 | `transform_midi` | Transpose, velocity (set/scale/add/clamp), humanize (seeded), lengths (set/scale/legato) |
 | `import_midi_file` | Import a .mid file as MIDI items, one call, no dialog |
-| `detect_key` | The key of a MIDI track, a rendered track or an audio file, with confidence and the chroma |
+| `detect_key` | The key of a MIDI track, a rendered track, one media item or an audio file, with confidence and the chroma |
+| `detect_chords` | The chords per bar or beat of a MIDI track, a rendered track, one media item or an audio file: progression, roman numerals, bass notes for a bass line |
 
 ### Media Item Editing (11 tools)
 

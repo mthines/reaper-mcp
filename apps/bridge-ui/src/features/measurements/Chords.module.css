@@ -1,0 +1,15 @@
+/* detect_chords: a chord chart that wraps; each chord grows with its length, coloured by its place in the key */
+.chart { display: flex; flex-wrap: wrap; gap: 3px; margin: 10px 0 4px; padding: 0; list-style: none; }
+.chord {
+  display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 3.4em; padding: 4px 6px;
+  border-radius: 3px; border: 1px solid transparent; background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.chord:where([data-place='out']) { background: color-mix(in srgb, var(--warn) 22%, transparent); }
+.chord:where([data-place='none']) { background: transparent; border: 1px dashed var(--line-2); }
+.chord:where([data-place='unknown']) { background: color-mix(in srgb, var(--faint) 25%, transparent); }
+.name { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.chord:where([data-place='none']) .name { color: var(--faint); font-weight: 400; }
+.roman { min-height: 1.2em; font-size: 10px; color: var(--muted); white-space: nowrap; }
+.lgIn { width: 10px; height: 10px; border-radius: 2px; background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.lgOut { width: 10px; height: 10px; border-radius: 2px; background: color-mix(in srgb, var(--warn) 22%, transparent); }
+.lgNone { width: 10px; height: 10px; border-radius: 2px; border: 1px dashed var(--line-2); }

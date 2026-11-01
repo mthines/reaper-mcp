@@ -4296,7 +4296,10 @@ function handlers.import_midi_file(params) return ext.midi.run("import", params)
 -- Internal (detect_key on a MIDI track): not logged, not counted, but refused while paused,
 -- since it answers an agent's tool call (a read, so read-only mode allows it)
 handlers["_midi_pitch_profile"] = function(params) return ext.midi.run("pitch_profile", params) end
-ext.paused_too = { _midi_pitch_profile = true }
+-- Internal, likewise: detect_chords' bar/beat grid (+ MIDI profiles), and an item's range (itemIndex)
+handlers["_chord_grid"] = function(params) return ext.midi.run("chord_grid", params) end
+handlers["_item_range"] = function(params) return ext.midi.run("item_range", params) end
+ext.paused_too = { _midi_pitch_profile = true, _chord_grid = true, _item_range = true }
 
 -- =============================================================================
 -- Arrangement: copy items, insert/remove time, copy a section, process items
@@ -5103,7 +5106,7 @@ for _, c in ipairs({
   "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
   "detect_transients", "create_transient_automation", "insert_stem_tracks",
   "analyze_loudness_curve", "analyze_stereo_bands", "measure_masking", "separate_stems",
-  "freeze_tracks", "unfreeze_tracks", "apply_fx_to_items", "quantize_audio", "detect_key", "import_midi_file", "process_items",
+  "freeze_tracks", "unfreeze_tracks", "apply_fx_to_items", "quantize_audio", "detect_key", "detect_chords", "import_midi_file", "process_items",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
 local HISTORY_LONG_PUBLISH_INTERVAL = 10

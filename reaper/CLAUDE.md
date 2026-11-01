@@ -16,7 +16,7 @@ Files installed INTO the REAPER DAW by the `setup` command. These run inside REA
 | `mcp_arrange_lib.lua` | Lua | Copy items, insert/remove time, copy a section, normalize/reverse/glue |
 | `mcp_envelopes_lib.lua` | Lua | Envelopes, points (dB through the envelope's scaling), pooled automation items |
 | `mcp_mixing_lib.lua` | Lua | Automation mode, FX modulation and pins, monitoring FX, freeze, apply FX, stretch markers and audio quantize |
-| `mcp_midi_lib.lua` | Lua | Quantize, transform, MIDI file import, pitch-class profile for detect_key |
+| `mcp_midi_lib.lua` | Lua | Quantize, transform, MIDI file import, pitch-class profile for detect_key, bar/beat grid + per-segment profiles for detect_chords |
 | `mcp_edit_views_lib.lua` | Lua | Status page results and before/after edit views |
 | `mcp_snapshot_lib.lua` | Lua | Shared library for snapshot action scripts (path helpers, JSON, restore logic) |
 | `mcp_snapshots_ui_lib.lua` | Lua | Status page Snapshots view: lists the folder, runs page restore/save requests through the bridge's dispatcher |

@@ -73,7 +73,7 @@ reaper-mcp/
         aesthetics.ts         # analyze_track_aesthetics (requires Python sidecar)
         offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment (sidecar, no model)
         transients.ts         # detect_transients, create_transient_automation (sidecar onsets → envelope pulses, e.g. lighting)
-        composition.ts        # quantize_midi, transform_midi, import_midi_file (SMF parsed in smf.ts), detect_key (key.ts; logic in reaper/mcp_midi_lib.lua)
+        composition.ts        # quantize_midi, transform_midi, import_midi_file (SMF parsed in smf.ts), detect_key (key.ts), detect_chords (chords.ts; logic in reaper/mcp_midi_lib.lua)
         mixcheck.ts           # analyze_loudness_curve, analyze_stereo_bands, measure_masking, separate_stems (sidecar)
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
         recording.ts          # record setup (inputs, monitoring, punch), fixed lanes, comp_lanes (logic in reaper/mcp_recording_lib.lua)
@@ -143,7 +143,7 @@ reaper-mcp/
     mcp_project_lib.lua       # Project ops, tempo map + marker editing (pure Lua, unit-tested via wasmoon)
     mcp_envelopes_lib.lua     # Envelopes, points (dB through the envelope's scaling) and pooled automation items (pure Lua, unit-tested via wasmoon)
     mcp_mixing_lib.lua        # Automation mode, FX modulation/pins, monitoring FX, freeze, apply FX, stretch markers + audio quantize (pure Lua, unit-tested via wasmoon)
-    mcp_midi_lib.lua          # Quantize, transform, MIDI file import, pitch-class profile (pure Lua, unit-tested via wasmoon)
+    mcp_midi_lib.lua          # Quantize, transform, MIDI file import, pitch-class profile, chord grid (pure Lua, unit-tested via wasmoon)
     mcp_items_lib.lua         # Items, takes, take FX, FX move/copy/rename, FX chains, track templates (pure Lua, unit-tested via wasmoon)
     mcp_recording_lib.lua     # Record inputs/monitoring/modes, punch, fixed lanes and comping (pure Lua, unit-tested via wasmoon)
     mcp_arrange_lib.lua       # Copy items, insert/remove time, copy a section, normalize/reverse/glue (pure Lua, unit-tested via wasmoon)
@@ -175,7 +175,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | Vite + React Compiler → single HTML | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (181 total)
+## MCP Tools (182 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -243,14 +243,15 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `get_midi_item_properties` | `tools/midi.ts` | Get MIDI item properties (position, length, note/CC count, mute, loop) |
 | `set_midi_item_properties` | `tools/midi.ts` | Set MIDI item properties (position, length, mute, loop source) |
 
-### Composition (4)
+### Composition (5)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `quantize_midi` | `tools/composition.ts` | Snap notes to the project grid: grid (beats), strength, swing, window, `lengths` keep/quantize; all notes or a selection (indexes, pitch range, channel) |
 | `transform_midi` | `tools/composition.ts` | Transpose (refused out of 0-127), velocity set/scale/add + clamp, humanize (seeded), length set/scale/legato |
 | `import_midi_file` | `tools/composition.ts` | Import a .mid (type 0/1, ≤5 MB, ≤20000 notes) without REAPER's dialog: merged onto a track or one new named track per file track; file tempo reported, not applied |
-| `detect_key` | `tools/composition.ts` | Key from a track's MIDI notes (drums skipped) or rendered audio / an audio file (sidecar chroma): key, confidence, relative, top 3, 12-bin chroma |
+| `detect_key` | `tools/composition.ts` | Key from a track's MIDI notes (drums skipped) or rendered audio / an audio file (sidecar chroma): key, confidence, relative, top 3, 12-bin chroma; `itemIndex` reads one item's range |
+| `detect_chords` | `tools/composition.ts` | Chords per bar or beat (project tempo map; a file by `bpm` or windows) from MIDI notes or rendered audio / a file (sidecar chroma per segment): key, progression, spans with roman numeral, slash bass (MIDI) and `bassMidi` for a bass line; `itemIndex`, paginated |
 
 ### Live MIDI Output (3)
 
@@ -507,7 +508,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 181 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 182 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
@@ -522,7 +523,7 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, 
 - **Batch operations** (`insert_midi_notes`, `edit_midi_notes`): Pass a JSON array of note objects for efficient multi-note operations
 - The Lua bridge includes a fallback JSON array parser for REAPER versions without `CF_Json_Parse`
 - **Undo**: a MIDI API edit (`MIDI_SetNote`, `MIDI_InsertNote`, …) leaves the item unmarked, so REAPER folds it into the previous MIDI undo point. Every MIDI write calls `MarkTrackItemsDirty(track, item)` before `Undo_EndBlock` (seen in REAPER 7.40)
-- **Composition** (`mcp_midi_lib.lua`): quantize snaps to the project's beats, not the item start; swing pushes every second grid line later. Humanize is reproducible from `seed`. `detect_key` correlates the 12-bin profile with the Krumhansl-Kessler key profiles (`key.ts`); confidence is the gap to the best key that is not the relative key, scaled down for a flat profile and by the best key's correlation
+- **Composition** (`mcp_midi_lib.lua`): quantize snaps to the project's beats, not the item start; swing pushes every second grid line later. Humanize is reproducible from `seed`. `detect_key` correlates the 12-bin profile with the Krumhansl-Kessler key profiles (`key.ts`); confidence is the gap to the best key that is not the relative key, scaled down for a flat profile and by the best key's correlation. `detect_chords` matches each bar's/beat's profile (cosine) against root × quality templates (triads preferred, in-key chords +0.03), holds the previous chord unless a new one wins by 0.03, and merges equal neighbours (`chords.ts`); the grid comes from the internal `_chord_grid` (bars/beats via `TimeMap_GetMeasureInfo`, MIDI profiles and the lowest note held ≥ ¼ of the segment)
 - **A MIDI or arrangement write that fails half way is undone** (an import leaves no new tracks). The failed block is closed under its own `… (failed — reverting)` label and undone only when that label is on top, so a failure that wrote nothing never undoes an earlier edit, the same rule as `run_plan`.
 
 ### Media Item Editing Concepts

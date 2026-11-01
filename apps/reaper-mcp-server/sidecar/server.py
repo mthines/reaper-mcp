@@ -423,7 +423,8 @@ def handle_chroma(request_id: Any, params: dict) -> str:
     """
     Pitch-class energy of a file (C first, largest = 1), for key detection.
 
-    params: path, startTime?, endTime? (seconds into the file)
+    params: path, startTime?, endTime? (seconds into the file), segments? ([start, end] pairs in
+    seconds from startTime: each segment's chroma too, for chord detection)
     """
     import analysis
 
@@ -434,7 +435,11 @@ def handle_chroma(request_id: Any, params: dict) -> str:
         audio, sr = analysis.load_audio(params["path"], float(params.get("startTime", 0)), params.get("endTime"))
         if audio.shape[1] < int(0.5 * sr):
             return _err(request_id, -32000, "Audio too short: need at least 0.5 s")
-        return _ok(request_id, analysis.chroma(audio, sr))
+        segments = params.get("segments")
+        if segments is not None and (not isinstance(segments, list) or len(segments) > 4000 or not all(
+                isinstance(x, list) and len(x) == 2 and all(isinstance(v, (int, float)) for v in x) for x in segments)):
+            return _err(request_id, -32602, "segments must be a list of at most 4000 [start, end] pairs")
+        return _ok(request_id, analysis.chroma(audio, sr, segments=segments))
     except Exception as exc:  # noqa: BLE001
         return _err(request_id, -32000, f"Chroma failed: {exc}")
 
