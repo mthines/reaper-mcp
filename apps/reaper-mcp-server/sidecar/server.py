@@ -419,11 +419,43 @@ def handle_separation_status(request_id: Any, params: dict) -> str:
     return _ok(request_id, {"installed": separation.is_installed(), "message": separation.NOT_INSTALLED})
 
 
+def handle_chords(request_id: Any, params: dict) -> str:
+    """
+    Chord segments of a file with lv-chordia (opt-in install), Harte labels.
+
+    params: path, startTime?, endTime? (seconds into the file), vocabulary? (submission|ismir2017|full)
+    """
+    import chords
+
+    error = _check_file(request_id, params, "path")
+    if error:
+        return error
+    try:
+        end = params.get("endTime")
+        return _ok(request_id, chords.recognize(
+            params["path"], float(params.get("startTime", 0)), None if end is None else float(end),
+            str(params.get("vocabulary", "submission"))))
+    except ValueError as exc:
+        return _err(request_id, -32602, str(exc))
+    except RuntimeError as exc:
+        return _err(request_id, -32000, str(exc))
+    except Exception as exc:  # noqa: BLE001
+        return _err(request_id, -32000, f"Chord recognition failed: {exc}")
+
+
+def handle_chords_status(request_id: Any, params: dict) -> str:
+    """Whether the chord model is installed, so a caller can pick the template engine instead."""
+    import chords
+
+    return _ok(request_id, chords.status())
+
+
 def handle_chroma(request_id: Any, params: dict) -> str:
     """
     Pitch-class energy of a file (C first, largest = 1), for key detection.
 
-    params: path, startTime?, endTime? (seconds into the file)
+    params: path, startTime?, endTime? (seconds into the file), segments? ([start, end] pairs in
+    seconds from startTime: each segment's chroma too, for chord detection)
     """
     import analysis
 
@@ -434,7 +466,11 @@ def handle_chroma(request_id: Any, params: dict) -> str:
         audio, sr = analysis.load_audio(params["path"], float(params.get("startTime", 0)), params.get("endTime"))
         if audio.shape[1] < int(0.5 * sr):
             return _err(request_id, -32000, "Audio too short: need at least 0.5 s")
-        return _ok(request_id, analysis.chroma(audio, sr))
+        segments = params.get("segments")
+        if segments is not None and (not isinstance(segments, list) or len(segments) > 4000 or not all(
+                isinstance(x, list) and len(x) == 2 and all(isinstance(v, (int, float)) for v in x) for x in segments)):
+            return _err(request_id, -32602, "segments must be a list of at most 4000 [start, end] pairs")
+        return _ok(request_id, analysis.chroma(audio, sr, segments=segments))
     except Exception as exc:  # noqa: BLE001
         return _err(request_id, -32000, f"Chroma failed: {exc}")
 
@@ -452,6 +488,8 @@ METHODS = {
     "masking": handle_masking,
     "separate": handle_separate,
     "separation_status": handle_separation_status,
+    "chords": handle_chords,
+    "chords_status": handle_chords_status,
 }
 
 

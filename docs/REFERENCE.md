@@ -226,7 +226,7 @@ from the clone (`npm run doctor` / `npm run setup` are shortcuts):
 |---------|-------------|
 | `reaper-mcp` / `reaper-mcp serve` | Start the MCP server in stdio mode (what Claude Code runs) |
 | `reaper-mcp setup` | Install the Lua bridge, snapshot scripts, JSFX and status page into REAPER; enable the web interface |
-| `reaper-mcp setup-sidecar` | Install the optional Python sidecar (perceptual analysis) |
+| `reaper-mcp setup-sidecar` | Install the optional Python sidecar: a picker in a terminal; `--yes`, `--all`, `--with-separation`, `--with-chords`, `--without-aesthetics`, `--list [--json]` for agents and CI |
 | `reaper-mcp init` | Configure Claude Code — tool allow-list + `.mcp.json` (copy-free) |
 | `reaper-mcp doctor` | Verify everything is configured correctly |
 | `reaper-mcp status` | Check bridge connection |
@@ -309,7 +309,7 @@ out of version control.
 ```
 reaper-mcp/
 ├── apps/
-│   ├── reaper-mcp-server/        # MCP server (181 tools, esbuild bundle)
+│   ├── reaper-mcp-server/        # MCP server (182 tools, esbuild bundle)
 │   └── bridge-ui/                # Bridge status page (React → one self-contained HTML file)
 ├── libs/protocol/                # Shared TypeScript types
 ├── .claude/skills/               # Mix skills (/mixer, /critique, /mastering, /learn-plugin, /mix-memory)

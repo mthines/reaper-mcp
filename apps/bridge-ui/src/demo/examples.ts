@@ -179,6 +179,16 @@ function measurementExampleList(): Example[] {
     chroma: [0.55, 0.42, 1, 0.38, 0.71, 0.49, 0.83, 0.77, 0.44, 0.92, 0.4, 0.58],
   }, { ms: 4_820 });
 
+  const chords = call('detect_chords', { trackIndex: 7 }, {
+    src: 'midi', key: 'A minor', per: 'bar', start: 0, end: 32,
+    ch: [[0, 4, 'Am', 'i'], [4, 8, 'F', 'VI'], [8, 12, 'C', 'III'], [12, 16, 'G', 'VII'], [16, 20, 'Am', 'i'], [20, 24, 'F', 'VI'],
+      [24, 28, 'Dm7', 'iv7'], [28, 30, 'E7', 'V7'], [30, 32, 'N', '']],
+  }, { ms: 120 });
+  const chordsAudio = call('detect_chords', { trackIndex: 3, itemIndex: 2, per: 'beat' }, {
+    name: 'Gtr Bus', src: 'audio', key: 'D major', per: 'beat', start: 48, end: 56,
+    ch: [[48, 50, 'D', 'I'], [50, 51, 'A/C#', 'V'], [51, 52, 'Bm', 'vi'], [52, 54, 'G', 'IV'], [54, 55, 'Bb', '♭VI'], [55, 56, 'A', 'V']],
+  }, { ms: 5_210 });
+
   return [
     example('Meters', meters, 'Comfortable levels'),
     example('Meters · hot', metersHot, 'Peaks above −6 dB turn amber, previous call ghosted', earlier(metersHot, { peakL: -6.8, peakR: -7.4, rmsL: -18.2, rmsR: -18.9 })),
@@ -203,6 +213,9 @@ function measurementExampleList(): Example[] {
     example('Aesthetics', aesthetics, 'Four scores on 0–10; previous call ghosted', earlier(aesthetics, { name: 'Master', pq: 7.18, pc: 5.9, ce: 6.4, cu: 6.95, lufs: -18, dur: 30 })),
     example('Key · MIDI', key, 'A minor from the notes: scale tones lit, the tonic strongest', earlier(key, { src: 'midi', key: 'C major', tonic: 'C', mode: 'major', r: 0.8, conf: 0.4, rel: 'A minor', alt: [], chroma: [1, 0.04, 0.4, 0.06, 0.7, 0.35, 0.03, 0.8, 0.05, 0.6, 0.07, 0.2] })),
     example('Key · audio, unsure', keyAudio, 'A dense guitar bus: low confidence flagged'),
+    example('Chords · MIDI, per bar', chords, 'One chord per bar in A minor, with roman numerals; the last bar holds no chord',
+      earlier(chords, { src: 'midi', key: 'A minor', per: 'bar', start: 0, end: 16, ch: [[0, 8, 'Am', 'i'], [8, 16, 'F', 'VI']] })),
+    example('Chords · audio, per beat', chordsAudio, 'One media item, per beat: a borrowed ♭VI outside the key, a slash chord'),
     example('Loudness curve', curve, 'Short-term loudness against −14 LUFS: spans over target shaded, previous call dashed; hover for values',
       earlier(curve, { ...curveR, lufs: -9.1, curve: song(1.3), over: [[28, 80, -7.3], [100, 165, -6.5]] })),
     example('Loudness curve · short clip', curveShort, 'Under 3 s: momentary only, no target'),

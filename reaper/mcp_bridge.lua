@@ -4305,7 +4305,10 @@ function handlers.import_midi_file(params) return ext.midi.run("import", params)
 -- Internal (detect_key on a MIDI track): not logged, not counted, but refused while paused,
 -- since it answers an agent's tool call (a read, so read-only mode allows it)
 handlers["_midi_pitch_profile"] = function(params) return ext.midi.run("pitch_profile", params) end
-ext.paused_too = { _midi_pitch_profile = true }
+-- Internal, likewise: detect_chords' bar/beat grid (+ MIDI profiles), and an item's range (itemIndex)
+handlers["_chord_grid"] = function(params) return ext.midi.run("chord_grid", params) end
+handlers["_item_range"] = function(params) return ext.midi.run("item_range", params) end
+ext.paused_too = { _midi_pitch_profile = true, _chord_grid = true, _item_range = true }
 
 -- =============================================================================
 -- Arrangement: copy items, insert/remove time, copy a section, process items
@@ -4530,6 +4533,7 @@ function handlers.render_track_to_wav(params)
   local saved_file     = ({reaper.GetSetProjectInfo_String(0, "RENDER_FILE",       "", false)})[2] or ""
   local saved_pattern  = ({reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN",    "", false)})[2] or ""
   local saved_format   = ({reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT",     "", false)})[2] or ""
+  local saved_format2  = ({reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT2",    "", false)})[2] or ""
   local saved_bounds   = reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", 0, false)
   local saved_settings = reaper.GetSetProjectInfo(0, "RENDER_SETTINGS",   0, false)
   local saved_start    = reaper.GetSetProjectInfo(0, "RENDER_STARTPOS",   0, false)
@@ -4573,6 +4577,9 @@ function handlers.render_track_to_wav(params)
     -- independent of whatever the user last rendered. Restored in finally.
     -- "evaw" is the little-endian "wave" fourcc REAPER uses for WAV format.
     reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT", "evaw", true)
+    -- No secondary file: a format that cannot write at this rate (a video format a new project inherits)
+    -- stops the render on a modal error, which blocks the bridge until someone closes it
+    reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT2", "", true)
     reaper.GetSetProjectInfo(0, "RENDER_SRATE",    sample_rate, true)
     reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", 2,           true)
     reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE", 0, true)
@@ -4600,6 +4607,7 @@ function handlers.render_track_to_wav(params)
     reaper.GetSetProjectInfo_String(0, "RENDER_FILE",       saved_file,     true)
     reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN",    saved_pattern,  true)
     reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT",     saved_format,   true)
+    reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT2",    saved_format2,  true)
     reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", saved_bounds,   true)
     reaper.GetSetProjectInfo(0, "RENDER_SETTINGS",   saved_settings, true)
     reaper.GetSetProjectInfo(0, "RENDER_STARTPOS",   saved_start,    true)
@@ -5112,7 +5120,7 @@ for _, c in ipairs({
   "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
   "detect_transients", "create_transient_automation", "insert_stem_tracks",
   "analyze_loudness_curve", "analyze_stereo_bands", "measure_masking", "separate_stems",
-  "freeze_tracks", "unfreeze_tracks", "apply_fx_to_items", "quantize_audio", "detect_key", "import_midi_file", "process_items",
+  "freeze_tracks", "unfreeze_tracks", "apply_fx_to_items", "quantize_audio", "detect_key", "detect_chords", "import_midi_file", "process_items",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
 local HISTORY_LONG_PUBLISH_INTERVAL = 10

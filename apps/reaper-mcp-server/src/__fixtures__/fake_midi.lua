@@ -12,7 +12,7 @@ local PPQ = 960
 local QN_PER_SEC = 2
 
 function new_midi_fake(spec)
-  local api = { writes = 0, undo = {}, tracks = {}, dirty = false }
+  local api = { writes = 0, undo = {}, tracks = {}, dirty = false, master = { name = "MASTER", items = {} } }
 
   local function new_item(tr, it)
     local item = { pos = it.pos or 0, len = it.len or 4, mute = it.mute and 1 or 0, track = tr }
@@ -49,6 +49,17 @@ function new_midi_fake(spec)
     return 0
   end
   function api.TimeMap2_timeToQN(_, t) return t * QN_PER_SEC end
+  function api.TimeMap2_QNToTime(_, q) return q / QN_PER_SEC end
+  -- 4/4 throughout, unless spec.beatsPerBar says otherwise
+  local BEATS = spec.beatsPerBar or 4
+  function api.TimeMap2_timeToBeats(_, t)
+    local q = t * QN_PER_SEC
+    local m = math.floor(q / BEATS + 1e-9)
+    return q - m * BEATS, m, BEATS, q, 4
+  end
+  function api.TimeMap_GetMeasureInfo(_, m) return m * BEATS / QN_PER_SEC, m * BEATS, (m + 1) * BEATS, BEATS, 4, 60 * QN_PER_SEC end
+  function api.GetMasterTrack() return api.master end
+  function api.GetProjectLength() return spec.projectLength or 0 end
 
   function api.MIDI_CountEvts(take) return 1, #take.notes, #take.cc, 0 end
   function api.MIDI_GetNote(take, i)

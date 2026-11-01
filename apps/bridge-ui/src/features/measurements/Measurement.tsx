@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Aesthetics } from './Aesthetics.js';
 import { Alignment } from './Alignment.js';
 import { Key } from './Key.js';
+import { Chords } from './Chords.js';
 import { Loudness } from './Loudness.js';
 import { LoudnessCurve } from './LoudnessCurve.js';
 import { Masking } from './Masking.js';
@@ -49,6 +50,7 @@ const TITLE: Record<Measurement['kind'], string> = {
   alignment: 'Timing and phase',
   aesthetics: 'Sound quality score',
   key: 'Key',
+  chords: 'Chords',
   curve: 'Loudness over time',
   stereo: 'Stereo by band',
   masking: 'Masking',
@@ -109,6 +111,8 @@ function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | un
       return <Aesthetics m={m} was={same('aesthetics', previous)} />;
     case 'key':
       return <Key m={m} was={same('key', previous)} />;
+    case 'chords':
+      return <Chords m={m} />;
     case 'curve':
       return <LoudnessCurve m={m} was={same('curve', previous)} />;
     case 'stereo':
@@ -202,6 +206,8 @@ function headline(m: Measurement): { value: number; label: string; unit: string;
       return v(m.pq, 'Quality', '/ 10', true);
     case 'key':
       return v(m.conf === undefined ? undefined : m.conf * 100, 'Confidence', '%', true);
+    case 'chords':
+      return null;
     case 'curve':
       return v(m.lufs, 'Integrated', 'LUFS');
     case 'stereo': {

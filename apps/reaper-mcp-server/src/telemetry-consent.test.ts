@@ -156,4 +156,26 @@ describe('AnonymizingSpanExporter', () => {
     expect(exported.events).toEqual([]);
     expect(JSON.stringify(exported.attributes) + JSON.stringify(exported.status)).not.toMatch(/Lead Vox|secret|Users/);
   });
+
+  it('keeps how key and chord detection ran, never the chords', async () => {
+    const sink = new tracing.InMemorySpanExporter();
+    const provider = new tracing.BasicTracerProvider({
+      spanProcessors: [new tracing.SimpleSpanProcessor(new AnonymizingSpanExporter(sink))],
+    });
+    provider.getTracer('test').startSpan('tools/call detect_chords', {
+      attributes: {
+        'reaper.chords.source': 'audio',
+        'reaper.chords.engine': 'model',
+        'reaper.chords.count': 8,
+        'reaper.chords.progression': 'C G/B Am7 F',
+      },
+    }).end();
+    await provider.forceFlush();
+
+    expect(sink.getFinishedSpans()[0].attributes).toEqual({
+      'reaper.chords.source': 'audio',
+      'reaper.chords.engine': 'model',
+      'reaper.chords.count': 8,
+    });
+  });
 });

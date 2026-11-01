@@ -1,6 +1,6 @@
 -- mcp_midi_lib.lua — MIDI composition edits: quantize, transform (transpose, velocity,
--- humanize, lengths), import of parsed MIDI file data, and the pitch-class profile
--- detect_key reads.
+-- humanize, lengths), import of parsed MIDI file data, the pitch-class profile detect_key
+-- reads, and the bar/beat grid with per-segment profiles detect_chords reads.
 -- Pure logic over an injected ReaScript API, unit-tested via wasmoon against a fake.
 -- Loaded by mcp_bridge.lua.
 -- Every function checks all of its input before the first write, so a refused request
@@ -376,6 +376,48 @@ end
 -- Pitch-class profile (for detect_key)
 -- -----------------------------------------------------------------------------
 
+-- Every heard note of a track's MIDI items overlapping [t0, t1) as { qs, qe, pitch, w } in project
+-- quarter notes, clipped to the range and the item edges; w = velocity / 127. Unmuted notes of
+-- unmuted items only, drums (GM channel 10) skipped. Also the item counts.
+local function heard_notes(api, tr, t0, t1)
+  local q0 = api.TimeMap2_timeToQN(0, t0)
+  local q1 = t1 and api.TimeMap2_timeToQN(0, t1) or math.huge
+  local out = {}
+  local counts = { notes = 0, midiItems = 0, audioItems = 0, capped = 0 }
+  -- The cap counts only items that overlap the range, so a late range on a long track is still read
+  local read = 0
+  for i = 0, api.CountTrackMediaItems(tr) - 1 do
+    local item = api.GetTrackMediaItem(tr, i)
+    local take = api.GetActiveTake(item)
+    local ipos = api.GetMediaItemInfo_Value(item, "D_POSITION")
+    local overlaps = ipos < (t1 or math.huge) and ipos + api.GetMediaItemInfo_Value(item, "D_LENGTH") > t0
+    if overlaps and read >= M.MAX_PROFILE_ITEMS then counts.capped = counts.capped + 1; overlaps = false end
+    if overlaps then read = read + 1 end
+    if overlaps and take and api.GetMediaItemInfo_Value(item, "B_MUTE") == 0 then
+      if api.TakeIsMIDI(take) then
+        counts.midiItems = counts.midiItems + 1
+        -- Only what the item shows: notes past a trimmed edge are not heard (a loop's repeats count once)
+        local i0 = math.max(q0, api.TimeMap2_timeToQN(0, ipos))
+        local i1 = math.min(q1, api.TimeMap2_timeToQN(0, ipos + api.GetMediaItemInfo_Value(item, "D_LENGTH")))
+        local _, count = api.MIDI_CountEvts(take)
+        for n = 0, count - 1 do
+          local _, _, muted, s, e, chan, pitch, vel = api.MIDI_GetNote(take, n)
+          local qs = math.max(api.MIDI_GetProjQNFromPPQPos(take, s), i0)
+          local qe = math.min(api.MIDI_GetProjQNFromPPQPos(take, e), i1)
+          -- Drums (GM channel 10) carry no key
+          if not muted and chan ~= 9 and qe > qs then
+            out[#out + 1] = { qs = qs, qe = qe, pitch = pitch, w = vel / 127 }
+            counts.notes = counts.notes + 1
+          end
+        end
+      else
+        counts.audioItems = counts.audioItems + 1
+      end
+    end
+  end
+  return out, counts
+end
+
 -- Note time per pitch class (C = 1 … B = 12) over a track's MIDI items in [start, end),
 -- weighted by duration and velocity. Unmuted notes of unmuted items only.
 function M.pitch_profile(api, p)
@@ -385,46 +427,128 @@ function M.pitch_profile(api, p)
   local t0, t1 = p.startTime or 0, p.endTime
   if not num(t0) or t0 < 0 then return nil, "startTime must be 0 or more" end
   if t1 ~= nil and (not num(t1) or t1 <= t0) then return nil, "endTime must be after startTime" end
-  local q0 = api.TimeMap2_timeToQN(0, t0)
-  local q1 = t1 and api.TimeMap2_timeToQN(0, t1) or math.huge
+  local notes, c = heard_notes(api, tr, t0, t1)
   local chroma = {}
   for k = 1, 12 do chroma[k] = 0 end
-  local notes, midi_items, audio_items = 0, 0, 0
-  -- The cap counts only items that overlap the range, so a late range on a long track is still read
-  local read, capped = 0, 0
-  for i = 0, api.CountTrackMediaItems(tr) - 1 do
-    local item = api.GetTrackMediaItem(tr, i)
-    local take = api.GetActiveTake(item)
-    local ipos = api.GetMediaItemInfo_Value(item, "D_POSITION")
-    local overlaps = ipos < (t1 or math.huge) and ipos + api.GetMediaItemInfo_Value(item, "D_LENGTH") > t0
-    if overlaps and read >= M.MAX_PROFILE_ITEMS then capped = capped + 1; overlaps = false end
-    if overlaps then read = read + 1 end
-    if overlaps and take and api.GetMediaItemInfo_Value(item, "B_MUTE") == 0 then
-      if api.TakeIsMIDI(take) then
-        midi_items = midi_items + 1
-        -- Only what the item shows: notes past a trimmed edge are not heard (a loop's repeats count once)
-        local pos = api.GetMediaItemInfo_Value(item, "D_POSITION")
-        local i0 = math.max(q0, api.TimeMap2_timeToQN(0, pos))
-        local i1 = math.min(q1, api.TimeMap2_timeToQN(0, pos + api.GetMediaItemInfo_Value(item, "D_LENGTH")))
-        local _, count = api.MIDI_CountEvts(take)
-        for n = 0, count - 1 do
-          local _, _, muted, s, e, chan, pitch, vel = api.MIDI_GetNote(take, n)
-          local qs = math.max(api.MIDI_GetProjQNFromPPQPos(take, s), i0)
-          local qe = math.min(api.MIDI_GetProjQNFromPPQPos(take, e), i1)
-          -- Drums (GM channel 10) carry no key
-          if not muted and chan ~= 9 and qe > qs then
-            chroma[pitch % 12 + 1] = chroma[pitch % 12 + 1] + (qe - qs) * vel / 127
-            notes = notes + 1
-          end
-        end
-      else
-        audio_items = audio_items + 1
+  for _, n in ipairs(notes) do chroma[n.pitch % 12 + 1] = chroma[n.pitch % 12 + 1] + (n.qe - n.qs) * n.w end
+  for k = 1, 12 do chroma[k] = r4(chroma[k]) end
+  local out = { chroma = chroma, notes = c.notes, midiItems = c.midiItems, audioItems = c.audioItems }
+  if c.capped > 0 then out.itemsNotRead = c.capped end
+  return out
+end
+
+M.MAX_CHORD_SEGMENTS = 4000
+
+-- The range detect_chords / detect_key read: an item's bounds (itemIndex), else startTime to endTime,
+-- where a missing end is where the track's last item ends (the project's length on the master)
+local function chord_range(api, p)
+  if not int(p.trackIndex) or p.trackIndex < -1 then return nil, "trackIndex must be -1 (master) or more" end
+  local tr = p.trackIndex == -1 and api.GetMasterTrack(0) or api.GetTrack(0, p.trackIndex)
+  if not tr then return nil, "track " .. p.trackIndex .. " not found" end
+  if p.itemIndex ~= nil then
+    if p.trackIndex < 0 then return nil, "the master track holds no items: give a track index with itemIndex" end
+    if not int(p.itemIndex) or p.itemIndex < 0 then return nil, "itemIndex must be 0 or more" end
+    local n = api.CountTrackMediaItems(tr)
+    if p.itemIndex >= n then return nil, "item " .. p.itemIndex .. " not found (track has " .. n .. " items)" end
+    local item = api.GetTrackMediaItem(tr, p.itemIndex)
+    local pos = api.GetMediaItemInfo_Value(item, "D_POSITION")
+    return tr, pos, pos + api.GetMediaItemInfo_Value(item, "D_LENGTH")
+  end
+  local t0, t1 = p.startTime or 0, p.endTime
+  if not num(t0) or t0 < 0 then return nil, "startTime must be 0 or more" end
+  if t1 == nil then
+    if p.trackIndex == -1 then
+      t1 = api.GetProjectLength(0)
+    else
+      t1 = 0
+      for i = 0, api.CountTrackMediaItems(tr) - 1 do
+        local item = api.GetTrackMediaItem(tr, i)
+        t1 = math.max(t1, api.GetMediaItemInfo_Value(item, "D_POSITION") + api.GetMediaItemInfo_Value(item, "D_LENGTH"))
       end
     end
+    if t1 <= t0 then return nil, "nothing to read: the track has no items after " .. t0 .. " s" end
+  elseif not num(t1) or t1 <= t0 then
+    return nil, "endTime must be after startTime"
   end
-  for k = 1, 12 do chroma[k] = r4(chroma[k]) end
-  local out = { chroma = chroma, notes = notes, midiItems = midi_items, audioItems = audio_items }
-  if capped > 0 then out.itemsNotRead = capped end
+  return tr, t0, t1
+end
+
+-- The range an item covers, for detect_key's itemIndex
+function M.item_range(api, p)
+  local tr, t0, t1 = chord_range(api, p)
+  if not tr then return nil, t0 end
+  return { startTime = t0, endTime = t1 }
+end
+
+-- Segments of [t0, t1) on the project grid, one per bar or beat (tempo and time signature
+-- changes followed), each { start, end, bar, beat } with 1-based bar and beat; the first and
+-- last are clipped to the range
+local function grid_segments(api, t0, t1, per)
+  local segs = {}
+  local _, m = api.TimeMap2_timeToBeats(0, t0)
+  m = math.floor(m)
+  while true do
+    local _, qs, qe, numer, denom = api.TimeMap_GetMeasureInfo(0, m)
+    local step = per == "beat" and 4 / denom or (qe - qs)
+    local beats = per == "beat" and numer or 1
+    for k = 0, beats - 1 do
+      local a = api.TimeMap2_QNToTime(0, qs + k * step)
+      local b = api.TimeMap2_QNToTime(0, k == beats - 1 and qe or qs + (k + 1) * step)
+      if a >= t1 - EPS then return segs end
+      a, b = math.max(a, t0), math.min(b, t1)
+      if b - a > 1e-6 then
+        if #segs >= M.MAX_CHORD_SEGMENTS then return nil end
+        segs[#segs + 1] = { start = r4(a), ["end"] = r4(b), bar = m + 1, beat = k + 1, q0 = api.TimeMap2_timeToQN(0, a), q1 = api.TimeMap2_timeToQN(0, b) }
+      end
+    end
+    m = m + 1
+  end
+end
+
+-- detect_chords: the range (item bounds or start/end), one segment per bar or beat, and with
+-- midi = true each segment's pitch-class profile (note time x velocity) and lowest held note
+function M.chord_grid(api, p)
+  local tr, t0, t1 = chord_range(api, p)
+  if not tr then return nil, t0 end
+  local per = p.per or "bar"
+  if per ~= "bar" and per ~= "beat" then return nil, 'per must be "bar" or "beat"' end
+  if p.midi and p.trackIndex < 0 then return nil, "the master track holds no MIDI notes" end
+  local segs = grid_segments(api, t0, t1, per)
+  if not segs then return nil, "more than " .. M.MAX_CHORD_SEGMENTS .. " " .. per .. "s in the range: use a shorter range" .. (per == "beat" and ' or per "bar"' or "") end
+  local out = { startTime = r4(t0), endTime = r4(t1), segments = {} }
+  local profiles, bass = {}, {}
+  for i, s in ipairs(segs) do
+    out.segments[i] = { start = s.start, ["end"] = s["end"], bar = s.bar, beat = s.beat }
+    local z = {}
+    for k = 1, 12 do z[k] = 0 end
+    profiles[i], bass[i] = z, -1
+  end
+  if p.midi then
+    local notes, c = heard_notes(api, tr, t0, t1)
+    for _, n in ipairs(notes) do
+      -- First segment the note can touch (segments are in time order)
+      local lo, hi = 1, #segs
+      while lo < hi do
+        local mid = (lo + hi) // 2
+        if segs[mid].q1 <= n.qs then lo = mid + 1 else hi = mid end
+      end
+      for i = lo, #segs do
+        local s = segs[i]
+        if s.q0 >= n.qe then break end
+        local o = math.min(n.qe, s.q1) - math.max(n.qs, s.q0)
+        if o > 0 then
+          local pc = n.pitch % 12 + 1
+          profiles[i][pc] = profiles[i][pc] + o * n.w
+          -- The bass: the lowest note held for at least a quarter of the segment
+          if o >= 0.25 * (s.q1 - s.q0) - EPS and (bass[i] < 0 or n.pitch < bass[i]) then bass[i] = n.pitch end
+        end
+      end
+    end
+    for i = 1, #segs do for k = 1, 12 do profiles[i][k] = r4(profiles[i][k]) end end
+    out.profiles, out.bass = profiles, bass
+    out.notes, out.midiItems, out.audioItems = c.notes, c.midiItems, c.audioItems
+    if c.capped > 0 then out.itemsNotRead = c.capped end
+  end
   return out
 end
 

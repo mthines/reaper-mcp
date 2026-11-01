@@ -1,0 +1,6 @@
+# Chord recognition (detect_chords engine "model") — opt-in: reaper-mcp setup-sidecar --with-chords
+# lv-chordia (MIT): a large-vocabulary chord recognizer (CNN + CRF, Harte labels such as C:maj, A:min7, C:maj/3).
+# Reuses the sidecar's torch; adds librosa and its weights (~135 MB download, ~400 MB installed).
+lv-chordia==1.1.0
+# lv-chordia imports pydub, which needs the audioop module Python 3.13 removed from the standard library
+audioop-lts==0.2.2; python_version >= "3.13"

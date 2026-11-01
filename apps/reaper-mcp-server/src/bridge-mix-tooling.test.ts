@@ -174,6 +174,25 @@ describe('render_track_to_wav delivery settings', () => {
   });
 });
 
+describe('render_track_to_wav secondary format', () => {
+  it('renders without the project\'s secondary format (REAPER would stop on a modal error), then puts it back', async () => {
+    await run(FAKE_RENDER + `
+      strs = { RENDER_FORMAT = "l3pm", RENDER_FORMAT2 = "FMW " }
+      reaper.GetSetProjectInfo_String = function(_, key, v, set)
+        if set then strs[key] = v end
+        return true, strs[key] or ""
+      end
+      reaper.Main_OnCommand = function() at_render = { f = strs.RENDER_FORMAT, f2 = strs.RENDER_FORMAT2 } end
+    `, 'render_track_to_wav', `
+      local r, err = handlers.render_track_to_wav({ trackIndex = 1, startTime = 0, endTime = 5, commandId = "abc" })
+      assert(r, err)
+      assert(at_render.f == "evaw", "WAV rendered: " .. tostring(at_render.f))
+      assert(at_render.f2 == "", "no secondary file rendered: " .. tostring(at_render.f2))
+      assert(strs.RENDER_FORMAT == "l3pm" and strs.RENDER_FORMAT2 == "FMW ", "both formats restored")
+    `);
+  });
+});
+
 describe('render_track_to_wav offset report', () => {
   it('reports the playback offset in ms (samples mode converted) and the polarity', async () => {
     await run(FAKE_RENDER + `

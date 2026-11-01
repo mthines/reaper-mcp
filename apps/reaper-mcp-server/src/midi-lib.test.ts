@@ -342,3 +342,78 @@ describe('mcp_midi_lib.lua pitch_profile', () => {
     `);
   });
 });
+
+describe('mcp_midi_lib.lua chord_grid', () => {
+  // 120 BPM 4/4 in the fake: a bar is 2 s, a beat 0.5 s
+  it('splits the range into bars with each bar\'s notes and its lowest held note', async () => {
+    await runLua(`
+      local api = new_midi_fake{ tracks = { { items = {
+        { pos = 0, len = 4, notes = {
+          { s = 0, e = 4, pitch = 57, vel = 127 }, { s = 0, e = 4, pitch = 60, vel = 127 }, { s = 0, e = 4, pitch = 64, vel = 127 },
+          { s = 0, e = 4, pitch = 45, vel = 127 },
+          { s = 4, e = 8, pitch = 53, vel = 127 }, { s = 4, e = 8, pitch = 57, vel = 127 }, { s = 4, e = 8, pitch = 60, vel = 127 },
+          { s = 0, e = 8, pitch = 36, vel = 127, chan = 9 },
+          { s = 7.9, e = 8, pitch = 30, vel = 127 } } } } } } }
+      local r = midi.chord_grid(api, { trackIndex = 0, per = "bar", midi = true })
+      assert(r.startTime == 0 and r.endTime == 4, "range ends where the last item ends")
+      assert(#r.segments == 2, "two bars: " .. #r.segments)
+      assert(r.segments[2].start == 2 and r.segments[2]["end"] == 4 and r.segments[2].bar == 2 and r.segments[2].beat == 1)
+      local am, f = r.profiles[1], r.profiles[2]
+      assert(am[10] == 8 and am[1] == 4 and am[5] == 4 and am[6] == 0, "bar 1: A (two octaves), C, E, 4 beats each: " .. table.concat(am, ","))
+      assert(f[6] == 4 and f[10] == 4 and f[1] == 4 and f[5] == 0, "bar 2: F, A, C: " .. table.concat(f, ","))
+      assert(r.bass[1] == 45, "bar 1 bass: the held A2, not the drum")
+      assert(r.bass[2] == 53, "bar 2 bass: F3; the short F#1 at the end does not count")
+      assert(r.notes == 8)
+    `);
+  });
+
+  it('gives one segment per beat, clipped to the range, numbered within the bar', async () => {
+    await runLua(`
+      local api = new_midi_fake{ tracks = { { items = { { pos = 0, len = 8, notes = {} } } } } }
+      local r = midi.chord_grid(api, { trackIndex = 0, per = "beat", startTime = 1.25, endTime = 3 })
+      assert(#r.segments == 4, "beats: " .. #r.segments)
+      local first, last = r.segments[1], r.segments[4]
+      assert(first.start == 1.25 and first["end"] == 1.5 and first.bar == 1 and first.beat == 3, "first beat clipped to the start")
+      assert(last.start == 2.5 and last["end"] == 3 and last.bar == 2 and last.beat == 2)
+      assert(r.profiles == nil, "no MIDI profiles unless asked")
+    `);
+  });
+
+  it('follows the time signature: three beats a bar in 3/4', async () => {
+    await runLua(`
+      local api = new_midi_fake{ beatsPerBar = 3, tracks = { { items = { { pos = 0, len = 3, notes = {} } } } } }
+      local r = midi.chord_grid(api, { trackIndex = 0, per = "bar" })
+      assert(#r.segments == 2 and r.segments[1]["end"] == 1.5, "bars of 1.5 s")
+    `);
+  });
+
+  it("reads one item's range, and the master up to the project end", async () => {
+    await runLua(`
+      local api = new_midi_fake{ projectLength = 6, tracks = { { items = { { pos = 0, len = 2, notes = {} }, { pos = 4, len = 4, notes = {} } } } } }
+      local r = midi.chord_grid(api, { trackIndex = 0, itemIndex = 1 })
+      assert(r.startTime == 4 and r.endTime == 8 and #r.segments == 2)
+      local range = midi.item_range(api, { trackIndex = 0, itemIndex = 1 })
+      assert(range.startTime == 4 and range.endTime == 8)
+      local m = midi.chord_grid(api, { trackIndex = -1 })
+      assert(m.endTime == 6 and #m.segments == 3, "master: to the project end")
+    `);
+  });
+
+  it('refuses what it cannot read, saying why', async () => {
+    await runLua(`
+      local api = new_midi_fake{ tracks = { { items = { { pos = 0, len = 2, notes = {} } } } } }
+      local function no(p, pattern)
+        local r, err = midi.chord_grid(api, p)
+        assert(r == nil and err:find(pattern), tostring(err))
+      end
+      no({ trackIndex = 3 }, "track 3 not found")
+      no({ trackIndex = 0, itemIndex = 5 }, "item 5 not found")
+      no({ trackIndex = -1, itemIndex = 0 }, "master track holds no items")
+      no({ trackIndex = -1, midi = true, endTime = 2 }, "no MIDI notes")
+      no({ trackIndex = 0, startTime = 3 }, "no items after")
+      no({ trackIndex = 0, per = "half" }, 'per must be')
+      midi.MAX_CHORD_SEGMENTS = 3
+      no({ trackIndex = 0, per = "beat" }, "more than 3 beats")
+    `);
+  });
+});

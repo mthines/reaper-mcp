@@ -218,6 +218,7 @@ export type LoggedTool =
   | 'measure_masking'
   | 'separate_stems'
   | 'detect_key'
+  | 'detect_chords'
   | 'detect_transients'
   | 'create_transient_automation';
 
@@ -495,6 +496,16 @@ export interface MidiPitchProfileParams {
   trackIndex: number;
   startTime?: number;
   endTime?: number;
+}
+
+/** Params of the internal `_chord_grid` command (detect_chords): the range's bars or beats, with MIDI profiles when `midi`. */
+export interface ChordGridParams {
+  trackIndex: number;
+  itemIndex?: number;
+  startTime?: number;
+  endTime?: number;
+  per: 'bar' | 'beat';
+  midi: boolean;
 }
 
 export interface GetMidiCCParams {

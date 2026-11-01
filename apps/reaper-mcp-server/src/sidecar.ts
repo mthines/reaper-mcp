@@ -77,12 +77,22 @@ export interface AlignParams {
   maxLagMs?: number;
 }
 
-/** Params of the sidecar's chroma method (pitch-class energy, for detect_key). */
+/** Params of the sidecar's chroma method (pitch-class energy, for detect_key and detect_chords). */
 export interface ChromaParams {
   path: string;
   /** Seconds into the file */
   startTime?: number;
   endTime?: number;
+  /** [start, end] in seconds from startTime: each segment's chroma too (detect_chords) */
+  segments?: [number, number][];
+}
+
+export interface ChromaResult {
+  chroma: number[];
+  durationSeconds: number;
+  frames: number;
+  /** One 12-bin chroma per requested segment (12 zeros for a silent one) */
+  segments?: number[][];
 }
 
 /** Params of the sidecar's transients method. */
@@ -128,6 +138,24 @@ export interface SeparateParams {
   maxSeconds?: number;
 }
 
+/** Params of the sidecar's chords method (lv-chordia, opt-in). */
+export interface ChordsParams {
+  path: string;
+  /** Seconds into the file */
+  startTime?: number;
+  endTime?: number;
+  /** Chord vocabulary: submission (default, sevenths and inversions), ismir2017, full */
+  vocabulary?: 'submission' | 'ismir2017' | 'full';
+}
+
+/** Chord segments from the model: Harte labels ("C:maj", "A:min7", "C:maj/3", "N"), seconds into the file. */
+export interface ChordsResult {
+  segments: { start: number; end: number; label: string }[];
+  durationSeconds: number;
+  vocabulary: string;
+  seconds: number;
+}
+
 export interface SidecarClient {
   /** True if the sidecar is installed (script + venv exist). Does NOT guarantee it's running. */
   isAvailable(): boolean;
@@ -150,7 +178,11 @@ export interface SidecarClient {
   /** Split a file into stems (Demucs). Runs for minutes on long audio: pass a timeout. */
   separate(params: SeparateParams, timeoutMs: number): Promise<Record<string, unknown>>;
   /** 12 pitch-class energies, C first, normalized so the largest is 1. */
-  chroma(params: ChromaParams): Promise<{ chroma: number[]; durationSeconds: number; frames: number }>;
+  chroma(params: ChromaParams): Promise<ChromaResult>;
+  /** Whether the chord model is installed (setup-sidecar --with-chords), with the install hint. */
+  chordsStatus(): Promise<{ installed: boolean; message: string }>;
+  /** Chord segments of a file (lv-chordia, 2-5x real time on a CPU): pass a timeout. */
+  chords(params: ChordsParams, timeoutMs: number): Promise<ChordsResult>;
   /** Terminate the sidecar process. Safe to call even if not running. */
   shutdown(): void;
 }
@@ -230,8 +262,16 @@ class SidecarClientImpl implements SidecarClient {
     return this.call('separate', { ...params }, Math.max(timeoutMs, ANALYZE_TIMEOUT_MS)) as Promise<Record<string, unknown>>;
   }
 
-  chroma(params: ChromaParams): Promise<{ chroma: number[]; durationSeconds: number; frames: number }> {
-    return this.call('chroma', { ...params }) as Promise<{ chroma: number[]; durationSeconds: number; frames: number }>;
+  chroma(params: ChromaParams): Promise<ChromaResult> {
+    return this.call('chroma', { ...params }) as Promise<ChromaResult>;
+  }
+
+  chordsStatus(): Promise<{ installed: boolean; message: string }> {
+    return this.call('chords_status', {}) as Promise<{ installed: boolean; message: string }>;
+  }
+
+  chords(params: ChordsParams, timeoutMs: number): Promise<ChordsResult> {
+    return this.call('chords', { ...params }, Math.max(timeoutMs, ANALYZE_TIMEOUT_MS)) as Promise<ChordsResult>;
   }
 
   /**

@@ -48,6 +48,9 @@ export type Measurement =
       kind: 'key'; name?: string; src?: string; key?: string; tonic?: string; mode?: string; rel?: string; r?: number; conf?: number;
       chroma: number[]; alt: [string, number][];
     }
+  /** Detected chords: spans [start, end, chord, roman numeral ('' = none)] over the range, the key, one per bar or beat
+   *  (per), how many spans past the first 64 were left out (more); src as for key */
+  | { kind: 'chords'; name?: string; src?: string; key?: string; per?: string; start?: number; end?: number; more?: number; ch: [number, number, string, string][] }
   /** Loudness over time (sidecar): the short-term (or momentary, `term: 'm'`) curve from `start` every `step` s, and
    *  spans [start, end, LUFS] of the loudest / quietest window and of every stretch over `target` */
   | {
@@ -78,6 +81,7 @@ const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[]
   measure_track_alignment: { kind: 'alignment', fields: ['delayMs', 'samples', 'corr', 'inv', 'cur', 'offset', 'phase', 'warn'] },
   analyze_track_aesthetics: { kind: 'aesthetics', fields: ['pq', 'pc', 'ce', 'cu', 'lufs', 'dur'] },
   detect_key: { kind: 'key', fields: ['r', 'conf'] },
+  detect_chords: { kind: 'chords', fields: ['start', 'end', 'more'] },
   analyze_loudness_curve: { kind: 'curve', fields: ['lufs', 'tp', 'lra', 'plr', 'maxM', 'target', 'overS', 'start', 'step'] },
   analyze_stereo_bands: { kind: 'stereo', fields: ['dur'] },
   measure_masking: { kind: 'masking', fields: [] },
@@ -185,6 +189,13 @@ export function measurementOf(e: CommandEntry): Measurement | null {
     out.chroma = chroma;
     out.alt = Array.isArray(alt) ? alt.filter((a): a is [string, number] => Array.isArray(a) && typeof a[0] === 'string' && typeof a[1] === 'number') : [];
   }
+  if (spec.kind === 'chords') {
+    for (const f of ['name', 'src', 'key', 'per']) if (typeof r[f] === 'string') out[f] = r[f];
+    out.ch = rows(r.ch)
+      .filter((c) => typeof c[0] === 'number' && typeof c[1] === 'number' && typeof c[2] === 'string')
+      .map((c) => [c[0], c[1], c[2], typeof c[3] === 'string' ? c[3] : '']);
+    if ((out.ch as unknown[]).length === 0) return null;
+  }
   if (spec.kind === 'waveform') {
     const { hi, lo } = e.r;
     if (!isNumbers(hi) || !isNumbers(lo) || hi.length !== lo.length) return null;
@@ -242,6 +253,7 @@ export const LONG_RUNNING = new Set([
   'process_items',
   'analyze_track_aesthetics',
   'detect_key',
+  'detect_chords',
   'analyze_loudness_curve',
   'analyze_stereo_bands',
   'measure_masking',

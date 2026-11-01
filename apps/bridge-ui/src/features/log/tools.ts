@@ -365,6 +365,15 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
       return m?.key ? `found ${on(e, 'the audio')} is in ${m.key}${m.conf !== undefined ? ` (${Math.round(m.conf * 100)}% sure)` : ''}` : `looked for the key of ${on(e)}`;
     },
   },
+  detect_chords: {
+    title: 'Detect the chords',
+    did: (e) => {
+      const m = measured(e, 'chords');
+      if (!m) return `looked for the chords of ${on(e)}`;
+      const names = [...new Set(m.ch.map((c) => c[2]).filter((c) => c !== 'N'))];
+      return `found ${names.length} chord${names.length === 1 ? '' : 's'} in ${on(e, 'the audio')}${m.key ? ` (${m.key})` : ''}: ${names.slice(0, 6).join(' ')}${names.length > 6 ? ' …' : ''}`;
+    },
+  },
   send_midi_cc: { title: 'Send a live MIDI CC', did: (e) => `sent CC ${paramsOf(e).cc ?? ''} = ${paramsOf(e).value ?? ''} live to ${on(e)}` },
   send_midi_pc: { title: 'Send a program change', did: (e) => `switched ${on(e)} to program ${paramsOf(e).program ?? ''} live` },
   send_midi_note: {
