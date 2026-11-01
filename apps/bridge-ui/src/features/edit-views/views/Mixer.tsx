@@ -1,7 +1,8 @@
 import { Counts } from './Counts.js';
 import { listDiff, type EditView, type SlotChange, type MixRow } from '../edit-views.js';
 import { ChangeLegend, ChangeMark } from './ChangeLegend.js';
-import { CHANGE_WORD, panText, pct, plural } from './format.js';
+import { HoverTip } from './HoverTip.js';
+import { CHANGE_WORD, panText, panWords, pct, plural } from './format.js';
 import { Measurement, fmt } from '../../measurements/index.js';
 import { cx } from '../../../lib/cx.js';
 import chartStyles from '../../../styles/chart.module.css';
@@ -48,27 +49,23 @@ function MixerRow({
           <ChangeMark c={c} />
         )}
       </span>
-      <span
+      <HoverTip
         className={cx(chartStyles.evBar, styles.evFader)}
         role="img"
         aria-label={`${name} ${fmt(db)} dB`}
+        tip={`Volume ${fmt(db)} dB`}
       >
         <span className={chartStyles.evZero} style={{ left: `${pct(0, -60, 6)}%` }} />
         <span
           className={cx(chartStyles.evFill, hot ? styles.evFillHot : '')}
           style={{ left: 0, width: `${pct(db, -60, 6)}%` }}
         />
-      </span>
+      </HoverTip>
       <span className={cx(styles.evTv, "mono")} data-zone={hot ? "hot" : "ok"}>{fmt(db)}</span>
-      <span
-        className={styles.evPan}
-        role="img"
-        aria-label={`pan ${panText(pan)}`}
-        title={`Pan ${panText(pan)}`}
-      >
+      <HoverTip className={styles.evPan} role="img" aria-label={`pan ${panText(pan)}`} tip={`Pan ${panWords(pan)}`}>
         <span className={styles.evPanC} />
         <span className={styles.evPanD} style={{ left: `${pct(pan, -1, 1)}%` }} />
-      </span>
+      </HoverTip>
       <span
         className={styles.evChips}
         aria-label={states.length ? states.join(", ") : undefined}

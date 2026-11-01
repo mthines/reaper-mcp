@@ -55,6 +55,8 @@ export const PROP_LABEL: Record<string, string> = {
   recordArm: "Record arm",
   phase: "Phase",
 };
+/** Pan in words, as the drawer's sentences say it: "centre", "30% left" */
+export const panWords = (v: number) => (Math.abs(v) < 0.005 ? "centre" : `${Math.round(Math.abs(v) * 100)}% ${v < 0 ? "left" : "right"}`);
 export const panText = (v: number) =>
   Math.abs(v) < 0.005
     ? "C"

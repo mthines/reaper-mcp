@@ -896,13 +896,13 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
 - Edit views: writes and listings also keep an `r` (`M.summary` in `mcp_edit_views_lib.lua`), drawn by
   `src/features/edit-views/` (`EditViews.tsx`, one view per kind in `views/`) from `editViewOf()` (`edit-views.ts`). A write reads the state it touches before its handler
   runs (`M.before`) and again after, so the drawer shows before → after: track and FX parameter changes (the
-  plugin's own readout), the automation window an edit touched (padded 25%, at least 4 s; automation items drawn as blocks tinted by
+  plugin's own readout; faders and pan dots show their value on hover, `HoverTip`), the automation window an edit touched (padded 25%, at least 4 s; automation items drawn as blocks tinted by
   pool with their name and shared curve, moved/deleted items and a changed pool's old curve dashed, items the call left unchanged dimmed), MIDI notes as a piano
   roll (first 256, `more` counts the rest; added notes solid, removed dashed), `analyze_midi` velocity per pitch,
   markers/regions/tempo/items on one timeline, `list_tracks` as a mixer, and `run_plan`'s ops; also FX chains
   (add/remove/move/copy/bypass/offline/rename/preset, `get_track_properties`: slots marked added/moved/changed/removed by
   FX GUID), item edits as one lane per touched track with the items before dashed, track structure edits on the mixer
-  (tracks diffed by GUID), routing (sends/receives/hardware outs with level bars, the old level ghosted), the time
+  (tracks diffed by GUID), routing (a signal-flow diagram — receives wired in on the left, sends and hardware outs out on the right, wires as thick as their level — over rows grouped under Receives from / Sends to / Hardware outputs with level bars, the old level ghosted), the time
   selection and edit cursor, MIDI CC as a stepped lane in beats (the automation view, unit `cc`), and
   `get_fx_parameters` as readout bars; `render_project` / `render_versions` as a render result (one row per file,
   ≤8: mini waveform from `PCM_Source_GetPeaks`, LUFS-I against the normalize target, true peak against the limit

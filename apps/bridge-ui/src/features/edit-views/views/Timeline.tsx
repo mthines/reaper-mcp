@@ -339,12 +339,14 @@ const TH = 40;
 
 /** The tempo and time signature in effect at `t`; a marker without a time signature keeps the one before it */
 function tempoAt(map: Tempo[], t: number): { bpm: number; sig: string } | null {
-  let found: { bpm: number; sig: string } | null = null;
+  let bpm: number | undefined;
+  let sig = "–";
   for (const m of [...map].sort((a, b) => a[0] - b[0])) {
     if (m[0] > t + 1e-6) break;
-    found = { bpm: m[1], sig: m[2] > 0 ? `${m[2]}/${m[3]}` : (found?.sig ?? "–") };
+    bpm = m[1];
+    if (m[2] > 0) sig = `${m[2]}/${m[3]}`;
   }
-  return found;
+  return bpm === undefined ? null : { bpm, sig };
 }
 
 function TempoLane({
