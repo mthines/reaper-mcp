@@ -1,4 +1,5 @@
-import { fmt, pct } from './format.js';
+import { fmt, pct, tipLine } from './format.js';
+import { HoverTip } from '../../components/index.js';
 import type { Measurement } from '../../lib/commands.js';
 import { cx } from '../../lib/cx.js';
 import chartStyles from '../../styles/chart.module.css';
@@ -19,7 +20,7 @@ export function Aesthetics({ m, was }: { m: Extract<Measurement, { kind: 'aesthe
           const v = m[k] as number | undefined;
           const w = was?.[k] as number | undefined;
           return (
-            <div key={k} className={chartStyles.evRow} title={hint}>
+            <HoverTip key={k} className={chartStyles.evRow} tip={[hint, tipLine('Score', v, 'of 10', w, { deltaUnit: '', signed: false })]}>
               <span className={chartStyles.evName}>{label}</span>
               <span className={cx(chartStyles.evVal, 'mono')}>
                 <b>{v === undefined ? '–' : v.toFixed(1)}</b> / 10
@@ -29,7 +30,7 @@ export function Aesthetics({ m, was }: { m: Extract<Measurement, { kind: 'aesthe
                 <span className={chartStyles.evFill} style={{ left: 0, width: `${v === undefined ? 0 : pct(v, 0, 10)}%` }} />
                 {w !== undefined && <span className={chartStyles.evWas} style={{ left: `${pct(w, 0, 10)}%` }} />}
               </span>
-            </div>
+            </HoverTip>
           );
         })}
       </div>

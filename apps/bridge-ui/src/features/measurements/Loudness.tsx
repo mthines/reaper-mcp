@@ -1,5 +1,6 @@
 import { Readout, Scale } from './Readout.js';
-import { fmt, pct, tpWord, tpZone } from './format.js';
+import { fmt, pct, tipLine, tpWord, tpZone } from './format.js';
+import { HoverTip } from '../../components/index.js';
 import type { Measurement } from '../../lib/commands.js';
 import { cx } from '../../lib/cx.js';
 import chartStyles from '../../styles/chart.module.css';
@@ -20,15 +21,25 @@ export function Loudness({ m, target, was }: { m: Extract<Measurement, { kind: '
           <span className={cx(styles.lufsDelta, 'mono', Math.abs(delta) <= 1 ? styles.lufsOn : delta > 0 ? styles.lufsOver : '')}>{Math.abs(delta) < 0.05 ? `on ${fmt(target, 0)}` : `${Math.abs(delta).toFixed(1)} ${delta > 0 ? 'over' : 'under'} ${fmt(target, 0)}`}</span>
         )}
       </div>
-      <div className={styles.lufsTrack} role="img" aria-label={`Integrated ${fmt(i)} LUFS, short-term ${fmt(m.shortTerm)}, momentary ${fmt(m.momentary)}${target !== null ? `, target ${fmt(target, 0)}` : ''}`}>
+      <HoverTip
+        className={styles.lufsTrack}
+        role="img"
+        aria-label={`Integrated ${fmt(i)} LUFS, short-term ${fmt(m.shortTerm)}, momentary ${fmt(m.momentary)}${target !== null ? `, target ${fmt(target, 0)}` : ''}`}
+        tip={[
+          tipLine('Integrated', i, 'LUFS', was, { deltaUnit: 'LU' }),
+          ...(m.shortTerm !== undefined ? [`Short-term ${fmt(m.shortTerm)} LUFS`] : []),
+          ...(m.momentary !== undefined ? [`Momentary ${fmt(m.momentary)} LUFS`] : []),
+          ...(target !== null ? [`Target ${fmt(target, 0)} ±1 LU`] : []),
+        ]}
+      >
         {target !== null && (
           <span className={styles.lufsTarget} style={{ left: `${lufsPct(target - 1)}%`, width: `${lufsPct(target + 1) - lufsPct(target - 1)}%` }} />
         )}
         {m.shortTerm !== undefined && <span className={styles.lufsShort} style={{ width: `${lufsPct(m.shortTerm)}%` }} />}
         {m.momentary !== undefined && <span className={styles.lufsMomentary} style={{ left: `${lufsPct(m.momentary)}%` }} />}
-        {was !== undefined && was > -149 && <span className={styles.lufsWas} style={{ left: `${lufsPct(was)}%` }} title={`Previous call ${fmt(was)} LUFS`} />}
+        {was !== undefined && was > -149 && <span className={styles.lufsWas} style={{ left: `${lufsPct(was)}%` }} />}
         {i !== undefined && <span className={styles.lufsNeedle} style={{ left: `${lufsPct(i)}%` }} />}
-      </div>
+      </HoverTip>
       <Scale ticks={[-40, -30, -20, -10, 0]} min={-40} max={0} />
       <div className={chartStyles.measureLegend}>
         <span><i className={chartStyles.lgNeedle} /> Integrated</span>

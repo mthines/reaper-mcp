@@ -1,4 +1,5 @@
-import { fmt, pct } from './format.js';
+import { fmt, pct, tipLine } from './format.js';
+import { HoverTip } from '../../components/index.js';
 import type { Measurement } from '../../lib/commands.js';
 import { cx } from '../../lib/cx.js';
 import chartStyles from '../../styles/chart.module.css';
@@ -24,8 +25,14 @@ export function StereoBands({ m, was }: { m: Extract<Measurement, { kind: 'stere
           const wide = !phase && band === 'low' && c !== null && c < 0.5; // the tool's own flag threshold (mixcheck.py)
           const w = was?.bands.find((b) => b[0] === band)?.[1] ?? null;
           return (
-            <div key={band} className={cx(chartStyles.evRow, phase && styles.bad, wide && chartStyles.evHot)}
-              title={`${label} (${range}): correlation ${c === null ? 'silent' : c.toFixed(2)}${worst !== null ? `, worst ${worst.toFixed(2)}` : ''}${neg !== null ? `, out of phase ${Math.round(neg * 100)}% of the time` : ''}${side !== null ? `, side ${fmt(side)} dB against mid` : ''}`}>
+            <HoverTip key={band} className={cx(chartStyles.evRow, phase && styles.bad, wide && chartStyles.evHot)}
+              tip={[
+                `${label} · ${range}`,
+                c === null ? 'Silent' : tipLine('Correlation', c, '', w ?? undefined, { digits: 2 }),
+                ...(worst !== null ? [`Worst moment ${fmt(worst, 2)}`] : []),
+                ...(neg !== null ? [`Out of phase ${Math.round(neg * 100)}% of the time`] : []),
+                ...(side !== null ? [`Side ${fmt(side)} dB against mid`] : []),
+              ]}>
               <span className={chartStyles.evName}>{label}<small>{range}</small></span>
               <span className={cx(chartStyles.evVal, styles.val, 'mono')}>
                 <b>{c === null ? 'silent' : fmt(c, 2)}</b>
@@ -38,7 +45,7 @@ export function StereoBands({ m, was }: { m: Extract<Measurement, { kind: 'stere
                 {worst !== null && c !== null && worst < c && <span className={chartStyles.evTick} style={{ left: `${at(worst)}%` }} />}
                 {w !== null && <span className={chartStyles.evWas} style={{ left: `${Math.min(99, Math.max(1, at(w)))}%` }} />}
               </span>
-            </div>
+            </HoverTip>
           );
         })}
       </div>

@@ -1,6 +1,7 @@
 import { lufsPct } from './Loudness.js';
 import { Readout, Scale } from './Readout.js';
-import { fmt, pct, tpWord, tpZone, secs } from './format.js';
+import { fmt, pct, tipLine, tpWord, tpZone, secs } from './format.js';
+import { HoverTip } from '../../components/index.js';
 import type { Measurement } from '../../lib/commands.js';
 import { cx } from '../../lib/cx.js';
 import loudnessStyles from './Loudness.module.css';
@@ -26,11 +27,16 @@ export function Offline({ m, was }: { m: Extract<Measurement, { kind: 'offline' 
           </span>
         )}
       </div>
-      <div className={loudnessStyles.lufsTrack} role="img" aria-label={`Integrated ${fmt(m.lufs)} LUFS`}>
-        {m.ref?.lufs !== undefined && <span className={cx(loudnessStyles.lufsWas, loudnessStyles.offRef)} style={{ left: `${lufsPct(m.ref.lufs)}%` }} title={`Reference ${fmt(m.ref.lufs)} LUFS`} />}
-        {was !== undefined && was > -149 && <span className={loudnessStyles.lufsWas} style={{ left: `${lufsPct(was)}%` }} title={`Previous call ${fmt(was)} LUFS`} />}
+      <HoverTip
+        className={loudnessStyles.lufsTrack}
+        role="img"
+        aria-label={`Integrated ${fmt(m.lufs)} LUFS`}
+        tip={[tipLine('Integrated', m.lufs, 'LUFS', was, { deltaUnit: 'LU' }), ...(m.ref?.lufs !== undefined ? [`Reference ${fmt(m.ref.lufs)} LUFS`] : [])]}
+      >
+        {m.ref?.lufs !== undefined && <span className={cx(loudnessStyles.lufsWas, loudnessStyles.offRef)} style={{ left: `${lufsPct(m.ref.lufs)}%` }} />}
+        {was !== undefined && was > -149 && <span className={loudnessStyles.lufsWas} style={{ left: `${lufsPct(was)}%` }} />}
         {m.lufs !== undefined && <span className={loudnessStyles.lufsNeedle} style={{ left: `${lufsPct(m.lufs)}%` }} />}
-      </div>
+      </HoverTip>
       <Scale ticks={[-40, -30, -20, -10, 0]} min={-40} max={0} />
       <div className={chartStyles.measureLegend}>
         <span><i className={chartStyles.lgNeedle} /> Integrated</span>
@@ -48,7 +54,12 @@ export function Offline({ m, was }: { m: Extract<Measurement, { kind: 'offline' 
           <div className={styles.offSections} role="img" aria-label={`Loudness of ${m.sections.length} sections, ${fmt(Math.min(...m.sections.map((s) => s[2])))} to ${fmt(Math.max(...m.sections.map((s) => s[2])))} LUFS`}>
             {m.lufs !== undefined && <span className={styles.offIntegrated} style={{ bottom: `${pct(m.lufs, lo, 0)}%` }} />}
             {m.sections.map(([a, b, l], i) => (
-              <span key={i} className={l > (m.lufs ?? 0) + 3 ? styles.offLoud : ''} style={{ height: `${Math.max(2, pct(l, lo, 0))}%` }} title={`${secs(a)}–${secs(b)} · ${fmt(l)} LUFS`} />
+              <HoverTip
+                key={i}
+                className={l > (m.lufs ?? 0) + 3 ? styles.offLoud : ''}
+                style={{ height: `${Math.max(2, pct(l, lo, 0))}%` }}
+                tip={[`${secs(a)}–${secs(b)}`, `${fmt(l)} LUFS${m.lufs !== undefined ? `, ${Math.abs(l - m.lufs).toFixed(1)} LU ${l >= m.lufs ? 'above' : 'below'} integrated` : ''}`]}
+              />
             ))}
           </div>
           <div className={cx(chartStyles.measureScaleWords, 'mono')}>
@@ -70,7 +81,15 @@ export function Offline({ m, was }: { m: Extract<Measurement, { kind: 'offline' 
               const d = m.ref?.bands[i] ?? null;
               const off = d !== null && Math.abs(d) >= 3;
               return (
-                <div key={i} className={cx(chartStyles.evRow, off ? chartStyles.evHot : '')} title={`${BAND_NAMES[i]} (${BAND_RANGES[i]}): ${b === null ? 'silent' : `${fmt(b)} dB of the energy`}${d !== null ? `, ${fmt(d)} dB against the reference` : ''}`}>
+                <HoverTip
+                  key={i}
+                  className={cx(chartStyles.evRow, off ? chartStyles.evHot : '')}
+                  tip={[
+                    `${BAND_NAMES[i]} · ${BAND_RANGES[i]}`,
+                    b === null ? 'Silent' : `${fmt(b)} dB of the energy`,
+                    ...(d !== null && b !== null ? [`Reference ${fmt(b - d)} dB, ${fmt(d)} dB against it`] : []),
+                  ]}
+                >
                   <span className={chartStyles.evName}>{BAND_NAMES[i]}</span>
                   <span className={cx(chartStyles.evVal, 'mono')}>
                     <b>{b === null ? '–' : fmt(b)}</b>
@@ -80,7 +99,7 @@ export function Offline({ m, was }: { m: Extract<Measurement, { kind: 'offline' 
                     <span className={chartStyles.evFill} style={{ left: 0, width: `${b === null ? 0 : pct(b, -40, 0)}%` }} />
                     {d !== null && b !== null && <span className={chartStyles.evWas} style={{ left: `${pct(b - d, -40, 0)}%` }} />}
                   </span>
-                </div>
+                </HoverTip>
               );
             })}
           </div>

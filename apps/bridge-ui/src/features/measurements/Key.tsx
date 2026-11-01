@@ -1,5 +1,6 @@
 import { Readout } from './Readout.js';
-import { pct, type Zone } from './format.js';
+import { pct, tipLine, type Zone } from './format.js';
+import { HoverTip } from '../../components/index.js';
 import type { Measurement } from '../../lib/commands.js';
 import { cx } from '../../lib/cx.js';
 import chartStyles from '../../styles/chart.module.css';
@@ -29,14 +30,22 @@ export function Key({ m, was }: { m: Extract<Measurement, { kind: 'key' }>; was:
           const d = degreeOf(i);
           const w = was?.chroma[i];
           return (
-            <div key={pc} className={styles.col} data-scale={d === 0 ? 'tonic' : d > 0 ? 'in' : 'out'} title={`${pc}: ${Math.round(m.chroma[i] * 100)}%${d >= 0 ? ` · scale degree ${DEGREE[m.mode ?? 'major']?.[d] ?? ''}` : ' · outside the key'}`}>
+            <HoverTip
+              key={pc}
+              className={styles.col}
+              data-scale={d === 0 ? 'tonic' : d > 0 ? 'in' : 'out'}
+              tip={[
+                `${pc} · ${d >= 0 ? `scale degree ${DEGREE[m.mode ?? 'major']?.[d] ?? ''}` : 'outside the key'}`,
+                w === undefined ? `${Math.round(m.chroma[i] * 100)}%` : tipLine('Share', m.chroma[i] * 100, '%', w * 100, { digits: 0, signed: false }),
+              ]}
+            >
               <span className={styles.track}>
                 <span className={styles.fill} style={{ height: `${pct(m.chroma[i], 0, 1)}%` }} />
                 {w !== undefined && <span className={styles.was} style={{ bottom: `${pct(w, 0, 1)}%` }} />}
               </span>
               <span className={cx(styles.pc, 'mono')}>{pc}</span>
               <span className={cx(styles.deg, 'mono')}>{d >= 0 ? DEGREE[m.mode ?? 'major']?.[d] : ''}</span>
-            </div>
+            </HoverTip>
           );
         })}
       </div>

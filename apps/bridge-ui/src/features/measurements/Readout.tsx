@@ -1,4 +1,5 @@
-import { ZONE_WORD, type Zone, fmt, pct, zoneOf } from './format.js';
+import { ZONE_WORD, type Zone, fmt, pct, tipLine, zoneOf } from './format.js';
+import { HoverTip } from '../../components/index.js';
 import { cx } from '../../lib/cx.js';
 import chartStyles from '../../styles/chart.module.css';
 import styles from './Readout.module.css';
@@ -28,13 +29,13 @@ export function Level({ label, value, hold, was, showValue = true }: { label: st
   return (
     <div className={styles.hlLevel}>
       <span className={cx(styles.hlLabel, 'mono')}>{label}</span>
-      <div className={styles.hlTrack} title={`Peak ${fmt(hold)} dB · RMS ${fmt(value)} dB`}>
+      <HoverTip className={styles.hlTrack} tip={[tipLine('Peak', hold, 'dB', was?.hold), tipLine('RMS', value, 'dB', was?.value)]}>
         {value !== undefined && <span className={cx(styles.hlFill, styles.hlFillLevel)} style={{ clipPath: `inset(0 ${100 - pct(value, -60, 6)}% 0 0 round 2px)` }} />}
         <span className={styles.hlZero} style={{ left: `${pct(0, -60, 6)}%` }} />
-        {was?.value !== undefined && <span className={styles.hlWas} style={{ left: `${pct(was.value, -60, 6)}%` }} title={`Previous call RMS ${fmt(was.value)} dB`} />}
-        {was?.hold !== undefined && <span className={styles.hlWasHold} style={{ left: `${pct(was.hold, -60, 6)}%` }} title={`Previous call peak ${fmt(was.hold)} dB`} />}
+        {was?.value !== undefined && <span className={styles.hlWas} style={{ left: `${pct(was.value, -60, 6)}%` }} />}
+        {was?.hold !== undefined && <span className={styles.hlWasHold} style={{ left: `${pct(was.hold, -60, 6)}%` }} />}
         {hold !== undefined && <span className={styles.hlHold} data-zone={zoneOf(hold)} style={{ left: `${pct(hold, -60, 6)}%` }} />}
-      </div>
+      </HoverTip>
       {showValue && <span className={cx(styles.hlValue, 'mono')} data-zone={zoneOf(hold ?? value)}>{fmt(hold ?? value)}</span>}
     </div>
   );

@@ -12,7 +12,8 @@ import { Spectrum } from './Spectrum.js';
 import { Stems } from './Stems.js';
 import { StereoBands } from './StereoBands.js';
 import { Waveform } from './Waveform.js';
-import { fmt, pct, targetOf, zoneOf } from './format.js';
+import { fmt, pct, targetOf, tipLine, zoneOf } from './format.js';
+import { HoverTip } from '../../components/index.js';
 import { formatAgo } from '../../lib/format.js';
 import { measurementOf, type CommandEntry, type Measurement } from '../../lib/commands.js';
 import { cx } from '../../lib/cx.js';
@@ -132,7 +133,7 @@ function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | un
             <Readout label="Width" value={m.stereoWidth?.toFixed(2) ?? '–'} />
             <Readout label="Side level" value={fmt(m.sideLevel)} unit="dB" />
           </div>
-          <div className={readoutStyles.hlTrack} role="img" aria-label={`Correlation ${c?.toFixed(2) ?? 'unknown'}, from −1 out of phase to +1 mono`}>
+          <HoverTip className={readoutStyles.hlTrack} role="img" aria-label={`Correlation ${c?.toFixed(2) ?? 'unknown'}, from −1 out of phase to +1 mono`} tip={tipLine('Correlation', c, '', wc, { digits: 2 })}>
             <span className={readoutStyles.hlCentre} />
             {c !== undefined && (
               <>
@@ -143,8 +144,8 @@ function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | un
                 <span className={readoutStyles.hlDot} data-zone={phase ? 'over' : 'ok'} style={{ left: `${pct(c, -1, 1)}%` }} />
               </>
             )}
-            {wc !== undefined && <span className={readoutStyles.hlWasDot} style={{ left: `${pct(wc, -1, 1)}%` }} title={`Previous call ${fmt(wc, 2)}`} />}
-          </div>
+            {wc !== undefined && <span className={readoutStyles.hlWasDot} style={{ left: `${pct(wc, -1, 1)}%` }} />}
+          </HoverTip>
           <div className={chartStyles.measureScaleWords}>
             <span>−1 phase</span>
             <span>0</span>

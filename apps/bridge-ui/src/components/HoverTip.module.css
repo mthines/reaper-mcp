@@ -1,0 +1,8 @@
+.host { position: relative; cursor: default; }
+.tip {
+  position: absolute; z-index: 3; bottom: calc(100% + 6px); left: 50%; transform: translateX(calc(-50% + var(--shift, 0px)));
+  width: max-content; max-width: 280px; padding: 3px 7px; border-radius: 6px;
+  font-size: 11px; line-height: 1.5; font-weight: 400; text-align: left; white-space: normal; color: var(--text);
+  background: var(--panel-2); border: 1px solid var(--line-2); pointer-events: none;
+}
+.line { display: block; }

@@ -3,7 +3,7 @@ import { listDiff, routeIds, type EditView, type Route, type SlotChange } from '
 import { ChangeLegend, ChangeMark, Legend } from './ChangeLegend.js';
 import { ChipLegend } from './Mixer.js';
 import { PointTip } from './Envelope.js';
-import { HoverTip } from './HoverTip.js';
+import { HoverTip } from '../../../components/index.js';
 import { CHANGE_WORD, panText, panWords, pct } from './format.js';
 import { Measurement, fmt } from '../../measurements/index.js';
 import { cx } from '../../../lib/cx.js';

@@ -1,7 +1,7 @@
 import { Counts } from './Counts.js';
 import { listDiff, type EditView, type SlotChange, type MixRow } from '../edit-views.js';
 import { ChangeLegend, ChangeMark } from './ChangeLegend.js';
-import { HoverTip } from './HoverTip.js';
+import { HoverTip } from '../../../components/index.js';
 import { CHANGE_WORD, panText, panWords, pct, plural } from './format.js';
 import { Measurement, fmt } from '../../measurements/index.js';
 import { cx } from '../../../lib/cx.js';

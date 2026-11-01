@@ -1,4 +1,6 @@
+import type { CSSProperties } from 'react';
 import { hzLabel } from './format.js';
+import { HoverTip } from '../../components/index.js';
 import type { Measurement } from '../../lib/commands.js';
 import { cx } from '../../lib/cx.js';
 import chartStyles from '../../styles/chart.module.css';
@@ -16,8 +18,8 @@ export function Masking({ m }: { m: Extract<Measurement, { kind: 'masking' }> })
               <span className={styles.name} title={`${a} × ${b}: overall ${overall.toFixed(2)}`}>{a} × {b}</span>
               <span className={styles.cells} style={{ gridTemplateColumns: `repeat(${scores.length}, 1fr)` }}>
                 {scores.map((s, k) => (
-                  <span key={k} className={s >= 0.6 ? styles.hot : undefined} style={{ opacity: s <= 0 ? 0.06 : 0.15 + 0.85 * Math.min(1, s) }}
-                    title={`${a} × ${b} at ${hzLabel(m.hz[k])} Hz: ${s.toFixed(2)}`} />
+                  <HoverTip key={k} className={s >= 0.6 ? styles.hot : undefined} style={{ '--o': `${Math.round((s <= 0 ? 0.06 : 0.15 + 0.85 * Math.min(1, s)) * 100)}%` } as CSSProperties}
+                    tip={[`${a} × ${b}`, `${hzLabel(m.hz[k])} Hz: overlap ${s.toFixed(2)}`]} />
                 ))}
               </span>
               <span className={cx(styles.score, 'mono')}>{overall.toFixed(2)}</span>

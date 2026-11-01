@@ -24,3 +24,23 @@ export function targetOf(e: CommandEntry): number | null {
   const t = p && typeof p === 'object' ? (p as Record<string, unknown>).targetLufs : undefined;
   return typeof t === 'number' && t < 0 && t > -60 ? t : null;
 }
+
+/**
+ * One reading for a hover tip, against the previous call when there was one: `Integrated −8.1 → −8.8 LUFS ▼ 0.7 LU`.
+ * `deltaUnit` names the change when it differs from the reading's (a loudness change is in LU); `signed: false`
+ * drops the `+` on a value that is never negative (a score).
+ */
+export function tipLine(
+  label: string,
+  now: number | undefined,
+  unit: string,
+  was?: number,
+  { deltaUnit = unit, digits = 1, signed = true }: { deltaUnit?: string; digits?: number; signed?: boolean } = {},
+): string {
+  const show = (v: number | undefined) => (signed || v === undefined ? fmt(v, digits) : v.toFixed(digits));
+  const u = unit ? ` ${unit}` : '';
+  if (was === undefined || was <= -149 || now === undefined || now <= -149) return `${label} ${show(now)}${u}`;
+  const d = now - was;
+  if (Math.abs(d) < 0.5 * 10 ** -digits) return `${label} ${show(now)}${u}, as in the previous call`;
+  return `${label} ${show(was)} → ${show(now)}${u} ${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(digits)}${deltaUnit ? ` ${deltaUnit}` : ''}`;
+}

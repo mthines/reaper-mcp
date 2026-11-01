@@ -98,3 +98,26 @@ export const ShowsTheKeysPreviousConfidenceInPercent: Story = {
     await expect(previous.textContent).not.toMatch(/0\.45/);
   },
 };
+
+export const ShowsThePreviousAndNewLoudnessOnHover: Story = {
+  args: of('Loudness · on target'),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.hover(canvas.getByRole('img', { name: /^Integrated/ }));
+    await expect(canvas.getByRole('tooltip').textContent).toMatch(/Integrated −[\d.]+ → −[\d.]+ LUFS [▲▼] [\d.]+ LU/);
+  },
+};
+
+export const ShowsABandsShareOnHover: Story = {
+  args: {
+    entry: entry('analyze_track_offline', { name: 'Master', lufs: -10.4, sections: [[0, 15, -11], [15, 30, -10]], bands: [-15, -6] }),
+    history: [],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.hover(canvas.getByText('Bass'));
+    await expect(canvas.getByRole('tooltip').textContent).toMatch(/Bass · 60–250 Hz\s*−6\.0 dB of the energy/);
+    await userEvent.unhover(canvas.getByText('Bass'));
+    await expect(canvas.queryByRole('tooltip')).toBeNull();
+  },
+};

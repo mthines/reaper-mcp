@@ -15,3 +15,4 @@ export { Markdown } from './Markdown.js';
 export { Notice } from './Notice.js';
 export { ResizeHandle, useDrawerWidth } from './ResizeHandle.js';
 export { Toggle } from './Toggle.js';
+export { HoverTip } from './HoverTip.js';

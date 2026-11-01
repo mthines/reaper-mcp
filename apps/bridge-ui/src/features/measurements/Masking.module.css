@@ -3,8 +3,8 @@
 .row { display: grid; grid-template-columns: minmax(64px, 30%) minmax(0, 1fr) 32px; gap: 8px; align-items: center; }
 .name { font-size: 11.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cells { display: grid; gap: 1px; height: 14px; }
-.cells > span { border-radius: 1px; background: var(--accent); }
-.cells > span.hot { background: var(--warn); }
+.cells > span { border-radius: 1px; background: color-mix(in srgb, var(--accent) var(--o, 100%), transparent); }
+.cells > span.hot { background: color-mix(in srgb, var(--warn) var(--o, 100%), transparent); }
 .score { font-size: 11px; color: var(--muted); text-align: right; }
 .axis { height: 14px; }
 .marks { position: relative; height: 14px; }

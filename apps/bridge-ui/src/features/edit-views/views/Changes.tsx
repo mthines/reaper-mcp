@@ -1,6 +1,7 @@
 import type { ChangeRow } from '../edit-views.js';
 import { Legend } from './ChangeLegend.js';
 import { PROP_LABEL, barPos, pct, plural, valueText } from './format.js';
+import { HoverTip } from '../../../components/index.js';
 import { cx } from '../../../lib/cx.js';
 import chartStyles from '../../../styles/chart.module.css';
 import styles from './Changes.module.css';
@@ -43,6 +44,7 @@ export function Changes({ rows, more = 0 }: { rows: ChangeRow[]; more?: number }
                   r={r}
                   b={r.b}
                   label={`${r.t} ${label} from ${before} to ${after}`}
+                  tip={same || r.a === undefined ? `${label} ${after}` : `${label} ${before} → ${after}`}
                 />
               )}
             </div>
@@ -70,16 +72,18 @@ function ChangeBar({
   r,
   b: after,
   label,
+  tip,
 }: {
   r: ChangeRow;
   b: number;
   label: string;
+  tip: string;
 }) {
   const b = barPos(r, after);
   const a = r.a === undefined ? null : barPos(r, r.a);
   const origin = r.s === "pan" ? 50 : 0;
   return (
-    <span className={chartStyles.evBar} role="img" aria-label={label}>
+    <HoverTip className={chartStyles.evBar} role="img" aria-label={label} tip={tip}>
       {r.s === "db" && (
         <span className={chartStyles.evZero} style={{ left: `${pct(0, -60, 6)}%` }} />
       )}
@@ -101,7 +105,7 @@ function ChangeBar({
         <span className={chartStyles.evWas} style={{ left: `${a}%` }} />
       )}
       <span className={chartStyles.evTick} style={{ left: `${b}%` }} />
-    </span>
+    </HoverTip>
   );
 }
 

@@ -1,6 +1,7 @@
 import { lufsPct } from './Loudness.js';
 import { Readout } from './Readout.js';
 import { fmt } from './format.js';
+import { HoverTip } from '../../components/index.js';
 import type { Measurement } from '../../lib/commands.js';
 import { cx } from '../../lib/cx.js';
 import chartStyles from '../../styles/chart.module.css';
@@ -21,7 +22,7 @@ export function Stems({ m }: { m: Extract<Measurement, { kind: 'stems' }> }) {
         {m.stems.map(([stem, lufs, peak]) => {
           const over = peak !== null && peak > 0;
           return (
-            <div key={stem} className={cx(chartStyles.evRow, over && chartStyles.evHot)} title={`${stemLabel(stem)}: ${lufs === null ? 'silent' : `${fmt(lufs)} LUFS`}${peak !== null ? `, peak ${fmt(peak)} dBFS` : ''}`}>
+            <HoverTip key={stem} className={cx(chartStyles.evRow, over && chartStyles.evHot)} tip={[stemLabel(stem), lufs === null ? 'Silent' : `${fmt(lufs)} LUFS`, ...(peak !== null ? [`Peak ${fmt(peak)} dBFS`] : [])]}>
               <span className={chartStyles.evName}>{stemLabel(stem)}</span>
               <span className={cx(chartStyles.evVal, 'mono')}>
                 {lufs === null ? <b>silent</b> : <><b>{fmt(lufs)}</b> LUFS</>}
@@ -30,7 +31,7 @@ export function Stems({ m }: { m: Extract<Measurement, { kind: 'stems' }> }) {
               <span className={chartStyles.evBar}>
                 <span className={chartStyles.evFill} style={{ left: 0, width: `${lufs === null ? 0 : lufsPct(lufs)}%` }} />
               </span>
-            </div>
+            </HoverTip>
           );
         })}
       </div>
