@@ -1,0 +1,34 @@
+/* Signal flow: receives in on the left, sends and hardware outputs out on the right */
+.flow { position: relative; margin: 4px 0 14px; }
+.flow svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.wire { fill: none; stroke: var(--accent); stroke-linecap: round; }
+.wire:where([data-state="same"]) { stroke: var(--muted); }
+.wire:where([data-state="muted"]) { stroke: var(--muted); stroke-dasharray: 3 3; }
+.wire:where([data-state="gone"]) { stroke: var(--faint); stroke-dasharray: 2 3; }
+.node {
+  position: absolute; transform: translateY(-50%); box-sizing: border-box; padding: 3px 6px; border-radius: 5px;
+  border: 1px solid var(--line-2); background: var(--panel-2); font-size: 12px; font-weight: 500; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.label {
+  position: absolute; transform: translateY(-50%); max-width: 26%; font-size: 12px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.label:where([data-side="out"]) { max-width: none; right: 0; }
+.label:where([data-state="same"], [data-state="muted"]) { color: var(--muted); }
+.label:where([data-state="gone"]) { color: var(--faint); text-decoration: line-through; }
+.label :global(.mono) { color: var(--faint); }
+
+/* The rows below, one section per kind */
+.section + .section { margin-top: 10px; }
+.heading { margin: 0 0 2px; font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+
+.lgWeight { width: 14px; height: 4px; background: var(--muted); clip-path: polygon(0 45%, 100% 0, 100% 100%, 0 55%); }
+.lgSame { width: 12px; height: 2px; background: var(--muted); }
+.lgMuted { width: 12px; height: 0; border-top: 2px dashed var(--muted); }
+.lgGone { width: 12px; height: 0; border-top: 1px dashed var(--faint); }
+
+/* The narrowest drawer: the sections below carry it alone */
+@container (max-width: 300px) {
+  .flow { display: none; }
+}

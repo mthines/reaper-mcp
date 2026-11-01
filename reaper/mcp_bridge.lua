@@ -1072,6 +1072,15 @@ function handlers.stop(params)
 end
 
 function handlers.record(params)
+  -- With no track armed REAPER opens a modal "Record Warning", which blocks the
+  -- main thread and with it the bridge until a person closes it (seen in 7.40).
+  local armed = false
+  for i = 0, reaper.CountTracks(0) - 1 do
+    if reaper.GetMediaTrackInfo_Value(reaper.GetTrack(0, i), "I_RECARM") ~= 0 then armed = true break end
+  end
+  if not armed then
+    return nil, "No track is armed for recording (REAPER would open a dialog that blocks the bridge). Arm a track first with set_track_record or set_track_property recordArm"
+  end
   -- Action 1013 = Transport: Record
   reaper.Main_OnCommand(1013, 0)
   return { success = true }
@@ -4013,8 +4022,8 @@ end
 function handlers.delete_marker(params)
   if params.markerIndex == nil then return nil, "markerIndex required" end
   reaper.Undo_BeginBlock()
-  -- DeleteProjectMarker takes (proj, isrgn, markrgnindexnumber)
-  local deleted = reaper.DeleteProjectMarker(0, false, params.markerIndex, false)
+  -- DeleteProjectMarker takes (proj, markrgnindexnumber, isrgn)
+  local deleted = reaper.DeleteProjectMarker(0, params.markerIndex, false)
   if not deleted then
     reaper.Undo_EndBlock("MCP: Delete marker (failed)", -1)
     return nil, "Marker " .. params.markerIndex .. " not found"
@@ -4026,7 +4035,7 @@ end
 function handlers.delete_region(params)
   if params.regionIndex == nil then return nil, "regionIndex required" end
   reaper.Undo_BeginBlock()
-  local deleted = reaper.DeleteProjectMarker(0, true, params.regionIndex, false)
+  local deleted = reaper.DeleteProjectMarker(0, params.regionIndex, true)
   if not deleted then
     reaper.Undo_EndBlock("MCP: Delete region (failed)", -1)
     return nil, "Region " .. params.regionIndex .. " not found"

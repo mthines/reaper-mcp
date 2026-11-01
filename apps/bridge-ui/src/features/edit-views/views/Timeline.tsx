@@ -1,8 +1,8 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties, type PointerEvent } from 'react';
 import { fittingLabels, focusOf, normalizedGains, timelineDiff, type ArrangeOp, type EditView, type Item, type Marker, type Region, type Tempo } from '../edit-views.js';
 import { Counts } from './Counts.js';
 import { Legend } from './ChangeLegend.js';
-import { EW } from './Envelope.js';
+import { EW, PointTip } from './Envelope.js';
 import { clock, hueOf, pct } from './format.js';
 import { useWidth } from '../../../lib/useWidth.js';
 import { useZoom } from '../../../lib/zoom.js';
@@ -71,6 +71,19 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
   const band = v.op === "insert" || v.op === "remove" ? v.span : v.to;
   const spanLabel = v.op && SPAN_LABEL[v.op];
   const sig = first && first[2] > 0 ? `${first[2]}/${first[3]}` : "–";
+  // One marker added, changed or removed: the readouts say what changed there, before → after, not the whole map
+  const one =
+    !v.was || tempos.removed.length > 1
+      ? undefined
+      : tempos.added.size === 1
+        ? [...tempos.added][0]
+        : tempos.added.size === 0 && tempos.removed.length === 1
+          ? tempos.removed[0]
+          : undefined;
+  const oneWas = one && v.was ? tempoAt(v.was.tempo, one[0]) : null;
+  const oneNow = one ? tempoAt(v.tempo, one[0]) : null;
+  const change = (was: string | undefined, now: string | undefined) =>
+    was !== undefined && now !== undefined && was !== now ? `${was} → ${now}` : (now ?? was ?? "–");
   const changed = regions.added.size + markers.added.size + tempos.added.size;
   const removed =
     regions.removed.length + markers.removed.length + tempos.removed.length;
@@ -134,15 +147,18 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
         <Measurement.Readout
           label="Tempo"
           value={
-            first
-              ? varies
-                ? `${Math.min(...bpms)}–${Math.max(...bpms)}`
-                : String(first[1])
-              : "–"
+            one
+              ? change(oneWas ? String(oneWas.bpm) : undefined, oneNow ? String(oneNow.bpm) : undefined)
+              : first
+                ? varies
+                  ? `${Math.min(...bpms)}–${Math.max(...bpms)}`
+                  : String(first[1])
+                : "–"
           }
           unit="BPM"
+          title={one ? `At ${clock(one[0], 1)}` : undefined}
         />
-        <Measurement.Readout label="Time sig" value={sig} />
+        <Measurement.Readout label="Time sig" value={one ? change(oneWas?.sig, oneNow?.sig) : sig} title={one ? `At ${clock(one[0], 1)}` : undefined} />
         {v.was ? (
           <Counts added={changed} removed={removed} />
         ) : (
@@ -321,6 +337,18 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
 
 const TH = 40;
 
+/** The tempo and time signature in effect at `t`; a marker without a time signature keeps the one before it */
+function tempoAt(map: Tempo[], t: number): { bpm: number; sig: string } | null {
+  let bpm: number | undefined;
+  let sig = "–";
+  for (const m of [...map].sort((a, b) => a[0] - b[0])) {
+    if (m[0] > t + 1e-6) break;
+    bpm = m[1];
+    if (m[2] > 0) sig = `${m[2]}/${m[3]}`;
+  }
+  return bpm === undefined ? null : { bpm, sig };
+}
+
 function TempoLane({
   tempo,
   removed,
@@ -333,6 +361,7 @@ function TempoLane({
   /** The seconds drawn, start to end */
   win: [number, number];
 }) {
+  const [hover, setHover] = useState<Tempo | null>(null);
   const bpms = [...tempo, ...removed].map((t) => t[1]);
   const top = Math.max(...bpms) + 2;
   const bottom = Math.min(...bpms) - 2;
@@ -353,8 +382,17 @@ function TempoLane({
     });
     return `${d}H${EW}`;
   };
+  const inView = (t: Tempo) => t[0] >= win[0] && t[0] <= win[1];
+  // The marker nearest the pointer, so a tiny dot needs no aiming
+  const onMove = (ev: PointerEvent<HTMLDivElement>) => {
+    const r = ev.currentTarget.getBoundingClientRect();
+    const at = win[0] + ((ev.clientX - r.left) / r.width) * (win[1] - win[0]);
+    setHover(
+      tempo.filter(inView).reduce<Tempo | null>((best, t) => (!best || Math.abs(t[0] - at) < Math.abs(best[0] - at) ? t : best), null),
+    );
+  };
   return (
-    <div className={styles.evTempo}>
+    <div className={styles.evTempo} onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
       <span className={cx(styles.evTempoLabel, 'mono')}>tempo</span>
       <svg
         viewBox={`0 0 ${EW} ${TH}`}
@@ -378,15 +416,19 @@ function TempoLane({
       {tempo.map((t, i) => (
         <span
           key={i}
-          className={cx(envelopeStyles.evDot, added.has(t) ? envelopeStyles.evDotNew : '')}
-          hidden={t[0] < win[0] || t[0] > win[1]}
+          className={cx(envelopeStyles.evDot, added.has(t) ? envelopeStyles.evDotNew : '', t === hover ? envelopeStyles.evDotHover : '')}
+          hidden={!inView(t)}
           style={{
             left: `${(x(t[0]) / EW) * 100}%`,
             top: `${(y(t[1]) / TH) * 100}%`,
           }}
-          title={`${t[1]} BPM${t[2] > 0 ? ` · ${t[2]}/${t[3]}` : ""} at ${clock(t[0], 1)}`}
         />
       ))}
+      {hover && (
+        <PointTip left={(x(hover[0]) / EW) * 100} top={(y(hover[1]) / TH) * 100}>
+          {hover[1]} BPM{hover[2] > 0 ? ` · ${hover[2]}/${hover[3]}` : ""} at {clock(hover[0], 1)}
+        </PointTip>
+      )}
     </div>
   );
 }
