@@ -9,6 +9,9 @@ type ChordsData = Extract<Measurement, { kind: 'chords' }>;
 /** Where a chord stands against the key: its roman numeral carries an accidental when its root is outside the scale */
 const placeOf = (chord: string, roman: string) => (chord === 'N' ? 'none' : /[♭♯]/.test(roman) ? 'out' : roman ? 'in' : 'unknown');
 
+/** Every chord is as wide as it lasts, on one scale for the whole chart, so a wrapped row never stretches */
+const EM_PER_SECOND = 1.8;
+
 const time = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 
 /** detect_chords: the progression as a chord chart, each chord as wide as it lasts, coloured by whether it is in the key */
@@ -24,7 +27,7 @@ export function Chords({ m }: { m: ChordsData }) {
       </div>
       <ol className={styles.chart} aria-label="Chord progression">
         {m.ch.map(([start, end, chord, roman]) => (
-          <li key={start} className={styles.chord} data-place={placeOf(chord, roman)} style={{ flexGrow: Math.max(end - start, 0.01) }}
+          <li key={start} className={styles.chord} data-place={placeOf(chord, roman)} style={{ flexBasis: `${Math.max(end - start, 0) * EM_PER_SECOND}em` }}
             title={`${chord === 'N' ? 'No chord' : chord}${roman ? ` (${roman})` : ''} · ${time(start)} – ${time(end)}`}>
             <span className={cx(styles.name, 'mono')}>{chord === 'N' ? '–' : chord}</span>
             <span className={cx(styles.roman, 'mono')}>{roman}</span>
