@@ -31,7 +31,7 @@ export function registerTransportTools(server: McpServer): void {
 
   server.tool(
     'record',
-    'Start recording in REAPER (arms must be set on target tracks)',
+    'Start recording in REAPER. Refused when no track is armed (REAPER would open a dialog that blocks the bridge): arm the target tracks first with set_track_record',
     {},
     async () => {
       const res = await sendCommand('record');

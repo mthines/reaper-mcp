@@ -263,6 +263,9 @@ export function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) 
                 ] as Array<[string, string]>)
               : []),
             ...(v.ais ? ([[chartStyles.lgAi, "Automation item (one colour per pool)"]] as Array<[string, string]>) : []),
+            ...(v.ais && changedItems(v).size
+              ? ([[cx(chartStyles.lgAi, styles.lgAiDim), "Unchanged item"]] as Array<[string, string]>)
+              : []),
           ]}
         />
       )}
@@ -281,6 +284,22 @@ function poolColors(v: EnvView): Map<number, string> {
 }
 
 const sameItem = (a: AutoItem, b: AutoItem) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+
+/**
+ * The items this call changed: the one it touched, ones added or moved, and every item of a pool whose curve
+ * changed (pooled items share it). The view dims the others, so the change reads at a glance; empty when the
+ * call changed no item (a listing, a plain point edit), and then nothing is dimmed.
+ */
+function changedItems(v: EnvView): Set<number> {
+  const ais = v.ais ?? [];
+  const changed = new Set<number>();
+  if (v.ai !== undefined && v.ai >= 0) changed.add(v.ai);
+  if (v.wasAis) ais.forEach((a, i) => !v.wasAis?.some((w) => sameItem(a, w)) && changed.add(i));
+  const before = new Map((v.wasPools ?? []).map((p) => [p[0], JSON.stringify(p[1])]));
+  const now = new Map((v.pools ?? []).map((p) => [p[0], JSON.stringify(p[1])]));
+  ais.forEach((a, i) => before.has(a[2]) && before.get(a[2]) !== (now.get(a[2]) ?? "[]") && changed.add(i));
+  return changed;
+}
 
 /** A pool's curve placed at an item, held at its last value to the item's end */
 function poolCurve(
@@ -313,6 +332,7 @@ function AutomationItems({
   const pts = new Map((v.pools ?? []).map((p) => [p[0], p[1]]));
   const wasPts = new Map((v.wasPools ?? []).map((p) => [p[0], p[1]]));
   const ais = v.ais ?? [];
+  const focus = changedItems(v);
   // Items that moved, resized or went: their old place, dashed
   const gone = (v.wasAis ?? []).filter((w) => !ais.some((a) => sameItem(a, w)));
   return (
@@ -335,7 +355,7 @@ function AutomationItems({
         const now = pts.get(a[2]) ?? [];
         const changed = before && JSON.stringify(before) !== JSON.stringify(now);
         return (
-          <g key={i}>
+          <g key={i} className={styles.evAiItem} data-state={focus.size && !focus.has(i) ? "dim" : undefined}>
             <rect
               className={styles.evAiCover}
               x={x(a[0])}
@@ -377,6 +397,7 @@ function AutomationItemLabels({ v, x }: { v: EnvView; x: (t: number) => number }
   const ais = v.ais ?? [];
   const uses = new Map<number, number>();
   for (const a of ais) uses.set(a[2], (uses.get(a[2]) ?? 0) + 1);
+  const focus = changedItems(v);
   return (
     <>
       {ais.map((a, i) => {
@@ -389,8 +410,9 @@ function AutomationItemLabels({ v, x }: { v: EnvView; x: (t: number) => number }
           <span
             key={i}
             className={cx(styles.evAiLabel, 'mono', v.ai === i ? styles.evAiLabelTouched : '')}
+            data-state={focus.size && !focus.has(i) ? "dim" : undefined}
             style={{ left: `${(left / EW) * 100}%`, width: `${(width / EW) * 100}%` }}
-            title={`${name} · pool ${a[2]}${pooled ? ` · ${uses.get(a[2])} pooled items` : ""} · ${clock(a[0], 2)}–${clock(a[0] + a[1], 2)}`}
+            title={`${name} · pool ${a[2]}${pooled ? ` · ${uses.get(a[2])} pooled items` : ""} · ${clock(a[0], 2)}–${clock(a[0] + a[1], 2)}${focus.has(i) ? " · changed by this call" : ""}`}
           >
             {width / EW > 0.1 ? `${name}${pooled ? " ⧉" : ""}` : ""}
           </span>

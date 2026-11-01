@@ -4,6 +4,13 @@ import { sendCommand } from '../bridge.js';
 import type { TrackSpectrum } from '@reaper-mcp/protocol';
 import { summarizeSpectrum } from './spectrum.js';
 
+const SPECTRUM_RETRIES = 4;
+const SPECTRUM_RETRY_MS = 250;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function registerMeterTools(server: McpServer): void {
   server.tool(
     'read_track_meters',
@@ -29,7 +36,13 @@ export function registerMeterTools(server: McpServer): void {
       includeBins: z.boolean().optional().describe('Also return every raw FFT bin (large: fftSize/2 values)'),
     },
     async ({ trackIndex, fftSize, includeBins }) => {
-      const res = await sendCommand('read_track_spectrum', { trackIndex, fftSize: fftSize ?? 4096 });
+      // An analyzer this call inserts has not run an FFT yet, so the first read finds no data
+      // (seen live: the second read, a moment later, works). Read again for up to ~1 s.
+      let res = await sendCommand('read_track_spectrum', { trackIndex, fftSize: fftSize ?? 4096 });
+      for (let i = 0; i < SPECTRUM_RETRIES && !res.success && res.error?.includes('not producing data yet'); i++) {
+        await sleep(SPECTRUM_RETRY_MS);
+        res = await sendCommand('read_track_spectrum', { trackIndex, fftSize: fftSize ?? 4096 });
+      }
       if (!res.success) {
         return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
       }

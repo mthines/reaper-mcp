@@ -220,7 +220,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 |------|------|-------------|
 | `play` | `tools/transport.ts` | Start playback |
 | `stop` | `tools/transport.ts` | Stop playback/recording |
-| `record` | `tools/transport.ts` | Start recording (arms must be set on target tracks) |
+| `record` | `tools/transport.ts` | Start recording; refused when no track is armed (REAPER would open a blocking dialog) |
 | `get_transport_state` | `tools/transport.ts` | Play/record/pause status, cursor positions, tempo, time sig |
 | `set_cursor_position` | `tools/transport.ts` | Move edit cursor to position in seconds |
 
@@ -897,7 +897,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   `src/features/edit-views/` (`EditViews.tsx`, one view per kind in `views/`) from `editViewOf()` (`edit-views.ts`). A write reads the state it touches before its handler
   runs (`M.before`) and again after, so the drawer shows before → after: track and FX parameter changes (the
   plugin's own readout), the automation window an edit touched (padded 25%, at least 4 s; automation items drawn as blocks tinted by
-  pool with their name and shared curve, moved/deleted items and a changed pool's old curve dashed), MIDI notes as a piano
+  pool with their name and shared curve, moved/deleted items and a changed pool's old curve dashed, items the call left unchanged dimmed), MIDI notes as a piano
   roll (first 256, `more` counts the rest; added notes solid, removed dashed), `analyze_midi` velocity per pitch,
   markers/regions/tempo/items on one timeline, `list_tracks` as a mixer, and `run_plan`'s ops; also FX chains
   (add/remove/move/copy/bypass/offline/rename/preset, `get_track_properties`: slots marked added/moved/changed/removed by

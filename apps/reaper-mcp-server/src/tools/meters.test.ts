@@ -112,6 +112,40 @@ describe('meter tools', () => {
       expect(mockedSendCommand).toHaveBeenCalledWith('read_track_spectrum', { trackIndex: 0, fftSize: 8192 });
     });
 
+    it('reads again while a just-inserted analyzer has no data yet, and returns the spectrum', async () => {
+      vi.useFakeTimers();
+      try {
+        const noData = { id: 'test', success: false, error: 'Spectrum analyzer not producing data yet. Ensure audio is playing.', timestamp: 0 };
+        mockedSendCommand
+          .mockResolvedValueOnce(noData)
+          .mockResolvedValueOnce({ id: 'test', success: true, data: spectrumData, timestamp: 0 });
+
+        const pending = tools['read_track_spectrum'].handler({ trackIndex: 0 }) as Promise<{ content: { text: string }[]; isError?: boolean }>;
+        await vi.runAllTimersAsync();
+        const result = await pending;
+        expect(result.isError).toBeUndefined();
+        expect(JSON.parse(result.content[0].text).peakDb).toBe(-6);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('gives up after about a second when the analyzer never produces data', async () => {
+      vi.useFakeTimers();
+      try {
+        mockedSendCommand.mockResolvedValue({ id: 'test', success: false, error: 'Spectrum analyzer not producing data yet. Ensure audio is playing.', timestamp: 0 });
+
+        const pending = tools['read_track_spectrum'].handler({ trackIndex: 0 });
+        await vi.runAllTimersAsync();
+        expect(await pending).toEqual({
+          content: [{ type: 'text', text: 'Error: Spectrum analyzer not producing data yet. Ensure audio is playing.' }],
+          isError: true,
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('returns error when analyzer not installed', async () => {
       mockedSendCommand.mockResolvedValue({
         id: 'test',
