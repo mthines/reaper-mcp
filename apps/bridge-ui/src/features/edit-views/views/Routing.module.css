@@ -39,5 +39,4 @@
 .wire, .label { transition: opacity 0.12s; }
 .wire { pointer-events: stroke; cursor: default; }
 .wire:where([data-focus="off"]), .label:where([data-focus="off"]) { opacity: 0.25; }
-.label:where([data-focus="on"]) { font-weight: 600; }
 .row:where([data-focus]) { background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: 4px; }

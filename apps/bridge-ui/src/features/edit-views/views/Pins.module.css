@@ -21,7 +21,6 @@
 .pin:where([data-side="out"]) { text-align: right; }
 
 .wire:where([data-focus="off"]), .chan:where([data-focus="off"]), .pin:where([data-focus="off"]) { opacity: 0.25; }
-.chan:where([data-focus="on"]), .pin:where([data-focus="on"]) { font-weight: 600; }
 
 .lgSame { width: 12px; height: 2px; background: var(--muted); }
 .lgGone { width: 12px; height: 0; border-top: 1px dashed var(--faint); }
