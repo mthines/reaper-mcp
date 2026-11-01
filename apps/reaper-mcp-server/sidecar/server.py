@@ -447,7 +447,7 @@ def handle_chords_status(request_id: Any, params: dict) -> str:
     """Whether the chord model is installed, so a caller can pick the template engine instead."""
     import chords
 
-    return _ok(request_id, {"installed": chords.is_installed(), "message": chords.NOT_INSTALLED})
+    return _ok(request_id, chords.status())
 
 
 def handle_chroma(request_id: Any, params: dict) -> str:

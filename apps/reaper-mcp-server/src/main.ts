@@ -12,7 +12,7 @@ import { homedir, platform } from 'node:os';
 import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
 import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
-import { setupSidecar } from './setup-sidecar.js';
+import { detectInstalled, setupSidecar } from './setup-sidecar.js';
 import { firstRunTelemetryNotice, resolveTelemetry, writeTelemetryConfig, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
 import { getSidecarClient } from './sidecar.js';
@@ -324,12 +324,10 @@ async function doctor(): Promise<void> {
   // Check (c2): the optional add-ons in the venv (setup-sidecar --with-separation / --with-chords)
   const addOns = { demucs: false, lv_chordia: false };
   if (depsOk) {
-    try {
-      const { stdout } = await execAsync(`"${venvPython}" -c "import importlib.util as u; print(','.join(m for m in ('demucs', 'lv_chordia') if u.find_spec(m)))"`);
-      for (const m of stdout.trim().split(',')) if (m in addOns) addOns[m as keyof typeof addOns] = true;
-    } catch {
-      // Reported as not installed
-    }
+    // The same check setup-sidecar plans its installs from: a chord model counts only when it imports
+    const found = await detectInstalled();
+    addOns.demucs = found.separation;
+    addOns.lv_chordia = found.chords;
   }
 
   // Check (d): model weights in HuggingFace cache

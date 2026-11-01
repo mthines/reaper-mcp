@@ -9,7 +9,6 @@ as they are; the TypeScript tool maps them onto the bar/beat grid and its chord 
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import tempfile
 import time
@@ -22,11 +21,31 @@ NOT_INSTALLED = ("The chord model is not installed. Run: reaper-mcp setup-sideca
                  "(installs lv-chordia, ~135 MB)")
 
 
-def is_installed() -> bool:
+def _load_error() -> str | None:
+    """None when the recognizer imports; else why not ("" when lv-chordia is not installed at all)."""
     try:
-        return importlib.util.find_spec("lv_chordia") is not None
-    except (ImportError, ValueError):
-        return False
+        import lv_chordia.chord_recognition  # type: ignore  # noqa: F401
+    except ModuleNotFoundError as exc:
+        return "" if exc.name == "lv_chordia" else str(exc)
+    except Exception as exc:  # noqa: BLE001 — any failure while loading means the model is unusable
+        return str(exc) or type(exc).__name__
+    return None
+
+
+def status() -> dict[str, Any]:
+    """Whether the model loads, and what to do when it does not. A package that is there but fails
+    to import (a dependency missing) counts as not installed, so `auto` falls back to the templates."""
+    if is_installed():
+        return {"installed": True, "message": ""}
+    error = _load_error()
+    if not error:
+        return {"installed": False, "message": NOT_INSTALLED}
+    return {"installed": False, "message": f"The chord model is installed but does not load ({error}). "
+                                           "Reinstall it: reaper-mcp setup-sidecar --with-chords"}
+
+
+def is_installed() -> bool:
+    return _load_error() is None
 
 
 def _recognize(path: str, vocabulary: str) -> list[dict[str, Any]]:
@@ -45,7 +64,7 @@ def recognize(path: str, start: float = 0.0, end: float | None = None,
     if vocabulary not in VOCABULARIES:
         raise ValueError(f"Unknown vocabulary {vocabulary}. Use {', '.join(VOCABULARIES)}")
     if not is_installed():
-        raise RuntimeError(NOT_INSTALLED)
+        raise RuntimeError(status()["message"])
     t0 = time.time()
     source, offset, temp = path, 0.0, None
     if start > 0 or end is not None:

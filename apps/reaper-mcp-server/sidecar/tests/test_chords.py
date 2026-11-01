@@ -95,3 +95,23 @@ def test_without_the_model_says_how_to_install_it(wav, monkeypatch):
     assert "--with-chords" in error["message"]
     status = call("chords_status")["result"]
     assert status["installed"] is False and "--with-chords" in status["message"]
+
+
+def test_a_model_that_fails_to_load_is_not_installed_and_says_why(wav, monkeypatch):
+    # lv-chordia present but one of its imports missing (pydub's audioop on Python 3.13)
+    package = types.ModuleType("lv_chordia")
+    monkeypatch.setitem(sys.modules, "lv_chordia", package)
+    monkeypatch.setitem(sys.modules, "lv_chordia.chord_recognition", None)
+    status = call("chords_status")["result"]
+    assert status["installed"] is False
+    assert "does not load" in status["message"] and "--with-chords" in status["message"]
+    assert "does not load" in call("chords", path=wav)["error"]["message"]
+
+
+def test_a_model_that_loads_is_installed(monkeypatch):
+    package = types.ModuleType("lv_chordia")
+    module = types.ModuleType("lv_chordia.chord_recognition")
+    package.chord_recognition = module
+    monkeypatch.setitem(sys.modules, "lv_chordia", package)
+    monkeypatch.setitem(sys.modules, "lv_chordia.chord_recognition", module)
+    assert call("chords_status")["result"]["installed"] is True

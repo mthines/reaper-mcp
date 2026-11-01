@@ -343,7 +343,8 @@ export async function detectInstalled(): Promise<Selection> {
     const found = JSON.parse(stdout.trim().split('\n').pop() ?? '{}') as Partial<Selection>;
     out.core = Boolean(found.core);
     out.separation = Boolean(found.separation);
-    out.chords = Boolean(found.chords);
+    // The package can be there but fail to import (a missing dependency): only a model that loads counts
+    out.chords = Boolean(found.chords) && await exec(`"${python}" -c "import lv_chordia.chord_recognition"`).then(() => true, () => false);
   } catch {
     // A venv whose Python fails counts as not installed: setup rebuilds it
   }

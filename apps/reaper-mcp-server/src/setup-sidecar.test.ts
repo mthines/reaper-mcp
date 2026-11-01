@@ -321,10 +321,21 @@ describe('setup-sidecar options', () => {
     expect(text).toContain('separate_stems');
   });
 
+  it('counts a chord model that is in the venv but fails to import as not installed, so setup repairs it', async () => {
+    execMock.mockReset();
+    vi.mocked(existsSync).mockReturnValue(true);
+    mockExecSuccess('{"core": true, "separation": false, "chords": true}\n');
+    mockExecFailure("ModuleNotFoundError: No module named 'pyaudioop'");
+    const installed = await detectInstalled();
+    expect(installed.chords).toBe(false);
+    expect(planSetup(resolveSelection({ chords: true }), installed)).toContain('chords');
+  });
+
   it('reads the installed add-ons from the venv', async () => {
     execMock.mockReset();
     vi.mocked(existsSync).mockReturnValue(true);
     mockExecSuccess('{"core": true, "separation": false, "chords": true}\n');
+    mockExecSuccess('');
     expect(await detectInstalled()).toEqual({ core: true, aesthetics: true, separation: false, chords: true });
     vi.mocked(existsSync).mockReturnValue(false);
     expect(await detectInstalled()).toEqual(none);
