@@ -226,7 +226,7 @@ from the clone (`npm run doctor` / `npm run setup` are shortcuts):
 |---------|-------------|
 | `reaper-mcp` / `reaper-mcp serve` | Start the MCP server in stdio mode (what Claude Code runs) |
 | `reaper-mcp setup` | Install the Lua bridge, snapshot scripts, JSFX and status page into REAPER; enable the web interface |
-| `reaper-mcp setup-sidecar` | Install the optional Python sidecar (perceptual analysis) |
+| `reaper-mcp setup-sidecar` | Install the optional Python sidecar: a picker in a terminal; `--yes`, `--all`, `--with-separation`, `--with-chords`, `--without-aesthetics`, `--list [--json]` for agents and CI |
 | `reaper-mcp init` | Configure Claude Code — tool allow-list + `.mcp.json` (copy-free) |
 | `reaper-mcp doctor` | Verify everything is configured correctly |
 | `reaper-mcp status` | Check bridge connection |

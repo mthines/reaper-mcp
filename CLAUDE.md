@@ -47,7 +47,7 @@ reaper-mcp/
       server.ts               # McpServer creation, tool registration
       bridge.ts               # File-based IPC: sendCommand(), isBridgeRunning(), etc.
       sidecar.ts              # Python subprocess lifecycle + JSON-RPC client (getSidecarClient())
-      setup-sidecar.ts        # setup-sidecar CLI command: Python check, venv, deps, weights download
+      setup-sidecar.ts        # setup-sidecar CLI command: component picker (TTY) or flags, Python check, venv, deps, weights, add-ons
       tools/
         project.ts            # get_project_info; undo/redo, save, render settings + render, project settings (logic in reaper/mcp_project_lib.lua)
         tracks.ts             # list_tracks, get_track_properties, set_track_property
@@ -85,6 +85,8 @@ reaper-mcp/
       separation.py           # Stem separation with Demucs (opt-in: setup-sidecar --with-separation)
       requirements.txt        # Pinned Python deps
       requirements-separation.txt # Demucs, installed only by --with-separation
+      chords.py               # Chord recognition with lv-chordia (opt-in: setup-sidecar --with-chords)
+      requirements-chords.txt # lv-chordia, installed only by --with-chords
       tests/test_server.py    # pytest unit tests for the sidecar
 
   libs/protocol/              # Shared TypeScript types (compiled with tsc)
@@ -251,7 +253,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `transform_midi` | `tools/composition.ts` | Transpose (refused out of 0-127), velocity set/scale/add + clamp, humanize (seeded), length set/scale/legato |
 | `import_midi_file` | `tools/composition.ts` | Import a .mid (type 0/1, ≤5 MB, ≤20000 notes) without REAPER's dialog: merged onto a track or one new named track per file track; file tempo reported, not applied |
 | `detect_key` | `tools/composition.ts` | Key from a track's MIDI notes (drums skipped) or rendered audio / an audio file (sidecar chroma): key, confidence, relative, top 3, 12-bin chroma; `itemIndex` reads one item's range |
-| `detect_chords` | `tools/composition.ts` | Chords per bar or beat (project tempo map; a file by `bpm` or windows) from MIDI notes or rendered audio / a file (sidecar chroma per segment): key, progression, spans with roman numeral, slash bass (MIDI) and `bassMidi` for a bass line; `itemIndex`, paginated |
+| `detect_chords` | `tools/composition.ts` | Chords per bar or beat (project tempo map; a file by `bpm` or windows) from MIDI notes or rendered audio / a file (sidecar chroma per segment, or the opt-in chord model `--with-chords`, `engine` auto/model/template): key, progression, spans with roman numeral, slash bass (MIDI or model) and `bassMidi` for a bass line; `itemIndex`, paginated |
 
 ### Live MIDI Output (3)
 
@@ -744,7 +746,7 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 
 - **Opt-in**: The sidecar is installed separately via `setup-sidecar`. `pnpm install` and `pnpm nx build` never touch Python.
 - **Lazy spawn**: The sidecar process spawns on the first sidecar tool call, not at server startup; the aesthetics model loads only on the first `analyze` request.
-- **JSON-RPC methods**: `analyze` (aesthetics, with optional `normalizeLufs`), `analyze_audio` (loudness/spectrum/reference, `sidecar/analysis.py`), `align` (cross-correlation delay + polarity), `loudness_curve` / `stereo_bands` / `masking` (`sidecar/mixcheck.py`), `separate` (Demucs, `sidecar/separation.py`: model loaded once per process, CUDA/MPS/CPU with a CPU fallback, `REAPER_MCP_SEPARATION_DEVICE` overrides; a separation call gets its own timeout, ~90 s + 3 s per audio second), `transients` (per-band spectral-flux onsets: low <150 Hz, mid, high >4 kHz, each band scaled to its own 99th percentile so a kick counts as much as a hat; dominant band by mean per-bin log rise; tempo from the onset autocorrelation).
+- **JSON-RPC methods**: `analyze` (aesthetics, with optional `normalizeLufs`), `analyze_audio` (loudness/spectrum/reference, `sidecar/analysis.py`), `align` (cross-correlation delay + polarity), `loudness_curve` / `stereo_bands` / `masking` (`sidecar/mixcheck.py`), `separate` (Demucs, `sidecar/separation.py`: model loaded once per process, CUDA/MPS/CPU with a CPU fallback, `REAPER_MCP_SEPARATION_DEVICE` overrides; a separation call gets its own timeout, ~90 s + 3 s per audio second), `transients` (per-band spectral-flux onsets: low <150 Hz, mid, high >4 kHz, each band scaled to its own 99th percentile so a kick counts as much as a hat; dominant band by mean per-bin log rise; tempo from the onset autocorrelation), `chroma` (12-bin pitch-class energy, per segment for chords), `chords` / `chords_status` (lv-chordia, `sidecar/chords.py`, opt-in: Harte-labelled segments in file seconds; a range is cut to a temp WAV first; the TS side maps the labels onto the bar/beat grid by largest overlap in `chords.ts` and takes the key from the chords' tones weighted by duration).
 - **Audio loading**: always `soundfile` (`analysis.load_audio`). torchaudio 2.9+ removed `info()` and moved `load()` to torchcodec, so never call `torchaudio.load`/`torchaudio.info`; `torchaudio.functional` (filters, resampling) is fine.
 - **Loudness**: `analysis.py` implements ITU-R BS.1770-4 (K-weighting, 400 ms blocks, -70/-10 gates, channels summed) and EBU 3342 LRA; `tests/test_analysis.py` checks them against the EBU 3341/3342 reference signals.
 - **Lifecycle**: Sidecar receives SIGTERM when the MCP server receives SIGINT/SIGTERM. Managed via `getSidecarClient().shutdown()` in `main.ts`.
@@ -1112,7 +1114,7 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 |---------|-------------|
 | `serve` (default) | Start MCP server in stdio mode for Claude Code |
 | `setup` | Install Lua bridge + JSFX analyzers into REAPER |
-| `setup-sidecar` | Install Python sidecar for perceptual audio analysis (opt-in, ~831 MB). Requires Python 3.10+. Installs venv at `~/.reaper-mcp/sidecar-venv/`, downloads Audiobox Aesthetics weights. `--with-separation` also installs Demucs and its htdemucs model (~80 MB) for `separate_stems`; on an existing install only that step runs. |
+| `setup-sidecar` | Install the Python sidecar (opt-in, Python 3.10+, venv at `~/.reaper-mcp/sidecar-venv/`). In a terminal it shows a picker: core analysis (required), Audiobox Aesthetics weights (831 MB, default on), stem separation (Demucs, ~110 MB), chord model (lv-chordia, ~135 MB), each with what it enables, why and its size. No prompt without a TTY, in CI, with `--yes`/`-y`/`--non-interactive` or with any component flag: `--all`, `--with-separation`, `--with-chords`, `--without-aesthetics` (defaults: core + aesthetics). `--list [--json]` prints the components and what is installed. An existing install gets only the missing picked parts; the scripts are always refreshed. |
 | `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` that runs the clone's built `main.js` (copy-free) |
 | `doctor` | Verify all components are configured correctly (includes 4 sidecar sub-checks) |
 | `status` | Check if Lua bridge is running in REAPER |

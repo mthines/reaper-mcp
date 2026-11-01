@@ -150,7 +150,7 @@ Workflow: [knowledge/workflows/transient-lighting.md](../knowledge/workflows/tra
 | `transform_midi` | Transpose, velocity (set/scale/add/clamp), humanize (seeded), lengths (set/scale/legato) |
 | `import_midi_file` | Import a .mid file as MIDI items, one call, no dialog |
 | `detect_key` | The key of a MIDI track, a rendered track, one media item or an audio file, with confidence and the chroma |
-| `detect_chords` | The chords per bar or beat of a MIDI track, a rendered track, one media item or an audio file: progression, roman numerals, bass notes for a bass line |
+| `detect_chords` | The chords per bar or beat of a MIDI track, a rendered track, one media item or an audio file: progression, roman numerals, bass notes for a bass line. Audio uses the chord model when installed (`reaper-mcp setup-sidecar --with-chords`: sevenths and inversions from a full mix), else chroma templates |
 
 ### Media Item Editing (11 tools)
 

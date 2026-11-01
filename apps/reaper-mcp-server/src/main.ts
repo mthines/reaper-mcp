@@ -321,6 +321,17 @@ async function doctor(): Promise<void> {
     }
   }
 
+  // Check (c2): the optional add-ons in the venv (setup-sidecar --with-separation / --with-chords)
+  const addOns = { demucs: false, lv_chordia: false };
+  if (depsOk) {
+    try {
+      const { stdout } = await execAsync(`"${venvPython}" -c "import importlib.util as u; print(','.join(m for m in ('demucs', 'lv_chordia') if u.find_spec(m)))"`);
+      for (const m of stdout.trim().split(',')) if (m in addOns) addOns[m as keyof typeof addOns] = true;
+    } catch {
+      // Reported as not installed
+    }
+  }
+
   // Check (d): model weights in HuggingFace cache
   const weightsPath = join(hfCachePath, 'models--facebook--audiobox-aesthetics');
   const weightsExist = existsSync(weightsPath);
@@ -363,6 +374,24 @@ async function doctor(): Promise<void> {
             detail: "Meta's Audiobox Aesthetics: Claude listens to any track and rates it 0–10 for production quality, complexity and enjoyment",
             fix: `~831 MB, downloads on first use · or get it now: ${repair}`,
           },
+      ...(depsOk ? [
+      addOns.lv_chordia
+        ? { label: 'Chord model', status: 'ok', detail: 'lv-chordia · detect_chords reads audio with it' }
+        : {
+            label: 'Chord model',
+            status: 'info',
+            detail: 'Optional: chords with sevenths and inversions from a full mix (detect_chords uses templates without it)',
+            fix: `~135 MB · ${repair} --with-chords`,
+          },
+      addOns.demucs
+        ? { label: 'Stem separation', status: 'ok', detail: 'Demucs · separate_stems' }
+        : {
+            label: 'Stem separation',
+            status: 'info',
+            detail: 'Optional: separate_stems splits a mix into drums, bass, vocals and the rest',
+            fix: `~110 MB · ${repair} --with-separation`,
+          },
+      ] satisfies Section['checks'] : []),
     ],
   };
 
@@ -473,7 +502,7 @@ switch (command) {
     break;
 
   case 'setup-sidecar':
-    setupSidecar({ withSeparation: process.argv.includes('--with-separation') }).catch((err) => {
+    setupSidecar(process.argv.slice(3)).catch((err) => {
       console.error('Sidecar setup failed:', err);
       process.exit(1);
     });
@@ -505,8 +534,9 @@ Usage:
   reaper-mcp                  Start MCP server (stdio mode)
   reaper-mcp serve            Start MCP server (stdio mode)
   reaper-mcp setup            Install Lua bridge + JSFX analyzers into REAPER
-  reaper-mcp setup-sidecar    Install Python sidecar for perceptual audio analysis (opt-in, ~831 MB);
-                              --with-separation adds stem separation (Demucs, ~80 MB model)
+  reaper-mcp setup-sidecar    Install the Python sidecar (opt-in audio analysis); in a terminal it asks which parts.
+                              Agents/CI: --yes (core + aesthetics weights), --all, --with-separation (Demucs),
+                              --with-chords (chord model), --without-aesthetics, --list [--json] (what is installed)
   reaper-mcp init             Configure Claude Code: tool allow-list + .mcp.json (copy-free)
   reaper-mcp doctor           Check that everything is configured correctly
   reaper-mcp status           Check if Lua bridge is running in REAPER

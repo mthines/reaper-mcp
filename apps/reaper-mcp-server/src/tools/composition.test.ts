@@ -209,6 +209,72 @@ describe('detect_chords', () => {
     expect(res.chords[2]).toMatchObject({ start: 4, end: 5, bar: 3 });
   });
 
+  const installed = async () => ({ installed: true, message: '' });
+  const missing = async () => ({ installed: false, message: 'The chord model is not installed. Run: reaper-mcp setup-sidecar --with-chords' });
+
+  it('reads a rendered track with the chord model when it is installed, with sevenths, slash chords and the key from the chords', async () => {
+    // The model's segments are relative to the render; the bars start at 10 s
+    const chords = vi.fn().mockResolvedValue({ durationSeconds: 8, vocabulary: 'submission', seconds: 2.1, segments: [
+      { start: 0, end: 2.2, label: 'A:min7' }, { start: 2.2, end: 4, label: 'D:min' },
+      { start: 4, end: 6, label: 'E:7/3' }, { start: 6, end: 8, label: 'N' },
+    ] });
+    const chroma = vi.fn();
+    vi.mocked(getSidecarClient).mockReturnValue({ isAvailable: () => true, chordsStatus: installed, chords, chroma } as never);
+    sendCommandMock.mockImplementation(async (type) => {
+      if ((type as string) === '_chord_grid') return ok({ startTime: 10, endTime: 18, segments: grid(4, 10), notes: 0 });
+      if (type === 'render_track_to_wav') return ok({ wavPath: join(dir, 'missing-render.wav'), trackName: 'Gtr', durationSeconds: 8 });
+      return ok({});
+    });
+    const res = json(await tool('detect_chords')({ trackIndex: 1 }));
+    expect(chroma).not.toHaveBeenCalled();
+    expect(res).toMatchObject({ source: 'audio', engine: 'model', progression: 'Am7 Dm E7/Ab', startTime: 10 });
+    expect(res.key.key).toBe('A minor');
+    expect(res.chords[0]).toMatchObject({ chord: 'Am7', quality: 'm7', roman: 'i7', start: 10, end: 12, score: 1 });
+    expect(res.chords[2]).toMatchObject({ chord: 'E7/Ab', bass: 'Ab', roman: 'V7' });
+    expect(res.chords[3]).toMatchObject({ chord: 'N', start: 16 });
+    expect(res.modelHint).toBeUndefined();
+  });
+
+  it('asks the model for a file range in file seconds and maps its chords onto the bars', async () => {
+    const chords = vi.fn().mockResolvedValue({ durationSeconds: 4, vocabulary: 'submission', seconds: 1, segments: [
+      { start: 30, end: 32, label: 'C:maj' }, { start: 32, end: 34, label: 'G:maj' },
+    ] });
+    vi.mocked(getSidecarClient).mockReturnValue({ isAvailable: () => true, chordsStatus: installed, chords } as never);
+    const res = json(await tool('detect_chords')({ path: join(dir, 'song.wav'), startTime: 30, endTime: 34, bpm: 120 }));
+    expect(chords.mock.calls[0][0]).toMatchObject({ startTime: 30, endTime: 34 });
+    expect(res).toMatchObject({ source: 'file', engine: 'model', progression: 'C G', startTime: 30, endTime: 34 });
+    expect(res.chords[1]).toMatchObject({ start: 32, end: 34, bar: 2, chord: 'G' });
+  });
+
+  it('falls back to the templates without the model and says how to install it; engine "model" refuses instead', async () => {
+    const chroma = vi.fn().mockResolvedValue({ chroma: tri(0, 4, 7), durationSeconds: 2, frames: 20, segments: [tri(0, 4, 7)] });
+    vi.mocked(getSidecarClient).mockReturnValue({ isAvailable: () => true, chordsStatus: missing, chroma } as never);
+    const file = join(dir, 'song.wav');
+    const auto = json(await tool('detect_chords')({ path: file, endTime: 2 }));
+    expect(auto).toMatchObject({ engine: 'template', progression: 'C' });
+    expect(auto.modelHint).toMatch(/--with-chords/);
+    const forced = await tool('detect_chords')({ path: file, endTime: 2, engine: 'model' });
+    expect(forced.isError).toBe(true);
+    expect(forced.content[0].text).toMatch(/--with-chords/);
+  });
+
+  it('keeps MIDI notes on the templates, and engine "model" renders a MIDI track instead', async () => {
+    const chords = vi.fn().mockResolvedValue({ durationSeconds: 2, vocabulary: 'submission', seconds: 1, segments: [{ start: 0, end: 2, label: 'G:maj' }] });
+    vi.mocked(getSidecarClient).mockReturnValue({ isAvailable: () => true, chordsStatus: installed, chords } as never);
+    sendCommandMock.mockImplementation(async (type, params) => {
+      if ((type as string) === '_chord_grid') {
+        const midi = (params as { midi?: boolean }).midi;
+        return ok({ startTime: 0, endTime: 2, segments: grid(1), notes: midi ? 3 : 0, ...(midi ? { profiles: [tri(9, 0, 4)], bass: [-1] } : {}) });
+      }
+      if (type === 'render_track_to_wav') return ok({ wavPath: join(dir, 'missing-render.wav'), trackName: 'Keys', durationSeconds: 2 });
+      return ok({});
+    });
+    expect(json(await tool('detect_chords')({ trackIndex: 0 }))).toMatchObject({ source: 'midi', engine: 'template', progression: 'Am' });
+    expect(chords).not.toHaveBeenCalled();
+    expect(json(await tool('detect_chords')({ trackIndex: 0, engine: 'model' }))).toMatchObject({ source: 'audio', engine: 'model', progression: 'G' });
+    expect((await tool('detect_chords')({ trackIndex: 0, engine: 'model', source: 'midi' })).content[0].text).toMatch(/reads audio/);
+  });
+
   it('says what is missing: a source, the sidecar for audio, MIDI notes, or too fine a grid', async () => {
     expect((await tool('detect_chords')({})).content[0].text).toMatch(/exactly one of trackIndex or path/);
     expect((await tool('detect_chords')({ trackIndex: 0, itemIndex: 0, endTime: 3 })).content[0].text).toMatch(/not both/);

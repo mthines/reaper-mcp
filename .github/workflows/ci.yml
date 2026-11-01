@@ -190,7 +190,7 @@ jobs:
           pip install numpy soundfile pytest
 
       - name: Sidecar analysis and mix-check tests
-        run: python -m pytest apps/reaper-mcp-server/sidecar/tests/test_analysis.py apps/reaper-mcp-server/sidecar/tests/test_mixcheck.py -q
+        run: python -m pytest apps/reaper-mcp-server/sidecar/tests/test_analysis.py apps/reaper-mcp-server/sidecar/tests/test_mixcheck.py apps/reaper-mcp-server/sidecar/tests/test_chords.py -q
 
   # =============================================================================
   # Step 3: Calculate version and create tag

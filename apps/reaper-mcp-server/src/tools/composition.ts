@@ -9,6 +9,8 @@
  *   rendered audio (sidecar chroma), or from an audio file; the key is picked here (key.ts).
  * detect_chords — one profile per bar or beat on the project grid (`_chord_grid`, in Lua: MIDI
  *   notes, or the segments the sidecar averages the rendered chroma over); chords picked here (chords.ts).
+ *   With the opt-in chord model (`setup-sidecar --with-chords`, lv-chordia) audio goes to the sidecar's
+ *   `chords` method instead, and its segments are mapped onto the same grid (engine "model").
  */
 
 import { z } from 'zod/v4';
@@ -23,7 +25,7 @@ import { getSidecarClient } from '../sidecar.js';
 import { getMidiNotesHistogram } from '../telemetry.js';
 import { logToolResult } from '../tool-log.js';
 import { estimateKey, type KeyEstimate } from '../key.js';
-import { chordSpans, progression, type ChordSpan, type Segment } from '../chords.js';
+import { chordProfile, chordSpans, mergeSpans, modelPicks, progression, type ChordPick, type ChordSpan, type ModelSegment, type Segment } from '../chords.js';
 import { parseSmf } from '../smf.js';
 import { MAX_OFFLINE_SECONDS } from './offline.js';
 
@@ -38,6 +40,8 @@ export const MAX_IMPORT_NOTES = 20_000;
 /** Range of a track rendered for detect_key when no endTime is given (seconds). */
 const DEFAULT_KEY_SECONDS = 60;
 const renderTimeoutMs = (seconds: number) => 30_000 + seconds * 400;
+/** The chord model runs at 2-5x real time on a CPU */
+const chordModelTimeoutMs = (seconds: number) => 60_000 + seconds * 500;
 
 const selectionSchema = {
   trackIndex: z.coerce.number().int().min(0).describe('Track index (0-based)'),
@@ -384,8 +388,10 @@ export function registerCompositionTools(server: McpServer): void {
     '(drums on channel 10 ignored; the lowest held note gives slash chords like C/E) or from rendered audio (Python ' +
     'sidecar chroma). Track bars and beats follow the project tempo map; a file uses `bpm` (bar 1 at startTime) or ' +
     'fixed windows. Returns the key, the progression ("Am F C G"), and chord spans (equal neighbours merged): ' +
-    'start/end seconds, bar.beat, chord, root, quality (maj, min, 7, maj7, m7, sus2, sus4, dim, aug), roman numeral in the key, ' +
-    'bassMidi (a MIDI note for a bass line, E1-D#2) and a 0..1 fit; "N" = no chord. Paginated (offset/limit). ' +
+    'start/end seconds, bar.beat, chord, root, quality (maj, min, 7, maj7, m7, sus2, sus4, dim, aug; the model also dim7, m7b5, 6, m6, 9, maj9, m9, mMaj7, 5, 11, 13), ' +
+    'roman numeral in the key, bassMidi (a MIDI note for a bass line, E1-D#2) and a 0..1 fit; "N" = no chord. Paginated (offset/limit). ' +
+    'Audio uses the chord model (lv-chordia, slash chords and sevenths from a full mix) when installed (setup-sidecar --with-chords), ' +
+    'else chroma templates; `engine` picks. ' +
     'Use it before writing a bass line or other parts to existing guitars, keys or vocals.',
     {
       trackIndex: z.coerce.number().int().min(-1).optional().describe('Track to analyze (-1 = master, audio only). Give this or path'),
@@ -395,6 +401,8 @@ export function registerCompositionTools(server: McpServer): void {
       source: z.enum(['auto', 'midi', 'audio']).optional().default('auto')
         .describe('For a track: midi (its MIDI notes), audio (render it), auto (default: MIDI notes when it has any, else audio)'),
       per: z.enum(['bar', 'beat']).optional().default('bar').describe('One chord per bar (default) or per beat'),
+      engine: z.enum(['auto', 'model', 'template']).optional().default('auto')
+        .describe('Audio: model (the chord model, setup-sidecar --with-chords; also renders a MIDI track), template (chroma templates), auto (default: the model when installed). MIDI notes always use templates'),
       startTime: z.coerce.number().min(0).optional().describe('Start of the range in seconds (project time for a track, file time for a file; default 0)'),
       endTime: z.coerce.number().min(0).optional()
         .describe(`End of the range in seconds (default: where the track's last item ends, the project end on the master, the file's end; max ${MAX_OFFLINE_SECONDS} s for audio)`),
@@ -423,6 +431,8 @@ export function registerCompositionTools(server: McpServer): void {
         }
         if (args.endTime != null && args.endTime <= (args.startTime ?? 0)) return fail('endTime must be greater than startTime');
         if (trackIndex === -1 && args.source === 'midi') return fail('The master track holds no MIDI notes: give a track index, or source "audio"');
+        const engineArg = args.engine ?? 'auto';
+        if (engineArg === 'model' && args.source === 'midi') return fail('engine "model" reads audio: use source "audio" (or "auto"), or engine "template" for MIDI notes');
 
         let segments: Segment[] = [];
         let profile: number[] = [];
@@ -430,8 +440,31 @@ export function registerCompositionTools(server: McpServer): void {
         let name: string | undefined;
         let range: { startTime: number; endTime: number };
         let extra: Record<string, unknown> = {};
+        let picks: ChordPick[] | null = null;
+        let engine: 'model' | 'template' = 'template';
+        let modelMissing = false;
         const sidecar = getSidecarClient();
         const needSidecar = () => fail('Audio chord detection needs the Python sidecar. Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar');
+        /** Whether audio goes to the chord model; a string is the error for engine "model" without it. */
+        const useModel = async (): Promise<boolean | string> => {
+          if (engineArg === 'template') return false;
+          const status = await Promise.resolve().then(() => sidecar.chordsStatus()).catch(() => ({ installed: false, message: 'The chord model is not installed. Run: reaper-mcp setup-sidecar --with-chords' }));
+          if (status.installed) return true;
+          if (engineArg === 'model') return status.message;
+          modelMissing = true;
+          return false;
+        };
+        /** The model's chords for a file range, as picks on the grid (seconds from `fileStart`) and a key profile. */
+        const runModel = async (file: string, fileStart: number, fileEnd: number | undefined, grid: { start: number; end: number }[], seconds: number) => {
+          const res = await sidecar.chords(
+            { path: file, ...(fileStart > 0 ? { startTime: fileStart } : {}), ...(fileEnd != null ? { endTime: fileEnd } : {}) },
+            chordModelTimeoutMs(seconds),
+          );
+          const model: ModelSegment[] = res.segments.map((m) => ({ ...m, start: m.start - fileStart, end: m.end - fileStart }));
+          engine = 'model';
+          extra = { ...extra, modelSeconds: res.seconds };
+          return { picks: modelPicks(grid, model), profile: chordProfile(model), duration: res.durationSeconds };
+        };
 
         if (path != null) {
           if (!sidecar.isAvailable()) return needSidecar();
@@ -440,6 +473,19 @@ export function registerCompositionTools(server: McpServer): void {
           if (end - start > MAX_OFFLINE_SECONDS) return fail(`Range too long: max ${MAX_OFFLINE_SECONDS} s per call`);
           const grid = fileGrid(end - start, args.bpm, args.beatsPerBar ?? 4, per, windowSeconds);
           if (!grid) return fail(`More than ${MAX_SEGMENTS} segments: use a shorter range, per "bar" or a longer windowSeconds`);
+          const model = await useModel();
+          if (typeof model === 'string') return fail(model);
+          if (model) {
+            const m = await runModel(path, start, args.endTime, grid, end - start);
+            const dur = m.duration;
+            const kept = grid.map((g, i) => ({ g, p: m.picks[i] })).filter(({ g }) => g.start < dur - 1e-6);
+            segments = kept.map(({ g }) => ({ ...g, start: start + g.start, end: start + Math.min(g.end, dur), profile: [] }));
+            picks = kept.map(({ p }) => p);
+            profile = m.profile;
+            source = 'file';
+            name = basename(path);
+            range = { startTime: start, endTime: start + dur };
+          } else {
           const c = await sidecar.chroma({
             path, ...(start > 0 ? { startTime: start } : {}), ...(args.endTime != null ? { endTime: args.endTime } : {}),
             segments: grid.map((g) => [g.start, g.end]),
@@ -452,8 +498,9 @@ export function registerCompositionTools(server: McpServer): void {
           source = 'file';
           name = basename(path);
           range = { startTime: start, endTime: start + dur };
+          }
         } else {
-          const useMidi = args.source !== 'audio' && (trackIndex as number) >= 0;
+          const useMidi = args.source !== 'audio' && engineArg !== 'model' && (trackIndex as number) >= 0;
           const res = await sendCommand('_chord_grid' as Parameters<typeof sendCommand>[0], {
             trackIndex: trackIndex as number,
             per,
@@ -475,6 +522,8 @@ export function registerCompositionTools(server: McpServer): void {
             if (!sidecar.isAvailable()) return needSidecar();
             const { startTime: start, endTime: end } = range;
             if (end - start > MAX_OFFLINE_SECONDS) return fail(`Range too long: max ${MAX_OFFLINE_SECONDS} s per call (give startTime/endTime)`);
+            const model = await useModel();
+            if (typeof model === 'string') return fail(model);
             const r = await sendCommand(
               'render_track_to_wav',
               { trackIndex: trackIndex as number, startTime: start, endTime: end, commandId: randomUUID() },
@@ -483,9 +532,17 @@ export function registerCompositionTools(server: McpServer): void {
             if (!r.success) return fail(`Render failed: ${r.error}`);
             const wav = r.data as RenderTrackToWavResult;
             try {
-              const c = await sidecar.chroma({ path: wav.wavPath, segments: g.segments.map((s) => [s.start - start, s.end - start]) });
-              segments = g.segments.map((s, i) => ({ ...s, profile: c.segments?.[i] ?? [] }));
-              profile = c.chroma;
+              const relative = g.segments.map((s) => ({ start: s.start - start, end: s.end - start }));
+              if (model) {
+                const m = await runModel(wav.wavPath, 0, undefined, relative, end - start);
+                segments = g.segments.map((s) => ({ ...s, profile: [] }));
+                picks = m.picks;
+                profile = m.profile;
+              } else {
+                const c = await sidecar.chroma({ path: wav.wavPath, segments: relative.map((s) => [s.start, s.end]) });
+                segments = g.segments.map((s, i) => ({ ...s, profile: c.segments?.[i] ?? [] }));
+                profile = c.chroma;
+              }
             } finally {
               await removeQuietly(wav.wavPath);
             }
@@ -496,18 +553,20 @@ export function registerCompositionTools(server: McpServer): void {
 
         const key = estimateKey(profile);
         if (!key) return fail('No pitched content found in the range (silence, or only drums/noise)');
-        const spans = chordSpans(segments, key);
+        const spans = picks ? mergeSpans(segments, picks, key) : chordSpans(segments, key);
         const page = spans.slice(offset, offset + limit);
         const chords = spans.filter((s) => s.chord !== 'N');
         const fit = chords.length ? chords.reduce((a, s) => a + s.score * s.length, 0) / chords.reduce((a, s) => a + s.length, 0) : 0;
         trace.getActiveSpan()?.setAttribute('reaper.chords.source', source);
         trace.getActiveSpan()?.setAttribute('reaper.chords.count', spans.length);
+        trace.getActiveSpan()?.setAttribute('reaper.chords.engine', engine);
         logToolResult('detect_chords', args, startedAt, chordsSummary(name, source, per, key.key, range, spans));
         return text({
           ...(trackIndex != null ? { trackIndex } : { path }),
           ...(args.itemIndex != null ? { itemIndex: args.itemIndex } : {}),
           ...(name ? { name } : {}),
           source,
+          engine,
           per: path != null && args.bpm == null ? `${windowSeconds} s` : per,
           ...range,
           key: { key: key.key, confidence: key.confidence, relative: key.relative },
@@ -517,7 +576,8 @@ export function registerCompositionTools(server: McpServer): void {
           hasMore: offset + page.length < spans.length,
           chords: page,
           ...extra,
-          ...(fit > 0 && fit < 0.75 ? { hint: 'Loose fit: the part may be a melody or riff more than chords, or drums/noise are in the mix. On a mix, try separate_stems first, or per "bar".' } : {}),
+          ...(modelMissing ? { modelHint: 'Audio read with chroma templates. For full mixes, sevenths and inversions install the chord model: reaper-mcp setup-sidecar --with-chords (~135 MB)' } : {}),
+          ...(engine === 'template' && fit > 0 && fit < 0.75 ? { hint: 'Loose fit: the part may be a melody or riff more than chords, or drums/noise are in the mix. On a mix, try separate_stems first, or per "bar".' } : {}),
         });
       } catch (err) {
         return fail(err instanceof Error ? err.message : String(err));

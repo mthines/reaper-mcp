@@ -3,7 +3,8 @@
  * beat of notes, how equal neighbours merge, and what a bass line gets from it.
  */
 import { describe, it, expect } from 'vitest';
-import { matchChord, chordSpans, progression, romanNumeral, type Segment } from './chords.js';
+import { matchChord, chordSpans, progression, romanNumeral, parseHarte, modelPicks, mergeSpans, chordProfile, type Segment } from './chords.js';
+import { estimateKey } from './key.js';
 
 /** A profile with weight on the given pitch classes (C = 0) */
 const pcs = (...classes: number[]) => {
@@ -85,5 +86,51 @@ describe('chordSpans', () => {
     expect(spans.map((s) => s.chord)).toEqual(['C', 'N', 'F']);
     expect(spans[1].bassMidi).toBeUndefined();
     expect(progression(spans)).toBe('C F');
+  });
+});
+
+describe('the chord model\'s labels', () => {
+  it('reads Harte labels: root, quality and the bass as an interval', () => {
+    expect(parseHarte('A:min7')).toEqual({ root: 9, quality: 'm7' });
+    expect(parseHarte('Bb:maj')).toEqual({ root: 10, quality: 'maj' });
+    expect(parseHarte('C:maj/3')).toEqual({ root: 0, quality: 'maj', bassPc: 4 });
+    expect(parseHarte('D:min7/b7')).toEqual({ root: 2, quality: 'm7', bassPc: 0 });
+    expect(parseHarte('F#:hdim7')).toEqual({ root: 6, quality: 'm7b5' });
+    expect(parseHarte('E')).toEqual({ root: 4, quality: 'maj' });
+    expect(parseHarte('G:7(b9)')).toEqual({ root: 7, quality: '7' });
+    expect(parseHarte('A:(1,b3,5)')).toEqual({ root: 9, quality: 'min' });
+    expect(parseHarte('Cb:minblues')).toEqual({ root: 11, quality: 'min' });
+    expect(parseHarte('N')).toBeNull();
+    expect(parseHarte('X')).toBeNull();
+  });
+
+  it('puts the chord covering most of each bar on it, and no chord where silence wins', () => {
+    const bars = [{ start: 0, end: 2 }, { start: 2, end: 4 }, { start: 4, end: 6 }];
+    const picks = modelPicks(bars, [
+      { start: 0, end: 1.6, label: 'C:maj' }, { start: 1.6, end: 2.5, label: 'G:maj/3' },
+      { start: 2.5, end: 4.2, label: 'A:min' }, { start: 4.2, end: 6, label: 'N' },
+    ]);
+    expect(picks[0]).toEqual({ root: 0, quality: 'maj', score: 0.8 });
+    expect(picks[1]).toEqual({ root: 9, quality: 'min', score: 0.75 });
+    expect(picks[2]).toMatchObject({ score: 0.9 });
+    expect(picks[2].root).toBeUndefined();
+  });
+
+  it('merges the model\'s chords into spans with slash names, numerals and the bass note to play', () => {
+    const segs = [0, 1, 2].map((i) => ({ start: i * 2, end: i * 2 + 2, bar: i + 1, beat: 1 }));
+    const spans = mergeSpans(segs, [
+      { root: 7, quality: '7', bassPc: 11, score: 1 }, { root: 7, quality: '7', bassPc: 11, score: 0.8 }, { root: 0, quality: 'maj9', score: 1 },
+    ], C_MAJOR);
+    expect(spans.map((s) => s.chord)).toEqual(['G7/B', 'Cmaj9']);
+    expect(spans[0]).toMatchObject({ length: 2, end: 4, roman: 'V7', bass: 'B', bassMidi: 35, score: 0.9 });
+    expect(spans[1]).toMatchObject({ roman: 'Imaj9', bassMidi: 36 });
+  });
+
+  it('finds the key from the chords the model heard', () => {
+    const am = chordProfile([
+      { start: 0, end: 4, label: 'A:min' }, { start: 4, end: 6, label: 'D:min' }, { start: 6, end: 8, label: 'E:7' }, { start: 8, end: 12, label: 'A:min' },
+    ]);
+    expect(estimateKey(am)?.key).toBe('A minor');
+    expect(chordProfile([{ start: 0, end: 4, label: 'N' }]).every((x) => x === 0)).toBe(true);
   });
 });
