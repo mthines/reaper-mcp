@@ -1,18 +1,31 @@
-/* FX pins: one row per pin, one column per track channel */
-.pins { overflow-x: auto; padding-bottom: 2px; }
-.row { display: grid; grid-template-columns: 64px repeat(var(--cols), minmax(14px, 1fr)); align-items: center; gap: 2px; min-height: 18px; }
-.name { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.side { color: var(--faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; margin: 6px 0 2px; }
-.ch { color: var(--faint); font-size: 10px; text-align: center; }
-.pin { justify-self: center; width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--line-2); }
-.on { background: var(--text); border-color: var(--text); }
-.new { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
-.gone { border: 1px dashed var(--muted); background: transparent; }
-.out { opacity: 0.4; }
-
-@container (max-width: 300px) {
-  .row { grid-template-columns: 36px repeat(var(--cols), minmax(12px, 1fr)); }
+/* FX pins as a patch: track channels → the plugin's input pins | output pins → track channels */
+.heads {
+  display: grid; grid-template-columns: 10% 1fr 10%; margin-top: 6px;
+  font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint);
 }
-.lgOn { width: 8px; height: 8px; border-radius: 50% !important; background: var(--text); }
-.lgNew { width: 8px; height: 8px; border-radius: 50% !important; background: var(--accent); }
-.lgGone { width: 8px; height: 8px; border-radius: 50% !important; border: 1px dashed var(--muted); box-sizing: border-box; }
+.heads > span:last-child { text-align: right; }
+.headFx { text-align: center; text-transform: none; letter-spacing: 0; font-size: 11px; font-weight: 500; color: var(--muted); }
+.patch { position: relative; margin: 4px 0 12px; }
+.patch svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.box { position: absolute; top: -3px; bottom: -3px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--panel-2); }
+
+.wire { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; pointer-events: stroke; transition: opacity 0.12s; }
+.wire:where([data-state="same"]) { stroke: var(--muted); }
+.wire:where([data-state="gone"]) { stroke: var(--faint); stroke-dasharray: 2 3; }
+
+.chan, .pin { position: absolute; transform: translateY(-50%); font-size: 12px; white-space: nowrap; transition: opacity 0.12s; }
+.chan { padding-inline: 4px; color: var(--text); }
+.chan:where([data-state="new"]) { color: var(--accent); }
+.chan:where([data-state="off"]) { color: var(--faint); text-decoration: line-through; }
+.pin { max-width: 21%; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.pin:where([data-side="out"]) { text-align: right; }
+
+.wire:where([data-focus="off"]), .chan:where([data-focus="off"]), .pin:where([data-focus="off"]) { opacity: 0.25; }
+.chan:where([data-focus="on"]), .pin:where([data-focus="on"]) { font-weight: 600; }
+
+.lgSame { width: 12px; height: 2px; background: var(--muted); }
+.lgGone { width: 12px; height: 0; border-top: 1px dashed var(--faint); }
+/* Channel swatches are a channel number drawn as the patch draws it */
+.lgNewCh, .lgOffCh { font: normal 11px var(--mono); }
+.lgNewCh::before { content: "3"; color: var(--accent); }
+.lgOffCh::before { content: "3"; color: var(--faint); text-decoration: line-through; }

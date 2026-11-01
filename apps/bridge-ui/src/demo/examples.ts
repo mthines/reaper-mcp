@@ -540,6 +540,11 @@ function editExampleList(): Example[] {
     in: [[1], [2], [3], [4]], out: [[1], [2]],
     inWas: [[1], [2], [], []], outWas: [[1], [2]],
   });
+  const pinsMoved = call('set_fx_pins', track(4, { fxIndex: 0 }), {
+    fx: 'ReaDelay (Cockos)', ch: 6, names: ['L in', 'R in'],
+    in: [[1], [2]], out: [[5], [6]],
+    inWas: [[1], [2]], outWas: [[1], [2]],
+  });
   const pinsListed = call('get_fx_pins', track(2, { fxIndex: 0 }), {
     fx: 'VST3: Pro-L 2 (FabFilter)', ch: 2, names: ['Input L', 'Input R'], in: [[1], [2]], out: [[1], [2]],
   });
@@ -781,6 +786,7 @@ function editExampleList(): Example[] {
     example('Modulation · LFO', modLfo, 'A tempo-synced LFO around the baseline; none before'),
     example('Modulation listed', modListed, 'An audio follower on 3 (band) and a parameter link'),
     example('Pins · sidechain', pins, 'Aux pins routed to 3/4; the track widened to 4 channels'),
+    example('Pins · outputs moved', pinsMoved, 'The delay now plays on channels 5/6 instead of 1/2'),
     example('Pins listed', pinsListed, 'A stereo limiter'),
     example('Audio quantized', audioQuantized, 'Hits moved onto the 8th grid; where they were dashed'),
     example('Stretch markers added', markers2, 'Three new markers beside the two kept'),

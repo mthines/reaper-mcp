@@ -910,7 +910,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   edits (`op`, the `span` they opened, cut or copied from
   hatched or outlined, where they copied `to`, a lane for up to 4 touched tracks plus `moreTracks`, normalized items
   with their gain as a 7th item field); FX modulation (LFO path, audio-follower band, link, the old baseline ghosted), FX pins as a
-  pin × channel grid (new connections marked, track widening shown), stretch markers and `quantize_audio` (grid lines, hits
+  patch (track channels wired into the plugin's input pins and out of its output pins, only connected ones drawn; new wires lit, disconnected dashed, added channels marked; hovering a pin or channel names its wiring), stretch markers and `quantize_audio` (grid lines, hits
   before dashed, offset before → after), freeze / automation mode / apply FX as change rows, record setup as one row per armed track (input, monitoring, record mode; the old value struck through, ≤32 plus `more`) under the global mode and punch range, and fixed lanes as one row per lane (≤32 plus `more`) with which lanes play and, for `comp_lanes`, each comp part tinted by the take it came from. List diffs share `listDiff()` in `edit-views.ts`. Lists are capped so
   an entry stays a few KB. Add a command in `M.summary`, `KIND_OF` (`edit-views.ts`) and an example in `src/demo/examples.ts` together;
   behaviour tests run the real bridge in wasmoon (`bridge-status.test.ts`, "edit views in the log").
