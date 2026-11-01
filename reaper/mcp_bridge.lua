@@ -4524,6 +4524,7 @@ function handlers.render_track_to_wav(params)
   local saved_file     = ({reaper.GetSetProjectInfo_String(0, "RENDER_FILE",       "", false)})[2] or ""
   local saved_pattern  = ({reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN",    "", false)})[2] or ""
   local saved_format   = ({reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT",     "", false)})[2] or ""
+  local saved_format2  = ({reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT2",    "", false)})[2] or ""
   local saved_bounds   = reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", 0, false)
   local saved_settings = reaper.GetSetProjectInfo(0, "RENDER_SETTINGS",   0, false)
   local saved_start    = reaper.GetSetProjectInfo(0, "RENDER_STARTPOS",   0, false)
@@ -4567,6 +4568,9 @@ function handlers.render_track_to_wav(params)
     -- independent of whatever the user last rendered. Restored in finally.
     -- "evaw" is the little-endian "wave" fourcc REAPER uses for WAV format.
     reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT", "evaw", true)
+    -- No secondary file: a format that cannot write at this rate (a video format a new project inherits)
+    -- stops the render on a modal error, which blocks the bridge until someone closes it
+    reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT2", "", true)
     reaper.GetSetProjectInfo(0, "RENDER_SRATE",    sample_rate, true)
     reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", 2,           true)
     reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE", 0, true)
@@ -4594,6 +4598,7 @@ function handlers.render_track_to_wav(params)
     reaper.GetSetProjectInfo_String(0, "RENDER_FILE",       saved_file,     true)
     reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN",    saved_pattern,  true)
     reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT",     saved_format,   true)
+    reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT2",    saved_format2,  true)
     reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", saved_bounds,   true)
     reaper.GetSetProjectInfo(0, "RENDER_SETTINGS",   saved_settings, true)
     reaper.GetSetProjectInfo(0, "RENDER_STARTPOS",   saved_start,    true)
