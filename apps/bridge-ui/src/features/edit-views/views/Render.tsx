@@ -1,3 +1,4 @@
+import { useState, type PointerEvent } from 'react';
 import type { EditView, RenderFile } from '../edit-views.js';
 import { Legend } from './ChangeLegend.js';
 import { clock, plural } from './format.js';
@@ -34,14 +35,42 @@ const renderWaveY = (v: number) => {
   return ((1 - (v < 0 ? -h : h)) / 2) * RENDER_H;
 };
 
-function RenderWave({ hi, lo }: { hi: number[]; lo: number[] }) {
-  if (hi.length < 2 || lo.length !== hi.length) return <span className={styles.wave} />;
-  const at = (vals: number[]) => vals.map((v, i) => `${((i / (vals.length - 1)) * RENDER_W).toFixed(1)},${renderWaveY(v).toFixed(1)}`);
+/** A slice's peak in dBFS, the louder of its two sides */
+const sliceDb = (hi: number, lo: number) => {
+  const a = Math.max(Math.abs(hi), Math.abs(lo));
+  return a > 0 ? 20 * Math.log10(a) : -150;
+};
+
+/**
+ * The file's peaks per slice, each drawn at its slice's centre and closed to the centre line at both ends (the
+ * first and last slice are seconds long, so their level is not the file's first or last sample). Hover: time and peak.
+ */
+function RenderWave({ hi, lo, dur }: { hi: number[]; lo: number[]; dur: number }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const n = hi.length;
+  if (n < 2 || lo.length !== n) return <span className={styles.waveWrap} />;
+  const xOf = (i: number) => ((i + 0.5) / n) * RENDER_W;
+  const at = (vals: number[]) => vals.map((v, i) => `${xOf(i).toFixed(1)},${renderWaveY(v).toFixed(1)}`);
+  const mid = RENDER_H / 2;
+  const onMove = (ev: PointerEvent<SVGSVGElement>) => {
+    const r = ev.currentTarget.getBoundingClientRect();
+    setHover(r.width > 0 ? Math.min(n - 1, Math.max(0, Math.floor(((ev.clientX - r.left) / r.width) * n))) : 0);
+  };
+  const db = hover === null ? 0 : sliceDb(hi[hover], lo[hover]);
   return (
-    <svg className={styles.wave} viewBox={`0 0 ${RENDER_W} ${RENDER_H}`} preserveAspectRatio="none" aria-hidden="true">
-      <line className={chartStyles.spectrumBase} x1={0} x2={RENDER_W} y1={RENDER_H / 2} y2={RENDER_H / 2} vectorEffect="non-scaling-stroke" />
-      <path className={styles.shape} d={`M${at(hi).join('L')}L${at(lo).reverse().join('L')}Z`} vectorEffect="non-scaling-stroke" />
-    </svg>
+    <span className={styles.waveWrap}>
+      <svg className={styles.wave} viewBox={`0 0 ${RENDER_W} ${RENDER_H}`} preserveAspectRatio="none" role="img"
+        aria-label="Waveform: peak level over time" onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
+        <line className={chartStyles.spectrumBase} x1={0} x2={RENDER_W} y1={mid} y2={mid} vectorEffect="non-scaling-stroke" />
+        <path className={styles.shape} d={`M0,${mid}L${at(hi).join('L')}L${RENDER_W},${mid}L${at(lo).reverse().join('L')}Z`} vectorEffect="non-scaling-stroke" />
+        {hover !== null && <line className={chartStyles.spectrumCursor} x1={xOf(hover)} x2={xOf(hover)} y1={0} y2={RENDER_H} vectorEffect="non-scaling-stroke" />}
+      </svg>
+      {hover !== null && (
+        <span role="tooltip" className={cx(chartStyles.spectrumTip, styles.waveTip, 'mono')} style={{ left: `${Math.min(85, Math.max(15, ((hover + 0.5) / n) * 100))}%` }}>
+          {dur > 0 ? `${clock(((hover + 0.5) / n) * dur, 1)} · ` : ''}{measured(db) ? `peak ${fmt(db)} dBFS` : 'silence'}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -66,9 +95,9 @@ export function Render({ v }: { v: Extract<EditView, { kind: 'render' }> }) {
     const tz = tpZone(tp);
     const label = `${name} · ${dur >= 0 ? clock(dur, 1) : 'length unknown'}${measured(lufs) ? ` · ${fmt(lufs)} LUFS-I${lz === 'hot' ? ' (off target)' : ''}` : ''}${measured(tp) ? ` · true peak ${fmt(tp)} dBTP${tz === 'over' ? ' (over 0)' : tz === 'hot' ? ' (hot)' : ''}` : ''}${measured(peak) ? ` · sample peak ${fmt(peak)} dBFS` : ''}`;
     return (
-      <div className={styles.row} key={key} role="group" aria-label={label} title={label}>
+      <div className={styles.row} key={key} role="group" aria-label={label}>
         <span className={styles.name}>{name}</span>
-        <RenderWave hi={hi} lo={lo} />
+        <RenderWave hi={hi} lo={lo} dur={dur} />
         <span className={cx(styles.v, styles.lufs, 'mono')} data-zone={lz}>{measured(lufs) ? fmt(lufs) : '–'}</span>
         <span className={cx(styles.v, styles.tp, 'mono')} data-zone={tz}>{measured(tp) ? fmt(tp) : '–'}</span>
         <span className={cx(styles.v, styles.dur, 'mono')}>{dur >= 0 ? clock(dur) : '–'}</span>

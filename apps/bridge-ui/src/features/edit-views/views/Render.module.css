@@ -6,7 +6,10 @@
 .row + .row, .group + .group { border-top: 1px solid var(--line); }
 .head { padding-top: 0; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); }
 .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wave { display: block; width: 100%; height: 22px; }
+.waveWrap { position: relative; display: block; min-width: 0; }
+.wave { display: block; width: 100%; height: 22px; overflow: visible; cursor: crosshair; }
+/* Above the waveform: the row is too short to hold it */
+.waveTip { top: auto; bottom: calc(100% + 4px); }
 .shape { fill: var(--accent); stroke: var(--accent); stroke-width: 0.5px; opacity: 0.85; }
 .v { font-size: 11px; text-align: right; color: var(--muted); }
 .v:where([data-zone='hot']) { color: var(--warn); }
@@ -17,7 +20,7 @@
 @container (max-width: 300px) {
   .row { grid-template-columns: minmax(0, 1fr) 72px 56px; grid-template-areas: 'name name dur' 'wave wave wave' '. lufs tp'; row-gap: 3px; }
   .name { grid-area: name; }
-  .wave { grid-area: wave; }
+  .waveWrap { grid-area: wave; }
   .lufs { grid-area: lufs; }
   .tp { grid-area: tp; }
   .dur { grid-area: dur; }

@@ -905,7 +905,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   (tracks diffed by GUID), routing (a signal-flow diagram — receives wired in on the left, sends and hardware outs out on the right, wires as thick as their level; hovering a name or wire shows its level and pan and marks its row, hovering a row lights its wire — over rows grouped under Receives from / Sends to / Hardware outputs with level bars, the old level ghosted), the time
   selection and edit cursor, MIDI CC as a stepped lane in beats (the automation view, unit `cc`), and
   `get_fx_parameters` as readout bars; `render_project` / `render_versions` as a render result (one row per file,
-  ≤8: mini waveform from `PCM_Source_GetPeaks`, LUFS-I against the normalize target, true peak against the limit
+  ≤8: mini waveform from `PCM_Source_GetPeaks`, tapered to silence at both ends, hover for time and peak, LUFS-I against the normalize target, true peak against the limit
   ceiling, length; versions grouped with their muted tracks; format, source and target as readouts); and arrangement
   edits (`op`, the `span` they opened, cut or copied from
   hatched or outlined, where they copied `to`, a lane for up to 4 touched tracks plus `moreTracks`, normalized items

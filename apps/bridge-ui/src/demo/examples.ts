@@ -60,7 +60,7 @@ function waveform(top: number, bed = 0.03) {
 /** A rendered file row: name, length, LUFS-I, true peak, sample peak and 60 waveform slices peaking at `top` */
 function renderFile(name: string, dur: number, lufs: number, tp: number, peak: number, top: number): unknown[] {
   // A song's shape on the dB scale: quiet intro, verses, louder choruses, a breakdown and a fade, with slice-to-slice jitter
-  const section = (i: number) => (i < 6 ? 0.06 + i * 0.03 : i < 18 ? 0.45 : i < 26 ? 0.95 : i < 36 ? 0.5 : i < 42 ? 0.15 : i < 54 ? 1 : (60 - i) / 6);
+  const section = (i: number) => (i < 6 ? 0.02 + i * 0.03 : i < 18 ? 0.45 : i < 26 ? 0.95 : i < 36 ? 0.5 : i < 42 ? 0.15 : i < 54 ? 1 : ((59 - i) / 6) ** 2);
   const hi = Array.from({ length: 60 }, (_, i) => Math.round(Math.min(1, top * section(i) * (0.82 + 0.18 * Math.abs(Math.sin(i * 2.3)))) * 100) / 100);
   return [name, dur, lufs, tp, peak, hi, hi.map((v) => -Math.round(v * 0.94 * 100) / 100)];
 }
