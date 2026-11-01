@@ -173,6 +173,12 @@ const ALLOWED_SPAN_ATTRIBUTES = new Set([
   'reaper.bridge.handler_ms',
   'reaper.bridge.pickup_ms',
   'reaper.bridge.poll_attempts',
+  // detect_key / detect_chords: where they read from and how sure they were, never the key or chords
+  'reaper.key.source',
+  'reaper.key.confidence',
+  'reaper.chords.source',
+  'reaper.chords.count',
+  'reaper.chords.engine',
 ]);
 
 /**

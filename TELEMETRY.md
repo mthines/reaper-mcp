@@ -21,6 +21,7 @@ For each tool call:
 - the tool name and the bridge command it ran (e.g. `set_fx_parameter`)
 - whether it succeeded, and if not, the **kind** of error (`timeout`, `tool_error`, …)
 - how long it took
+- for key and chord detection: whether it read MIDI, rendered audio or a file, which engine it used, how many chords it found and how sure it was of the key (never the key or the chords)
 - reaper-mcp version, OS type and version, Node.js version
 - a random install id (`~/.reaper-mcp/install-id`), so one person's calls can be grouped without knowing who they are
 
