@@ -53,3 +53,21 @@ export const TheFlowShowsWhatComesInAndWhatGoesOut: Story = {
     await expect(c.getByText('Muted')).toBeInTheDocument();
   },
 };
+
+const big = editExamples('routing').find((e) => e.title === 'Big routing');
+
+export const HoveringANameInTheFlowShowsItsLevelAndMarksItsRow: Story = {
+  args: { v: big!.v },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    const flow = c.getByRole('img', { name: /into/ });
+    const name = within(flow).getByText('Room Verb');
+    await userEvent.hover(name);
+    await expect(await c.findByRole('tooltip')).toHaveTextContent(/^Send to Room Verb · −?\d+\.\d → −?\d+\.\d dB · pan /);
+    const sends = c.getByRole('region', { name: 'Sends to' });
+    await expect(within(sends).getByText('Room Verb').closest('[aria-current="true"]')).not.toBeNull();
+    await userEvent.unhover(name);
+    await expect(c.queryByRole('tooltip')).not.toBeInTheDocument();
+    await expect(canvasElement.querySelector('[aria-current="true"]')).toBeNull();
+  },
+};

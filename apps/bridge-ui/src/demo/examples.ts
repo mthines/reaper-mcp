@@ -381,6 +381,27 @@ function editExampleList(): Example[] {
   const routingListed = call('get_track_routing', track(10), {
     t: 'Verb', routes: [['r', 'Vox', -12, 0, ''], ['r', 'Gtr L', -18, -0.6, ''], ['r', 'Gtr R', -18, 0.6, ''], ['r', 'Snare', -20, 0, 'M']],
   });
+  // A drum bus in a big session: every kit piece in, parallel and FX sends out, a long name or two
+  const KIT = ['Kick In', 'Kick Out', 'Kick Sub', 'Snare Top', 'Snare Bottom', 'Hi-Hat', 'Tom 1', 'Tom 2', 'Floor Tom', 'Overheads', 'Room Mics (Far, Mono)', 'Trash Mic'];
+  const routingBig = call('add_send', { from: 'Drum Bus', to: 'Drum Crush', volume: -8 }, {
+    t: 'Drum Bus',
+    routes: [
+      ...KIT.slice(0, 7).map((n, i): unknown[] => ['r', n, -4 - i * 2, 0, i === 6 ? 'M' : '']),
+      ['s', 'Drum Crush', -8, 0, ''], ['s', 'Room Verb', -14, 0, ''], ['s', 'Plate', -18, 0.2, ''], ['h', 'Out 5/6', -3, 0, ''],
+    ],
+    was: [
+      ...KIT.slice(0, 7).map((n, i): unknown[] => ['r', n, -4 - i * 2, 0, i === 6 ? 'M' : '']),
+      ['s', 'Room Verb', -20, 0, ''], ['s', 'Plate', -18, 0.2, ''], ['s', 'Slap Delay', -22, 0, ''], ['h', 'Out 5/6', -3, 0, ''],
+    ],
+  });
+  const routingHuge = call('get_track_routing', track(2), {
+    t: 'Drum Bus',
+    routes: [
+      ...KIT.map((n, i): unknown[] => ['r', n, -3 - i * 1.5, (i % 3 - 1) * 0.4, i === 11 ? 'M' : '']),
+      ['s', 'Drum Crush', -8, 0, ''], ['s', 'Room Verb', -14, 0, ''], ['s', 'Plate', -18, 0.2, ''], ['s', 'Slap Delay', -22, 0, 'M'],
+      ['s', 'Sidechain → Bass Comp', -6, 0, ''], ['h', 'Out 5/6', -3, 0, ''], ['h', 'Out 7 (Click)', -10, 0, ''],
+    ],
+  });
   const ARMED = [
     ['Lead Vox', 1, 'In 1 · Shure SM7B', 'auto', 'input'],
     ['Gtr DI', 1, 'In 3/4', 'off', 'input'],
@@ -731,6 +752,8 @@ function editExampleList(): Example[] {
     example('FX chain listed', fxListed, 'Presets, a bypassed and offline slot'),
     example('Send added', routing, 'New, changed and removed routes; was-level ghosted'),
     example('Routing listed', routingListed, 'A bus and its receives'),
+    example('Big routing', routingBig, 'A drum bus: 7 kit pieces in, a send added, one removed, one turned up'),
+    example('Huge routing', routingHuge, '12 kit pieces in, 7 out: the flow at full size'),
     example('Item moved', itemMoved, 'From one track to another; where it was dashed'),
     example('Item split', itemSplit, 'One item became two'),
     example('MIDI items listed', midiItems, 'One lane, a muted item'),

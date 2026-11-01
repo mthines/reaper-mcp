@@ -902,7 +902,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   markers/regions/tempo/items on one timeline, `list_tracks` as a mixer, and `run_plan`'s ops; also FX chains
   (add/remove/move/copy/bypass/offline/rename/preset, `get_track_properties`: slots marked added/moved/changed/removed by
   FX GUID), item edits as one lane per touched track with the items before dashed, track structure edits on the mixer
-  (tracks diffed by GUID), routing (a signal-flow diagram — receives wired in on the left, sends and hardware outs out on the right, wires as thick as their level — over rows grouped under Receives from / Sends to / Hardware outputs with level bars, the old level ghosted), the time
+  (tracks diffed by GUID), routing (a signal-flow diagram — receives wired in on the left, sends and hardware outs out on the right, wires as thick as their level; hovering a name or wire shows its level and pan and marks its row, hovering a row lights its wire — over rows grouped under Receives from / Sends to / Hardware outputs with level bars, the old level ghosted), the time
   selection and edit cursor, MIDI CC as a stepped lane in beats (the automation view, unit `cc`), and
   `get_fx_parameters` as readout bars; `render_project` / `render_versions` as a render result (one row per file,
   ≤8: mini waveform from `PCM_Source_GetPeaks`, LUFS-I against the normalize target, true peak against the limit
