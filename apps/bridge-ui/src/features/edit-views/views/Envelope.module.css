@@ -27,3 +27,7 @@
 }
 .evDotNew { width: 8px; height: 8px; margin: -4px 0 0 -4px; background: var(--accent); border: 2px solid var(--panel); }
 .evDotGone { border: 1px dashed var(--bad); background: transparent; }
+/* The point under the pointer: ringed, its value in a tip beside it */
+.evDotHover { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent); border-color: var(--accent); }
+.evTip { transform: translate(-50%, calc(-100% - 9px)); }
+.evTip:where([data-align="below"]) { transform: translate(-50%, 9px); }

@@ -1,4 +1,4 @@
-import { useState, type PointerEvent } from 'react';
+import { useState, type PointerEvent, type ReactNode } from 'react';
 import { newPoints, type AutoItem, type EditView, type EnvPoint } from '../edit-views.js';
 import { Counts } from './Counts.js';
 import { Legend } from './ChangeLegend.js';
@@ -10,6 +10,23 @@ import chartStyles from '../../../styles/chart.module.css';
 import styles from './Envelope.module.css';
 
 export const EW = 400;
+
+/**
+ * The value of the point under the pointer, beside it: above the point, or below it when the point sits near
+ * the top. `left` / `top` are percentages of the plot; the tip stays inside it at the edges.
+ */
+export function PointTip({ left, top, children }: { left: number; top: number; children: ReactNode }) {
+  return (
+    <div
+      role="tooltip"
+      className={cx(chartStyles.spectrumTip, styles.evTip, 'mono')}
+      data-align={top < 35 ? 'below' : undefined}
+      style={{ left: `${Math.min(88, Math.max(12, left))}%`, top: `${top}%` }}
+    >
+      {children}
+    </div>
+  );
+}
 export const EH = 110;
 
 /** Envelope path through REAPER's point shapes: 0 linear, 1 square, 2/5 slow start/end (bezier drawn as slow), 3 fast start, 4 fast end */
@@ -227,19 +244,14 @@ export function Envelope({ v }: { v: Extract<EditView, { kind: "envelope" }> }) 
           {v.pts.filter(inView).map((p, i) => (
             <span
               key={i}
-              className={cx(styles.evDot, added.has(p) ? styles.evDotNew : '')}
+              className={cx(styles.evDot, added.has(p) ? styles.evDotNew : '', p === hover ? styles.evDotHover : '')}
               style={dot(x(p[0]), y(p[1]))}
             />
           ))}
           {hover && (
-            <div
-              className={cx(chartStyles.spectrumTip, 'mono')}
-              style={{
-                left: `${Math.min(80, Math.max(20, (x(hover[0]) / EW) * 100))}%`,
-              }}
-            >
+            <PointTip left={(x(hover[0]) / EW) * 100} top={(y(hover[1]) / EH) * 100}>
               {when(hover[0], 2)} · {envValue(v.unit, hover[1])}
-            </div>
+            </PointTip>
           )}
         </div>
       </div>

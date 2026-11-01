@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, within } from 'storybook/test';
+import { expect, fireEvent, userEvent, within } from 'storybook/test';
 import { editExamples } from '../../../demo/examples.js';
 import { EditView } from '../index.js';
 
@@ -46,5 +46,17 @@ export const AListingDimsNothing: Story = {
     const c = within(canvasElement);
     await expect(c.queryByText('Unchanged item')).not.toBeInTheDocument();
     await expect(c.queryAllByTitle(/changed by this call/)).toHaveLength(0);
+  },
+};
+
+export const HoveringTheCurveShowsTheNearestPointsValue: Story = {
+  args: { v: byTitle('Automation added') },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    const plot = c.getByRole('img', { name: /automation from/ }).parentElement as HTMLElement;
+    await fireEvent.pointerMove(plot, { clientX: 0 });
+    await expect(await c.findByRole('tooltip')).toHaveTextContent(/^0:\d\d\.\d\d · .+ dB$/);
+    await userEvent.unhover(plot);
+    await expect(c.queryByRole('tooltip')).not.toBeInTheDocument();
   },
 };
