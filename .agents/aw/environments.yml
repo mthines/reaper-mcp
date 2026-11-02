@@ -1,0 +1,21 @@
+# .agents/aw/environments.yml — where the suite runs. Committed; no secrets.
+# Field reference: the aw-verify skill's rules/config.md. Written by /aw-verify setup.
+# No preview environment: PRs get no deployed preview. Live-REAPER steps: notes.md.
+version: 1
+environments:
+  local:
+    url: http://localhost:8098/mcp_bridge.html
+    stack:
+      driver: command
+      commands:
+        - name: bridge-ui
+          run: pnpm dev:bridge          # Vite :8098; proxies /_/ to REAPER :8099, installs saved reaper/ files
+          port: 8098
+          ready_url: http://localhost:8098/mcp_bridge.html
+      component_map:
+        apps/bridge-ui/: [bridge-ui]
+      default: [bridge-ui]
+      hot_reload: [apps/bridge-ui/, reaper/]
+      ready_timeout_seconds: 120
+    auth:
+      strategy: none

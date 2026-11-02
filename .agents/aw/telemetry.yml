@@ -1,0 +1,13 @@
+# .agents/aw/telemetry.yml — the telemetry witness (telemetry-verify). Committed.
+# The MCP server key is personal (~/.agents/aw/config.yml). The dataset is the repo's
+# own public DEFAULT_DESTINATION (telemetry-consent.ts), so it is safe to commit.
+version: 1
+backend: dash0-mcp
+environments:
+  local: { dataset: reaper-mcp, service_name: reaper-mcp-usage }
+web:
+  service_name: reaper-mcp-bridge-ui      # SERVICE_NAME in apps/bridge-ui/src/lib/analytics.ts
+  event_patterns: ["track\\(['\"]([^'\"]+)"]
+ingest_wait_seconds: 45
+thresholds: { interactive_span_ms: 1000, repeated_child_spans: 10 }
+loops: 3

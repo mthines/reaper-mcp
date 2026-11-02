@@ -1,0 +1,14 @@
+# .agents/aw/ui.yml — the browser witness (ui-verify, aw-tester). Committed.
+version: 1
+surface:
+  include: ['apps/bridge-ui/**']
+  exclude: ['**/*.test.ts', '**/*.test.tsx', '**/*.stories.tsx', 'apps/bridge-ui/e2e/**']
+driver: auto
+screenshots: true
+recording: true
+constraints: { parallelism: 1, reset_between_specs: false }
+adversarial:
+  enabled: true
+  max_probes: 24
+  time_budget_minutes: 10
+  allowed_origins: [http://localhost:8098]
