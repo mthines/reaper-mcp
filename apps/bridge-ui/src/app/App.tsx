@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { setUsageStats, startAnalytics, track, trackView, type UsageStatsState } from '../lib/analytics.js';
 import { isBoolean, useUrlState } from '../lib/url-state.js';
 import { liveness, type SettingKey, type Liveness } from '../lib/status.js';
+import { AppCommands } from './AppCommands.js';
 import { Header } from './Header.js';
 import { Notices } from './Notices.js';
 import { Offline } from './Offline.js';
@@ -128,6 +129,25 @@ export function App() {
 
   return (
     <div className={cx(styles.shell, overview ? styles.overviewOn : '')}>
+      <AppCommands
+        rangeKey={rangeKey}
+        onRange={chooseRange}
+        settings={settings}
+        onSet={changeSetting('settings')}
+        onOpenSettings={settings ? openSettings(true) : undefined}
+        overview={overview}
+        onToggleOverview={status ? toggleOverview : undefined}
+        onRebuild={
+          settings?.dev && status?.control?.canUpdate && status.control.changed && status.control.update?.state !== 'running'
+            ? () => request('rebuild')
+            : undefined
+        }
+        onRestart={status?.control?.canRestart ? () => request('restart') : undefined}
+        notify={notify}
+        onNotify={setNotify}
+        usageStats={usageStats}
+        onUsageStats={chooseUsageStats}
+      />
       <Header
         status={status}
         state={state}

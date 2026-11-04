@@ -13,6 +13,8 @@ import { matchesQuery, parseQuery } from '../../lib/search.js';
 import { hasToolCalls, isConnected, sessionHue, sessionName, type Session } from '../../lib/sessions.js';
 import type { Span } from '../../lib/timeline.js';
 import { Combobox, Icon } from '../../components/index.js';
+import { AgentChips } from './AgentChips.js';
+import { LogCommands } from './LogCommands.js';
 import { Plugins, type KnowledgeFeed } from '../plugins/index.js';
 import { Snapshots, type SnapshotsHook } from '../snapshots/index.js';
 import { editViewOf } from '../edit-views/index.js';
@@ -153,10 +155,9 @@ export function Log({
 
   // Read when a key is pressed, so it always sees this render's selection and rows
   const onKey = useEffectEvent((ev: KeyboardEvent) => {
-    if (ev.key === '/' && document.activeElement !== searchRef.current) {
-      ev.preventDefault();
-      searchRef.current?.focus();
-    } else if (ev.key === 'Escape') {
+    // The palette and the shortcut sheet have their own keys
+    if (ev.target instanceof Element && ev.target.closest('[role="dialog"]')) return;
+    if (ev.key === 'Escape') {
       // Close the details sidebar first, then clear the chart selection, then the filter
       if (selected) setSelected(null);
       else if (!clearChartSelection()) {
@@ -224,6 +225,14 @@ export function Log({
   const shownViews = VIEWS.filter((v) => (v.key !== 'plugins' || knowledge) && (v.key !== 'snapshots' || snapshots));
   const agentsShown = multiSession && (view === 'calls' || view === 'tools');
 
+  // j/k: the next or previous call (the first one when none is open), like ↑/↓ with the details open
+  const step = (dir: 1 | -1) => {
+    const i = selected ? rows.findIndex((e) => e.n === selected.n) : -1;
+    const next = rows[selected ? i + dir : dir === 1 ? 0 : rows.length - 1];
+    if (next) setSelected(next, selected ? 'replace' : 'push');
+  };
+  const agentChoices = multiSession ? sessionIds.map((id) => ({ id, name: sessionName(sessionOf(id)) })) : [];
+
   const showCalls = (opts: { tool?: string; session?: string; errors?: boolean }) => {
     if (opts.session !== undefined) setSessionFilter(opts.session);
     setFilter(opts.errors ? 'errors' : 'all');
@@ -232,6 +241,28 @@ export function Log({
 
   return (
     <section className={styles.log}>
+      <LogCommands
+        views={shownViews}
+        view={view}
+        onView={(v) => choose(v)}
+        onFocusSearch={() => searchRef.current?.focus()}
+        errorsOnly={filter === 'errors'}
+        onToggleErrors={() => chooseFilter(filter === 'errors' ? 'all' : 'errors')}
+        paused={paused}
+        onTogglePause={onTogglePause}
+        canCopy={rows.length > 0}
+        onCopy={() => void copy()}
+        canClear={log.length > 0}
+        onClear={clear}
+        detailsOpen={selected !== null}
+        onStep={step}
+        onCloseDetails={() => setSelected(null)}
+        hasSpan={selection !== null}
+        onClearSpan={() => clearChartSelection()}
+        agents={agentChoices}
+        agentFilter={sessionFilter}
+        onAgent={chooseSession}
+      />
       <div className={styles.toolbar}>
         <Combobox.Grouped
           className={styles.logMenu}
@@ -368,29 +399,15 @@ export function Log({
       )}
 
       {agentsShown && (
-        <div className={cx(listStyles.chips, styles.folds)} role="tablist" aria-label="Agent session">
-          <button role="tab" aria-selected={sessionFilter === null} className={listStyles.chip} onClick={() => chooseSession(null)}>
-            All agents
-          </button>
-          {sessionIds.map((id) => {
-            const x = sessionOf(id);
-            const n = windowed.filter((e) => e.s === id).length;
-            return (
-              <button
-                key={id}
-                role="tab"
-                aria-selected={sessionFilter === id}
-                className={listStyles.chip}
-                title={x.dir ?? id}
-                onClick={() => chooseSession(sessionFilter === id ? null : id)}
-              >
-                <i className={`sdot hue-${sessionHue(id)} ${isConnected(x, now) ? '' : 'sdot-off'}`} />
-                {sessionName(x)}
-                <span className="count">{n}</span>
-              </button>
-            );
-          })}
-        </div>
+        <AgentChips
+          className={styles.folds}
+          ids={sessionIds}
+          sessionOf={sessionOf}
+          countOf={(id) => windowed.filter((e) => e.s === id).length}
+          selected={sessionFilter}
+          now={now}
+          onPick={chooseSession}
+        />
       )}
 
       {view === 'plugins' && knowledge ? (

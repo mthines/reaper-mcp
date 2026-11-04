@@ -6,10 +6,15 @@ import './styles/chart.module.css';
 import './styles/drawer.module.css';
 import './styles/list.module.css';
 import { App } from './app/App.js';
+import { CommandProvider } from './features/command/index.js';
 
 const root = createRoot(document.getElementById('root') as HTMLElement);
 
-root.render(<App />);
+root.render(
+  <CommandProvider>
+    <App />
+  </CommandProvider>,
+);
 
 // Installable app: the service worker is scoped to /mcp_bridge* so REAPER's other web remotes are untouched
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

@@ -901,6 +901,9 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   state a viewer would want to go back to or share (tabs, filters, an open drawer); keep transient UI (hover, drag,
   copied flags) and per-viewer preferences (grouping, tokens) in `useState`/localStorage. Give each param a
   `validate` guard so a stale or hand-edited link falls back to the default, and keep keys unique across views.
+- Command palette and shortcuts (`src/features/command/`, rules in `.claude/rules/command-palette.md`): ⌘K opens the palette, `?` the shortcut sheet,
+  `g` then `c`/`t`/`a`/`p`/`s` go to Calls/Tools/Sessions/Plugins/Snapshots, `/` `f` `p` `j` `k` `c` act in the view. Every view and
+  action registers with `useCommand` (palette entry); only frequent ones get a key. A new view, tab or action adds its command in the same change.
 - Search (`parseQuery()` / `matchesQuery()` in `src/lib/search.ts`): space-separated terms, all must match. A word matches the
   command name, error or params text; `key:value` matches one param exactly (`trackIndex:6` is not 16; quote values
   with spaces, `fxName:"VST3: Pro-Q 3"`). Selecting text in a command's Params offers **Filter** (the whole param when

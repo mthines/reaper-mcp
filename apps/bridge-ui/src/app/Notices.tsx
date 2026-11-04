@@ -5,6 +5,7 @@ import { DEMO } from './demo-mode.js';
 import type { BridgeRequest } from './useBridgeRequest.js';
 import { load, save } from '../lib/storage.js';
 import { Icon, Notice } from '../components/index.js';
+import { useCommand } from '../features/command/index.js';
 import { cx } from '../lib/cx.js';
 import styles from './Notices.module.css';
 
@@ -32,6 +33,12 @@ export function Notices({
   const rebuild = update?.kind === 'rebuild';
   const release = useLatestRelease(!DEMO && !dev);
   const notices: ReactNode[] = [];
+  // The same update the notice below offers (not while one is running, done or failed)
+  const offerUpdate = update?.state !== 'running' && update?.state !== 'failed' && !dev && release && compareVersions(release.version, __VERSION__) > 0 && skipped !== release.version;
+  useCommand(
+    { id: 'bridge-update', label: `Update reaper-mcp to v${release?.version ?? ''}`, group: 'Bridge', onSelect: () => request('update') },
+    Boolean(offerUpdate && control?.canUpdate),
+  );
 
   if (update?.state === 'done' && !updateDoneDismissed) {
     notices.push(

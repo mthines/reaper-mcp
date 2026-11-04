@@ -1,0 +1,5 @@
+/* Two rows of chips, the toggle beside them so it is never clipped with the chips it counts */
+.wrap { flex-wrap: nowrap; align-items: flex-start; }
+.chips { --chip-rows: 2; position: relative; flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; max-height: calc(var(--chip-rows) * 24px + (var(--chip-rows) - 1) * 6px); overflow: hidden; }
+.chips[data-expanded] { max-height: none; overflow: visible; }
+.more { flex: none; color: var(--accent); }
