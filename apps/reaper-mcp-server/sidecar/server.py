@@ -511,7 +511,7 @@ def handle_voice_sketch(request_id: Any, params: dict) -> str:
         return _ok(request_id, result)
     except ValueError as exc:
         return _err(request_id, -32602, str(exc))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - decoder/DSP failures must fail only this RPC
         return _err(request_id, -32000, f"Voice transcription failed: {exc}")
 
 
@@ -522,7 +522,7 @@ def handle_voice_render(request_id: Any, params: dict) -> str:
         return _ok(request_id, voice_render.render(params))
     except ValueError as exc:
         return _err(request_id, -32602, str(exc))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - native-library failures must not stop the sidecar
         return _err(request_id, -32000, f"Voice arrangement preview failed: {exc}")
 
 
