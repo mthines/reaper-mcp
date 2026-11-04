@@ -213,7 +213,7 @@ const TRANSPORT = new Set(['play', 'stop', 'record', 'set_cursor_position', 'set
 /** Rough intent of a command: inspects the project, changes it, or drives transport. Mirrors the bridge's read-only allowlist. */
 export function commandKind(c: string): CommandKind {
   if (TRANSPORT.has(c)) return 'transport';
-  if (READ_PREFIXES.some((p) => c.startsWith(p)) || c === 'snapshot_list' || c === 'render_track_to_wav') return 'read';
+  if (READ_PREFIXES.some((p) => c.startsWith(p)) || c === 'snapshot_list' || c === 'render_track_to_wav' || c === 'render_tracks_to_wav') return 'read';
   return 'write';
 }
 
@@ -262,6 +262,7 @@ export const LONG_RUNNING = new Set([
   'import_midi_file',
   'render_project',
   'render_track_to_wav',
+  'render_tracks_to_wav',
   'render_versions',
   'run_plan',
   'run_action',

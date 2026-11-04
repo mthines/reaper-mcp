@@ -201,6 +201,7 @@ export type CommandType =
   | 'edit_region'
   // Semantic audio analysis (requires Python sidecar)
   | 'render_track_to_wav'
+  | 'render_tracks_to_wav'
   // Removes the meters measure_tracks / read_track_* inserted
   | 'remove_mcp_meters'
   // Extension plumbing (internal, never public MCP tools): saved plugin state, and the Lua commands an extension ships
@@ -851,6 +852,18 @@ export interface RenderTrackToWavParams {
   startTime: number;   // seconds from project start
   endTime: number;     // seconds from project start
   commandId: string;   // used to generate a unique temp filename
+  fresh?: boolean;     // skip the bridge's render cache and render again
+  restoreFocus?: boolean; // false: leave focus where REAPER's render window put it (default: hand it back, macOS)
+}
+
+/** Several tracks in one render pass; -1 = master. Tracks that feed each other are rendered separately. */
+export interface RenderTracksToWavParams {
+  trackIndices: number[];
+  startTime: number;
+  endTime: number;
+  commandId: string;
+  fresh?: boolean;
+  restoreFocus?: boolean;
 }
 
 // =============================================================================

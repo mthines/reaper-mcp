@@ -11,7 +11,7 @@ const REAPER_DIR = join(__dirname, '../../../reaper');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
 const SCRIPTS = '/reaper/Scripts/';
 const BRIDGE_DIR = `${SCRIPTS}mcp_bridge_data/`;
-const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_recording_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_arrange_lib.lua', 'mcp_midi_lib.lua', 'mcp_mixing_lib.lua'];
+const LIBS = ['mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua', 'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_recording_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_arrange_lib.lua', 'mcp_midi_lib.lua', 'mcp_mixing_lib.lua', 'mcp_render_lib.lua'];
 
 interface Entry { n: number; t: number; c: string; ok: boolean; s?: string; p?: string; e?: string; r?: Record<string, unknown> }
 type Row = [number, number, number, number, number];
@@ -209,6 +209,55 @@ describe('measurement results in the log', () => {
       expect(hz).toBeLessThan(1250);
     }
   });
+  it('reuses a track\'s render until a command that writes runs, and renders several tracks in one pass', async () => {
+    const bridge = await startBridge(`
+      local render = {}
+      api.GetTempPath = function() return "/tmp/" end
+      api.GetSetProjectInfo_String = function(_, k, v, set) if set then render[k] = v end return true, render[k] or "" end
+      api.Main_OnCommand = function(id)
+        if id ~= 42230 then return end
+        local f = io.open(render.RENDER_FILE .. render.RENDER_PATTERN .. ".wav", "wb")
+        f:write("RIFF"); f:close()
+      end
+    `);
+    type Res = { success: boolean; error?: string; data?: { cached: boolean; wavPath: string } };
+    const render = () => bridge.send('render_track_to_wav', { trackIndex: 0, startTime: 0, endTime: 5, commandId: 'abc' }) as Promise<Res>;
+
+    const first = await render();
+    expect(first.error).toBeUndefined();
+    expect(first.data).toMatchObject({ cached: false });
+    const again = await render();
+    expect(again.data).toMatchObject({ cached: true, wavPath: first.data?.wavPath });
+
+    // Reading changes nothing: still the same render
+    await bridge.send('get_project_info');
+    expect(((await render()) as Res).data?.cached).toBe(true);
+
+    // A command that writes makes it stale
+    await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -3 });
+    const after = await render();
+    expect(after.data).toMatchObject({ cached: false });
+  });
+
+  it('answers render_tracks_to_wav with one result per track from a JSON array', async () => {
+    const bridge = await startBridge(`
+      local render = {}
+      api.GetTempPath = function() return "/tmp/" end
+      api.GetSetProjectInfo_String = function(_, k, v, set) if set then render[k] = v end return true, render[k] or "" end
+      api.Main_OnCommand = function(id)
+        if id ~= 42230 then return end
+        local f = io.open(render.RENDER_FILE .. render.RENDER_PATTERN .. ".wav", "wb")
+        f:write("RIFF"); f:close()
+      end
+    `);
+    // Without CF_Json_Parse the command parser hands an array over as a string
+    const res = (await bridge.send('render_tracks_to_wav', { trackIndices: '[0]', startTime: 0, endTime: 5, commandId: 'abc' })) as {
+      success: boolean; error?: string; data?: { tracks: { trackIndex: number; trackName: string }[]; rendered: number; cached: number };
+    };
+    expect(res.error).toBeUndefined();
+    expect(res.data).toMatchObject({ rendered: 1, cached: 0, tracks: [{ trackIndex: 0, trackName: 'Kick' }] });
+  });
+
   it("draws a render's waveform from the WAV it wrote, clipping counted", async () => {
     // The render writes 1 s of 16-bit stereo at 1 kHz: a quiet first half, then a full-scale square
     const bridge = await startBridge(`

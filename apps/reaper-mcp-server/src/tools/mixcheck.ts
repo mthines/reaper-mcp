@@ -15,14 +15,13 @@
  */
 
 import { z } from 'zod/v4';
-import { randomUUID } from 'node:crypto';
-import { unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, extname, join } from 'node:path';
 import { trace } from '@opentelemetry/api';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ProjectInfo, RenderTrackToWavResult } from '@reaper-mcp/protocol';
 import { sendCommand } from '../bridge.js';
+import { discardRender, renderTrack, renderTracks } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
 import { emitLog, getSeparationSpeedHistogram, redactHome } from '../telemetry.js';
 import { curveSummary, logToolResult, maskingSummary, stemsSummary, stereoBandsSummary } from '../tool-log.js';
@@ -42,7 +41,6 @@ const DEFAULT_MASKING_SECONDS = 20;
 export const MAX_MASKING_TRACKS = 8;
 /** Separation is slow on a CPU: cap one call. */
 export const MAX_SEPARATION_SECONDS = 600;
-const renderTimeoutMs = (seconds: number) => 30_000 + seconds * 400;
 /** Demucs on a CPU runs at roughly real time; allow 3x that plus the model load. */
 const separationTimeoutMs = (seconds: number) => 90_000 + seconds * 3_000;
 
@@ -52,20 +50,6 @@ const text = (data: unknown): ToolResult => ({ content: [{ type: 'text', text: J
 const error = (message: string): ToolResult => ({ content: [{ type: 'text', text: message }], isError: true });
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
 const round1 = (x: number) => Math.round(x * 10) / 10;
-
-async function render(trackIndex: number, startTime: number, endTime: number): Promise<RenderTrackToWavResult> {
-  const res = await sendCommand(
-    'render_track_to_wav',
-    { trackIndex, startTime, endTime, commandId: randomUUID() },
-    renderTimeoutMs(endTime - startTime),
-  );
-  if (!res.success) throw new Error(`Render failed: ${res.error}`);
-  return res.data as RenderTrackToWavResult;
-}
-
-const removeQuietly = (path: string) => unlink(path).catch(() => {
-  // Best-effort: the OS temp dir is cleaned eventually
-});
 
 const sourceSchema = {
   trackIndex: z.coerce.number().int().min(-1).optional()
@@ -86,8 +70,8 @@ interface Source {
   offset: number;
   /** Window inside `path` for the sidecar (a render is already cut) */
   window: { startTime?: number; endTime?: number };
-  /** The render to delete afterwards */
-  temp?: string;
+  /** The render to hand back (discardRender) when done */
+  temp?: RenderTrackToWavResult;
   trackIndex?: number;
   /** Length of the range, when known before reading the file */
   seconds?: number;
@@ -115,13 +99,13 @@ async function resolveSource(
   }
   const end = endTime ?? start + Math.min(defaultSeconds, maxSeconds);
   if (end - start > maxSeconds) return `Range too long: max ${maxSeconds} s per call`;
-  const wav = await render(trackIndex as number, start, end);
+  const wav = await renderTrack(trackIndex as number, start, end);
   return {
     path: wav.wavPath,
     name: wav.trackName ?? (trackIndex === -1 ? 'Master' : `Track ${(trackIndex as number) + 1}`),
     offset: start,
     window: {},
-    temp: wav.wavPath,
+    temp: wav,
     trackIndex,
     seconds: end - start,
   };
@@ -194,7 +178,7 @@ export function registerMixcheckTools(server: McpServer): void {
         logToolResult('analyze_loudness_curve', args, startedAt, null, messageOf(err));
         return error(messageOf(err));
       } finally {
-        if (src.temp) await removeQuietly(src.temp);
+        if (src.temp) await discardRender(src.temp);
       }
     },
   );
@@ -232,7 +216,7 @@ export function registerMixcheckTools(server: McpServer): void {
         logToolResult('analyze_stereo_bands', args, startedAt, null, messageOf(err));
         return error(messageOf(err));
       } finally {
-        if (src.temp) await removeQuietly(src.temp);
+        if (src.temp) await discardRender(src.temp);
       }
     },
   );
@@ -260,8 +244,8 @@ export function registerMixcheckTools(server: McpServer): void {
       const end = startTime + (durationSeconds ?? DEFAULT_MASKING_SECONDS);
       const rendered: RenderTrackToWavResult[] = [];
       try {
-        // REAPER renders one at a time (synchronous action)
-        for (const t of tracks) rendered.push(await render(t, startTime, end));
+        // One render pass for all of them (REAPER renders synchronously, and every render opens its progress window)
+        rendered.push(...(await renderTracks(tracks, startTime, end)));
         const names = rendered.map((r, i) => r.trackName || `Track ${tracks[i] + 1}`);
         // Two tracks with one name would be indistinguishable in the answer
         const unique = names.map((n, i) => (names.indexOf(n) === i ? n : `${n} (${tracks[i] + 1})`));
@@ -291,7 +275,7 @@ export function registerMixcheckTools(server: McpServer): void {
         logToolResult('measure_masking', args, startedAt, null, messageOf(err));
         return error(messageOf(err));
       } finally {
-        await Promise.all(rendered.map((r) => removeQuietly(r.wavPath)));
+        await Promise.all(rendered.map(discardRender));
       }
     },
   );
@@ -389,7 +373,7 @@ export function registerMixcheckTools(server: McpServer): void {
         logToolResult('separate_stems', args, startedAt, null, messageOf(err));
         return error(messageOf(err));
       } finally {
-        if (src.temp) await removeQuietly(src.temp);
+        if (src.temp) await discardRender(src.temp);
       }
     },
   );
