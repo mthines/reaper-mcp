@@ -93,6 +93,11 @@ Extension tools are not in the Claude Code allow-list `reaper-mcp init` writes, 
 
 ## Writing and testing one
 
+`/new-extension` in Claude Code walks through all of this for one plugin: it checks the plugin is a VST3, probes its
+saved state, scaffolds the extension, writes tools with behaviour tests, proves them on a scratch track and records
+what it learned. To try an extension without restarting Claude Code (it only sees new tools after a restart), call it
+through a fresh server: `node scripts/ext-call.mjs --list <name>_` and `node scripts/ext-call.mjs <name>_<tool> '<json>'`.
+
 - In this repo: `extensions/<name>/` (a pnpm workspace package, tag `type:extension`), built by `pnpm nx build <name>` to
   `dist/index.mjs` with esbuild (`extensions/vital/project.json` is the template). `reaper-mcp extension add <name>` links it.
 - Test behaviour, not wiring: drive your tools through a fake `ExtensionApi` (`extensions/vital/src/__fixtures__/fake-api.ts`)

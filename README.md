@@ -250,6 +250,7 @@ want and the right one starts.
 | ✂️ | **`/editing`** | Edits notes, arrangement and timing, and compares two versions of a part in lanes | `/editing Make the chorus half-time` |
 | 💿 | **`/mastering`** | A mastering chain on the mix bus, aimed at a platform's loudness | `/mastering Master this for Spotify` |
 | 🎓 | **`/learn-plugin`** | Researches a plugin you own, tests it live and saves it to LoreKit, asking you only what it can't work out | `/learn-plugin JST Gain Reduction Deluxe` |
+| 🧩 | **`/new-extension`** | Builds an opt-in extension that edits a plugin's internals (wavetables, mod matrix, patch state) and proves it live on a scratch track | `/new-extension Serum` |
 | 🗂️ | **`/mix-memory`** | Shows what it remembers, and tidies it up | `/mix-memory What do you know about Pro-C 2?` |
 
 ---
