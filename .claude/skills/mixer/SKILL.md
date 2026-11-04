@@ -70,6 +70,12 @@ record shapes, layer merge and plugin lookup):
   { key: "plugins::{vendor}/{plugin}" }` and `memory.read` of
   `user::plugins::{vendor}/{plugin}` (find the slug via the `fx::` tags when
   you only have the FX name) and combine them.
+- **First use of a plugin in the session → read its memory first.** Keep a running
+  list of the plugins already recalled this session. The first time you are about
+  to add, tweak or read a plugin that isn't on it (including one already in the
+  project, or one you meet while listing a chain), do the two reads above, then
+  add it to the list. Don't re-read on later uses. No record in either layer is
+  fine: carry on, or bootstrap it if the user asked for it by name (below).
 - **A record with an `extension::<name>` tag** means an opt-in extension drives that
   plugin's internals (for a synth: wavetables, mod matrix, LFO shapes). When
   `list_tool_categories` shows that extension's category, use its tools for anything

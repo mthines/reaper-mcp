@@ -59,6 +59,13 @@ the recorded-track cleanup procedure.
    so music written there is silent or switches articulation). Read the plugin's
    record (`get_builtin_knowledge`, `memory.read` of `user::plugins::…`) before
    writing a part, and probe one note if it is unverified.
+6. **First use of a plugin in the session → read its memory first.** Keep a running
+   list of the plugins already recalled this session. The first time you touch a
+   plugin that isn't on it (write MIDI for it, add or tweak it, an FX on a take or
+   track), read both `get_builtin_knowledge { key: "plugins::{vendor}/{plugin}" }`
+   and `memory.read` of `user::plugins::{vendor}/{plugin}` (the user's record wins),
+   then add it to the list. Don't re-read on later uses. No record is fine: carry
+   on. LoreKit not connected: say so once and use the built-in read only.
 
 ## Writing and rewriting MIDI
 

@@ -46,6 +46,11 @@ the user's own `user::` layer on top. Reads combine both; writes go to `user::` 
   `get_builtin_knowledge { key: "plugins::{vendor}/{plugin}" }` and `memory.read`
   of `user::plugins::{vendor}/{plugin}` — past
   targets the user preferred and known gotchas (the user record wins).
+- **First use of a plugin in the session → read its memory first.** Keep a running
+  list of the plugins already recalled this session. The first time you are about
+  to add, tweak or read a plugin that isn't on it (including one already on the
+  bus), do both reads, then add it to the list. Don't re-read on later uses. No
+  record in either layer is fine: carry on.
 - **Unknown plugin?** Bootstrap it first (see protocol): dispatch the
   `plugin-researcher` agent (or follow its steps yourself), then read its
   `user::plugins::` record and use it.
