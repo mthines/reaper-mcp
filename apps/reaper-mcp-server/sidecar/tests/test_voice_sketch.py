@@ -96,6 +96,22 @@ def test_mixed_voice_keeps_a_pitched_layer_and_overlapping_percussion():
                for m in result["melody"] for d in result["drums"])
 
 
+def test_percussion_attacks_do_not_rearticulate_a_held_hummed_note():
+    audio = np.zeros((1, SR * 3), dtype=np.float32)
+    sound = tone(60, 2.6)
+    audio[0, int(0.2 * SR):int(0.2 * SR) + len(sound)] = sound
+    burst_times = [0.7, 1.2, 1.7, 2.2]
+    t = np.arange(int(0.04 * SR)) / SR
+    burst = 0.65 * np.sin(2 * np.pi * 6000 * t) * np.exp(-t * 60)
+    for start in burst_times:
+        pos = int(start * SR)
+        audio[0, pos:pos + len(burst)] += burst
+    result = transcribe(audio, SR, bpm=120)
+    assert [n["pitch"] for n in result["melody"]] == [60]
+    assert result["melody"][0]["duration"] == pytest.approx(2.6, abs=0.1)
+    assert [n["time"] for n in result["drums"]] == pytest.approx(burst_times, abs=0.05)
+
+
 def test_rpc_validates_range_before_reading_and_reports_file_times(tmp_path):
     import soundfile as sf
     path = tmp_path / "sketch.wav"

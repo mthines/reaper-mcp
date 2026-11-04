@@ -66,7 +66,7 @@ def _pitch_frames(mono: np.ndarray, sr: int, pitch_min: int, pitch_max: int):
     return np.array(times), np.array(pitches), np.array(clarity), np.array(levels)
 
 
-def _melody(mono: np.ndarray, sr: int, hits: list, pitch_min: int, pitch_max: int, min_note: float):
+def _melody(mono: np.ndarray, sr: int, pitch_min: int, pitch_max: int, min_note: float):
     times, pitches, clarity, levels = _pitch_frames(mono, sr, pitch_min, pitch_max)
     rounded = np.where(pitches >= 0, np.floor(pitches + 0.5), -1).astype(int)
     # Median among voiced neighbours removes single-frame octave/rounding glitches,
@@ -94,15 +94,10 @@ def _melody(mono: np.ndarray, sr: int, hits: list, pitch_min: int, pitch_max: in
         if smooth[i] >= 0 and (j - i) * hop >= min_note:
             start = max(0, times[i] - 0.02)
             end = min(mono.size / sr, times[j - 1] + hop - 0.02)
-            # Repeated syllables on the same pitch need separate MIDI notes.
-            splits = [h["time"] for h in hits if start + min_note < h["time"] < end - min_note]
-            bounds = [start] + splits + [end]
-            for a, b in zip(bounds, bounds[1:]):
-                if b - a < min_note:
-                    continue
-                notes.append({"time": round(float(a), 4), "duration": round(float(b - a), 4),
-                              "pitch": int(smooth[i]), "velocity": int(np.clip(90 * levels[i:j].mean() / top, 35, 115)),
-                              "confidence": round(float(clarity[i:j].mean()), 3)})
+            # Percussion attacks do not rearticulate a continuous voiced run.
+            notes.append({"time": round(float(start), 4), "duration": round(float(end - start), 4),
+                          "pitch": int(smooth[i]), "velocity": int(np.clip(90 * levels[i:j].mean() / top, 35, 115)),
+                          "confidence": round(float(clarity[i:j].mean()), 3)})
         i = j
     return notes, (times, clarity)
 
@@ -244,7 +239,7 @@ def transcribe(audio: np.ndarray, sr: int, *, mode: str = "auto", bpm: float | N
     hits = detected["transients"]
     melody, voiced = ([], (np.array([]), np.array([])))
     if mode != "drums":
-        melody, voiced = _melody(mono, sr, hits, pitch_min, pitch_max, min_note_ms / 1000)
+        melody, voiced = _melody(mono, sr, pitch_min, pitch_max, min_note_ms / 1000)
     drums = _drums(mono, sr, hits, voiced, mode) if mode != "melody" else []
     flux, _, frame_s = analysis._band_flux(mono, sr)
     tempo = _tempo(flux["full"], frame_s, hits, duration, bpm, tempo_change_threshold)
