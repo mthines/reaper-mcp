@@ -23,9 +23,9 @@ export const LoadsASnapshotOnClick: Story = {
   },
 };
 
-export const LoadsWithTheNumberKeys: Story = {
+export const LoadsWithShiftAndTheNumberKeys: Story = {
   play: async ({ args }) => {
-    await userEvent.keyboard('2');
+    await userEvent.keyboard('{Shift>}2{/Shift}');
     await expect(args.onSend).toHaveBeenCalledWith('restore', feed?.snapshots[1].name);
   },
 };
@@ -73,7 +73,7 @@ export const RefusesLoadsAndSavesWhileReadOnly: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: /mix-A/ }));
-    await userEvent.keyboard('1');
+    await userEvent.keyboard('{Shift>}1{/Shift}');
     await expect(args.onSend).not.toHaveBeenCalled();
     await expect(canvas.getByLabelText('Snapshot name')).toBeDisabled();
   },

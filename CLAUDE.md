@@ -1016,7 +1016,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   One plugin installed in several formats (same title and vendor, e.g. `VST3i:`/`CLAPi:`/`VSTi: Vital (Vital Audio)`)
   is one row (`PluginRow.variants`, VST3 preferred for the Teach prompt), counting the instances of every format.
 - Snapshots tab (`view=snapshots`, shown when `status.control.snapshots`): lists the project's snapshots, loads one
-  with a click or `1`–`9` (A/B/C while listening) and saves the current mix (name + optional description; a name that
+  with a click or Shift+`1`–`9` (A/B/C while listening) and saves the current mix (name + optional description; a name that
   saves to an existing file asks to replace it; a blank name saves under the date and time, `timeSnapshotName()`, the
   same name the quick-save action gives). Each row renames (name + description, `snapshot_edit`) or deletes (inline
   confirm, `snapshot_delete`). While the view is open the page pings ExtState `snap_seen/<ms>` and

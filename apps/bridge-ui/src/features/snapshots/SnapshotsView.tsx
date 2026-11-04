@@ -31,7 +31,7 @@ export function SnapshotsView({
   query?: string;
   now: number;
   onSend: (op: SnapshotOp, name: string, description?: string, newName?: string) => void;
-  /** Number keys load snapshots (off in stories, where several views share the page) */
+  /** Shift+number keys load snapshots (off in stories, where several views share the page) */
   keys?: boolean;
   /** Stories: start with this row in rename or delete-confirm mode */
   initialRow?: RowMode;
@@ -51,8 +51,9 @@ export function SnapshotsView({
     const el = document.activeElement;
     // A held key auto-repeats: load once, not once per repeat (each load is an undo point)
     if (ev.repeat || ev.metaKey || ev.ctrlKey || ev.altKey || (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'))) return;
-    const n = Number(ev.key);
-    const snap = Number.isInteger(n) && n >= 1 ? shown[n - 1] : undefined;
+    // Shift+1…9; ev.code, since Shift turns the key into "!" or "@"
+    const n = ev.shiftKey ? Number(/^Digit([1-9])$/.exec(ev.code)?.[1]) : NaN;
+    const snap = Number.isInteger(n) ? shown[n - 1] : undefined;
     if (!snap) return;
     ev.preventDefault();
     load(snap);
@@ -107,9 +108,9 @@ export function SnapshotsView({
                   onClick={() => load(s)}
                   disabled={Boolean(blocked)}
                   aria-current={current ? 'true' : undefined}
-                  title={blocked ?? `Load ${s.name}${i < 9 && keys ? ` (${i + 1})` : ''}`}
+                  title={blocked ?? `Load ${s.name}${i < 9 && keys ? ` (Shift+${i + 1})` : ''}`}
                 >
-                  {i < 9 && keys && <kbd className={styles.snapKey}>{i + 1}</kbd>}
+                  {i < 9 && keys && <kbd className={styles.snapKey}>⇧{i + 1}</kbd>}
                   <span className={styles.snapMain}>
                     <span className={styles.snapName}>{s.name}</span>
                     {s.description && <span className={styles.snapDesc}>{s.description}</span>}
