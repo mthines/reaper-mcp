@@ -475,6 +475,57 @@ def handle_chroma(request_id: Any, params: dict) -> str:
         return _err(request_id, -32000, f"Chroma failed: {exc}")
 
 
+def handle_voice_sketch(request_id: Any, params: dict) -> str:
+    """Transcribe a bounded file range. Never writes files or changes REAPER."""
+    import math
+    import soundfile as sf
+    import analysis
+    import voice_sketch
+
+    error = _check_file(request_id, params, "path")
+    if error:
+        return error
+    try:
+        info = sf.info(params["path"])
+        start = float(params.get("startTime", 0))
+        end = float(params.get("endTime", info.duration))
+        if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
+            raise ValueError("Require finite 0 <= startTime < endTime")
+        if end - start > voice_sketch.MAX_SECONDS:
+            raise ValueError(f"Select at most {voice_sketch.MAX_SECONDS} seconds per call")
+        if end > info.duration + 1 / info.samplerate:
+            raise ValueError("endTime is beyond the end of the audio file")
+        audio, sr = analysis.load_audio(params["path"], start, end)
+        result = voice_sketch.transcribe(
+            audio, sr, mode=str(params.get("mode", "auto")),
+            bpm=None if params.get("bpm") is None else float(params["bpm"]),
+            grid=float(params.get("grid", 0.25)), pitch_min=int(params.get("pitchMin", 36)),
+            pitch_max=int(params.get("pitchMax", 84)), min_note_ms=float(params.get("minNoteMs", 80)),
+            tempo_change_threshold=float(params.get("tempoChangeThreshold", 0.2)))
+        result["startTime"] = start
+        result["tempo"]["originSeconds"] += start
+        for segment in result["tempo"]["segments"]:
+            segment["time"] = round(segment["time"] + start, 4)
+        for note in result["melody"] + result["drums"]:
+            note["time"] = round(note["time"] + start, 4)
+        return _ok(request_id, result)
+    except ValueError as exc:
+        return _err(request_id, -32602, str(exc))
+    except Exception as exc:  # noqa: BLE001 - decoder/DSP failures must fail only this RPC
+        return _err(request_id, -32000, f"Voice transcription failed: {exc}")
+
+
+def handle_voice_render(request_id: Any, params: dict) -> str:
+    """Render generated MIDI parts, never mutate a REAPER project."""
+    try:
+        import voice_render
+        return _ok(request_id, voice_render.render(params))
+    except ValueError as exc:
+        return _err(request_id, -32602, str(exc))
+    except Exception as exc:  # noqa: BLE001 - native-library failures must not stop the sidecar
+        return _err(request_id, -32000, f"Voice arrangement preview failed: {exc}")
+
+
 # JSON-RPC method names must stay in sync with the TypeScript client.
 # When adding a method here, also reference it from apps/reaper-mcp-server/src/sidecar.ts.
 METHODS = {
@@ -490,6 +541,8 @@ METHODS = {
     "separation_status": handle_separation_status,
     "chords": handle_chords,
     "chords_status": handle_chords_status,
+    "transcribe_voice_sketch": handle_voice_sketch,
+    "render_voice_arrangement": handle_voice_render,
 }
 
 

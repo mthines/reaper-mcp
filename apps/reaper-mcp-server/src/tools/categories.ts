@@ -55,7 +55,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
     tools: [
       'create_midi_item', 'list_midi_items', 'get_midi_notes', 'analyze_midi',
       'insert_midi_note', 'insert_midi_notes', 'edit_midi_note', 'edit_midi_notes',
-      'delete_midi_note', 'quantize_midi', 'transform_midi', 'import_midi_file', 'get_midi_cc', 'insert_midi_cc', 'delete_midi_cc',
+      'delete_midi_note', 'quantize_midi', 'transform_midi', 'import_midi_file', 'transcribe_voice_sketch', 'get_midi_cc', 'insert_midi_cc', 'delete_midi_cc',
       'get_midi_item_properties', 'set_midi_item_properties',
       'send_midi_cc', 'send_midi_pc', 'send_midi_note',
     ],

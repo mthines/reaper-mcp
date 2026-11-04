@@ -254,6 +254,7 @@ export const LONG_RUNNING = new Set([
   'analyze_track_aesthetics',
   'detect_key',
   'detect_chords',
+  'transcribe_voice_sketch',
   'analyze_loudness_curve',
   'analyze_stereo_bands',
   'measure_masking',

@@ -58,6 +58,7 @@ export const DEMO_CALLS: Record<LoggedCommand, Record<string, unknown> | 'exampl
   import_midi_file: 'example',
   detect_key: 'example',
   detect_chords: 'example',
+  transcribe_voice_sketch: { path: '/music/voice-sketch.mp3', mode: 'auto', grid: 0.25 },
   // Live MIDI
   send_midi_cc: 'example',
   send_midi_pc: { trackIndex: 8, program: 12, bankMsb: 0 },

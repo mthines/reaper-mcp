@@ -4979,6 +4979,7 @@ for _, c in ipairs({
   "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
   "detect_transients", "create_transient_automation", "insert_stem_tracks",
   "analyze_loudness_curve", "analyze_stereo_bands", "measure_masking", "separate_stems",
+  "transcribe_voice_sketch",
   "freeze_tracks", "unfreeze_tracks", "apply_fx_to_items", "quantize_audio", "detect_key", "detect_chords", "import_midi_file", "process_items",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0

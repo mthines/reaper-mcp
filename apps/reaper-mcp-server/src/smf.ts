@@ -26,6 +26,9 @@ export interface SmfTrack {
   name: string;
   notes: SmfNote[];
   cc: SmfCc[];
+  /** Optional export-only GM instrument. The importer reports program changes as skipped. */
+  program?: number;
+  channel?: number;
 }
 
 export interface SmfFile {
@@ -191,4 +194,53 @@ export function parseSmf(data: Uint8Array): SmfFile {
   }
 
   return { format, ppq, tracks, tempo, tempoChanges, timeSignature, lengthQN: endTicks / ppq, skipped };
+}
+
+/** Export quarter-note events as SMF type 1, with a separate 4/4 tempo track.
+ * Note-offs sort before note-ons so adjacent repeated notes remain distinct.
+ */
+export function writeSmf(tracks: SmfTrack[], tempos: { beat: number; bpm: number }[]): Uint8Array {
+  const ppq = 960;
+  const varlen = (value: number): number[] => {
+    const out = [value & 0x7f];
+    while ((value >>>= 7)) out.unshift((value & 0x7f) | 0x80);
+    return out;
+  };
+  const chunk = (id: string, data: number[]) => {
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    return Buffer.concat([Buffer.from(id), length, Buffer.from(data)]);
+  };
+  type Event = { tick: number; bytes: number[]; order: number };
+  const track = (name: string, events: Event[]) => {
+    const label = [...Buffer.from(name, 'utf8')];
+    const data = [0, 0xff, 3, ...varlen(label.length), ...label];
+    let last = 0;
+    for (const e of events.sort((a, b) => a.tick - b.tick || a.order - b.order)) {
+      data.push(...varlen(e.tick - last), ...e.bytes);
+      last = e.tick;
+    }
+    data.push(0, 0xff, 0x2f, 0);
+    return chunk('MTrk', data);
+  };
+  const conductor: Event[] = [{ tick: 0, order: 0, bytes: [0xff, 0x58, 4, 4, 2, 24, 8] }];
+  for (const tempo of tempos) {
+    const us = Math.round(60_000_000 / tempo.bpm);
+    conductor.push({ tick: Math.round(tempo.beat * ppq), order: 1, bytes: [0xff, 0x51, 3, us >> 16, (us >> 8) & 255, us & 255] });
+  }
+  const header = [0, 1, (tracks.length + 1) >> 8, (tracks.length + 1) & 255, ppq >> 8, ppq & 255];
+  return Buffer.concat([chunk('MThd', header), track('Tempo', conductor), ...tracks.map(t => {
+    const events: Event[] = [];
+    if (t.program !== undefined && t.channel !== undefined) {
+      events.push({ tick: 0, order: 0, bytes: [0xc0 | t.channel, t.program] });
+    }
+    for (const n of t.notes) {
+      const tick = Math.round(n.start * ppq);
+      events.push({ tick, order: 2, bytes: [0x90 | n.channel, n.pitch, n.velocity] });
+      events.push({ tick: Math.max(tick + 1, Math.round((n.start + n.length) * ppq)), order: 1,
+        bytes: [0x80 | n.channel, n.pitch, 0] });
+    }
+    for (const c of t.cc) events.push({ tick: Math.round(c.time * ppq), order: 0, bytes: [0xb0 | c.channel, c.cc, c.value] });
+    return track(t.name, events);
+  })]);
 }

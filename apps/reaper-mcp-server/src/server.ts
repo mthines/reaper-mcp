@@ -33,6 +33,7 @@ import { registerTransientTools } from './tools/transients.js';
 import { registerMixcheckTools } from './tools/mixcheck.js';
 import { registerMixingTools } from './tools/mixing.js';
 import { registerCompositionTools } from './tools/composition.js';
+import { registerVoiceSketchTools } from './tools/voice-sketch.js';
 import { registerKnowledgeTools } from './tools/knowledge.js';
 
 // Cap for free-text error messages on span status (full text goes to the log).
@@ -164,6 +165,7 @@ export function createServer(): McpServer {
   registerMixcheckTools(server);
   registerMixingTools(server);
   registerCompositionTools(server);
+  registerVoiceSketchTools(server);
   registerKnowledgeTools(server);
 
   return server;

@@ -358,6 +358,7 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
     },
   },
   import_midi_file: { title: 'Import a MIDI file', did: (e) => `imported ${fileName(paramsOf(e).path)} onto ${on(e)}${at(paramsOf(e).position)}` },
+  transcribe_voice_sketch: { title: 'Compose from a voice sketch', did: (e) => `${paramsOf(e).arrange === false ? 'transcribed' : 'composed an arrangement from'} ${fileName(paramsOf(e).path)}` },
   detect_key: {
     title: 'Detect the key',
     did: (e) => {

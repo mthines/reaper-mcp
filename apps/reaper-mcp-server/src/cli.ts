@@ -236,6 +236,7 @@ export const MCP_TOOL_NAMES = [
   'import_midi_file',
   'detect_key',
   'detect_chords',
+  'transcribe_voice_sketch',
   'get_midi_cc',
   'insert_midi_cc',
   'delete_midi_cc',

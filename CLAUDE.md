@@ -186,7 +186,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | Vite + React Compiler → single HTML | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (182 total)
+## MCP Tools (183 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -254,13 +254,14 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `get_midi_item_properties` | `tools/midi.ts` | Get MIDI item properties (position, length, note/CC count, mute, loop) |
 | `set_midi_item_properties` | `tools/midi.ts` | Set MIDI item properties (position, length, mute, loop source) |
 
-### Composition (5)
+### Composition (6)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `quantize_midi` | `tools/composition.ts` | Snap notes to the project grid: grid (beats), strength, swing, window, `lengths` keep/quantize; all notes or a selection (indexes, pitch range, channel) |
 | `transform_midi` | `tools/composition.ts` | Transpose (refused out of 0-127), velocity set/scale/add + clamp, humanize (seeded), length set/scale/legato |
 | `import_midi_file` | `tools/composition.ts` | Import a .mid (type 0/1, ≤5 MB, ≤20000 notes) without REAPER's dialog: merged onto a track or one new named track per file track; file tempo reported, not applied |
+| `transcribe_voice_sketch` | `tools/voice-sketch.ts` | Voice recording → detected notes, tempo/key and a generated band arrangement; optional MIDI + sampled stems. See [usage and limits](docs/TOOLS.md#voice-recording-to-an-arrangement) |
 | `detect_key` | `tools/composition.ts` | Key from a track's MIDI notes (drums skipped) or rendered audio / an audio file (sidecar chroma): key, confidence, relative, top 3, 12-bin chroma; `itemIndex` reads one item's range |
 | `detect_chords` | `tools/composition.ts` | Chords per bar or beat (project tempo map; a file by `bpm` or windows) from MIDI notes or rendered audio / a file (sidecar chroma per segment, or the opt-in chord model `--with-chords`, `engine` auto/model/template): key, progression, spans with roman numeral, slash bass (MIDI or model) and `bassMidi` for a bass line; `itemIndex`, paginated |
 
@@ -519,7 +520,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 182 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 183 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
