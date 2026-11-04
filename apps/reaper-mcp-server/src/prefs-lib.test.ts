@@ -1,5 +1,5 @@
 /**
- * Shared LoreKit tokens (reaper/mcp_prefs_lib.lua) in real Lua (wasmoon): driven through the ExtState keys the
+ * The shared read-only LoreKit token (reaper/mcp_prefs_lib.lua) in real Lua (wasmoon): driven through the ExtState keys the
  * page reads and writes (`lorekit_tokens`, `tokens_req`) and observed through the file in the config folder.
  */
 import { describe, it, expect, afterEach } from 'vitest';
@@ -64,9 +64,9 @@ async function start(file?: string, dir: string | null = DIR) {
       const raw = await read('MCPBridge/lorekit_tokens');
       return raw ? (JSON.parse(raw) as { read?: string; publish?: string; req?: string; ok?: boolean; error?: string; writable: boolean }) : null;
     },
-    async request(read: string, publish: string, token = CONTROL) {
+    async request(read: string, token = CONTROL) {
       const req = `r${++id}`;
-      lua.global.set('REQ', `${req}-${token}-${hex(read)}-${hex(publish)}`);
+      lua.global.set('REQ', `${req}-${token}-${hex(read)}`);
       await lua.doString('ext["MCPBridge/tokens_req"] = REQ; prefs.poll()');
       return req;
     },
@@ -76,60 +76,68 @@ async function start(file?: string, dir: string | null = DIR) {
   };
 }
 
-describe('shared LoreKit tokens', () => {
-  it('publishes the tokens already in the file when the bridge starts', async () => {
-    const prefs = await start('{"publishToken":"lk_rw_pub","readToken":"lk_ro_read"}');
+describe('shared read-only LoreKit token', () => {
+  it('publishes the token already in the file when the bridge starts', async () => {
+    const prefs = await start('{"readToken":"lk_ro_read"}');
     await prefs.poll();
-    expect(await prefs.published()).toMatchObject({ read: 'lk_ro_read', publish: 'lk_rw_pub', writable: true });
+    expect(await prefs.published()).toMatchObject({ read: 'lk_ro_read', writable: true });
   });
 
   it('publishes nothing when there is no file yet', async () => {
     const prefs = await start();
     await prefs.poll();
-    const p = await prefs.published();
-    expect(p?.read).toBeUndefined();
-    expect(p?.publish).toBeUndefined();
+    expect((await prefs.published())?.read).toBeUndefined();
   });
 
-  it('keeps the tokens a page sends in the file and answers with them', async () => {
+  it('keeps the token a page sends in the file and answers with it', async () => {
     const prefs = await start();
     await prefs.poll();
-    const id = await prefs.request('lk_ro_new', 'lk_rw_new');
-    expect(await prefs.published()).toMatchObject({ req: id, ok: true, read: 'lk_ro_new', publish: 'lk_rw_new' });
+    const id = await prefs.request('lk_ro_new');
+    expect(await prefs.published()).toMatchObject({ req: id, ok: true, read: 'lk_ro_new' });
     expect(await prefs.file()).toContain('lk_ro_new');
-    expect(await prefs.file()).toContain('lk_rw_new');
   });
 
-  it('removes a token when the page sends it empty, and keeps the other', async () => {
-    const prefs = await start('{"publishToken":"lk_rw_pub","readToken":"lk_ro_read"}');
+  it('removes the token when the page sends it empty', async () => {
+    const prefs = await start('{"readToken":"lk_ro_read"}');
     await prefs.poll();
-    await prefs.request('lk_ro_read', '');
+    await prefs.request('');
+    expect((await prefs.published())?.read).toBeUndefined();
+    expect(await prefs.file()).not.toContain('lk_ro_read');
+  });
+
+  it('refuses a write token and never lets it reach the file or the web interface', async () => {
+    const prefs = await start('{"readToken":"lk_ro_read"}');
+    await prefs.poll();
+    await prefs.request('lk_rw_secret');
     const p = await prefs.published();
-    expect(p?.publish).toBeUndefined();
+    expect(p).toMatchObject({ ok: false, read: 'lk_ro_read' });
+    expect(JSON.stringify(p)).not.toContain('lk_rw_secret');
+    expect(await prefs.file()).not.toContain('lk_rw_secret');
+  });
+
+  it('takes a write token an earlier version kept out of the file, and never publishes it', async () => {
+    const prefs = await start('{"publishToken":"lk_rw_old","readToken":"lk_ro_read"}');
+    await prefs.poll();
+    const p = await prefs.published();
     expect(p?.read).toBe('lk_ro_read');
-    expect(await prefs.file()).not.toContain('lk_rw_pub');
+    expect(JSON.stringify(p)).not.toContain('lk_rw_old');
+    expect(await prefs.file()).not.toContain('lk_rw_old');
+    expect(await prefs.file()).toContain('lk_ro_read');
   });
 
   it('ignores a request without this run’s control token', async () => {
     const prefs = await start('{"readToken":"lk_ro_read"}');
     await prefs.poll();
-    await prefs.request('lk_ro_evil', '', 'wrong');
+    await prefs.request('lk_ro_evil', 'wrong');
     expect((await prefs.published())?.read).toBe('lk_ro_read');
     expect(await prefs.file()).toContain('lk_ro_read');
   });
 
-  it('refuses a token with whitespace and changes nothing', async () => {
-    const prefs = await start('{"readToken":"lk_ro_read"}');
-    await prefs.poll();
-    await prefs.request('lk_ro bad', '');
-    expect(await prefs.published()).toMatchObject({ ok: false, read: 'lk_ro_read' });
-  });
-
-  it('says it cannot keep tokens when there is no home folder', async () => {
+  it('says it cannot keep the token when there is no home folder', async () => {
     const prefs = await start(undefined, null);
     await prefs.poll();
     expect((await prefs.published())?.writable).toBe(false);
-    await prefs.request('lk_ro_x', '');
+    await prefs.request('lk_ro_x');
     expect(await prefs.published()).toMatchObject({ ok: false });
   });
 });
