@@ -3,6 +3,7 @@ import { REPO_URL } from '../lib/links.js';
 import { usePopover } from '../lib/usePopover.js';
 import { hasToolCalls, isConnected, sessionHue, sessionName, type Session } from '../lib/sessions.js';
 import { Icon, Mark } from '../components/index.js';
+import { CommandPaletteButton } from '../features/command/index.js';
 import { cx } from '../lib/cx.js';
 import styles from './Header.module.css';
 
@@ -81,6 +82,7 @@ export function Header({
             Rebuild &amp; reload
           </button>
         )}
+        <CommandPaletteButton />
         {onOpenSettings && (
           <button className={styles.iconLink} onClick={onOpenSettings} title="Settings" aria-label="Settings">
             <Icon.Gear />

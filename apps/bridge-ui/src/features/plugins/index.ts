@@ -11,4 +11,5 @@ export const Plugins = Object.assign(PluginsView, { Details: PluginDetails, Teac
 
 export { pluginCoverage, type Coverage, type InstalledFx, type KnowledgeFeed, type PluginRecord, type PluginRow, type PublishResult, type UsedFx } from './plugins.js';
 export { LOREKIT_PUBLISH_TOKEN_KEY, loadLoreKitToken, saveLoreKitToken, useKnowledge } from './useKnowledge.js';
+export { parseSharedTokens, saveSharedTokensUrl, useLoreKitTokens } from './sharedTokens.js';
 export type { TeachOption } from './TeachMenu.js';

@@ -160,6 +160,7 @@ reaper-mcp/
     mcp_extensions_lib.lua    # extension_call: runs a Lua command from an installed extension's handlers.lua (internal)
     mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
     mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
+    mcp_prefs_lib.lua         # the read-only LoreKit token shared through ~/.config/reaper-mcp/lorekit.json (never the lk_rw_ one) (ExtState lorekit_tokens / tokens_req; prefs-lib.test.ts)
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
     mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
     mcp_snapshot_quick_save.lua # Action: quick save, named by the date and time
@@ -902,6 +903,9 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   state a viewer would want to go back to or share (tabs, filters, an open drawer); keep transient UI (hover, drag,
   copied flags) and per-viewer preferences (grouping, tokens) in `useState`/localStorage. Give each param a
   `validate` guard so a stale or hand-edited link falls back to the default, and keep keys unique across views.
+- Command palette and shortcuts (`src/features/command/`, rules in `.claude/rules/command-palette.md`): ⌘K opens the palette, `?` the shortcut sheet,
+  `g` then `c`/`t`/`a`/`p`/`s` go to Calls/Tools/Sessions/Plugins/Snapshots, `/` `f` `p` `j` `k` `c` act in the view. Every view and
+  action registers with `useCommand` (palette entry); only frequent ones get a key. A new view, tab or action adds its command in the same change.
 - Search (`parseQuery()` / `matchesQuery()` in `src/lib/search.ts`): space-separated terms, all must match. A word matches the
   command name, error or params text; `key:value` matches one param exactly (`trackIndex:6` is not 16; quote values
   with spaces, `fxName:"VST3: Pro-Q 3"`). Selecting text in a command's Params offers **Filter** (the whole param when
@@ -1018,7 +1022,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   else REAPER's `(Vendor)` suffix), project plugins first, with Teach prompts per row, per creator and for all. Plugin records come straight from LoreKit's **REST** API
   (`GET /memories`, which allows browser origins — the server's `/mcp` endpoint does not): the built-in layer with the
   public token, which `build-config.mjs` reads out of `tools/knowledge.ts` at build time, and the viewer's own `user::` records
-  only with their own `lk_ro_` token from Settings (kept in localStorage, never sent to the bridge). Records link into
+  only with their own `lk_ro_` token from Settings (kept in `~/.config/reaper-mcp/lorekit.json` by the bridge; the `lk_rw_` publish token stays in localStorage, as REAPER's web port answers anyone who reaches it, `reaper/mcp_prefs_lib.lua`, so the dev server, REAPER's page and an installed app share it; localStorage is the offline copy). Records link into
   LoreKit by row id. The tab stays hidden until the bridge has published its list. **Contribute N** (with a token, when you have
   `user::` records) opens GitHub's new-file page with them as one file under `knowledge/contributions/` (format and
   checks: `apps/bridge-ui/src/features/plugins/plugin-contributions.mjs`), so GitHub forks and opens the PR. The `plugin-contributions`

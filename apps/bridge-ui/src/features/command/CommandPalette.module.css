@@ -1,0 +1,36 @@
+.scrim { position: fixed; inset: 0; z-index: 50; display: flex; justify-content: center; align-items: flex-start; padding: 12vh 16px 16px; background: rgba(5, 6, 8, 0.55); animation: scrim-in 140ms ease-out; }
+.scrim.leaving { animation: scrim-out 120ms ease-in forwards; pointer-events: none; }
+@keyframes scrim-in { from { opacity: 0; } }
+@keyframes scrim-out { to { opacity: 0; } }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(-8px) scale(0.98); } }
+@keyframes dialog-out { to { opacity: 0; transform: translateY(-6px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) { .scrim, .scrim.leaving, .dialog, .leaving .dialog { animation-duration: 1ms; } }
+.dialog {
+  width: min(560px, 100%); max-height: min(70vh, 560px); display: flex; flex-direction: column; overflow: hidden;
+  background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  color: var(--text); outline: 0; animation: dialog-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.leaving .dialog { animation: dialog-out 120ms ease-in forwards; }
+.inputRow { display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.input { flex: 1; min-width: 0; height: 46px; border: 0; outline: 0; background: none; color: var(--text); font: inherit; font-size: 14.5px; }
+.input::placeholder { color: var(--faint); }
+.crumb { flex: none; height: 24px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12px; }
+.list { flex: 1; overflow-y: auto; padding: 4px 6px 6px; }
+.groupLabel { padding: 8px 8px 4px; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); }
+.row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 7px; cursor: pointer; }
+.row[aria-selected='true'] { background: var(--panel-2); box-shadow: 0 0 0 1px var(--line-2); }
+.icon { display: inline-flex; color: var(--muted); }
+.label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kbd { flex: none; padding: 1px 6px; border: 1px solid var(--line-2); border-radius: 5px; background: var(--bg); color: var(--muted); font: 11.5px var(--mono); }
+.empty { padding: 28px 12px; text-align: center; color: var(--faint); }
+.foot { display: flex; gap: 14px; padding: 7px 14px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--faint); }
+.trigger { display: inline-flex; align-items: center; height: 28px; padding: 0 4px; border: 0; background: none; cursor: pointer; }
+.trigger:hover .kbd { color: var(--text); border-color: #3c414a; }
+.helpHead { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.helpBody { overflow-y: auto; padding: 0 14px 12px; }
+.helpRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.trail { color: var(--faint); }
+/* A row that opens a menu: its count and a chevron, and a faint rule, so it never reads as a plain action */
+.row[data-menu] .label { font-weight: 500; }
+.menuMark { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--faint); font-size: 11.5px; }
+.row[data-menu][aria-selected='true'] .menuMark { color: var(--text); }

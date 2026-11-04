@@ -4,6 +4,7 @@ import { EditForm } from './EditForm.js';
 import { SaveForm } from './SaveForm.js';
 import { formatAgo } from '../../lib/format.js';
 import { cx } from '../../lib/cx.js';
+import { useCommand, type Command } from '../command/index.js';
 import listStyles from '../../styles/list.module.css';
 import styles from './SnapshotsView.module.css';
 
@@ -49,6 +50,7 @@ export function SnapshotsView({
     if (!blocked) onSend('restore', s.name);
   };
   const onKey = useEffectEvent((ev: KeyboardEvent) => {
+    if (ev.target instanceof Element && ev.target.closest('[role="dialog"]')) return;
     const el = document.activeElement;
     // A held key auto-repeats: load once, not once per repeat (each load is an undo point)
     if (ev.repeat || ev.metaKey || ev.ctrlKey || ev.altKey || (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'))) return;
@@ -66,8 +68,19 @@ export function SnapshotsView({
     return () => window.removeEventListener('keydown', listener);
   }, [keys]);
 
+  const all = feed?.snapshots ?? [];
   return (
     <div className={cx(listStyles.rows, styles.snaps)}>
+      <SnapshotCommands
+        snapshots={all}
+        blocked={Boolean(blocked)}
+        keys={keys}
+        onLoad={load}
+        onQuickSave={() => onSend('save', '', '')}
+        onRename={(s) => setRow({ name: s.name, mode: 'edit' })}
+        onDelete={(s) => setRow({ name: s.name, mode: 'delete' })}
+        onClearAll={() => setConfirmClear(true)}
+      />
       <SaveForm snapshots={feed?.snapshots ?? []} blocked={blocked} saving={pending?.op === 'save'} onSave={(name, desc) => onSend('save', name, desc)} />
       {blocked && (
         <p className={styles.snapBlocked} role="note">
@@ -113,18 +126,26 @@ export function SnapshotsView({
                 >
                   {i < 9 && keys && <kbd className={styles.snapKey}>⇧{i + 1}</kbd>}
                   <span className={styles.snapMain}>
-                    <span className={styles.snapName}>{s.name}</span>
-                    {s.description && <span className={styles.snapDesc}>{s.description}</span>}
-                  </span>
-                  <span className={styles.snapMeta}>
-                    <span title={new Date(s.timestamp).toLocaleString()}>{formatAgo(now - s.timestamp)}</span>
-                    {s.trackCount !== undefined && (
-                      <span>
-                        {s.trackCount} track{s.trackCount === 1 ? '' : 's'}
-                        {s.scoped ? ' only' : ''}
+                    <span className={styles.snapName} title={s.name}>
+                      {s.name}
+                    </span>
+                    <span className={styles.snapSub}>
+                      <span className={styles.snapMeta}>
+                        <span title={new Date(s.timestamp).toLocaleString()}>{formatAgo(now - s.timestamp)}</span>
+                        {s.trackCount !== undefined && (
+                          <span>
+                            {s.trackCount} track{s.trackCount === 1 ? '' : 's'}
+                            {s.scoped ? ' only' : ''}
+                          </span>
+                        )}
+                        {s.fullChunk && <span title="Exact track state: every plugin's internal state">exact</span>}
                       </span>
-                    )}
-                    {s.fullChunk && <span title="Exact track state: every plugin's internal state">exact</span>}
+                      {s.description && (
+                        <span className={styles.snapDesc} title={s.description}>
+                          {s.description}
+                        </span>
+                      )}
+                    </span>
                   </span>
                   <span className={styles.snapState}>{loading ? 'Loading…' : current ? 'Loaded' : 'Load'}</span>
                 </button>
@@ -234,4 +255,47 @@ function RequestLine({ request }: { request: RequestState | null }) {
       )}
     </div>
   );
+}
+
+/**
+ * Snapshots' commands. `c` saves the current mix (Linear's create), contextual to this view. Loading one is
+ * also Shift+1–9 (shown as a hint: that handler lives above, not in the chord machine). Delete and clear only
+ * open their inline confirm, never act on a bare key.
+ */
+function SnapshotCommands({
+  snapshots,
+  blocked,
+  keys,
+  onLoad,
+  onQuickSave,
+  onRename,
+  onDelete,
+  onClearAll,
+}: {
+  snapshots: SnapshotInfo[];
+  blocked: boolean;
+  keys: boolean;
+  onLoad: (s: SnapshotInfo) => void;
+  onQuickSave: () => void;
+  onRename: (s: SnapshotInfo) => void;
+  onDelete: (s: SnapshotInfo) => void;
+  onClearAll: () => void;
+}) {
+  useCommand({ contextual: true, id: 'snapshots-save', label: 'Save the current mix', group: 'Snapshots', shortcut: ['c'], description: 'new snapshot, named by the date and time', onSelect: onQuickSave }, !blocked);
+  useCommand(
+    {
+      contextual: true,
+      id: 'snapshots-load',
+      label: 'Load a snapshot…',
+      group: 'Snapshots',
+      description: 'restore the mix',
+      children: snapshots.map((s, i) => ({ id: `load-${s.name}`, label: s.name, description: s.description, hint: keys && i < 9 ? `⇧${i + 1}` : undefined, onSelect: () => onLoad(s) })),
+    },
+    !blocked && snapshots.length > 0,
+  );
+  const pick = (verb: string, run: (s: SnapshotInfo) => void): Command[] => snapshots.map((s) => ({ id: `${verb}-${s.name}`, label: s.name, onSelect: () => run(s) }));
+  useCommand({ contextual: true, id: 'snapshots-rename', label: 'Rename a snapshot…', group: 'Snapshots', children: pick('rename', onRename) }, !blocked && snapshots.length > 0);
+  useCommand({ contextual: true, id: 'snapshots-delete', label: 'Delete a snapshot…', group: 'Snapshots', children: pick('delete', onDelete) }, !blocked && snapshots.length > 0);
+  useCommand({ contextual: true, id: 'snapshots-clear', label: 'Delete all snapshots…', group: 'Snapshots', onSelect: onClearAll }, !blocked && snapshots.length > 0);
+  return null;
 }

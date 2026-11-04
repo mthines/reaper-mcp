@@ -65,6 +65,8 @@ end)()
 local edit_lib_ok, edit_lib = pcall(dofile, script_dir .. "mcp_edit_views_lib.lua")
 -- Snapshot list, restore and save from the status page (same install rules).
 local snaps_lib_ok, snaps_lib = pcall(dofile, script_dir .. "mcp_snapshots_ui_lib.lua")
+-- LoreKit tokens shared through ~/.config/reaper-mcp (same install rules).
+ext.prefs = (function() local ok, lib = pcall(dofile, script_dir .. "mcp_prefs_lib.lua"); return ok and lib or nil end)()
 
 local last_poll = 0
 local last_heartbeat = 0
@@ -4866,6 +4868,8 @@ local function control_status()
     update = update,
     -- The page may list, restore and save snapshots (mcp_snapshots_ui_lib.lua)
     snapshots = snaps_lib_ok,
+    -- The page keeps its LoreKit tokens in ~/.config/reaper-mcp (mcp_prefs_lib.lua)
+    sharedTokens = ext.prefs ~= nil,
   }
 end
 
@@ -5398,6 +5402,18 @@ if snaps_lib_ok then
   snaps_lib.register_actions(reaper, script_dir, read_kb_ini())
 end
 
+if ext.prefs then
+  local windows = reaper.GetOS and tostring(reaper.GetOS()):find("Win") ~= nil
+  ext.prefs.init({
+    api = reaper, section = STATUS_SECTION, dir = ext.prefs.default_dir(os.getenv, windows),
+    decode = plan_lib_ok and plan_lib.json_decode or json_decode, encode = json_encode, read_file = read_file,
+    token = function() return control_token end,
+    chmod = not windows and function(path)
+      if not path:find("'", 1, true) then os.execute("chmod 600 '" .. path .. "'") end
+    end or nil,
+  })
+end
+
 -- =============================================================================
 -- Heartbeat
 -- =============================================================================
@@ -5458,6 +5474,7 @@ local function main_loop()
   publish_installed_fx(now)
   publish_used_fx(now)
   if snaps_lib_ok then snaps_lib.poll(now) end
+  if ext.prefs then ext.prefs.poll() end
 
   reaper.defer(main_loop)
 end

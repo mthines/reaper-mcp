@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { setUsageStats, startAnalytics, track, trackView, type UsageStatsState } from '../lib/analytics.js';
 import { isBoolean, useUrlState } from '../lib/url-state.js';
 import { liveness, type SettingKey, type Liveness } from '../lib/status.js';
+import { AppCommands } from './AppCommands.js';
 import { Header } from './Header.js';
 import { Notices } from './Notices.js';
 import { Offline } from './Offline.js';
@@ -19,7 +20,7 @@ import { formatAgo } from '../lib/format.js';
 import { inSpan, type Span } from '../lib/timeline.js';
 import { labelSessions } from '../lib/sessions.js';
 import { Log, VIEW_KEY, isSpanOrNull, isView, loadView, type View } from '../features/log/index.js';
-import { LOREKIT_PUBLISH_TOKEN_KEY, loadLoreKitToken, saveLoreKitToken, useKnowledge } from '../features/plugins/index.js';
+import { useKnowledge, useLoreKitTokens } from '../features/plugins/index.js';
 import { SETTING_NAME, Settings } from '../features/settings/index.js';
 import { blockedBy, useSnapshots } from '../features/snapshots/index.js';
 import { Stats } from '../features/stats/index.js';
@@ -83,17 +84,17 @@ export function App() {
   useEffect(() => {
     if (new URLSearchParams(location.search).has('install')) setSettingsOpen(true, 'replace');
   }, [setSettingsOpen]);
-  const [loreToken, setLoreToken] = useState(() => loadLoreKitToken());
+  // The LoreKit tokens, kept by the bridge in ~/.config/reaper-mcp so every way of opening the page shares them
+  const tokens = useLoreKitTokens(!DEMO, status?.control?.token);
+  const loreToken = tokens.read;
+  const publishToken = tokens.publish;
   const chooseLoreToken = (token: string | null) => {
     track({ name: 'lorekit_token_changed', kind: 'read', connected: token !== null });
-    setLoreToken(token);
-    saveLoreKitToken(token);
+    tokens.setRead(token);
   };
-  const [publishToken, setPublishToken] = useState(() => loadLoreKitToken(LOREKIT_PUBLISH_TOKEN_KEY));
   const choosePublishToken = (token: string | null) => {
     track({ name: 'lorekit_token_changed', kind: 'publish', connected: token !== null });
-    setPublishToken(token);
-    saveLoreKitToken(token, LOREKIT_PUBLISH_TOKEN_KEY);
+    tokens.setPublish(token);
   };
   const liveKnowledge = useKnowledge(!DEMO, loreToken, publishToken);
   // The Snapshots tab: only a bridge that serves it (control.snapshots), read only while the view is open
@@ -128,6 +129,25 @@ export function App() {
 
   return (
     <div className={cx(styles.shell, overview ? styles.overviewOn : '')}>
+      <AppCommands
+        rangeKey={rangeKey}
+        onRange={chooseRange}
+        settings={settings}
+        onSet={changeSetting('settings')}
+        onOpenSettings={settings ? openSettings(true) : undefined}
+        overview={overview}
+        onToggleOverview={status ? toggleOverview : undefined}
+        onRebuild={
+          settings?.dev && status?.control?.canUpdate && status.control.changed && status.control.update?.state !== 'running'
+            ? () => request('rebuild')
+            : undefined
+        }
+        onRestart={status?.control?.canRestart ? () => request('restart') : undefined}
+        notify={notify}
+        onNotify={setNotify}
+        usageStats={usageStats}
+        onUsageStats={chooseUsageStats}
+      />
       <Header
         status={status}
         state={state}
@@ -192,6 +212,7 @@ export function App() {
               loreToken={loreToken}
               onLoreToken={chooseLoreToken}
               publishToken={publishToken}
+              tokensShared={tokens.shared}
               onPublishToken={choosePublishToken}
               onClose={() => setSettingsOpen(false)}
               canUpdate={status.control?.canUpdate === true}

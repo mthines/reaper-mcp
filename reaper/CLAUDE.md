@@ -20,6 +20,7 @@ Files installed INTO the REAPER DAW by the `setup` command. These run inside REA
 | `mcp_midi_lib.lua` | Lua | Quantize, transform, MIDI file import, pitch-class profile for detect_key, bar/beat grid + per-segment profiles for detect_chords |
 | `mcp_edit_views_lib.lua` | Lua | Status page results and before/after edit views |
 | `mcp_snapshot_lib.lua` | Lua | Shared library for snapshot action scripts (path helpers, JSON, restore logic) |
+| `mcp_prefs_lib.lua` | Lua | Keeps the page's read-only (lk_ro_) LoreKit token in `~/.config/reaper-mcp/lorekit.json` (mode 600) so every way of opening the page shares them; bridge holds it in `ext.prefs` (the bridge is at Lua's 200-locals limit: add no top-level local) |
 | `mcp_snapshots_ui_lib.lua` | Lua | Status page Snapshots view: lists the folder, runs page restore/save requests through the bridge's dispatcher |
 | `mcp_snapshot_next.lua` | Lua | Action: restore next snapshot (bind to key for A/B testing) |
 | `mcp_snapshot_prev.lua` | Lua | Action: restore previous snapshot (bind to key for A/B testing) |

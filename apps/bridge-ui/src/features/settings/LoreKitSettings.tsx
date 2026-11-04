@@ -7,10 +7,11 @@ import styles from './LoreKitSettings.module.css';
 const LOREKIT_KEYS_URL = 'https://www.lorekit.io/settings/api-keys';
 
 /** The viewer's own read-only LoreKit token, so the Plugins tab includes their `user::` records. */
-export function LoreKitSetting({ token, onChange }: { token: string | null; onChange: (token: string | null) => void }) {
+export function LoreKitSetting({ token, onChange, shared = false }: { token: string | null; onChange: (token: string | null) => void; shared?: boolean }) {
   const [draft, setDraft] = useState('');
   const trimmed = draft.trim();
   const invalid = trimmed !== '' && !/^lk_ro_[A-Za-z0-9]+$/.test(trimmed);
+  const where = shared ? 'in ~/.config/reaper-mcp/lorekit.json, the same for every way of opening this page' : 'in this browser';
   return (
     <div className={settingsPanelStyles.settingGroup}>
       <h3>Your plugin knowledge</h3>
@@ -68,8 +69,8 @@ export function LoreKitSetting({ token, onChange }: { token: string | null; onCh
         {invalid
           ? 'That isn’t a read-only token. Use one that starts with lk_ro_ here; a write token only goes under Publish to built-in.'
           : token
-            ? 'The Plugins tab includes the plugins you taught the mixer. The token stays in this browser and is only sent to LoreKit.'
-            : 'The Plugins tab always shows the built-in records. Your token adds the plugins you taught the mixer; it stays in this browser and is only sent to LoreKit.'}
+            ? `The Plugins tab includes the plugins you taught the mixer. The token is kept ${where} and is only sent to LoreKit.`
+            : `The Plugins tab always shows the built-in records. Your token adds the plugins you taught the mixer; it is kept ${where} and is only sent to LoreKit.`}
       </p>
     </div>
   );

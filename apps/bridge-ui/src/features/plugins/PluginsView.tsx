@@ -9,6 +9,7 @@ import { TeachMenu, toastText } from './TeachMenu.js';
 import { learnAllPrompt, learnPrompt } from './teach.js';
 import { useCopy } from '../../lib/useCopy.js';
 import { Icon } from '../../components/index.js';
+import { useCommand } from '../command/index.js';
 import { cx } from '../../lib/cx.js';
 import listStyles from '../../styles/list.module.css';
 import publishRecordStyles from './PublishRecord.module.css';
@@ -78,6 +79,7 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
   // ↑/↓ step through the list while a plugin is open, like the Calls tab
   const onKey = useEffectEvent((ev: KeyboardEvent) => {
     if ((ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') || !open) return;
+    if (ev.target instanceof Element && ev.target.closest('[role="dialog"]')) return;
     if (ev.target instanceof HTMLElement && ev.target.closest('input, textarea, [role="separator"], [role="menu"]')) return;
     ev.preventDefault();
     const i = shown.findIndex((r) => r.fx.name === open.fx.name);
@@ -178,6 +180,20 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
 
   return (
     <div className={cx(listStyles.rows, styles.plugins)}>
+      <PluginsCommands
+        filter={filter}
+        onFilter={(f) => chooseFilter(f)}
+        hasProjectList={Boolean(feed.used)}
+        inProject={inProject}
+        onInProject={() => chooseFilter(filter, !inProject)}
+        grouped={grouped}
+        onGrouped={chooseGrouped}
+        mine={mine.length}
+        onContribute={() => (feed.publish ? setPublishingAll((o) => !o) : contribute(mine))}
+        publishes={Boolean(feed.publish)}
+        unknownInProject={unknownInProject.length}
+        onTeachProject={() => teach(unknownInProject, learnAllPrompt(unknownInProject), `all:project:${unknownInProject.length}`)}
+      />
       <div className={styles.knSummary}>
         <div className={styles.knMeter} aria-label={`${known} of ${rows.length} installed plugins known`}>
           <span className={cx(styles.knSeg, styles.knLearned)} style={{ flexGrow: count('learned') }} />
@@ -314,4 +330,51 @@ export function PluginsView({ feed, query, now, onOpenSettings }: { feed: Knowle
       )}
     </div>
   );
+}
+
+/** The Plugins view's commands: all palette-only, they are occasional (rules: .claude/rules/command-palette.md) */
+function PluginsCommands({
+  filter,
+  onFilter,
+  hasProjectList,
+  inProject,
+  onInProject,
+  grouped,
+  onGrouped,
+  mine,
+  onContribute,
+  publishes,
+  unknownInProject,
+  onTeachProject,
+}: {
+  filter: Filter;
+  onFilter: (f: Filter) => void;
+  hasProjectList: boolean;
+  inProject: boolean;
+  onInProject: () => void;
+  grouped: boolean;
+  onGrouped: (on: boolean) => void;
+  mine: number;
+  onContribute: () => void;
+  publishes: boolean;
+  unknownInProject: number;
+  onTeachProject: () => void;
+}) {
+  useCommand({ contextual: true,
+    id: 'plugins-filter',
+    label: 'Filter plugins…',
+    group: 'Plugins',
+    description: 'coverage learned built-in unknown',
+    children: (['all', 'learned', 'built-in', 'unknown'] as const).map((f) => ({
+      id: `plugins-filter-${f}`,
+      label: f === 'all' ? 'All plugins' : COVERAGE_LABEL[f],
+      hint: filter === f ? 'current' : undefined,
+      onSelect: () => onFilter(f),
+    })),
+  });
+  useCommand({ contextual: true, id: 'plugins-in-project', label: inProject ? 'Show all installed plugins' : 'Show only plugins in this project', group: 'Plugins', onSelect: onInProject }, hasProjectList);
+  useCommand({ contextual: true, id: 'plugins-layout', label: grouped ? 'List plugins' : 'Group plugins by creator', group: 'Plugins', onSelect: () => onGrouped(!grouped) });
+  useCommand({ contextual: true, id: 'plugins-contribute', label: publishes ? `Publish ${mine} to built-in` : `Contribute ${mine} plugin${mine === 1 ? '' : 's'}`, group: 'Plugins', description: 'share learned records', onSelect: onContribute }, mine > 0);
+  useCommand({ contextual: true, id: 'plugins-teach-project', label: `Copy the prompt to teach ${unknownInProject} unknown plugin${unknownInProject === 1 ? '' : 's'} in this project`, group: 'Plugins', description: 'learn-plugin', onSelect: onTeachProject }, unknownInProject > 0);
+  return null;
 }
