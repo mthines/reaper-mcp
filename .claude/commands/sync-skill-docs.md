@@ -15,7 +15,7 @@ ensure naming, cross-references, and documentation are consistent.
 Read all `.claude/skills/*/SKILL.md` files. Build a table of `name` (frontmatter) and
 the `/skill` references found in other skills. Verify every `name` matches its
 containing directory name. The expected mix set is: `mixer`, `critique`,
-`mastering`, `editing`, `learn-plugin`, `mix-memory`.
+`mastering`, `editing`, `learn-plugin`, `new-extension`, `mix-memory`.
 
 ### 2. Cross-reference consistency
 

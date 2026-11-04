@@ -124,6 +124,7 @@ reaper-mcp/
     mastering/SKILL.md        # /mastering — mix-bus mastering to a LUFS target
     editing/SKILL.md          # /editing — MIDI, arrangement, comping, A/B variants in fixed lanes
     learn-plugin/SKILL.md     # /learn-plugin — research + live-probe a plugin via plugin-researcher, ask only the gaps (LoreKit)
+    new-extension/SKILL.md    # /new-extension — build an extension for a plugin's internals: probe its state, write tools + tests, prove them live
     mix-memory/SKILL.md       # /mix-memory — recall / consolidate / promote memory
   .claude/agents/             # Subagents, symlinked into ~/.claude/agents by scripts/sync-symlinks.sh
     plugin-researcher.md      # Web research + scratch-track probing → user::plugins:: record; used by /learn-plugin, /mixer, /mastering
@@ -137,6 +138,7 @@ reaper-mcp/
 
   scripts/
     sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (primary install model)
+    ext-call.mjs              # Call any tool on a fresh `reaper-mcp serve` (so a new extension can be tried without restarting Claude Code): --list [prefix] | <tool> [json]
     plugin-list.mjs           # Rebuild docs/PLUGINS.md's built-in plugin table from LoreKit (logic: apps/bridge-ui/src/features/plugins/plugin-list.mjs)
 
   reaper/                     # Files installed INTO REAPER (copied by setup command)
