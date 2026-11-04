@@ -156,9 +156,9 @@ reaper-mcp/
     mcp_items_lib.lua         # Items, takes, take FX, FX move/copy/rename, FX chains, track templates (pure Lua, unit-tested via wasmoon)
     mcp_recording_lib.lua     # Record inputs/monitoring/modes, punch, fixed lanes and comping (pure Lua, unit-tested via wasmoon)
     mcp_arrange_lib.lua       # Copy items, insert/remove time, copy a section, normalize/reverse/glue (pure Lua, unit-tested via wasmoon)
-    mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
     mcp_fxstate_lib.lua       # Read/replace one VST3's saved state in the track chunk, via files in the bridge folder (internal: get_fx_state / set_fx_state)
     mcp_extensions_lib.lua    # extension_call: runs a Lua command from an installed extension's handlers.lua (internal)
+    mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
     mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
     mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
@@ -791,7 +791,6 @@ The `render_track_to_wav` Lua handler uses `Main_OnCommand(42230)` which is **sy
 
 The sidecar architecture admits new JSON-RPC methods easily — future phases (CLAP, MERT, Demucs, Parakeet, Essentia) just add new methods to `server.py` and new tools in TypeScript. The IPC channel and subprocess lifecycle are shared infrastructure.
 
-## Spectrum Analysis (JSFX + gmem)
 ## Extensions
 
 Opt-in add-ons for things that don't belong in core (one synth, one workflow): `docs/EXTENSIONS.md` has the manifest, the
@@ -807,6 +806,7 @@ the tool count or `TOOL_CATEGORIES` (each registers its own category at load).
 - **VST3 state:** after changing a state's size fix its two length fields and give the FX a new `FXID`, or REAPER silently keeps the
   old state (`libs/extension-api/src/vst3-state.ts`, `fx-state.ts`).
 
+## Spectrum Analysis (JSFX + gmem)
 
 The JSFX analyzer (`mcp_analyzer.jsfx`) runs in REAPER's audio thread:
 - Performs configurable FFT (512-8192 bins, default 4096)
@@ -1139,8 +1139,8 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 | `serve` (default) | Start MCP server in stdio mode for Claude Code |
 | `setup` | Install Lua bridge + JSFX analyzers into REAPER |
 | `setup-sidecar` | Install the Python sidecar (opt-in, Python 3.10+, venv at `~/.reaper-mcp/sidecar-venv/`). In a terminal it shows a picker: core analysis (required), Audiobox Aesthetics weights (831 MB, default on), stem separation (Demucs, ~110 MB), chord model (lv-chordia, ~135 MB), each with what it enables, why and its size. No prompt without a TTY, in CI, with `--yes`/`-y`/`--non-interactive` or with any component flag: `--all`, `--with-separation`, `--with-chords`, `--without-aesthetics` (defaults: core + aesthetics). `--list [--json]` prints the components and what is installed. An existing install gets only the missing picked parts; the scripts are always refreshed. |
-| `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` that runs the clone's built `main.js` (copy-free) |
 | `extension` | Manage opt-in extensions: `list`, `add <name\|folder\|git-url>`, `link <folder>`, `remove <name>`, `new <name>` (see `docs/EXTENSIONS.md`) |
+| `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` that runs the clone's built `main.js` (copy-free) |
 | `doctor` | Verify all components are configured correctly (includes 4 sidecar sub-checks) |
 | `status` | Check if Lua bridge is running in REAPER |
 

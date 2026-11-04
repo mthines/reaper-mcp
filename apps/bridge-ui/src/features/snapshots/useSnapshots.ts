@@ -25,6 +25,8 @@ function report(req: RequestState, meta: RequestMeta) {
   const outcome = req.state === 'lost' ? 'lost' : req.state === 'done' && req.result.ok ? 'ok' : 'refused';
   if (req.op === 'restore') {
     track({ name: 'snapshot_restored', outcome, warnings: req.state === 'done' && Boolean(req.result.warnings?.length) });
+  } else if (req.op === 'clear') {
+    track({ name: 'snapshots_cleared', outcome });
   } else if (req.op === 'delete') {
     track({ name: 'snapshot_deleted', outcome });
   } else if (req.op === 'edit') {
@@ -90,7 +92,7 @@ export function useSnapshots(enabled: boolean, token: string | undefined, demo: 
       const snapshots = feed?.snapshots ?? [];
       // A save without a name is named by the date and time, as the quick-save action does
       const typed = name.trim() !== '';
-      const target = op === 'save' && !typed ? timeSnapshotName(snapshots) : name.trim();
+      const target = op === 'save' && !typed ? timeSnapshotName(snapshots) : op === 'clear' ? 'all snapshots' : name.trim();
       meta.current = {
         replaced: op === 'save' && replacedBy(snapshots, target) !== null,
         described: description.trim() !== '',
@@ -113,6 +115,10 @@ export function useSnapshots(enabled: boolean, token: string | undefined, demo: 
 }
 
 function demoAnswer(f: SnapshotsFeed, id: string, op: SnapshotOp, name: string, description: string, newName: string): SnapshotsFeed {
+  if (op === 'clear') {
+    const n = f.snapshots.length;
+    return { ...f, snapshots: [], current: undefined, result: { id, op, name: `${n} snapshot${n === 1 ? '' : 's'}`, ok: true } };
+  }
   if (op === 'delete') {
     return { ...f, snapshots: f.snapshots.filter((s) => s.name !== name), result: { id, op, name, ok: true } };
   }

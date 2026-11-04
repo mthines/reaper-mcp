@@ -42,6 +42,7 @@ export type TrackEvent =
   | { name: 'snapshot_restored'; outcome: 'ok' | 'refused' | 'lost'; warnings: boolean }
   | { name: 'snapshot_saved'; outcome: 'ok' | 'refused' | 'lost'; described: boolean; replaced: boolean; named: boolean }
   | { name: 'snapshot_deleted'; outcome: 'ok' | 'refused' | 'lost' }
+  | { name: 'snapshots_cleared'; outcome: 'ok' | 'refused' | 'lost' }
   | { name: 'snapshot_edited'; outcome: 'ok' | 'refused' | 'lost'; renamed: boolean }
   | { name: 'page_error'; type: string };
 

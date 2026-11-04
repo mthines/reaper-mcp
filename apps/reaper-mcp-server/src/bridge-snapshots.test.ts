@@ -320,6 +320,28 @@ describe('snapshot delete and edit from the status page', () => {
     expect(await bridge.file('mix-B.json')).not.toBeNull();
   });
 
+  it('clears every snapshot in one request, each delete logged as from the page', async () => {
+    const bridge = await startBridge({ 'mix-A.json': LEGACY_SCOPED, 'mix-B.json': PARAMS_B });
+    await bridge.ping();
+    const id = await bridge.requestFields('clear', ['all snapshots']);
+
+    expect(await bridge.file('mix-A.json')).toBeNull();
+    expect(await bridge.file('mix-B.json')).toBeNull();
+    const published = await bridge.published();
+    expect(published?.snapshots).toEqual([]);
+    expect(published?.result).toMatchObject({ id, op: 'clear', name: '2 snapshots', ok: true });
+    expect((await bridge.status()).recent[0]).toMatchObject({ c: 'snapshot_delete', ok: true, src: 'page' });
+  });
+
+  it('keeps every snapshot when clearing while read-only', async () => {
+    const bridge = await startBridge({ 'mix-B.json': PARAMS_B });
+    const token = (await bridge.status()).control.token;
+    await bridge.set('MCPBridge/cfg_readonly', '1');
+    await bridge.requestFields('clear', ['all snapshots'], token);
+    expect(await bridge.file('mix-B.json')).not.toBeNull();
+    expect((await bridge.published())?.result).toMatchObject({ op: 'clear', ok: false, error: expect.stringMatching(/Read-only mode is on/) });
+  });
+
   it('refuses delete and edit while read-only', async () => {
     const bridge = await startBridge({ 'mix-B.json': PARAMS_B });
     const token = (await bridge.status()).control.token;
