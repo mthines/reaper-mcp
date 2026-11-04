@@ -13,7 +13,7 @@ built-in one disagree, yours wins.
 several installed. Your own records can set your own preference.
 
 <!-- plugin-list:start -->
-35 plugins.
+37 plugins.
 
 | Category | Plugin | Vendor | Preference |
 | --- | --- | --- | --- |
@@ -26,11 +26,13 @@ several installed. Your own records can set your own preference.
 | compressor | ReaComp | Cockos | 35 |
 | delay | ReaDelay | Cockos | 38 |
 | drum-sampler | XO | XLN Audio | 80 |
+| drums | GetGood Drums – Invasion (Kontakt) MIDI map |  | – |
 | eq | FabFilter Pro-Q 4 | FabFilter | 95 |
 | eq | FabFilter Pro-Q 3 | FabFilter | 90 |
 | eq | ReaEQ | Cockos | 40 |
 | gate | ReaGate | Cockos | 40 |
 | instrument | Kontakt 8 | Native Instruments | 95 |
+| instrument | Odin x Ari Lite | Solemn Tones | 80 |
 | instrument | Spitfire Audio LABS | Spitfire Audio | 70 |
 | limiter | FabFilter Pro-L 2 | FabFilter | 92 |
 | limiter, multiband | Ozone 9 | iZotope | 80 |
