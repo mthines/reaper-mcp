@@ -15,10 +15,10 @@
 
 import { z } from 'zod/v4';
 import { randomUUID } from 'node:crypto';
-import { unlink } from 'node:fs/promises';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
 import { sendCommand } from '../bridge.js';
+import { discardRender } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
 import { logToolResult } from '../tool-log.js';
 import { MAX_OFFLINE_SECONDS } from './offline.js';
@@ -126,10 +126,6 @@ function sections(hits: Transient[], start: number, end: number, seconds: number
   return out;
 }
 
-const removeQuietly = (path: string) => unlink(path).catch(() => {
-  // Best-effort: the OS temp dir is cleaned eventually
-});
-
 const sourceSchema = {
   trackIndex: z.coerce.number().int().min(-1).optional()
     .describe('Track to analyze, rendered post-FX (-1 = master). Give this or path'),
@@ -224,7 +220,7 @@ async function detect(args: SourceArgs): Promise<Detection | string> {
     try {
       result = await sidecar.transients({ path: wav.wavPath, ...options });
     } finally {
-      await removeQuietly(wav.wavPath);
+      await discardRender(wav);
     }
     // The render starts at `start`
     for (const t of (result['transients'] as Transient[] | undefined) ?? []) t.time = round(t.time + start);

@@ -647,6 +647,7 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
   },
   remove_mcp_meters: { title: 'Remove the agent’s meters', did: (e) => `removed the meters it had added to ${countOf(paramsOf(e).trackIndices, 'track', 'the tracks')}` },
   render_track_to_wav: { title: 'Render a clip to listen to', did: (e) => `rendered ${on(e)}${between(paramsOf(e).startTime, paramsOf(e).endTime)} to a file to analyse` },
+  render_tracks_to_wav: { title: 'Render several clips to listen to', did: (e) => `rendered ${countOf(paramsOf(e).trackIndices, 'track', 'the tracks')}${between(paramsOf(e).startTime, paramsOf(e).endTime)} in one pass to analyse` },
   analyze_track_aesthetics: {
     title: 'Score the sound quality',
     did: (e) => {

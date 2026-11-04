@@ -498,6 +498,14 @@ export interface RenderTrackToWavResult {
   channelCount: number;
   playOffsetMs?: number;  // the track's playback offset during the render (0 for the master)
   phaseInverted?: boolean; // the track's polarity during the render
+  cached?: boolean;       // true: the bridge reused an earlier render, nothing was rendered for this call
+  cacheOwned?: boolean;   // true: the bridge's render cache owns the file and deletes it itself; callers must not
+}
+
+export interface RenderTracksToWavResult {
+  tracks: RenderTrackToWavResult[]; // in the order asked
+  rendered: number;                 // tracks REAPER rendered for this call
+  cached: number;                   // tracks served from the cache
 }
 
 export interface AestheticsResult {

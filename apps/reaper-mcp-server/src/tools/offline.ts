@@ -15,12 +15,10 @@
  */
 
 import { z } from 'zod/v4';
-import { randomUUID } from 'node:crypto';
-import { unlink } from 'node:fs/promises';
 import { basename } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
-import { sendCommand } from '../bridge.js';
+import { discardRender, renderTrack, renderTracks } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
 import { alignmentSummary, logToolResult, offlineSummary } from '../tool-log.js';
 
@@ -39,27 +37,10 @@ const DEFAULT_MAX_LAG_MS = 20;
 export const MIN_ALIGNMENT_CORRELATION = 0.3;
 /** Max window measure_track_alignment renders per track (seconds). */
 export const MAX_ALIGNMENT_SECONDS = 30;
-/** Render is synchronous in REAPER: allow ~1 s per 3 s of audio plus slack. */
-const renderTimeoutMs = (seconds: number) => 30_000 + seconds * 400;
-
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
 
 const text = (data: unknown): ToolResult => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
 const error = (message: string): ToolResult => ({ content: [{ type: 'text', text: message }], isError: true });
-
-async function render(trackIndex: number, startTime: number, endTime: number): Promise<RenderTrackToWavResult> {
-  const res = await sendCommand(
-    'render_track_to_wav',
-    { trackIndex, startTime, endTime, commandId: randomUUID() },
-    renderTimeoutMs(endTime - startTime),
-  );
-  if (!res.success) throw new Error(`Render failed: ${res.error}`);
-  return res.data as RenderTrackToWavResult;
-}
-
-const removeQuietly = (path: string) => unlink(path).catch(() => {
-  // Best-effort: the OS temp dir is cleaned eventually
-});
 
 /** Shift the sidecar's file-relative section times to project time. */
 function toProjectTime(result: Record<string, unknown>, offset: number): Record<string, unknown> {
@@ -115,7 +96,7 @@ export function registerOfflineTools(server: McpServer): void {
 
       let wav: RenderTrackToWavResult;
       try {
-        wav = await render(trackIndex, start, end);
+        wav = await renderTrack(trackIndex, start, end);
       } catch (err) {
         return error(err instanceof Error ? err.message : String(err));
       }
@@ -139,7 +120,7 @@ export function registerOfflineTools(server: McpServer): void {
         logToolResult('analyze_track_offline', args, startedAt, null, message);
         return error(message);
       } finally {
-        await removeQuietly(wav.wavPath);
+        await discardRender(wav);
       }
     },
   );
@@ -213,8 +194,8 @@ export function registerOfflineTools(server: McpServer): void {
       const end = startTime + (durationSeconds ?? DEFAULT_ALIGNMENT_SECONDS);
       const rendered: RenderTrackToWavResult[] = [];
       try {
-        rendered.push(await render(referenceTrack, startTime, end));
-        rendered.push(await render(trackIndex, startTime, end));
+        // One render pass for both tracks: one progress window, not two
+        rendered.push(...(await renderTracks([referenceTrack, trackIndex], startTime, end)));
         const result = await sidecar.align({
           referencePath: rendered[0].wavPath,
           path: rendered[1].wavPath,
@@ -257,7 +238,7 @@ export function registerOfflineTools(server: McpServer): void {
         logToolResult('measure_track_alignment', args, startedAt, null, message);
         return error(message);
       } finally {
-        await Promise.all(rendered.map((r) => removeQuietly(r.wavPath)));
+        await Promise.all(rendered.map(discardRender));
       }
     },
   );

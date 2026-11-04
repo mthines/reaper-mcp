@@ -32,18 +32,22 @@ function tool(name: string): ToolCallback {
 const json = (r: ToolResult) => JSON.parse(r.content[0].text);
 
 /** What the fake REAPER holds: track names, rendered files still on disk, inserted tracks. */
-let reaper: { names: string[]; rendered: string[]; ranges: [number, number][]; onDisk: Set<string>; inserted: { name: string; position: number }[]; insertFails: boolean };
+let reaper: { names: string[]; rendered: string[]; ranges: [number, number][]; onDisk: Set<string>; inserted: { name: string; position: number }[]; insertFails: boolean; cacheOwned?: boolean };
 
 function fakeBridge() {
   vi.mocked(sendCommand).mockImplementation(async (type: string, params: Record<string, unknown> = {}) => {
     const ok = (data: unknown) => ({ id: 'x', success: true, timestamp: 0, data });
-    if (type === 'render_track_to_wav') {
+    const renderOne = (i: number) => {
       const path = `/tmp/render${reaper.rendered.length}.wav`;
       reaper.rendered.push(path);
       reaper.ranges.push([params['startTime'] as number, params['endTime'] as number]);
       reaper.onDisk.add(path);
-      const i = params['trackIndex'] as number;
-      return ok({ trackIndex: i, trackName: i === -1 ? 'Master' : reaper.names[i], wavPath: path });
+      return { trackIndex: i, trackName: i === -1 ? 'Master' : reaper.names[i], wavPath: path, ...(reaper.cacheOwned ? { cacheOwned: true } : {}) };
+    };
+    if (type === 'render_track_to_wav') return ok(renderOne(params['trackIndex'] as number));
+    if (type === 'render_tracks_to_wav') {
+      const tracks = (params['trackIndices'] as number[]).map(renderOne);
+      return ok({ tracks, rendered: tracks.length, cached: 0 });
     }
     if (type === 'get_project_info') return ok({ name: 'Song', path: '/music/Song/Media' });
     if (type === 'insert_stem_tracks') {
@@ -185,6 +189,21 @@ describe('measure_masking', () => {
     expect(r.content[0].text).toMatch(/Sample rates differ/);
     expect(reaper.rendered).toHaveLength(3);
     expect(reaper.onDisk.size).toBe(0);
+  });
+
+  it('keeps renders the bridge\'s cache owns, which the next analysis may reuse', async () => {
+    reaper.cacheOwned = true;
+    const r = await tool('measure_masking')({ tracks: [0, 1, 2], startTime: 0 });
+    expect(r.isError).toBeUndefined();
+    expect(reaper.rendered).toHaveLength(3);
+    expect(reaper.onDisk.size).toBe(3);
+  });
+
+  it('asks the bridge for all the tracks in one render pass', async () => {
+    await tool('measure_masking')({ tracks: [0, 1, 2], startTime: 5, durationSeconds: 10 });
+    const calls = vi.mocked(sendCommand).mock.calls.filter(([type]) => String(type).startsWith('render_'));
+    expect(calls.map(([type]) => type)).toEqual(['render_tracks_to_wav']);
+    expect(calls[0][1]).toMatchObject({ trackIndices: [0, 1, 2], startTime: 5, endTime: 15 });
   });
 });
 

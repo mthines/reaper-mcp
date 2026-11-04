@@ -46,10 +46,15 @@ function sidecar(available = true) {
 }
 
 let renders = 0;
-function renderOk() {
-  sendCommandMock.mockImplementation(async (_type: string, params: { trackIndex: number }) => ({
+const wavFor = (trackIndex: number, extra: Record<string, unknown> = {}) =>
+  ({ trackIndex, trackName: `T${trackIndex}`, wavPath: `/tmp/r${renders++}.wav`, durationSeconds: 5, sampleRate: 44100, channelCount: 2, ...extra });
+/** A bridge that renders one track per render_track_to_wav and many per render_tracks_to_wav */
+function renderOk(extra: Record<string, unknown> = {}) {
+  sendCommandMock.mockImplementation(async (type: string, params: { trackIndex: number; trackIndices: number[] }) => ({
     id: 'r', success: true, timestamp: 0,
-    data: { trackIndex: params.trackIndex, trackName: `T${params.trackIndex}`, wavPath: `/tmp/r${renders++}.wav`, durationSeconds: 5, sampleRate: 44100, channelCount: 2 },
+    data: type === 'render_tracks_to_wav'
+      ? { tracks: params.trackIndices.map((t) => wavFor(t, extra)), rendered: params.trackIndices.length, cached: 0 }
+      : wavFor(params.trackIndex, extra),
   }));
 }
 
@@ -79,6 +84,14 @@ describe('analyze_track_offline', () => {
     expect(data.loudness.integratedLufs).toBe(-9.8);
     expect(data.loudness.sections[0]).toMatchObject({ start: 60, end: 70 });
     expect(unlinkMock).toHaveBeenCalledWith('/tmp/r0.wav');
+  });
+
+  it('leaves a render the bridge keeps in its cache alone, so the next analysis can reuse it', async () => {
+    sidecar();
+    renderOk({ cacheOwned: true });
+    const result = await tool('analyze_track_offline')({ trackIndex: 3, startTime: 0, durationSeconds: 30 });
+    expect(result.isError).toBeUndefined();
+    expect(unlinkMock).not.toHaveBeenCalled();
   });
 
   it('passes a reference file through', async () => {
@@ -129,8 +142,11 @@ describe('measure_track_alignment', () => {
 
     const result = await tool('measure_track_alignment')({ referenceTrack: 30, trackIndex: 31, startTime: 12, durationSeconds: 5, maxLagMs: 10 });
 
-    const renderCalls = sendCommandMock.mock.calls.filter(([type]) => type === 'render_track_to_wav').map(([, p]) => p as Record<string, number>);
-    expect(renderCalls.map((p) => [p['trackIndex'], p['startTime'], p['endTime']])).toEqual([[30, 12, 17], [31, 12, 17]]);
+    // One render pass for both tracks, not two
+    const renderCalls = sendCommandMock.mock.calls.filter(([type]) => String(type).startsWith('render_')).map(([type, p]) => [type, p as Record<string, unknown>]);
+    expect(renderCalls).toHaveLength(1);
+    expect(renderCalls[0][0]).toBe('render_tracks_to_wav');
+    expect(renderCalls[0][1]).toMatchObject({ trackIndices: [30, 31], startTime: 12, endTime: 17 });
     expect(client.align).toHaveBeenCalledWith({ referencePath: '/tmp/r0.wav', path: '/tmp/r1.wav', maxLagMs: 10 });
     const data = JSON.parse(result.content[0].text);
     expect(data).toMatchObject({ delaySamples: 37, polarityInverted: true, suggestedPlayOffsetMs: -0.839, suggestedPhase: 1, referenceName: 'T30', trackName: 'T31' });
@@ -140,9 +156,10 @@ describe('measure_track_alignment', () => {
 
   it('suggests absolute settings that include the track\'s current offset and polarity', async () => {
     const client = sidecar();
-    sendCommandMock
-      .mockResolvedValueOnce({ id: 'r', success: true, timestamp: 0, data: { trackName: 'Top', wavPath: '/tmp/a.wav' } })
-      .mockResolvedValueOnce({ id: 'r', success: true, timestamp: 0, data: { trackName: 'Bottom', wavPath: '/tmp/b.wav', playOffsetMs: 2, phaseInverted: true } });
+    sendCommandMock.mockResolvedValueOnce({ id: 'r', success: true, timestamp: 0, data: { rendered: 2, cached: 0, tracks: [
+      { trackName: 'Top', wavPath: '/tmp/a.wav' },
+      { trackName: 'Bottom', wavPath: '/tmp/b.wav', playOffsetMs: 2, phaseInverted: true },
+    ] } });
     client.align.mockResolvedValue({ delaySamples: 0, delayMs: 0, correlation: 0.97, polarityInverted: false });
 
     const data = JSON.parse((await tool('measure_track_alignment')({ referenceTrack: 1, trackIndex: 2, startTime: 0 })).content[0].text);
@@ -172,11 +189,22 @@ describe('measure_track_alignment', () => {
     expect(logged?.[1]).not.toHaveProperty('r');
   });
 
-  it('cleans up the first render when the second fails', async () => {
+  it('reports a refused render and analyzes nothing', async () => {
+    const client = sidecar();
+    sendCommandMock.mockResolvedValueOnce({ id: 'r', success: false, timestamp: 0, error: 'Track 99 not found' });
+    const result = await tool('measure_track_alignment')({ referenceTrack: 1, trackIndex: 99, startTime: 0 });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Track 99 not found');
+    expect(client.align).not.toHaveBeenCalled();
+  });
+
+  it('renders one track at a time on a bridge that predates the multi-track render, and cleans up when the second fails', async () => {
     sidecar();
-    sendCommandMock
-      .mockResolvedValueOnce({ id: 'r', success: true, timestamp: 0, data: { trackName: 'A', wavPath: '/tmp/a.wav' } })
-      .mockResolvedValueOnce({ id: 'r', success: false, timestamp: 0, error: 'Track 99 not found' });
+    sendCommandMock.mockImplementation(async (type: string, params: { trackIndex?: number }) => {
+      if (type === 'render_tracks_to_wav') return { id: 'r', success: false, timestamp: 0, error: 'Unknown command type: render_tracks_to_wav' };
+      if (params.trackIndex === 99) return { id: 'r', success: false, timestamp: 0, error: 'Track 99 not found' };
+      return { id: 'r', success: true, timestamp: 0, data: { trackName: 'A', wavPath: '/tmp/a.wav' } };
+    });
     const result = await tool('measure_track_alignment')({ referenceTrack: 1, trackIndex: 99, startTime: 0 });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Track 99 not found');

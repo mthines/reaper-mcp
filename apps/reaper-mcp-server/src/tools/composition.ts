@@ -15,12 +15,13 @@
 
 import { z } from 'zod/v4';
 import { randomUUID } from 'node:crypto';
-import { readFile, stat, unlink } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
 import { trace } from '@opentelemetry/api';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
 import { sendCommand } from '../bridge.js';
+import { discardRender } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
 import { getMidiNotesHistogram } from '../telemetry.js';
 import { logToolResult } from '../tool-log.js';
@@ -71,10 +72,6 @@ function recordNotes(tool: string, notesChanged: number): void {
   trace.getActiveSpan()?.setAttribute('reaper.midi.notes_changed', notesChanged);
   getMidiNotesHistogram().record(notesChanged, { 'gen_ai.tool.name': tool });
 }
-
-const removeQuietly = (path: string) => unlink(path).catch(() => {
-  // Best-effort: the OS temp dir is cleaned eventually
-});
 
 /** detect_key: the numbers the page's key view draws */
 export function keySummary(name: string | undefined, source: string, k: KeyEstimate): Record<string, unknown> {
@@ -355,7 +352,7 @@ export function registerCompositionTools(server: McpServer): void {
               profile = c.chroma;
               extra = { durationSeconds: c.durationSeconds };
             } finally {
-              await removeQuietly(wav.wavPath);
+              await discardRender(wav);
             }
             source = 'audio';
             name = wav.trackName;
@@ -544,7 +541,7 @@ export function registerCompositionTools(server: McpServer): void {
                 profile = c.chroma;
               }
             } finally {
-              await removeQuietly(wav.wavPath);
+              await discardRender(wav);
             }
             source = 'audio';
             name = wav.trackName;

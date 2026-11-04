@@ -13,10 +13,10 @@
  */
 
 import { z } from 'zod/v4';
-import { unlink } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sendCommand } from '../bridge.js';
+import { discardRender } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
 import { aestheticsSummary, logToolResult } from '../tool-log.js';
 import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
@@ -126,10 +126,8 @@ export function registerAestheticsTools(server: McpServer): void {
           isError: true,
         };
       } finally {
-        // Always clean up temp WAV, even on error
-        await unlink(wavPath).catch(() => {
-          // Best-effort: OS temp dir cleaned on reboot; file is small
-        });
+        // Always hand the render back, even on error (the bridge keeps a file its cache owns)
+        await discardRender(renderData);
       }
     }
   );

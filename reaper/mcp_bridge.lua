@@ -4496,223 +4496,46 @@ function handlers.send_midi_note(params)
 end
 
 -- =============================================================================
--- render_track_to_wav handler
+-- render_track_to_wav / render_tracks_to_wav handlers
 --
--- Renders a target track's output (post-FX, post-fader) to a temp WAV file.
--- Saves and restores all render settings and solo states around the render.
--- Blocks the defer loop during render (~0.5-1s) — this is by design.
+-- Render tracks' output (post-FX, post-fader) to temp WAVs for the analysis tools. The logic is in
+-- mcp_render_lib.lua: it caches renders until the project changes, renders several tracks in one
+-- pass and hands focus back after a render (REAPER's progress window takes it). One table, not
+-- separate locals: the bridge's main chunk is at Lua's 200-locals limit.
 --
--- Params:
---   trackIndex  (number) — zero-based track index
---   startTime   (number) — render start, seconds from project start
---   endTime     (number) — render end, seconds from project start
---   commandId   (string) — used to generate a unique temp filename
---
--- Returns:
---   { trackIndex, trackName, wavPath, durationSeconds, sampleRate, channelCount }
+-- render_track_to_wav params: trackIndex (-1 = master), startTime, endTime (seconds), commandId,
+--   fresh (skip the cache), restoreFocus (false: leave focus where the render put it)
+--   -> { trackIndex, trackName, wavPath, durationSeconds, sampleRate, channelCount,
+--        playOffsetMs, phaseInverted, cached, cacheOwned }
+-- render_tracks_to_wav: the same with trackIndices (JSON array) -> { tracks, rendered, cached }
 -- =============================================================================
 
+ext.render = {}
+ext.render.ok, ext.render.lib = pcall(dofile, script_dir .. "mcp_render_lib.lua")
+
+function ext.render.run(name, params)
+  if not ext.render.ok then
+    return nil, "mcp_render_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. tostring(ext.render.lib) .. ")"
+  end
+  local ok, res, err = pcall(ext.render.lib[name], reaper, params)
+  if not ok then return nil, "Handler error: " .. tostring(res) end
+  return res, err
+end
+
 function handlers.render_track_to_wav(params)
-  local track_index = params.trackIndex
-  local start_time  = params.startTime
-  local end_time    = params.endTime
-  local command_id  = params.commandId or tostring(os.time())
+  return ext.render.run("render_track", params)
+end
 
-  -- Validate inputs
-  if track_index == nil then
-    return nil, "Missing required param: trackIndex"
+function handlers.render_tracks_to_wav(params)
+  local p = {}
+  for k, v in pairs(params) do p[k] = v end
+  -- Without CF_Json_Parse the command parser hands arrays over as a JSON string
+  if type(params.trackIndices) == "string" then
+    local list = {}
+    for n in params.trackIndices:gmatch("%-?%d+") do list[#list + 1] = tonumber(n) end
+    p.trackIndices = list
   end
-  if start_time == nil or end_time == nil then
-    return nil, "Missing required params: startTime, endTime"
-  end
-  if end_time <= start_time then
-    return nil, "endTime must be greater than startTime"
-  end
-
-  -- Get track (-1 = master: render the whole mix with every solo cleared)
-  local is_master = track_index == -1
-  local track = is_master and reaper.GetMasterTrack(0) or reaper.GetTrack(0, track_index)
-  if not track then
-    return nil, "Track " .. tostring(track_index) .. " not found"
-  end
-  local track_name = is_master and "MASTER"
-    or ({reaper.GetSetMediaTrackInfo_String(track, "P_NAME", "", false)})[2] or ""
-  if track_name == "" then track_name = "Track " .. (track_index + 1) end
-
-  -- Render target is always 44100 Hz (WAV for sidecar inference).
-  -- The actual project sample rate is irrelevant here; Audiobox resamples internally.
-  local sample_rate = 44100
-
-  -- Build unique temp file path
-  -- Use GetTempPath() if available (REAPER 6.29+), fall back to os.tmpname pattern
-  local temp_dir
-  if reaper.GetTempPath then
-    temp_dir = reaper.GetTempPath()
-  else
-    -- Fallback: derive temp dir from os.tmpname()
-    local t = os.tmpname()
-    temp_dir = t:match("^(.+)[/\\][^/\\]+$") or "/tmp"
-    os.remove(t)
-  end
-
-  -- Ensure temp dir ends with separator
-  if temp_dir:sub(-1) ~= "/" and temp_dir:sub(-1) ~= "\\" then
-    temp_dir = temp_dir .. "/"
-  end
-
-  local wav_filename = "mcp_aes_" .. command_id:gsub("-", ""):sub(1, 16) .. ".wav"
-  local wav_path = temp_dir .. wav_filename
-
-  -- -------------------------------------------------------------------------
-  -- Save current render settings
-  -- -------------------------------------------------------------------------
-  local saved_file     = ({reaper.GetSetProjectInfo_String(0, "RENDER_FILE",       "", false)})[2] or ""
-  local saved_pattern  = ({reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN",    "", false)})[2] or ""
-  local saved_format   = ({reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT",     "", false)})[2] or ""
-  local saved_format2  = ({reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT2",    "", false)})[2] or ""
-  local saved_bounds   = reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", 0, false)
-  local saved_settings = reaper.GetSetProjectInfo(0, "RENDER_SETTINGS",   0, false)
-  local saved_start    = reaper.GetSetProjectInfo(0, "RENDER_STARTPOS",   0, false)
-  local saved_end      = reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     0, false)
-  local saved_srate    = reaper.GetSetProjectInfo(0, "RENDER_SRATE",      0, false)
-  local saved_channels = reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   0, false)
-  -- Delivery processing set_render_settings stores in the project: an analysis render must hear the raw mix
-  local saved_normalize = reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE", 0, false)
-  local saved_dither    = reaper.GetSetProjectInfo(0, "RENDER_DITHER",    0, false)
-
-  -- Save solo and selection states for all tracks
-  local track_count = reaper.CountTracks(0)
-  local saved_solo_states = {}
-  local saved_selected = {}
-  for i = 0, track_count - 1 do
-    local t = reaper.GetTrack(0, i)
-    saved_solo_states[i] = reaper.GetMediaTrackInfo_Value(t, "I_SOLO")
-    saved_selected[i] = reaper.IsTrackSelected(t)
-  end
-
-  -- -------------------------------------------------------------------------
-  -- Apply render settings
-  -- -------------------------------------------------------------------------
-  local ok, restore_err = pcall(function()
-    -- Set output: render to temp dir with unique filename (no extension in pattern)
-    reaper.GetSetProjectInfo_String(0, "RENDER_FILE",    temp_dir,     true)
-    reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN", wav_filename:match("^(.+)%.wav$") or wav_filename, true)
-
-    -- Set render bounds: 0 = custom time range
-    reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", 0, true)
-    reaper.GetSetProjectInfo(0, "RENDER_STARTPOS", start_time, true)
-    reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",   end_time,   true)
-
-    -- Render mode: 0 = master mix (the master); 3 = stems of the SELECTED tracks only,
-    -- so the target is made the only selected track below. 2 lists no target in
-    -- REAPER 7 and silently renders the master mix instead (the soloed track through
-    -- the master: silence for anything that reaches it only through sends).
-    reaper.GetSetProjectInfo(0, "RENDER_SETTINGS", is_master and 0 or 3, true)
-
-    -- Force WAV at 44100 Hz stereo so the sidecar always gets a known format,
-    -- independent of whatever the user last rendered. Restored in finally.
-    -- "evaw" is the little-endian "wave" fourcc REAPER uses for WAV format.
-    reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT", "evaw", true)
-    -- No secondary file: a format that cannot write at this rate (a video format a new project inherits)
-    -- stops the render on a modal error, which blocks the bridge until someone closes it
-    reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT2", "", true)
-    reaper.GetSetProjectInfo(0, "RENDER_SRATE",    sample_rate, true)
-    reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", 2,           true)
-    reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE", 0, true)
-    reaper.GetSetProjectInfo(0, "RENDER_DITHER",    0, true)
-
-    -- Unsolo all tracks, then solo only the target track (master: none)
-    for i = 0, track_count - 1 do
-      local t = reaper.GetTrack(0, i)
-      reaper.SetMediaTrackInfo_Value(t, "I_SOLO", 0)
-    end
-    if not is_master then
-      reaper.SetMediaTrackInfo_Value(track, "I_SOLO", 1)
-      reaper.SetOnlyTrackSelected(track)
-    end
-
-    -- Trigger render: action 42230 = "Render project, using the most recent render settings, auto-close render dialog"
-    -- This call is synchronous — it blocks the defer loop until rendering completes.
-    reaper.Main_OnCommand(42230, 0)
-  end)
-
-  -- -------------------------------------------------------------------------
-  -- Restore all settings and solo states (always, even on error)
-  -- -------------------------------------------------------------------------
-  local restore_ok, restore_err2 = pcall(function()
-    reaper.GetSetProjectInfo_String(0, "RENDER_FILE",       saved_file,     true)
-    reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN",    saved_pattern,  true)
-    reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT",     saved_format,   true)
-    reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT2",    saved_format2,  true)
-    reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", saved_bounds,   true)
-    reaper.GetSetProjectInfo(0, "RENDER_SETTINGS",   saved_settings, true)
-    reaper.GetSetProjectInfo(0, "RENDER_STARTPOS",   saved_start,    true)
-    reaper.GetSetProjectInfo(0, "RENDER_ENDPOS",     saved_end,      true)
-    reaper.GetSetProjectInfo(0, "RENDER_SRATE",      saved_srate,    true)
-    reaper.GetSetProjectInfo(0, "RENDER_CHANNELS",   saved_channels, true)
-    reaper.GetSetProjectInfo(0, "RENDER_NORMALIZE",  saved_normalize, true)
-    reaper.GetSetProjectInfo(0, "RENDER_DITHER",     saved_dither,    true)
-    for i = 0, track_count - 1 do
-      local t = reaper.GetTrack(0, i)
-      reaper.SetMediaTrackInfo_Value(t, "I_SOLO", saved_solo_states[i] or 0)
-      reaper.SetTrackSelected(t, saved_selected[i] or false)
-    end
-  end)
-
-  if not restore_ok then
-    -- Log but don't fail — the render may have succeeded
-    reaper.ShowConsoleMsg("[reaper-mcp] Warning: failed to restore render settings: " .. tostring(restore_err2) .. "\n")
-  end
-
-  if not ok then
-    return nil, "Render failed: " .. tostring(restore_err)
-  end
-
-  -- Verify the file was actually created.
-  -- RENDER_PATTERN was set without the .wav extension so REAPER appends it;
-  -- wav_path already has the full expected name including the extension.
-  local f = io.open(wav_path, "rb")
-  if not f then
-    return nil, "Render produced no output file at: " .. wav_path
-  end
-  -- Verify the rendered file is actually a WAV. RENDER_FORMAT was set to "evaw"
-  -- (REAPER's WAV fourcc) above; if REAPER silently ignored that value the file
-  -- could be any codec the user last rendered (MP3/FLAC/etc.). Check the RIFF
-  -- magic bytes so we fail loudly here rather than crashing in the Python sidecar
-  -- with a confusing "Cannot read audio file" error.
-  local magic = f:read(4)
-  f:close()
-  if magic ~= "RIFF" then
-    os.remove(wav_path)
-    return nil, "Render produced a non-WAV file (RENDER_FORMAT may not have been applied). " ..
-                "First 4 bytes: " .. (magic and string.format("%q", magic) or "<empty>")
-  end
-
-  -- The render includes the track's playback offset and polarity; report them so
-  -- measure_track_alignment can turn a measured delay into an absolute setting.
-  local play_offset_ms, phase_inverted = 0, false
-  if not is_master then
-    local flag = reaper.GetMediaTrackInfo_Value(track, "I_PLAY_OFFSET_FLAG")
-    if flag & 1 == 0 then
-      local v = reaper.GetMediaTrackInfo_Value(track, "D_PLAY_OFFSET")
-      local srate = reaper.GetSetProjectInfo(0, "PROJECT_SRATE", 0, false)
-      if not srate or srate <= 0 then srate = sample_rate end
-      play_offset_ms = (flag & 2 ~= 0) and (v / srate * 1000) or (v * 1000)
-    end
-    phase_inverted = reaper.GetMediaTrackInfo_Value(track, "B_PHASE") ~= 0
-  end
-
-  local duration = end_time - start_time
-  return {
-    trackIndex     = track_index,
-    trackName      = track_name,
-    wavPath        = wav_path,
-    durationSeconds = duration,
-    sampleRate     = sample_rate,
-    channelCount   = 2,
-    playOffsetMs   = play_offset_ms,
-    phaseInverted  = phase_inverted,
-  }
+  return ext.render.run("render_tracks", p)
 end
 
 -- =============================================================================
@@ -4848,7 +4671,7 @@ end
 -- Read-only mode lets agents inspect and audition but never change the project
 local READONLY_PREFIXES = { "get_", "list_", "read_", "analyze_", "search_", "measure_" }
 local READONLY_ALLOW = {
-  snapshot_list = true, render_track_to_wav = true,
+  snapshot_list = true, render_track_to_wav = true, render_tracks_to_wav = true,
   play = true, stop = true, set_cursor_position = true, set_time_selection = true,
 }
 local function readonly_allows(cmd_type)
@@ -5149,7 +4972,7 @@ local HISTORY_SLOW_MS = 100
 -- arbitrary work): never counted as slow. Mirrors LONG_RUNNING in apps/bridge-ui/src/lib/commands.ts.
 local LONG_RUNNING = {}
 for _, c in ipairs({
-  "render_project", "render_track_to_wav", "render_versions", "run_plan", "run_action", "save_project", "undo_project",
+  "render_project", "render_track_to_wav", "render_tracks_to_wav", "render_versions", "run_plan", "run_action", "save_project", "undo_project",
   "redo_project", "add_fx", "add_take_fx", "setup_fx_chain", "copy_fx", "move_fx", "set_fx_offline",
   "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
   "insert_audio_file", "snapshot_save", "snapshot_restore", "snapshot_edit",
@@ -5502,6 +5325,8 @@ local function run_command(cmd)
     local handler_start = reaper.time_precise()
     local ok, data_or_err, err_msg = pcall(handler, cmd.params or {})
     handler_ms = (reaper.time_precise() - handler_start) * 1000
+    -- A command that may have changed the project makes every cached render stale
+    if ext.render.ok and not internal and not readonly_allows(cmd.type) then ext.render.lib.note_write() end
 
     if not ok then
       -- pcall caught a Lua runtime error — handler crashed
@@ -5684,7 +5509,11 @@ write_heartbeat()
 log_event("bridge_start", { reaperVersion = reaper.GetAppVersion(), bridgeDir = bridge_dir })
 
 -- Register shutdown handler
+-- Renders a previous run left behind
+if ext.render.ok then pcall(ext.render.lib.sweep, reaper) end
+
 reaper.atexit(function()
+  if ext.render.ok then pcall(ext.render.lib.purge) end
   log_event("bridge_stop", {})
   save_history(reaper.time_precise(), true)
   reaper.DeleteExtState(STATUS_SECTION, "status", false) -- UI flips to offline at once

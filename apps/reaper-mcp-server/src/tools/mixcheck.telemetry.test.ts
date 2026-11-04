@@ -60,7 +60,9 @@ describe('mix-check telemetry', () => {
     await speeds();
     vi.mocked(sendCommand).mockImplementation(async (type) => ({
       id: 't', success: true, timestamp: 0,
-      data: type === 'render_track_to_wav' ? { trackName: 'Mix', wavPath: '/tmp/r.wav' } : { path: '/p' },
+      data: type === 'render_track_to_wav' ? { trackName: 'Mix', wavPath: '/tmp/r.wav' }
+        : type === 'render_tracks_to_wav' ? { tracks: [{ trackName: 'A', wavPath: '/tmp/a.wav' }, { trackName: 'B', wavPath: '/tmp/b.wav' }], rendered: 2, cached: 0 }
+        : { path: '/p' },
     }));
     vi.mocked(getSidecarClient).mockReturnValue({
       isAvailable: () => true,

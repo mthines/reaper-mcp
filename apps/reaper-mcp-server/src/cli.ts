@@ -100,6 +100,7 @@ export const REAPER_ASSETS = [
   'mcp_envelopes_lib.lua',
   'mcp_recording_lib.lua',
   'mcp_mixing_lib.lua',
+  'mcp_render_lib.lua',
   'mcp_midi_lib.lua',
   'mcp_fxstate_lib.lua',
   'mcp_extensions_lib.lua',
@@ -390,7 +391,7 @@ export const MCP_TOOL_NAMES = [
   // built-in mix knowledge (read-only LoreKit proxy)
   'list_builtin_knowledge',
   'get_builtin_knowledge',
-  // Note: 'render_track_to_wav', 'remove_mcp_meters' (measure_tracks cleanup), 'insert_stem_tracks'
+  // Note: 'render_track_to_wav', 'render_tracks_to_wav', 'remove_mcp_meters' (measure_tracks cleanup), 'insert_stem_tracks'
   // (the insertTracks option of separate_stems) and 'get_fx_state' / 'set_fx_state' / 'extension_call'
   // (extension plumbing) are internal
   // Lua bridge commands, NOT public MCP tools.

@@ -1,6 +1,6 @@
 /**
  * handlers.set_track_property (record arm, phase, input, playback offset),
- * handlers.render_track_to_wav (master = whole mix, no solo) and
+ * render_track (mcp_render_lib.lua: master = whole mix, no solo) and
  * handlers.remove_mcp_meters and ensure_jsfx_on_track, run in real Lua 5.4 via wasmoon against a fake `reaper`.
  */
 import { describe, it, expect } from 'vitest';
@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { LuaFactory } from 'wasmoon';
 
 const BRIDGE_SRC = readFileSync(join(__dirname, '../../../reaper/mcp_bridge.lua'), 'utf8');
+const RENDER_LIB = readFileSync(join(__dirname, '../../../reaper/mcp_render_lib.lua'), 'utf8');
 const LUFS_JSFX = readFileSync(join(__dirname, '../../../reaper/mcp_lufs_meter.jsfx'), 'utf8');
 
 function handler(name: string): string {
@@ -30,6 +31,20 @@ async function run(setup: string, name: string, check: string): Promise<void> {
   try {
     await lua.doString(`handlers = {}\n${setup}`);
     await lua.doString(name.includes('(') ? name : handler(name));
+    await lua.doString(check);
+  } finally {
+    lua.global.close();
+  }
+}
+
+/** The render lib against the fake API in `setup`; handlers.render_track_to_wav is what the bridge's handler does */
+async function runRender(setup: string, check: string): Promise<void> {
+  const lua = await new LuaFactory().createEngine();
+  try {
+    lua.global.set('RENDER_LIB', RENDER_LIB);
+    await lua.doString(`handlers = {}\n${setup}
+      lib = load(RENDER_LIB, "mcp_render_lib")()
+      handlers.render_track_to_wav = function(p) return lib.render_track(reaper, p) end`);
     await lua.doString(check);
   } finally {
     lua.global.close();
@@ -114,7 +129,7 @@ const FAKE_RENDER = `
 
 describe('render_track_to_wav master', () => {
   it('renders -1 as the whole mix: every solo cleared, none set, then restored', async () => {
-    await run(FAKE_RENDER, 'render_track_to_wav', `
+    await runRender(FAKE_RENDER, `
       local r, err = handlers.render_track_to_wav({ trackIndex = -1, startTime = 0, endTime = 5, commandId = "abc" })
       assert(r, err)
       assert(r.trackName == "MASTER", "name " .. tostring(r.trackName))
@@ -126,7 +141,7 @@ describe('render_track_to_wav master', () => {
   });
 
   it('still solos a normal track', async () => {
-    await run(FAKE_RENDER, 'render_track_to_wav', `
+    await runRender(FAKE_RENDER, `
       local r, err = handlers.render_track_to_wav({ trackIndex = 1, startTime = 0, endTime = 5, commandId = "abc" })
       assert(r, err)
       assert(written.T1 == 1, "target soloed")
@@ -155,7 +170,7 @@ const FAKE_METERS = `
 
 describe('render_track_to_wav delivery settings', () => {
   it('renders without the normalize, limiter and dither set for delivery, then puts them back', async () => {
-    await run(FAKE_RENDER + `
+    await runRender(FAKE_RENDER + `
       proj = { RENDER_NORMALIZE = 1 | 8 | 64, RENDER_DITHER = 3 }
       at_render = {}
       local base = reaper.GetSetProjectInfo
@@ -165,7 +180,7 @@ describe('render_track_to_wav delivery settings', () => {
         return proj[key]
       end
       reaper.Main_OnCommand = function() at_render = { n = proj.RENDER_NORMALIZE, d = proj.RENDER_DITHER } end
-    `, 'render_track_to_wav', `
+    `, `
       local r, err = handlers.render_track_to_wav({ trackIndex = -1, startTime = 0, endTime = 5, commandId = "abc" })
       assert(r, err)
       assert(at_render.n == 0 and at_render.d == 0, "raw mix rendered: " .. tostring(at_render.n) .. " " .. tostring(at_render.d))
@@ -176,14 +191,14 @@ describe('render_track_to_wav delivery settings', () => {
 
 describe('render_track_to_wav secondary format', () => {
   it('renders without the project\'s secondary format (REAPER would stop on a modal error), then puts it back', async () => {
-    await run(FAKE_RENDER + `
+    await runRender(FAKE_RENDER + `
       strs = { RENDER_FORMAT = "l3pm", RENDER_FORMAT2 = "FMW " }
       reaper.GetSetProjectInfo_String = function(_, key, v, set)
         if set then strs[key] = v end
         return true, strs[key] or ""
       end
       reaper.Main_OnCommand = function() at_render = { f = strs.RENDER_FORMAT, f2 = strs.RENDER_FORMAT2 } end
-    `, 'render_track_to_wav', `
+    `, `
       local r, err = handlers.render_track_to_wav({ trackIndex = 1, startTime = 0, endTime = 5, commandId = "abc" })
       assert(r, err)
       assert(at_render.f == "evaw", "WAV rendered: " .. tostring(at_render.f))
@@ -195,11 +210,11 @@ describe('render_track_to_wav secondary format', () => {
 
 describe('render_track_to_wav offset report', () => {
   it('reports the playback offset in ms (samples mode converted) and the polarity', async () => {
-    await run(FAKE_RENDER + `
+    await runRender(FAKE_RENDER + `
       local base = reaper.GetMediaTrackInfo_Value
       local extra = { I_PLAY_OFFSET_FLAG = 2, D_PLAY_OFFSET = 441, B_PHASE = 1 }
       reaper.GetMediaTrackInfo_Value = function(t, key) return extra[key] or base(t, key) end
-    `, 'render_track_to_wav', `
+    `, `
       local r, err = handlers.render_track_to_wav({ trackIndex = 1, startTime = 0, endTime = 5, commandId = "abc" })
       assert(r, err)
       assert(math.abs(r.playOffsetMs - 10) < 1e-9, "441 samples at 44.1k = 10 ms, got " .. tostring(r.playOffsetMs))
