@@ -140,6 +140,9 @@ export const DEMO_CALLS: Record<LoggedCommand, Record<string, unknown> | 'exampl
   read_track_correlation: 'example',
   read_track_crest: 'example',
   remove_mcp_meters: { trackIndices: [0, 2, -1] },
+  get_fx_state: { trackIndex: 3, fxIndex: 0, outFile: 'fxstate_5f3a.out' },
+  set_fx_state: { trackIndex: 3, fxIndex: 0, inFile: 'fxstate_8c21.in', expectName: 'Vital' },
+  extension_call: { extension: 'vital', command: 'summarize', paramsJson: '{"trackIndex":3}' },
   render_track_to_wav: 'example',
   // Sidecar analysis (logged by the server)
   analyze_track_aesthetics: 'example',

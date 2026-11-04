@@ -160,6 +160,17 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
 };
 
+/**
+ * Add a category for an extension's tools (named after the extension), so `list_tool_categories` shows them.
+ * A built-in category is never replaced: the extension's category gets an `ext:` prefix when the name is taken.
+ */
+export function registerExtensionCategory(extension: string, description: string, tools: string[]): string {
+  const taken = (n: string) => n in TOOL_CATEGORIES && !n.startsWith('ext:');
+  const name = taken(extension) ? `ext:${extension}` : extension;
+  TOOL_CATEGORIES[name] = { name, description, tools };
+  return name;
+}
+
 export function registerCategoryTools(server: McpServer): void {
   server.tool(
     'list_tool_categories',

@@ -203,6 +203,9 @@ Field guide:
   plus a short form (`Pro-Q 3`); add VST and VST3 variants. Matching is a
   case-insensitive substring.
 - **replaces** — stock plugin slugs this supersedes (`rea-eq`, `rea-comp`).
+- **extension** — tag `extension::<name>` when an opt-in extension (`docs/EXTENSIONS.md`) drives the
+  plugin's internals, e.g. `extension::vital`. The note in `## Learned notes` says which tools to use; a skill
+  uses them only when `list_tool_categories` shows that extension's category.
 
 Write (user layer — the only layer a skill writes):
 

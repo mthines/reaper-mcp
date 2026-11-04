@@ -636,6 +636,15 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
       return c === undefined ? `measured the dynamics of ${on(e)}` : `measured the dynamics of ${on(e)}: peaks ${c.toFixed(1)} dB above the average (crest factor)`;
     },
   },
+  get_fx_state: { title: 'Read a plugin’s saved state', did: (e) => `read the saved state of the plugin on ${on(e)}` },
+  set_fx_state: { title: 'Replace a plugin’s saved state', did: (e) => `replaced the saved state of the plugin on ${on(e)}` },
+  extension_call: {
+    title: 'Run an extension command',
+    did: (e) => {
+      const p = paramsOf(e);
+      return `ran ${typeof p.command === 'string' ? `“${p.command}”` : 'a command'} of the ${typeof p.extension === 'string' ? `“${p.extension}”` : ''} extension`;
+    },
+  },
   remove_mcp_meters: { title: 'Remove the agent’s meters', did: (e) => `removed the meters it had added to ${countOf(paramsOf(e).trackIndices, 'track', 'the tracks')}` },
   render_track_to_wav: { title: 'Render a clip to listen to', did: (e) => `rendered ${on(e)}${between(paramsOf(e).startTime, paramsOf(e).endTime)} to a file to analyse` },
   analyze_track_aesthetics: {

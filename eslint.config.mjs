@@ -23,6 +23,8 @@ export default tseslint.config(
           depConstraints: [
             { sourceTag: 'type:app', onlyDependOnLibsWithTags: ['type:lib'] },
             { sourceTag: 'type:lib', onlyDependOnLibsWithTags: ['type:lib'] },
+            // An extension sees reaper-mcp only through the extension API: no protocol, no server internals
+            { sourceTag: 'type:extension', onlyDependOnLibsWithTags: ['type:extension-api'] },
           ],
         },
       ],

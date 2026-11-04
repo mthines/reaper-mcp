@@ -202,7 +202,11 @@ export type CommandType =
   // Semantic audio analysis (requires Python sidecar)
   | 'render_track_to_wav'
   // Removes the meters measure_tracks / read_track_* inserted
-  | 'remove_mcp_meters';
+  | 'remove_mcp_meters'
+  // Extension plumbing (internal, never public MCP tools): saved plugin state, and the Lua commands an extension ships
+  | 'get_fx_state'
+  | 'set_fx_state'
+  | 'extension_call';
 
 /**
  * Tools the server composes itself (sidecar analysis) and logs on the bridge's status page with `_log_result`
@@ -1422,4 +1426,29 @@ export interface QuantizeAudioParams {
   strength?: number;
   swing?: number;
   window?: number;
+}
+
+export interface GetFxStateParams {
+  trackIndex: number;
+  fxIndex: number;
+  /** File in the bridge folder (`fxstate_<id>.out`) the bridge writes: line 1 base64 header, line 2 base64 state */
+  outFile: string;
+}
+
+export interface SetFxStateParams {
+  trackIndex: number;
+  fxIndex: number;
+  /** File in the bridge folder (`fxstate_<id>.in`) holding the same two lines */
+  inFile: string;
+  /** Refuse unless the FX's name contains this (guards a wrong index) */
+  expectName?: string;
+}
+
+export interface ExtensionCallParams {
+  /** Extension name (its manifest `name`) */
+  extension: string;
+  /** A command its handlers.lua returns */
+  command: string;
+  /** JSON object for the command */
+  paramsJson?: string;
 }

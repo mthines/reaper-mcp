@@ -3,6 +3,8 @@
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
+import { checkExtensions, loadExtensions } from './extensions.js';
+import { extensionCommand } from './extension-cli.js';
 import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, readBridgeEvents, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
 import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges, emitLog, exceptionAttributes, readServiceVersion } from './telemetry.js';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -393,8 +395,13 @@ async function doctor(): Promise<void> {
     ],
   };
 
-  console.log(renderDoctor([{ title: 'Core', checks: core }, sidecar], { version: readServiceVersion(), color: useColor() }));
-  process.exit(bridgeRunning && knowledgeLinked && mcpRegistered && !sidecarBroken ? 0 : 1);
+  const extensionChecks = await checkExtensions();
+  const sections: Section[] = [{ title: 'Core', checks: core }, sidecar];
+  if (extensionChecks.length > 0) sections.push({ title: 'Extensions', checks: extensionChecks });
+  const extensionsBroken = extensionChecks.some((c) => c.status === 'fail');
+
+  console.log(renderDoctor(sections, { version: readServiceVersion(), color: useColor() }));
+  process.exit(bridgeRunning && knowledgeLinked && mcpRegistered && !sidecarBroken && !extensionsBroken ? 0 : 1);
 }
 
 async function serve(): Promise<void> {
@@ -446,6 +453,10 @@ async function serve(): Promise<void> {
       startupSpan.setAttribute('reaper.bridge.connected', bridgeRunning);
 
       const server = createServer();
+      for (const ext of await loadExtensions(server)) {
+        if (ext.status === 'loaded') log(`Extension ${ext.name} ${ext.version ?? ''} loaded (${ext.tools.length} tools)`);
+        else log(`Extension ${ext.name} skipped: ${ext.reason}`);
+      }
       const transport = new StdioServerTransport();
 
       await server.connect(transport);
@@ -499,6 +510,17 @@ switch (command) {
     });
     break;
 
+  case 'extension':
+  case 'extensions':
+    extensionCommand(process.argv.slice(3)).then(
+      (code) => process.exit(code),
+      (err: unknown) => {
+        console.error('Extension command failed:', err);
+        process.exit(1);
+      },
+    );
+    break;
+
   case 'setup-sidecar':
     setupSidecar(process.argv.slice(3)).catch((err) => {
       console.error('Sidecar setup failed:', err);
@@ -535,6 +557,7 @@ Usage:
   reaper-mcp setup-sidecar    Install the Python sidecar (opt-in audio analysis); in a terminal it asks which parts.
                               Agents/CI: --yes (core + aesthetics weights), --all, --with-separation (Demucs),
                               --with-chords (chord model), --without-aesthetics, --list [--json] (what is installed)
+  reaper-mcp extension        Manage opt-in extensions: list | add <name|folder|git-url> | link <folder> | remove <name> | new <name>
   reaper-mcp init             Configure Claude Code: tool allow-list + .mcp.json (copy-free)
   reaper-mcp doctor           Check that everything is configured correctly
   reaper-mcp status           Check if Lua bridge is running in REAPER

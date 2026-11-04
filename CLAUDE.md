@@ -89,6 +89,8 @@ reaper-mcp/
       requirements-chords.txt # lv-chordia, installed only by --with-chords
       tests/test_server.py    # pytest unit tests for the sidecar
 
+  libs/extension-api/         # The API extensions are written against (types, manifest check, VST3 state helpers); see docs/EXTENSIONS.md
+  extensions/vital/           # Opt-in extension: read/edit Vital patches (settings, mod matrix, LFOs, wavetables); built to dist/index.mjs
   libs/protocol/              # Shared TypeScript types (compiled with tsc)
     src/
       index.ts                # Re-exports commands + responses
@@ -151,6 +153,8 @@ reaper-mcp/
     mcp_recording_lib.lua     # Record inputs/monitoring/modes, punch, fixed lanes and comping (pure Lua, unit-tested via wasmoon)
     mcp_arrange_lib.lua       # Copy items, insert/remove time, copy a section, normalize/reverse/glue (pure Lua, unit-tested via wasmoon)
     mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
+    mcp_fxstate_lib.lua       # Read/replace one VST3's saved state in the track chunk, via files in the bridge folder (internal: get_fx_state / set_fx_state)
+    mcp_extensions_lib.lua    # extension_call: runs a Lua command from an installed extension's handlers.lua (internal)
     mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
     mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
@@ -784,6 +788,21 @@ The `render_track_to_wav` Lua handler uses `Main_OnCommand(42230)` which is **sy
 The sidecar architecture admits new JSON-RPC methods easily — future phases (CLAP, MERT, Demucs, Parakeet, Essentia) just add new methods to `server.py` and new tools in TypeScript. The IPC channel and subprocess lifecycle are shared infrastructure.
 
 ## Spectrum Analysis (JSFX + gmem)
+## Extensions
+
+Opt-in add-ons for things that don't belong in core (one synth, one workflow): `docs/EXTENSIONS.md` has the manifest, the
+API, the trust model and the Vital extension. In short: `reaper-mcp serve` loads every folder in `~/.reaper-mcp/extensions/`
+(`extensions.ts`), each registers tools as `<name>_<tool>` through `ExtensionApi` (`libs/extension-api`), and reaches REAPER
+with `api.bridge()` (core commands), `api.call()` (its own Lua, via the internal `extension_call`) and `api.fxState`
+(VST3 state). A broken extension is skipped, never fatal. Extension tools are not core tools: they are not in `MCP_TOOL_NAMES`,
+the tool count or `TOOL_CATEGORIES` (each registers its own category at load).
+
+- **Boundary:** a `type:extension` project may depend only on `type:extension-api` (eslint). Never import core into one.
+- **Internal commands** `get_fx_state`, `set_fx_state`, `extension_call` are bridge commands, not MCP tools. Saved state moves as
+  `fxstate_*` files in the bridge folder, never in the command JSON.
+- **VST3 state:** after changing a state's size fix its two length fields and give the FX a new `FXID`, or REAPER silently keeps the
+  old state (`libs/extension-api/src/vst3-state.ts`, `fx-state.ts`).
+
 
 The JSFX analyzer (`mcp_analyzer.jsfx`) runs in REAPER's audio thread:
 - Performs configurable FFT (512-8192 bins, default 4096)
@@ -1117,6 +1136,7 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 | `setup` | Install Lua bridge + JSFX analyzers into REAPER |
 | `setup-sidecar` | Install the Python sidecar (opt-in, Python 3.10+, venv at `~/.reaper-mcp/sidecar-venv/`). In a terminal it shows a picker: core analysis (required), Audiobox Aesthetics weights (831 MB, default on), stem separation (Demucs, ~110 MB), chord model (lv-chordia, ~135 MB), each with what it enables, why and its size. No prompt without a TTY, in CI, with `--yes`/`-y`/`--non-interactive` or with any component flag: `--all`, `--with-separation`, `--with-chords`, `--without-aesthetics` (defaults: core + aesthetics). `--list [--json]` prints the components and what is installed. An existing install gets only the missing picked parts; the scripts are always refreshed. |
 | `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` that runs the clone's built `main.js` (copy-free) |
+| `extension` | Manage opt-in extensions: `list`, `add <name\|folder\|git-url>`, `link <folder>`, `remove <name>`, `new <name>` (see `docs/EXTENSIONS.md`) |
 | `doctor` | Verify all components are configured correctly (includes 4 sidecar sub-checks) |
 | `status` | Check if Lua bridge is running in REAPER |
 
