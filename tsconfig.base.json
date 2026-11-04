@@ -19,7 +19,8 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@reaper-mcp/protocol": ["libs/protocol/src/index.ts"]
+      "@reaper-mcp/protocol": ["libs/protocol/src/index.ts"],
+      "@reaper-mcp/extension-api": ["libs/extension-api/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "dist"]

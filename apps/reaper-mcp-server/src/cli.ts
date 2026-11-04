@@ -101,6 +101,8 @@ export const REAPER_ASSETS = [
   'mcp_recording_lib.lua',
   'mcp_mixing_lib.lua',
   'mcp_midi_lib.lua',
+  'mcp_fxstate_lib.lua',
+  'mcp_extensions_lib.lua',
   'mcp_edit_views_lib.lua',
   'mcp_snapshots_ui_lib.lua',
   'mcp_snapshot_next.lua',
@@ -388,8 +390,9 @@ export const MCP_TOOL_NAMES = [
   // built-in mix knowledge (read-only LoreKit proxy)
   'list_builtin_knowledge',
   'get_builtin_knowledge',
-  // Note: 'render_track_to_wav', 'remove_mcp_meters' (measure_tracks cleanup) and 'insert_stem_tracks'
-  // (the insertTracks option of separate_stems) are internal
+  // Note: 'render_track_to_wav', 'remove_mcp_meters' (measure_tracks cleanup), 'insert_stem_tracks'
+  // (the insertTracks option of separate_stems) and 'get_fx_state' / 'set_fx_state' / 'extension_call'
+  // (extension plumbing) are internal
   // Lua bridge commands, NOT public MCP tools.
   // They must NOT be listed here — MCP_TOOL_NAMES drives the Claude Code allowlist.
 ] as const;

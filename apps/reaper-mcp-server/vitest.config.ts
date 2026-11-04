@@ -11,6 +11,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@reaper-mcp/protocol': resolve(__dirname, '../../libs/protocol/src/index.ts'),
+      '@reaper-mcp/extension-api': resolve(__dirname, '../../libs/extension-api/src/index.ts'),
     },
   },
 });

@@ -177,7 +177,9 @@ describe('cli helpers', () => {
       expect(REAPER_ASSETS).toContain('mcp_recording_lib.lua');
       expect(REAPER_ASSETS).toContain('mcp_midi_lib.lua');
       expect(REAPER_ASSETS).toContain('mcp_arrange_lib.lua');
-      expect(REAPER_ASSETS.length).toBe(23);
+      expect(REAPER_ASSETS).toContain('mcp_fxstate_lib.lua');
+      expect(REAPER_ASSETS).toContain('mcp_extensions_lib.lua');
+      expect(REAPER_ASSETS.length).toBe(25);
     });
 
     it('retires the gfx snapshot manager (replaced by the status page Snapshots tab)', () => {
@@ -242,7 +244,8 @@ describe('package integrity', () => {
 
   it.skipIf(!distExists)('main.js does not contain node_modules paths', () => {
     const mainJs = readFileSync(join(distDir, 'main.js'), 'utf-8');
-    expect(mainJs).not.toContain('node_modules');
+    // A path segment, not the word: the extension installer names node_modules in the folders it skips when copying
+    expect(mainJs).not.toMatch(/[\\/]node_modules[\\/]/);
   });
 });
 

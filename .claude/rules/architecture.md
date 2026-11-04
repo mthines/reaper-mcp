@@ -19,7 +19,8 @@ Never attempt to use WebSockets, HTTP, or any other transport between the server
 ## Monorepo Structure
 
 - `apps/` contains runnable applications (currently just `reaper-mcp-server`)
-- `libs/` contains shared libraries (currently just `protocol`)
+- `libs/` contains shared libraries (`protocol`, and `extension-api`, the contract opt-in extensions are written against)
+- `extensions/` contains opt-in extensions (see `docs/EXTENSIONS.md`); they depend only on `extension-api`, never on `protocol` or the server
 - `reaper/` contains files that get installed INTO REAPER (Lua scripts, JSFX plugins)
 - The protocol library is the shared contract between server and bridge -- types here must match the Lua implementation
 
@@ -27,6 +28,8 @@ Never attempt to use WebSockets, HTTP, or any other transport between the server
 
 - `apps/reaper-mcp-server` -> `libs/protocol` (allowed)
 - `libs/protocol` -> nothing (no app dependencies, no external deps)
+- `libs/extension-api` -> `libs/protocol` (types only)
+- `extensions/*` -> `libs/extension-api` only (enforced by `@nx/enforce-module-boundaries`)
 - Never import from `apps/` into `libs/`
 - The `reaper/` directory is not a TypeScript package -- it contains Lua/JSFX files
 

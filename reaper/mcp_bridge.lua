@@ -51,6 +51,16 @@ ext.recording = (function()
   if ok then return lib end
   return { load_error = tostring(lib) }
 end)()
+ext.fxstate = (function()
+  local ok, lib = pcall(dofile, script_dir .. "mcp_fxstate_lib.lua")
+  if ok then return lib end
+  return { load_error = tostring(lib) }
+end)()
+ext.extensions = (function()
+  local ok, lib = pcall(dofile, script_dir .. "mcp_extensions_lib.lua")
+  if ok then return lib end
+  return { load_error = tostring(lib) }
+end)()
 -- What a write changed and what a listing showed, for the status page's drawer (same install rules).
 local edit_lib_ok, edit_lib = pcall(dofile, script_dir .. "mcp_edit_views_lib.lua")
 -- Snapshot list, restore and save from the status page (same install rules).
@@ -3525,6 +3535,32 @@ function ext.with_recording(fn)
   if not ok then return nil, tostring(res) end
   return res, err
 end
+
+-- Saved plugin state and extension commands (logic in mcp_fxstate_lib.lua / mcp_extensions_lib.lua).
+-- State travels as files in the bridge folder, never in the command JSON: it is megabytes.
+function ext.lib_call(key, fn, params, dir)
+  local lib = ext[key]
+  if lib.load_error then
+    return nil, "mcp_" .. key .. "_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge (" .. lib.load_error .. ")"
+  end
+  if not plan_lib_ok then return nil, "mcp_plan_lib.lua is not installed next to mcp_bridge.lua" end
+  local ctx = {
+    plan = plan_lib, dir = dir or bridge_dir, read = read_file, fxstate = ext.fxstate,
+    write = function(path, text)
+      local f, err = io.open(path, "wb")
+      if not f then return nil, err end
+      f:write(text)
+      f:close()
+      return true
+    end,
+  }
+  local ok, res, err = pcall(lib[fn], reaper, params, ctx)
+  if not ok then return nil, "Handler error: " .. tostring(res) end
+  return res, err
+end
+function handlers.get_fx_state(params) return ext.lib_call("fxstate", "get_fx_state", params) end
+function handlers.set_fx_state(params) return ext.lib_call("fxstate", "set_fx_state", params) end
+function handlers.extension_call(params) return ext.lib_call("extensions", "call", params, bridge_dir .. "extensions/") end
 
 -- A JSON-encoded value (number, array or object) from the flat parser
 function ext.decode_json(value, field)

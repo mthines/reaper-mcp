@@ -1,0 +1,16 @@
+{
+  "name": "extension-api",
+  "sourceRoot": "libs/extension-api/src",
+  "projectType": "library",
+  "tags": ["type:lib", "type:extension-api"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "options": {
+        "outputPath": "dist/libs/extension-api",
+        "main": "libs/extension-api/src/index.ts",
+        "tsConfig": "libs/extension-api/tsconfig.json"
+      }
+    }
+  }
+}
