@@ -13,7 +13,7 @@ built-in one disagree, yours wins.
 several installed. Your own records can set your own preference.
 
 <!-- plugin-list:start -->
-37 plugins.
+38 plugins.
 
 | Category | Plugin | Vendor | Preference |
 | --- | --- | --- | --- |
@@ -32,6 +32,7 @@ several installed. Your own records can set your own preference.
 | eq | ReaEQ | Cockos | 40 |
 | gate | ReaGate | Cockos | 40 |
 | instrument | Kontakt 8 | Native Instruments | 95 |
+| instrument | EuroBass III | SubMission Audio | 80 |
 | instrument | Odin x Ari Lite | Solemn Tones | 80 |
 | instrument | Spitfire Audio LABS | Spitfire Audio | 70 |
 | limiter | FabFilter Pro-L 2 | FabFilter | 92 |
