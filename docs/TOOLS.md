@@ -142,15 +142,83 @@ Workflow: [knowledge/workflows/transient-lighting.md](../knowledge/workflows/tra
 | `get_midi_cc` / `insert_midi_cc` / `delete_midi_cc` | CC event management |
 | `get_midi_item_properties` / `set_midi_item_properties` | MIDI item props |
 
-### Composition (5 tools)
+### Composition (6 tools)
 
 | Tool | Description |
 |------|-------------|
 | `quantize_midi` | Snap notes to the grid with strength, swing and a window; keep or quantize lengths |
 | `transform_midi` | Transpose, velocity (set/scale/add/clamp), humanize (seeded), lengths (set/scale/legato) |
 | `import_midi_file` | Import a .mid file as MIDI items, one call, no dialog |
+| `transcribe_voice_sketch` | Humming/beatboxing → quantized melody, tentative percussion, tempo/key, and a generated band arrangement. Optional MIDI, sampled mix, and separate instrument stems |
 | `detect_key` | The key of a MIDI track, a rendered track, one media item or an audio file, with confidence and the chroma |
 | `detect_chords` | The chords per bar or beat of a MIDI track, a rendered track, one media item or an audio file: progression, roman numerals, bass notes for a bass line. Audio uses the chord model when installed (`reaper-mcp setup-sidecar --with-chords`: sevenths and inversions from a full mix), else chroma templates |
+
+#### Voice recording to an arrangement
+
+Build the server, then restart your MCP connection to discover `transcribe_voice_sketch` in the MIDI category.
+Install the core sidecar if it isn't installed:
+
+```bash
+reaper-mcp setup-sidecar --without-aesthetics
+```
+
+Ask your agent to compose from an absolute local audio path, or call the tool with:
+
+```json
+{
+  "path": "/absolute/path/voice.mp3",
+  "startTime": 0.8,
+  "bars": 16,
+  "outputPath": "/absolute/path/idea.mid",
+  "limit": 0
+}
+```
+
+The default output is a proposed 4/4 arrangement with drums, fingered electric bass, electric piano chords, and vibraphone melody.
+Detected kick positions drive the groove and bass; generated backbeats, hats, ghost notes, and fills complete the drums.
+Chord choices favor the detected melody's notes within the estimated key.
+The intro, verse, chorus, and outro are proposals, not detected song sections.
+Set `arrange: false` to export only the detected melody and tentative percussion.
+No files are written without `outputPath`, and no REAPER project changes happen in this tool.
+Existing MIDI files and stem folders are never overwritten.
+
+| Control | Meaning |
+|---------|---------|
+| `bpm` | Authoritative fixed tempo, 40–240. Use this to resolve half/double-time ambiguity |
+| `grid` | Detected-note grid in quarter notes: 0.25 sixteenths by default, 0.5 eighths, 1/3 triplets. Generated backing uses a straight eighth-note groove |
+| `startTime` / `endTime` | Select music and exclude speech, up to 120 seconds |
+| `mode` | `auto` detects both layers; `melody` or `drums` limits extraction. Arrangement still generates accompaniment |
+| `pitchMin` / `pitchMax` | Vocal MIDI range, default 36–84. Lower `pitchMin` for bass-like humming |
+| `minNoteMs` | Stable note minimum, default 80 ms. Lower to 40 for short syllables, at the cost of more false notes |
+| `key` | Accompaniment override, e.g. `A minor`, `Eb major`. Never retunes detected notes |
+| `bars` | Generated length, 4–64 bars, default 16 |
+| `offset` / `limit` | Page each part's notes; `limit: 0` gives summaries. MIDI always contains the full score |
+
+The detector rounds ordinary tempo drift to one BPM.
+A change needs two consecutive four-second windows and at least 20% difference by default.
+Timing is heuristic; short clips, syncopation, gradual accelerations, and exact half/double changes remain ambiguous.
+The first onset is assumed to be beat zero, not a detected downbeat.
+Review octaves, short notes, drum labels, and key confidence before arranging further.
+When there is no melodic key, generated accompaniment uses C minor and reports that fallback.
+This is an editable draft, not a faithful reconstruction of a mixed vocal performance.
+
+For **sampled audio playback**, install the FluidSynth shared library separately:
+`brew install fluid-synth` on macOS, or `sudo apt install libfluidsynth3` on Debian/Ubuntu.
+Supply your own General MIDI `.sf2`, such as [GeneralUser GS](https://schristiancollins.com/generaluser.php), and add its absolute `soundfontPath` to the call above.
+No SoundFont or native library is bundled or downloaded automatically.
+On Windows, the renderer needs a FluidSynth DLL discoverable by Python; automatic native-library setup isn't provided.
+
+This creates `idea-stems/mix.wav`, `drums.wav`, `bass.wav`, `harmony.wav`, and `melody.wav` beside the MIDI file.
+The 22.05 kHz stereo, 32-bit float stems share one attenuation factor and sum back to the mix.
+Previews are limited to 240 seconds, including a two-second release tail.
+If playback dependencies are missing, the response reports `preview.error` and keeps the exported MIDI.
+These are **resynthesized instrument stems**, not separated original voice audio.
+The existing Demucs `separate_stems` tool targets recorded bands; its accuracy on simultaneous humming and beatboxing is unverified.
+
+Import the WAV stems directly for immediate REAPER playback, or import the MIDI and assign your preferred instruments.
+REAPER's native MIDI import can import the tempo map and GM programs.
+The MCP `import_midi_file(newTracks: true)` imports notes/CC only: it reports but doesn't apply tempo and skips program changes.
+With that importer, set project tempo/tempo markers separately before importing, and add instrument FX afterward.
 
 ### Media Item Editing (11 tools)
 
@@ -291,4 +359,3 @@ For quick A/B testing, bind these action scripts to keyboard shortcuts in REAPER
 | `save_track_template` | Save a track as `<resource>/TrackTemplates/<name>.RTrackTemplate` (items only with `includeItems`) |
 | `insert_track_template` | Insert the track(s) of a template at a position, fresh GUIDs |
 | `list_track_templates` | List saved `.RTrackTemplate` names |
-

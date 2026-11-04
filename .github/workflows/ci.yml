@@ -189,8 +189,13 @@ jobs:
           pip install --index-url https://download.pytorch.org/whl/cpu torch torchaudio
           pip install numpy soundfile pytest
 
+      - name: Install sampled-preview test dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfluidsynth3 timgm6mb-soundfont
+
       - name: Sidecar analysis and mix-check tests
-        run: python -m pytest apps/reaper-mcp-server/sidecar/tests/test_analysis.py apps/reaper-mcp-server/sidecar/tests/test_mixcheck.py apps/reaper-mcp-server/sidecar/tests/test_chords.py -q
+        env:
+          REAPER_MCP_TEST_SOUNDFONT: /usr/share/sounds/sf2/TimGM6mb.sf2
+        run: python -m pytest apps/reaper-mcp-server/sidecar/tests/test_analysis.py apps/reaper-mcp-server/sidecar/tests/test_mixcheck.py apps/reaper-mcp-server/sidecar/tests/test_chords.py apps/reaper-mcp-server/sidecar/tests/test_voice_sketch.py apps/reaper-mcp-server/sidecar/tests/test_voice_render.py -q
 
   # =============================================================================
   # Step 3: Calculate version and create tag

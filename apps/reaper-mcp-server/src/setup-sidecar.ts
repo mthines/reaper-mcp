@@ -52,7 +52,7 @@ export const SIDECAR_VENV_PATH = join(homedir(), '.reaper-mcp', 'sidecar-venv');
 export const SIDECAR_DIR = join(homedir(), '.reaper-mcp', 'sidecar');
 export const SIDECAR_SCRIPT_DEST = join(SIDECAR_DIR, 'server.py');
 /** Python modules server.py imports; installed next to it. */
-export const SIDECAR_MODULES = ['analysis.py', 'mixcheck.py', 'separation.py', 'chords.py'];
+export const SIDECAR_MODULES = ['analysis.py', 'mixcheck.py', 'separation.py', 'chords.py', 'voice_sketch.py', 'voice_render.py'];
 /** The Demucs model separate_stems uses by default; pre-downloaded by --with-separation. */
 export const SEPARATION_MODEL = 'htdemucs';
 export const MODEL_ID = 'facebook/audiobox-aesthetics';
@@ -244,7 +244,7 @@ export const COMPONENTS: Component[] = [
     id: 'core',
     title: 'Audio analysis (required)',
     enables: 'analyze_track_offline, analyze_audio_file, measure_track_alignment, detect_transients, quantize_audio, ' +
-      'detect_key / detect_chords on audio, analyze_loudness_curve, analyze_stereo_bands, measure_masking',
+      'detect_key / detect_chords on audio, transcribe_voice_sketch, analyze_loudness_curve, analyze_stereo_bands, measure_masking',
     why: 'Claude renders a track and reads it offline: loudness (LUFS, LRA, true peak), tonal balance against a reference, ' +
       'timing, phase, key and chords. Everything else builds on it.',
     size: 'Python venv with PyTorch (CPU) and audio libraries: ~0.5-1 GB on macOS/Windows, up to ~2.5 GB on Linux (CUDA wheels)',

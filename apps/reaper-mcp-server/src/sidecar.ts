@@ -156,6 +156,72 @@ export interface ChordsResult {
   seconds: number;
 }
 
+export interface VoiceSketchParams {
+  path: string;
+  startTime?: number;
+  endTime?: number;
+  mode?: 'auto' | 'melody' | 'drums';
+  bpm?: number;
+  grid?: number;
+  pitchMin?: number;
+  pitchMax?: number;
+  minNoteMs?: number;
+  tempoChangeThreshold?: number;
+}
+
+export interface VoiceSketchNote {
+  /** Original file seconds, before timing correction. */
+  time: number;
+  duration: number;
+  pitch: number;
+  velocity: number;
+  confidence: number;
+  label?: string;
+  /** Quantized quarter notes, relative to tempo.originSeconds. */
+  beat: number;
+  lengthBeats: number;
+}
+
+export interface VoiceSketchResult {
+  durationSeconds: number;
+  startTime: number;
+  mode: string;
+  grid: number;
+  tempo: {
+    bpm: number;
+    detectedBpm: number | null;
+    confidence: number | null;
+    source: 'manual' | 'estimated';
+    originSeconds: number;
+    alternatives: number[];
+    segments: { time: number; beat: number; bpm: number }[];
+  };
+  chroma: number[];
+  melody: VoiceSketchNote[];
+  drums: VoiceSketchNote[];
+  warnings: string[];
+  patterns: { bars: number[]; hits: { beat: number; pitch: number }[] }[];
+}
+
+export interface VoiceRenderParams {
+  soundfontPath: string;
+  outDir: string;
+  durationSeconds: number;
+  tracks: { name: string; channel: number; program: number; gain: number;
+    notes: { time: number; duration: number; pitch: number; velocity: number }[] }[];
+}
+
+export interface VoiceRenderResult {
+  engine: string;
+  sampleRate: number;
+  durationSeconds: number;
+  gain: number;
+  peakDb: number | null;
+  soundfontPath: string;
+  mixPath: string;
+  stems: { name: string; path: string }[];
+}
+
 export interface SidecarClient {
   /** True if the sidecar is installed (script + venv exist). Does NOT guarantee it's running. */
   isAvailable(): boolean;
@@ -183,6 +249,10 @@ export interface SidecarClient {
   chordsStatus(): Promise<{ installed: boolean; message: string }>;
   /** Chord segments of a file (lv-chordia, 2-5x real time on a CPU): pass a timeout. */
   chords(params: ChordsParams, timeoutMs: number): Promise<ChordsResult>;
+  /** Local monophonic melody + tentative drums from a voice sketch, up to 120 s. */
+  transcribeVoiceSketch(params: VoiceSketchParams): Promise<VoiceSketchResult>;
+  /** Offline sampled preview + stems. Requires a local GM SoundFont and FluidSynth library. */
+  renderVoiceArrangement(params: VoiceRenderParams): Promise<VoiceRenderResult>;
   /** Terminate the sidecar process. Safe to call even if not running. */
   shutdown(): void;
 }
@@ -272,6 +342,14 @@ class SidecarClientImpl implements SidecarClient {
 
   chords(params: ChordsParams, timeoutMs: number): Promise<ChordsResult> {
     return this.call('chords', { ...params }, Math.max(timeoutMs, ANALYZE_TIMEOUT_MS)) as Promise<ChordsResult>;
+  }
+
+  transcribeVoiceSketch(params: VoiceSketchParams): Promise<VoiceSketchResult> {
+    return this.call('transcribe_voice_sketch', { ...params }, Math.max(120_000, ANALYZE_TIMEOUT_MS)) as Promise<VoiceSketchResult>;
+  }
+
+  renderVoiceArrangement(params: VoiceRenderParams): Promise<VoiceRenderResult> {
+    return this.call('render_voice_arrangement', { ...params }, Math.max(120_000, params.durationSeconds * 1000)) as Promise<VoiceRenderResult>;
   }
 
   /**

@@ -224,6 +224,7 @@ export type LoggedTool =
   | 'separate_stems'
   | 'detect_key'
   | 'detect_chords'
+  | 'transcribe_voice_sketch'
   | 'detect_transients'
   | 'create_transient_automation';
 

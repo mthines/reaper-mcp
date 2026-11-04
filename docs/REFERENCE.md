@@ -309,7 +309,7 @@ out of version control.
 ```
 reaper-mcp/
 ├── apps/
-│   ├── reaper-mcp-server/        # MCP server (182 tools, esbuild bundle)
+│   ├── reaper-mcp-server/        # MCP server (183 tools, esbuild bundle)
 │   └── bridge-ui/                # Bridge status page (React → one self-contained HTML file)
 ├── libs/protocol/                # Shared TypeScript types
 ├── .claude/skills/               # Mix skills (/mixer, /critique, /mastering, /editing, /learn-plugin, /new-extension, /mix-memory)
@@ -358,4 +358,3 @@ pnpm nx run-many --target=build,lint,test  # Everything
 ```
 
 See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full dev workflow including running from source, MCP Inspector, and bridge update details.
-
