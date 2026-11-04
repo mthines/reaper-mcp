@@ -37,6 +37,7 @@ export function SnapshotsView({
   initialRow?: RowMode;
 }) {
   const [row, setRow] = useState<RowMode | null>(initialRow ?? null);
+  const [confirmClear, setConfirmClear] = useState(false);
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = feed?.snapshots ?? [];
@@ -158,6 +159,33 @@ export function SnapshotsView({
           })}
         </ol>
       )}
+      {feed && feed.snapshots.length > 0 && (
+        <div className={styles.snapClear}>
+          {confirmClear ? (
+            <span role="group" aria-label="Delete all snapshots?" className={styles.snapActions}>
+              <span className={styles.snapConfirmText}>Delete all {feed.snapshots.length}?</span>
+              <button
+                className="btn btn-sm btn-warn"
+                autoFocus
+                onClick={() => {
+                  onSend('clear', 'all snapshots');
+                  setConfirmClear(false);
+                  setRow(null);
+                }}
+              >
+                Delete all
+              </button>
+              <button className="btn btn-sm" onClick={() => setConfirmClear(false)}>
+                Keep
+              </button>
+            </span>
+          ) : (
+            <button className="btn btn-sm" disabled={Boolean(blocked)} onClick={() => setConfirmClear(true)} title={blocked ?? 'Delete every snapshot of this project'}>
+              Clear all
+            </button>
+          )}
+        </div>
+      )}
       {feed && (
         <p className={cx(styles.snapFoot, 'muted')}>
           {feed.storage === 'project' ? 'Saved next to the project, in .reaper-mcp/snapshots.' : 'The project isn’t saved yet: snapshots go to the bridge folder.'}{' '}
@@ -170,13 +198,13 @@ export function SnapshotsView({
 
 function RequestLine({ request }: { request: RequestState | null }) {
   if (!request) return null;
-  const verb = { restore: 'load', save: 'save', delete: 'delete', edit: 'rename' }[request.op];
-  const done = { restore: 'loaded', save: 'saved', delete: 'deleted', edit: 'renamed' }[request.op];
+  const verb = { restore: 'load', save: 'save', delete: 'delete', edit: 'rename', clear: 'delete' }[request.op];
+  const done = { restore: 'loaded', save: 'saved', delete: 'deleted', edit: 'renamed', clear: 'deleted' }[request.op];
   let tone = 'info';
   let text: string;
   let warnings: string[] = [];
   if (request.state === 'pending') {
-    text = `${{ restore: 'Loading', save: 'Saving', delete: 'Deleting', edit: 'Saving' }[request.op]} ${request.name}…`;
+    text = `${{ restore: 'Loading', save: 'Saving', delete: 'Deleting', edit: 'Saving', clear: 'Deleting' }[request.op]} ${request.name}…`;
   } else if (request.state === 'lost') {
     tone = 'bad';
     text = `No answer from the bridge: ${request.name} wasn’t ${done}. Is the bridge script running?`;
@@ -187,7 +215,7 @@ function RequestLine({ request }: { request: RequestState | null }) {
     text =
       request.op === 'restore'
         ? `Loaded ${request.name}${n !== undefined ? ` · ${n} track${n === 1 ? '' : 's'}` : ''}${warnings.length ? ` · ${warnings.length} warning${warnings.length === 1 ? '' : 's'}` : ''}`
-        : `${{ save: 'Saved', delete: 'Deleted', edit: 'Saved' }[request.op]} ${request.name}`;
+        : `${{ save: 'Saved', delete: 'Deleted', edit: 'Saved', clear: 'Deleted' }[request.op]} ${request.name}`;
   } else {
     tone = 'bad';
     text = `Couldn’t ${verb} ${request.name}: ${request.result.error ?? 'refused by the bridge'}`;

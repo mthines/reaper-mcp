@@ -10,7 +10,8 @@
 --                                 (or the current snapshot) changed.
 --   snap_req  = <id>-<token>-<op>-<hex name>[-<hex field>…]
 --                                 op: restore | delete <name>, save <name>-<description>,
---                                 edit <name>-<new name>-<description>. The token is the bridge's per-run control
+--                                 edit <name>-<new name>-<description>, clear (any name: deletes every snapshot
+--                                 of the project, one snapshot_delete each). The token is the bridge's per-run control
 --                                 token, only readable from the status feed (REAPER's web server
 --                                 sends no CORS headers), so another site can't make it count.
 --                                 Name and description travel hex-encoded: no URL or `;` escaping.
@@ -171,6 +172,29 @@ local function handle(req)
   local name = (fields[1] or ""):sub(1, NAME_MAX)
   if name == "" then return false end
   local cmd = { id = "page-" .. id, source = "page" }
+  if op == "clear" then
+    -- Every snapshot, one ordinary snapshot_delete each (logged, refused while read-only or paused).
+    -- list() is capped, so go again until a round deletes nothing.
+    local deleted, failed, first_error = 0, 0, nil
+    local tried = {}
+    while true do
+      local progressed = false
+      for _, e in ipairs(M.list()) do
+        if not tried[e.name] then
+          tried[e.name] = true
+          progressed = true
+          local r = ctx.run({ id = "page-" .. id .. "-" .. (deleted + failed), source = "page", type = "snapshot_delete", params = { name = e.name } }) or {}
+          if r.success then deleted = deleted + 1 else failed = failed + 1; first_error = first_error or r.error end
+        end
+      end
+      if not progressed then break end
+    end
+    result = {
+      id = id, op = op, name = deleted .. (deleted == 1 and " snapshot" or " snapshots"),
+      ok = failed == 0, error = failed > 0 and (failed .. " not deleted: " .. tostring(first_error)) or nil,
+    }
+    return true
+  end
   if op == "restore" or op == "delete" then
     cmd.type, cmd.params = "snapshot_" .. op, { name = name }
   elseif op == "save" then

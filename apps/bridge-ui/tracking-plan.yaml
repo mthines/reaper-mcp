@@ -83,6 +83,8 @@ events:
     named: boolean           # false: saved without a name, under the date and time
   snapshot_deleted:          # the bridge answered a delete from the Snapshots view
     outcome: [ok, refused, lost]
+  snapshots_cleared:         # the bridge answered a Clear all from the Snapshots view
+    outcome: [ok, refused, lost]
   snapshot_edited:           # the bridge answered a rename / description edit from the Snapshots view
     outcome: [ok, refused, lost]
     renamed: boolean         # the name changed (else only the description)

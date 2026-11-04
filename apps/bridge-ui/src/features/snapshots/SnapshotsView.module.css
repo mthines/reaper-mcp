@@ -44,3 +44,5 @@
   .snapState { grid-row: 1 / span 2; grid-column: 2; }
   .snapDesc { white-space: normal; }
 }
+.snapClear { display: flex; justify-content: flex-end; }
+.snapClear :global(.btn-sm):not(:global(.btn-warn)) { color: var(--muted); }

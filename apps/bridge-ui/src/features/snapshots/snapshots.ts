@@ -19,7 +19,7 @@ export interface SnapshotInfo {
   fullChunk: boolean;
 }
 
-export type SnapshotOp = 'restore' | 'save' | 'delete' | 'edit';
+export type SnapshotOp = 'restore' | 'save' | 'delete' | 'edit' | 'clear';
 
 /** A row of the Snapshots view being renamed, or asked to confirm its delete */
 export type RowMode = { name: string; mode: 'edit' | 'delete' };
@@ -131,7 +131,7 @@ function isSnapshot(x: unknown): x is SnapshotInfo {
 
 function asResult(x: unknown): SnapshotResult | undefined {
   const r = x as SnapshotResult;
-  if (typeof x !== 'object' || x === null || typeof r.id !== 'string' || (r.op !== 'restore' && r.op !== 'save')) return undefined;
+  if (typeof x !== 'object' || x === null || typeof r.id !== 'string' || !['restore', 'save', 'delete', 'edit', 'clear'].includes(r.op)) return undefined;
   return {
     ...r,
     ok: r.ok === true,

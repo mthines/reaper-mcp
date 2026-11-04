@@ -68,6 +68,17 @@ export const DeletesAfterConfirmingInTheRow: Story = {
   },
 };
 
+export const ClearsAllAfterConfirming: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Clear all' }));
+    await expect(args.onSend).not.toHaveBeenCalled();
+    const confirm = canvas.getByRole('group', { name: 'Delete all snapshots?' });
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Delete all' }));
+    await expect(args.onSend).toHaveBeenCalledWith('clear', 'all snapshots');
+  },
+};
+
 export const RefusesLoadsAndSavesWhileReadOnly: Story = {
   args: { blocked: example('Read-only').blocked },
   play: async ({ canvasElement, args }) => {
