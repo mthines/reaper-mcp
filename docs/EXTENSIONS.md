@@ -112,6 +112,30 @@ Extension tools are not in the Claude Code allow-list `reaper-mcp init` writes, 
 Not yet: wavetables from audio files, spectral/warp components, the sample slot, effect-section helpers, macros.
 Lessons from building it (VST3 length fields, FXID) are in LoreKit under `repo::mthines/reaper-mcp`.
 
+## The Helix extension
+
+`extensions/helix` works on Line 6 `.hlx` presets (plain JSON), because Helix Native's saved plugin state is encrypted and
+cannot be edited through `api.fxState`. Blocks are cloned from real presets, so model ids and parameter names are never invented.
+
+| Tool | |
+|---|---|
+| `helix_guide` | The Helix knowledge (format, model catalog, chain design, genre recipes incl. Sleep Token, snapshot rules, parameter encoding) |
+| `helix_inspect_preset` | Chains, boot snapshot, routing, every snapshot, and validation findings |
+| `helix_list_models` | Models (and a model's real parameters) found in your `.hlx` library: the source of valid ids |
+| `helix_create_preset` | Build a preset from a donor: your blocks per path, up to 8 snapshots (bypass + per-snapshot values), validated; `dryRun` |
+| `helix_edit_preset` | Rename, tempo, block parameters, per-snapshot blocks and values; load-time state re-synced; writes a copy or overwrites with a `.bak` |
+| `helix_set_preset` | Load a `.hlx` into one library slot of a live Helix Native, then verify on disk and roll back if anything else changed |
+| `helix_backup_library` | Copy the whole preset library to `~/.reaper-mcp/helix/library-backups/` |
+
+`helix_set_preset` runs Helix Native's Import through a **driver you configure**: `~/.reaper-mcp/helix-import.json` with
+`{"command": ["osascript", "/path/import.scpt", "{file}"]}` (`{file}` becomes the `.hlx` path; override with `HELIX_IMPORT_CONFIG`). The
+extension owns the safety, not the clicking: the instance must be online (3 parameters = offline, refused), the library is backed up, and after
+the driver returns exactly the slot you named (`setlist`/`preset`) must have changed, or the library is restored. Choose a scratch slot.
+Env: `HELIX_PRESET_DIRS` (colon-separated folders scanned for templates), `HELIX_PRESET_OUT`, `HELIX_NATIVE_LIBRARY`.
+
+Not yet: the import driver itself (needs calibrating against the live plugin window), adding or removing blocks in `edit_preset`
+(use `create_preset`), `.hls` setlists, footswitch assignments (created presets carry none), IR slots.
+
 ## Not built yet
 
 - A separate collection repo with a `registry.json` (`extension add <name>` would resolve through it). Extensions live in

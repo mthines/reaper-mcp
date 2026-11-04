@@ -1,0 +1,7 @@
+{
+  "name": "helix",
+  "version": "0.1.0",
+  "apiVersion": 1,
+  "description": "Create, edit and validate Line 6 Helix .hlx presets (donor-based chains, snapshots) and load them into Helix Native with a checked import",
+  "main": "dist/index.mjs"
+}

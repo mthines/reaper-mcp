@@ -1,0 +1,38 @@
+{
+  "name": "helix",
+  "sourceRoot": "extensions/helix/src",
+  "projectType": "library",
+  "tags": [
+    "type:extension"
+  ],
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "options": {
+        "main": "extensions/helix/src/index.ts",
+        "outputPath": "extensions/helix/dist",
+        "outputFileName": "index.mjs",
+        "tsConfig": "extensions/helix/tsconfig.json",
+        "bundle": true,
+        "format": [
+          "esm"
+        ],
+        "platform": "node",
+        "target": "node20",
+        "minify": false,
+        "sourcemap": false,
+        "thirdParty": true,
+        "deleteOutputPath": true,
+        "external": [],
+        "skipTypeCheck": true,
+        "generatePackageJson": false,
+        "esbuildOptions": {
+          "outExtension": {
+            ".js": ".mjs"
+          }
+        },
+        "declaration": false
+      }
+    }
+  }
+}

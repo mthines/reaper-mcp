@@ -164,6 +164,8 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
 
+  extensions/helix: {}
+
   extensions/vital: {}
 
   libs/extension-api: {}

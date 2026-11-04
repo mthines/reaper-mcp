@@ -1,0 +1,6 @@
+{
+  "name": "@reaper-mcp/extension-helix",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module"
+}

@@ -91,6 +91,7 @@ reaper-mcp/
 
   libs/extension-api/         # The API extensions are written against (types, manifest check, VST3 state helpers); see docs/EXTENSIONS.md
   extensions/vital/           # Opt-in extension: read/edit Vital patches (settings, mod matrix, LFOs, wavetables); built to dist/index.mjs
+  extensions/helix/           # Opt-in extension: build/edit/validate Helix .hlx presets (donor + real blocks, snapshots), checked import into Helix Native; knowledge/ holds the Helix docs
   libs/protocol/              # Shared TypeScript types (compiled with tsc)
     src/
       index.ts                # Re-exports commands + responses
