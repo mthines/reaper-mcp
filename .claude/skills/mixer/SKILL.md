@@ -70,6 +70,12 @@ record shapes, layer merge and plugin lookup):
   { key: "plugins::{vendor}/{plugin}" }` and `memory.read` of
   `user::plugins::{vendor}/{plugin}` (find the slug via the `fx::` tags when
   you only have the FX name) and combine them.
+- **A record with an `extension::<name>` tag** means an opt-in extension drives that
+  plugin's internals (for a synth: wavetables, mod matrix, LFO shapes). When
+  `list_tool_categories` shows that extension's category, use its tools for anything
+  structural and keep `set_fx_parameter` for quick nudges; read the extension's
+  `read_*` tool before changing a patch. Not installed: say the structural part is out
+  of reach and offer `reaper-mcp extension add <name>`.
 - **Asked to use a plugin you don't know?** Bootstrap it *before* mixing with it
   (see the protocol): dispatch the `plugin-researcher` agent, which researches
   the web, probes the plugin on a scratch track and writes its

@@ -63,6 +63,17 @@ from a source. If you inferred something, say so in the report.
 
 ## Step 4 — Test it in REAPER
 
+**Does an extension drive this plugin?** Before probing host parameters, call
+`list_tool_categories` and look for a category named after the plugin (for example
+`vital`), or `reaper-mcp extension list` via Bash. If there is one, its `read_*`
+tool shows the plugin's real structure (oscillators, wavetables, modulation, effects)
+far better than 0/0.25/0.5/0.75/1 probes can: use it on the scratch track, record
+what it returns in `## Learned notes` (setting names, raw scales, enums), tag the
+record `extension::<name>`, and probe host parameters only for what it doesn't cover.
+No extension, and the plugin keeps most of its sound in internal state (wavetables, a
+mod matrix, patch graphs the host parameters don't expose): say so in the report as
+an open question, with `reaper-mcp extension new <name>` as the way to add one.
+
 This is ground truth for **this** build. It beats the web wherever the two
 disagree.
 

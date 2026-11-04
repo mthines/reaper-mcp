@@ -15,6 +15,12 @@ agent researches the plugin on the web, loads it on a scratch track, probes its
 parameters, and writes the record. Then this skill asks the user **only** the
 questions the agent couldn't answer, and folds the answers in.
 
+If an opt-in extension drives the plugin (a `list_tool_categories` category named
+after it, e.g. `vital`), the agent reads its internals through it and tags the record
+`extension::<name>`, so `/mixer` and `/mastering` know to use it. A plugin that hides
+its sound in internal state and has no extension gets a one-line offer to build one
+(`reaper-mcp extension new <name>`, see `docs/EXTENSIONS.md`).
+
 The mixing skills use the same agent to bootstrap plugins they don't know. To
 recall or tidy memory, use `/mix-memory`. If the `memory.*` tools are not
 connected, say so and stop.
