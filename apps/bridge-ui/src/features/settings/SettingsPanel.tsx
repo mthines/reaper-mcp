@@ -20,6 +20,7 @@ export function SettingsPanel({
   onLoreToken,
   publishToken,
   onPublishToken,
+  tokensShared = false,
   onClose,
   canUpdate,
   onRestart,
@@ -34,6 +35,8 @@ export function SettingsPanel({
   onLoreToken: (token: string | null) => void;
   publishToken: string | null;
   onPublishToken: (token: string | null) => void;
+  /** The tokens are kept in ~/.config/reaper-mcp by the bridge, not only in this browser */
+  tokensShared?: boolean;
   onClose: () => void;
   canUpdate: boolean;
   /** Absent when the bridge can't relaunch itself (REAPER before 7.03, or the script has no action ID). */
@@ -131,7 +134,7 @@ export function SettingsPanel({
             />
           </div>
         )}
-        <LoreKitSetting token={loreToken} onChange={onLoreToken} />
+        <LoreKitSetting token={loreToken} onChange={onLoreToken} shared={tokensShared} />
         <PublishSetting token={publishToken} readToken={loreToken} onChange={onPublishToken} />
         <div className={styles.settingGroup}>
           <h3>Privacy</h3>
