@@ -31,7 +31,7 @@ def _pitch_frames(mono: np.ndarray, sr: int, pitch_min: int, pitch_max: int):
     padded = np.pad(x, (size // 2, size // 2))
     lo = max(2, int(rate / (440 * 2 ** ((pitch_max + 0.5 - 69) / 12))))
     hi = min(size // 2, int(math.ceil(rate / (440 * 2 ** ((pitch_min - 0.5 - 69) / 12)))))
-    times, pitches, clarity, levels = [], [], [], []
+    times, pitches, clarity, levels, silences = [], [], [], [], []
     gate = max(1e-5, float(np.sqrt(np.mean(x * x))) * 0.08)
     for pos in range(0, x.size, hop):
         frame = padded[pos:pos + size].copy()
@@ -63,11 +63,13 @@ def _pitch_frames(mono: np.ndarray, sr: int, pitch_min: int, pitch_max: int):
         pitches.append(pitch)
         clarity.append(confidence if pitch >= 0 else 0)
         levels.append(rms)
-    return np.array(times), np.array(pitches), np.array(clarity), np.array(levels)
+        short_frame = padded[pos + size // 2 - hop // 2:pos + size // 2 + hop // 2]
+        silences.append(float(np.sqrt(np.mean(short_frame * short_frame))) < gate)
+    return np.array(times), np.array(pitches), np.array(clarity), np.array(levels), np.array(silences)
 
 
 def _melody(mono: np.ndarray, sr: int, pitch_min: int, pitch_max: int, min_note: float):
-    times, pitches, clarity, levels = _pitch_frames(mono, sr, pitch_min, pitch_max)
+    times, pitches, clarity, levels, silences = _pitch_frames(mono, sr, pitch_min, pitch_max)
     rounded = np.where(pitches >= 0, np.floor(pitches + 0.5), -1).astype(int)
     # Median among voiced neighbours removes single-frame octave/rounding glitches,
     # but never fills a truly unvoiced frame with a made-up note.
@@ -83,6 +85,9 @@ def _melody(mono: np.ndarray, sr: int, pitch_min: int, pitch_max: int, min_note:
                 if smooth[i + gap] == smooth[i - 1]:
                     smooth[i:i + gap] = smooth[i - 1]
                     break
+    # The 93 ms pitch window spans short vocal gaps; 10 ms silence evidence must
+    # survive dropout smoothing without treating percussion attacks as reattacks.
+    smooth[silences] = -1
     notes = []
     i = 0
     top = float(np.percentile(levels, 95)) or 1

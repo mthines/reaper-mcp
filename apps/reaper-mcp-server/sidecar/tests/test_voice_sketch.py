@@ -96,6 +96,20 @@ def test_mixed_voice_keeps_a_pitched_layer_and_overlapping_percussion():
                for m in result["melody"] for d in result["drums"])
 
 
+@pytest.mark.parametrize("mode", ["auto", "melody"])
+def test_same_pitch_syllables_keep_short_silent_gaps(mode):
+    audio = np.zeros((1, SR * 3), dtype=np.float32)
+    starts = [0.2, 0.7, 1.2, 1.7, 2.2]
+    for start in starts:
+        sound = tone(60, 0.48)
+        pos = int(start * SR)
+        audio[0, pos:pos + len(sound)] = sound
+    result = transcribe(audio, SR, mode=mode, bpm=120)
+    assert [n["pitch"] for n in result["melody"]] == [60] * 5
+    assert [n["time"] for n in result["melody"]] == pytest.approx(starts, abs=0.03)
+    assert [n["beat"] for n in result["melody"]] == [0, 1, 2, 3, 4]
+
+
 def test_percussion_attacks_do_not_rearticulate_a_held_hummed_note():
     audio = np.zeros((1, SR * 3), dtype=np.float32)
     sound = tone(60, 2.6)
