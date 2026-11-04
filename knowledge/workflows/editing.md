@@ -230,6 +230,10 @@ params:
   description: "Audio editing complete — crossfades, timing, phase, cleanup done"
 ```
 
+### A/B-testing MIDI or arrangement variants
+
+Comparing two versions of a part (a drum groove, a chorus) is done in fixed lanes, one complete version per lane. The procedure and its gotchas are in the `/editing` skill (`.claude/skills/editing/SKILL.md`), not here.
+
 ## Verification
 
 After completing audio editing:

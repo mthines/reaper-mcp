@@ -120,6 +120,7 @@ reaper-mcp/
     mixer/SKILL.md            # /mixer — executes mixes (live session, reads/writes memory)
     critique/SKILL.md         # /critique — read-only analysis ("roast my mix")
     mastering/SKILL.md        # /mastering — mix-bus mastering to a LUFS target
+    editing/SKILL.md          # /editing — MIDI, arrangement, comping, A/B variants in fixed lanes
     learn-plugin/SKILL.md     # /learn-plugin — research + live-probe a plugin via plugin-researcher, ask only the gaps (LoreKit)
     mix-memory/SKILL.md       # /mix-memory — recall / consolidate / promote memory
   .claude/agents/             # Subagents, symlinked into ~/.claude/agents by scripts/sync-symlinks.sh

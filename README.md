@@ -240,13 +240,14 @@ breakdown is in [docs/REFERENCE.md](docs/REFERENCE.md#installation).
 
 ## 🎚️ Meet your engineers
 
-Five skills, each tuned for a job. Type the slash command, or just describe what you
+Six skills, each tuned for a job. Type the slash command, or just describe what you
 want and the right one starts.
 
 | | Skill | What it does | Try |
 |---|---|---|---|
 | 🎚️ | **`/mixer`** | Does the mixing: gain staging, vocal chains, drum bus, low end, stereo image | `/mixer Build a vocal chain on track 3` |
 | 🔥 | **`/critique`** | "Roast my mix." A measured report of what to fix. **Changes nothing.** | `/critique What's holding this mix back?` |
+| ✂️ | **`/editing`** | Edits notes, arrangement and timing, and compares two versions of a part in lanes | `/editing Make the chorus half-time` |
 | 💿 | **`/mastering`** | A mastering chain on the mix bus, aimed at a platform's loudness | `/mastering Master this for Spotify` |
 | 🎓 | **`/learn-plugin`** | Researches a plugin you own, tests it live and saves it to LoreKit, asking you only what it can't work out | `/learn-plugin JST Gain Reduction Deluxe` |
 | 🗂️ | **`/mix-memory`** | Shows what it remembers, and tidies it up | `/mix-memory What do you know about Pro-C 2?` |

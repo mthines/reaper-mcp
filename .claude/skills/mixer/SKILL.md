@@ -108,7 +108,7 @@ Shipped baseline at the project `.claude/knowledge/` or `~/.claude/knowledge/`
 - `genres/{genre}.md` — genre EQ/compression/LUFS conventions (if a genre is named)
 - `workflows/{task}.md` — step-by-step procedures; map the request to one:
   gain-staging · session-prep · vocal-chain · drum-bus · low-end · stereo-image ·
-  master-bus · editing · stem-prep · delivery · section-levels · transient-lighting
+  master-bus · stem-prep · delivery · section-levels · transient-lighting
 - `reference/*.md` — frequencies, compression, metering, perceived-loudness, aesthetics-scoring,
   common-mistakes (read these instead of guessing).
 
@@ -168,6 +168,10 @@ loudness/limiting, defer to `/mastering`.
      `snapshot_restore` reloads the plugins and can drop out mid-playback.
      State each variant's LUFS, since the louder one wins a quick A/B by level
      alone.
+   - **MIDI, notes or arrangement variants** (a drum groove, a bass line, a
+     different chorus) cannot go in snapshots, which store faders and FX
+     parameters, not items. Hand them to `/editing`, which compares whole
+     versions in fixed lanes; keep the mix side in snapshots here.
    - **"It ducks with the full mix but not soloed"** is pumping. Measure it
      with two `JS: reaper-mcp/mcp_gain_trace` instances: mode pre at the
      start of the chain, mode post at the end, and the same slot on both. Read

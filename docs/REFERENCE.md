@@ -312,7 +312,7 @@ reaper-mcp/
 │   ├── reaper-mcp-server/        # MCP server (182 tools, esbuild bundle)
 │   └── bridge-ui/                # Bridge status page (React → one self-contained HTML file)
 ├── libs/protocol/                # Shared TypeScript types
-├── .claude/skills/               # Mix skills (/mixer, /critique, /mastering, /learn-plugin, /mix-memory)
+├── .claude/skills/               # Mix skills (/mixer, /critique, /mastering, /editing, /learn-plugin, /mix-memory)
 ├── knowledge/                    # AI mix engineer knowledge base (symlinked into ~/.claude/knowledge)
 │   ├── genres/                   # Genre mixing conventions
 │   ├── workflows/                # Step-by-step mixing workflows
