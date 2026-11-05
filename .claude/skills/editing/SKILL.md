@@ -47,8 +47,11 @@ the recorded-track cleanup procedure.
    unique. Item indexes also change after every move, import or delete.
 2. **Snapshots do not store items.** `snapshot_save` keeps faders and FX
    parameters, so it cannot undo a MIDI or arrangement edit. Before changing
-   items, keep the original: a muted copy, or the A lane of a lane pair (below).
-   Delete the original only when the user says the new version won.
+   items, keep the original as a **take** of the item it replaces (see "Keeping
+   the original" below), or as the A lane of a lane pair. **Never mute an
+   original and leave it under or beside the new item**: overlapping muted items
+   clutter the timeline and are easy to leave muted. Delete the original only
+   when the user says the new version won.
 3. **Keep the user's selection in mind.** `set_selected_items` and item actions
    replace it; say so when it ends up changed.
 4. **Validate, then write.** Check pitch range, track and item before the first
@@ -81,8 +84,24 @@ the recorded-track cleanup procedure.
   `transform_midi` (transpose, velocity, humanize, length) and `quantize_midi`
   (grid, strength, swing). Positions are in beats, velocity 1-127.
 - **Replacing a section:** import the new section at its start time on the same
-  track, then keep the old item (muted, or in another lane) until approved.
+  track, then fold old and new into one item of takes (below) until approved.
   Imported items never overwrite existing ones.
+- **Keeping the original (takes, never mute).** For one section replaced:
+  1. `set_selected_items` on exactly the old and new item of **one** section,
+     then `run_action 40543` ("Take: Implode items on same track into takes").
+     Do one section per call: selecting several sections at once merges them
+     all into a single item (seen live; `undo_project` reverts it). Work from
+     the highest item index down, since indexes shift after each implode.
+  2. The takes keep the lower-indexed item first. `list_takes` the item, then
+     `set_active_take` the version that should play (`takeIndex` 1 when the
+     new item came after the old one).
+  3. The imploded item can inherit the mute: `get_media_item_properties`, and if
+     `muted`, `set_media_item_properties { mute: 0 }` (the parameter is `mute`,
+     a number 0/1, not a boolean).
+  4. Switch versions later with `set_active_take`; when the user decides, delete
+     the losing take (or keep it). Take names are blank for imported items; say
+     which take is which in chat.
+  Use fixed lanes below instead when whole-song versions are compared.
 - **Big MIDI calls can hit the 10 s bridge timeout** (seen on a 400-note
   `transform_midi` while the user was in the session). Prefer re-importing a
   generated file over editing hundreds of notes in place.
@@ -199,7 +218,8 @@ stem seems silent; preserve the source and make A/B switching explicit.
 
 Use this to compare alternatives that change notes or arrangement: a drum
 groove, a bass line, a different chorus. A snapshot cannot switch them (rule 2),
-and a muted duplicate is easy to leave muted.
+and a muted duplicate is easy to leave muted (so never use one; one section
+replaced is a take, see "Keeping the original").
 
 **One lane per complete version.** Each lane holds the whole song, so one switch
 plays a whole version and nothing is left silent. A lane with only a changed
