@@ -23,7 +23,7 @@ No menus to learn and no exporting. You don't need to code.
 [![macOS · Windows · Linux](https://img.shields.io/badge/macOS_·_Windows_·_Linux-1a1240?style=for-the-badge)](#-install-in-3-steps)
 [![MIT](https://img.shields.io/badge/license-MIT-ff7a45?style=for-the-badge)](LICENSE)
 
-[**Install in 3 steps**](#-install-in-3-steps) · [See it work](#-just-say-what-you-hear) · [What you get](#-why-producers-use-it) · [Extensions](#-extensions-teach-it-your-plugin) · [FAQ](#-faq)
+[**Install in 3 steps**](#-install-in-3-steps) · [See it work](#-just-say-what-you-hear) · [What you get](#-why-producers-use-it) · [Watch it work](#-see-what-your-agent-is-doing) · [Extensions](#-extensions-teach-it-your-plugin) · [FAQ](#-faq)
 
 </div>
 
@@ -328,18 +328,138 @@ reaper-mcp extension list           # what's installed, and why one can't load
 - 👀 **Advice-only mode.** `/critique` never changes your project. The bridge window
   also has a read-only switch and a pause button.
 - 📊 **Bridge status window.** See every action as it happens, with timing and errors,
-  in a small window next to REAPER.
+  in a small window next to REAPER ([see what it shows](#-see-what-your-agent-is-doing)).
 
-### 👀 Watch it work
+---
 
-The bridge status window opens next to REAPER when you click Run. It shows every
-move the AI makes, as it happens: what it did, how long it took, and anything that
-went wrong. With several Claude sessions connected at once, you can see which one
-did what.
+## 🔭 See what your agent is doing
+
+You shouldn't have to take its word for it. The **bridge window** opens next to REAPER and
+logs every move the agent makes, as it happens: what it did, how long it took and anything
+that went wrong. With several Claude sessions connected, you can see which one did what.
 
 <img src="docs/assets/bridge-status.png" alt="The MCP Bridge status window: uptime, command count, errors, latency, a commands-per-minute timeline, and a live log of tool calls such as read_track_spectrum, set_track_property and snapshot_save, tagged by session." width="100%">
 
 <sub>Demo data. Add <code>?demo</code> to the window's address to explore it without REAPER.</sub>
+
+### Click any call to see what it did
+
+Every call opens a drawer in plain words (*"midnight-drive wrote new points into the Volume
+automation on track 5"*) with a picture of the change: **before → after** for edits, a
+readout against your target for measurements.
+
+<img src="docs/assets/bridge-drawer.png" alt="The bridge window with a call open in the drawer: Write automation, with a volume envelope drawn before and after, and the params the agent sent." width="100%">
+
+### 📈 What it measured
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+<img src="docs/assets/views/spectrum.png" alt="The spectrum view: third-octave bands from 25 Hz to 16 kHz as bars, hot bands in amber." width="100%">
+
+**Spectrum**<br><sub>Where the energy sits, band by band, judged by perceived loudness. Hot bands turn amber.</sub>
+
+</td>
+<td width="50%" valign="top">
+
+<img src="docs/assets/views/loudness.png" alt="The loudness view: integrated LUFS against a target range on a scale, with short-term, momentary and true peak readouts and the change since the previous call." width="100%">
+
+**Loudness**<br><sub>LUFS against your target, true peak, and how it moved since the last measurement.</sub>
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+<img src="docs/assets/views/loudness-curve.png" alt="The loudness curve view: short-term loudness over the length of a song against a target line, with the spans over target shaded." width="100%">
+
+**Loudness over time**<br><sub>The whole song's loudness, with the stretches that run over target shaded.</sub>
+
+</td>
+<td width="50%" valign="top">
+
+<img src="docs/assets/views/masking.png" alt="The masking view: a heat map of track pairs against frequency bands, with the worst conflicts and which track to cut." width="100%">
+
+**Masking**<br><sub>Which tracks fight, at which frequency, and which one should give way.</sub>
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+<img src="docs/assets/views/stereo-bands.png" alt="The stereo view: correlation per frequency band on a minus one to plus one scale." width="100%">
+
+**Stereo, per band**<br><sub>Phase correlation per band. Catches a wide or out-of-phase low end before it hurts.</sub>
+
+</td>
+<td width="50%" valign="top">
+
+<img src="docs/assets/views/waveform.png" alt="The waveform view: a rendered track drawn on a decibel scale with its peak, RMS and clipped sample count." width="100%">
+
+**Waveform**<br><sub>What a rendered track really looks like, with clipping counted.</sub>
+
+</td>
+</tr>
+</table>
+
+### 🎛️ What it changed
+
+Every edit is drawn **before → after**: new in blue, old dashed or ghosted, removed struck through.
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+<img src="docs/assets/views/mixer.png" alt="The mixer view: every track as a fader with its level in dB, pan, and mute, solo and arm badges, grouped by folder." width="100%">
+
+**Mixer**<br><sub>The session as a mixer: folders, levels, pans, mute, solo and arm.</sub>
+
+</td>
+<td width="50%" valign="top">
+
+<img src="docs/assets/views/routing.png" alt="The routing view: a signal-flow diagram of a track's sends, receives and hardware outputs, with added, changed and removed routes marked." width="100%">
+
+**Routing**<br><sub>Sends, receives and outputs as signal flow. Thicker wire means louder.</sub>
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+<img src="docs/assets/views/automation.png" alt="The automation view: a volume envelope with pooled automation items drawn as blocks tinted by pool." width="100%">
+
+**Automation**<br><sub>Envelope points and pooled automation items, before and after.</sub>
+
+</td>
+<td width="50%" valign="top">
+
+<img src="docs/assets/views/piano-roll.png" alt="The piano roll view: added notes in blue, unchanged notes in grey, removed notes dashed, and a velocity lane." width="100%">
+
+**Piano roll**<br><sub>MIDI edits as a piano roll: added, kept and removed notes, with velocity.</sub>
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+<img src="docs/assets/views/pins.png" alt="The plugin pins view: track channels wired into a compressor's input pins, with a newly connected sidechain highlighted." width="100%">
+
+**Plugin pins**<br><sub>Which track channels feed which plugin pins. Here, a sidechain just got wired in.</sub>
+
+</td>
+<td width="50%" valign="top">
+
+<img src="docs/assets/views/render.png" alt="The render view: three rendered versions of a song with a waveform, LUFS, peak and length for each, against a loudness target." width="100%">
+
+**Renders**<br><sub>Every rendered file with its LUFS, peak and length against your target.</sub>
+
+</td>
+</tr>
+</table>
+
+<sub>Illustrative data, drawn by the same components the bridge window uses. There's a view for nearly every tool
+that reads or writes your session.</sub>
 
 ---
 
