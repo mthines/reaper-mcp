@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" width="1200" height="520" role="img" aria-label="Extensions plug into reaper-mcp through a small versioned API. The core server on the left offers 180+ tools. On the right, the Vital extension edits a synth's mod matrix, LFOs and wavetables, the Helix extension builds and loads guitar presets, and your own extension, started with /new-extension, can reach any plugin's internals. Extensions are opt-in, load on restart, and a broken one is skipped, never fatal.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d0b1e"/>
+      <stop offset="1" stop-color="#1c1240"/>
+    </linearGradient>
+    <linearGradient id="flow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3a6"/>
+      <stop offset="1" stop-color="#ff7a45"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#ffffff" fill-opacity="0.7"/>
+    </marker>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif; }
+      .h { font-size: 22px; font-weight: 800; fill: #ffffff; }
+      .p { font-size: 15px; fill: #bdb6e6; }
+      .k { font-size: 12px; font-weight: 700; letter-spacing: 1.6px; }
+      .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; fill: #e8e4ff; }
+      .dash { stroke-dasharray: 6 8; animation: run 1.2s linear infinite; }
+      @keyframes run { to { stroke-dashoffset: -28; } }
+      @media (prefers-reduced-motion: reduce) { .dash { animation: none; } }
+    </style>
+  </defs>
+
+  <rect width="1200" height="520" rx="28" fill="url(#bg)"/>
+
+  <!-- core -->
+  <g transform="translate(40,50)">
+    <rect width="300" height="340" rx="22" fill="#ffffff" fill-opacity="0.05" stroke="#22d3a6" stroke-opacity="0.55" stroke-width="1.5"/>
+    <text x="28" y="44" class="k" fill="#7ff0d2">ALWAYS THERE</text>
+    <text x="28" y="76" class="h">reaper-mcp core</text>
+    <text x="28" y="108" class="p">180+ tools for the whole session:</text>
+    <g font-size="14" font-weight="600" fill="#e8e4ff">
+      <rect x="28" y="128" width="112" height="34" rx="17" fill="#22d3a6" fill-opacity="0.14" stroke="#22d3a6" stroke-opacity="0.45"/>
+      <text x="84" y="150" text-anchor="middle">🎚️ tracks</text>
+      <rect x="150" y="128" width="92" height="34" rx="17" fill="#22d3a6" fill-opacity="0.14" stroke="#22d3a6" stroke-opacity="0.45"/>
+      <text x="196" y="150" text-anchor="middle">🎛️ FX</text>
+      <rect x="28" y="172" width="112" height="34" rx="17" fill="#22d3a6" fill-opacity="0.14" stroke="#22d3a6" stroke-opacity="0.45"/>
+      <text x="84" y="194" text-anchor="middle">🎹 MIDI</text>
+      <rect x="150" y="172" width="122" height="34" rx="17" fill="#22d3a6" fill-opacity="0.14" stroke="#22d3a6" stroke-opacity="0.45"/>
+      <text x="211" y="194" text-anchor="middle">📈 metering</text>
+      <rect x="28" y="216" width="136" height="34" rx="17" fill="#22d3a6" fill-opacity="0.14" stroke="#22d3a6" stroke-opacity="0.45"/>
+      <text x="96" y="238" text-anchor="middle">〰️ automation</text>
+    </g>
+    <text x="28" y="292" class="p">Sees a plugin's host</text>
+    <text x="28" y="314" class="p">parameters. Not its insides.</text>
+  </g>
+
+  <!-- API band -->
+  <g transform="translate(410,50)">
+    <rect width="170" height="340" rx="22" fill="#a78bfa" fill-opacity="0.1" stroke="#a78bfa" stroke-opacity="0.65" stroke-width="1.5"/>
+    <text x="85" y="44" text-anchor="middle" class="k" fill="#cbb8ff">THE CONTRACT</text>
+    <text x="85" y="76" text-anchor="middle" class="h">Extension API</text>
+    <text x="85" y="100" text-anchor="middle" font-size="13" fill="#bdb6e6">version 1</text>
+    <g class="m" text-anchor="middle">
+      <text x="85" y="150">api.tool()</text>
+      <text x="85" y="186">api.bridge()</text>
+      <text x="85" y="222">api.call()</text>
+      <text x="85" y="258">api.fxState</text>
+    </g>
+    <text x="85" y="304" text-anchor="middle" font-size="13" fill="#9d96c8">small · typed · stable</text>
+  </g>
+
+  <!-- connectors core -> api -> extensions -->
+  <path d="M348 220 H402" stroke="url(#flow)" stroke-width="3" fill="none" class="dash" marker-end="url(#arrow)"/>
+  <path d="M588 110 H650" stroke="url(#flow)" stroke-width="3" fill="none" class="dash" marker-end="url(#arrow)"/>
+  <path d="M588 220 H650" stroke="url(#flow)" stroke-width="3" fill="none" class="dash" marker-end="url(#arrow)"/>
+  <path d="M588 330 H650" stroke="#ffffff" stroke-opacity="0.45" stroke-width="3" fill="none" class="dash" marker-end="url(#arrow)"/>
+
+  <!-- vital -->
+  <g transform="translate(660,50)">
+    <rect width="500" height="100" rx="20" fill="#ffffff" fill-opacity="0.05" stroke="#ff7a45" stroke-opacity="0.6" stroke-width="1.5"/>
+    <circle cx="48" cy="50" r="26" fill="#ff7a45" fill-opacity="0.2"/>
+    <text x="48" y="59" font-size="24" text-anchor="middle">🎹</text>
+    <text x="92" y="40" class="h">vital</text>
+    <text x="92" y="66" class="p">Reads and edits a Vital patch: mod matrix,</text>
+    <text x="92" y="86" class="p">LFO shapes and 256-frame wavetables.</text>
+    <text x="478" y="40" text-anchor="end" class="m" fill="#ffb08a" style="fill:#ffb08a">vital_write_patch</text>
+  </g>
+
+  <!-- helix -->
+  <g transform="translate(660,170)">
+    <rect width="500" height="100" rx="20" fill="#ffffff" fill-opacity="0.05" stroke="#ff7a45" stroke-opacity="0.6" stroke-width="1.5"/>
+    <circle cx="48" cy="50" r="26" fill="#ff7a45" fill-opacity="0.2"/>
+    <text x="48" y="59" font-size="24" text-anchor="middle">🎸</text>
+    <text x="92" y="40" class="h">helix</text>
+    <text x="92" y="66" class="p">Builds Line 6 .hlx presets with snapshots, then</text>
+    <text x="92" y="86" class="p">loads them into Helix Native with a checked import.</text>
+    <text x="478" y="40" text-anchor="end" class="m" style="fill:#ffb08a">helix_create_preset</text>
+  </g>
+
+  <!-- yours -->
+  <g transform="translate(660,290)">
+    <rect width="500" height="100" rx="20" fill="#ffffff" fill-opacity="0.03" stroke="#ffffff" stroke-opacity="0.4" stroke-width="1.5" stroke-dasharray="7 7"/>
+    <circle cx="48" cy="50" r="26" fill="#ffffff" fill-opacity="0.1"/>
+    <text x="48" y="59" font-size="24" text-anchor="middle">🧩</text>
+    <text x="92" y="40" class="h">your-plugin</text>
+    <text x="92" y="66" class="p">Serum, Pigments, Kontakt, a guitar rig, your studio's</text>
+    <text x="92" y="86" class="p">habits. Claude builds it for you:</text>
+    <text x="478" y="40" text-anchor="end" class="m" style="fill:#7ff0d2">/new-extension Serum</text>
+  </g>
+
+  <!-- footer pills -->
+  <g transform="translate(40,430)" font-size="15" font-weight="600" text-anchor="middle">
+    <rect width="270" height="52" rx="26" fill="#22d3a6" fill-opacity="0.14" stroke="#22d3a6" stroke-opacity="0.5"/>
+    <text x="135" y="32" fill="#7ff0d2">🔌  Opt-in, nothing loads by default</text>
+    <rect x="285" width="270" height="52" rx="26" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.2"/>
+    <text x="420" y="32" fill="#e8e4ff">🔄  Restart the server to load</text>
+    <rect x="570" width="330" height="52" rx="26" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.2"/>
+    <text x="735" y="32" fill="#e8e4ff">🛡️  A broken one is skipped, never fatal</text>
+    <rect x="915" width="245" height="52" rx="26" fill="#ff7a45" fill-opacity="0.16" stroke="#ff7a45" stroke-opacity="0.55"/>
+    <text x="1037" y="32" fill="#ffb08a">✓  Proven live first</text>
+  </g>
+</svg>

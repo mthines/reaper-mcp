@@ -23,7 +23,7 @@ No menus to learn and no exporting. You don't need to code.
 [![macOS · Windows · Linux](https://img.shields.io/badge/macOS_·_Windows_·_Linux-1a1240?style=for-the-badge)](#-install-in-3-steps)
 [![MIT](https://img.shields.io/badge/license-MIT-ff7a45?style=for-the-badge)](LICENSE)
 
-[**Install in 3 steps**](#-install-in-3-steps) · [See it work](#-just-say-what-you-hear) · [What you get](#-why-producers-use-it) · [FAQ](#-faq)
+[**Install in 3 steps**](#-install-in-3-steps) · [See it work](#-just-say-what-you-hear) · [What you get](#-why-producers-use-it) · [Extensions](#-extensions-teach-it-your-plugin) · [FAQ](#-faq)
 
 </div>
 
@@ -240,7 +240,7 @@ breakdown is in [docs/REFERENCE.md](docs/REFERENCE.md#installation).
 
 ## 🎚️ Meet your engineers
 
-Six skills, each tuned for a job. Type the slash command, or just describe what you
+Seven skills, each tuned for a job. Type the slash command, or just describe what you
 want and the right one starts.
 
 | | Skill | What it does | Try |
@@ -250,7 +250,7 @@ want and the right one starts.
 | ✂️ | **`/editing`** | Edits notes, arrangement and timing, and compares two versions of a part in lanes | `/editing Make the chorus half-time` |
 | 💿 | **`/mastering`** | A mastering chain on the mix bus, aimed at a platform's loudness | `/mastering Master this for Spotify` |
 | 🎓 | **`/learn-plugin`** | Researches a plugin you own, tests it live and saves it to LoreKit, asking you only what it can't work out | `/learn-plugin JST Gain Reduction Deluxe` |
-| 🧩 | **`/new-extension`** | Builds an opt-in extension that edits a plugin's internals (wavetables, mod matrix, patch state) and proves it live on a scratch track | `/new-extension Serum` |
+| 🧩 | **`/new-extension`** | Builds or updates an [extension](#-extensions-teach-it-your-plugin) that edits a plugin's internals (wavetables, mod matrix, patch state) and proves it live on a scratch track | `/new-extension Serum` |
 | 🗂️ | **`/mix-memory`** | Shows what it remembers, and tidies it up | `/mix-memory What do you know about Pro-C 2?` |
 
 ---
@@ -278,6 +278,43 @@ instead of just giving advice:
 | 🎛️ Electronic | −10 to −6 LUFS | Sidechain pump, mono sub, stereo width |
 | 🎻 Orchestral | −23 to −16 LUFS | Preserved dynamics, hall reverb staging |
 | 🤘 Metal | −11 to −8 LUFS | Scooped guitars, tight drums, four-guitar wall |
+
+---
+
+## 🧩 Extensions: teach it your plugin
+
+Out of the box it controls any plugin through its knobs. But some of what makes a sound
+isn't a knob: a synth's **wavetables**, its **modulation matrix**, a guitar rig's **preset
+file**. **Extensions** reach that. They're small add-ons you switch on, and you can have
+Claude build one for the plugin *you* use.
+
+<img src="docs/assets/extensions.svg" alt="Extensions plug into reaper-mcp through a small versioned API: the core on the left, and the Vital, Helix and your-own extensions on the right." width="100%">
+
+> 🎹 *"On the Vital on track 2, route LFO 2 to the filter cutoff at 40% and make it a slow triangle."*
+>
+> 🎸 *"Build me a djent rhythm tone in Helix with a clean, a crunch and a lead snapshot."*
+>
+> 🌊 *"Give this synth a wavetable that morphs from a sine to a bright saw over 64 frames."*
+
+| | Extension | What Claude can do with it |
+|---|---|---|
+| 🎹 | **`vital`** | Read a Vital patch and edit its settings, **mod matrix** and **LFO shapes**; build **wavetables** (1-256 frames) from classic shapes or harmonic recipes |
+| 🎸 | **`helix`** | Build and edit Line 6 **Helix presets** with up to 8 snapshots, check them against real models, and load them into Helix Native, **backed up and rolled back** if anything else changed |
+| 🧩 | **yours** | `/new-extension Serum`: Claude researches the plugin's format, probes it on a scratch track, writes the tools **with tests** and proves they change the sound |
+
+**Switch one on**, then restart Claude Code:
+
+```bash
+reaper-mcp extension add vital      # or: helix
+reaper-mcp extension list           # what's installed, and why one can't load
+```
+
+- 🔌 **Opt-in.** Nothing loads unless you add it. `reaper-mcp extension remove vital` takes it out.
+- 🛟 **Same safety as the rest.** Every edit is one undo step, and write tools can preview with a dry run.
+- 🛡️ **A broken extension is skipped**, never a crash, and `reaper-mcp doctor` tells you why.
+- 🧪 **Proven live.** `/new-extension` doesn't finish until the edit shows up in the plugin *and* in the audio.
+
+📖 Full guide (the API, Lua handlers, testing, sharing, troubleshooting): **[docs/EXTENSIONS.md](docs/EXTENSIONS.md)**
 
 ---
 
@@ -362,6 +399,15 @@ also teach it one up front with <code>/learn-plugin</code>.
 </details>
 
 <details>
+<summary><b>It doesn't support my plugin's patches, wavetables or presets. Now what?</b></summary>
+<br>
+Host parameters already work for any plugin. For anything deeper, build an
+<a href="#-extensions-teach-it-your-plugin">extension</a>: run <code>/new-extension YourPlugin</code> and
+Claude researches the format, writes the tools and tests, and proves them on a scratch track. Today there are
+extensions for Vital and Line 6 Helix.
+</details>
+
+<details>
 <summary><b>What does it cost?</b></summary>
 <br>
 reaper-mcp is free and open source (MIT), and so is LoreKit. You need REAPER and a
@@ -381,6 +427,7 @@ No. It reads meter values and settings from your running session, not your audio
 - 📖 **[docs/REFERENCE.md](docs/REFERENCE.md)**: architecture, install internals, CLI,
   environment variables, telemetry, project structure
 - 🧰 **[docs/TOOLS.md](docs/TOOLS.md)**: the main tools by area
+- 🧩 **[docs/EXTENSIONS.md](docs/EXTENSIONS.md)**: write, test and share an extension (the API, Lua handlers, Vital and Helix)
 - 🧑‍💻 **[DEVELOPMENT.md](DEVELOPMENT.md)**: build, test, run from source, MCP Inspector
 - 🧪 **[docs/TESTING.md](docs/TESTING.md)**: end-to-end testing guide
 

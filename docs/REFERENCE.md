@@ -228,6 +228,7 @@ from the clone (`npm run doctor` / `npm run setup` are shortcuts):
 | `reaper-mcp setup` | Install the Lua bridge, snapshot scripts, JSFX and status page into REAPER; enable the web interface |
 | `reaper-mcp setup-sidecar` | Install the optional Python sidecar: a picker in a terminal; `--yes`, `--all`, `--with-separation`, `--with-chords`, `--without-aesthetics`, `--list [--json]` for agents and CI |
 | `reaper-mcp init` | Configure Claude Code — tool allow-list + `.mcp.json` (copy-free) |
+| `reaper-mcp extension <list\|add\|link\|remove\|new>` | Manage opt-in extensions (Vital, Helix, your own): [docs/EXTENSIONS.md](EXTENSIONS.md) |
 | `reaper-mcp doctor` | Verify everything is configured correctly |
 | `reaper-mcp status` | Check bridge connection |
 | `scripts/sync-symlinks.sh` | Symlink the mix skills + knowledge into `~/.claude` |
@@ -312,6 +313,8 @@ reaper-mcp/
 │   ├── reaper-mcp-server/        # MCP server (183 tools, esbuild bundle)
 │   └── bridge-ui/                # Bridge status page (React → one self-contained HTML file)
 ├── libs/protocol/                # Shared TypeScript types
+├── libs/extension-api/           # The contract extensions are written against (docs/EXTENSIONS.md)
+├── extensions/                   # Opt-in extensions: vital (synth patches), helix (.hlx presets)
 ├── .claude/skills/               # Mix skills (/mixer, /critique, /mastering, /editing, /learn-plugin, /new-extension, /mix-memory)
 ├── knowledge/                    # AI mix engineer knowledge base (symlinked into ~/.claude/knowledge)
 │   ├── genres/                   # Genre mixing conventions
