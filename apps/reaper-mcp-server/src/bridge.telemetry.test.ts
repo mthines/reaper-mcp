@@ -10,7 +10,7 @@ import { mkdtemp, mkdir, readdir, readFile, writeFile, rm } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { metrics as otelMetrics, trace } from '@opentelemetry/api';
-import { metrics, tracing } from '@opentelemetry/sdk-node';
+import { metrics, node, tracing } from '@opentelemetry/sdk-node';
 import type { CommandType } from '@reaper-mcp/protocol';
 import { sendCommand, pollBridgeDiagnostics } from './bridge.js';
 
@@ -65,9 +65,8 @@ async function meteredMethods(): Promise<string[]> {
 
 describe('bridge telemetry', () => {
   beforeAll(() => {
-    trace.setGlobalTracerProvider(
-      new tracing.BasicTracerProvider({ spanProcessors: [new tracing.SimpleSpanProcessor(spans)] }),
-    );
+    // register() installs the async context manager, so a tool span parents the bridge span
+    new node.NodeTracerProvider({ spanProcessors: [new tracing.SimpleSpanProcessor(spans)] }).register();
     otelMetrics.setGlobalMeterProvider(new metrics.MeterProvider({ readers: [reader] }));
   });
 
