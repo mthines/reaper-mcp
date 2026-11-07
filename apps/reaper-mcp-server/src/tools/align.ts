@@ -48,6 +48,13 @@ async function readItem(ref: { trackIndex: number; itemIndex: number }, what: st
   return { item };
 }
 
+const geometryOf = (item: ItemProps): DoubleGeometry => ({
+  position: item.position ?? 0,
+  length: item.length ?? 0,
+  startOffset: item.startOffset ?? 0,
+  playRate: item.playRate ?? 1,
+});
+
 interface Detect { sensitivity: number; minGapMs: number; minStrength: number }
 
 /** Hits of an item's source window, times in seconds of the source file; `truncated` when more than MAX_HITS were found. */
@@ -87,8 +94,8 @@ export function registerAlignTools(server: McpServer): void {
       if (!getSidecarClient().isAvailable()) return error(SIDECAR_NOT_INSTALLED_MSG);
       const det: Detect = { sensitivity, minGapMs, minStrength };
 
-      const g = await readItem(guide, 'The guide');
-      if ('error' in g) return error(g.error);
+      const guideRead = await readItem(guide, 'The guide');
+      if ('error' in guideRead) return error(guideRead.error);
       const markers = await sendCommand('get_stretch_markers', guide);
       if (markers.success && ((markers.data as { total?: number }).total ?? 0) > 0) {
         return error('The guide item has stretch markers, so its hits would not sit where its source says. ' +
@@ -97,11 +104,11 @@ export function registerAlignTools(server: McpServer): void {
       let guideHits: Hit[];
       let guideTruncated = false;
       try {
-        const found = await detect(g.item, det);
+        const found = await detect(guideRead.item, det);
         guideTruncated = found.truncated;
         const raw = found.hits;
         // Hit times are seconds of the guide's source; the pairing works in project time
-        const geo: DoubleGeometry = { position: g.item.position ?? 0, length: g.item.length ?? 0, startOffset: g.item.startOffset ?? 0, playRate: g.item.playRate ?? 1 };
+        const geo = geometryOf(guideRead.item);
         guideHits = raw.map((h) => ({ ...h, time: projectTime(geo, h.time) }));
       } catch (err) {
         return error(`Hit detection failed on the guide: ${err instanceof Error ? err.message : String(err)}`);
@@ -112,20 +119,19 @@ export function registerAlignTools(server: McpServer): void {
       for (const ref of doubles) {
         const label = `track ${ref.trackIndex} item ${ref.itemIndex}`;
         const fail = (message: string) => results.push({ ...ref, ok: false, error: message });
-        const d = await readItem(ref, `The double (${label})`);
-        if ('error' in d) { fail(d.error); continue; }
+        const doubleRead = await readItem(ref, `The double (${label})`);
+        if ('error' in doubleRead) { fail(doubleRead.error); continue; }
         let hits: Hit[];
         let truncated = false;
         try {
-          const found = await detect(d.item, det);
+          const found = await detect(doubleRead.item, det);
           hits = found.hits;
           truncated = found.truncated;
         } catch (err) {
           fail(`Hit detection failed: ${err instanceof Error ? err.message : String(err)}`);
           continue;
         }
-        const geo: DoubleGeometry = { position: d.item.position ?? 0, length: d.item.length ?? 0, startOffset: d.item.startOffset ?? 0, playRate: d.item.playRate ?? 1 };
-        const built = buildPairs(guideHits, hits, geo, { maxShiftMs, protectConsonants, consonantMs });
+        const built = buildPairs(guideHits, hits, geometryOf(doubleRead.item), { maxShiftMs, protectConsonants, consonantMs });
         if (built.matched === 0) {
           fail(`No hit of the double sits within ${maxShiftMs} ms of a guide hit (${hits.length} hits in the double, ${guideHits.length} in the guide) — nothing changed. Raise maxShiftMs or check the items overlap.`);
           continue;
