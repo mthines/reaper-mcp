@@ -50,8 +50,8 @@ async function readItem(ref: { trackIndex: number; itemIndex: number }, what: st
 
 interface Detect { sensitivity: number; minGapMs: number; minStrength: number }
 
-/** Hits of an item's source window, times in seconds of the source file. */
-async function detect(item: ItemProps, d: Detect): Promise<Hit[]> {
+/** Hits of an item's source window, times in seconds of the source file; `truncated` when more than MAX_HITS were found. */
+async function detect(item: ItemProps, d: Detect): Promise<{ hits: Hit[]; truncated: boolean }> {
   const offs = item.startOffset ?? 0;
   const span = (item.length ?? 0) * (item.playRate ?? 1);
   const res = await getSidecarClient().transients({
@@ -63,7 +63,8 @@ async function detect(item: ItemProps, d: Detect): Promise<Hit[]> {
     minGapMs: d.minGapMs,
   });
   const all = (res['transients'] as Hit[] | undefined) ?? [];
-  return all.filter((h) => (h.strength ?? 1) >= d.minStrength).slice(0, MAX_HITS);
+  const strong = all.filter((h) => (h.strength ?? 1) >= d.minStrength);
+  return { hits: strong.slice(0, MAX_HITS), truncated: strong.length > MAX_HITS };
 }
 
 export function registerAlignTools(server: McpServer): void {
@@ -94,8 +95,11 @@ export function registerAlignTools(server: McpServer): void {
           'Glue or render it first, or align to an item without stretch markers.');
       }
       let guideHits: Hit[];
+      let guideTruncated = false;
       try {
-        const raw = await detect(g.item, det);
+        const found = await detect(g.item, det);
+        guideTruncated = found.truncated;
+        const raw = found.hits;
         // Hit times are seconds of the guide's source; the pairing works in project time
         const geo: DoubleGeometry = { position: g.item.position ?? 0, length: g.item.length ?? 0, startOffset: g.item.startOffset ?? 0, playRate: g.item.playRate ?? 1 };
         guideHits = raw.map((h) => ({ ...h, time: projectTime(geo, h.time) }));
@@ -111,8 +115,11 @@ export function registerAlignTools(server: McpServer): void {
         const d = await readItem(ref, `The double (${label})`);
         if ('error' in d) { fail(d.error); continue; }
         let hits: Hit[];
+        let truncated = false;
         try {
-          hits = await detect(d.item, det);
+          const found = await detect(d.item, det);
+          hits = found.hits;
+          truncated = found.truncated;
         } catch (err) {
           fail(`Hit detection failed: ${err instanceof Error ? err.message : String(err)}`);
           continue;
@@ -135,6 +142,9 @@ export function registerAlignTools(server: McpServer): void {
         results.push({
           ...ref, ok: true, ...(res.data as Record<string, unknown>),
           matched: built.matched, unmatchedGuide: built.unmatchedGuide, unmatchedDouble: built.unmatchedDouble,
+          ...(truncated || guideTruncated
+            ? { warning: `More than ${MAX_HITS} hits were found; only the first ${MAX_HITS} were used, so the end of the item is not aligned. Raise minStrength or lower sensitivity, or align it in parts.` }
+            : {}),
         });
       }
 

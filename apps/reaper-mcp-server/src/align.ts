@@ -112,11 +112,17 @@ export function buildPairs(
     const hit = double[di];
     pairs.push({ src: hit.time, to: guide[gi].time });
     if (!opts.protectConsonants || hit.band !== 'high') return;
-    // The tail needs room before the next matched hit and inside the item
+    // The tail needs room before the next matched hit — in the double's source and at the guide's
+    // target (a tail that lands past the next target would make the bridge skip that real hit) —
+    // inside the item, and must leave room for every pair still to come under MAX_HITS
     const tailSrc = hit.time + tail * g.playRate;
-    const next = matches[k + 1] ? double[matches[k + 1][1]].time : Infinity;
-    if (projectTime(g, tailSrc) < end - 0.01 && tailSrc < next - 0.02) {
-      pairs.push({ src: tailSrc, to: guide[gi].time + tail, extra: true });
+    const following = matches[k + 1];
+    const nextSrc = following ? double[following[1]].time : Infinity;
+    const nextTo = following ? guide[following[0]].time : Infinity;
+    const tailTo = guide[gi].time + tail;
+    const room = pairs.length + 1 + (matches.length - k - 1) <= MAX_HITS;
+    if (room && projectTime(g, tailSrc) < end - 0.01 && tailSrc < nextSrc - 0.02 && tailTo < nextTo - 0.02) {
+      pairs.push({ src: tailSrc, to: tailTo, extra: true });
     }
   });
   return {

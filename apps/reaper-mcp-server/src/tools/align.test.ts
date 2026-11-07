@@ -144,3 +144,16 @@ describe('align_audio_to_guide', () => {
     expect(res.content[0].text).toContain('No hit could be placed');
   });
 });
+
+describe('align_audio_to_guide: very dense items', () => {
+  it('warns when more hits were found than it can use', async () => {
+    const many = Array.from({ length: 2005 }, (_, i) => ({ time: 0.5 + i * 0.002, strength: 0.9 }));
+    HITS['/a/guide.wav'] = many;
+    HITS['/a/double1.wav'] = many.map((h) => ({ ...h, time: h.time + 0.001 }));
+    ITEMS['0'] = { ...ITEMS['0'], length: 20 };
+    ITEMS['1'] = { ...ITEMS['1'], length: 20 };
+    setup();
+    const res = await align({ guide: GUIDE, doubles: [{ trackIndex: 1, itemIndex: 0 }], minGapMs: 5 });
+    expect(json(res).results[0].warning).toMatch(/2000 hits/);
+  });
+});

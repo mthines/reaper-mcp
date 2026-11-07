@@ -226,7 +226,7 @@ export function registerMixingTools(server: McpServer): void {
 
   server.tool(
     'edit_stretch_markers',
-    'Edit existing stretch markers of an audio item in one call and one undo point: move a marker (position, seconds from the item start), change which source time it pins (sourcePosition) and its slope (-1..1, the curve of the stretch after it). Markers are named by index as get_stretch_markers lists them. Only the fields given change. Every edit is checked first: a marker moved out of order (position or source), onto another marker, outside the item, or a repeated index refuses the whole call and changes nothing.',
+    'Edit existing stretch markers of an audio item in one call and one undo point: move a marker (position, seconds from the item start), change which source time it pins (sourcePosition) and its slope (-1..1, the curve of the stretch after it). Markers are named by index, in position order. position is in item seconds, as this tool and add_stretch_markers report them; get_stretch_markers lists raw take positions, which equal item seconds only at play rate 1 (divide by the play rate otherwise). Only the fields given change. Every edit is checked first: a marker moved out of order (position or source), onto another marker, outside the item, or a repeated index refuses the whole call and changes nothing.',
     {
       trackIndex: z.coerce.number().int().min(0),
       itemIndex: z.coerce.number().int().min(0),

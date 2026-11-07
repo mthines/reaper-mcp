@@ -85,3 +85,27 @@ describe('building pairs for a double', () => {
     expect(r.pairs.some((p) => p.extra)).toBe(false);
   });
 });
+
+describe('consonant tails near the next hit', () => {
+  it('gives no tail when the next guide hit is closer than the tail, so the next hit is never pushed out', () => {
+    // double hits 1.0 (high) and 1.2 are 200 ms apart, but the guide's targets 11.1 and 11.15 are 50 ms apart
+    const r = buildPairs(
+      [11.1, 11.15].map((time) => ({ time })),
+      [{ time: 1.0, band: 'high' }, { time: 1.2 }],
+      GEO, { ...OPTS, maxShiftMs: 120, protectConsonants: true },
+    );
+    expect(r.matched).toBe(2);
+    expect(r.pairs.some((p) => p.extra)).toBe(false);
+    expect(r.pairs.map((p) => p.to)).toEqual([11.1, 11.15]);
+  });
+
+  it('never returns more pairs than the stretch-marker limit, keeping every matched hit before any tail', () => {
+    const n = 2000;
+    const guide = Array.from({ length: n }, (_, i) => ({ time: 10.1 + i * 0.1 }));
+    const double = Array.from({ length: n }, (_, i) => ({ time: 0.1 + i * 0.1 + 0.01, band: 'high' }));
+    const r = buildPairs(guide, double, { ...GEO, length: 300 }, { ...OPTS, protectConsonants: true });
+    expect(r.matched).toBe(n);
+    expect(r.pairs.length).toBeLessThanOrEqual(2000);
+    expect(r.pairs.filter((p) => !p.extra)).toHaveLength(n);
+  });
+});
