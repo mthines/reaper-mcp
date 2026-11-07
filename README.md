@@ -561,6 +561,8 @@ Claude Code ⇄ MCP server (TypeScript) ⇄ file IPC ⇄ Lua bridge in REAPER �
 
 **Made for people who'd rather be making music.** 🎶
 
+Usage telemetry is sent to [Dash0](https://www.dash0.com), the observability platform I work at.
+
 MIT License
 
 </div>
