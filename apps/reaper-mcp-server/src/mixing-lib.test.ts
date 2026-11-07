@@ -511,7 +511,9 @@ describe('mcp_mixing_lib.lua: aligning audio to a guide', () => {
       local api = ${ITEM}
       local r = mix.align_stretch(api, { trackIndex = 0, itemIndex = 0 },
         { { src = 1, to = 11.2 }, { src = 1.08, to = 11.28, extra = true } })
-      assert(r.placed == 2 and r.offsetBefore.maxMs == 200, "only the hit is measured")
+      assert(r.placed == 1 and r.tails == 1 and r.moved == 1 and r.pairs == 1, "the tail is not counted as a hit")
+      assert(r.offsetBefore.maxMs == 200, "only the hit is measured")
+      assert(#r.moves == 1, "nor drawn as a move")
       local sm = api.tracks[1].items[1].takes[1].sm
       assert(math.abs((sm[3][1] - sm[2][1]) - 0.08) < 1e-9, "the tail keeps its length")
     `);

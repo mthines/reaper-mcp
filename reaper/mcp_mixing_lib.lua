@@ -971,32 +971,39 @@ function M.align_stretch(api, p, pairs)
   if #list == 0 then return nil, "No hits inside the item — nothing changed" end
 
   local before = read_markers(api, t)
-  local placed, last_pos, skipped, moved = {}, edge, 0, 0
+  -- Hits are counted apart from consonant tails (extra pairs), which only ride along with their hit
+  local placed, hits, last_pos, skipped, moved, tails = {}, {}, edge, 0, 0, 0
   local err_before, err_after = {}, {}
   for _, h in ipairs(list) do
     local new_pos = h.pos + (h.target - h.pos) * strength
     -- A move that would cross the previous marker or reach the item end would fold time
     if new_pos <= last_pos + 0.001 or new_pos >= t.len - edge then
-      skipped = skipped + 1
+      if not h.extra then skipped = skipped + 1 end
     else
-      placed[#placed + 1] = { pos = new_pos, src = h.src, from = h.pos, to = h.target }
-      if math.abs(new_pos - h.pos) > 1e-6 then moved = moved + 1 end
-      if not h.extra then
+      local m = { pos = new_pos, src = h.src, from = h.pos, to = h.target }
+      placed[#placed + 1] = m
+      if h.extra then
+        tails = tails + 1
+      else
+        hits[#hits + 1] = m
+        if math.abs(new_pos - h.pos) > 1e-6 then moved = moved + 1 end
         err_before[#err_before + 1] = math.abs(h.target - h.pos)
         err_after[#err_after + 1] = math.abs(h.target - new_pos)
       end
       last_pos = new_pos
     end
   end
-  if #placed == 0 then return nil, "No hit could be placed (each would fold time or reach an item edge) — nothing changed" end
+  if #hits == 0 then return nil, "No hit could be placed (each would fold time or reach an item edge) — nothing changed" end
 
   local moves = {}
-  for i = 1, math.min(#placed, 256) do moves[i] = { round(placed[i].from, 4), round(placed[i].pos, 4) } end
+  for i = 1, math.min(#hits, 256) do moves[i] = { round(hits[i].from, 4), round(hits[i].pos, 4) } end
+  local real = 0
+  for _, h in ipairs(list) do if not h.extra then real = real + 1 end end
   local result = {
     trackIndex = int(p.trackIndex), itemIndex = int(p.itemIndex), position = round(t.pos, 4), length = round(t.len, 4),
-    strength = strength, pairs = #list, placed = #placed, moved = moved, skipped = skipped,
+    strength = strength, pairs = real, placed = #hits, tails = tails, moved = moved, skipped = skipped,
     replacedMarkers = #before, offsetBefore = offset_stats(err_before), offsetAfter = offset_stats(err_after),
-    moves = moves, more = math.max(0, #placed - 256), dryRun = p.dryRun == true,
+    moves = moves, more = math.max(0, #hits - 256), dryRun = p.dryRun == true,
     guideTrackIndex = int(p.guideTrackIndex), guideItemIndex = int(p.guideItemIndex),
   }
   if p.dryRun == true then return result end
