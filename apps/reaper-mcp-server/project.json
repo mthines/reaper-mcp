@@ -2,9 +2,7 @@
   "name": "reaper-mcp-server",
   "sourceRoot": "apps/reaper-mcp-server/src",
   "projectType": "application",
-  "tags": [
-    "type:app"
-  ],
+  "tags": ["type:app"],
   "targets": {
     "build": {
       "executor": "@nx/esbuild:esbuild",
@@ -14,9 +12,7 @@
         "outputFileName": "main.js",
         "tsConfig": "apps/reaper-mcp-server/tsconfig.json",
         "bundle": true,
-        "format": [
-          "esm"
-        ],
+        "format": ["esm"],
         "platform": "node",
         "target": "node20",
         "minify": false,
@@ -32,25 +28,6 @@
             "glob": "**/*",
             "input": "reaper",
             "output": "reaper"
-          },
-          {
-            "glob": "**/*",
-            "input": ".claude/skills",
-            "output": "claude/skills"
-          },
-          {
-            "glob": "**/*",
-            "input": ".claude/agents",
-            "output": "claude/agents"
-          },
-          {
-            "glob": "**/*",
-            "input": "knowledge",
-            "output": "claude/knowledge",
-            "ignore": [
-              "CLAUDE.md",
-              "contributions/**"
-            ]
           }
         ]
       }
@@ -74,12 +51,8 @@
       "options": {
         "command": "node dist/apps/reaper-mcp-server/main.js serve"
       },
-      "dependsOn": [
-        "build"
-      ]
+      "dependsOn": ["build"]
     }
   },
-  "implicitDependencies": [
-    "bridge-ui"
-  ]
+  "implicitDependencies": ["bridge-ui"]
 }

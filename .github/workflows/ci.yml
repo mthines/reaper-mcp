@@ -375,6 +375,11 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.version.outputs.version }}"
+          # A re-run after a publish that worked must not fail on the version npm already has
+          if npm view "@mthines/reaper-mcp@$VERSION" version >/dev/null 2>&1; then
+            echo "::notice::@mthines/reaper-mcp@$VERSION is already on npm; skipping publish"
+            exit 0
+          fi
           echo "Publishing @mthines/reaper-mcp@$VERSION"
           if [[ "$VERSION" == *"-"* ]]; then
             NPM_TAG=$(echo "$VERSION" | sed -E 's/.*-([^.]+)\..*/\1/')
