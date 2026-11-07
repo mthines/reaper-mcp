@@ -22,7 +22,7 @@ export interface ClaudeAssetsResult {
   updated: string[];
   unchanged: number;
   /** Left alone because the user edited them, own them, or a symlink points elsewhere */
-  skipped: { path: string; reason: 'edited' | 'not-ours' | 'symlink' }[];
+  skipped: { path: string; reason: 'edited' | 'not-ours' | 'symlink' | 'broken-symlink' }[];
 }
 
 type Manifest = { version: 1; files: Record<string, string> };
@@ -94,7 +94,8 @@ export function installClaudeAssets(packageClaudeDir: string, claudeDir: string,
     if (isSymlink(linkRoot)) {
       if (!skippedSymlinks.has(linkRoot)) {
         skippedSymlinks.add(linkRoot);
-        result.skipped.push({ path: linkRoot, reason: 'symlink' });
+        // A link whose target is gone (a deleted clone) is never repaired for the user, but it must be named
+        result.skipped.push({ path: linkRoot, reason: existsSync(linkRoot) ? 'symlink' : 'broken-symlink' });
       }
       continue;
     }

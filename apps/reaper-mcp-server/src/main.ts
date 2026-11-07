@@ -261,7 +261,7 @@ function installSkills(dryRun = false): void {
   const verb = dryRun ? 'Would install' : 'Installed';
   console.log(`${verb} the mix skills, agents and knowledge in ~/.claude: ${r.installed.length} new, ${r.updated.length} updated, ${r.unchanged} already current.`);
   for (const s of r.skipped) {
-    const why = { edited: 'you changed it, left as is', 'not-ours': 'already exists and is yours, left as is', symlink: 'linked elsewhere, left as is' }[s.reason];
+    const why = { edited: 'you changed it, left as is', 'not-ours': 'already exists and is yours, left as is', symlink: 'linked elsewhere, left as is', 'broken-symlink': 'a link to a folder that no longer exists (a deleted clone?); remove it and run this again' }[s.reason];
     console.log(`  Skipped ${s.path}: ${why}`);
   }
   if (!dryRun) console.log('Try /mixer, /critique or /learn-plugin in Claude Code. (/learn-plugin saves what it learns to LoreKit, see the README.)');

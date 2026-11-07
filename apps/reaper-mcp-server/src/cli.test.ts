@@ -250,18 +250,22 @@ describe('package integrity', () => {
     expect(pkg.dependencies['zod']).toBeDefined();
   });
 
-  // Clone-only model: the CLI resolves skills/knowledge from the repo source tree
-  // (resolveAssetDir walks up), so dist only carries the bridge + sidecar assets.
+  // The npm package carries the bridge, sidecar and the skills install-skills copies into ~/.claude.
   it.skipIf(!distExists)('dist contains all REAPER assets', () => {
     for (const asset of REAPER_ASSETS) {
       expect(existsSync(join(distDir, 'reaper', asset)), `missing reaper/${asset}`).toBe(true);
     }
   });
 
-  it.skipIf(!distExists)('dist does NOT bundle the copy-path assets (clone-only)', () => {
-    expect(existsSync(join(distDir, 'knowledge'))).toBe(false);
-    expect(existsSync(join(distDir, 'claude-skills'))).toBe(false);
-    expect(existsSync(join(distDir, 'claude-rules'))).toBe(false);
+  it.skipIf(!distExists)('dist carries the skills, agents and knowledge that install-skills copies', () => {
+    expect(existsSync(join(distDir, 'claude', 'skills', 'learn-plugin', 'SKILL.md'))).toBe(true);
+    expect(existsSync(join(distDir, 'claude', 'agents', 'plugin-researcher.md'))).toBe(true);
+    expect(existsSync(join(distDir, 'claude', 'knowledge', 'reference', 'lorekit-setup.md'))).toBe(true);
+  });
+
+  it.skipIf(!distExists)('dist leaves the repo-only knowledge files out of the package', () => {
+    expect(existsSync(join(distDir, 'claude', 'knowledge', 'CLAUDE.md'))).toBe(false);
+    expect(existsSync(join(distDir, 'claude', 'knowledge', 'contributions'))).toBe(false);
   });
 
   it('mixer skill + memory protocol resolve from the repo source tree', () => {

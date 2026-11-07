@@ -84,6 +84,13 @@ describe('installing the mix skills from the npm package', () => {
     expect(r.skipped).toEqual([{ path: join(claude, 'knowledge'), reason: 'symlink' }]);
   });
 
+  it('names a link whose clone is gone instead of silently skipping it', () => {
+    mkdirSync(claude, { recursive: true });
+    symlinkSync(join(tmp, 'deleted-clone', 'knowledge'), join(claude, 'knowledge'));
+    const r = installClaudeAssets(pkg, claude);
+    expect(r.skipped).toEqual([{ path: join(claude, 'knowledge'), reason: 'broken-symlink' }]);
+  });
+
   it('writes nothing on a dry run', () => {
     const r = installClaudeAssets(pkg, claude, { dryRun: true });
     expect(r.installed).toHaveLength(4);
