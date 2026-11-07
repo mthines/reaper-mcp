@@ -322,8 +322,8 @@ reaper-mcp extension list           # what's installed, and why one can't load
 
 ## 🛟 Safe by design
 
-- 📸 **Snapshots before and after every change.** A/B them in the bridge window, or bind
-  `mcp_snapshot_next` / `_prev` / `_quick_save` to keys (setup adds them to the Action List).
+- 📸 **Snapshots around every mix task.** The mix skills save one before and after; A/B them in the
+  bridge window, or bind `mcp_snapshot_next` / `_prev` / `_quick_save` to keys (setup adds them to the Action List).
 - ↩️ **One change, one undo.** Each edit is labelled `MCP: …` in REAPER's undo history.
 - 🚫 **No surprise pop-ups.** It won't run anything that opens a dialog unless you allow
   it, and it never closes your project or quits REAPER.
@@ -331,6 +331,8 @@ reaper-mcp extension list           # what's installed, and why one can't load
   also has a read-only switch and a pause button.
 - 📊 **Bridge status window.** See every action as it happens, with timing and errors,
   in a small window next to REAPER ([see what it shows](#-see-what-your-agent-is-doing)).
+
+📖 What it can and can't do to a session, and what isn't covered: **[docs/SAFETY.md](docs/SAFETY.md)**.
 
 ---
 
@@ -513,9 +515,9 @@ explains its reasoning so you can push back.
 <details>
 <summary><b>Can it wreck my project?</b></summary>
 <br>
-Every change is bracketed by snapshots and is a single undo step. Use
-<code>/critique</code> if you only want advice. Saving a copy of your project before a
-big session never hurts.
+Every edit is a single undo step, and the mix skills snapshot before and after a task. Use
+<code>/critique</code> or read-only mode if you only want advice. Saving a copy of your project
+before a big session never hurts. <a href="docs/SAFETY.md">What is and isn't guarded</a>.
 </details>
 
 <details>
