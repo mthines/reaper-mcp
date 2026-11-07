@@ -23,7 +23,7 @@ its sound in internal state and has no extension gets a one-line offer to build 
 
 The mixing skills use the same agent to bootstrap plugins they don't know. To
 recall or tidy memory, use `/mix-memory`. If the `memory.*` tools are not
-connected, do not stop at an error: read `knowledge/reference/lorekit-setup.md` and walk
+connected, do not stop at an error: read `~/.claude/knowledge/reference/lorekit-setup.md` (in a clone: `knowledge/reference/lorekit-setup.md`) and walk
 the user through connecting LoreKit (free, a few minutes), then carry on once it is.
 If they decline, say there is nowhere to save the record and stop.
 
