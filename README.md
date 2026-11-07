@@ -7,13 +7,13 @@
 
 <br><br>
 
-<img src="docs/assets/hero.svg" alt="reaper-mcp — Mix by talking. An AI mix engineer inside your REAPER session." width="100%">
+<img src="docs/assets/hero.svg" alt="reaper-mcp — Mix by asking. Type what you hear and an AI mix engineer inside your REAPER session does it." width="100%">
 
 <br>
 
-**Tell it what you hear. It measures, decides and makes the change live in your REAPER session.**
+**Type what you hear. It measures, decides and makes the change live in your REAPER session.**
 <br>
-No menus to learn and no exporting. You don't need to code.
+You chat in plain English in Claude Code, by keyboard (or dictation, if you like). No menus to learn, no exporting, no code.
 
 <br>
 
@@ -23,20 +23,22 @@ No menus to learn and no exporting. You don't need to code.
 [![macOS · Windows · Linux](https://img.shields.io/badge/macOS_·_Windows_·_Linux-1a1240?style=for-the-badge)](#-install-in-3-steps)
 [![MIT](https://img.shields.io/badge/license-MIT-ff7a45?style=for-the-badge)](LICENSE)
 
-[**Install in 3 steps**](#-install-in-3-steps) · [See it work](#-just-say-what-you-hear) · [What you get](#-why-producers-use-it) · [Watch it work](#-see-what-your-agent-is-doing) · [Extensions](#-extensions-teach-it-your-plugin) · [FAQ](#-faq)
+[**Install in 3 steps**](#-install-in-3-steps) · [See it work](#-just-type-what-you-hear) · [What you get](#-why-producers-use-it) · [Watch it work](#-see-what-your-agent-is-doing) · [Extensions](#-extensions-teach-it-your-plugin) · [FAQ](#-faq)
 
 </div>
 
 ---
 
-## 🎤 Just say what you hear
+## 💬 Just type what you hear
 
 You know what's wrong with your mix. You just don't want to spend an hour in
-plugin windows fixing it. Say it the way you'd say it to an engineer:
+plugin windows fixing it. Type it into Claude Code the way you'd say it to an
+engineer. It's a text chat, so no microphone or voice setup is needed (dictate
+with your OS if you prefer, it's the same thing to the agent):
 
 > 🎧 *"Please gain stage my tracks."*
 >
-> 🎤 *"The chorus needs more energy. Make the vocals cut through."*
+> 🎸 *"The chorus needs more energy. Make the vocals cut through."*
 >
 > 🔊 *"I hear some low-end rumble. Can you fix that?"*
 >
@@ -488,8 +490,16 @@ goes, is in [TELEMETRY.md](TELEMETRY.md).
 <details>
 <summary><b>Do I need to know how to code?</b></summary>
 <br>
-No. You paste one command to install. After that you talk in plain words, the way you
-would to an engineer.
+No. You paste one command to install. After that you type in plain words, the way you
+would say it to an engineer.
+</details>
+
+<details>
+<summary><b>Is this voice control?</b></summary>
+<br>
+No. You type to it in Claude Code, like any chat. "Talking" means plain language, not
+a microphone. Nothing listens to you. If you'd rather speak, use your OS dictation or a
+voice-to-text tool; the agent just sees the text.
 </details>
 
 <details>
