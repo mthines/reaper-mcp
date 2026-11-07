@@ -106,15 +106,22 @@ export function isSystemError(type: BridgeErrorType): boolean {
 /** A provider with no delegate hands out no-op tracers: spans are never recorded. */
 const NOOP_TRACER = new ProxyTracerProvider().getTracer('noop');
 
+/**
+ * Bridge plumbing, not usage: the diagnostics poller, the session heartbeat and the
+ * bridge page's tool log. Like the bridge status page, they stay out of traces and the
+ * per-command metrics. Every other command is traced, internal `_` commands a tool runs
+ * as part of its work included (`_chord_grid`, `_item_range`, `_midi_pitch_profile`):
+ * hiding those left a tool that failed inside one with no child span to say why.
+ */
+const UNTRACED_COMMANDS: ReadonlySet<string> = new Set(['_bridge_diagnostics', '_session', '_log_result']);
+
 export async function sendCommand(
   type: CommandType,
   params: Record<string, unknown> = {},
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<BridgeResponse> {
-  // Internal `_` commands (the diagnostics poller) are plumbing, not usage: like the
-  // bridge status page, keep them out of traces and the per-command metrics.
-  const internal = type.startsWith('_');
-  const tracer = internal ? NOOP_TRACER : getTracer();
+  const untraced = UNTRACED_COMMANDS.has(type);
+  const tracer = untraced ? NOOP_TRACER : getTracer();
   const startMs = Date.now();
   const t: Record<string, number> = {};
   const profiling = PROFILE_BRIDGE;
@@ -141,7 +148,7 @@ export async function sendCommand(
           span.setAttribute('error.type', errorType);
         }
         span.end();
-        if (!internal) getCommandDurationHistogram().record((Date.now() - startMs) / 1000, attrs);
+        if (!untraced) getCommandDurationHistogram().record((Date.now() - startMs) / 1000, attrs);
       };
 
       try {
@@ -210,14 +217,14 @@ export async function sendCommand(
             span.setAttribute('reaper.bridge.poll_attempts', pollAttempts);
             if (handlerMs != null) {
               span.setAttribute('reaper.bridge.handler_ms', handlerMs);
-              if (!internal) getHandlerDurationHistogram().record(handlerMs / 1000, {
+              if (!untraced) getHandlerDurationHistogram().record(handlerMs / 1000, {
                 'rpc.method': type,
                 ...(errorType && { 'error.type': errorType }),
               });
             }
             if (pickupMs != null) {
               span.setAttribute('reaper.bridge.pickup_ms', pickupMs);
-              if (!internal) getPickupDurationHistogram().record(pickupMs / 1000);
+              if (!untraced) getPickupDurationHistogram().record(pickupMs / 1000);
             }
             if (deferCycle != null) {
               span.setAttribute('reaper.bridge.defer_cycle', deferCycle);

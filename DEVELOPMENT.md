@@ -244,8 +244,8 @@ namespace belongs to the official MCP conventions). Durations are in seconds.
 
 | Span | Kind | Key attributes |
 |------|------|----------------|
-| `tools/call {tool}` | SERVER | `mcp.method.name`, `gen_ai.tool.name`, `gen_ai.operation.name=execute_tool`, `jsonrpc.request.id`, `error.type` (`tool_error` when the result has `isError`) |
-| `reaper.Bridge/{command}` | CLIENT | `rpc.system=reaper_bridge`, `rpc.method`, `peer.service=reaper`, `reaper.bridge.command.id`, `reaper.bridge.handler_ms` / `pickup_ms`, `error.type` |
+| `tools/call {tool}` | SERVER | `mcp.method.name`, `gen_ai.tool.name`, `gen_ai.operation.name=execute_tool`, `jsonrpc.request.id`, `error.type` (`tool_error` when the result has `isError`), `reaper.tool.error.message` (on any failure: the message the agent got, home directory as `~`, at most 256 characters; a refused request keeps the status unset, so this is where its text is. Never in the anonymous usage telemetry) |
+| `reaper.Bridge/{command}` | CLIENT | `rpc.system=reaper_bridge`, `rpc.method`, `peer.service=reaper`, `reaper.bridge.command.id`, `reaper.bridge.handler_ms` / `pickup_ms`, `error.type`. Internal commands a tool runs (`_chord_grid`, `_item_range`, `_midi_pitch_profile`) are traced like any other; the plumbing (`_bridge_diagnostics`, `_session`, `_log_result`) is not, nor counted in the per-command metrics |
 | `sidecar/analyze` | CLIENT | `rpc.system=jsonrpc`, `rpc.method`, `error.type` |
 | `reaper-mcp startup`, `poll bridge diagnostics` | INTERNAL | root spans for headless work |
 
@@ -320,9 +320,9 @@ users (installs) apart without identifying anyone; delete the file to get a new 
 ### Routing through an OpenTelemetry Collector (optional)
 
 Exporting straight to Dash0 needs no Collector: the server already redacts at the source — the home directory
-(which contains your OS username) becomes `~` in log bodies, log attributes, and span status messages, and the
-resource carries only `process.pid` / `process.runtime.*` instead of the SDK's path-bearing `process.*`
-attributes. If you route through a Collector anyway, this transform is defence in depth for other paths
+(which contains your OS username) becomes `~` in log bodies, log attributes, span status messages and
+`reaper.tool.error.message`, and the resource carries only `process.pid` / `process.runtime.*` instead of the
+SDK's path-bearing `process.*` attributes. If you route through a Collector anyway, this transform is defence in depth for other paths
 (`/Users/<name>`, `/home/<name>`, `C:\\Users\\<name>`) and for other SDKs' `process.command_args`.
 Validated with `otelcol-contrib validate` (v0.120.0) and against live server output.
 
@@ -347,6 +347,7 @@ processors:
       - replace_pattern(resource.attributes["process.executable.path"], "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where resource.attributes["process.executable.path"] != nil
       - replace_pattern(resource.attributes["process.command"], "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where resource.attributes["process.command"] != nil
       - replace_pattern(span.status.message, "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where span.status.message != nil
+      - replace_pattern(span.attributes["reaper.tool.error.message"], "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where span.attributes["reaper.tool.error.message"] != nil
     log_statements:
       - delete_key(resource.attributes, "process.command_args")
       - replace_pattern(resource.attributes["process.executable.path"], "(/Users|/home|C:\\\\Users)/[^/\\\\\\s]+", "$$1/<user>") where resource.attributes["process.executable.path"] != nil
