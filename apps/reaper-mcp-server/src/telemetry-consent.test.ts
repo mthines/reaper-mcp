@@ -217,4 +217,20 @@ describe('AnonymizingSpanExporter', () => {
       'reaper.chords.count': 8,
     });
   });
+
+  it('keeps whether the bridge answered at startup and which setup step is missing', async () => {
+    const sink = new tracing.InMemorySpanExporter();
+    const provider = new tracing.BasicTracerProvider({
+      spanProcessors: [new tracing.SimpleSpanProcessor(new AnonymizingSpanExporter(sink))],
+    });
+    provider.getTracer('test').startSpan('check bridge connection', {
+      attributes: { 'reaper.bridge.connected': false, 'reaper.bridge.state': 'never_started' },
+    }).end();
+    await provider.forceFlush();
+
+    expect(sink.getFinishedSpans()[0].attributes).toEqual({
+      'reaper.bridge.connected': false,
+      'reaper.bridge.state': 'never_started',
+    });
+  });
 });

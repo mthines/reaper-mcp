@@ -20,6 +20,7 @@ import { discardRender } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
 import { aestheticsSummary, logToolResult } from '../tool-log.js';
 import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
+import { SETUP_SIDECAR_HINT } from '../sidecar-hint.js';
 
 /** Loudness every clip is scored at, so louder versions do not score higher for being louder. */
 export const DEFAULT_SCORING_LUFS = -18;
@@ -27,13 +28,12 @@ export const DEFAULT_SCORING_LUFS = -18;
 export const DEFAULT_CLIP_SECONDS = 30;
 
 const SIDECAR_NOT_INSTALLED_MSG =
-  'Audio understanding sidecar not installed. ' +
-  'Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar';
+  `Audio understanding sidecar not installed. ${SETUP_SIDECAR_HINT}`;
 
 export function registerAestheticsTools(server: McpServer): void {
   server.tool(
     'analyze_track_aesthetics',
-    'Analyze the perceptual aesthetic quality of a track\'s audio using Meta\'s Audiobox Aesthetics model (CC-BY 4.0). Bounces the track to a temp WAV file (post-FX, post-fader) and runs 4-axis perceptual quality scoring: Production Quality (PQ), Production Complexity (PC), Content Enjoyment (CE), Content Usefulness (CU). Returns scores 0-10. The clip is normalized to normalizeLufs (default -18 LUFS) before scoring, so level differences between versions do not bias the scores (CE rises with level; PQ barely moves). PQ (and partly CU) judge mix changes; PC and CE mostly follow the arrangement, so only compare the same time range. Measured noise: re-rendering the same 30 s clip moves PQ by ~0.05, a 10 s clip by ~0.4; treat smaller differences as no change. Requires the Python sidecar (run: node dist/apps/reaper-mcp-server/main.js setup-sidecar).',
+    'Analyze the perceptual aesthetic quality of a track\'s audio using Meta\'s Audiobox Aesthetics model (CC-BY 4.0). Bounces the track to a temp WAV file (post-FX, post-fader) and runs 4-axis perceptual quality scoring: Production Quality (PQ), Production Complexity (PC), Content Enjoyment (CE), Content Usefulness (CU). Returns scores 0-10. The clip is normalized to normalizeLufs (default -18 LUFS) before scoring, so level differences between versions do not bias the scores (CE rises with level; PQ barely moves). PQ (and partly CU) judge mix changes; PC and CE mostly follow the arrangement, so only compare the same time range. Measured noise: re-rendering the same 30 s clip moves PQ by ~0.05, a 10 s clip by ~0.4; treat smaller differences as no change. Requires the Python sidecar (run in a terminal: reaper-mcp setup-sidecar).',
     {
       trackIndex: z.coerce.number().int().min(-1)
         .describe('Zero-based track index (-1 = master: the whole mix)'),

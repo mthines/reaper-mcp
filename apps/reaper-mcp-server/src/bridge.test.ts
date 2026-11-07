@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { logs, SeverityNumber } from '@opentelemetry/api-logs';
-import { sendCommand, isBridgeRunning, cleanupStaleFiles, ensureBridgeDir, readBridgeEvents, classifyBridgeError } from './bridge.js';
+import { sendCommand, isBridgeRunning, cleanupStaleFiles, ensureBridgeDir, readBridgeEvents, classifyBridgeError, isSystemError, getBridgeState } from './bridge.js';
 
 // Mock node:fs/promises
 vi.mock('node:fs/promises', () => ({
@@ -19,6 +19,7 @@ vi.mock('node:crypto', () => ({
 }));
 
 import { appendFile, readFile, writeFile, readdir, unlink, mkdir, stat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 
 const mockedAppendFile = vi.mocked(appendFile);
 const mockedReadFile = vi.mocked(readFile);
@@ -27,6 +28,23 @@ const mockedReaddir = vi.mocked(readdir);
 const mockedUnlink = vi.mocked(unlink);
 const mockedMkdir = vi.mocked(mkdir);
 const mockedStat = vi.mocked(stat);
+
+type Stat = Awaited<ReturnType<typeof stat>>;
+
+/**
+ * What REAPER's resource folder holds: each key is a file (matched by the end of its path),
+ * its value the file's age in ms. Anything else does not exist.
+ */
+function resourceFolder(files: Record<string, number>): void {
+  mockedStat.mockImplementation(async (path) => {
+    for (const [name, ageMs] of Object.entries(files)) {
+      if (String(path).endsWith(name)) return { mtimeMs: Date.now() - ageMs } as Stat;
+    }
+    throw Object.assign(new Error(`ENOENT: ${String(path)}`), { code: 'ENOENT' });
+  });
+}
+
+const INSTALLED = { 'mcp_bridge.lua': 0, 'reaper.ini': 0 };
 
 // The global logger provider can be set only once per process: register one
 // whose emit every test can inspect.
@@ -39,6 +57,8 @@ describe('bridge', () => {
     process.env['REAPER_RESOURCE_PATH'] = '/tmp/test-reaper';
     mockedMkdir.mockResolvedValue(undefined);
     mockedAppendFile.mockResolvedValue(undefined);
+    // REAPER is running with the bridge: a fresh heartbeat
+    mockedStat.mockResolvedValue({ mtimeMs: Date.now() } as Stat);
   });
 
   afterEach(() => {
@@ -146,6 +166,91 @@ describe('bridge', () => {
     });
   });
 
+  describe('getBridgeState', () => {
+    it.each([
+      ['connected', { 'heartbeat.json': 1_000, ...INSTALLED }],
+      ['stale', { 'heartbeat.json': 10 * 60_000, ...INSTALLED }],
+      ['never_started', INSTALLED],
+      ['not_installed', { 'reaper.ini': 0 }],
+      ['no_reaper', {}],
+    ] as const)('reports %s from the files in REAPER\'s resource folder', async (state, files) => {
+      resourceFolder(files);
+      expect((await getBridgeState()).state).toBe(state);
+    });
+  });
+
+  describe('sendCommand while the bridge is down', () => {
+    it.each([
+      ['never ran', INSTALLED, /Script: mcp_bridge\.lua/],
+      ['is not installed', { 'reaper.ini': 0 }, /Run in a terminal: reaper-mcp setup/],
+      ['has no REAPER to run in', {}, /REAPER_RESOURCE_PATH/],
+      ['stopped half an hour ago', { 'heartbeat.json': 30 * 60_000, ...INSTALLED }, /has not answered for 30 min/],
+    ] as const)('refuses at once when the bridge %s, says how to fix it, and sends nothing', async (_case, files, fix) => {
+      resourceFolder(files);
+      const started = Date.now();
+
+      const result = await sendCommand('get_project_info');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(fix);
+      expect(classifyBridgeError(result.error)).toBe('bridge_not_running');
+      expect(Date.now() - started).toBeLessThan(1_000); // not the 10 s timeout
+      expect(mockedWriteFile).not.toHaveBeenCalled(); // no command file left behind for REAPER
+    });
+
+    it('logs the refusal as a warning that names the bridge state', async () => {
+      emit.mockClear();
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      resourceFolder({ 'reaper.ini': 0 });
+
+      await sendCommand('get_project_info');
+
+      const refused = emit.mock.calls.map(([r]) => r).filter((r) => r.eventName === 'reaper.bridge.command.not_sent');
+      expect(refused).toHaveLength(1);
+      expect(refused[0]).toMatchObject({
+        severityNumber: SeverityNumber.WARN,
+        attributes: { 'error.type': 'bridge_not_running', 'reaper.bridge.state': 'not_installed' },
+      });
+    });
+
+    it('still waits for REAPER when the heartbeat is only seconds old (a render pauses it)', async () => {
+      resourceFolder({ 'heartbeat.json': 20_000, ...INSTALLED });
+      mockedWriteFile.mockResolvedValue(undefined);
+      mockedUnlink.mockResolvedValue(undefined);
+      mockedReadFile.mockResolvedValueOnce(JSON.stringify({ id: 'test-uuid-1234', success: true, data: {}, timestamp: Date.now() }));
+
+      const result = await sendCommand('get_project_info');
+
+      expect(result.success).toBe(true);
+    });
+
+    it('queues behind a command REAPER is still busy with, even once the heartbeat has gone stale', async () => {
+      resourceFolder({ 'heartbeat.json': 0, ...INSTALLED });
+      mockedWriteFile.mockResolvedValue(undefined);
+      mockedUnlink.mockResolvedValue(undefined);
+      let rendering = true;
+      mockedReadFile.mockImplementation(async (path) => {
+        if (rendering) throw new Error('ENOENT');
+        const id = /response_(.+)\.json$/.exec(String(path))?.[1];
+        return JSON.stringify({ id, success: true, data: {}, timestamp: Date.now() });
+      });
+      vi.mocked(randomUUID)
+        .mockReturnValueOnce('render-0000-0000-0000-000000000000')
+        .mockReturnValueOnce('next-0000-0000-0000-000000000000');
+
+      const render = sendCommand('render_track_to_wav' as never, {}, 5_000);
+      await vi.waitFor(() => expect(mockedWriteFile).toHaveBeenCalledTimes(1));
+      // The render blocks REAPER's defer loop, so the heartbeat stops being written
+      resourceFolder({ 'heartbeat.json': 5 * 60_000, ...INSTALLED });
+      const next = sendCommand('get_project_info', {}, 5_000);
+      await vi.waitFor(() => expect(mockedWriteFile).toHaveBeenCalledTimes(2));
+      rendering = false;
+
+      expect((await render).success).toBe(true);
+      expect((await next).success).toBe(true);
+    });
+  });
+
   describe('cleanupStaleFiles', () => {
     it('removes stale command and response files', async () => {
       const staleTime = Date.now() - 60000;
@@ -219,6 +324,12 @@ describe('bridge', () => {
       expect(classifyBridgeError('Timeout: no response from REAPER Lua bridge after 10000ms')).toBe('timeout');
       expect(classifyBridgeError('Track 99 not found')).toBe('command_failed');
       expect(classifyBridgeError(undefined)).toBe('command_failed');
+    });
+
+    it('does not count a bridge the user has not started as a system error', () => {
+      expect(classifyBridgeError('Bridge not running: REAPER has not answered for 5 min.')).toBe('bridge_not_running');
+      expect(isSystemError('bridge_not_running')).toBe(false);
+      expect(isSystemError('timeout')).toBe(true);
     });
   });
 

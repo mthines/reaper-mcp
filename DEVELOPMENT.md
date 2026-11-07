@@ -248,6 +248,7 @@ namespace belongs to the official MCP conventions). Durations are in seconds.
 | `reaper.Bridge/{command}` | CLIENT | `rpc.system=reaper_bridge`, `rpc.method`, `peer.service=reaper`, `reaper.bridge.command.id`, `reaper.bridge.handler_ms` / `pickup_ms`, `error.type`. Internal commands a tool runs (`_chord_grid`, `_item_range`, `_midi_pitch_profile`) are traced like any other; the plumbing (`_bridge_diagnostics`, `_session`, `_log_result`) is not, nor counted in the per-command metrics |
 | `sidecar/analyze` | CLIENT | `rpc.system=jsonrpc`, `rpc.method`, `error.type` |
 | `reaper-mcp startup`, `poll bridge diagnostics` | INTERNAL | root spans for headless work |
+| `check bridge connection` | INTERNAL | child of `reaper-mcp startup`; `reaper.bridge.connected`, `reaper.bridge.state` (`connected`, `stale` = heartbeat older than 5 s, `never_started` = script installed but no heartbeat, `not_installed` = no `Scripts/mcp_bridge.lua`, `no_reaper` = no `reaper.ini` in the resource folder); both also on the startup span |
 
 Recording tools add to their `tools/call` span: `reaper.record.mode`, `reaper.record.armed_count` (record setup),
 `reaper.lanes.count` (fixed lanes), `reaper.comp.segment_count` and `reaper.comp.source_lane_count` (`comp_lanes`).
@@ -263,7 +264,7 @@ Mixing tools add attributes to their `tools/call` span: `reaper.quantize.hits` /
 | Metric | Unit | Attributes |
 |--------|------|------------|
 | `mcp.server.operation.duration` | s | `mcp.method.name`, `gen_ai.tool.name`, `error.type` |
-| `reaper.bridge.command.duration` | s | `rpc.method`, `error.type` (`timeout`, `handler_crash`, `unknown_command`, `internal_error`, `command_failed`) |
+| `reaper.bridge.command.duration` | s | `rpc.method`, `error.type` (`timeout`, `bridge_not_running`, `handler_crash`, `unknown_command`, `internal_error`, `command_failed`). `bridge_not_running`: refused without waiting because the heartbeat is missing or older than 60 s and no other command of this server is in flight; the span carries `reaper.bridge.state` and keeps its status unset, like a refused request |
 | `reaper.bridge.handler.duration` | s | `rpc.method`, `error.type` — time inside the Lua handler |
 | `reaper.bridge.pickup.duration` | s | — time until the defer loop picked the command up |
 | `reaper.sidecar.request.duration` | s | `rpc.method`, `error.type` (`timeout`, `busy` = waited 5 min behind an earlier request, `not_installed`, `sidecar_error`); includes time queued behind earlier requests |
@@ -283,6 +284,7 @@ Mixing tools add attributes to their `tools/call` span: `reaper.quantize.hits` /
 | `reaper.bridge.handler_error` / `handler_unknown` | ERROR | Lua handler crashed / unknown command |
 | `reaper.bridge.command.failed` | WARN or ERROR | handler returned an error (WARN) or crashed (ERROR) |
 | `reaper.bridge.command.timeout` | ERROR | no response from REAPER |
+| `reaper.bridge.command.not_sent` | WARN | command refused at once: the bridge is not running (`reaper.bridge.state` says why) |
 | `reaper.sidecar.timeout` / `exit` / `spawn_error` / `restart` | ERROR/WARN | Python sidecar lifecycle |
 | `reaper.server.crash` | ERROR | uncaught exception / unhandled rejection (`exception.*` attributes) |
 | `reaper.comp.undone` | ERROR | `comp_lanes` failed after it started writing and undid itself (a bug, not a refusal); `error.type=comp_undone` |
@@ -295,6 +297,7 @@ resource (`service.instance.id`, `deployment.environment.name`). Count them per 
 
 - `reaper.bridge.up == 0` for 2 min — REAPER closed or the bridge script stopped.
 - Rate of `reaper.bridge.command.duration{error.type="timeout"}` > 0 — commands not reaching REAPER.
+- `reaper.bridge.command.duration{error.type="bridge_not_running"}` — tool calls made while REAPER was closed or the bridge never started; group the startup span's `reaper.bridge.state` to see which setup step people miss.
 - p95 of `reaper.bridge.command.duration` > 0.5 s — the defer loop is starved (heavy project, blocking render).
 - `mcp.server.operation.duration{error.type!=""}` / total > 5 % per `gen_ai.tool.name` — a tool regressed.
 - Any `reaper.bridge.handler_error` or `reaper.server.crash` log — a bug, not a user error.

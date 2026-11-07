@@ -91,7 +91,7 @@ export async function checkPython(pythonBin: string): Promise<string> {
     const notFound =
       `Python interpreter not found: ${pythonBin}\n` +
       `Install Python 3.10+ from https://python.org or set the PYTHON_BIN environment variable.\n` +
-      `Example: PYTHON_BIN=/usr/local/bin/python3.11 node dist/apps/reaper-mcp-server/main.js setup-sidecar`;
+      `Example: PYTHON_BIN=/usr/local/bin/python3.11 reaper-mcp setup-sidecar`;
     throw new Error(notFound);
   }
 

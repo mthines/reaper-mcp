@@ -21,10 +21,10 @@ import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
 import { discardRender, renderTrack, renderTracks } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
 import { alignmentSummary, logToolResult, offlineSummary } from '../tool-log.js';
+import { SETUP_SIDECAR_HINT } from '../sidecar-hint.js';
 
 const SIDECAR_NOT_INSTALLED_MSG =
-  'Audio understanding sidecar not installed. ' +
-  'Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar';
+  `Audio understanding sidecar not installed. ${SETUP_SIDECAR_HINT}`;
 
 /** Max range analyze_track_offline renders in one call (seconds). */
 export const MAX_OFFLINE_SECONDS = 900;

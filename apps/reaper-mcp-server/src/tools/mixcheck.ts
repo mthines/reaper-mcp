@@ -26,10 +26,10 @@ import { getSidecarClient } from '../sidecar.js';
 import { emitLog, getSeparationSpeedHistogram, redactHome } from '../telemetry.js';
 import { curveSummary, logToolResult, maskingSummary, stemsSummary, stereoBandsSummary } from '../tool-log.js';
 import { MAX_OFFLINE_SECONDS } from './offline.js';
+import { SETUP_SIDECAR_HINT } from '../sidecar-hint.js';
 
 const SIDECAR_NOT_INSTALLED_MSG =
-  'Audio understanding sidecar not installed. ' +
-  'Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar';
+  `Audio understanding sidecar not installed. ${SETUP_SIDECAR_HINT}`;
 
 /** Range rendered from a track when no endTime is given (seconds). */
 const DEFAULT_TRACK_SECONDS = 180;
