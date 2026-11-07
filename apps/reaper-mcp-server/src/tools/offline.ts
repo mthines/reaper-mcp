@@ -8,6 +8,9 @@
  *                           track, a bounce, a stem). No REAPER involved.
  * measure_track_alignment — render two tracks over the same range and
  *                           cross-correlate them: delay and polarity.
+ * verify_edit             — after an edit, compare the result with the audio from
+ *                           before it: delay/gain/polarity-compensated null and a
+ *                           click check, with a verdict per check.
  *
  * Unlike the real-time meters these need no playback, work on folder tracks and
  * the master, and see the whole range at once. They need the sidecar
@@ -37,6 +40,9 @@ const DEFAULT_MAX_LAG_MS = 20;
 export const MIN_ALIGNMENT_CORRELATION = 0.3;
 /** Max window measure_track_alignment renders per track (seconds). */
 export const MAX_ALIGNMENT_SECONDS = 30;
+/** Window verify_edit renders per track (seconds). */
+const DEFAULT_VERIFY_SECONDS = 10;
+export const MAX_VERIFY_SECONDS = 60;
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
 
 const text = (data: unknown): ToolResult => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
@@ -237,6 +243,77 @@ export function registerOfflineTools(server: McpServer): void {
         const message = err instanceof Error ? err.message : String(err);
         logToolResult('measure_track_alignment', args, startedAt, null, message);
         return error(message);
+      } finally {
+        await Promise.all(rendered.map(discardRender));
+      }
+    },
+  );
+
+  server.tool(
+    'verify_edit',
+    'Check the result of an edit you just made, since you cannot hear it: compare the edited track with the audio from ' +
+    'before the edit and get a verdict per check. Compensated null: the delay (ms, + = later), gain (dB) and polarity ' +
+    'between the two are estimated and removed, and the residual left (dB below the reference) says whether anything else ' +
+    'changed (noise, a splice, a different waveform; it is relative to referenceRmsDb, so with a quiet reference the rounding noise of a 16-bit bounce can set it). Discontinuity: the largest sample-to-sample jump against the ' +
+    "reference's own, with where it happens (a click or hard splice). Use expect 'identical' (default) for edits that " +
+    'should leave the sound alone apart from level, delay and polarity (alignment, gain, split, crossfade): the residual ' +
+    'is judged ok/warn/fail. Use "changed" for EQ, compression and the like: the residual is reported without a ' +
+    'verdict. Set timeScale to the stretch factor when the edit changed the timing: the waveform null is then skipped ' +
+    'and only the click check runs. The reference is another track (e.g. a copy you kept) or an audio file of the same ' +
+    'range from before the edit (a bounce), not an undo. Pitch, formant and transient checks are not included: they ' +
+    'need a baseline per source. A passing result is evidence, not a replacement for listening. Requires the Python sidecar.',
+    {
+      trackIndex: z.coerce.number().int().min(0).describe('Zero-based index of the edited track'),
+      referenceTrack: z.coerce.number().int().min(0).optional()
+        .describe('Zero-based index of a track holding the audio from before the edit (give this or referencePath)'),
+      referencePath: z.string().min(1).optional()
+        .describe('Absolute path of an audio file of the same range from before the edit (give this or referenceTrack)'),
+      startTime: z.coerce.number().min(0).describe('Start of the range in seconds'),
+      durationSeconds: z.coerce.number().min(0.5).max(MAX_VERIFY_SECONDS).optional().default(DEFAULT_VERIFY_SECONDS)
+        .describe(`Length in seconds (default ${DEFAULT_VERIFY_SECONDS}, max ${MAX_VERIFY_SECONDS})`),
+      expect: z.enum(['identical', 'changed']).optional().default('identical')
+        .describe('"identical": only level, delay and polarity may differ; "changed": report the residual without a verdict'),
+      timeScale: z.coerce.number().min(0.1).max(10).optional().default(1)
+        .describe('1 = the edit kept the timing (default). Any other value (a stretch) skips the waveform null'),
+      maxLagMs: z.coerce.number().min(0.1).max(100).optional().default(DEFAULT_MAX_LAG_MS)
+        .describe(`Largest delay to search either way in ms (default ${DEFAULT_MAX_LAG_MS})`),
+    },
+    async (args) => {
+      const { trackIndex, referenceTrack, referencePath, startTime, durationSeconds, expect, timeScale, maxLagMs } = args;
+      const sidecar = getSidecarClient();
+      if (!sidecar.isAvailable()) return error(SIDECAR_NOT_INSTALLED_MSG);
+      if ((referenceTrack == null) === (referencePath == null)) {
+        return error('Give exactly one of referenceTrack (a track with the audio from before the edit) or referencePath (a file)');
+      }
+      if (referenceTrack === trackIndex) return error('referenceTrack and trackIndex must differ');
+
+      const end = startTime + (durationSeconds ?? DEFAULT_VERIFY_SECONDS);
+      const rendered: RenderTrackToWavResult[] = [];
+      try {
+        if (referenceTrack != null) {
+          rendered.push(...(await renderTracks([referenceTrack, trackIndex], startTime, end)));
+        } else {
+          rendered.push(await renderTrack(trackIndex, startTime, end));
+        }
+        const edited = rendered[rendered.length - 1];
+        const result = await sidecar.verifyEdit({
+          referencePath: referenceTrack != null ? rendered[0].wavPath : (referencePath as string),
+          path: edited.wavPath,
+          expect: expect ?? 'identical',
+          timeScale: timeScale ?? 1,
+          maxLagMs: maxLagMs ?? DEFAULT_MAX_LAG_MS,
+        });
+        if (typeof result['error'] === 'string') return error(result['error']);
+        return text({
+          trackIndex,
+          trackName: edited.trackName,
+          ...(referenceTrack != null ? { referenceTrack, referenceName: rendered[0].trackName } : { referencePath }),
+          startTime,
+          endTime: end,
+          ...result,
+        });
+      } catch (err) {
+        return error(err instanceof Error ? err.message : String(err));
       } finally {
         await Promise.all(rendered.map(discardRender));
       }

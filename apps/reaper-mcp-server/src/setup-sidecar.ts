@@ -52,7 +52,7 @@ export const SIDECAR_VENV_PATH = join(homedir(), '.reaper-mcp', 'sidecar-venv');
 export const SIDECAR_DIR = join(homedir(), '.reaper-mcp', 'sidecar');
 export const SIDECAR_SCRIPT_DEST = join(SIDECAR_DIR, 'server.py');
 /** Python modules server.py imports; installed next to it. */
-export const SIDECAR_MODULES = ['analysis.py', 'mixcheck.py', 'separation.py', 'chords.py', 'voice_sketch.py', 'voice_render.py'];
+export const SIDECAR_MODULES = ['analysis.py', 'mixcheck.py', 'separation.py', 'chords.py', 'voice_sketch.py', 'voice_render.py', 'verify.py'];
 /** The Demucs model separate_stems uses by default; pre-downloaded by --with-separation. */
 export const SEPARATION_MODEL = 'htdemucs';
 export const MODEL_ID = 'facebook/audiobox-aesthetics';

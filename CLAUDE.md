@@ -71,7 +71,7 @@ reaper-mcp/
         tempo.ts              # get_tempo_map, add/edit/delete_tempo_marker, set_project_tempo
         envelopes.ts          # envelope points (read/insert/edit/delete, dB on volume envelopes) + automation items (logic in reaper/mcp_envelopes_lib.lua)
         aesthetics.ts         # analyze_track_aesthetics (requires Python sidecar)
-        offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment (sidecar, no model)
+        offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment, verify_edit (sidecar, no model)
         transients.ts         # detect_transients, create_transient_automation (sidecar onsets → envelope pulses, e.g. lighting)
         composition.ts        # quantize_midi, transform_midi, import_midi_file (SMF parsed in smf.ts), detect_key (key.ts), detect_chords (chords.ts; logic in reaper/mcp_midi_lib.lua)
         mixcheck.ts           # analyze_loudness_curve, analyze_stereo_bands, measure_masking, separate_stems (sidecar)
@@ -81,6 +81,7 @@ reaper-mcp/
 
     sidecar/                  # Python sidecar for semantic audio analysis (opt-in)
       server.py               # JSON-RPC server (Meta Audiobox Aesthetics, CC-BY 4.0)
+      verify.py               # verify_edit: delay/gain/polarity-compensated null + discontinuity (click) check, ok/warn/fail
       mixcheck.py             # Loudness curve, stereo correlation per band, masking between tracks
       separation.py           # Stem separation with Demucs (opt-in: setup-sidecar --with-separation)
       requirements.txt        # Pinned Python deps
@@ -187,9 +188,9 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | Vite + React Compiler → single HTML | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (183 total)
+## MCP Tools (184 total)
 
-Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
+Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template, `measure_track_alignment` and `verify_edit` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
 ### Project & Tracks (5)
 
@@ -394,7 +395,7 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `read_track_crest` | `tools/analysis.ts` | Crest factor (peak-to-RMS ratio) |
 | `measure_tracks` | `tools/analysis.ts` | Play, collect LUFS/crest/correlation/spectrum for 1–8 tracks in one call, stop, then remove the meters it inserted (`keepMeters` keeps them). A metric that returned no data goes to the track's `errors` instead of zeros (TS-composed; cleanup via internal `remove_mcp_meters`) |
 
-### Offline & Perceptual Audio Analysis (6) — Requires Python Sidecar
+### Offline & Perceptual Audio Analysis (7) — Requires Python Sidecar
 
 | Tool | File | Description |
 |------|------|-------------|
@@ -402,6 +403,7 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `analyze_track_offline` | `tools/offline.ts` | Render a track or the master once (up to 900 s, no playback) and analyze it: integrated LUFS (BS.1770 gated), LRA (EBU 3342), true peak, sample peak, crest, per-section loudness, band balance, resonance and sibilance hints; with `referencePath`, loudness and tonal-balance deltas against that file |
 | `analyze_audio_file` | `tools/offline.ts` | The same analysis for an audio file on disk (reference song, bounce, stem); no REAPER involved |
 | `measure_track_alignment` | `tools/offline.ts` | Render two tracks over the same window (≤30 s) and cross-correlate: delay (ms, samples), polarity, correlation, and absolute `suggestedPlayOffsetMs` / `suggestedPhase` for `set_track_property` (include the track's current offset and polarity) |
+| `verify_edit` | `tools/offline.ts` | Check an edit's result against the audio from before it (a reference track or a bounce of the same range, ≤60 s): delay/gain/polarity-compensated null (residual dB) and a discontinuity (click) check, each with ok/warn/fail; `expect: "changed"` reports the residual without a verdict, `timeScale` ≠ 1 (a stretch) skips the null. Logic in `sidecar/verify.py`. Thresholds are first values from two sources (vocal, bass); pitch/formant/transient checks need a baseline per source and are not included |
 | `detect_transients` | `tools/transients.ts` | Hits in a track (rendered, ≤900 s) or an audio file (MP3 too; `filePosition` maps it to project time): time, strength 0..1, dominant band (low/mid/high), peakDb, plus tempo, per-band counts and per-section density; filter by `band`/`bands`/`sensitivity`/`minGapMs`/`minStrength`, paginated |
 | `create_transient_automation` | `tools/transients.ts` | Detect, then write one pulse per hit (attack, hold, exponential/linear decay, scaled by strength) onto an existing envelope — e.g. lighting that flashes on the kicks. Replaces the range's points (REAPER keeps an envelope's last point on a range delete; it becomes the first pulse point), `dryRun` returns the points. TS-composed over `remove_envelope_points` / `insert_envelope_points` |
 
@@ -521,7 +523,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 183 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 184 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
@@ -757,7 +759,7 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 
 - **Opt-in**: The sidecar is installed separately via `setup-sidecar`. `pnpm install` and `pnpm nx build` never touch Python.
 - **Lazy spawn**: The sidecar process spawns on the first sidecar tool call, not at server startup; the aesthetics model loads only on the first `analyze` request.
-- **JSON-RPC methods**: `analyze` (aesthetics, with optional `normalizeLufs`), `analyze_audio` (loudness/spectrum/reference, `sidecar/analysis.py`), `align` (cross-correlation delay + polarity), `loudness_curve` / `stereo_bands` / `masking` (`sidecar/mixcheck.py`), `separate` (Demucs, `sidecar/separation.py`: model loaded once per process, CUDA/MPS/CPU with a CPU fallback, `REAPER_MCP_SEPARATION_DEVICE` overrides; a separation call gets its own timeout, ~90 s + 3 s per audio second), `transients` (per-band spectral-flux onsets: low <150 Hz, mid, high >4 kHz, each band scaled to its own 99th percentile so a kick counts as much as a hat; dominant band by mean per-bin log rise; tempo from the onset autocorrelation), `chroma` (12-bin pitch-class energy, per segment for chords), `chords` / `chords_status` (lv-chordia, `sidecar/chords.py`, opt-in: Harte-labelled segments in file seconds; a range is cut to a temp WAV first; the TS side maps the labels onto the bar/beat grid by largest overlap in `chords.ts` and takes the key from the chords' tones weighted by duration).
+- **JSON-RPC methods**: `analyze` (aesthetics, with optional `normalizeLufs`), `analyze_audio` (loudness/spectrum/reference, `sidecar/analysis.py`), `align` (cross-correlation delay + polarity), `verify_edit` (`sidecar/verify.py`: compensated null + discontinuity check on an edit's result), `loudness_curve` / `stereo_bands` / `masking` (`sidecar/mixcheck.py`), `separate` (Demucs, `sidecar/separation.py`: model loaded once per process, CUDA/MPS/CPU with a CPU fallback, `REAPER_MCP_SEPARATION_DEVICE` overrides; a separation call gets its own timeout, ~90 s + 3 s per audio second), `transients` (per-band spectral-flux onsets: low <150 Hz, mid, high >4 kHz, each band scaled to its own 99th percentile so a kick counts as much as a hat; dominant band by mean per-bin log rise; tempo from the onset autocorrelation), `chroma` (12-bin pitch-class energy, per segment for chords), `chords` / `chords_status` (lv-chordia, `sidecar/chords.py`, opt-in: Harte-labelled segments in file seconds; a range is cut to a temp WAV first; the TS side maps the labels onto the bar/beat grid by largest overlap in `chords.ts` and takes the key from the chords' tones weighted by duration).
 - **Audio loading**: always `soundfile` (`analysis.load_audio`). torchaudio 2.9+ removed `info()` and moved `load()` to torchcodec, so never call `torchaudio.load`/`torchaudio.info`; `torchaudio.functional` (filters, resampling) is fine.
 - **Loudness**: `analysis.py` implements ITU-R BS.1770-4 (K-weighting, 400 ms blocks, -70/-10 gates, channels summed) and EBU 3342 LRA; `tests/test_analysis.py` checks them against the EBU 3341/3342 reference signals.
 - **Lifecycle**: Sidecar receives SIGTERM when the MCP server receives SIGINT/SIGTERM. Managed via `getSidecarClient().shutdown()` in `main.ts`.
@@ -777,8 +779,9 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 | `apps/reaper-mcp-server/src/sidecar.ts` | Node.js subprocess lifecycle + JSON-RPC client |
 | `apps/reaper-mcp-server/src/setup-sidecar.ts` | `setup-sidecar` CLI command implementation |
 | `apps/reaper-mcp-server/src/tools/aesthetics.ts` | `analyze_track_aesthetics` tool registration |
-| `apps/reaper-mcp-server/src/tools/offline.ts` | `analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment` |
+| `apps/reaper-mcp-server/src/tools/offline.ts` | `analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment`, `verify_edit` |
 | `apps/reaper-mcp-server/src/tools/transients.ts` | `detect_transients`, `create_transient_automation` (pulse generation in `pulsePoints()`) |
+| `apps/reaper-mcp-server/sidecar/verify.py` | Compensated null and discontinuity checks for `verify_edit` (numpy only; the window's first/last `maxLagMs` is left out of both) |
 | `apps/reaper-mcp-server/sidecar/mixcheck.py` | Loudness curve, per-band stereo correlation, third-octave masking (numpy only) |
 | `apps/reaper-mcp-server/sidecar/separation.py` | Demucs stem separation (soundfile I/O, never demucs's torchaudio I/O) |
 | `apps/reaper-mcp-server/src/tools/mixcheck.ts` | `analyze_loudness_curve`, `analyze_stereo_bands`, `measure_masking`, `separate_stems` |

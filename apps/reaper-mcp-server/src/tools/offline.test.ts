@@ -1,6 +1,6 @@
 /**
  * Vitest unit tests for tools/offline.ts (analyze_track_offline, analyze_audio_file,
- * measure_track_alignment). The bridge, the sidecar and unlink are mocked.
+ * measure_track_alignment, verify_edit). The bridge, the sidecar and unlink are mocked.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -35,10 +35,21 @@ const ANALYSIS = {
   spectrum: { bandBalanceDb: { bass: -4 } },
 };
 
+const VERIFY = {
+  verdict: 'ok',
+  expect: 'identical',
+  sampleRate: 44100,
+  checks: {
+    discontinuity: { verdict: 'ok', score: 4.4, referenceScore: 4.4, atSeconds: 1.2 },
+    null: { verdict: 'ok', delayMs: 4, gainDb: -3, polarityInverted: false, residualDb: -118.1 },
+  },
+};
+
 function sidecar(available = true) {
   const client = {
     isAvailable: vi.fn().mockReturnValue(available),
     analyzeAudio: vi.fn().mockResolvedValue(structuredClone(ANALYSIS)),
+    verifyEdit: vi.fn().mockResolvedValue(structuredClone(VERIFY)),
     align: vi.fn().mockResolvedValue({ delaySamples: 37, delayMs: 0.839, correlation: 0.93, polarityInverted: true }),
   };
   getSidecarClientMock.mockReturnValue(client);
@@ -216,5 +227,100 @@ describe('measure_track_alignment', () => {
     const result = await tool('measure_track_alignment')({ referenceTrack: 4, trackIndex: 4, startTime: 0 });
     expect(result.isError).toBe(true);
     expect(sendCommandMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('verify_edit', () => {
+  it('compares the edited track with a reference track and returns the verdict per check', async () => {
+    sidecar();
+    renderOk();
+
+    const result = await tool('verify_edit')({ trackIndex: 31, referenceTrack: 30, startTime: 12, durationSeconds: 5 });
+
+    expect(result.isError).toBeUndefined();
+    const data = JSON.parse(result.content[0].text);
+    expect(data).toMatchObject({
+      verdict: 'ok',
+      trackName: 'T31',
+      referenceName: 'T30',
+      startTime: 12,
+      endTime: 17,
+      checks: { null: { delayMs: 4, gainDb: -3, residualDb: -118.1 }, discontinuity: { verdict: 'ok' } },
+    });
+    // Both renders are temporary files and are cleaned up
+    expect(unlinkMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('compares against a file from before the edit and leaves that file alone', async () => {
+    sidecar();
+    renderOk();
+
+    const result = await tool('verify_edit')({ trackIndex: 5, referencePath: '/bounces/before.wav', startTime: 0 });
+
+    const data = JSON.parse(result.content[0].text);
+    expect(data).toMatchObject({ verdict: 'ok', referencePath: '/bounces/before.wav', trackName: 'T5' });
+    expect(unlinkMock).not.toHaveBeenCalledWith('/bounces/before.wav');
+    expect(unlinkMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes a fail through with where the click is', async () => {
+    const client = sidecar();
+    renderOk();
+    client.verifyEdit.mockResolvedValue({
+      verdict: 'fail',
+      expect: 'identical',
+      sampleRate: 44100,
+      checks: { discontinuity: { verdict: 'fail', score: 13.5, referenceScore: 4.4, atSeconds: 1.5 }, null: { verdict: 'fail', residualDb: -21 } },
+    });
+
+    const data = JSON.parse((await tool('verify_edit')({ trackIndex: 2, referenceTrack: 1, startTime: 0 })).content[0].text);
+
+    expect(data.verdict).toBe('fail');
+    expect(data.checks.discontinuity).toMatchObject({ verdict: 'fail', atSeconds: 1.5 });
+  });
+
+  it('refuses without a reference, with two, or against the track itself, and renders nothing', async () => {
+    sidecar();
+    const verify = tool('verify_edit');
+
+    const none = await verify({ trackIndex: 2, startTime: 0 });
+    const both = await verify({ trackIndex: 2, referenceTrack: 1, referencePath: '/a.wav', startTime: 0 });
+    const same = await verify({ trackIndex: 2, referenceTrack: 2, startTime: 0 });
+
+    for (const refused of [none, both, same]) expect(refused.isError).toBe(true);
+    expect(none.content[0].text).toMatch(/exactly one of referenceTrack/);
+    expect(same.content[0].text).toMatch(/must differ/);
+    expect(sendCommandMock).not.toHaveBeenCalled();
+  });
+
+  it('turns a silent window into an error with the sidecar\'s reason', async () => {
+    const client = sidecar();
+    renderOk();
+    client.verifyEdit.mockResolvedValue({ error: 'The reference is silent over this range' });
+
+    const result = await tool('verify_edit')({ trackIndex: 2, referenceTrack: 1, startTime: 0 });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe('The reference is silent over this range');
+    expect(unlinkMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('says how to install the sidecar when it is missing', async () => {
+    sidecar(false);
+    const result = await tool('verify_edit')({ trackIndex: 2, referenceTrack: 1, startTime: 0 });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/setup-sidecar/);
+  });
+
+  it('deletes the renders even when the sidecar fails', async () => {
+    const client = sidecar();
+    renderOk();
+    client.verifyEdit.mockRejectedValue(new Error('Verification failed: boom'));
+
+    const result = await tool('verify_edit')({ trackIndex: 2, referenceTrack: 1, startTime: 0 });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/boom/);
+    expect(unlinkMock).toHaveBeenCalledTimes(2);
   });
 });
