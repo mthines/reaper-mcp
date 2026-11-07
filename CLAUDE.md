@@ -78,6 +78,7 @@ reaper-mcp/
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
         recording.ts          # record setup (inputs, monitoring, punch), fixed lanes, comp_lanes (logic in reaper/mcp_recording_lib.lua)
         mixing.ts             # automation mode, FX modulation + pins, monitoring FX, freeze, render in place, stretch markers, quantize_audio (logic in reaper/mcp_mixing_lib.lua)
+        align.ts              # align_audio_to_guide (onset pairing in src/align.ts; markers written by align_stretch in reaper/mcp_mixing_lib.lua)
 
     sidecar/                  # Python sidecar for semantic audio analysis (opt-in)
       server.py               # JSON-RPC server (Meta Audiobox Aesthetics, CC-BY 4.0)
@@ -188,7 +189,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | Vite + React Compiler → single HTML | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (184 total)
+## MCP Tools (186 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template, `measure_track_alignment` and `verify_edit` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -418,7 +419,7 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `set_track_lanes` | `tools/recording.ts` | Fixed lanes on/off, lane count, names, which lane plays alone or which lanes play layered |
 | `comp_lanes` | `tools/recording.ts` | Comp from lanes: `{start, end, lane}` ranges (max 200, no overlaps) copied onto a new exclusive comp lane with crossfades; a range a lane has no audio for is refused with the gap |
 
-### Mixing Depth (14)
+### Mixing Depth (16)
 
 | Tool | File | Description |
 |------|------|-------------|
@@ -435,6 +436,8 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `unfreeze_tracks` | `tools/mixing.ts` | Restore one freeze layer (41644); refuses a track that is not frozen |
 | `apply_fx_to_items` | `tools/mixing.ts` | Render in place: track + take FX to a new active take (40209/40361/41993); the old take stays |
 | `add_stretch_markers` | `tools/mixing.ts` | Many stretch markers on an audio item in one call and one undo point |
+| `edit_stretch_markers` | `tools/mixing.ts` | Edit existing markers by index in one call and one undo point: position (item seconds), sourcePosition, slope (-1..1); all edits checked against the whole list first (out of order, repeated or out of range refuses everything) |
+| `align_audio_to_guide` | `tools/align.ts` | Vocal alignment: onsets of a guide item and 1-8 doubles (sidecar `transients`, source files), paired in order within `maxShiftMs` (`align.ts`), then a stretch marker per hit moves the double onto the guide; `strength`, `dryRun`, `protectConsonants` (high-band hits keep a rigid `consonantMs` tail); per double the offset before/after (avg/max ms); a guide with stretch markers is refused (TS-composed over `get_media_item_properties` + the `align_audio_to_guide` bridge command) |
 | `quantize_audio` | `tools/mixing.ts` | Hits from the sidecar (`transients`), then stretch markers moved toward the grid (strength, window, swing); returns the timing offset before/after (TS-composed over `get_media_item_properties` + the `quantize_audio` bridge command) |
 
 ### Mix Checks (4) — Requires Python Sidecar
@@ -523,7 +526,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 184 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 186 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
@@ -609,6 +612,7 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, 
 
 ### Mixing Depth Concepts
 
+- **Aligning to a guide** (`align_audio_to_guide`): the pairing is a monotonic match (dynamic programming) of the guide's hits (project time) to the double's (source time → project time), a pair never further apart than `maxShiftMs`, a hit left alone costing `maxShiftMs`. Hits come from each item's source file, so take FX and existing stretch markers are not heard: the double's markers are replaced (re-running is idempotent), a guide that has some is refused. `align_stretch` skips a hit whose move would cross the previous marker, anchors both item ends, and `strength` scales each hit's move; consonant tails are `extra` pairs (same shift as their hit, not counted in the offsets). `edit_stretch_markers` rewrites the whole marker list in order after checking every edit, so a marker's index is the one `get_stretch_markers` lists.
 - **Logic lives in `reaper/mcp_mixing_lib.lua`** (pure Lua over an injected API, unit-tested via wasmoon in `mixing-lib.test.ts`); the bridge handlers decode the nested JSON params and pass `reaper` in.
 - **Modulation** goes through `TrackFX_Get/SetNamedConfigParm` keys `param.N.{mod,lfo,acs,plink}.*` (REAPER 6.37+). Reads fail until a parameter has modulation; an unknown key's write fails, so every write is checked and the whole edit is one undo point (seen live: undo removes it).
 - **Pins** are bit masks per pin (`TrackFX_Get/SetPinMappings`, low and high 32 channels). ReaComp has 4 inputs; pins 2/3 (0-based) are its sidechain and default to channels 3/4.

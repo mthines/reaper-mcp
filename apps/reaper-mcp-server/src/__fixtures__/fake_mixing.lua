@@ -192,9 +192,11 @@ function new_fake(spec)
       table.sort(take.sm, function(a, b) return a[1] < b[1] end)
       for k, m in ipairs(take.sm) do if m[1] == pos then return k - 1 end end
     end
-    take.sm[i + 1] = { pos, src }
+    take.sm[i + 1] = { pos, src, take.sm[i + 1] and take.sm[i + 1][3] or 0 }
     return i
   end
+  function api.GetTakeStretchMarkerSlope(take, i) return take.sm[i + 1][3] or 0 end
+  function api.SetTakeStretchMarkerSlope(take, i, slope) w(); take.sm[i + 1][3] = slope; return true end
   function api.DeleteTakeStretchMarkers(take, i) w(); table.remove(take.sm, i + 1); return 1 end
 
   function api.TimeMap2_timeToQN(_, t) return t * 2 end

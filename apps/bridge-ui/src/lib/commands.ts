@@ -245,6 +245,7 @@ export const LONG_RUNNING = new Set([
   'unfreeze_tracks',
   'apply_fx_to_items',
   'quantize_audio',
+  'align_audio_to_guide',
   'analyze_track_offline',
   'analyze_audio_file',
   'measure_track_alignment',

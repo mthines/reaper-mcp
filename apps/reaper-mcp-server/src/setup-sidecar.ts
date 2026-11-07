@@ -243,7 +243,7 @@ export const COMPONENTS: Component[] = [
   {
     id: 'core',
     title: 'Audio analysis (required)',
-    enables: 'analyze_track_offline, analyze_audio_file, measure_track_alignment, detect_transients, quantize_audio, ' +
+    enables: 'analyze_track_offline, analyze_audio_file, measure_track_alignment, detect_transients, quantize_audio, align_audio_to_guide, ' +
       'detect_key / detect_chords on audio, transcribe_voice_sketch, analyze_loudness_curve, analyze_stereo_bands, measure_masking',
     why: 'Claude renders a track and reads it offline: loudness (LUFS, LRA, true peak), tonal balance against a reference, ' +
       'timing, phase, key and chords. Everything else builds on it.',
