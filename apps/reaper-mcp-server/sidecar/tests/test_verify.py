@@ -140,10 +140,24 @@ def test_a_stretch_skips_the_null_and_still_checks_for_clicks(source):
     assert verify.verify_edit(source, stretched, SR, time_scale=1.1)["verdict"] == "fail"
 
 
-def test_stereo_input_is_judged_on_its_mono_sum(source):
-    stereo = np.stack([source, source])
-    result = verify.verify_edit(stereo, np.stack([source * 0.5, source * 0.5]), SR)
+def test_a_stereo_gain_change_passes_and_is_reported_in_dB(source):
+    stereo = np.stack([source, source * 0.8])
+    result = verify.verify_edit(stereo, stereo * 0.5, SR)
     assert result["checks"]["null"]["gainDb"] == pytest.approx(-6.0, abs=0.05)
+    assert result["verdict"] == "ok"
+
+
+def test_swapping_left_and_right_is_not_hidden_by_the_mono_sum():
+    rng = np.random.default_rng(5)
+    left = np.convolve(rng.standard_normal(2 * SR), np.ones(16) / 16, mode="same") * 0.2
+    right = np.convolve(rng.standard_normal(2 * SR), np.ones(16) / 16, mode="same") * 0.2
+    result = verify.verify_edit(np.stack([left, right]), np.stack([right, left]), SR)
+    assert result["verdict"] == "fail"
+    assert result["checks"]["null"]["residualDb"] > verify.NULL_WARN_DB
+
+
+def test_a_mono_edit_of_a_stereo_reference_is_compared_on_the_sum(source):
+    result = verify.verify_edit(np.stack([source, source]), source, SR)
     assert result["verdict"] == "ok"
 
 

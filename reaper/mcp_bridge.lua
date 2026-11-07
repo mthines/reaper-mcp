@@ -4980,7 +4980,7 @@ for _, c in ipairs({
   "redo_project", "add_fx", "add_take_fx", "setup_fx_chain", "copy_fx", "move_fx", "set_fx_offline",
   "set_fx_preset", "get_fx_preset_list", "list_available_fx", "load_fx_chain", "insert_track_template",
   "insert_audio_file", "snapshot_save", "snapshot_restore", "snapshot_edit",
-  "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "analyze_track_aesthetics",
+  "analyze_track_offline", "analyze_audio_file", "measure_track_alignment", "verify_edit", "analyze_track_aesthetics",
   "detect_transients", "create_transient_automation", "insert_stem_tracks",
   "analyze_loudness_curve", "analyze_stereo_bands", "measure_masking", "separate_stems",
   "transcribe_voice_sketch",

@@ -41,6 +41,12 @@ def _mono(audio: np.ndarray) -> np.ndarray:
     return a if a.ndim == 1 else a.mean(axis=0)
 
 
+def _channels(audio: np.ndarray) -> np.ndarray:
+    """(channels, samples) float64, whatever the input shape."""
+    a = np.asarray(audio, dtype=np.float64)
+    return a[None, :] if a.ndim == 1 else a
+
+
 def _db(x: float, floor: float = -150.0) -> float:
     return float(max(floor, 10.0 * np.log10(max(x, 1e-15))))
 
@@ -59,9 +65,13 @@ def compensated_null(reference: np.ndarray, edited: np.ndarray, sample_rate: int
     (dB relative to the reference) once those are removed. The inputs are cut to the
     shorter one's length; the lag margin at both ends is left out of the residual.
     """
+    ref_ch, edit_ch = _channels(reference), _channels(edited)
     ref, edit = _mono(reference), _mono(edited)
     n = min(len(ref), len(edit))
     ref, edit = ref[:n], edit[:n]
+    # Delay and gain come from the mono sum. When both have the same channels the residual is measured on each,
+    # so swapping left and right (or any change only to the stereo image) is not hidden by the sum.
+    per_channel = ref_ch.shape[0] == edit_ch.shape[0] and ref_ch.shape[0] > 1
     if n < int(0.1 * sample_rate):
         return {"error": "Audio too short: need at least 0.1 s"}
     if np.max(np.abs(ref)) < SILENCE:
@@ -83,16 +93,21 @@ def compensated_null(reference: np.ndarray, edited: np.ndarray, sample_rate: int
 
     aligned = _fractional_delay(edit, -lag)  # undo the delay: bring the edit back onto the reference
     gain = float(np.dot(ref, aligned) / (np.dot(aligned, aligned) + 1e-15))
-    residual = ref - gain * aligned
     margin = lag_max * 2
     span = slice(margin, n - margin) if n > 4 * margin else slice(0, n)
-    ref_power = float(np.mean(ref[span] ** 2)) + 1e-15
+    if per_channel:
+        pairs = [(r[:n], _fractional_delay(e[:n], -lag)) for r, e in zip(ref_ch, edit_ch)]
+        residual_power = float(np.mean([np.mean((r[span] - gain * a[span]) ** 2) for r, a in pairs]))
+        ref_power = float(np.mean([np.mean(r[span] ** 2) for r, _ in pairs])) + 1e-15
+    else:
+        residual_power = float(np.mean((ref - gain * aligned)[span] ** 2))
+        ref_power = float(np.mean(ref[span] ** 2)) + 1e-15
     return {
         "delayMs": round(1000.0 * lag / sample_rate, 3),
         # gain that maps the edit back to the reference; the edit is 1/gain times as loud
         "gainDb": round(-20.0 * np.log10(abs(gain) + 1e-15), 2),
         "polarityInverted": bool(gain < 0),
-        "residualDb": round(_db(float(np.mean(residual[span] ** 2)) / ref_power), 1),
+        "residualDb": round(_db(residual_power / ref_power), 1),
         # The residual is relative to this: with a quiet reference, rounding noise of a 16-bit file can set it
         "referenceRmsDb": round(_db(ref_power), 1),
     }

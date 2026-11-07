@@ -279,6 +279,33 @@ describe('verify_edit', () => {
     expect(data.checks.discontinuity).toMatchObject({ verdict: 'fail', atSeconds: 1.5 });
   });
 
+  it('reports where a click is in project time, not time into the rendered window', async () => {
+    const client = sidecar();
+    renderOk();
+    client.verifyEdit.mockResolvedValue({
+      verdict: 'fail',
+      expect: 'identical',
+      sampleRate: 44100,
+      checks: { discontinuity: { verdict: 'fail', score: 13.5, referenceScore: 4.4, atSeconds: 1.5 }, null: { verdict: 'ok' } },
+    });
+
+    const data = JSON.parse((await tool('verify_edit')({ trackIndex: 2, referenceTrack: 1, startTime: 12, durationSeconds: 5 })).content[0].text);
+
+    expect(data.checks.discontinuity.atSeconds).toBe(13.5);
+    expect(data).toMatchObject({ startTime: 12, endTime: 17 });
+  });
+
+  it('shows up in the bridge page log, for a verdict and for a refusal', async () => {
+    sidecar();
+    renderOk();
+    await tool('verify_edit')({ trackIndex: 2, referenceTrack: 1, startTime: 0 });
+    await tool('verify_edit')({ trackIndex: 2, referenceTrack: 2, startTime: 0 });
+
+    const logged = sendCommandMock.mock.calls.filter(([type]) => type === '_log_result').map(([, p]) => p as Record<string, unknown>);
+    expect(logged.map((l) => [l['command'], l['ok']])).toEqual([['verify_edit', 1], ['verify_edit', 0]]);
+    expect(String(logged[1]['e'])).toMatch(/must differ/);
+  });
+
   it('refuses without a reference, with two, or against the track itself, and renders nothing', async () => {
     sidecar();
     const verify = tool('verify_edit');
@@ -290,7 +317,7 @@ describe('verify_edit', () => {
     for (const refused of [none, both, same]) expect(refused.isError).toBe(true);
     expect(none.content[0].text).toMatch(/exactly one of referenceTrack/);
     expect(same.content[0].text).toMatch(/must differ/);
-    expect(sendCommandMock).not.toHaveBeenCalled();
+    expect(sendCommandMock.mock.calls.filter(([type]) => String(type).startsWith('render_'))).toHaveLength(0);
   });
 
   it('turns a silent window into an error with the sidecar\'s reason', async () => {

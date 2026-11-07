@@ -61,6 +61,16 @@ function toProjectTime(result: Record<string, unknown>, offset: number): Record<
   return result;
 }
 
+/** verify_edit: the sidecar's click time is seconds into the rendered window; the rest of the answer is project time. */
+function inProjectTime(result: Record<string, unknown>, offset: number): Record<string, unknown> {
+  const checks = result['checks'] as { discontinuity?: { atSeconds?: number | null } } | undefined;
+  const at = checks?.discontinuity?.atSeconds;
+  if (checks?.discontinuity && typeof at === 'number') {
+    checks.discontinuity.atSeconds = Math.round((at + offset) * 1000) / 1000;
+  }
+  return result;
+}
+
 const referenceSchema = {
   referencePath: z.string().min(1).optional()
     .describe('Absolute path of a reference audio file (WAV/FLAC/AIFF) to compare tonal balance and loudness against'),
@@ -254,13 +264,13 @@ export function registerOfflineTools(server: McpServer): void {
     'Check the result of an edit you just made, since you cannot hear it: compare the edited track with the audio from ' +
     'before the edit and get a verdict per check. Compensated null: the delay (ms, + = later), gain (dB) and polarity ' +
     'between the two are estimated and removed, and the residual left (dB below the reference) says whether anything else ' +
-    'changed (noise, a splice, a different waveform; it is relative to referenceRmsDb, so with a quiet reference the rounding noise of a 16-bit bounce can set it). Discontinuity: the largest sample-to-sample jump against the ' +
+    'changed (noise, a splice, a different waveform, a swapped stereo channel; it is relative to referenceRmsDb, so with a quiet reference the rounding noise of a 16-bit bounce can set it). Discontinuity: the largest sample-to-sample jump against the ' +
     "reference's own, with where it happens (a click or hard splice). Use expect 'identical' (default) for edits that " +
     'should leave the sound alone apart from level, delay and polarity (alignment, gain, split, crossfade): the residual ' +
     'is judged ok/warn/fail. Use "changed" for EQ, compression and the like: the residual is reported without a ' +
     'verdict. Set timeScale to the stretch factor when the edit changed the timing: the waveform null is then skipped ' +
     'and only the click check runs. The reference is another track (e.g. a copy you kept) or an audio file of the same ' +
-    'range from before the edit (a bounce), not an undo. Pitch, formant and transient checks are not included: they ' +
+    'range from before the edit (a bounce), not an undo. Keep a reference track unmuted so it renders. Pitch, formant and transient checks are not included: they ' +
     'need a baseline per source. A passing result is evidence, not a replacement for listening. Requires the Python sidecar.',
     {
       trackIndex: z.coerce.number().int().min(0).describe('Zero-based index of the edited track'),
@@ -280,12 +290,17 @@ export function registerOfflineTools(server: McpServer): void {
     },
     async (args) => {
       const { trackIndex, referenceTrack, referencePath, startTime, durationSeconds, expect, timeScale, maxLagMs } = args;
+      const startedAt = Date.now();
+      const refuse = (message: string): ToolResult => {
+        logToolResult('verify_edit', args, startedAt, null, message);
+        return error(message);
+      };
       const sidecar = getSidecarClient();
       if (!sidecar.isAvailable()) return error(SIDECAR_NOT_INSTALLED_MSG);
       if ((referenceTrack == null) === (referencePath == null)) {
-        return error('Give exactly one of referenceTrack (a track with the audio from before the edit) or referencePath (a file)');
+        return refuse('Give exactly one of referenceTrack (a track with the audio from before the edit) or referencePath (a file)');
       }
-      if (referenceTrack === trackIndex) return error('referenceTrack and trackIndex must differ');
+      if (referenceTrack === trackIndex) return refuse('referenceTrack and trackIndex must differ');
 
       const end = startTime + (durationSeconds ?? DEFAULT_VERIFY_SECONDS);
       const rendered: RenderTrackToWavResult[] = [];
@@ -303,17 +318,18 @@ export function registerOfflineTools(server: McpServer): void {
           timeScale: timeScale ?? 1,
           maxLagMs: maxLagMs ?? DEFAULT_MAX_LAG_MS,
         });
-        if (typeof result['error'] === 'string') return error(result['error']);
+        if (typeof result['error'] === 'string') return refuse(result['error']);
+        logToolResult('verify_edit', args, startedAt, null);
         return text({
           trackIndex,
           trackName: edited.trackName,
           ...(referenceTrack != null ? { referenceTrack, referenceName: rendered[0].trackName } : { referencePath }),
           startTime,
           endTime: end,
-          ...result,
+          ...inProjectTime(result, startTime),
         });
       } catch (err) {
-        return error(err instanceof Error ? err.message : String(err));
+        return refuse(err instanceof Error ? err.message : String(err));
       } finally {
         await Promise.all(rendered.map(discardRender));
       }

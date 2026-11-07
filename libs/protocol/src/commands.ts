@@ -217,6 +217,7 @@ export type LoggedTool =
   | 'analyze_track_offline'
   | 'analyze_audio_file'
   | 'measure_track_alignment'
+  | 'verify_edit'
   | 'analyze_track_aesthetics'
   | 'analyze_loudness_curve'
   | 'analyze_stereo_bands'
