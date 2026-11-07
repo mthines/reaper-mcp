@@ -132,6 +132,23 @@ def discontinuity_score(audio: np.ndarray, edge_samples: int = 0) -> dict[str, A
     return {"score": round(float(inner[k] / scale), 2), "atSample": offset + k + 1}
 
 
+def _worst_channel(reference: np.ndarray, edited: np.ndarray, edge_samples: int) -> tuple[dict, dict, int | None]:
+    """
+    Discontinuity of the channel that scores highest in the edit, with the reference's score for the same channel.
+    A click on one channel, or opposite clicks on left and right, would shrink or cancel in a mono sum.
+    Channel counts that differ are compared as mono sums.
+    """
+    ref_ch, edit_ch = _channels(reference), _channels(edited)
+    if ref_ch.shape[0] != edit_ch.shape[0]:
+        ref_ch, edit_ch = _mono(reference)[None, :], _mono(edited)[None, :]
+    best: tuple[dict, dict, int | None] | None = None
+    for index, (ref, edit) in enumerate(zip(ref_ch, edit_ch)):
+        edit_disc, ref_disc = discontinuity_score(edit, edge_samples), discontinuity_score(ref, edge_samples)
+        if edit_disc["score"] is not None and (best is None or edit_disc["score"] > best[0]["score"]):
+            best = (edit_disc, ref_disc, index if len(edit_ch) > 1 else None)
+    return best or (discontinuity_score(edit_ch[0]), discontinuity_score(ref_ch[0]), None)
+
+
 def _click_verdict(edit_score: float | None, ref_score: float | None) -> str:
     if edit_score is None:
         return "unknown"
@@ -166,13 +183,13 @@ def verify_edit(reference: np.ndarray, edited: np.ndarray, sample_rate: int, *,
     checks: dict[str, Any] = {}
 
     edge = int(sample_rate * max_lag_ms / 1000.0)
-    edit_disc = discontinuity_score(edited, edge)
-    ref_disc = discontinuity_score(reference, edge)
+    edit_disc, ref_disc, channel = _worst_channel(reference, edited, edge)
     checks["discontinuity"] = {
         "verdict": _click_verdict(edit_disc["score"], ref_disc["score"]),
         "score": edit_disc["score"],
         "referenceScore": ref_disc["score"],
         "atSeconds": None if edit_disc["atSample"] is None else round(edit_disc["atSample"] / sample_rate, 3),
+        **({"channel": channel} if channel is not None else {}),
     }
 
     if abs(time_scale - 1.0) > 1e-6:

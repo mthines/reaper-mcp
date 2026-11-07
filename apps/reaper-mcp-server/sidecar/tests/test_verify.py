@@ -129,6 +129,39 @@ def test_a_delayed_copy_of_material_that_starts_abruptly_is_not_called_a_click()
     assert result["checks"]["null"]["delayMs"] == pytest.approx(5.0, abs=0.05)
 
 
+def _stereo_tone(seed: int = 2) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    t = np.arange(3 * SR) / SR
+    tone = 0.2 * np.sin(2 * np.pi * 220 * t) + 0.01 * rng.standard_normal(len(t))
+    return np.stack([tone, tone])
+
+
+def test_a_click_on_one_channel_is_found_and_the_channel_is_named():
+    reference = _stereo_tone()
+    clicked = reference.copy()
+    clicked[1, len(reference[0]) // 2] += 0.5
+    disc = verify.verify_edit(reference, clicked, SR, expect="changed")["checks"]["discontinuity"]
+    assert disc["verdict"] == "fail"
+    assert disc["channel"] == 1
+    assert disc["atSeconds"] == pytest.approx(1.5, abs=0.002)
+
+
+def test_opposite_clicks_on_left_and_right_do_not_cancel_out():
+    reference = _stereo_tone()
+    clicked = reference.copy()
+    k = len(reference[0]) // 2
+    clicked[0, k] += 0.5
+    clicked[1, k] -= 0.5
+    assert verify.verify_edit(reference, clicked, SR, expect="changed")["checks"]["discontinuity"]["verdict"] == "fail"
+
+
+def test_a_clean_stereo_edit_names_no_channel_problem():
+    reference = _stereo_tone()
+    result = verify.verify_edit(reference, reference * 0.7, SR)
+    assert result["verdict"] == "ok"
+    assert result["checks"]["discontinuity"]["verdict"] == "ok"
+
+
 def test_a_stretch_skips_the_null_and_still_checks_for_clicks(source):
     stretched = source[: int(len(source) / 1.1)].copy()
     clean = verify.verify_edit(source, stretched, SR, time_scale=1.1)

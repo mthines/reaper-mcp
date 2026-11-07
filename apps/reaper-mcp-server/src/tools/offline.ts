@@ -264,8 +264,8 @@ export function registerOfflineTools(server: McpServer): void {
     'Check the result of an edit you just made, since you cannot hear it: compare the edited track with the audio from ' +
     'before the edit and get a verdict per check. Compensated null: the delay (ms, + = later), gain (dB) and polarity ' +
     'between the two are estimated and removed, and the residual left (dB below the reference) says whether anything else ' +
-    'changed (noise, a splice, a different waveform, a swapped stereo channel; it is relative to referenceRmsDb, so with a quiet reference the rounding noise of a 16-bit bounce can set it). Discontinuity: the largest sample-to-sample jump against the ' +
-    "reference's own, with where it happens (a click or hard splice). Use expect 'identical' (default) for edits that " +
+    'changed (noise, a splice, a different waveform, a swapped stereo channel; it is relative to referenceRmsDb, so with a quiet reference the rounding noise of a 16-bit bounce can set it). Discontinuity: the largest sample-to-sample jump on any channel against the ' +
+    "reference's own, with where it happens and which channel (a click or hard splice). Use expect 'identical' (default) for edits that " +
     'should leave the sound alone apart from level, delay and polarity (alignment, gain, split, crossfade): the residual ' +
     'is judged ok/warn/fail. Use "changed" for EQ, compression and the like: the residual is reported without a ' +
     'verdict. Set timeScale to the stretch factor when the edit changed the timing: the waveform null is then skipped ' +
