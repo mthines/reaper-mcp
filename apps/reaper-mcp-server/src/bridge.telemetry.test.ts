@@ -1,15 +1,16 @@
 /**
  * What sendCommand reports to OpenTelemetry, observed end to end: a real temp
  * bridge directory, a tiny fake bridge answering command files, and in-memory
- * span/metric exporters. Internal `_` commands (the diagnostics poller) must
- * stay out of usage telemetry, the way the bridge status page hides them.
+ * span/metric exporters. Bridge plumbing (the diagnostics poller, the session
+ * heartbeat, the bridge page's tool log) stays out of usage telemetry, the way
+ * the bridge status page hides it; internal commands a tool runs are traced.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, readdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { metrics as otelMetrics, trace } from '@opentelemetry/api';
-import { metrics, tracing } from '@opentelemetry/sdk-node';
+import { metrics, node, tracing } from '@opentelemetry/sdk-node';
 import type { CommandType } from '@reaper-mcp/protocol';
 import { sendCommand, pollBridgeDiagnostics } from './bridge.js';
 
@@ -64,9 +65,8 @@ async function meteredMethods(): Promise<string[]> {
 
 describe('bridge telemetry', () => {
   beforeAll(() => {
-    trace.setGlobalTracerProvider(
-      new tracing.BasicTracerProvider({ spanProcessors: [new tracing.SimpleSpanProcessor(spans)] }),
-    );
+    // register() installs the async context manager, so a tool span parents the bridge span
+    new node.NodeTracerProvider({ spanProcessors: [new tracing.SimpleSpanProcessor(spans)] }).register();
     otelMetrics.setGlobalMeterProvider(new metrics.MeterProvider({ readers: [reader] }));
   });
 
@@ -103,10 +103,30 @@ describe('bridge telemetry', () => {
     expect(await meteredMethods()).not.toContain('_bridge_diagnostics');
   });
 
-  it('keeps any internal command out of traces', async () => {
-    const res = await sendCommand('_session' as CommandType);
+  it('keeps the session heartbeat and the bridge page\'s tool log out of traces and per-command metrics', async () => {
+    const results = [await sendCommand('_session' as CommandType), await sendCommand('_log_result' as CommandType)];
 
-    expect(res.success).toBe(true);
+    expect(results.every((r) => r.success)).toBe(true);
+    expect(received).toEqual(['_session', '_log_result']);
     expect(spans.getFinishedSpans()).toEqual([]);
+    const metered = await meteredMethods();
+    expect(metered).not.toContain('_session');
+    expect(metered).not.toContain('_log_result');
   });
+
+  it.each(['_chord_grid', '_item_range', '_midi_pitch_profile'])(
+    'traces and meters %s, an internal command a tool runs, under the tool\'s span',
+    async (command) => {
+      await trace.getTracer('test').startActiveSpan('tools/call detect_chords', async (tool) => {
+        await sendCommand(command as CommandType);
+        tool.end();
+      });
+
+      const finished = spans.getFinishedSpans();
+      const tool = finished.find((s) => s.name === 'tools/call detect_chords');
+      const bridge = finished.find((s) => s.name === `reaper.Bridge/${command}`);
+      expect(bridge?.parentSpanContext?.spanId).toBe(tool?.spanContext().spanId);
+      expect(await meteredMethods()).toContain(command);
+    },
+  );
 });

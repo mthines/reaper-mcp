@@ -142,6 +142,7 @@ describe('AnonymizingSpanExporter', () => {
         'error.type': 'tool_error',
         'reaper.bridge.command.id': 'c3e9a5f7',
         'reaper.track.name': 'Lead Vox',
+        'reaper.tool.error.message': 'Error: Track "Lead Vox" not found in ~/Songs/secret.rpp',
       },
     });
     span.recordException(new Error('/Users/someone/Songs/secret.rpp: Track "Lead Vox" not found'));

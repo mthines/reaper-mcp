@@ -40,10 +40,20 @@ import { registerKnowledgeTools } from './tools/knowledge.js';
 const MAX_STATUS_MESSAGE = 256;
 
 /**
+ * The failure message of every failed tool call, as the agent got it (home directory
+ * redacted, capped). A refused request leaves the span status unset, which carries no
+ * description, so this is the one place its text is on the span. Free text can name
+ * tracks, plugins or paths: the anonymized usage telemetry drops it (not in
+ * ALLOWED_SPAN_ATTRIBUTES, telemetry-consent.ts); a custom OTEL_* exporter gets it.
+ */
+const TOOL_ERROR_MESSAGE = 'reaper.tool.error.message';
+
+/**
  * Wraps server.tool() so every tool callback runs inside a SERVER span that
  * follows the OTel MCP semantic conventions: `tools/call {tool}` with
  * `mcp.method.name`, `gen_ai.tool.name`, `jsonrpc.request.id`, and `error.type`
- * (`tool_error` when the result has `isError`). The span parents the CLIENT
+ * (`tool_error` when the result has `isError`) with the failure message in
+ * `reaper.tool.error.message`. The span parents the CLIENT
  * bridge spans: tool invocation → bridge command → REAPER response.
  *
  * Also records `mcp.server.operation.duration` per call.
@@ -90,21 +100,22 @@ export function instrumentToolHandlers(server: McpServer): void {
               // HTTP 4xx; only system errors mark the span as failed. No log: the
               // bridge/sidecar call below already logged the cause.
               const errorText = res.content?.[0]?.text ?? 'Tool error';
+              const message = redactHome(errorText).slice(0, MAX_STATUS_MESSAGE);
               metricAttrs['error.type'] = 'tool_error';
               span.setAttribute('error.type', 'tool_error');
+              span.setAttribute(TOOL_ERROR_MESSAGE, message);
               if (isSystemError(classifyBridgeError(errorText.replace(/^Error:\s*/, '')))) {
-                span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(errorText).slice(0, MAX_STATUS_MESSAGE) });
+                span.setStatus({ code: SpanStatusCode.ERROR, message });
               }
             }
             return result;
           } catch (err) {
             const errorType = err instanceof Error ? err.name : 'Error';
+            const message = redactHome(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
             metricAttrs['error.type'] = errorType;
             span.setAttribute('error.type', errorType);
-            span.setStatus({
-              code: SpanStatusCode.ERROR,
-              message: redactHome(err instanceof Error ? `${err.name}: ${err.message}` : String(err)),
-            });
+            span.setAttribute(TOOL_ERROR_MESSAGE, message.slice(0, MAX_STATUS_MESSAGE));
+            span.setStatus({ code: SpanStatusCode.ERROR, message });
             emitLog('error', `Tool ${toolName} threw`, {
               'gen_ai.tool.name': toolName,
               'error.type': errorType,

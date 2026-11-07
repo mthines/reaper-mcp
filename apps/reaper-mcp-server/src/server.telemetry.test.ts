@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { homedir } from 'node:os';
 import { trace, SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { tracing } from '@opentelemetry/sdk-node';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -45,6 +46,7 @@ describe('instrumentToolHandlers', () => {
       'network.transport': 'pipe',
     });
     expect(span.attributes['error.type']).toBeUndefined();
+    expect(span.attributes['reaper.tool.error.message']).toBeUndefined();
     expect(span.status.code).toBe(SpanStatusCode.UNSET);
   });
 
@@ -56,6 +58,30 @@ describe('instrumentToolHandlers', () => {
     const [span] = exporter.getFinishedSpans();
     expect(span.attributes['error.type']).toBe('tool_error');
     expect(span.status.code).toBe(SpanStatusCode.UNSET);
+  });
+
+  it('keeps a refused request\'s message on the span, since an unset status carries none', async () => {
+    const cb = wrapTool('detect_chords', async () => ({
+      content: [{ type: 'text', text: 'Give exactly one of trackIndex or path' }],
+      isError: true,
+    }));
+
+    await cb({}, { requestId: 4 });
+
+    const [span] = exporter.getFinishedSpans();
+    expect(span.attributes['reaper.tool.error.message']).toBe('Give exactly one of trackIndex or path');
+  });
+
+  it('writes the home directory as ~ and caps a long failure message', async () => {
+    const text = `Render failed: no output file at ${homedir()}/Music/${'x'.repeat(400)}.wav`;
+    const cb = wrapTool('detect_chords', async () => ({ content: [{ type: 'text', text }], isError: true }));
+
+    await cb({}, { requestId: 5 });
+
+    const message = String(exporter.getFinishedSpans()[0].attributes['reaper.tool.error.message']);
+    expect(message.startsWith('Render failed: no output file at ~/Music/')).toBe(true);
+    expect(message).not.toContain(homedir());
+    expect(message.length).toBeLessThanOrEqual(256);
   });
 
   it.each([
@@ -70,6 +96,7 @@ describe('instrumentToolHandlers', () => {
     const [span] = exporter.getFinishedSpans();
     expect(span.attributes['error.type']).toBe('tool_error');
     expect(span.status).toMatchObject({ code: SpanStatusCode.ERROR, message: text });
+    expect(span.attributes['reaper.tool.error.message']).toBe(text);
   });
 
   it('logs nothing of its own for an isError result: the bridge already logged the cause', async () => {
@@ -88,6 +115,7 @@ describe('instrumentToolHandlers', () => {
 
     const [span] = exporter.getFinishedSpans();
     expect(span.attributes['error.type']).toBe('TypeError');
+    expect(span.attributes['reaper.tool.error.message']).toBe('TypeError: boom');
     expect(span.status.code).toBe(SpanStatusCode.ERROR);
   });
 });
