@@ -1113,7 +1113,7 @@ ESLint enforces dependency rules via `@nx/enforce-module-boundaries`:
 
 ## Running the MCP Server
 
-Clone-only model: clone the fork, run the one-command installer, done.
+Two ways in: clone the fork and run the one-command installer (below), or `npm install -g @mthines/reaper-mcp` then `reaper-mcp setup && reaper-mcp init` (no clone; the release job publishes it with provenance, `scripts/prepare-npm-package.mjs` assembles the package).
 
 ```bash
 # Full setup from a fresh clone (deps, build, link CLI, bridge, symlinks, config)
@@ -1146,12 +1146,12 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 | `setup-sidecar` | Install the Python sidecar (opt-in, Python 3.10+, venv at `~/.reaper-mcp/sidecar-venv/`). In a terminal it shows a picker: core analysis (required), Audiobox Aesthetics weights (831 MB, default on), stem separation (Demucs, ~110 MB), chord model (lv-chordia, ~135 MB), each with what it enables, why and its size. No prompt without a TTY, in CI, with `--yes`/`-y`/`--non-interactive` or with any component flag: `--all`, `--with-separation`, `--with-chords`, `--without-aesthetics` (defaults: core + aesthetics). `--list [--json]` prints the components and what is installed. An existing install gets only the missing picked parts; the scripts are always refreshed. |
 | `extension` | Manage opt-in extensions: `list`, `add <name\|folder\|git-url>`, `link <folder>`, `remove <name>`, `new <name>` (see `docs/EXTENSIONS.md`) |
 | `install-skills` | Copy the mix skills, agents and knowledge shipped in the npm package into `~/.claude` (never overwrites files the user edited or owns, skips symlinked folders; a clone uses `scripts/sync-symlinks.sh`). `--dry-run` previews. `init` runs it for an npm install |
-| `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` that runs the clone's built `main.js` (copy-free) |
+| `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` that runs the clone's built `main.js` (copy-free). From an npm install it instead registers the server at user scope with `claude mcp add --scope user` (replacing an entry whose node or `main.js` no longer exists) and runs `install-skills` |
 | `doctor` | Verify all components are configured correctly (includes 4 sidecar sub-checks) |
 | `status` | Check if Lua bridge is running in REAPER |
 
 > Skills + knowledge are wired by `scripts/sync-symlinks.sh` (symlinks into
-> `~/.claude`), not by a CLI command — the repo is the source of truth.
+> `~/.claude`) in a clone, and by `reaper-mcp install-skills` (a copy) from an npm install — the repo is the source of truth.
 
 ### Claude Code MCP Config
 
