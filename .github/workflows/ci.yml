@@ -163,10 +163,12 @@ jobs:
       - name: Check the npm package assembles
         run: |
           node scripts/prepare-npm-package.mjs
-          mkdir -p tmp/npm-smoke/home
-          npm pack ./dist/apps/reaper-mcp-server --pack-destination tmp/npm-smoke >/dev/null
-          cd tmp/npm-smoke && npm init -y >/dev/null && npm i ./mthines-reaper-mcp-*.tgz >/dev/null
-          HOME="$PWD/home" npx reaper-mcp install-skills | tee out.txt
+          # Outside the checkout: inside it, the CLI would see the clone and skip install-skills
+          SMOKE="$RUNNER_TEMP/npm-smoke"
+          mkdir -p "$SMOKE/home"
+          npm pack ./dist/apps/reaper-mcp-server --pack-destination "$SMOKE" >/dev/null
+          cd "$SMOKE" && npm init -y >/dev/null && npm i ./mthines-reaper-mcp-*.tgz >/dev/null
+          HOME="$SMOKE/home" npx reaper-mcp install-skills | tee out.txt
           grep -q "mix skills" out.txt && test -f home/.claude/skills/learn-plugin/SKILL.md
 
       - name: Lint all projects

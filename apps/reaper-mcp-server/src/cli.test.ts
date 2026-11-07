@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureWebInterface, ensureSnapshotActions, findCloneRoot, isDevClone, updateConfigText, REAPER_ASSETS, RETIRED_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureWebInterface, ensureSnapshotActions, findCloneRoot, isDevClone, updateConfigText, REAPER_ASSETS, RETIRED_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `reaper-mcp-test-${randomUUID()}`);
@@ -36,6 +36,30 @@ describe('cli helpers', () => {
       expect(hasUserMcpServer(join(tmp, 'missing.json'))).toBe(false);
       writeFileSync(path, '{ not json');
       expect(hasUserMcpServer(path)).toBe(false);
+    });
+  });
+
+  describe('userMcpServerIsStale', () => {
+    const write = (server: unknown) => {
+      const path = join(tmp, '.claude.json');
+      writeFileSync(path, JSON.stringify({ mcpServers: { reaper: server } }));
+      return path;
+    };
+
+    it('is true when the registered script no longer exists', () => {
+      const path = write({ command: process.execPath, args: [join(tmp, 'gone', 'main.js'), 'serve'] });
+      expect(userMcpServerIsStale(path)).toBe(true);
+    });
+
+    it('is false when the registered node and script both exist', () => {
+      const main = join(tmp, 'main.js');
+      writeFileSync(main, '');
+      expect(userMcpServerIsStale(write({ command: process.execPath, args: [main, 'serve'] }))).toBe(false);
+    });
+
+    it('is false for a PATH command, no server, or an unreadable file', () => {
+      expect(userMcpServerIsStale(write({ command: 'reaper-mcp', args: ['serve'] }))).toBe(false);
+      expect(userMcpServerIsStale(join(tmp, 'missing.json'))).toBe(false);
     });
   });
 

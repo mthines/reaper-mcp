@@ -14,7 +14,7 @@ import { homedir, platform } from 'node:os';
 import { exec as execCb, execFileSync } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
 import { installClaudeAssets } from './claude-assets.js';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
 import { detectInstalled, setupSidecar } from './setup-sidecar.js';
 import { firstRunTelemetryNotice, resolveTelemetry, saveTelemetryChoice, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
@@ -223,12 +223,19 @@ async function init(): Promise<void> {
 
 /** npm install: tell Claude Code about the server once, for every folder (a clone writes .mcp.json instead). */
 function registerUserMcpServer(): void {
-  if (hasUserMcpServer(join(homedir(), '.claude.json'))) {
+  const claudeJson = join(homedir(), '.claude.json');
+  const registered = hasUserMcpServer(claudeJson);
+  if (registered && !userMcpServerIsStale(claudeJson)) {
     console.log('Claude Code already knows REAPER (user-scope server "reaper" is registered).');
     return;
   }
   const mainJs = realpathSync(process.argv[1]);
   try {
+    if (registered) {
+      // Its node or main.js is gone (Node switched, package moved): replace it instead of keeping a dead entry
+      execFileSync('claude', ['mcp', 'remove', '--scope', 'user', 'reaper'], { stdio: 'pipe' });
+      console.log('The registered REAPER server pointed at files that no longer exist; replacing it.');
+    }
     execFileSync('claude', ['mcp', 'add', '--scope', 'user', 'reaper', '--', process.execPath, mainJs, 'serve'], { stdio: 'pipe' });
     console.log('Connected Claude Code to REAPER (works from any folder).');
   } catch (err) {
@@ -316,7 +323,7 @@ async function doctor(): Promise<void> {
   core.push(
     localSkills || globalSkills
       ? { label: 'Mix skills', status: 'ok', detail: localSkills ? '.claude/skills' : '~/.claude/skills' }
-      : { label: 'Mix skills', status: 'fail', detail: 'Not linked', fix: 'scripts/sync-symlinks.sh (from your clone)' },
+      : { label: 'Mix skills', status: 'fail', detail: 'Not linked', fix: findCloneRoot(__dirname) ? 'scripts/sync-symlinks.sh (from your clone)' : 'reaper-mcp install-skills' },
   );
 
   // The skills read ~/.claude/knowledge (the symlink sync-symlinks.sh creates), or
