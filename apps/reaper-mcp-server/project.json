@@ -28,6 +28,22 @@
             "glob": "**/*",
             "input": "reaper",
             "output": "reaper"
+          },
+          {
+            "glob": "**/*",
+            "input": ".claude/skills",
+            "output": "claude/skills"
+          },
+          {
+            "glob": "**/*",
+            "input": ".claude/agents",
+            "output": "claude/agents"
+          },
+          {
+            "glob": "**/*",
+            "input": "knowledge",
+            "output": "claude/knowledge",
+            "ignore": ["CLAUDE.md", "contributions/**"]
           }
         ]
       }
