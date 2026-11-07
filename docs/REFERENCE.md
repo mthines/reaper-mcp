@@ -310,7 +310,7 @@ out of version control.
 ```
 reaper-mcp/
 ├── apps/
-│   ├── reaper-mcp-server/        # MCP server (185 tools, esbuild bundle)
+│   ├── reaper-mcp-server/        # MCP server (186 tools, esbuild bundle)
 │   └── bridge-ui/                # Bridge status page (React → one self-contained HTML file)
 ├── libs/protocol/                # Shared TypeScript types
 ├── libs/extension-api/           # The contract extensions are written against (docs/EXTENSIONS.md)

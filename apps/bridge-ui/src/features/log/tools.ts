@@ -682,6 +682,14 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
       return `found ${on(e)} ${late} ${trackName(p.referenceTrack) ?? 'the reference'}${m.inv ? ', with its polarity inverted' : ''}`;
     },
   },
+  verify_edit: {
+    title: 'Check the result of an edit',
+    did: (e) => {
+      const p = paramsOf(e);
+      const against = str(p.referencePath) ? fileName(p.referencePath) : (trackName(p.referenceTrack) ?? 'the audio from before the edit');
+      return `checked the edit on ${on(e)} against ${against}`;
+    },
+  },
   detect_transients: {
     title: 'Find the hits',
     did: (e) => {

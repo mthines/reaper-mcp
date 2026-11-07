@@ -369,6 +369,7 @@ export const MCP_TOOL_NAMES = [
   'analyze_track_offline',
   'analyze_audio_file',
   'measure_track_alignment',
+  'verify_edit',
   'detect_transients',
   'create_transient_automation',
   // mixing depth

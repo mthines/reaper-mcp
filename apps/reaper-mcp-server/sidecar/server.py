@@ -254,6 +254,35 @@ def handle_align(request_id: Any, params: dict) -> str:
         return _err(request_id, -32000, f"Alignment failed: {exc}")
 
 
+def handle_verify_edit(request_id: Any, params: dict) -> str:
+    """
+    Checks on the result of an edit: `path` (after) against `referencePath` (before).
+    Compensated null (delay, gain, polarity, residual) and a discontinuity check.
+
+    params: referencePath, path, expect? ("identical" | "changed"), timeScale? (1 = timing kept),
+            maxLagMs? (default 20)
+    """
+    import verify
+
+    for key in ("referencePath", "path"):
+        error = _check_file(request_id, params, key)
+        if error:
+            return error
+    try:
+        import analysis
+
+        ref, ref_sr = analysis.load_audio(params["referencePath"])
+        edited, sr = analysis.load_audio(params["path"])
+        if ref_sr != sr:
+            return _err(request_id, -32000, f"Sample rates differ: {ref_sr} vs {sr}")
+        result = verify.verify_edit(ref, edited, sr, expect=str(params.get("expect", "identical")),
+                                    time_scale=float(params.get("timeScale", 1.0)),
+                                    max_lag_ms=float(params.get("maxLagMs", 20)))
+        return _ok(request_id, result)
+    except Exception as exc:  # noqa: BLE001 - a JSON-RPC handler reports any failure to the caller instead of crashing the sidecar
+        return _err(request_id, -32000, f"Verification failed: {exc}")
+
+
 def handle_transients(request_id: Any, params: dict) -> str:
     """
     Transient (onset) times of a file with strength, dominant band and tempo.
@@ -532,6 +561,7 @@ METHODS = {
     "analyze": handle_analyze,
     "analyze_audio": handle_analyze_audio,
     "align": handle_align,
+    "verify_edit": handle_verify_edit,
     "transients": handle_transients,
     "chroma": handle_chroma,
     "loudness_curve": handle_loudness_curve,
