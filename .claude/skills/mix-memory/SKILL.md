@@ -27,7 +27,7 @@ without `org` archives the org row too.
 
 The full contract — buckets, body shapes,
 entrenchment guards — is `knowledge/reference/memory-protocol.md`; read it before
-any write. If the `memory.*` tools are not connected, say so and stop.
+any write. If the `memory.*` tools are not connected, read `knowledge/reference/lorekit-setup.md`, walk the user through connecting LoreKit, and carry on once it is (stop only if they decline).
 
 ## Mode detection
 

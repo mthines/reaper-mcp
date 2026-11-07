@@ -23,7 +23,9 @@ its sound in internal state and has no extension gets a one-line offer to build 
 
 The mixing skills use the same agent to bootstrap plugins they don't know. To
 recall or tidy memory, use `/mix-memory`. If the `memory.*` tools are not
-connected, say so and stop.
+connected, do not stop at an error: read `knowledge/reference/lorekit-setup.md` and walk
+the user through connecting LoreKit (free, a few minutes), then carry on once it is.
+If they decline, say there is nowhere to save the record and stop.
 
 Every learned plugin should end up in the **built-in plugin list**
 (`docs/PLUGINS.md`). A **publisher** (writing member of the `reaper-mcp` LoreKit
