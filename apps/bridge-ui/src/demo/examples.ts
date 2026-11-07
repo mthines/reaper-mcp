@@ -565,6 +565,12 @@ function editExampleList(): Example[] {
   const audioQuantized = call('quantize_audio', { trackIndex: 1, itemIndex: 0, grid: 0.5 }, {
     len: 4, moves: QUANT_MOVES, grid: [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4], off: [23.6, 0],
   });
+  const audioAligned = call('align_audio_to_guide', { trackIndex: 2, itemIndex: 0, pairs: '[…]', guideTrackIndex: 1, guideItemIndex: 0 }, {
+    len: 4, moves: [[0.52, 0.45], [1.03, 1.0], [1.47, 1.5], [2.02, 1.96], [2.55, 2.5], [3.49, 3.4]], guide: true, off: [41.7, 0],
+  });
+  const markersEdited = call('edit_stretch_markers', { trackIndex: 1, itemIndex: 0, edits: '[…]' }, {
+    len: 4, marks: [0.5, 1.2, 1.5, 2, 3], was: [0.5, 1, 1.5, 2, 3],
+  });
   const markers2 = call('add_stretch_markers', { trackIndex: 1, itemIndex: 0, markers: '[…]' }, {
     len: 4, marks: [0.5, 1, 1.5, 2, 3], was: [2, 3],
   });
@@ -802,6 +808,8 @@ function editExampleList(): Example[] {
     example('Pins · outputs moved', pinsMoved, 'The delay now plays on channels 5/6 instead of 1/2'),
     example('Pins listed', pinsListed, 'A stereo limiter'),
     example('Audio quantized', audioQuantized, 'Hits moved onto the 8th grid; where they were dashed'),
+    example('Audio aligned to a guide', audioAligned, 'A double’s hits pulled onto the lead’s; where they were dashed'),
+    example('Stretch markers edited', markersEdited, 'One marker moved from 1.0 s to 1.2 s'),
     example('Stretch markers added', markers2, 'Three new markers beside the two kept'),
     example('Tracks frozen', frozen, 'Two tracks frozen, their FX taken out'),
     example('Monitoring FX added', monitor, 'Room correction ahead of a bypassed mono check'),

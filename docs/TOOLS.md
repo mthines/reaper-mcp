@@ -315,6 +315,8 @@ For quick A/B testing, bind these action scripts to keyboard shortcuts in REAPER
 | `unfreeze_tracks` | Restore one freeze layer |
 | `apply_fx_to_items` | Render in place: apply track and take FX to items as a new active take |
 | `add_stretch_markers` | Add many stretch markers to an audio item in one call |
+| `edit_stretch_markers` | Edit existing stretch markers by index: position, source position, slope, all checked first |
+| `align_audio_to_guide` | Vocal alignment: move the hits of one or more doubles onto a guide's with stretch markers (dry run, strength, protected consonants; Python sidecar) |
 | `quantize_audio` | Quantize an audio item to the grid with stretch markers placed on detected hits (Python sidecar) |
 
 ### Plan Executor

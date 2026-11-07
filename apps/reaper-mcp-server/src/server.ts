@@ -32,6 +32,7 @@ import { registerOfflineTools } from './tools/offline.js';
 import { registerTransientTools } from './tools/transients.js';
 import { registerMixcheckTools } from './tools/mixcheck.js';
 import { registerMixingTools } from './tools/mixing.js';
+import { registerAlignTools } from './tools/align.js';
 import { registerCompositionTools } from './tools/composition.js';
 import { registerVoiceSketchTools } from './tools/voice-sketch.js';
 import { registerKnowledgeTools } from './tools/knowledge.js';
@@ -175,6 +176,7 @@ export function createServer(): McpServer {
   registerTransientTools(server);
   registerMixcheckTools(server);
   registerMixingTools(server);
+  registerAlignTools(server);
   registerCompositionTools(server);
   registerVoiceSketchTools(server);
   registerKnowledgeTools(server);

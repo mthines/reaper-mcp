@@ -255,7 +255,7 @@ Mix-check tool spans add: `reaper.masking.track_count` / `conflict_count` (`meas
 (`analyze_stereo_bands`), `reaper.loudness.over_target_seconds` (`analyze_loudness_curve`), `reaper.separation.stem_count`
 / `device` (`separate_stems`).
 Mixing tools add attributes to their `tools/call` span: `reaper.quantize.hits` / `.moved` / `.skipped`
-(`quantize_audio`), `reaper.freeze.mode` / `reaper.freeze.track_count` (`freeze_tracks`), `reaper.fx.pins.widened`
+(`quantize_audio`), `reaper.align.doubles` / `.aligned` / `.dry_run` (`align_audio_to_guide`), `reaper.freeze.mode` / `reaper.freeze.track_count` (`freeze_tracks`), `reaper.fx.pins.widened`
 (`set_fx_pins`) and `reaper.fx.modulation.kind` (`set_fx_param_modulation`, e.g. `lfo,link`).
 
 **Metrics** — error rate is each histogram's count filtered on `error.type`:

@@ -4217,6 +4217,8 @@ function handlers.unfreeze_tracks(params) return ext.mix.run("unfreeze_tracks", 
 function handlers.apply_fx_to_items(params) return ext.mix.run("apply_fx_to_items", params, ext.mix.decode(params.items)) end
 function handlers.add_stretch_markers(params) return ext.mix.run("add_stretch_markers", params, ext.mix.decode(params.markers)) end
 function handlers.quantize_audio(params) return ext.mix.run("quantize_stretch", params, ext.mix.decode(params.hits)) end
+function handlers.edit_stretch_markers(params) return ext.mix.run("edit_stretch_markers", params, ext.mix.decode(params.edits)) end
+function handlers.align_audio_to_guide(params) return ext.mix.run("align_stretch", params, ext.mix.decode(params.pairs)) end
 
 function handlers.set_envelope_properties(params)
   local track = reaper.GetTrack(0, params.trackIndex)
@@ -4984,7 +4986,7 @@ for _, c in ipairs({
   "detect_transients", "create_transient_automation", "insert_stem_tracks",
   "analyze_loudness_curve", "analyze_stereo_bands", "measure_masking", "separate_stems",
   "transcribe_voice_sketch",
-  "freeze_tracks", "unfreeze_tracks", "apply_fx_to_items", "quantize_audio", "detect_key", "detect_chords", "import_midi_file", "process_items",
+  "freeze_tracks", "unfreeze_tracks", "apply_fx_to_items", "quantize_audio", "align_audio_to_guide", "detect_key", "detect_chords", "import_midi_file", "process_items",
 }) do LONG_RUNNING[c] = true end
 local HISTORY_MIN_PUBLISH_INTERVAL = 1.0
 local HISTORY_LONG_PUBLISH_INTERVAL = 10

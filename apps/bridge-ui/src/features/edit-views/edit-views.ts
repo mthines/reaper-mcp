@@ -110,7 +110,7 @@ export type EditView =
    * Stretch markers on an item, seconds from its start: quantize moves [from, to] over the grid lines with the
    * average offset from the grid before/after (ms); a batch add shows the markers now and before
    */
-  | { kind: 'stretch'; len: number; moves?: [number, number][]; more?: number; grid?: number[]; off?: [number, number]; marks?: number[]; was?: number[] }
+  | { kind: 'stretch'; len: number; moves?: [number, number][]; more?: number; grid?: number[]; off?: [number, number]; guide?: boolean; marks?: number[]; was?: number[] }
   | {
       kind: 'render'; fmt: string; src: string; groups: RenderGroup[]; more?: number;
       /** Bit depth or MP3 kbps, the normalize mode and target (dB), and the limiter ceiling (dB, `tp` true peak) */
@@ -151,7 +151,7 @@ const kinds: Array<[EditView['kind'], string[]]> = [
   ['lanes', ['get_track_lanes', 'set_track_lanes', 'comp_lanes']],
   ['modulation', ['get_fx_param_modulation', 'set_fx_param_modulation']],
   ['pins', ['get_fx_pins', 'set_fx_pins']],
-  ['stretch', ['add_stretch_markers', 'quantize_audio']],
+  ['stretch', ['add_stretch_markers', 'edit_stretch_markers', 'quantize_audio', 'align_audio_to_guide']],
   ['render', ['render_project', 'render_versions']],
 ];
 for (const [kind, commands] of kinds) for (const c of commands) KIND_OF[c] = kind;
@@ -385,6 +385,7 @@ export function editViewOf(e: CommandEntry): EditView | null {
         ...(num(r.more) && r.more > 0 ? { more: r.more } : {}),
         ...(numbers(r.grid) ? { grid: r.grid } : {}),
         ...(pair(r.off) ? { off: r.off } : {}),
+        ...(r.guide === true ? { guide: true } : {}),
         ...(numbers(r.marks) ? { marks: r.marks } : {}),
         ...(numbers(r.was) ? { was: r.was } : {}),
       };

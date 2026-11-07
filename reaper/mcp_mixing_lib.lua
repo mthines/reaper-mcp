@@ -740,7 +740,8 @@ local function read_markers(api, t)
   local out = {}
   for i = 0, api.GetTakeNumStretchMarkers(t.take) - 1 do
     local _, pos, src = api.GetTakeStretchMarker(t.take, i)
-    out[#out + 1] = { position = round(pos / t.rate, 4), sourcePosition = round(src, 4) }
+    local slope = api.GetTakeStretchMarkerSlope and api.GetTakeStretchMarkerSlope(t.take, i) or 0
+    out[#out + 1] = { index = i, position = round(pos / t.rate, 4), sourcePosition = round(src, 4), slope = round(slope, 4) }
   end
   return out
 end
@@ -775,6 +776,80 @@ function M.add_stretch_markers(api, p, markers)
   end)
 end
 
+-- Replaces every marker of a take with `list` ({pos in take time at rate 1, src, slope?}, sorted).
+local function write_markers(api, t, list)
+  for i = api.GetTakeNumStretchMarkers(t.take) - 1, 0, -1 do api.DeleteTakeStretchMarkers(t.take, i) end
+  for _, m in ipairs(list) do api.SetTakeStretchMarker(t.take, -1, m.pos, m.src) end
+  if api.SetTakeStretchMarkerSlope then
+    for i, m in ipairs(list) do
+      if m.slope and m.slope ~= 0 then api.SetTakeStretchMarkerSlope(t.take, i - 1, m.slope) end
+    end
+  end
+end
+
+-- Edits existing markers by index: {index, position?, sourcePosition?, slope?}. Positions are item
+-- seconds. Every edit is checked against the whole list first (an edit that folds time, i.e. puts a
+-- marker out of order in position or source, refuses the call); markers are then rewritten in one undo point.
+function M.edit_stretch_markers(api, p, edits)
+  local t, err = audio_take(api, p)
+  if not t then return nil, err end
+  if type(edits) ~= "table" or #edits == 0 then
+    return nil, "edits must be a non-empty list of {index, position?, sourcePosition?, slope?}"
+  end
+  local have = api.GetTakeNumStretchMarkers(t.take)
+  local list = {}
+  for i = 0, have - 1 do
+    local _, pos, src = api.GetTakeStretchMarker(t.take, i)
+    list[i + 1] = { pos = pos, src = src, slope = api.GetTakeStretchMarkerSlope and api.GetTakeStretchMarkerSlope(t.take, i) or 0 }
+  end
+  local seen = {}
+  for n, e in ipairs(edits) do
+    local idx = int(e.index)
+    if idx == nil or idx < 0 or idx >= have then
+      return nil, "edit " .. n .. ": marker " .. tostring(e.index) .. " not found (the item has " .. have .. ") — nothing changed"
+    end
+    if seen[idx] then return nil, "edit " .. n .. ": marker " .. idx .. " is edited twice — nothing changed" end
+    seen[idx] = true
+    if e.position == nil and e.sourcePosition == nil and e.slope == nil then
+      return nil, "edit " .. n .. ": give position, sourcePosition or slope — nothing changed"
+    end
+    local m = list[idx + 1]
+    if e.position ~= nil then
+      local pos = tonumber(e.position)
+      if not pos or pos < 0 or pos > t.len then
+        return nil, "edit " .. n .. ": position " .. tostring(e.position) .. " must be 0.." .. round(t.len, 3) .. " (seconds from the item start) — nothing changed"
+      end
+      m.pos = pos * t.rate
+    end
+    if e.sourcePosition ~= nil then
+      local src = tonumber(e.sourcePosition)
+      if not src then return nil, "edit " .. n .. ": sourcePosition must be a number — nothing changed" end
+      m.src = src
+    end
+    if e.slope ~= nil then
+      local slope = tonumber(e.slope)
+      if not slope or slope < -1 or slope > 1 then return nil, "edit " .. n .. ": slope must be -1..1 — nothing changed" end
+      m.slope = slope
+    end
+  end
+  table.sort(list, function(a, b) return a.pos < b.pos end)
+  for i = 2, #list do
+    if list[i].pos <= list[i - 1].pos + 1e-6 then
+      return nil, "two markers would sit at the same position (" .. round(list[i].pos / t.rate, 4) .. " s) — nothing changed"
+    end
+    if list[i].src <= list[i - 1].src + 1e-6 then
+      return nil, "the edit would fold time: marker sources must keep increasing with position — nothing changed"
+    end
+  end
+  local before = read_markers(api, t)
+  return with_undo(api, "MCP: Edit stretch markers", 4, function()
+    write_markers(api, t, list)
+    api.UpdateItemInProject(t.item)
+    return { trackIndex = int(p.trackIndex), itemIndex = int(p.itemIndex), length = round(t.len, 4),
+             edited = #edits, markers = read_markers(api, t), before = before }
+  end)
+end
+
 -- Grid line nearest a project time (grid in quarter notes, swing like quantize_midi)
 local function nearest_line(api, time, grid, swing)
   local qn = api.TimeMap2_timeToQN(0, time)
@@ -789,6 +864,14 @@ local function nearest_line(api, time, grid, swing)
     end
   end
   return api.TimeMap2_QNToTime(0, best), best_d
+end
+
+-- Average and worst of a list of offsets in seconds, as ms
+local function offset_stats(list_s)
+  if #list_s == 0 then return { avgMs = 0, maxMs = 0 } end
+  local sum, mx = 0, 0
+  for _, v in ipairs(list_s) do sum = sum + v; if v > mx then mx = v end end
+  return { avgMs = round(sum / #list_s * 1000, 1), maxMs = round(mx * 1000, 1) }
 end
 
 -- Places one stretch marker per hit and moves it toward the nearest grid line. `hits` are
@@ -846,13 +929,6 @@ function M.quantize_stretch(api, p, hits)
   end
   if #placed == 0 then return nil, "No hit could be placed (each would fold time or reach an item edge) — nothing changed" end
 
-  local function stats(list_ms)
-    if #list_ms == 0 then return { avgMs = 0, maxMs = 0 } end
-    local sum, mx = 0, 0
-    for _, v in ipairs(list_ms) do sum = sum + v; if v > mx then mx = v end end
-    return { avgMs = round(sum / #list_ms * 1000, 1), maxMs = round(mx * 1000, 1) }
-  end
-
   return with_undo(api, "MCP: Quantize audio", 4, function()
     for i = api.GetTakeNumStretchMarkers(t.take) - 1, 0, -1 do api.DeleteTakeStretchMarkers(t.take, i) end
     -- Anchors at both ends keep the item's length and the audio outside the hits in place
@@ -865,9 +941,80 @@ function M.quantize_stretch(api, p, hits)
     return {
       trackIndex = int(p.trackIndex), itemIndex = int(p.itemIndex), position = round(t.pos, 4), length = round(t.len, 4),
       grid = grid, strength = strength, hits = #list, placed = #placed, moved = moved, skipped = skipped,
-      replacedMarkers = #before, offsetBefore = stats(err_before), offsetAfter = stats(err_after),
+      replacedMarkers = #before, offsetBefore = offset_stats(err_before), offsetAfter = offset_stats(err_after),
       moves = hits_out, more = math.max(0, #placed - 256),
     }
+  end)
+end
+
+-- Moves a double's hits onto a guide's. `pairs` are {src, to, extra?}: src is a hit's time in the
+-- double's source file, `to` the project time it should land on (the guide's hit). `extra` pairs
+-- (a consonant's rigid tail) move with their hit but do not count in the offsets. With strength < 1 each
+-- hit moves that fraction of the way. The item's existing markers are replaced; anchors at both ends
+-- keep its length. dryRun returns the plan and writes nothing.
+function M.align_stretch(api, p, pairs)
+  local t, err = audio_take(api, p)
+  if not t then return nil, err end
+  local strength = tonumber(p.strength or 1)
+  if not strength or strength <= 0 or strength > 1 then return nil, "strength must be > 0 and <= 1" end
+  if type(pairs) ~= "table" then return nil, "pairs must be a list of {src, to}" end
+  if #pairs > M.MAX_STRETCH_MARKERS then return nil, "at most " .. M.MAX_STRETCH_MARKERS .. " pairs per item" end
+  local edge = 0.005
+  local list = {}
+  for n, pr in ipairs(pairs) do
+    local src, to = tonumber(pr.src), tonumber(pr.to)
+    if not src or not to then return nil, "pair " .. n .. ": src and to must be numbers — nothing changed" end
+    local pos = (src - t.offs) / t.rate
+    if pos > edge and pos < t.len - edge then list[#list + 1] = { src = src, pos = pos, target = to - t.pos, extra = pr.extra == true } end
+  end
+  table.sort(list, function(a, b) return a.pos < b.pos end)
+  if #list == 0 then return nil, "No hits inside the item — nothing changed" end
+
+  local before = read_markers(api, t)
+  -- Hits are counted apart from consonant tails (extra pairs), which only ride along with their hit
+  local placed, hits, last_pos, skipped, moved, tails = {}, {}, edge, 0, 0, 0
+  local err_before, err_after = {}, {}
+  for _, h in ipairs(list) do
+    local new_pos = h.pos + (h.target - h.pos) * strength
+    -- A move that would cross the previous marker or reach the item end would fold time
+    if new_pos <= last_pos + 0.001 or new_pos >= t.len - edge then
+      if not h.extra then skipped = skipped + 1 end
+    else
+      local m = { pos = new_pos, src = h.src, from = h.pos, to = h.target }
+      placed[#placed + 1] = m
+      if h.extra then
+        tails = tails + 1
+      else
+        hits[#hits + 1] = m
+        if math.abs(new_pos - h.pos) > 1e-6 then moved = moved + 1 end
+        err_before[#err_before + 1] = math.abs(h.target - h.pos)
+        err_after[#err_after + 1] = math.abs(h.target - new_pos)
+      end
+      last_pos = new_pos
+    end
+  end
+  if #hits == 0 then return nil, "No hit could be placed (each would fold time or reach an item edge) — nothing changed" end
+
+  local moves = {}
+  for i = 1, math.min(#hits, 256) do moves[i] = { round(hits[i].from, 4), round(hits[i].pos, 4) } end
+  local real = 0
+  for _, h in ipairs(list) do if not h.extra then real = real + 1 end end
+  local result = {
+    trackIndex = int(p.trackIndex), itemIndex = int(p.itemIndex), position = round(t.pos, 4), length = round(t.len, 4),
+    strength = strength, pairs = real, placed = #hits, tails = tails, moved = moved, skipped = skipped,
+    replacedMarkers = #before, offsetBefore = offset_stats(err_before), offsetAfter = offset_stats(err_after),
+    moves = moves, more = math.max(0, #hits - 256), dryRun = p.dryRun == true,
+    guideTrackIndex = int(p.guideTrackIndex), guideItemIndex = int(p.guideItemIndex),
+  }
+  if p.dryRun == true then return result end
+
+  return with_undo(api, "MCP: Align audio to guide", 4, function()
+    local out = { { pos = 0, src = t.offs } }
+    for _, m in ipairs(placed) do out[#out + 1] = { pos = m.pos * t.rate, src = m.src } end
+    out[#out + 1] = { pos = t.len * t.rate, src = t.offs + t.len * t.rate }
+    write_markers(api, t, out)
+    api.UpdateItemInProject(t.item)
+    return result
   end)
 end
 

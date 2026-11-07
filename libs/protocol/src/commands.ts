@@ -91,7 +91,9 @@ export type CommandType =
   | 'unfreeze_tracks'
   | 'apply_fx_to_items'
   | 'add_stretch_markers'
+  | 'edit_stretch_markers'
   | 'quantize_audio'
+  | 'align_audio_to_guide'
   // MIDI editing
   | 'create_midi_item'
   | 'list_midi_items'
@@ -1428,6 +1430,26 @@ export interface AddStretchMarkersParams {
   itemIndex: number;
   /** JSON: [{ position (s from the item start), sourcePosition? }] */
   markers: string;
+}
+
+export interface EditStretchMarkersParams {
+  trackIndex: number;
+  itemIndex: number;
+  /** JSON: [{ index, position? (s from the item start), sourcePosition?, slope? (-1..1) }] */
+  edits: string;
+}
+
+export interface AlignAudioToGuideParams {
+  trackIndex: number;
+  itemIndex: number;
+  /** JSON: [{ src (s in the item's source file), to (project time it should land on), extra? }] */
+  pairs: string;
+  /** 0..1, how far each hit moves toward the guide's */
+  strength?: number;
+  dryRun?: boolean;
+  /** The guide item, echoed back for the status page */
+  guideTrackIndex?: number;
+  guideItemIndex?: number;
 }
 
 export interface QuantizeAudioParams {

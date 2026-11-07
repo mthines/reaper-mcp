@@ -214,5 +214,7 @@ export const DEMO_CALLS: Record<LoggedCommand, Record<string, unknown> | 'exampl
   unfreeze_tracks: 'example',
   apply_fx_to_items: 'example',
   add_stretch_markers: 'example',
+  edit_stretch_markers: 'example',
   quantize_audio: 'example',
+  align_audio_to_guide: 'example',
 };
