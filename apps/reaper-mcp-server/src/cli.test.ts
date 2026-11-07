@@ -59,6 +59,7 @@ describe('cli helpers', () => {
 
     it('is false for a PATH command, no server, or an unreadable file', () => {
       expect(userMcpServerIsStale(write({ command: 'reaper-mcp', args: ['serve'] }))).toBe(false);
+      expect(userMcpServerIsStale(write(undefined))).toBe(false);
       expect(userMcpServerIsStale(join(tmp, 'missing.json'))).toBe(false);
     });
   });
