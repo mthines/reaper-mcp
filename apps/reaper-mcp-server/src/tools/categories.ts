@@ -66,7 +66,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
     tools: [
       'list_media_items', 'get_media_item_properties', 'set_media_item_properties', 'set_media_items_properties',
       'split_media_item', 'delete_media_item', 'move_media_item', 'trim_media_item',
-      'add_stretch_marker', 'get_stretch_markers', 'delete_stretch_marker', 'add_stretch_markers', 'quantize_audio', 'apply_fx_to_items',
+      'add_stretch_marker', 'get_stretch_markers', 'delete_stretch_marker', 'add_stretch_markers', 'edit_stretch_markers', 'quantize_audio', 'align_audio_to_guide', 'apply_fx_to_items',
     ],
   },
   arrange: {

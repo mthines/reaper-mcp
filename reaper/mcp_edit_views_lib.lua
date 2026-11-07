@@ -1015,6 +1015,10 @@ end
 
 function MIX.stretch(cmd_type, data)
   if type(data) ~= "table" then return nil end
+  if cmd_type == "align_audio_to_guide" then
+    return { len = data.length, moves = data.moves or {}, more = data.more or 0, guide = true,
+             off = { data.offsetBefore and data.offsetBefore.avgMs or 0, data.offsetAfter and data.offsetAfter.avgMs or 0 } }
+  end
   if cmd_type == "quantize_audio" then
     return { len = data.length, moves = data.moves or {}, more = data.more or 0, grid = MIX.grid_lines(data.position or 0, data.length or 0, data.grid),
              off = { data.offsetBefore and data.offsetBefore.avgMs or 0, data.offsetAfter and data.offsetAfter.avgMs or 0 } }
@@ -1346,7 +1350,7 @@ function M.summary(cmd_type, params, data, before)
     return MIX.modulation(cmd_type, data)
   elseif cmd_type == "get_fx_pins" or cmd_type == "set_fx_pins" then
     return MIX.pins(data)
-  elseif cmd_type == "add_stretch_markers" or cmd_type == "quantize_audio" then
+  elseif cmd_type == "add_stretch_markers" or cmd_type == "edit_stretch_markers" or cmd_type == "quantize_audio" or cmd_type == "align_audio_to_guide" then
     return MIX.stretch(cmd_type, data)
   elseif cmd_type == "freeze_tracks" or cmd_type == "unfreeze_tracks" or cmd_type == "apply_fx_to_items" then
     return MIX.freeze(cmd_type, data)

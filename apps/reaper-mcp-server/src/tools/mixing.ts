@@ -225,6 +225,22 @@ export function registerMixingTools(server: McpServer): void {
   );
 
   server.tool(
+    'edit_stretch_markers',
+    'Edit existing stretch markers of an audio item in one call and one undo point: move a marker (position, seconds from the item start), change which source time it pins (sourcePosition) and its slope (-1..1, the curve of the stretch after it). Markers are named by index as get_stretch_markers lists them. Only the fields given change. Every edit is checked first: a marker moved out of order (position or source), onto another marker, outside the item, or a repeated index refuses the whole call and changes nothing.',
+    {
+      trackIndex: z.coerce.number().int().min(0),
+      itemIndex: z.coerce.number().int().min(0),
+      edits: z.array(z.object({
+        index: z.coerce.number().int().min(0),
+        position: z.coerce.number().min(0).optional(),
+        sourcePosition: z.coerce.number().optional(),
+        slope: z.coerce.number().min(-1).max(1).optional(),
+      })).min(1).max(2000),
+    },
+    async (args) => run('edit_stretch_markers', flatten(args, ['edits'])),
+  );
+
+  server.tool(
     'quantize_audio',
     'Quantize an audio item to the grid with stretch markers: finds the hits in the item\'s source (sidecar), puts a marker on each and moves it toward the nearest grid line (strength, window and swing as quantize_midi). The item keeps its length (anchors at both ends); the item\'s existing stretch markers are replaced. Returns the timing offset before and after (avg/max ms). Requires the sidecar.',
     {

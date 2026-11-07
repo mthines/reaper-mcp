@@ -409,3 +409,122 @@ describe('mcp_mixing_lib.lua: stretch markers', () => {
     `);
   });
 });
+
+describe('mcp_mixing_lib.lua: editing stretch markers', () => {
+  const SETUP = `
+    local api = new_fake{ tracks = { { items = { { pos = 2, len = 4 } } } } }
+    local P = { trackIndex = 0, itemIndex = 0 }
+    assert(mix.add_stretch_markers(api, P, { { position = 1, sourcePosition = 1 }, { position = 2, sourcePosition = 2 }, { position = 3, sourcePosition = 3 } }))
+    local undo_before = #api.undo
+    api.writes = 0 -- count only what the call under test writes
+  `;
+
+  it('edit_stretch_markers applies several edits at once, keeps the rest, and is one undo point', async () => {
+    await runLua(`${SETUP}
+      local r, err = mix.edit_stretch_markers(api, P, { { index = 0, position = 1.2 }, { index = 2, slope = 0.5, sourcePosition = 3.1 } })
+      assert(r, tostring(err))
+      assert(r.edited == 2 and #r.markers == 3 and #r.before == 3)
+      assert(r.before[1].position == 1 and r.markers[1].position == 1.2, "first marker moved")
+      assert(r.markers[1].sourcePosition == 1, "source untouched when not given")
+      assert(r.markers[2].position == 2 and r.markers[2].slope == 0, "an unedited marker is unchanged")
+      assert(r.markers[3].sourcePosition == 3.1 and r.markers[3].slope == 0.5)
+      assert(#api.undo == undo_before + 1 and api.undo[#api.undo] == "MCP: Edit stretch markers")
+    `);
+  });
+
+  it('edit_stretch_markers reads positions in item seconds on a sped-up item', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = { { items = { { pos = 0, len = 4, rate = 2 } } } } }
+      local P = { trackIndex = 0, itemIndex = 0 }
+      assert(mix.add_stretch_markers(api, P, { { position = 1, sourcePosition = 2 } }))
+      local r, err = mix.edit_stretch_markers(api, P, { { index = 0, position = 1.5 } })
+      assert(r, tostring(err))
+      assert(r.markers[1].position == 1.5, "item seconds in and out: " .. tostring(r.markers[1].position))
+    `);
+  });
+
+  it('edit_stretch_markers refuses a bad index, a repeat, an empty edit or a bad range and changes nothing', async () => {
+    await runLua(`${SETUP}
+      refused(api, "not found", mix.edit_stretch_markers(api, P, { { index = 5, position = 1 } }))
+      refused(api, "twice", mix.edit_stretch_markers(api, P, { { index = 0, position = 1 }, { index = 0, position = 1.1 } }))
+      refused(api, "give position", mix.edit_stretch_markers(api, P, { { index = 0 } }))
+      refused(api, "position 9", mix.edit_stretch_markers(api, P, { { index = 0, position = 9 } }))
+      refused(api, "slope", mix.edit_stretch_markers(api, P, { { index = 0, slope = 2 } }))
+      refused(api, "non%-empty", mix.edit_stretch_markers(api, P, {}))
+    `);
+  });
+
+  it('edit_stretch_markers refuses a move that folds time — nothing changes, even when an earlier edit was valid', async () => {
+    await runLua(`${SETUP}
+      -- marker 1 onto marker 2's position
+      refused(api, "same position", mix.edit_stretch_markers(api, P, { { index = 0, position = 1.1 }, { index = 1, position = 1.1 } }))
+      -- a source that no longer increases with position
+      refused(api, "fold time", mix.edit_stretch_markers(api, P, { { index = 0, sourcePosition = 2.5 } }))
+    `);
+  });
+});
+
+describe('mcp_mixing_lib.lua: aligning audio to a guide', () => {
+  // A double at project 10 s; its hits in source seconds. The guide wants them at project times.
+  const ITEM = `new_fake{ tracks = { { items = { { pos = 10, len = 4 } } } } }`;
+
+  it('align_stretch moves hits onto the guide: offset after is smaller, anchors keep the length, one undo point', async () => {
+    await runLua(`
+      local api = ${ITEM}
+      -- hits at 0.5 / 1.5 / 2.5 s into the item; guide has them at 0.4 / 1.5 / 2.7
+      local r, err = mix.align_stretch(api, { trackIndex = 0, itemIndex = 0, guideTrackIndex = 1, guideItemIndex = 0 },
+        { { src = 0.5, to = 10.4 }, { src = 1.5, to = 11.5 }, { src = 2.5, to = 12.7 } })
+      assert(r, tostring(err))
+      assert(r.pairs == 3 and r.placed == 3 and r.moved == 2)
+      assert(r.offsetBefore.maxMs == 200 and r.offsetAfter.maxMs == 0, "max offset " .. r.offsetBefore.maxMs .. " -> " .. r.offsetAfter.maxMs)
+      assert(r.offsetAfter.avgMs < r.offsetBefore.avgMs)
+      local sm = api.tracks[1].items[1].takes[1].sm
+      assert(#sm == 5 and sm[1][1] == 0 and sm[5][1] == 4, "anchors at both ends")
+      assert(math.abs(sm[2][1] - 0.4) < 1e-9 and sm[2][2] == 0.5, "first hit lands on the guide, source kept")
+      assert(math.abs(sm[4][1] - 2.7) < 1e-9)
+      assert(#api.undo == 1 and api.undo[1] == "MCP: Align audio to guide")
+      assert(r.guideTrackIndex == 1, "the guide is reported for the page")
+    `);
+  });
+
+  it('align_stretch strength moves each hit only part of the way', async () => {
+    await runLua(`
+      local api = ${ITEM}
+      local r = mix.align_stretch(api, { trackIndex = 0, itemIndex = 0, strength = 0.5 }, { { src = 1, to = 11.2 } })
+      local sm = api.tracks[1].items[1].takes[1].sm
+      assert(math.abs(sm[2][1] - 1.1) < 1e-9, "halfway from 1.0 to 1.2: " .. sm[2][1])
+      assert(r.offsetBefore.maxMs == 200 and r.offsetAfter.maxMs == 100)
+    `);
+  });
+
+  it('align_stretch dry run reports the plan and writes nothing', async () => {
+    await runLua(`
+      local api = ${ITEM}
+      local r, err = mix.align_stretch(api, { trackIndex = 0, itemIndex = 0, dryRun = true }, { { src = 1, to = 11.2 } })
+      assert(r and r.dryRun == true and r.moved == 1 and r.moves[1][2] == 1.2, tostring(err))
+      assert(api.writes == 0 and #api.undo == 0 and #api.tracks[1].items[1].takes[1].sm == 0)
+    `);
+  });
+
+  it('align_stretch moves an extra (consonant tail) pair with its hit without counting it in the offsets', async () => {
+    await runLua(`
+      local api = ${ITEM}
+      local r = mix.align_stretch(api, { trackIndex = 0, itemIndex = 0 },
+        { { src = 1, to = 11.2 }, { src = 1.08, to = 11.28, extra = true } })
+      assert(r.placed == 2 and r.offsetBefore.maxMs == 200, "only the hit is measured")
+      local sm = api.tracks[1].items[1].takes[1].sm
+      assert(math.abs((sm[3][1] - sm[2][1]) - 0.08) < 1e-9, "the tail keeps its length")
+    `);
+  });
+
+  it('align_stretch skips a hit that would cross the previous one, and refuses when nothing can be placed', async () => {
+    await runLua(`
+      local api = ${ITEM}
+      local r = mix.align_stretch(api, { trackIndex = 0, itemIndex = 0 }, { { src = 1, to = 11.5 }, { src = 1.2, to = 11.3 } })
+      assert(r.placed == 1 and r.skipped == 1)
+      local api2 = ${ITEM}
+      refused(api2, "No hits inside", mix.align_stretch(api2, { trackIndex = 0, itemIndex = 0 }, { { src = 9, to = 11 } }))
+      refused(api2, "strength", mix.align_stretch(api2, { trackIndex = 0, itemIndex = 0, strength = 0 }, { { src = 1, to = 11 } }))
+    `);
+  });
+});
