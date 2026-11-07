@@ -228,3 +228,16 @@ def test_a_silent_edit_is_refused_even_when_the_timing_changed(source):
 def test_a_reference_covering_another_range_is_refused_not_failed(source):
     longer = np.concatenate([source[: 5 * SR // 2], source])
     assert "same range" in verify.verify_edit(longer, source, SR)["error"]
+
+
+def test_a_polarity_flip_of_one_channel_fails_instead_of_being_called_silent():
+    reference = _stereo_tone()
+    flipped = reference.copy()
+    flipped[1] *= -1  # the mono sum of the edit cancels to nothing
+    result = verify.verify_edit(reference, flipped, SR)
+    assert "error" not in result
+    assert result["verdict"] == "fail"
+
+
+def test_empty_audio_is_refused_as_too_short():
+    assert "too short" in verify.verify_edit(np.zeros(0), np.zeros(0), SR)["error"]

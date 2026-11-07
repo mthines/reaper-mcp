@@ -781,7 +781,7 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 | `apps/reaper-mcp-server/src/tools/aesthetics.ts` | `analyze_track_aesthetics` tool registration |
 | `apps/reaper-mcp-server/src/tools/offline.ts` | `analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment`, `verify_edit` |
 | `apps/reaper-mcp-server/src/tools/transients.ts` | `detect_transients`, `create_transient_automation` (pulse generation in `pulsePoints()`) |
-| `apps/reaper-mcp-server/sidecar/verify.py` | Compensated null and discontinuity checks for `verify_edit` (numpy only; the window's first/last `maxLagMs` is left out of both) |
+| `apps/reaper-mcp-server/sidecar/verify.py` | Compensated null and discontinuity checks for `verify_edit` (numpy only; the click check leaves out the window's first and last `maxLagMs`, the null twice that) |
 | `apps/reaper-mcp-server/sidecar/mixcheck.py` | Loudness curve, per-band stereo correlation, third-octave masking (numpy only) |
 | `apps/reaper-mcp-server/sidecar/separation.py` | Demucs stem separation (soundfile I/O, never demucs's torchaudio I/O) |
 | `apps/reaper-mcp-server/src/tools/mixcheck.ts` | `analyze_loudness_curve`, `analyze_stereo_bands`, `measure_masking`, `separate_stems` |

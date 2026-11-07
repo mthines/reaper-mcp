@@ -74,9 +74,9 @@ def compensated_null(reference: np.ndarray, edited: np.ndarray, sample_rate: int
     per_channel = ref_ch.shape[0] == edit_ch.shape[0] and ref_ch.shape[0] > 1
     if n < int(0.1 * sample_rate):
         return {"error": "Audio too short: need at least 0.1 s"}
-    if np.max(np.abs(ref)) < SILENCE:
+    if np.max(np.abs(ref_ch)) < SILENCE:
         return {"error": "The reference is silent over this range"}
-    if np.max(np.abs(edit)) < SILENCE:
+    if np.max(np.abs(edit_ch)) < SILENCE:
         return {"error": "The edited audio is silent over this range"}
 
     lag_max = max(1, int(sample_rate * max_lag_ms / 1000.0))
@@ -191,6 +191,8 @@ def verify_edit(reference: np.ndarray, edited: np.ndarray, sample_rate: int, *,
     if expect not in ("identical", "changed"):
         return {"error": f"expect must be 'identical' or 'changed', got {expect!r}"}
     ref_len, edit_len = np.asarray(reference).shape[-1], np.asarray(edited).shape[-1]
+    if min(ref_len, edit_len) < int(0.1 * sample_rate):
+        return {"error": "Audio too short: need at least 0.1 s"}
     for name, audio in (("reference", reference), ("edited audio", edited)):
         if np.max(np.abs(audio)) < SILENCE:
             return {"error": f"The {name} is silent over this range"}
