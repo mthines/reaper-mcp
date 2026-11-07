@@ -11,12 +11,12 @@
  *   await shutdownTelemetry();
  */
 
-import { trace, metrics, type Tracer, type Meter } from '@opentelemetry/api';
+import { trace, metrics, SpanKind, type Tracer, type Meter } from '@opentelemetry/api';
 import { logs, SeverityNumber, type Logger } from '@opentelemetry/api-logs';
-import { NodeSDK, metrics as sdkMetrics, tracing } from '@opentelemetry/sdk-node';
+import { NodeSDK, core, metrics as sdkMetrics, tracing } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
-import { resourceFromAttributes, envDetector, hostDetector, osDetector } from '@opentelemetry/resources';
+import { resourceFromAttributes, detectResources, envDetector, hostDetector, osDetector } from '@opentelemetry/resources';
 import {
   ATTR_SERVICE_NAME,
   ATTR_SERVICE_NAMESPACE,
@@ -28,7 +28,14 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { AnonymizingSpanExporter, DEFAULT_DESTINATION, resolveTelemetry } from './telemetry-consent.js';
+import {
+  AnonymizingSpanExporter,
+  CONSENT_SERVICE_NAME,
+  DEFAULT_DESTINATION,
+  consentReportAllowed,
+  resolveTelemetry,
+  type ConsentChange,
+} from './telemetry-consent.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -191,6 +198,95 @@ export async function initTelemetry(): Promise<void> {
       '[reaper-mcp] OpenTelemetry initialized (no exporters configured — telemetry stays local)',
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Opt-in / opt-out counts
+// ---------------------------------------------------------------------------
+
+export interface ConsentReportOptions {
+  env?: Record<string, string | undefined>;
+  destination?: { endpoint: string; dataset: string; token: string };
+  /** Replaces the OTLP exporter (tests). */
+  exporter?: tracing.SpanExporter;
+  /** Longest a CLI command waits for the export; it gives up silently after. */
+  timeoutMs?: number;
+}
+
+/**
+ * Report one opt-in or opt-out as a single `telemetry consent` span, so the
+ * developer can count how many installs opt in and out — opted-out installs
+ * included, which otherwise send nothing.
+ *
+ * Privacy: the span carries only on/off, where the choice was made, the
+ * reaper-mcp version and the OS. No install id, session id, pid or host — it
+ * cannot be linked to the install's usage telemetry. It goes to its own
+ * service name (`CONSENT_SERVICE_NAME`), through the same allow-list as usage
+ * spans, and only when nothing in the environment rules telemetry out
+ * (`consentReportAllowed`: DO_NOT_TRACK, REAPER_MCP_TELEMETRY=0, own OTEL_*).
+ *
+ * Never throws. Resolves true only when the backend accepted it.
+ */
+export async function reportConsentChange(change: ConsentChange, options: ConsentReportOptions = {}): Promise<boolean> {
+  const { env = process.env, destination = DEFAULT_DESTINATION, timeoutMs = 3000 } = options;
+  if (!consentReportAllowed(env, destination)) return false;
+
+  let exporter: tracing.SpanExporter | undefined;
+  try {
+    const span = await consentSpan(change);
+    exporter = new AnonymizingSpanExporter(
+      options.exporter ??
+        new OTLPTraceExporter({
+          url: `${destination.endpoint}/v1/traces`,
+          headers: { Authorization: `Bearer ${destination.token}`, Dataset: destination.dataset },
+          timeoutMillis: timeoutMs,
+        }),
+    );
+    const target = exporter;
+    return await new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), timeoutMs + 500);
+      timer.unref();
+      target.export([span], (result) => {
+        clearTimeout(timer);
+        resolve(result.code === core.ExportResultCode.SUCCESS);
+      });
+    });
+  } catch {
+    return false;
+  } finally {
+    await exporter?.shutdown().catch(() => undefined);
+  }
+}
+
+/** The finished consent span, built with a throwaway provider so no global SDK is touched. */
+async function consentSpan(change: ConsentChange): Promise<tracing.ReadableSpan> {
+  const resource = resourceFromAttributes({
+    [ATTR_SERVICE_NAME]: CONSENT_SERVICE_NAME,
+    [ATTR_SERVICE_NAMESPACE]: SERVICE_NAMESPACE,
+    [ATTR_SERVICE_VERSION]: readServiceVersion(),
+    'deployment.environment.name': 'production',
+  }).merge(detectResources({ detectors: [osDetector] }));
+
+  const memory = new tracing.InMemorySpanExporter();
+  const provider = new tracing.BasicTracerProvider({
+    resource,
+    spanProcessors: [new tracing.SimpleSpanProcessor(memory)],
+  });
+  provider
+    .getTracer(SCOPE_NAME)
+    .startSpan('telemetry consent', {
+      kind: SpanKind.INTERNAL,
+      attributes: {
+        'reaper.telemetry.consent.state': change.state,
+        'reaper.telemetry.consent.source': change.source,
+      },
+    })
+    .end();
+  await provider.forceFlush();
+  const [span] = memory.getFinishedSpans();
+  await provider.shutdown();
+  if (!span) throw new Error('consent span was not recorded');
+  return span;
 }
 
 /**

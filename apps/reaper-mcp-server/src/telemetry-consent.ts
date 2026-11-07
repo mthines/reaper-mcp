@@ -7,6 +7,10 @@
  *   custom  — the user set their own OTEL_* exporters; exported as configured
  *   default — anonymous usage telemetry to the built-in destination
  *   off     — nothing is exported
+ *
+ * Opting in or out (`reaper-mcp telemetry on|off`, the first-run answer) is
+ * itself reported once, as an anonymous count with no install id — see
+ * `reportConsentChange()` in telemetry.ts.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -31,6 +35,13 @@ export const DEFAULT_DESTINATION = {
   token: 'auth_qWTU9VhiQD5ADILLZKLuF5WiuZcAeGe8',
 };
 
+/**
+ * Service name of the opt-in/opt-out counts. Kept apart from the usage
+ * service so these id-less events never show up as an extra "person" in
+ * queries that count distinct `enduser.pseudo.id` values.
+ */
+export const CONSENT_SERVICE_NAME = 'reaper-mcp-consent';
+
 export const TELEMETRY_DOC_URL = 'https://github.com/mthines/reaper-mcp/blob/main/TELEMETRY.md';
 
 export const TELEMETRY_NOTICE = `Pseudonymous usage telemetry is ON by default.
@@ -38,12 +49,25 @@ reaper-mcp is built by one developer. To see which tools people use, which fail,
 and how fast they are, it sends pseudonymous usage data: tool names, error types,
 timings, and app/OS versions, tagged with a random install id.
 It never sends your projects, track names, parameters, file paths or error text.
+Your answer below is counted once, anonymously (on or off, no install id).
 
 Opt out any time:  reaper-mcp telemetry off
                    (or set REAPER_MCP_TELEMETRY=0 or DO_NOT_TRACK=1)
 Details: ${TELEMETRY_DOC_URL}`;
 
 export type TelemetryMode = 'custom' | 'default' | 'off';
+
+/** Where an opt-in or opt-out was made. */
+export type ConsentSource =
+  | 'cli' //              `reaper-mcp telemetry on|off`
+  | 'first_run_prompt' // the Y/n question at setup
+  | 'first_run_notice'; // setup without a terminal: notice shown, default kept
+
+/** One opt-in or opt-out, as reported by `reportConsentChange()`. */
+export interface ConsentChange {
+  state: 'on' | 'off';
+  source: ConsentSource;
+}
 
 export interface TelemetryDecision {
   mode: TelemetryMode;
@@ -88,6 +112,28 @@ export function writeTelemetryConfig(patch: TelemetryConfig, dir = defaultConfig
 }
 
 /**
+ * Save `reaper-mcp telemetry on|off`. Returns the change to report, or
+ * undefined when the saved choice already said so — running `off` twice
+ * counts one opt-out, and `on` on an install that never opted out counts none.
+ */
+export function saveTelemetryChoice(on: boolean, dir = defaultConfigDir()): ConsentChange | undefined {
+  const wasOn = readTelemetryConfig(dir).telemetry !== false;
+  writeTelemetryConfig({ telemetry: on, telemetryNoticeShown: true }, dir);
+  return wasOn === on ? undefined : { state: on ? 'on' : 'off', source: 'cli' };
+}
+
+/**
+ * Whether an opt-in/opt-out may be reported to the built-in destination: only
+ * when nothing in the environment rules telemetry to the developer out. The
+ * saved choice is ignored on purpose (it is the thing being reported), so
+ * DO_NOT_TRACK=1, REAPER_MCP_TELEMETRY=0, own OTEL_* exporters or a build
+ * without a destination mean nothing at all is sent, not even this.
+ */
+export function consentReportAllowed(env: Env = process.env, destination: { token: string } = DEFAULT_DESTINATION): boolean {
+  return resolveTelemetry(env, {}, destination).mode === 'default';
+}
+
+/**
  * Decide the telemetry mode. Precedence: the user's own OTEL_* exporters, then
  * DO_NOT_TRACK, then REAPER_MCP_TELEMETRY, then `reaper-mcp telemetry on|off`,
  * then the built-in default (on, when this build has a destination).
@@ -127,19 +173,19 @@ export interface ConsentIO {
 
 /**
  * First-time setup: show the notice once and, when someone is at the keyboard,
- * ask whether to keep telemetry on (Enter keeps it on). Returns false without
- * a word when the notice was already shown, or when default telemetry wouldn't
- * run anyway (opted out by env, own OTEL_* setup, no built-in destination) —
- * then it is still unshown for when it would.
+ * ask whether to keep telemetry on (Enter keeps it on). Returns the choice to
+ * report, or undefined without a word when the notice was already shown, or
+ * when default telemetry wouldn't run anyway (opted out by env, own OTEL_*
+ * setup, no built-in destination) — then it is still unshown for when it would.
  */
 export async function firstRunTelemetryNotice(
   io: ConsentIO,
   dir = defaultConfigDir(),
   env: Env = process.env,
   destination: { token: string } = DEFAULT_DESTINATION,
-): Promise<boolean> {
+): Promise<ConsentChange | undefined> {
   const config = readTelemetryConfig(dir);
-  if (config.telemetryNoticeShown || resolveTelemetry(env, config, destination).mode !== 'default') return false;
+  if (config.telemetryNoticeShown || resolveTelemetry(env, config, destination).mode !== 'default') return undefined;
   io.output.write(`\n${TELEMETRY_NOTICE}\n\n`);
 
   let keep = true;
@@ -156,7 +202,7 @@ export async function firstRunTelemetryNotice(
     io.output.write(keep ? 'Thanks — telemetry stays on.\n' : 'Telemetry is off. Turn it back on with `reaper-mcp telemetry on`.\n');
   }
   writeTelemetryConfig({ telemetry: keep, telemetryNoticeShown: true }, dir);
-  return true;
+  return { state: keep ? 'on' : 'off', source: io.interactive ? 'first_run_prompt' : 'first_run_notice' };
 }
 
 /** Span attributes default telemetry keeps: what ran, how it ended, how long it took. */
@@ -179,6 +225,9 @@ const ALLOWED_SPAN_ATTRIBUTES = new Set([
   'reaper.chords.source',
   'reaper.chords.count',
   'reaper.chords.engine',
+  // opt-in/opt-out counts: on or off, and where the choice was made
+  'reaper.telemetry.consent.state',
+  'reaper.telemetry.consent.source',
 ]);
 
 /**

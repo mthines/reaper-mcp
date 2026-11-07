@@ -14,6 +14,20 @@ DO_NOT_TRACK=1                 # the common convention, honored too
 
 `reaper-mcp telemetry status` (or `reaper-mcp doctor`) shows the current state and why. `reaper-mcp telemetry on` turns it back on. Restart Claude Code (or run `/mcp`) so the running server picks up the change.
 
+## When you opt in or out
+
+Your answer at setup, and `reaper-mcp telemetry on` / `off` when it changes your choice, sends **one** event, so I can count how many people opt in and how many opt out. Without it, everyone who opts out would be invisible, and I'd have no idea how many people use reaper-mcp at all.
+
+That event carries only:
+
+- on or off
+- where you chose: the setup question, setup without a terminal (the notice was shown and the default kept), or the `telemetry` command
+- reaper-mcp version, OS type and version
+
+It carries **no install id** and nothing else from your machine, so it can't be linked to any usage telemetry you sent before or after. It is sent once per change: running `telemetry off` twice sends one. After an opt-out, nothing else is sent.
+
+It is not sent when `DO_NOT_TRACK=1` or `REAPER_MCP_TELEMETRY=0` is set, or when you use your own `OTEL_*` exporters. Set one of those before `reaper-mcp telemetry off` (or before setup) if you'd rather opt out without being counted.
+
 ## What is sent
 
 For each tool call:
@@ -35,7 +49,7 @@ Plus periodic health numbers for the REAPER bridge, such as whether it's running
 - file paths, your user name, host name or machine id
 - audio, MIDI or anything rendered
 
-Nothing is collected while telemetry is off. If you set your own `OTEL_*` exporter variables, telemetry goes only to your destination, in full, and nothing goes to the developer.
+Nothing is collected while telemetry is off, apart from the single event at the moment you turn it off (above). If you set your own `OTEL_*` exporter variables, telemetry goes only to your destination, in full, and nothing goes to the developer.
 
 ## The bridge page
 

@@ -6,7 +6,7 @@ import { createServer } from './server.js';
 import { checkExtensions, loadExtensions } from './extensions.js';
 import { extensionCommand } from './extension-cli.js';
 import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, readBridgeEvents, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
-import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges, emitLog, exceptionAttributes, readServiceVersion } from './telemetry.js';
+import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges, emitLog, exceptionAttributes, readServiceVersion, reportConsentChange } from './telemetry.js';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +15,7 @@ import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
 import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
 import { detectInstalled, setupSidecar } from './setup-sidecar.js';
-import { firstRunTelemetryNotice, resolveTelemetry, writeTelemetryConfig, TELEMETRY_DOC_URL } from './telemetry-consent.js';
+import { firstRunTelemetryNotice, resolveTelemetry, saveTelemetryChoice, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
 import { getSidecarClient } from './sidecar.js';
 import { renderDoctor, useColor, type Check, type CheckStatus, type Section } from './doctor-report.js';
@@ -200,7 +200,7 @@ async function init(): Promise<void> {
     console.log(`.mcp.json already exists — leaving it untouched.`);
   }
 
-  await firstRunTelemetryNotice(consoleConsentIO());
+  await askTelemetryOnce();
 
   console.log('\nIf you haven\'t yet, symlink the skills + knowledge and install the bridge:');
   console.log('  scripts/sync-symlinks.sh   # mix skills + knowledge → ~/.claude');
@@ -213,6 +213,16 @@ function consoleConsentIO() {
   return { input: process.stdin, output: process.stdout, interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY) };
 }
 
+const OPT_OUT_COUNTED = 'One anonymous "opted out" count was sent (no install id). Nothing is sent after this.';
+
+/** The first-run notice, then its answer reported as one anonymous count. False when the notice was not shown. */
+async function askTelemetryOnce(): Promise<boolean> {
+  const choice = await firstRunTelemetryNotice(consoleConsentIO());
+  if (!choice) return false;
+  if ((await reportConsentChange(choice)) && choice.state === 'off') console.log(OPT_OUT_COUNTED);
+  return true;
+}
+
 function describeTelemetry(): string {
   const { mode, reason } = resolveTelemetry();
   const label = { default: 'On — pseudonymous usage data to the developer', custom: 'Custom — your own OTEL_* destination', off: 'Off' }[mode];
@@ -222,11 +232,13 @@ function describeTelemetry(): string {
 // reaper-mcp telemetry [status|on|off|setup]
 async function telemetryCommand(sub = 'status'): Promise<void> {
   if (sub === 'on' || sub === 'off') {
-    writeTelemetryConfig({ telemetry: sub === 'on', telemetryNoticeShown: true });
-    console.log(sub === 'on' ? 'Pseudonymous usage telemetry turned on — thank you!' : 'Telemetry turned off. Nothing will be sent.');
+    const change = saveTelemetryChoice(sub === 'on');
+    const counted = change ? await reportConsentChange(change) : false;
+    if (sub === 'on') console.log('Pseudonymous usage telemetry turned on — thank you!');
+    else console.log(counted ? `Telemetry turned off. ${OPT_OUT_COUNTED}` : 'Telemetry turned off. Nothing will be sent.');
     console.log('Restart Claude Code (or run /mcp) for the running server to pick it up.');
   } else if (sub === 'setup') {
-    if (!(await firstRunTelemetryNotice(consoleConsentIO()))) console.log(`Telemetry: ${describeTelemetry()}`);
+    if (!(await askTelemetryOnce())) console.log(`Telemetry: ${describeTelemetry()}`);
     return;
   } else if (sub !== 'status') {
     console.log('Usage: reaper-mcp telemetry [status|on|off]');
