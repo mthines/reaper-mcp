@@ -41,8 +41,9 @@ mix skill — `/critique` included).
 `project::reaper-mcp` (if `memory.*` isn't connected, say so and carry on):
 - the `loop::mixing-lessons` bucket (capped at 5 + one keyword search) — past
   process lessons help you weight what to flag.
-- the plugin records for the plugins on the session (match FX names via their
-  `fx::` tags) — both the built-in record (`get_builtin_knowledge`) and the user's
+- the plugin records for **every** plugin you comment on, looked up before you judge it
+  (match FX names via their
+  `fx::` tags; a setting the record calls intentional or warns about shapes your flag) — both the built-in record (`get_builtin_knowledge`) and the user's
   `user::plugins::{vendor}/{plugin}` overlay, which wins: the user's tools and taste.
 
 **Capture (process lessons about your *analysis*).** Read-only means you don't

@@ -46,11 +46,23 @@ the user's own `user::` layer on top. Reads combine both; writes go to `user::` 
   `get_builtin_knowledge { key: "plugins::{vendor}/{plugin}" }` and `memory.read`
   of `user::plugins::{vendor}/{plugin}` — past
   targets the user preferred and known gotchas (the user record wins).
-- **First use of a plugin in the session → read its memory first.** Keep a running
-  list of the plugins already recalled this session. The first time you are about
-  to add, tweak or read a plugin that isn't on it (including one already on the
-  bus), do both reads, then add it to the list. Don't re-read on later uses. No
-  record in either layer is fine: carry on.
+- **Plugin gate — no plugin is touched before its memory is read.** Before the
+  first call that adds, sets, loads a preset for, writes MIDI to, or reads parameters
+  of a plugin (`add_fx`, `setup_fx_chain`, `set_fx_parameter`,
+  `set_multiple_fx_parameters`, `set_fx_preset`, `load_fx_chain`, MIDI for an
+  instrument track, take FX), look it up — every plugin, every time it is new to this
+  session, including ones the user named, ones already in the project and ones you
+  only meet while listing a chain. Never skip it because the plugin looks familiar.
+  Look up both layers: `list_builtin_knowledge { query: "<plugin name>" }` (or `tags:
+  ["fx::<FX name>"]`) / `get_builtin_knowledge { key: "plugins::{vendor}/{plugin}" }`,
+  and `memory.search` / `memory.read` of `user::plugins::{vendor}/{plugin}` (the user's
+  record wins). Then **follow the record**: its MIDI map and note ranges, parameter
+  scaling, recommended settings and gotchas decide what you do, and a setting you were
+  about to use that the record warns against is not used. Say it in one chat line
+  ("Recalled Odin x Ari Lite: notes <36 are keyswitches → transposing"). Keep a running
+  list of recalled plugins and don't re-read those. No record in either layer: say so
+  and carry on (or bootstrap it when the user asked for the plugin by name). LoreKit
+  not connected: say so once and use the built-in read only.
 - **Unknown plugin?** Bootstrap it first (see protocol): dispatch the
   `plugin-researcher` agent (or follow its steps yourself), then read its
   `user::plugins::` record and use it.
@@ -125,6 +137,8 @@ the user's own `user::` layer on top. Reads combine both; writes go to `user::` 
 ## Hard Rules
 
 <!-- Promotion target: recurring mastering lessons graduate here via /mix-memory promote. -->
+
+- **No plugin without its memory.** Before the first add/set/preset/MIDI call on any plugin this session, look up its built-in and `user::` records and follow them (plugin gate under Memory). Skipping the lookup because the plugin looks familiar is a bug.
 
 - **Capture the lesson at the correction point** — if the user overrides a
   target/ceiling or a re-measure misses, write the lesson before your next action

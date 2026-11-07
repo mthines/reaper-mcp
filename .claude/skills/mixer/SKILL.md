@@ -70,12 +70,23 @@ record shapes, layer merge and plugin lookup):
   { key: "plugins::{vendor}/{plugin}" }` and `memory.read` of
   `user::plugins::{vendor}/{plugin}` (find the slug via the `fx::` tags when
   you only have the FX name) and combine them.
-- **First use of a plugin in the session → read its memory first.** Keep a running
-  list of the plugins already recalled this session. The first time you are about
-  to add, tweak or read a plugin that isn't on it (including one already in the
-  project, or one you meet while listing a chain), do the two reads above, then
-  add it to the list. Don't re-read on later uses. No record in either layer is
-  fine: carry on, or bootstrap it if the user asked for it by name (below).
+- **Plugin gate — no plugin is touched before its memory is read.** Before the
+  first call that adds, sets, loads a preset for, writes MIDI to, or reads parameters
+  of a plugin (`add_fx`, `setup_fx_chain`, `set_fx_parameter`,
+  `set_multiple_fx_parameters`, `set_fx_preset`, `load_fx_chain`, MIDI for an
+  instrument track, take FX), look it up — every plugin, every time it is new to this
+  session, including ones the user named, ones already in the project and ones you
+  only meet while listing a chain. Never skip it because the plugin looks familiar.
+  Look up both layers: `list_builtin_knowledge { query: "<plugin name>" }` (or `tags:
+  ["fx::<FX name>"]`) / `get_builtin_knowledge { key: "plugins::{vendor}/{plugin}" }`,
+  and `memory.search` / `memory.read` of `user::plugins::{vendor}/{plugin}` (the user's
+  record wins). Then **follow the record**: its MIDI map and note ranges, parameter
+  scaling, recommended settings and gotchas decide what you do, and a setting you were
+  about to use that the record warns against is not used. Say it in one chat line
+  ("Recalled Odin x Ari Lite: notes <36 are keyswitches → transposing"). Keep a running
+  list of recalled plugins and don't re-read those. No record in either layer: say so
+  and carry on (or bootstrap it when the user asked for the plugin by name). LoreKit
+  not connected: say so once and use the built-in read only.
 - **A record with an `extension::<name>` tag** means an opt-in extension drives that
   plugin's internals (for a synth: wavetables, mod matrix, LFO shapes). When
   `list_tool_categories` shows that extension's category, use its tools for anything
@@ -204,6 +215,8 @@ loudness/limiting, defer to `/mastering`.
 ## Hard Rules
 
 <!-- Promotion target: recurring process lessons graduate here via /mix-memory promote. -->
+
+- **No plugin without its memory.** Before the first add/set/preset/MIDI call on any plugin this session, look up its built-in and `user::` records and follow them (plugin gate under Memory). Skipping the lookup because the plugin looks familiar is a bug.
 
 - **Never skip the before-snapshot** — even for small changes. (Invariant.)
 - **Capture the lesson at the correction point.** If the user reverts/rejects a

@@ -62,13 +62,23 @@ the recorded-track cleanup procedure.
    so music written there is silent or switches articulation). Read the plugin's
    record (`get_builtin_knowledge`, `memory.read` of `user::plugins::…`) before
    writing a part, and probe one note if it is unverified.
-6. **First use of a plugin in the session → read its memory first.** Keep a running
-   list of the plugins already recalled this session. The first time you touch a
-   plugin that isn't on it (write MIDI for it, add or tweak it, an FX on a take or
-   track), read both `get_builtin_knowledge { key: "plugins::{vendor}/{plugin}" }`
-   and `memory.read` of `user::plugins::{vendor}/{plugin}` (the user's record wins),
-   then add it to the list. Don't re-read on later uses. No record is fine: carry
-   on. LoreKit not connected: say so once and use the built-in read only.
+6. **Plugin gate — no plugin is touched before its memory is read.** Before the
+   first call that adds, sets, loads a preset for, writes MIDI to, or reads parameters
+   of a plugin (`add_fx`, `setup_fx_chain`, `set_fx_parameter`,
+   `set_multiple_fx_parameters`, `set_fx_preset`, `load_fx_chain`, MIDI for an
+   instrument track, take FX), look it up — every plugin, every time it is new to this
+   session, including ones the user named, ones already in the project and ones you
+   only meet while listing a chain. Never skip it because the plugin looks familiar.
+   Look up both layers: `list_builtin_knowledge { query: "<plugin name>" }` (or `tags:
+   ["fx::<FX name>"]`) / `get_builtin_knowledge { key: "plugins::{vendor}/{plugin}" }`,
+   and `memory.search` / `memory.read` of `user::plugins::{vendor}/{plugin}` (the user's
+   record wins). Then **follow the record**: its MIDI map and note ranges, parameter
+   scaling, recommended settings and gotchas decide what you do, and a setting you were
+   about to use that the record warns against is not used. Say it in one chat line
+   ("Recalled Odin x Ari Lite: notes <36 are keyswitches → transposing"). Keep a running
+   list of recalled plugins and don't re-read those. No record in either layer: say so
+   and carry on (or bootstrap it when the user asked for the plugin by name). LoreKit
+   not connected: say so once and use the built-in read only.
 
 ## Writing and rewriting MIDI
 
