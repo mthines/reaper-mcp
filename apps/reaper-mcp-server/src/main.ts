@@ -333,7 +333,7 @@ async function doctor(): Promise<void> {
   core.push(
     knowledgeLinked
       ? { label: 'Knowledge base', status: 'ok', detail: localKnowledge ? '.claude/knowledge' : '~/.claude/knowledge' }
-      : { label: 'Knowledge base', status: 'fail', detail: 'Not linked', fix: 'scripts/sync-symlinks.sh (from your clone)' },
+      : { label: 'Knowledge base', status: 'fail', detail: 'Not linked', fix: findCloneRoot(__dirname) ? 'scripts/sync-symlinks.sh (from your clone)' : 'reaper-mcp install-skills' },
   );
 
   const userServer = hasUserMcpServer(join(homedir(), '.claude.json'));
@@ -342,7 +342,7 @@ async function doctor(): Promise<void> {
   core.push(
     mcpRegistered
       ? { label: 'MCP config', status: 'ok', detail: userServer ? 'Registered for your user (any folder)' : '.mcp.json in this folder' }
-      : { label: 'MCP config', status: 'fail', detail: 'Not registered', fix: 'scripts/install.sh (from your clone)' },
+      : { label: 'MCP config', status: 'fail', detail: 'Not registered', fix: findCloneRoot(__dirname) ? 'scripts/install.sh (from your clone)' : 'reaper-mcp init' },
   );
 
   core.push({ label: 'SWS', status: 'info', detail: 'Checked live: the bridge page shows it, or ask Claude to run list_available_fx' });
