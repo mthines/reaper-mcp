@@ -190,6 +190,13 @@ def verify_edit(reference: np.ndarray, edited: np.ndarray, sample_rate: int, *,
     """
     if expect not in ("identical", "changed"):
         return {"error": f"expect must be 'identical' or 'changed', got {expect!r}"}
+    ref_len, edit_len = np.asarray(reference).shape[-1], np.asarray(edited).shape[-1]
+    for name, audio in (("reference", reference), ("edited audio", edited)):
+        if np.max(np.abs(audio)) < SILENCE:
+            return {"error": f"The {name} is silent over this range"}
+    if abs(time_scale - 1.0) <= 1e-6 and abs(ref_len - edit_len) > sample_rate * max_lag_ms / 1000.0:
+        return {"error": f"The reference is {ref_len / sample_rate:.2f} s and the edited audio {edit_len / sample_rate:.2f} s: "
+                         "they must cover the same range (cut the reference file to the window, or use referenceTrack)"}
     checks: dict[str, Any] = {}
 
     edge = int(sample_rate * max_lag_ms / 1000.0)

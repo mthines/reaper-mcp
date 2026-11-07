@@ -1110,7 +1110,7 @@ ESLint enforces dependency rules via `@nx/enforce-module-boundaries`:
   command in `e2e/fixtures/status.json`, a status feed recorded from the real bridge, in the built page at the narrowest (320 px),
   default and widest drawer, and fails on anything drawn outside the drawer or a console error. CI runs it. Add an entry
   to the fixture when you add a view (record it by running the commands through the wasmoon bridge and saving `MCPBridge/status`).
-- **Sidecar tests in CI**: the `sidecar` job runs `test_analysis.py` and `test_mixcheck.py` with CPU torch (Demucs and
+- **Sidecar tests in CI**: the `sidecar` job runs `test_analysis.py`, `test_mixcheck.py`, `test_verify.py` (and the chord and voice-sketch tests) with CPU torch (Demucs and
   the aesthetics model are not installed there).
 - **Validate changes with tests**: Always write small, simple, and effective tests to validate your changes. Prefer focused tests that check one behaviour well. If modifying existing code, add or update tests to cover the change before considering it complete.
 

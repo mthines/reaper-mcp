@@ -279,7 +279,7 @@ def handle_verify_edit(request_id: Any, params: dict) -> str:
                                     time_scale=float(params.get("timeScale", 1.0)),
                                     max_lag_ms=float(params.get("maxLagMs", 20)))
         return _ok(request_id, result)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - a JSON-RPC handler reports any failure to the caller instead of crashing the sidecar
         return _err(request_id, -32000, f"Verification failed: {exc}")
 
 

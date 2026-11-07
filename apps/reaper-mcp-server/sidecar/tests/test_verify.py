@@ -219,3 +219,12 @@ def test_too_short_audio_is_refused(source):
 
 def test_an_unknown_expectation_is_refused(source):
     assert "expect" in verify.verify_edit(source, source, SR, expect="better")["error"]
+
+
+def test_a_silent_edit_is_refused_even_when_the_timing_changed(source):
+    assert "silent" in verify.verify_edit(source, np.zeros(int(len(source) / 1.1)), SR, time_scale=1.1)["error"]
+
+
+def test_a_reference_covering_another_range_is_refused_not_failed(source):
+    longer = np.concatenate([source[: 5 * SR // 2], source])
+    assert "same range" in verify.verify_edit(longer, source, SR)["error"]
