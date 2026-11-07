@@ -360,14 +360,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # What gets published is built fresh, never restored from the Nx cache
       - name: Build all projects
-        run: pnpm nx run-many --target=build
+        run: pnpm nx run-many --target=build --skip-nx-cache
 
       - name: Prepare npm package
         run: node scripts/prepare-npm-package.mjs "${{ needs.version.outputs.version }}"
-
-      - name: Update npm
-        run: npm install -g npm@latest
 
       - name: Publish to npm
         working-directory: dist/apps/reaper-mcp-server
