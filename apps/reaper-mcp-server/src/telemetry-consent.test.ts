@@ -7,9 +7,11 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import { tracing } from '@opentelemetry/sdk-node';
 import {
   AnonymizingSpanExporter,
+  consentReportAllowed,
   firstRunTelemetryNotice,
   readTelemetryConfig,
   resolveTelemetry,
+  saveTelemetryChoice,
   writeTelemetryConfig,
 } from './telemetry-consent.js';
 
@@ -57,6 +59,41 @@ describe('telemetry config', () => {
   });
 });
 
+describe('saveTelemetryChoice', () => {
+  it('reports an opt-out once, however often `telemetry off` runs', () => {
+    const dir = tempDir();
+
+    expect(saveTelemetryChoice(false, dir)).toEqual({ state: 'off', source: 'cli' });
+    expect(saveTelemetryChoice(false, dir)).toBeUndefined();
+    expect(resolveTelemetry({}, readTelemetryConfig(dir), WITH_TOKEN).mode).toBe('off');
+  });
+
+  it('reports opting back in after an opt-out', () => {
+    const dir = tempDir();
+    saveTelemetryChoice(false, dir);
+
+    expect(saveTelemetryChoice(true, dir)).toEqual({ state: 'on', source: 'cli' });
+    expect(resolveTelemetry({}, readTelemetryConfig(dir), WITH_TOKEN).mode).toBe('default');
+  });
+
+  it('reports nothing for `telemetry on` on an install that never opted out', () => {
+    expect(saveTelemetryChoice(true, tempDir())).toBeUndefined();
+  });
+});
+
+describe('consentReportAllowed', () => {
+  it.each([
+    ['nothing set', {}, WITH_TOKEN, true],
+    ['REAPER_MCP_TELEMETRY=1', { REAPER_MCP_TELEMETRY: '1' }, WITH_TOKEN, true],
+    ['DO_NOT_TRACK=1', { DO_NOT_TRACK: '1' }, WITH_TOKEN, false],
+    ['REAPER_MCP_TELEMETRY=0', { REAPER_MCP_TELEMETRY: '0' }, WITH_TOKEN, false],
+    ['own OTEL exporters', { OTEL_TRACES_EXPORTER: 'otlp' }, WITH_TOKEN, false],
+    ['no built-in destination', {}, { token: '' }, false],
+  ] as const)('%s → %s', (_label, env, destination, allowed) => {
+    expect(consentReportAllowed(env, destination)).toBe(allowed);
+  });
+});
+
 describe('firstRunTelemetryNotice', () => {
   async function run(dir: string, answer: string | null) {
     const input = new PassThrough();
@@ -64,22 +101,23 @@ describe('firstRunTelemetryNotice', () => {
     let printed = '';
     output.on('data', (chunk: Buffer) => { printed += chunk.toString(); });
     if (answer !== null) input.end(`${answer}\n`);
-    const shown = await firstRunTelemetryNotice({ input, output, interactive: answer !== null }, dir, {}, WITH_TOKEN);
-    return { shown, printed };
+    const choice = await firstRunTelemetryNotice({ input, output, interactive: answer !== null }, dir, {}, WITH_TOKEN);
+    return { choice, printed };
   }
 
   it.each([
-    ['', 'default'],
-    ['y', 'default'],
-    ['n', 'off'],
-    ['No', 'off'],
-  ])('answer %j keeps telemetry %s', async (answer, mode) => {
+    ['', 'default', 'on'],
+    ['y', 'default', 'on'],
+    ['n', 'off', 'off'],
+    ['No', 'off', 'off'],
+  ])('answer %j keeps telemetry %s and returns it as the choice to report', async (answer, mode, state) => {
     const dir = tempDir();
-    const { shown, printed } = await run(dir, answer);
+    const { choice, printed } = await run(dir, answer);
 
-    expect(shown).toBe(true);
+    expect(choice).toEqual({ state, source: 'first_run_prompt' });
     expect(printed).toMatch(/on by default/i);
     expect(printed).toMatch(/reaper-mcp telemetry off/);
+    expect(printed).toMatch(/answer below is counted once, anonymously/i);
     expect(resolveTelemetry({}, readTelemetryConfig(dir), WITH_TOKEN).mode).toBe(mode);
   });
 
@@ -89,7 +127,7 @@ describe('firstRunTelemetryNotice', () => {
 
     const again = await run(dir, 'y');
 
-    expect(again).toEqual({ shown: false, printed: '' });
+    expect(again).toEqual({ choice: undefined, printed: '' });
     expect(resolveTelemetry({}, readTelemetryConfig(dir), WITH_TOKEN).mode).toBe('off');
   });
 
@@ -103,9 +141,9 @@ describe('firstRunTelemetryNotice', () => {
     let printed = '';
     output.on('data', (chunk: Buffer) => { printed += chunk.toString(); });
 
-    const shown = await firstRunTelemetryNotice({ input: new PassThrough(), output, interactive: true }, dir, env, destination);
+    const choice = await firstRunTelemetryNotice({ input: new PassThrough(), output, interactive: true }, dir, env, destination);
 
-    expect({ shown, printed }).toEqual({ shown: false, printed: '' });
+    expect({ choice, printed }).toEqual({ choice: undefined, printed: '' });
     expect(readTelemetryConfig(dir).telemetryNoticeShown).toBeUndefined();
   });
 
@@ -114,17 +152,17 @@ describe('firstRunTelemetryNotice', () => {
     const input = new PassThrough();
     input.end();
 
-    const shown = await firstRunTelemetryNotice({ input, output: new PassThrough(), interactive: true }, dir, {}, WITH_TOKEN);
+    const choice = await firstRunTelemetryNotice({ input, output: new PassThrough(), interactive: true }, dir, {}, WITH_TOKEN);
 
-    expect(shown).toBe(true);
+    expect(choice).toEqual({ state: 'on', source: 'first_run_prompt' });
     expect(readTelemetryConfig(dir)).toEqual({ telemetry: true, telemetryNoticeShown: true });
   });
 
   it('without a terminal, shows the notice and leaves telemetry on', async () => {
     const dir = tempDir();
-    const { shown, printed } = await run(dir, null);
+    const { choice, printed } = await run(dir, null);
 
-    expect(shown).toBe(true);
+    expect(choice).toEqual({ state: 'on', source: 'first_run_notice' });
     expect(printed).toMatch(/on by default/i);
     expect(resolveTelemetry({}, readTelemetryConfig(dir), WITH_TOKEN).mode).toBe('default');
   });
