@@ -622,7 +622,7 @@ switch (command) {
   default:
     console.log(`reaper-mcp — AI-powered mixing for REAPER DAW
 
-reaper-mcp is fork-and-clone: clone your fork and run one command.
+Install from npm (below), or clone the repo and run ./scripts/install.sh.
 
 Usage:
   reaper-mcp                  Start MCP server (stdio mode)

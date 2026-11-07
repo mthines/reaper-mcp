@@ -5,7 +5,8 @@
 //
 // `nx run-many --target=build` leaves main.js, reaper/, sidecar/ and package.json there, and the
 // status page in dist/apps/bridge-ui. The package also needs the status page as a sibling
-// `bridge-ui/` (where `reaper-mcp setup` looks for it), plus README and LICENSE.
+// `bridge-ui/` (where `reaper-mcp setup` looks for it), plus LICENSE and the npm README
+// (apps/reaper-mcp-server/NPM_README.md, written for people who install without git).
 // Every required file is checked up front and the script names the missing ones, so a layout
 // change fails here with a readable message instead of in the middle of `npm publish`.
 
@@ -18,7 +19,8 @@ const pkgDir = join(root, 'dist', 'apps', 'reaper-mcp-server');
 const uiBuild = join(root, 'dist', 'apps', 'bridge-ui');
 
 const copies = [
-  [join(root, 'README.md'), join(pkgDir, 'README.md')],
+  // npm's page: the root README is the clone tour (relative images, git clone steps)
+  [join(root, 'apps', 'reaper-mcp-server', 'NPM_README.md'), join(pkgDir, 'README.md')],
   [join(root, 'LICENSE'), join(pkgDir, 'LICENSE')],
   [uiBuild, join(pkgDir, 'bridge-ui')],
 ];
@@ -28,7 +30,7 @@ const required = [
   join(pkgDir, 'reaper', 'mcp_bridge.lua'),
   join(pkgDir, 'sidecar', 'server.py'),
   join(uiBuild, 'mcp_bridge.html'),
-  join(root, 'README.md'),
+  join(root, 'apps', 'reaper-mcp-server', 'NPM_README.md'),
   join(root, 'LICENSE'),
 ];
 
