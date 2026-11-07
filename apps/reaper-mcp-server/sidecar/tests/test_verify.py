@@ -155,6 +155,18 @@ def test_opposite_clicks_on_left_and_right_do_not_cancel_out():
     assert verify.verify_edit(reference, clicked, SR, expect="changed")["checks"]["discontinuity"]["verdict"] == "fail"
 
 
+def test_a_spiky_unchanged_channel_does_not_hide_a_click_on_the_other():
+    t = np.arange(3 * SR) / SR
+    left = 0.2 * np.sin(2 * np.pi * 220 * t)
+    left[::9000] += 0.5  # naturally spiky, identical in the edit
+    right = 0.2 * np.sin(2 * np.pi * 330 * t) + 0.002 * np.random.default_rng(4).standard_normal(len(t))
+    clicked = right.copy()
+    clicked[SR:] += 0.3  # a step
+    disc = verify.verify_edit(np.stack([left, right]), np.stack([left, clicked]), SR, expect="changed")["checks"]["discontinuity"]
+    assert disc["verdict"] == "fail"
+    assert disc["channel"] == 1
+
+
 def test_a_clean_stereo_edit_names_no_channel_problem():
     reference = _stereo_tone()
     result = verify.verify_edit(reference, reference * 0.7, SR)

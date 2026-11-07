@@ -132,6 +132,9 @@ def discontinuity_score(audio: np.ndarray, edge_samples: int = 0) -> dict[str, A
     return {"score": round(float(inner[k] / scale), 2), "atSample": offset + k + 1}
 
 
+_VERDICT_RANK = {"unknown": 0, "ok": 1, "warn": 2, "fail": 3}
+
+
 def _worst_channel(reference: np.ndarray, edited: np.ndarray, edge_samples: int) -> tuple[dict, dict, int | None]:
     """
     Discontinuity of the channel that scores highest in the edit, with the reference's score for the same channel.
@@ -142,10 +145,17 @@ def _worst_channel(reference: np.ndarray, edited: np.ndarray, edge_samples: int)
     if ref_ch.shape[0] != edit_ch.shape[0]:
         ref_ch, edit_ch = _mono(reference)[None, :], _mono(edited)[None, :]
     best: tuple[dict, dict, int | None] | None = None
+    best_key: tuple[int, float] | None = None
     for index, (ref, edit) in enumerate(zip(ref_ch, edit_ch)):
         edit_disc, ref_disc = discontinuity_score(edit, edge_samples), discontinuity_score(ref, edge_samples)
-        if edit_disc["score"] is not None and (best is None or edit_disc["score"] > best[0]["score"]):
-            best = (edit_disc, ref_disc, index if len(edit_ch) > 1 else None)
+        if edit_disc["score"] is None:
+            continue
+        # Worst verdict first, then the biggest jump over the channel's own reference: a naturally spiky,
+        # unchanged channel must not hide a click on the other one.
+        rank = _VERDICT_RANK[_click_verdict(edit_disc["score"], ref_disc["score"])]
+        ratio = edit_disc["score"] / max(ref_disc["score"] or 1.0, 1.0)
+        if best_key is None or (rank, ratio) > best_key:
+            best, best_key = (edit_disc, ref_disc, index if len(edit_ch) > 1 else None), (rank, ratio)
     return best or (discontinuity_score(edit_ch[0]), discontinuity_score(ref_ch[0]), None)
 
 
