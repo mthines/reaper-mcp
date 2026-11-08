@@ -485,7 +485,7 @@ that reads or writes your session.</sub>
 
 ## 🤖 Clients and models
 
-reaper-mcp is an [MCP](https://modelcontextprotocol.io) server: a set of REAPER tools any MCP client can call.
+reaper-mcp is an [MCP](https://modelcontextprotocol.io) server: a set of REAPER tools any MCP client that can start a local (stdio) server can call.
 It has no model of its own, so the AI is whichever one your client runs.
 
 **Tested clients**
@@ -568,7 +568,7 @@ voice-to-text tool; the agent just sees the text.
 <details>
 <summary><b>Does it work with other AI apps or local models?</b></summary>
 <br>
-The tools work from any MCP client, and with a local model if it handles tool calling well and has a big enough
+The tools work from any MCP client that can start a local (stdio) server, and with a local model if it handles tool calling well and has a big enough
 context window. Only Claude Code is tested. See <a href="#-clients-and-models">Clients and models</a>.
 </details>
 
