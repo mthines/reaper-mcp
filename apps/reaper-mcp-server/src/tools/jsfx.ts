@@ -174,7 +174,7 @@ export function writeJsfx(input: WriteArgs): ToolResult {
   }
 
   if (existing !== undefined && !args.breaking) {
-    const broken = breakingChanges(parseSliders(existing).sliders, parseSliders(args.source).sliders);
+    const broken = breakingChanges(parseSliders(existing).sliders, sliders);
     if (broken.length) {
       record({ ...shape, outcome: 'refused_breaking' });
       emitLog('warn', 'write_jsfx refused: breaking slider change', { 'reaper.jsfx.outcome': 'refused_breaking', 'reaper.jsfx.breaking_count': broken.length });

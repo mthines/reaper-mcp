@@ -74,6 +74,7 @@ function sections(code: string): Map<string, { text: string; line: number }> {
 
 const WIDGET = /\bui_(knob|toggle|choice)\s*\(\s*(\d+)/g;
 const METER = /\bui_meter\s*\(/g;
+const countWidgets = (t: string) => [...t.matchAll(WIDGET)].length + [...t.matchAll(METER)].length;
 
 export function lintJsfx(source: string): LintFinding[] {
   const findings: LintFinding[] = [];
@@ -119,9 +120,8 @@ export function lintJsfx(source: string): LintFinding[] {
     const at = gfx.text.search(/\bui_section\s*\(/);
     const core = at === -1 ? gfx.text : gfx.text.slice(0, at);
     const adv = at === -1 ? '' : gfx.text.slice(at);
-    const widgets = (t: string) => [...t.matchAll(WIDGET)].length + [...t.matchAll(METER)].length;
-    if (widgets(core) > MAX_CORE_WIDGETS) add('core-overflow', 'error', `${widgets(core)} widgets before the first ui_section (max ${MAX_CORE_WIDGETS}): keep the core view to what is changed in most uses and move the rest behind ui_section("Advanced").`, gfx.line);
-    if (widgets(adv) > MAX_ADVANCED_WIDGETS) add('advanced-overflow', 'warning', `${widgets(adv)} advanced widgets (max ${MAX_ADVANCED_WIDGETS}): does every one earn its place?`, gfx.line);
+    if (countWidgets(core) > MAX_CORE_WIDGETS) add('core-overflow', 'error', `${countWidgets(core)} widgets before the first ui_section (max ${MAX_CORE_WIDGETS}): keep the core view to what is changed in most uses and move the rest behind ui_section("Advanced").`, gfx.line);
+    if (countWidgets(adv) > MAX_ADVANCED_WIDGETS) add('advanced-overflow', 'warning', `${countWidgets(adv)} advanced widgets (max ${MAX_ADVANCED_WIDGETS}): does every one earn its place?`, gfx.line);
 
     const byIndex = new Map(sliders.map((s) => [s.index, s]));
     const used = new Set<number>();
@@ -180,6 +180,5 @@ export const warningsOf = (f: LintFinding[]) => f.filter((x) => x.severity === '
 export function widgetCounts(source: string): { core: number; advanced: number } {
   const gfx = sections(stripComments(source.replace(/\r\n/g, '\n'))).get('gfx')?.text ?? '';
   const at = gfx.search(/\bui_section\s*\(/);
-  const count = (t: string) => [...t.matchAll(WIDGET)].length + [...t.matchAll(METER)].length;
-  return { core: count(at === -1 ? gfx : gfx.slice(0, at)), advanced: at === -1 ? 0 : count(gfx.slice(at)) };
+  return { core: countWidgets(at === -1 ? gfx : gfx.slice(0, at)), advanced: at === -1 ? 0 : countWidgets(gfx.slice(at)) };
 }
