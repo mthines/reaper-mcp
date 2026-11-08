@@ -94,7 +94,8 @@ record shapes, layer merge and plugin lookup):
   `read_*` tool before changing a patch. Not installed: say the structural part is out
   of reach and offer `reaper-mcp extension add <name>`.
 - **Asked to use a plugin you don't know?** Bootstrap it *before* mixing with it
-  (see the protocol): dispatch the `plugin-researcher` agent, which researches
+  (see the protocol): dispatch the `plugin-researcher` agent (add the prompt line
+  `Dispatched by: mixer`), which researches
   the web, probes the plugin on a scratch track and writes its
   `user::plugins::` record. If the agent isn't available, do those steps
   yourself. Then read the record and use it. Refine it as you go.

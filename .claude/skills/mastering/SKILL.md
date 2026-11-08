@@ -64,7 +64,8 @@ the user's own `user::` layer on top. Reads combine both; writes go to `user::` 
   and carry on (or bootstrap it when the user asked for the plugin by name). LoreKit
   not connected: say so once and use the built-in read only.
 - **Unknown plugin?** Bootstrap it first (see protocol): dispatch the
-  `plugin-researcher` agent (or follow its steps yourself), then read its
+  `plugin-researcher` agent (prompt line `Dispatched by: mastering`; or follow its
+  steps yourself), then read its
   `user::plugins::` record and use it.
 - **At a correction point — write the lesson immediately, before your next
   action** (the user found your master too loud and you backed off; a re-measure
