@@ -18,7 +18,7 @@ function tool(links: string[], reply: Reply): () => Promise<Reply> {
 }
 
 const OK: Reply = { content: [{ type: 'text', text: '{"ok":true}' }] };
-const page = (n: number) => `http://localhost:8099/mcp_bridge.html?view=calls&entry=${n}`;
+const page = (n: number) => `http://localhost:8099/mcp_bridge.html?view=%22calls%22&entry=${n}`;
 
 describe('bridge page link in tool replies', () => {
   it("adds the last write's page link after the tool's own reply", async () => {
