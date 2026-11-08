@@ -40,9 +40,10 @@ takes a few tool calls. No `run_plan` batches of unrelated edits in explain mode
    bridge page: <url>"). Never open it yourself (no `open`, no `curl`): REAPER's web server leaks a connection on
    every scripted request. No line in the reply means the web interface is off, or the call only moved the cursor
    or time selection (those count as navigation, not writes); skip the offer.
-7. **Undo**: one line. Every tool call that writes is its own undo step, so count them. One call (or one
-   `run_plan`): "Ctrl+Z (Cmd+Z) in REAPER, or ask me to undo, takes back exactly this." N calls: "Ctrl+Z N times
-   takes back this change, or ask me to undo it" (then call `undo_project` N times).
+7. **Undo**: one line. Every tool call that writes is its own undo step, and measuring adds steps too (the
+   meter cleanup is "MCP: Remove meters"), so never promise a number of Ctrl+Z presses. Say: "Ask me to undo this,
+   or use Edit → Undo history in REAPER: this change's steps are the ones named MCP: …". When asked, call
+   `undo_project` one step at a time and stop once the labels it reports are past this change.
 8. **Pause**: ask before the next change ("Next: a high-pass on the guitars. Go on?"). The user can say "keep
    going" to let you do the rest of the current step without pausing; keep explaining each change anyway.
 
