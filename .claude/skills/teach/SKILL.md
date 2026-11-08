@@ -38,7 +38,9 @@ user says so ("stop explaining", "just do it").
 4. **Get oriented, out loud**: `list_tracks` (compact), then describe the session in plain words — how many tracks,
    which are folders, what the master is doing — linking the concepts you name (Track, Folder track, Master track).
 5. **Snapshot before the first change**: `snapshot_save` with a name like `before-teach`, and say what a snapshot is
-   (link Snapshots) and how to get back to it.
+   (link Snapshots) and how to get back to it. Say what it covers: the mix (faders, pans, FX, sends), never notes or
+   items. For MIDI and arrangement work, `/editing` keeps each original as a take or lane, and undo takes back the
+   rest; say so before the first edit.
 
 ## Do the task
 
@@ -65,4 +67,5 @@ Close with a short recap a beginner can keep:
 - the changes made, one line each, with the concept they used
 - the shortcuts and actions that came up, as a list
 - what to try by hand next on this song, and which concept to read about
-- how to go back: the snapshot name and `undo_project` / Ctrl+Z
+- how to go back: the snapshot name for mix changes; for edits, the original take or lane `/editing` kept, and
+  undo by name (`undo_project`, or Edit → Undo history)
