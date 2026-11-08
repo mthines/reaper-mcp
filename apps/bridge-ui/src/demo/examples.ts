@@ -115,11 +115,15 @@ function measurementExampleList(): Example[] {
     name: 'Vox stretched', ref: 'Vox', verdict: 'ok', expect: 'identical',
     checks: [['null', 'skipped', '', 'timing changed (timeScale != 1): a waveform null needs the same timing'], ['discontinuity', 'ok', '3.2×', 'at 1.50 s'], ['pitch', 'ok', '-2 cents', '140 Hz reference'], ['tone', 'ok', '0.19 dB', ''], ['transients', 'ok', '-0.04', '']],
   }, { ms: 4_200 });
-  const verifyWarn = call('verify_edit', { trackIndex: 4, referenceTrack: 2, startTime: 12, timeScale: 1.1 }, {
-    name: 'Vox varispeed', ref: 'Vox', verdict: 'warn', expect: 'identical',
-    checks: [['null', 'skipped', '', 'timing changed (timeScale != 1): a waveform null needs the same timing'], ['discontinuity', 'ok', '3.0×', 'at 2.10 s'], ['pitch', 'warn', '165 cents', '140 Hz reference'], ['tone', 'warn', '4.13 dB', ''], ['transients', 'ok', '-0.10', '']],
+  const verifyWarn = call('verify_edit', { trackIndex: 4, referenceTrack: 2, startTime: 12, timeScale: 0.85 }, {
+    name: 'Vox slowed', ref: 'Vox', verdict: 'warn', expect: 'identical',
+    checks: [['null', 'skipped', '', 'timing changed (timeScale != 1): a waveform null needs the same timing'], ['discontinuity', 'ok', '3.0×', 'at 2.10 s'], ['pitch', 'ok', '0 cents', '140 Hz reference'], ['tone', 'ok', '0.13 dB', ''], ['transients', 'ok', '-0.10', ''], ['dropout', 'warn', '17.0 dB', 'deepest dip under the original']],
   }, { ms: 4_150 });
-  const verifyOk0 = { name: 'Vox varispeed', ref: 'Vox', verdict: 'ok', expect: 'identical', checks: [['pitch', 'ok', '-2 cents', '140 Hz reference'], ['tone', 'ok', '0.19 dB', '']] };
+  const verifyInfo = call('verify_edit', { trackIndex: 5, referenceTrack: 2, startTime: 12, timeScale: 1.1 }, {
+    name: 'Vox varispeed', ref: 'Vox', verdict: 'ok', expect: 'changed',
+    checks: [['null', 'skipped', '', 'timing changed (timeScale != 1): a waveform null needs the same timing'], ['discontinuity', 'ok', '3.0×', 'at 2.10 s'], ['pitch', 'info', '165 cents', 'plain speed change (expected 165 cents)'], ['tone', 'info', '4.13 dB', 'the spectrum moves with the pitch after a plain speed change'], ['transients', 'ok', '-0.10', '']],
+  }, { ms: 4_100 });
+  const verifyOk0 = { name: 'Vox slowed', ref: 'Vox', verdict: 'ok', expect: 'identical', checks: [['pitch', 'ok', '-2 cents', '140 Hz reference'], ['tone', 'ok', '0.19 dB', '']] };
   const verifyFail = call('verify_edit', { trackIndex: 3, referenceTrack: 2, startTime: 12 }, {
     name: 'Snare Btm', ref: 'Snare Top', verdict: 'fail', expect: 'identical',
     checks: [['null', 'fail', '-25.0 dB', 'delay 4.00 ms, gain -3.0 dB'], ['discontinuity', 'fail', '14.8×', 'at 12.50 s, channel 2']],
@@ -224,7 +228,8 @@ function measurementExampleList(): Example[] {
     example('Alignment', align, 'Bottom mic 0.84 ms late and inverted; the fix', earlier(align, { ref: 'Snare Top', name: 'Snare Btm', delayMs: 0.02, samples: 1, corr: 0.95, inv: 0, cur: -0.84, offset: -0.84, phase: 1 })),
     example('Alignment · unsure', alignUnsure, 'Low correlation: no fix suggested'),
     example('Edit check · passed', verifyOk, 'A good stretch: pitch, tone and attacks all kept; the null is skipped for timing'),
-    example('Edit check · worth a listen', verifyWarn, 'Varispeed: pitch drifts 165 cents and the tone moves; previous call ghosted', earlier(verifyWarn, { ...verifyOk0 })),
+    example('Edit check · plain speed change', verifyInfo, 'Varispeed: the pitch and tone move with the speed, reported rather than warned'),
+    example('Edit check · worth a listen', verifyWarn, 'A big slow-down goes quiet in one spot; previous call ghosted', earlier(verifyWarn, { ...verifyOk0 })),
     example('Edit check · failed', verifyFail, 'A click on one channel and a null that does not cancel'),
     example('Aesthetics', aesthetics, 'Four scores on 0–10; previous call ghosted', earlier(aesthetics, { name: 'Master', pq: 7.18, pc: 5.9, ce: 6.4, cu: 6.95, lufs: -18, dur: 30 })),
     example('Key · MIDI', key, 'A minor from the notes: scale tones lit, the tonic strongest', earlier(key, { src: 'midi', key: 'C major', tonic: 'C', mode: 'major', r: 0.8, conf: 0.4, rel: 'A minor', alt: [], chroma: [1, 0.04, 0.4, 0.06, 0.7, 0.35, 0.03, 0.8, 0.05, 0.6, 0.07, 0.2] })),
