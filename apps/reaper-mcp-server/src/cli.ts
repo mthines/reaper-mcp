@@ -128,6 +128,17 @@ export const REAPER_ASSETS = [
   'mcp_snapshot_quick_save.lua',
 ] as const;
 
+/**
+ * What `reaper-mcp setup` does about files, given whether ReaPack installed the bridge and whether setup runs from a
+ * git clone. 'leave': ReaPack owns them, only autostart and the web interface are set up. 'install-with-warning': a
+ * developer's clone still copies its files (they take effect once ReaPack's are uninstalled), but ReaPack's copies
+ * win until then (and the status page it copies is removed again when ReaPack's packages are uninstalled, so setup runs a second time). 'install': the usual copy.
+ */
+export function setupFilesPlan(reapackInstalled: boolean, inClone: boolean): 'leave' | 'install-with-warning' | 'install' {
+  if (!reapackInstalled) return 'install';
+  return inClone ? 'install-with-warning' : 'leave';
+}
+
 /** Files earlier versions installed into REAPER's Scripts/ that setup now deletes */
 export const RETIRED_ASSETS = ['mcp_snapshot_manager.lua'] as const;
 

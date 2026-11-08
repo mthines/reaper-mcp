@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, autostartCheck, readExtState, findCloneRoot, isDevClone, updateConfigText, REAPER_ASSETS, RETIRED_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, setupFilesPlan, autostartCheck, readExtState, findCloneRoot, isDevClone, updateConfigText, REAPER_ASSETS, RETIRED_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `reaper-mcp-test-${randomUUID()}`);
@@ -472,6 +472,21 @@ describe('the autostart block, run by REAPER at launch (wasmoon)', () => {
 
   it('does nothing when the bridge script is not installed', async () => {
     expect(await launchReaper({ bridgeInstalled: false })).toMatchObject({ ran: null, registered: null, ownStartupRan: true });
+  });
+});
+
+describe('setupFilesPlan', () => {
+  it('copies the files as usual without ReaPack', () => {
+    expect(setupFilesPlan(false, false)).toBe('install');
+    expect(setupFilesPlan(false, true)).toBe('install');
+  });
+
+  it('leaves the files to ReaPack for an npm install', () => {
+    expect(setupFilesPlan(true, false)).toBe('leave');
+  });
+
+  it('still installs from a developer clone, with a warning that ReaPack\'s copy wins', () => {
+    expect(setupFilesPlan(true, true)).toBe('install-with-warning');
   });
 });
 
