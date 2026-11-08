@@ -98,7 +98,7 @@ describe('report_plugin_research', () => {
   });
 
   it('leaves out what the researcher did not give, instead of sending "other"', async () => {
-    await tools()['report_plugin_research']({ outcome: 'not_installed' }, { requestId: 1 });
+    await tools()['report_plugin_research']({ outcome: 'not_installed', category: '', style: '  ', format: '' }, { requestId: 1 });
 
     const attributes = reportSpan()?.attributes ?? {};
     for (const key of ['reaper.plugin.category', 'reaper.plugin.style', 'reaper.plugin.format', 'reaper.plugin.instrument', 'reaper.plugin.params_total', 'reaper.plugin_research.cleaned_up']) {

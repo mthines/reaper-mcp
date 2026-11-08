@@ -149,6 +149,10 @@ report_plugin_research { outcome: <new | refined | not_installed | load_failed |
   caller: <the prompt's "Dispatched by", else other>, batchSize: <the prompt's "Batch", else 1> }
 ```
 
+Leave out every field you never learned — on an early stop that is usually
+`format`, `paramsTotal` and `paramsProbed`. Never send a placeholder (`""`, `0`,
+`unknown`): it would be counted as a real value.
+
 `refined` covers an overlay on a built-in record too. Don't skip the call when
 you did the steps inline.
 

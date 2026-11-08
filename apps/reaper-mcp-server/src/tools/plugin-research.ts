@@ -66,6 +66,11 @@ function runSeconds(tag: string | undefined, now = Date.now()): number | undefin
   return Math.round((now - start) / 1000);
 }
 
+/** A blank string is not a value: an early-stop report that passes "" means "not known". */
+function given(value: string | undefined): string | undefined {
+  return value?.trim() ? value : undefined;
+}
+
 /** The value when it is one of `allowed`, else "other": free text never reaches a span. */
 function closed<T extends string>(allowed: readonly T[], value: string | undefined): T | 'other' {
   const candidate = value?.split(',')[0]?.trim().toLowerCase();
@@ -119,6 +124,9 @@ export function registerPluginResearchTools(server: McpServer): void {
       scratchTag: z.string().optional().describe('The <TAG> of your "[MCP] plugin-research <TAG>" track, so the server can time the run. Never sent.'),
     },
     async (args) => {
+      const category = given(args.category);
+      const style = given(args.style);
+      const format = given(args.format);
       const seconds = runSeconds(args.scratchTag);
       const bucket = paramsBucket(args.paramsTotal);
       const attributes: Record<string, string | number | boolean> = {
@@ -131,9 +139,9 @@ export function registerPluginResearchTools(server: McpServer): void {
         ...(args.cleanedUp !== undefined ? { 'reaper.plugin_research.cleaned_up': args.cleanedUp } : {}),
         ...(seconds !== undefined ? { 'reaper.plugin_research.duration_s': seconds } : {}),
         // given but unknown → "other"; not given → left out, so a missing value never reads as one
-        ...(args.category !== undefined ? { 'reaper.plugin.category': closed(PLUGIN_CATEGORIES, args.category) } : {}),
-        ...(args.style !== undefined ? { 'reaper.plugin.style': closed(PLUGIN_STYLES, args.style) } : {}),
-        ...(args.format !== undefined ? fxAttributes(args.format) : {}),
+        ...(category ? { 'reaper.plugin.category': closed(PLUGIN_CATEGORIES, category) } : {}),
+        ...(style ? { 'reaper.plugin.style': closed(PLUGIN_STYLES, style) } : {}),
+        ...(format ? fxAttributes(format) : {}),
         ...(bucket ? { 'reaper.plugin.params_total': bucket } : {}),
       };
       trace.getActiveSpan()?.setAttributes(attributes);
