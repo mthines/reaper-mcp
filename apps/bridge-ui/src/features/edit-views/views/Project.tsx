@@ -30,7 +30,7 @@ export function Project({ v }: { v: Extract<EditView, { kind: 'project' }> }) {
       )}
       <div className={chartStyles.measureReadouts}>
         {v.tempo !== undefined && <Measurement.Readout label="Tempo" value={plain(v.tempo)} unit=" BPM" />}
-        {v.ts && <Measurement.Readout label="Time signature" value={`${v.ts[0]}/${v.ts[1]}`} />}
+        {v.ts && <Measurement.Readout label="Meter" value={`${v.ts[0]}/${v.ts[1]}`} title="Time signature" />}
         {bar !== undefined && <Measurement.Readout label="Bar" value={plain(bar)} unit=" s" title="How long one bar lasts at this tempo" />}
         {v.sr !== undefined && (
           <Measurement.Readout label="Sample rate" value={kHz(v.sr)} word={v.forced ? 'project' : ''}
