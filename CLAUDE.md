@@ -191,7 +191,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | Vite + React Compiler → single HTML | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (186 total)
+## MCP Tools (187 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template, `measure_track_alignment` and `verify_edit` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -459,12 +459,13 @@ Each takes a track (rendered post-FX, `-1` = master) or a file `path`; `measure_
 |------|------|-------------|
 | `run_plan` | `tools/plan.ts` | Execute an ordered list of ops in **one** bridge call and **one** undo block, all-or-nothing, with `$refs`, `dryRun`, `idempotencyKey`, and an optional `snapshotBefore` |
 
-### Built-in Mix Knowledge (2)
+### Built-in Mix Knowledge (3)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `list_builtin_knowledge` | `tools/knowledge.ts` | List (summaries, tag filter) or full-text search the built-in plugin records and mixing lessons |
 | `get_builtin_knowledge` | `tools/knowledge.ts` | Read one built-in record by key (`plugins::…` / `mixing-lessons::…`) |
+| `report_plugin_research` | `tools/plugin-research.ts` | The plugin-researcher's last call: how the run went (outcome, caller, batch, category, style, format, parameter range, counts) on the tool's span for usage telemetry, timed from its `[MCP] plugin-research <TAG>` scratch track (`add_track` / `run_plan` note it, in memory). Never the plugin's name, nor a combination that singles one out |
 
 TS-only (no bridge command): JSON-RPC to LoreKit with a bundled **public read-only** `lk_ro_` token
 (`BUILTIN_LOREKIT_TOKEN`, scoped to `project::reaper-mcp` + the `reaper-mcp` org; override with
@@ -528,7 +529,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 186 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 187 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 

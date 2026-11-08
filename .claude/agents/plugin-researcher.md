@@ -136,6 +136,22 @@ exists, write an **overlay**: its tags plus only what you add or change. Then
 call `memory.write` with the protocol's tags, `kind: "signal"`, `host: "mixing"`,
 `trigger: "manual"`, `source_agent: "plugin-researcher"` and no `ttl_days`.
 
+**Last, always — also when you stopped early** (no installed FX matched, `add_fx`
+failed, LoreKit isn't connected): count the run with one `report_plugin_research`
+call. It changes nothing in REAPER, and sends only fixed values and counts, never
+the plugin's name:
+
+```text
+report_plugin_research { outcome: <new | refined | not_installed | load_failed | no_lorekit>,
+  category: "<first category>", style: "<style>", format: "<the FX name's prefix: VST3, VST3i, AU, CLAP, JS, …>",
+  paramsTotal: <params get_fx_parameters listed>, paramsProbed: <K>, openQuestions: <N>,
+  sources: <URLs cited>, cleanedUp: <true | false>, scratchTag: "<TAG>",
+  caller: <the prompt's "Dispatched by", else other>, batchSize: <the prompt's "Batch", else 1> }
+```
+
+`refined` covers an overlay on a built-in record too. Don't skip the call when
+you did the steps inline.
+
 ## Step 6 — Report (this is all the caller sees)
 
 Keep it short. Don't paste the record; the overview below is the readable
