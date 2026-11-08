@@ -26,7 +26,7 @@ type Handler = (args: Record<string, unknown>, extra: unknown) => Promise<{ cont
 
 function tools(): Record<string, Handler> {
   const registered: Record<string, Handler> = {};
-  const server = { tool: (...a: unknown[]) => { registered[a[0] as string] = a[a.length - 1] as Handler; } };
+  const server = { tool: (...args: unknown[]) => { registered[args[0] as string] = args[args.length - 1] as Handler; } };
   instrumentToolHandlers(server as unknown as McpServer);
   registerStructureTools(server as unknown as McpServer);
   registerPlanTools(server as unknown as McpServer);
@@ -120,11 +120,11 @@ describe('report_plugin_research', () => {
   it('times the run from the scratch track add_track created to the report', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-08T10:00:00Z'));
-    const t = tools();
-    await t['add_track']({ name: '[MCP] plugin-research PROC2' }, { requestId: 1 });
+    const registered = tools();
+    await registered['add_track']({ name: '[MCP] plugin-research PROC2' }, { requestId: 1 });
 
     vi.setSystemTime(new Date('2026-11-08T10:03:04Z'));
-    await t['report_plugin_research']({ outcome: 'new', scratchTag: 'PROC2' }, { requestId: 2 });
+    await registered['report_plugin_research']({ outcome: 'new', scratchTag: 'PROC2' }, { requestId: 2 });
 
     expect(reportSpan()?.attributes['reaper.plugin_research.duration_s']).toBe(184);
   });
@@ -132,13 +132,13 @@ describe('report_plugin_research', () => {
   it('times a reused tag from its latest scratch track, not from a run that never reported', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-08T09:00:00Z'));
-    const t = tools();
-    await t['add_track']({ name: '[MCP] plugin-research REAEQ' }, { requestId: 1 }); // this run never reports
+    const registered = tools();
+    await registered['add_track']({ name: '[MCP] plugin-research REAEQ' }, { requestId: 1 }); // this run never reports
 
     vi.setSystemTime(new Date('2026-11-08T10:00:00Z'));
-    await t['add_track']({ name: '[MCP] plugin-research REAEQ' }, { requestId: 2 });
+    await registered['add_track']({ name: '[MCP] plugin-research REAEQ' }, { requestId: 2 });
     vi.setSystemTime(new Date('2026-11-08T10:00:45Z'));
-    await t['report_plugin_research']({ outcome: 'new', scratchTag: 'REAEQ' }, { requestId: 3 });
+    await registered['report_plugin_research']({ outcome: 'new', scratchTag: 'REAEQ' }, { requestId: 3 });
 
     expect(reportSpan()?.attributes['reaper.plugin_research.duration_s']).toBe(45);
   });
@@ -146,29 +146,29 @@ describe('report_plugin_research', () => {
   it('times a run whose scratch track run_plan created, and leaves out a run it never saw start', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-08T10:00:00Z'));
-    const t = tools();
-    await t['run_plan']({ ops: [{ op: 'add_track', name: '[MCP] plugin-research VITAL', as: '$t' }] }, { requestId: 1 });
+    const registered = tools();
+    await registered['run_plan']({ ops: [{ op: 'add_track', name: '[MCP] plugin-research VITAL', as: '$t' }] }, { requestId: 1 });
 
     vi.setSystemTime(new Date('2026-11-08T10:01:30Z'));
-    await t['report_plugin_research']({ outcome: 'new', scratchTag: 'VITAL' }, { requestId: 2 });
+    await registered['report_plugin_research']({ outcome: 'new', scratchTag: 'VITAL' }, { requestId: 2 });
     expect(reportSpan()?.attributes['reaper.plugin_research.duration_s']).toBe(90);
 
     spans.reset();
-    await t['report_plugin_research']({ outcome: 'new', scratchTag: 'NEVERSEEN' }, { requestId: 3 });
+    await registered['report_plugin_research']({ outcome: 'new', scratchTag: 'NEVERSEEN' }, { requestId: 3 });
     expect(reportSpan()?.attributes).not.toHaveProperty('reaper.plugin_research.duration_s');
   });
 
   it('starts no timer for a scratch track that failed to add or was only a run_plan dry run', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-08T10:00:00Z'));
-    const t = tools();
+    const registered = tools();
     vi.mocked(sendCommand).mockResolvedValueOnce({ id: 't', success: false, error: 'REAPER is busy', timestamp: 0 });
-    await t['add_track']({ name: '[MCP] plugin-research FAILED' }, { requestId: 1 });
-    await t['run_plan']({ ops: [{ op: 'add_track', name: '[MCP] plugin-research DRYRUN' }], dryRun: true }, { requestId: 2 });
+    await registered['add_track']({ name: '[MCP] plugin-research FAILED' }, { requestId: 1 });
+    await registered['run_plan']({ ops: [{ op: 'add_track', name: '[MCP] plugin-research DRYRUN' }], dryRun: true }, { requestId: 2 });
 
     vi.setSystemTime(new Date('2026-11-08T10:02:00Z'));
-    await t['report_plugin_research']({ outcome: 'load_failed', scratchTag: 'FAILED' }, { requestId: 3 });
-    await t['report_plugin_research']({ outcome: 'new', scratchTag: 'DRYRUN' }, { requestId: 4 });
+    await registered['report_plugin_research']({ outcome: 'load_failed', scratchTag: 'FAILED' }, { requestId: 3 });
+    await registered['report_plugin_research']({ outcome: 'new', scratchTag: 'DRYRUN' }, { requestId: 4 });
 
     const reports = spans.getFinishedSpans().filter((s) => s.name === 'tools/call report_plugin_research');
     expect(reports).toHaveLength(2);

@@ -68,15 +68,15 @@ function runSeconds(tag: string | undefined, now = Date.now()): number | undefin
 
 /** The value when it is one of `allowed`, else "other": free text never reaches a span. */
 function closed<T extends string>(allowed: readonly T[], value: string | undefined): T | 'other' {
-  const v = value?.split(',')[0]?.trim().toLowerCase();
-  return v !== undefined && (allowed as readonly string[]).includes(v) ? (v as T) : 'other';
+  const candidate = value?.split(',')[0]?.trim().toLowerCase();
+  return candidate !== undefined && (allowed as readonly string[]).includes(candidate) ? (candidate as T) : 'other';
 }
 
 /** "VST3i:" / "vst3" / "CLAPi" → format and whether it is an instrument (REAPER's trailing "i"). */
 export function fxFormat(prefix: string | undefined): { format: (typeof FX_FORMATS)[number] | 'other'; instrument: boolean } {
-  const p = prefix?.trim().replace(/:$/, '').toUpperCase() ?? '';
-  const instrument = /^(VST3?|AU|CLAP|LV2|DX)I$/.test(p);
-  const base = instrument ? p.slice(0, -1) : p;
+  const label = prefix?.trim().replace(/:$/, '').toUpperCase() ?? '';
+  const instrument = /^(VST3?|AU|CLAP|LV2|DX)I$/.test(label);
+  const base = instrument ? label.slice(0, -1) : label;
   const format = (FX_FORMATS as readonly string[]).includes(base) ? (base as (typeof FX_FORMATS)[number]) : 'other';
   return { format, instrument };
 }

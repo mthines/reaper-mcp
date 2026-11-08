@@ -47,9 +47,9 @@ export function registerStructureTools(server: McpServer): void {
       index: z.coerce.number().int().min(0).optional().describe('0-based position to insert at (default: after the last track)'),
     },
     async (params) => {
-      const res = await run('add_track', params);
-      if (!('isError' in res)) noteScratchTrack(params.name);
-      return res;
+      const added = await run('add_track', params);
+      if (!('isError' in added)) noteScratchTrack(params.name);
+      return added;
     }
   );
 
