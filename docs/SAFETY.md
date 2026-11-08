@@ -34,7 +34,7 @@ and the code disagree, the code wins and this page has a bug.
   permission model. Their tools are not in the allow-list `reaper-mcp init` writes, so Claude Code asks before each new
   one. See [Trust](EXTENSIONS.md#trust).
 - **Your model sees what the tools return.** Track names, FX settings and file paths go to whichever model your client
-  uses. reaper-mcp trains nothing and sends nothing elsewhere, apart from [opt-out usage telemetry](../TELEMETRY.md).
+  uses. reaper-mcp trains nothing. Apart from that model, it sends only [opt-out usage telemetry](../TELEMETRY.md) and read-only lookups of the built-in plugin knowledge in LoreKit (search terms such as plugin names; [where your data goes](../README.md#-clients-and-models)).
 
 ## Habits that make it boring
 
