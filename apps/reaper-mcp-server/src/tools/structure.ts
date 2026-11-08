@@ -2,6 +2,7 @@ import { z } from 'zod/v4';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CommandType } from '@reaper-mcp/protocol';
 import { sendCommand } from '../bridge.js';
+import { noteScratchTrack } from './plugin-research.js';
 
 /** Index, exact name, "{GUID}" or "master" — resolved by the bridge before anything is written. */
 export const trackRef = z
@@ -45,7 +46,11 @@ export function registerStructureTools(server: McpServer): void {
       name: z.string().optional().describe('Track name'),
       index: z.coerce.number().int().min(0).optional().describe('0-based position to insert at (default: after the last track)'),
     },
-    async (params) => run('add_track', params)
+    async (params) => {
+      const added = await run('add_track', params);
+      if (!('isError' in added)) noteScratchTrack(params.name);
+      return added;
+    }
   );
 
   server.tool(

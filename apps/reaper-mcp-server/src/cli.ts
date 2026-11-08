@@ -411,6 +411,8 @@ export const MCP_TOOL_NAMES = [
   // built-in mix knowledge (read-only LoreKit proxy)
   'list_builtin_knowledge',
   'get_builtin_knowledge',
+  // plugin research runs → usage telemetry (TS-only, no bridge command)
+  'report_plugin_research',
   // Note: 'render_track_to_wav', 'render_tracks_to_wav', 'remove_mcp_meters' (measure_tracks cleanup), 'insert_stem_tracks'
   // (the insertTracks option of separate_stems) and 'get_fx_state' / 'set_fx_state' / 'extension_call'
   // (extension plumbing) are internal

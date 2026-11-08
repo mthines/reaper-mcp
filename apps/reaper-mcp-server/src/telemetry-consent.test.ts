@@ -233,4 +233,32 @@ describe('AnonymizingSpanExporter', () => {
       'reaper.bridge.state': 'never_started',
     });
   });
+
+  it('keeps how a plugin research run went, never which plugin it was', async () => {
+    const sink = new tracing.InMemorySpanExporter();
+    const provider = new tracing.BasicTracerProvider({
+      spanProcessors: [new tracing.SimpleSpanProcessor(new AnonymizingSpanExporter(sink))],
+    });
+    const run = {
+      'reaper.plugin_research.outcome': 'new',
+      'reaper.plugin_research.caller': 'learn-plugin',
+      'reaper.plugin_research.batch_size': 3,
+      'reaper.plugin_research.params_probed': 9,
+      'reaper.plugin_research.open_questions': 2,
+      'reaper.plugin_research.sources': 3,
+      'reaper.plugin_research.cleaned_up': true,
+      'reaper.plugin_research.duration_s': 184,
+      'reaper.plugin.category': 'compressor',
+      'reaper.plugin.style': 'transparent',
+      'reaper.plugin.format': 'VST3',
+      'reaper.plugin.instrument': false,
+      'reaper.plugin.params_total': '16-63',
+    };
+    provider.getTracer('test').startSpan('tools/call report_plugin_research', {
+      attributes: { ...run, 'reaper.plugin.id': 'fabfilter/pro-c-2', 'reaper.fx.name': 'VST3: Pro-C 2 (FabFilter)', 'reaper.plugin_research.scratch_tag': 'PROC2' },
+    }).end();
+    await provider.forceFlush();
+
+    expect(sink.getFinishedSpans()[0].attributes).toEqual(run);
+  });
 });

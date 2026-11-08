@@ -65,7 +65,7 @@ Give each one a short, unique uppercase tag for its scratch track:
 
 ```text
 Agent(subagent_type: "plugin-researcher",
-      prompt: "Plugin: <exact name>\nScratch track tag: <TAG, e.g. PROQ4>\nCaller context: <anything the user said, or 'none'>")
+      prompt: "Plugin: <exact name>\nScratch track tag: <TAG, e.g. PROQ4>\nCaller context: <anything the user said, or 'none'>\nDispatched by: learn-plugin\nBatch: <how many plugins this request researches>")
 ```
 
 Tell the user what is happening, in one line: each researcher looks the plugin

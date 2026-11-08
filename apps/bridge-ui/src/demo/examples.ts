@@ -111,6 +111,19 @@ function measurementExampleList(): Example[] {
   const alignUnsure = call('measure_track_alignment', { referenceTrack: 2, trackIndex: 9, startTime: 12 }, {
     ref: 'Snare Top', name: 'Room', delayMs: -9.84, samples: -434, corr: 0.01, inv: 0, cur: 0, warn: 1,
   }, { ms: 3_040 });
+  const verifyOk = call('verify_edit', { trackIndex: 3, referenceTrack: 2, startTime: 12, timeScale: 1.1 }, {
+    name: 'Vox stretched', ref: 'Vox', verdict: 'ok', expect: 'identical',
+    checks: [['null', 'skipped', '', 'timing changed (timeScale != 1): a waveform null needs the same timing'], ['discontinuity', 'ok', '3.2×', 'at 1.50 s'], ['pitch', 'ok', '-2 cents', '140 Hz reference'], ['tone', 'ok', '0.19 dB', ''], ['transients', 'ok', '-0.04', '']],
+  }, { ms: 4_200 });
+  const verifyWarn = call('verify_edit', { trackIndex: 4, referenceTrack: 2, startTime: 12, timeScale: 1.1 }, {
+    name: 'Vox varispeed', ref: 'Vox', verdict: 'warn', expect: 'identical',
+    checks: [['null', 'skipped', '', 'timing changed (timeScale != 1): a waveform null needs the same timing'], ['discontinuity', 'ok', '3.0×', 'at 2.10 s'], ['pitch', 'warn', '165 cents', '140 Hz reference'], ['tone', 'warn', '4.13 dB', ''], ['transients', 'ok', '-0.10', '']],
+  }, { ms: 4_150 });
+  const verifyOk0 = { name: 'Vox varispeed', ref: 'Vox', verdict: 'ok', expect: 'identical', checks: [['pitch', 'ok', '-2 cents', '140 Hz reference'], ['tone', 'ok', '0.19 dB', '']] };
+  const verifyFail = call('verify_edit', { trackIndex: 3, referenceTrack: 2, startTime: 12 }, {
+    name: 'Snare Btm', ref: 'Snare Top', verdict: 'fail', expect: 'identical',
+    checks: [['null', 'fail', '-25.0 dB', 'delay 4.00 ms, gain -3.0 dB'], ['discontinuity', 'fail', '14.8×', 'at 12.50 s, channel 2']],
+  }, { ms: 3_900 });
   const aesthetics = call('analyze_track_aesthetics', { trackIndex: -1, startTime: 60 }, {
     name: 'Master', pq: 7.42, pc: 5.81, ce: 6.66, cu: 7.05, lufs: -18, dur: 30,
   }, { ms: 6_400 });
@@ -210,6 +223,9 @@ function measurementExampleList(): Example[] {
     example('Audio file', audioFile, 'A reference on disk, no REAPER involved', earlier(audioFile, { ...offlineR, lufs: -8.6 })),
     example('Alignment', align, 'Bottom mic 0.84 ms late and inverted; the fix', earlier(align, { ref: 'Snare Top', name: 'Snare Btm', delayMs: 0.02, samples: 1, corr: 0.95, inv: 0, cur: -0.84, offset: -0.84, phase: 1 })),
     example('Alignment · unsure', alignUnsure, 'Low correlation: no fix suggested'),
+    example('Edit check · passed', verifyOk, 'A good stretch: pitch, tone and attacks all kept; the null is skipped for timing'),
+    example('Edit check · worth a listen', verifyWarn, 'Varispeed: pitch drifts 165 cents and the tone moves; previous call ghosted', earlier(verifyWarn, { ...verifyOk0 })),
+    example('Edit check · failed', verifyFail, 'A click on one channel and a null that does not cancel'),
     example('Aesthetics', aesthetics, 'Four scores on 0–10; previous call ghosted', earlier(aesthetics, { name: 'Master', pq: 7.18, pc: 5.9, ce: 6.4, cu: 6.95, lufs: -18, dur: 30 })),
     example('Key · MIDI', key, 'A minor from the notes: scale tones lit, the tonic strongest', earlier(key, { src: 'midi', key: 'C major', tonic: 'C', mode: 'major', r: 0.8, conf: 0.4, rel: 'A minor', alt: [], chroma: [1, 0.04, 0.4, 0.06, 0.7, 0.35, 0.03, 0.8, 0.05, 0.6, 0.07, 0.2] })),
     example('Key · audio, unsure', keyAudio, 'A dense guitar bus: low confidence flagged'),

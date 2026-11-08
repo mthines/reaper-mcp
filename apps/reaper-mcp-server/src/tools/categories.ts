@@ -155,8 +155,8 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   knowledge: {
     name: 'knowledge',
-    description: 'Built-in mix knowledge (read-only, curated in LoreKit): list/search plugin records and mixing lessons, read one by key. The user\'s own LoreKit layer (user:: keys) overrides it.',
-    tools: ['list_builtin_knowledge', 'get_builtin_knowledge'],
+    description: 'Built-in mix knowledge (read-only, curated in LoreKit): list/search plugin records and mixing lessons, read one by key. The user\'s own LoreKit layer (user:: keys) overrides it. report_plugin_research ends a plugin research run.',
+    tools: ['list_builtin_knowledge', 'get_builtin_knowledge', 'report_plugin_research'],
   },
 };
 
