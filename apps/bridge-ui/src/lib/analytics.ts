@@ -15,7 +15,7 @@ export const SERVICE_NAME = 'reaper-mcp-bridge-ui';
 /** Every event the page sends; the name goes out as `bridge_ui.<name>`, the rest as `bridge_ui.*` attributes. */
 export type TrackEvent =
   | { name: 'settings_opened' }
-  | { name: 'setting_changed'; setting: 'paused' | 'readonly' | 'open_on_start' | 'dev' | 'error_notifications' | 'usage_stats'; enabled: boolean; source: 'settings' | 'notice' }
+  | { name: 'setting_changed'; setting: 'paused' | 'readonly' | 'open_on_start' | 'dev' | 'autostart' | 'error_notifications' | 'usage_stats'; enabled: boolean; source: 'settings' | 'notice' }
   | { name: 'app_install_clicked'; state: string }
   | { name: 'bridge_restart_clicked'; source: 'settings' }
   | { name: 'lorekit_token_changed'; kind: 'read' | 'publish'; connected: boolean }

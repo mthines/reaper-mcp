@@ -52,6 +52,8 @@ export function AppCommands({
   useCommand(toggle('bridge-readonly', 'cfg_readonly', settings?.readonly, ['Turn on read-only mode', 'Turn off read-only mode']), ready);
   useCommand(toggle('bridge-open-on-start', 'cfg_open_on_start', settings?.openOnStart, ['Open this page when the bridge starts', 'Stop opening this page when the bridge starts']), ready);
   useCommand(toggle('bridge-dev', 'cfg_dev', settings?.dev, ['Turn on developer mode', 'Turn off developer mode']), ready);
+  // Only on bridges that report it; turning it on does nothing until setup has written the startup block
+  useCommand(toggle('bridge-autostart', 'cfg_autostart', settings?.autostart, ['Start the bridge with REAPER', 'Stop starting the bridge with REAPER']), ready && settings?.autostart !== undefined);
 
   // One entry; the ranges are its menu (a search finds them too)
   useCommand({

@@ -6,7 +6,8 @@ const meta = {
   title: 'Features/Settings/SettingsPanel',
   component: Settings,
   args: {
-    settings: { paused: false, readonly: false, openOnStart: true, dev: false },
+    settings: { paused: false, readonly: false, openOnStart: true, dev: false, autostart: true },
+    autostartInstalled: true,
     notify: false,
     usageStats: { on: true },
     loreToken: null,
@@ -29,6 +30,9 @@ export const Default: Story = {};
 
 export const Playground: Story = {};
 
-export const ReadOnlyAndPaused: Story = { args: { settings: { paused: true, readonly: true, openOnStart: false, dev: true } } };
+export const ReadOnlyAndPaused: Story = { args: { settings: { paused: true, readonly: true, openOnStart: false, dev: true, autostart: false } } };
+
+/** setup has not written the startup block in this REAPER yet: the toggle says how, and can't be turned on */
+export const StartWithReaperNotSetUp: Story = { args: { autostartInstalled: false } };
 
 export const ConnectedToLoreKit: Story = { args: { loreToken: 'lk_ro_example', publishToken: 'lk_rw_example' } };

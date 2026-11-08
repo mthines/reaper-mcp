@@ -14,7 +14,7 @@ import { homedir, platform } from 'node:os';
 import { exec as execCb, execFileSync } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
 import { installClaudeAssets } from './claude-assets.js';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
 import { detectInstalled, setupSidecar } from './setup-sidecar.js';
 import { firstRunTelemetryNotice, resolveTelemetry, saveTelemetryChoice, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
@@ -97,14 +97,14 @@ async function setup(): Promise<void> {
 
   const webPort = await enableWebInterface();
   await registerSnapshotActions();
+  installBridgeAutostart(scriptsDir);
 
   console.log('\nSetup complete!\n');
   console.log('Next steps:');
-  console.log('  1. Open REAPER');
-  console.log('  2. Actions > Show action list > Load ReaScript');
-  console.log(`  3. Select: ${join(scriptsDir, 'mcp_bridge.lua')}`);
-  console.log('  4. Run the script (it will keep running in background via defer loop)');
-  console.log('  5. Add reaper-mcp to your Claude Code config (see: reaper-mcp doctor)');
+  console.log('  1. Start REAPER: the bridge starts with it. If REAPER is already open, restart it,');
+  console.log('     or run the bridge once by hand: Actions > Show action list > Load ReaScript,');
+  console.log(`     select ${join(scriptsDir, 'mcp_bridge.lua')} and click Run.`);
+  console.log('  2. Add reaper-mcp to your Claude Code config (see: reaper-mcp doctor)');
   if (webPort) {
     console.log(`\nThe bridge opens its status window on start: http://localhost:${webPort}/${BRIDGE_UI_FILE}`);
   }
@@ -161,6 +161,20 @@ async function enableWebInterface(): Promise<number | null> {
   writeFileSync(iniPath, ensureWebInterface(readFileSync(iniPath, 'utf-8'), requested).ini, 'utf-8');
   console.log(`  Enabled on port ${result.port} (override with REAPER_WEB_PORT)`);
   return result.port;
+}
+
+/**
+ * Start the bridge with REAPER: a block in Scripts/__startup.lua, which REAPER runs at launch. Written
+ * every time (it honours the page's "Start with REAPER" setting, so it never overrides a user's choice).
+ * REAPER never writes that file, so this is safe while REAPER is open.
+ */
+function installBridgeAutostart(scriptsDir: string): void {
+  console.log('\nStarting the bridge with REAPER...');
+  const path = join(scriptsDir, '__startup.lua');
+  const { text, changed } = ensureBridgeAutostart(existsSync(path) ? readFileSync(path, 'utf-8') : '');
+  if (changed) writeFileSync(path, text, 'utf-8');
+  console.log(changed ? '  Added to Scripts/__startup.lua (REAPER runs it at launch)' : '  Already in Scripts/__startup.lua');
+  console.log('  Turn it off in the bridge window: Settings > Start with REAPER.');
 }
 
 /** List the snapshot scripts in REAPER's Action List (reaper-kb.ini), ready for a shortcut. */

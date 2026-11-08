@@ -217,6 +217,7 @@ export function App() {
               onClose={() => setSettingsOpen(false)}
               canUpdate={status.control?.canUpdate === true}
               onRestart={status.control?.canRestart ? () => request('restart') : undefined}
+              autostartInstalled={status.health?.autostart}
             />
           )}
           <footer className={styles.footer}>

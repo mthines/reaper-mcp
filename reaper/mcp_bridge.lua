@@ -4668,6 +4668,7 @@ end
 
 -- Settings written by the status page through REAPER's web interface (/_/SET/EXTSTATE...).
 -- cfg_paused is in-memory only (resets with REAPER); the others persist in reaper-extstate.ini.
+-- cfg_autostart is read at REAPER's launch by the startup block setup writes into Scripts/__startup.lua.
 local function cfg(key)
   return reaper.GetExtState(STATUS_SECTION, key) == "1"
 end
@@ -4692,7 +4693,7 @@ local _, script_path, _, script_cmd_id = reaper.get_action_context()
 local script_source = script_path and read_file(script_path)
 local HEALTH_INTERVAL = 10
 local last_health_check = -HEALTH_INTERVAL
-local health = { sws = false, jsfx = true, outdated = false }
+local health = { sws = false, jsfx = true, outdated = false, autostart = false }
 local JSFX_FILES = { "mcp_analyzer.jsfx", "mcp_lufs_meter.jsfx", "mcp_correlation_meter.jsfx", "mcp_crest_factor.jsfx", "mcp_midi_emitter.jsfx" }
 
 local function check_health(now)
@@ -4710,8 +4711,13 @@ local function check_health(now)
     missingJsfx = #missing > 0 and missing or nil,
     -- The installed script changed under us (setup ran): this running copy is stale until restarted
     outdated = script_source ~= nil and installed ~= nil and installed ~= script_source,
+    -- REAPER's startup script holds the block `reaper-mcp setup` writes (AUTOSTART_BLOCK in cli.ts), which
+    -- starts the bridge with REAPER unless the page's cfg_autostart is "0"
+    autostart = ((read_file(reaper.GetResourcePath() .. "/Scripts/__startup.lua") or "")
+      :find("reaper-mcp: start the bridge with REAPER", 1, true)) ~= nil,
   }
-  if next_health.sws ~= health.sws or next_health.jsfx ~= health.jsfx or next_health.outdated ~= health.outdated then
+  if next_health.sws ~= health.sws or next_health.jsfx ~= health.jsfx or next_health.outdated ~= health.outdated
+    or next_health.autostart ~= health.autostart then
     status_dirty = true
   end
   health = next_health
@@ -5294,7 +5300,11 @@ local function publish_status(now, force)
     deferMs = defer_n > 0 and math.floor(defer_sum / defer_n * 100000 + 0.5) / 100 or 0,
     recent = status.recent,
     sessions = session_list(),
-    settings = { paused = cfg("cfg_paused"), readonly = cfg("cfg_readonly"), openOnStart = open_on_start(), dev = dev_mode() },
+    settings = {
+      paused = cfg("cfg_paused"), readonly = cfg("cfg_readonly"), openOnStart = open_on_start(), dev = dev_mode(),
+      -- Start with REAPER: on unless turned off ("0"); read by the startup block, not by this script
+      autostart = reaper.GetExtState(STATUS_SECTION, "cfg_autostart") ~= "0",
+    },
     health = health,
     web = web_watch.status,
     control = control_status(),

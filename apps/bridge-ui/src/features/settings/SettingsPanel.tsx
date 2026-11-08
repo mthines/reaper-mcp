@@ -24,6 +24,7 @@ export function SettingsPanel({
   onClose,
   canUpdate,
   onRestart,
+  autostartInstalled,
 }: {
   settings: BridgeSettings;
   onSet: (key: SettingKey, on: boolean) => void;
@@ -41,6 +42,8 @@ export function SettingsPanel({
   canUpdate: boolean;
   /** Absent when the bridge can't relaunch itself (REAPER before 7.03, or the script has no action ID). */
   onRestart?: () => void;
+  /** REAPER's startup script holds the block that starts the bridge (`reaper-mcp setup` writes it). Absent on older bridges. */
+  autostartInstalled?: boolean;
 }) {
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => ev.key === 'Escape' && onClose();
@@ -99,6 +102,19 @@ export function SettingsPanel({
         </div>
         <div className={styles.settingGroup}>
           <h3>Bridge</h3>
+          {settings.autostart !== undefined && (
+            <Toggle
+              label="Start with REAPER"
+              hint={
+                autostartInstalled === false
+                  ? 'Not set up in this REAPER. Run reaper-mcp setup in a terminal: it adds the bridge to REAPER’s startup script (Scripts/__startup.lua).'
+                  : 'Run mcp_bridge.lua each time REAPER opens, from REAPER’s startup script. Takes effect the next time REAPER starts. Persists.'
+              }
+              on={settings.autostart && autostartInstalled !== false}
+              disabled={autostartInstalled === false}
+              onChange={(on) => onSet('cfg_autostart', on)}
+            />
+          )}
           <div className={styles.installRow}>
             <div className={styles.installText}>
               <div className={styles.rowLabel}>Restart bridge</div>
@@ -165,6 +181,7 @@ export const SETTING_NAME: Record<SettingKey, Extract<TrackEvent, { name: 'setti
   cfg_readonly: 'readonly',
   cfg_open_on_start: 'open_on_start',
   cfg_dev: 'dev',
+  cfg_autostart: 'autostart',
 };
 
 function InstallSetting() {

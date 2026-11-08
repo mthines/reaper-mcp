@@ -195,6 +195,54 @@ export function ensureSnapshotActions(kb: string): { kb: string; added: string[]
   return { kb: body + lines.join(eol) + eol, added };
 }
 
+/**
+ * The block `setup` writes into REAPER's Scripts/__startup.lua, which REAPER runs once at launch, so the
+ * bridge starts with REAPER. It runs mcp_bridge.lua as its own action (registered through the API, the
+ * same id as running it from the Action List), so running it again there still stops it, and the bridge's
+ * Restart still works. It honours the bridge page's "Start with REAPER" setting, the persistent ExtState
+ * MCPBridge/cfg_autostart: "0" skips it, so turning it off never needs this file edited.
+ * The bridge reports whether REAPER's startup script holds it by looking for AUTOSTART_MARKER
+ * (health.autostart, check_health() in mcp_bridge.lua).
+ */
+export const AUTOSTART_MARKER = 'reaper-mcp: start the bridge with REAPER';
+const AUTOSTART_BEGIN = `-- ${AUTOSTART_MARKER} (begin)`;
+const AUTOSTART_END = `-- ${AUTOSTART_MARKER} (end)`;
+export const AUTOSTART_BLOCK = [
+  AUTOSTART_BEGIN,
+  '-- Written by `reaper-mcp setup`. Turn it off in the bridge window: Settings → Start with REAPER.',
+  'do',
+  '  local bridge = reaper.GetResourcePath() .. "/Scripts/mcp_bridge.lua"',
+  '  if reaper.GetExtState("MCPBridge", "cfg_autostart") ~= "0" and reaper.file_exists(bridge) then',
+  '    local id = reaper.AddRemoveReaScript(true, 0, bridge, true)',
+  '    if id and id > 0 then reaper.Main_OnCommand(id, 0) end',
+  '  end',
+  'end',
+  AUTOSTART_END,
+];
+
+/**
+ * Put the autostart block into the text of Scripts/__startup.lua, keeping whatever else is in it.
+ * The block goes first: a user's script may end in a top-level `return`, after which Lua accepts no
+ * statement. An existing block is replaced with the current one. Safe while REAPER runs: REAPER only
+ * reads the file at launch and never writes it.
+ */
+export function ensureBridgeAutostart(startup: string): { text: string; changed: boolean } {
+  const eol = startup.includes('\r\n') ? '\r\n' : '\n';
+  const block = AUTOSTART_BLOCK.join(eol);
+  const lines = startup.split(/\r?\n/);
+  const begin = lines.indexOf(AUTOSTART_BEGIN);
+  const end = begin === -1 ? -1 : lines.indexOf(AUTOSTART_END, begin);
+  let text: string;
+  if (begin !== -1 && end !== -1) {
+    text = [...lines.slice(0, begin), ...AUTOSTART_BLOCK, ...lines.slice(end + 1)].join(eol);
+  } else if (startup.trim() === '') {
+    text = block + eol;
+  } else {
+    text = block + eol + eol + startup;
+  }
+  return { text, changed: text !== startup };
+}
+
 /** All MCP tool names registered by the server */
 export const MCP_TOOL_NAMES = [
   // project

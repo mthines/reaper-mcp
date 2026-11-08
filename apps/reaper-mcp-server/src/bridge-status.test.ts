@@ -6,6 +6,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { LuaFactory, type LuaEngine } from 'wasmoon';
+import { ensureBridgeAutostart } from './cli.js';
 
 const REAPER_DIR = join(__dirname, '../../../reaper');
 const FAKE_SRC = readFileSync(join(__dirname, '__fixtures__/fake_reaper.lua'), 'utf8');
@@ -23,8 +24,8 @@ interface Status {
   errors: number;
   recent: Entry[];
   sessions: Session[];
-  settings: { paused: boolean; readonly: boolean; openOnStart: boolean; dev: boolean };
-  health: { sws: boolean; jsfx: boolean; outdated: boolean };
+  settings: { paused: boolean; readonly: boolean; openOnStart: boolean; dev: boolean; autostart: boolean };
+  health: { sws: boolean; jsfx: boolean; outdated: boolean; autostart: boolean };
   web?: { stuck: number; limit: number };
   control: { token: string; canRestart: boolean; canUpdate: boolean; changed?: boolean; update?: { kind: string; state: string } };
 }
@@ -1012,8 +1013,24 @@ describe('bridge settings from the status page', () => {
 
   it('reports setup health', async () => {
     const { health } = await (await startBridge()).status();
-    // The fake has no SWS and no Effects/reaper-mcp/ JSFX
-    expect(health).toMatchObject({ sws: false, jsfx: false, outdated: false });
+    // The fake has no SWS, no Effects/reaper-mcp/ JSFX and no Scripts/__startup.lua
+    expect(health).toMatchObject({ sws: false, jsfx: false, outdated: false, autostart: false });
+  });
+
+  it('sees the startup block setup writes, and echoes Start with REAPER (on until turned off)', async () => {
+    const startup = ensureBridgeAutostart('-- the user\'s own startup code\n').text;
+    const bridge = await startBridge('', { '/reaper/Scripts/__startup.lua': startup });
+    const first = await bridge.status();
+    expect(first.health.autostart).toBe(true);
+    expect(first.settings.autostart).toBe(true);
+
+    // The page writes the setting; any command makes the bridge republish its status
+    await bridge.set('cfg_autostart', '0');
+    await bridge.send('get_project_info');
+    expect((await bridge.status()).settings.autostart).toBe(false);
+    await bridge.set('cfg_autostart', '1');
+    await bridge.send('get_project_info');
+    expect((await bridge.status()).settings.autostart).toBe(true);
   });
 });
 

@@ -8,7 +8,8 @@ const meta = {
   tags: ['test'],
   parameters: { chromatic: { disableSnapshot: true } },
   args: {
-    settings: { paused: false, readonly: false, openOnStart: true, dev: false },
+    settings: { paused: false, readonly: false, openOnStart: true, dev: false, autostart: true },
+    autostartInstalled: true,
     notify: false,
     usageStats: { on: true },
     loreToken: null,
@@ -45,5 +46,33 @@ export const OffersNoRestartWhenTheBridgeCannotRelaunch: Story = {
     await expect(within(panel).queryByRole('button', { name: /Restart/ })).toBeNull();
     await userEvent.click(within(panel).getByRole('button', { name: 'Close settings' }));
     await expect(args.onClose).toHaveBeenCalled();
+  },
+};
+
+export const TurnsStartWithReaperOff: Story = {
+  play: async ({ canvasElement, args }) => {
+    const toggle = within(canvasElement).getByRole('switch', { name: /Start with REAPER/ });
+    await expect(toggle).toBeChecked();
+    await userEvent.click(toggle);
+    await expect(args.onSet).toHaveBeenCalledWith('cfg_autostart', false);
+  },
+};
+
+export const SaysHowToSetUpStartWithReaperWhenTheStartupScriptLacksIt: Story = {
+  args: { autostartInstalled: false },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const toggle = canvas.getByRole('switch', { name: /Start with REAPER/ });
+    await expect(toggle).not.toBeChecked();
+    await expect(toggle).toBeDisabled();
+    await expect(canvas.getByText(/Run reaper-mcp setup in a terminal/)).toBeInTheDocument();
+    await expect(args.onSet).not.toHaveBeenCalled();
+  },
+};
+
+export const HidesStartWithReaperOnBridgesThatDoNotReportIt: Story = {
+  args: { settings: { paused: false, readonly: false, openOnStart: true, dev: false }, autostartInstalled: undefined },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).queryByRole('switch', { name: /Start with REAPER/ })).toBeNull();
   },
 };
