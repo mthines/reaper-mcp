@@ -599,6 +599,21 @@ export function getArrangeItemsHistogram(): Histogram {
   return _arrangeItems;
 }
 
+let _jsfxFindings: ReturnType<Meter['createCounter']> | null = null;
+
+/**
+ * Lint findings write_jsfx reported, one count per finding. Attributes: `reaper.jsfx.lint.rule` (a fixed list of
+ * ~23 ids from `jsfx/lint.ts`, never built from input) and `reaper.jsfx.lint.severity` (error | warning). A rule that
+ * keeps refusing plugins is a gap in the skill or the toolkit's docs; never the plugin's name or source.
+ */
+export function getJsfxFindingsCounter(): ReturnType<Meter['createCounter']> {
+  _jsfxFindings ??= getMeter().createCounter('reaper.jsfx.lint.findings', {
+    description: 'Lint findings reported by write_jsfx for generated plugins',
+    unit: '{finding}',
+  });
+  return _jsfxFindings;
+}
+
 // ---------------------------------------------------------------------------
 // Bridge health gauges
 // ---------------------------------------------------------------------------

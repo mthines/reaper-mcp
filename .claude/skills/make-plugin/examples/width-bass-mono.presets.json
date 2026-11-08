@@ -1,0 +1,6 @@
+[
+  { "name": "Tight low end", "values": { "Width": 1, "Mono below": 150, "Slope": 1 } },
+  { "name": "Wide chorus bus", "values": { "Width": 1.5, "Mono below": 120, "Side": 1.5, "Output": -1 } },
+  { "name": "Gentle spread", "values": { "Width": 1.2, "Mono below": 90, "Slope": 0 } },
+  { "name": "Mono check", "values": { "Width": 0 } }
+]

@@ -1,0 +1,115 @@
+import { describe, it, expect } from 'vitest';
+import { lintJsfx, errorsOf, warningsOf, widgetCounts, LINT_RULES } from './lint.js';
+
+/** The smallest source that passes: one knob, a boot, a changed hook. */
+const OK = `desc:Gain
+slider1:0<-24,12,0.1>Gain
+@init
+update() ( gain = 10 ^ (slider1 / 20); );
+update(); ui_boot(0);
+@block
+ui_changed() ? update();
+@sample
+spl0 *= gain; spl1 *= gain;
+@gfx 200 120
+ui_begin(1, 0) ? ( ui_row(1); ui_knob(1, "Gain", 1); ui_end(); );
+`;
+const rules = (src: string) => lintJsfx(src).map((f) => f.rule);
+const without = (src: string, line: string) => src.replace(line, '');
+
+describe('lintJsfx', () => {
+  it('passes the smallest valid plugin without findings', () => {
+    expect(lintJsfx(OK)).toEqual([]);
+  });
+
+  it('refuses scientific notation, which makes EEL2 drop the whole plugin', () => {
+    const f = lintJsfx(OK.replace('spl0 *= gain;', 'spl0 *= gain + 1e-9;'));
+    expect(errorsOf(f).map((x) => x.rule)).toContain('science-literal');
+    expect(f.find((x) => x.rule === 'science-literal')?.line).toBe(9);
+  });
+
+  it('refuses max/min with three arguments, which REAPER cannot compile', () => {
+    const f = lintJsfx(OK.replace('spl0 *= gain;', 'spl0 *= max(gain, abs(spl0), 0.5);'));
+    expect(errorsOf(f).map((x) => x.rule)).toContain('two-arg-minmax');
+    expect(rules(OK.replace('spl0 *= gain;', 'spl0 *= max(max(gain, abs(spl0)), 0.5);'))).toEqual([]);
+  });
+
+  it('ignores a literal that only appears in a comment', () => {
+    expect(rules(OK.replace('@sample', '// was 1e-9\n@sample'))).toEqual([]);
+  });
+
+  it('refuses a named slider, because the toolkit reads sliders by number', () => {
+    expect(rules(OK.replace('slider1:0<', 'slider1:g=0<'))).toContain('named-slider');
+  });
+
+  it('refuses a slider that has no widget unless its label is hidden with a dash', () => {
+    const two = OK.replace('slider1:0<-24,12,0.1>Gain', 'slider1:0<-24,12,0.1>Gain\nslider2:0<0,1,0.01>Extra');
+    expect(rules(two)).toContain('slider-without-widget');
+    expect(rules(two.replace('>Extra', '>-Extra'))).not.toContain('slider-without-widget');
+  });
+
+  it('refuses a widget that points at a slider nobody declared', () => {
+    expect(rules(OK.replace('ui_knob(1,', 'ui_knob(7,'))).toContain('widget-unknown-slider');
+  });
+
+  it('keeps the core view small: six widgets before the first section is refused', () => {
+    const sliders = [1, 2, 3, 4, 5, 6].map((i) => `slider${i}:0<0,1,0.01>S${i}`).join('\n');
+    const knobs = [1, 2, 3, 4, 5, 6].map((i) => `ui_knob(${i}, "S${i}", 0);`).join(' ');
+    const six = `desc:Six\n${sliders}\n@init\nui_boot(0);\n@block\nui_changed() ? 0;\n@gfx 300 200\nui_begin(1,0) ? ( ui_row(6); ${knobs} ui_end(); );\n`;
+    expect(errorsOf(lintJsfx(six)).map((x) => x.rule)).toContain('core-overflow');
+    const split = six.replace('ui_knob(4,', 'ui_section("Advanced") ? ( ui_row(3); ui_knob(4,').replace('ui_end();', ' ); ui_end();');
+    expect(rules(split)).not.toContain('core-overflow');
+  });
+
+  it('counts core and advanced widgets for the plugin shape', () => {
+    const src = OK.replace('ui_end();', 'ui_section("Advanced") ? ( ui_knob(1, "a", 0); ui_toggle(1, "b"); ); ui_end();');
+    expect(widgetCounts(src)).toEqual({ core: 1, advanced: 2 });
+  });
+
+  it('refuses a plugin that never boots the toolkit or never hears the knobs', () => {
+    expect(rules(without(OK, 'update(); ui_boot(0);'))).toContain('no-ui-boot');
+    expect(rules(without(OK, 'ui_changed() ? update();'))).toContain('no-changed');
+  });
+
+  it('refuses gmem: a generated plugin must not depend on the bridge', () => {
+    expect(rules(OK.replace('slider1', 'options:gmem=Foo\nslider1'))).toContain('gmem');
+  });
+
+  it('refuses local() at the top level of @sample', () => {
+    expect(rules(OK.replace('spl0 *= gain;', 'local(a); spl0 *= gain;'))).toContain('local-top-level');
+  });
+
+  it('refuses a slider past slider32 (the toolkit passes slider masks, and 32 is plenty)', () => {
+    expect(rules(OK.replace('@init', 'slider33:0<0,1,1>-x\n@init'))).toContain('slider-limit');
+  });
+
+  it('warns, without refusing, about work per sample', () => {
+    const f = lintJsfx(OK.replace('spl0 *= gain;', 'loop(4, spl0 *= gain;); spl1 /= srate;'));
+    expect(errorsOf(f)).toEqual([]);
+    expect(warningsOf(f).map((x) => x.rule).sort()).toEqual(['sample-divide-srate', 'sample-loop']);
+  });
+
+  it('warns when the plugin sets ui_adv_open, which would close the drawer every time Play re-runs @init', () => {
+    const f = lintJsfx(OK.replace('update(); ui_boot(0);', 'update(); ui_adv_open = 0; ui_boot(0);'));
+    expect(errorsOf(f)).toEqual([]);
+    expect(warningsOf(f).map((x) => x.rule)).toEqual(['ui-state-reset']);
+    expect(rules(OK.replace('ui_end();', 'ui_adv_open == 1 ? 0; ui_end();'))).not.toContain('ui-state-reset');
+  });
+
+  it('warns when the plugin sets its own accent, which write_jsfx owns', () => {
+    const f = lintJsfx(OK.replace('update(); ui_boot(0);', 'update(); ui_cAccent = $xff8800; ui_boot(0);'));
+    expect(errorsOf(f)).toEqual([]);
+    expect(warningsOf(f).map((x) => x.rule)).toEqual(['accent-assign']);
+    expect(rules(OK.replace('update(); ui_boot(0);', 'update(); ui_theme($xff8800); ui_boot(0);'))).toContain('accent-assign');
+    expect(rules(OK)).not.toContain('accent-assign');
+  });
+
+  it('warns when the plugin reads the keyboard, which the value box needs', () => {
+    expect(rules(OK.replace('ui_end();', 'c = gfx_getchar(); ui_end();'))).toContain('own-key-handling');
+  });
+
+  it('only ever reports rules from the closed list (they become a metric attribute)', () => {
+    const messy = OK.replace('slider1:0<', 'slider1:g=9<').replace('@init', 'options:gmem=x\n@init');
+    for (const f of lintJsfx(messy)) expect(LINT_RULES).toContain(f.rule);
+  });
+});

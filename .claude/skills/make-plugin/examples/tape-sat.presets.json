@@ -1,0 +1,6 @@
+[
+  { "name": "Warm bus", "values": { "Drive": 3, "Tone": -0.15, "Mix": 1, "Output": -1, "Bias": 0.05, "Wow": 0.05, "Flutter": 0.05, "2x": 1 } },
+  { "name": "Crushed drums", "values": { "Drive": 18, "Tone": 0.2, "Mix": 0.6, "Output": -8, "Bias": 0.15, "2x": 1 } },
+  { "name": "Old cassette", "values": { "Drive": 8, "Tone": -0.5, "Mix": 1, "Output": -3, "Bias": 0.1, "Wow": 0.5, "Flutter": 0.4 } },
+  { "name": "Vocal sheen", "values": { "Drive": 4.5, "Tone": 0.3, "Mix": 0.7, "Output": -1.5, "2x": 1 } }
+]

@@ -248,6 +248,29 @@ const ALLOWED_SPAN_ATTRIBUTES = new Set([
   'reaper.plugin.format',
   'reaper.plugin.instrument',
   'reaper.plugin.params_total',
+  // write_jsfx (tools/jsfx.ts): the shape of a generated plugin as closed values and capped counts
+  // (outcome, sizes, version, lint finding counts). Never its name, the request, its source or any
+  // control label: those describe what the person is making.
+  'reaper.jsfx.outcome',
+  'reaper.jsfx.overwrite',
+  'reaper.jsfx.sliders',
+  'reaper.jsfx.widgets.core',
+  'reaper.jsfx.widgets.advanced',
+  'reaper.jsfx.size',
+  'reaper.jsfx.version',
+  'reaper.jsfx.toolkit_version',
+  'reaper.jsfx.lint.errors',
+  'reaper.jsfx.lint.warnings',
+  'reaper.jsfx.presets',
+  'reaper.jsfx.accent',
+  // report_plugin_build (tools/plugin-build.ts): how a /make-plugin run ended, same rule
+  'reaper.plugin_build.outcome',
+  'reaper.plugin_build.example',
+  'reaper.plugin_build.rounds',
+  'reaper.plugin_build.checks_passed',
+  'reaper.plugin_build.checks_failed',
+  'reaper.plugin_build.cleaned_up',
+  'reaper.plugin_build.duration_s',
 ]);
 
 /**

@@ -1,0 +1,627 @@
+// mcp_ui.jsfx-inc: the reaper-mcp @gfx toolkit, v1.2.0
+//
+// Canonical source. `write_jsfx` pastes the body below (everything after this header) into the
+// plugin's own @init section, so a generated plugin is ONE file with no dependency on this one,
+// the bridge or the MCP server. Edit it here, never in a generated plugin.
+//
+// Principles: fast (redraw only when something changed, no allocation in @gfx, coefficients
+// belong in the plugin's update()), simple (five widgets), progressive disclosure (a core view
+// that fills the window and never moves, an Advanced drawer that slides up over it).
+//
+// Gestures on a knob (the FabFilter/Serum convention): drag up/down, Shift-drag = 10x finer,
+// wheel (Shift = finer), double-click = type a value, Cmd-click / Ctrl-click / Alt-click = reset
+// to the default. Toggles and choices: click; a modifier-click resets them too.
+// Esc: REAPER closes the FX window on Esc before the plugin sees it. Only with the FX window's
+// "+" menu > "Send all keyboard input to plug-in" does Esc reach the plugin; then it closes the
+// value box, the About dialog or the drawer (and the window closes with its close button).
+//
+// Memory 0..1023 is reserved for the toolkit: the plugin's own buffers start at ui_mem.
+// Every global starts with ui_. Sliders must be UNNAMED (slider1:0.5<0,1,0.01>Label): named
+// sliders do not keep their value in sliderN, which the toolkit reads through slider(idx).
+// EEL2: max()/min() take exactly two arguments; no 1e-9 style literals.
+//
+// Plugin side:
+//   @init      ... ui_boot(animated);   // animated = 1 when the UI has a meter
+//   @block     ui_changed() ? update(); // a slider moved by a click or drag in @gfx
+//   @gfx 380 220
+//   ui_begin(core_rows, adv_rows) ? (
+//     ui_row(3); ui_knob(1, "Mix", 2); ui_knob(2, "Size", 2); ui_toggle(3, "Freeze");
+//     ui_section("Advanced") ? ( ui_row(2); ui_knob(4, "Damping", 2); ui_knob(5, "Pre-delay", 4); );
+//     ui_end();
+//   );
+//   @serialize file_var(0, ui_adv_open);   // added for you when the plugin has none
+
+ui_ver = 1.2;
+
+// Design tokens: the bridge status page's palette (apps/bridge-ui/src/styles.css). The accent is
+// the plugin's own: write_jsfx emits ui_theme($xRRGGBB) after this block (from the plugin's name,
+// or the colour the user picked). Plugin code never sets it.
+ui_cBg = $x0e0f11;   ui_cPanel = $x15171a;  ui_cPanel2 = $x1b1d21;  ui_cLine = $x24272c;
+ui_cText = $xe7e9ec; ui_cMuted = $x8a909a;  ui_cAccent = $x7cc4ff;  ui_cLive = $x4ade80;
+ui_cWarn = $xf5b84b; ui_cBad = $xf87171;
+
+// The footer credit (bottom right). 0 hides it. A click opens the About dialog (JSFX cannot open
+// a browser or write the clipboard, so it shows the repository address as text).
+ui_credit = 1;
+// 1 hides REAPER's slider panel above the UI (it duplicates the knobs and squeezes them). The
+// sliders stay real parameters: automation, MIDI learn and the Param menu still list them.
+ui_hide_sliders = 1;
+// 1 = a very subtle vertical gradient (tinted by the accent) with fine film grain behind the UI,
+// rendered once into an offscreen image and blitted; 0 = a flat background.
+ui_texture = 1;
+ui_grain = 0.3;        // grain strength: the tile is bg-level noise of +/-0.06, blended at this opacity
+ui_img_bg = 120; ui_img_tile = 121;
+
+// Filled in by write_jsfx's metadata block (shown in the About dialog): never the user's request.
+strcpy(#ui_name, "Plugin"); strcpy(#ui_date, ""); strcpy(#ui_tkv, "1.2.0");
+ui_pver = 0; ui_nctl = 0; ui_akind = 0; ui_example = 0;
+
+// Per-slider metadata (index 1..64), filled by write_jsfx from the slider lines.
+ui_min = 0; ui_max = 65; ui_def = 130; ui_stp = 195;
+ui_mtr = 400;          // meter state: 2 slots per meter (level in dB, last time)
+ui_mem = 1024;         // first free memory index for the plugin's own buffers
+// REAPER re-runs @init when playback starts (and on sample-rate changes): the UI state below
+// is set once, so pressing Play never closes the drawer or drops a drag. Plugin code must not
+// assign ui_adv_open either (only @serialize's file_var restores it).
+ui_ready ? ( ui_hash = -1; ) : (
+  ui_adv_open = 0;     // Advanced drawer open (saved with the project and presets)
+  ui_hash = -1;
+  ui_p = -1;           // drawer position 0..1 (animated); -1 = not drawn yet
+  ui_ed = 0;           // slider whose value box is open (typing a value), 0 = none
+  ui_about = 0;        // About dialog open
+  ui_ready = 1;
+);
+
+function ui_meta(idx, lo, hi, df, st) (
+  ui_min[idx] = lo; ui_max[idx] = hi; ui_def[idx] = df; ui_stp[idx] = st;
+);
+
+function ui_boot(animated) (
+  gfx_ext_retina = 1;
+  gfx_clear = -1;
+  ui_animated = animated;
+  ui_hide_sliders ? slider_show(4294967295, 0);
+);
+
+// A slider moved from @gfx: returns 1 once, so @block can re-run the plugin's update().
+function ui_changed() local(r) ( r = ui_chg; ui_chg = 0; r; );
+
+function ui_c(c, a) local(r, g, b) (
+  r = floor(c / 65536) & 255; g = floor(c / 256) & 255; b = c & 255;
+  gfx_set(r / 255, g / 255, b / 255, a);
+);
+
+// The mix of two packed colours as a packed colour (t = 0: c1, 1: c2).
+function ui_mixc(c1, c2, t) (
+  floor((floor(c1 / 65536) & 255) * (1 - t) + (floor(c2 / 65536) & 255) * t + 0.5) * 65536
+  + floor((floor(c1 / 256) & 255) * (1 - t) + (floor(c2 / 256) & 255) * t + 0.5) * 256
+  + floor((c1 & 255) * (1 - t) + (c2 & 255) * t + 0.5);
+);
+
+// The plugin's accent and every token derived from it, computed once (not per frame).
+function ui_theme(c) (
+  ui_cAccent = c;
+  ui_cAccentHi = ui_mixc(c, ui_cText, 0.18);          // hover
+  ui_cAccentAct = ui_mixc(c, ui_cText, 0.35);         // dragging
+  ui_cTrack = ui_mixc(ui_mixc(ui_cLine, ui_cMuted, 0.12), c, 0.07);
+  ui_cTrackHot = ui_mixc(ui_mixc(ui_cLine, ui_cMuted, 0.22), c, 0.12);
+  ui_cTop = ui_mixc(ui_mixc(ui_cBg, $xffffff, 0.012), c, 0.02); // gradient: a hair lighter (and tinted) on top,
+  ui_cBot = ui_mixc(ui_cBg, 0, 0.15);                             // a hair darker at the bottom
+);
+ui_theme($x7cc4ff);
+
+// Opaque mix of two colors (t = 0: c1, 1: c2): blending without alpha, so shapes never seam.
+function ui_cm(c1, c2, t) local(r, g, b) (
+  r = (floor(c1 / 65536) & 255) * (1 - t) + (floor(c2 / 65536) & 255) * t;
+  g = (floor(c1 / 256) & 255) * (1 - t) + (floor(c2 / 256) & 255) * t;
+  b = (c1 & 255) * (1 - t) + (c2 & 255) * t;
+  gfx_set(r / 255, g / 255, b / 255, 1);
+);
+
+function ui_q(idx, v) local(lo, hi, st) (
+  lo = ui_min[idx]; hi = ui_max[idx]; st = ui_stp[idx];
+  st > 0 ? v = lo + floor((v - lo) / st + 0.5) * st;
+  min(hi, max(lo, v));
+);
+
+function ui_set(idx, v) (
+  v != slider(idx) ? (
+    slider(idx) = v;
+    slider_automate(2 ^ (idx - 1));
+    ui_chg = 1;
+  );
+);
+
+// ---- drawing helpers ----------------------------------------------------------------------
+
+// Filled rounded rectangle (opaque colors only: the corners overlap the sides).
+function ui_rrect(x, y, w, h, r) (
+  r = min(r, min(w, h) / 2);
+  gfx_rect(x + r, y, w - 2 * r, h);
+  gfx_rect(x, y + r, r, h - 2 * r);
+  gfx_rect(x + w - r, y + r, r, h - 2 * r);
+  gfx_circle(x + r, y + r, r, 1, 1);         gfx_circle(x + w - r - 1, y + r, r, 1, 1);
+  gfx_circle(x + r, y + h - r - 1, r, 1, 1); gfx_circle(x + w - r - 1, y + h - r - 1, r, 1, 1);
+);
+
+// One solid stroke along a circle: a ring segment filled as quads, its edges anti-aliased,
+// round caps. Angles in radians, 0 = 12 o'clock, clockwise.
+function ui_ring(cx, cy, r0, r1, a0, a1) local(n, d, a, b, ra, rb) (
+  n = max(2, ceil(abs(a1 - a0) / 0.07)); d = (a1 - a0) / n; a = a0;
+  loop(n,
+    b = a + d;
+    gfx_triangle(cx + sin(a) * r1, cy - cos(a) * r1, cx + sin(b) * r1, cy - cos(b) * r1,
+                 cx + sin(b) * r0, cy - cos(b) * r0, cx + sin(a) * r0, cy - cos(a) * r0);
+    a = b;
+  );
+  gfx_arc(cx, cy, r1, a0, a1, 1); gfx_arc(cx, cy, r1 - 0.5, a0, a1, 1);
+  gfx_arc(cx, cy, r0, a0, a1, 1); gfx_arc(cx, cy, r0 + 0.5, a0, a1, 1);
+  ra = (r1 - r0) / 2; rb = (r0 + r1) / 2;
+  gfx_circle(cx + sin(a0) * rb, cy - cos(a0) * rb, ra, 1, 1);
+  gfx_circle(cx + sin(a1) * rb, cy - cos(a1) * rb, ra, 1, 1);
+);
+
+// #ui_txt = the label in capitals (drawn small and muted above each widget)
+function ui_caps(s) local(i, c) (
+  strcpy(#ui_txt, s); i = 0;
+  loop(strlen(#ui_txt), c = str_getchar(#ui_txt, i); (c >= 97 && c <= 122) ? str_setchar(#ui_txt, i, c - 32); i += 1;);
+);
+
+function ui_ctext(x, y, w, h) (
+  gfx_measurestr(#ui_txt, ui_tw, ui_th);
+  gfx_x = x + (w - ui_tw) / 2; gfx_y = y + (h - ui_th) / 2;
+  gfx_drawstr(#ui_txt);
+);
+
+function ui_chev(cx, cy, up) local(d, k) (
+  d = 4 * ui_s; k = 0;
+  loop(2,
+    gfx_line(cx - d, cy + (up ? d / 2 : -d / 2) + k, cx, cy + (up ? -d / 2 : d / 2) + k, 1);
+    gfx_line(cx, cy + (up ? -d / 2 : d / 2) + k, cx + d, cy + (up ? d / 2 : -d / 2) + k, 1);
+    k += 1;
+  );
+);
+
+// The background image: gradient + grain, built on the first frame and when the window size or
+// the accent changes, never per frame. The grain is one 128 px tile of noise made once and tiled.
+function ui_bgbuild() local(x, y, v, m, rt, gt, bt) (
+  !ui_tiled ? (
+    // Noise centred on the background's own level, so blending it never lifts or dims the page.
+    m = ((floor(ui_cBg / 65536) & 255) + (floor(ui_cBg / 256) & 255) + (ui_cBg & 255)) / 765;
+    gfx_setimgdim(ui_img_tile, 128, 128); gfx_dest = ui_img_tile;
+    y = 0; loop(128, x = 0; loop(128, v = m + (rand(1) - 0.5) * 0.12; gfx_x = x; gfx_y = y; gfx_setpixel(v, v, v); x += 1;); y += 1;);
+    ui_tiled = 1;
+  );
+  gfx_setimgdim(ui_img_bg, gfx_w, gfx_h); gfx_dest = ui_img_bg;
+  rt = (floor(ui_cTop / 65536) & 255) / 255; gt = (floor(ui_cTop / 256) & 255) / 255; bt = (ui_cTop & 255) / 255;
+  gfx_gradrect(0, 0, gfx_w, gfx_h, rt, gt, bt, 1, 0, 0, 0, 0,
+    ((floor(ui_cBot / 65536) & 255) / 255 - rt) / gfx_h, ((floor(ui_cBot / 256) & 255) / 255 - gt) / gfx_h, ((ui_cBot & 255) / 255 - bt) / gfx_h, 0);
+  gfx_mode = 6; gfx_a = ui_grain;   // 2: ignore the tile's alpha, 4: no filtering (crisp grain)
+  y = 0; loop(ceil(gfx_h / 128), x = 0; loop(ceil(gfx_w / 128), gfx_blit(ui_img_tile, 1, 0, 0, 0, 128, 128, x, y, 128, 128); x += 128;); y += 128;);
+  gfx_mode = 0; gfx_a = 1; gfx_dest = -1;
+  ui_bgw = gfx_w; ui_bgh = gfx_h; ui_bgc = ui_cTop;
+);
+
+function ui_bg() (
+  ui_texture ? (
+    (gfx_w != ui_bgw || gfx_h != ui_bgh || ui_bgc != ui_cTop) ? ui_bgbuild();
+    gfx_x = 0; gfx_y = 0; gfx_mode = 6; gfx_a = 1;
+    gfx_blit(ui_img_bg, 1, 0);
+    gfx_mode = 0;
+  ) : (
+    ui_c(ui_cBg, 1); gfx_rect(0, 0, gfx_w, gfx_h);
+  );
+);
+
+// ---- typing a value ------------------------------------------------------------------------
+
+// The value box's text: the value in the knob's display units, without the unit.
+function ui_fmted(fmt, v) (
+  fmt == 1 ? sprintf(#ui_edt, "%.1f", v) :
+  fmt == 2 ? sprintf(#ui_edt, "%.0f", v * 100) :
+  (fmt == 3 || fmt == 4) ? sprintf(#ui_edt, "%.0f", v) :
+  fmt == 5 ? sprintf(#ui_edt, "%d", v) :
+  sprintf(#ui_edt, "%.2f", v);
+);
+
+function ui_edopen(idx, fmt, label, x, y) (
+  ui_ed = idx; ui_edfmt = fmt; ui_edx = x; ui_edy = y; ui_edsel = 1;
+  strcpy(#ui_edl, label); ui_fmted(fmt, slider(idx));
+  while (gfx_getchar() > 0) ( 0; );   // keys typed before the box opened are not part of the value
+  ui_active = 0; ui_lci = 0; ui_press = 0;
+);
+
+// Enter: read the typed number (digits, one '.', '-', a 'k' = x1000), percent knobs store a
+// fraction, then clamp and snap it like a drag would. Nothing typed = nothing changes.
+function ui_edcommit() local(i, c, v, sg, fr, d, k, any) (
+  i = 0; v = 0; sg = 1; fr = 0; d = 1; k = 1; any = 0;
+  loop(strlen(#ui_edt),
+    c = str_getchar(#ui_edt, i);
+    c == 45 ? sg = -sg :
+    c == 46 ? fr = 1 :
+    c == 107 ? k = 1000 :
+    (c >= 48 && c <= 57) ? ( any = 1; fr ? ( d *= 0.1; v += (c - 48) * d; ) : v = v * 10 + c - 48; );
+    i += 1;
+  );
+  any ? (
+    v *= sg * k;
+    ui_edfmt == 2 ? v /= 100;
+    ui_set(ui_ed, ui_q(ui_ed, v)); slider_automate(2 ^ (ui_ed - 1), 1);
+  );
+  ui_ed = 0;
+);
+
+function ui_edkey(c) (
+  c == 13 ? ui_edcommit() :
+  c == 8 ? (
+    ui_edsel ? strcpy(#ui_edt, "") : strlen(#ui_edt) > 0 ? str_delsub(#ui_edt, strlen(#ui_edt) - 1, 1);
+    ui_edsel = 0;
+  ) :
+  ((c >= 48 && c <= 57) || c == 46 || c == 45 || ((c == 107 || c == 75) && ui_edfmt == 3)) ? (
+    ui_edsel ? strcpy(#ui_edt, ""); ui_edsel = 0;
+    strlen(#ui_edt) < 12 ? ( sprintf(#ui_tmp, "%c", c == 75 ? 107 : c); strcat(#ui_edt, #ui_tmp); );
+  );
+);
+
+// Keys are read only while a layer is open. Esc (only delivered with "Send all keyboard input
+// to plug-in") closes the top layer: value box, then About, then the drawer.
+function ui_keys() local(c) (
+  (ui_ed || ui_about || ui_adv_open) ? (
+    c = gfx_getchar();
+    while (c > 0) (
+      c == 27 ? ( ui_ed ? ui_ed = 0 : ui_about ? ui_about = 0 : ui_adv_open = 0; ) : ui_ed ? ui_edkey(c);
+      ui_edv += 1;
+      c = gfx_getchar();
+    );
+  );
+);
+
+// ---- layout -------------------------------------------------------------------------------
+
+// Returns 1 when the frame needs drawing. Nothing changed = nothing drawn, the old frame stays.
+// The core rows keep one fixed layout; the Advanced drawer slides over them and never resizes them.
+function ui_begin(core_rows, adv_rows) local(h, i, now, e, top) (
+  ui_s = max(gfx_ext_retina, 1);
+  ui_pad = 10 * ui_s; ui_lh = 14 * ui_s;
+  ui_bar = adv_rows > 0 ? 28 * ui_s : 0;
+  ui_down = mouse_cap & 1;
+  ui_press = ui_down && !ui_was_down;
+  ui_rel = !ui_down && ui_was_down;
+  ui_rpress = (mouse_cap & 2) && !ui_was_r;
+  ui_was_down = ui_down; ui_was_r = mouse_cap & 2;
+  ui_keys();
+  ui_modal = ui_ed > 0 || ui_about;   // a value box or the About dialog takes every click
+
+  // the drawer glides open/closed in about 0.15 s
+  now = time_precise();
+  ui_p < 0 ? ui_p = ui_adv_open;
+  ui_p = ui_adv_open ? min(1, ui_p + (now - ui_lt) / 0.15) : max(0, ui_p - (now - ui_lt) / 0.15);
+  ui_lt = now;
+
+  h = gfx_w * 7 + gfx_h * 13 + mouse_x * 3 + mouse_y * 5 + mouse_cap * 11 + ui_adv_open * 17
+      + mouse_wheel * 23 + floor(now * 2) * 19 + ui_p * 29 + ui_ed * 31 + ui_edv * 37 + ui_about * 41;
+  i = 1; loop(64, h += slider(i) * (i + 0.37); i += 1;);
+  ui_dirty = ui_animated || h != ui_hash || (ui_p > 0 && ui_p < 1);
+  ui_hash = h;
+
+  ui_dirty ? (
+    ui_bg();
+    gfx_setfont(1, "Arial", 12 * ui_s);
+    gfx_setfont(2, "Arial", 9.5 * ui_s, 'b');
+    gfx_setfont(3, "Arial", 10.5 * ui_s);
+    gfx_setfont(4, "Arial", 15 * ui_s, 'b');
+    gfx_setfont(1);
+    ui_core = 1;
+    ui_blocked = adv_rows > 0 && (ui_adv_open || ui_p > 0);
+    // core: the window minus the drawer's closed bar (or the footer line when there is no drawer)
+    ui_rowh = (gfx_h - ui_pad - (adv_rows > 0 ? ui_bar + 4 * ui_s : ui_pad + (ui_credit ? 6 * ui_s : 0))) / max(1, core_rows);
+    ui_y = ui_pad; ui_mi = 0;
+    // the drawer: rows of a comfortable fixed height, leaving a strip of the core view above it
+    ui_arowh = adv_rows > 0 ? min(100 * ui_s, max(60 * ui_s, (gfx_h - 40 * ui_s - ui_bar - ui_pad) / adv_rows)) : 0;
+    top = max(8 * ui_s, gfx_h - ui_bar - adv_rows * ui_arowh - ui_pad);
+    e = ui_p * ui_p * (3 - 2 * ui_p);
+    ui_sy = gfx_h - ui_bar - (gfx_h - ui_bar - top) * e;
+    ui_e = e;
+  );
+  ui_dirty;
+);
+
+// The footer credit: "reaper-mcp" in the bottom-right corner; a click opens the About dialog.
+// Hidden in a narrow window.
+function ui_footer(y, h) local(x, hit) (
+  ui_credit && gfx_w >= 240 * ui_s ? (
+    gfx_setfont(2); strcpy(#ui_txt, "reaper-mcp"); gfx_measurestr(#ui_txt, ui_tw, ui_th);
+    x = gfx_w - ui_pad - ui_tw - (ui_bar > 0 ? 26 * ui_s : 0);
+    hit = mouse_x >= x - 4 * ui_s && mouse_x < x + ui_tw + 4 * ui_s && mouse_y >= y && mouse_y < y + h && !ui_modal;
+    ui_c(hit ? ui_cAccent : ui_cMuted, hit ? 1 : 0.55);
+    gfx_x = x; gfx_y = y + (h - ui_th) / 2; gfx_drawstr(#ui_txt);
+    hit != ui_cur ? ( gfx_setcursor(hit ? 32649 : 32512); ui_cur = hit; );
+    hit && ui_press ? ( ui_about = 1; ui_press = 0; );
+    gfx_setfont(1);
+    hit;
+  ) : 0;
+);
+
+// A panel floating over everything: shadow, hairline, fill.
+function ui_float(x, y, w, h) local(k) (
+  k = 0; loop(5, ui_c(0, 0.07 * (5 - k)); ui_rrect(x - k * ui_s, y - k * ui_s + 2 * ui_s, w + 2 * k * ui_s, h + 2 * k * ui_s, 10 * ui_s + k * ui_s); k += 1;);
+  ui_c(ui_cLine, 1); ui_rrect(x - ui_s, y - ui_s, w + 2 * ui_s, h + 2 * ui_s, 10 * ui_s);
+  ui_c(ui_cPanel, 1); ui_rrect(x, y, w, h, 9 * ui_s);
+);
+
+// The value box next to a knob: type, Enter sets it. A click outside it cancels.
+function ui_popover() local(w, h, x, y, fx, fy, fw, fh, tx) (
+  w = 132 * ui_s; h = 62 * ui_s;
+  x = min(gfx_w - w - 6 * ui_s, max(6 * ui_s, ui_edx - w / 2));
+  y = ui_edy + 14 * ui_s; y + h > gfx_h - 6 * ui_s ? y = ui_edy - h - 14 * ui_s; y = max(6 * ui_s, y);
+  ui_press && (mouse_x < x || mouse_x >= x + w || mouse_y < y || mouse_y >= y + h) ? ui_ed = 0;
+  ui_press = 0;
+  ui_ed ? (
+    ui_c(ui_cBg, 0.45); gfx_rect(0, 0, gfx_w, gfx_h);
+    ui_float(x, y, w, h);
+    gfx_setfont(2); ui_caps(#ui_edl); ui_c(ui_cMuted, 1);
+    gfx_x = x + 10 * ui_s; gfx_y = y + 8 * ui_s; gfx_drawstr(#ui_txt);
+    strcpy(#ui_txt, "ENTER"); gfx_measurestr(#ui_txt, ui_tw, ui_th); ui_c(ui_cMuted, 0.6);
+    gfx_x = x + w - 10 * ui_s - ui_tw; gfx_y = y + 8 * ui_s; gfx_drawstr(#ui_txt);
+    fx = x + 8 * ui_s; fy = y + 26 * ui_s; fw = w - 16 * ui_s; fh = 26 * ui_s;
+    ui_c(ui_cAccent, 1); ui_rrect(fx - ui_s, fy - ui_s, fw + 2 * ui_s, fh + 2 * ui_s, 7 * ui_s);
+    ui_c(ui_cBg, 1); ui_rrect(fx, fy, fw, fh, 6 * ui_s);
+    gfx_setfont(1); gfx_measurestr(#ui_edt, ui_tw, ui_th);
+    tx = fx + 8 * ui_s;
+    ui_edsel && ui_tw > 0 ? ( ui_c(ui_cAccent, 0.35); gfx_rect(tx - 2 * ui_s, fy + (fh - ui_th) / 2 - ui_s, ui_tw + 4 * ui_s, ui_th + 2 * ui_s); );
+    ui_c(ui_cText, 1); gfx_x = tx; gfx_y = fy + (fh - ui_th) / 2; gfx_drawstr(#ui_edt);
+    // caret, blinking
+    !ui_edsel && floor(time_precise() * 2) % 2 == 0 ? ( ui_c(ui_cAccent, 1); gfx_rect(tx + ui_tw + ui_s, fy + 6 * ui_s, max(1, ui_s), fh - 12 * ui_s); );
+    strcpy(#ui_txt, ui_edfmt == 1 ? "dB" : ui_edfmt == 2 ? "%" : ui_edfmt == 3 ? "Hz" : ui_edfmt == 4 ? "ms" : "");
+    gfx_measurestr(#ui_txt, ui_tw, ui_th); ui_c(ui_cMuted, 1);
+    gfx_x = fx + fw - 8 * ui_s - ui_tw; gfx_y = fy + (fh - ui_th) / 2; gfx_drawstr(#ui_txt);
+  );
+);
+
+// One "label   value" line of the About dialog.
+function ui_arow(x, y, w, label, val) (
+  gfx_setfont(3); ui_c(ui_cMuted, 1); gfx_x = x; gfx_y = y; gfx_drawstr(label);
+  ui_c(ui_cText, 1); gfx_x = x + 70 * ui_s; gfx_y = y; gfx_drawstr(val);
+);
+
+// The About dialog: what reaper-mcp is, where to find it, and this plugin's facts. Closes on a
+// click outside it or on its x. In a short window the description lines go first.
+function ui_aboutdraw() local(w, h, x, y, lh, nd, rows, bx, cy, hitx) (
+  lh = 13 * ui_s;
+  nd = max(0, min(3, floor((gfx_h - 16 * ui_s - 186 * ui_s) / lh)));
+  rows = nd > 0 ? 6 : max(2, min(6, floor((gfx_h - 16 * ui_s - 108 * ui_s) / lh)));
+  w = min(gfx_w - 16 * ui_s, 300 * ui_s);
+  h = (12 + 22 + 6 + 4 + 28 + 10 + 16 + 10) * ui_s + nd * lh + rows * lh;
+  x = (gfx_w - w) / 2; y = max(8 * ui_s, (gfx_h - h) / 2);
+  bx = x + w - 26 * ui_s;
+  hitx = mouse_x >= bx && mouse_x < bx + 20 * ui_s && mouse_y >= y + 8 * ui_s && mouse_y < y + 28 * ui_s;
+  ui_press && (hitx || mouse_x < x || mouse_x >= x + w || mouse_y < y || mouse_y >= y + h) ? ui_about = 0;
+  ui_press = 0;
+  hitx != ui_cur ? ( gfx_setcursor(hitx ? 32649 : 32512); ui_cur = hitx; );
+  ui_about ? (
+    ui_c(ui_cBg, 0.7); gfx_rect(0, 0, gfx_w, gfx_h);
+    ui_float(x, y, w, h);
+    // close x
+    ui_c(hitx ? ui_cText : ui_cMuted, 1); cy = y + 18 * ui_s;
+    gfx_line(bx + 6 * ui_s, cy - 4 * ui_s, bx + 14 * ui_s, cy + 4 * ui_s, 1); gfx_line(bx + 6 * ui_s, cy + 4 * ui_s, bx + 14 * ui_s, cy - 4 * ui_s, 1);
+    gfx_line(bx + 7 * ui_s, cy - 4 * ui_s, bx + 15 * ui_s, cy + 4 * ui_s, 1); gfx_line(bx + 7 * ui_s, cy + 4 * ui_s, bx + 15 * ui_s, cy - 4 * ui_s, 1);
+    // wordmark
+    x += 14 * ui_s; y += 12 * ui_s;
+    gfx_setfont(4); ui_c(ui_cAccent, 1); gfx_x = x; gfx_y = y; gfx_drawstr("reaper-mcp");
+    gfx_setfont(2); ui_c(ui_cMuted, 0.8); strcpy(#ui_txt, "ABOUT"); gfx_measurestr(#ui_txt, ui_tw, ui_th);
+    gfx_x += 8 * ui_s; gfx_y = y + 5 * ui_s; gfx_drawstr(#ui_txt);
+    y += 22 * ui_s + 6 * ui_s;
+    gfx_setfont(3); ui_c(ui_cText, 0.85);
+    nd > 0 ? ( gfx_x = x; gfx_y = y; gfx_drawstr("AI-made plugins for REAPER: ask Claude Code to make"); y += lh; );
+    nd > 1 ? ( gfx_x = x; gfx_y = y; gfx_drawstr("or tweak one and it writes this file. The plugin then"); y += lh; );
+    nd > 2 ? ( gfx_x = x; gfx_y = y; gfx_drawstr("works on its own, without reaper-mcp running."); y += lh; );
+    y += 4 * ui_s;
+    ui_c(ui_cMuted, 1); gfx_x = x; gfx_y = y; gfx_drawstr("Source and docs (type it into a browser):"); y += 14 * ui_s;
+    ui_c(ui_cText, 1); gfx_x = x; gfx_y = y; gfx_drawstr("github.com/mthines/reaper-mcp"); y += 14 * ui_s + 10 * ui_s;
+    ui_c(ui_cLine, 1); gfx_rect(x, y - 6 * ui_s, w - 28 * ui_s, max(1, ui_s));
+    gfx_setfont(2); ui_c(ui_cMuted, 1); gfx_x = x; gfx_y = y; gfx_drawstr("THIS PLUGIN"); y += 16 * ui_s;
+    ui_example ? sprintf(#ui_txt, "%s (example)", #ui_name) : strcpy(#ui_txt, #ui_name);
+    ui_arow(x, y, w, "Name", #ui_txt); y += lh;
+    rows > 1 ? ( sprintf(#ui_txt, "%d", ui_pver); ui_arow(x, y, w, "Version", #ui_txt); y += lh; );
+    rows > 2 ? ( sprintf(#ui_txt, "mcp_ui %s", #ui_tkv); ui_arow(x, y, w, "Toolkit", #ui_txt); y += lh; );
+    rows > 3 ? (
+      sprintf(#ui_txt, "    %s  #%06x", ui_akind == 2 ? "custom" : ui_akind == 1 ? "named" : "auto", ui_cAccent);
+      ui_arow(x, y, w, "Accent", #ui_txt);
+      ui_c(ui_cAccent, 1); gfx_circle(x + 70 * ui_s + 5 * ui_s, y + 6.5 * ui_s, 4.5 * ui_s, 1, 1);
+      y += lh;
+    );
+    rows > 4 ? ( sprintf(#ui_txt, "%d", ui_nctl); ui_arow(x, y, w, "Controls", #ui_txt); y += lh; );
+    rows > 5 ? ( ui_arow(x, y, w, "Written", strlen(#ui_date) ? #ui_date : "-"); y += lh; );
+    gfx_setfont(1);
+  );
+);
+
+function ui_end() (
+  ui_bar == 0 ? ui_footer(gfx_h - ui_pad - 6 * ui_s, ui_pad + 6 * ui_s);
+  ui_ed ? ui_popover() : ui_about ? ui_aboutdraw();
+  mouse_wheel = 0;
+);
+
+function ui_row(n) (
+  ui_ci = 0; ui_n = max(1, n);
+  ui_cw = (gfx_w - 2 * ui_pad) / ui_n;
+  ui_ry0 = ui_y; ui_y += ui_rowh;
+);
+
+function ui_cell() (
+  ui_rx = ui_pad + ui_ci * ui_cw; ui_ry = ui_ry0; ui_rw = ui_cw; ui_rh = ui_rowh;
+  ui_ci += 1;
+  ui_hit = mouse_x >= ui_rx && mouse_x < ui_rx + ui_rw && mouse_y >= ui_ry && mouse_y < ui_ry + ui_rh
+           && !(ui_core && ui_blocked) && !ui_modal;
+  // every widget is one block centred in its cell: label, body (a knob's height), value.
+  // The same for every cell of a row, so labels and values line up across widget types.
+  ui_kr = max(4 * ui_s, min(64 * ui_s, min(ui_rw / 2 - 8 * ui_s, (ui_rh - 2 * ui_lh - 22 * ui_s) / 2)));
+  ui_lby = ui_ry + (ui_rh - 2 * ui_lh - 12 * ui_s - 2 * ui_kr) / 2;
+  ui_by = ui_lby + ui_lh + 6 * ui_s; ui_bh = 2 * ui_kr;
+);
+
+// label (top) and value line (bottom) of the current cell; #ui_txt holds the value
+function ui_label(label, hot) (
+  gfx_setfont(2); ui_caps(label);
+  ui_c(hot ? ui_cText : ui_cMuted, 1); ui_ctext(ui_rx, ui_lby, ui_rw, ui_lh);
+  gfx_setfont(1);
+);
+function ui_value(col) ( ui_c(col, 1); ui_ctext(ui_rx, ui_by + ui_bh + 6 * ui_s, ui_rw, ui_lh); );
+
+// fmt: 0 number, 1 dB, 2 percent of 0..1, 3 Hz/kHz, 4 ms, 5 integer
+function ui_fmtv(fmt, v) (
+  fmt == 1 ? sprintf(#ui_txt, "%.1f dB", v) :
+  fmt == 2 ? sprintf(#ui_txt, "%.0f%%", v * 100) :
+  fmt == 3 ? (v >= 1000 ? sprintf(#ui_txt, "%.1f kHz", v / 1000) : sprintf(#ui_txt, "%.0f Hz", v)) :
+  fmt == 4 ? sprintf(#ui_txt, "%.0f ms", v) :
+  fmt == 5 ? sprintf(#ui_txt, "%d", v) :
+  sprintf(#ui_txt, "%.2f", v);
+);
+
+// Drag (200 px = the full range, Shift = 10x finer), wheel, Cmd/Ctrl/Alt-click = default
+// (mouse_cap 4 = Cmd on macOS / Ctrl elsewhere, 32 = Ctrl on macOS, 16 = Alt), double-click =
+// type a value (a box opens next to the knob at x, y).
+function ui_reset(idx) ( ui_set(idx, ui_def[idx]); slider_automate(2 ^ (idx - 1), 1); ui_lci = 0; );
+function ui_ctl(idx, fmt, label, x, y) local(lo, hi, st, t, fine) (
+  lo = ui_min[idx]; hi = ui_max[idx]; st = ui_stp[idx];
+  ui_hit && ui_press ? (
+    t = time_precise();
+    (mouse_cap & 52) ? ui_reset(idx) :
+    (ui_lci == idx && t - ui_lct < 0.45) ? ui_edopen(idx, fmt, label, x, y) :
+    ( ui_active = idx; ui_ly = mouse_y; ui_acc = slider(idx); ui_lci = idx; ui_lct = t; );
+  );
+  ui_active == idx && ui_down ? (
+    fine = mouse_cap & 8;
+    ui_acc += (ui_ly - mouse_y) / (200 * ui_s * (fine ? 10 : 1)) * (hi - lo);
+    ui_acc = min(hi, max(lo, ui_acc));
+    ui_ly = mouse_y;
+    ui_set(idx, ui_q(idx, ui_acc));
+  );
+  ui_hit && mouse_wheel != 0 ? (
+    ui_set(idx, ui_q(idx, slider(idx) + sign(mouse_wheel) * (st > 0 ? st : (hi - lo) / ((mouse_cap & 8) ? 200 : 40))));
+  );
+  ui_active == idx && ui_rel ? ( slider_automate(2 ^ (idx - 1), 1); ui_active = 0; );
+);
+
+// ---- widgets ------------------------------------------------------------------------------
+
+// A ring knob: dim track, one accent stroke for the value (from 0 when the range crosses it),
+// a face with a dot pointing at the value. 7:30 to 4:30 o'clock.
+function ui_knob(idx, label, fmt) local(lo, hi, t, t0, r, th, cx, cy, a0, a1, av, aa, fr, hot, dr) (
+  ui_cell(); ui_ctl(idx, fmt, label, ui_rx + ui_rw / 2, ui_by + ui_bh / 2);
+  lo = ui_min[idx]; hi = ui_max[idx];
+  t = min(1, max(0, (slider(idx) - lo) / (hi - lo)));
+  t0 = (lo < 0 && hi > 0) ? -lo / (hi - lo) : 0;
+  hot = ui_active == idx || ui_hit;
+  r = ui_kr;
+  cx = ui_rx + ui_rw / 2; cy = ui_by + ui_bh / 2;
+  th = max(3 * ui_s, r * 0.14);
+  a0 = -2.35; a1 = 2.35;
+  av = a0 + (a1 - a0) * t; aa = a0 + (a1 - a0) * t0;
+  ui_c(hot ? ui_cTrackHot : ui_cTrack, 1); ui_ring(cx, cy, r - th, r, a0, a1);
+  abs(t - t0) > 0.002 ? (
+    ui_c(ui_active == idx ? ui_cAccentAct : (hot ? ui_cAccentHi : ui_cAccent), 1);
+    ui_ring(cx, cy, r - th, r, min(aa, av), max(aa, av));
+  );
+  fr = r - th - max(3 * ui_s, r * 0.12);
+  fr > 4 * ui_s ? (
+    ui_cm(ui_cPanel2, ui_cLine, hot ? 0.9 : 0.4); gfx_circle(cx, cy, fr, 1, 1);
+    ui_cm(ui_cLine, ui_cMuted, hot ? 0.3 : 0.15); gfx_circle(cx, cy, fr, 0, 1);
+    dr = max(1.5 * ui_s, fr * 0.12);
+    ui_c(hot ? ui_cAccent : ui_cText, 1);
+    gfx_circle(cx + sin(av) * (fr - dr * 2.2), cy - cos(av) * (fr - dr * 2.2), dr, 1, 1);
+  );
+  ui_label(label, hot);
+  ui_fmtv(fmt, slider(idx)); ui_value(ui_active == idx ? ui_cAccent : ui_cText);
+);
+
+function ui_toggle(idx, label) local(on, w, h, x, y, hot) (
+  ui_cell();
+  ui_hit && ui_press ? ( (mouse_cap & 52) ? ui_reset(idx) : ( ui_set(idx, slider(idx) ? 0 : 1); slider_automate(2 ^ (idx - 1), 1); ); );
+  on = slider(idx) > 0.5; hot = ui_hit;
+  w = min(ui_rw - 12 * ui_s, 42 * ui_s); h = 22 * ui_s;
+  x = ui_rx + (ui_rw - w) / 2; y = ui_by + (ui_bh - h) / 2;
+  on ? ui_c(hot ? ui_cAccentHi : ui_cAccent, 1) : ui_cm(ui_cLine, ui_cMuted, hot ? 0.2 : 0.06);
+  ui_rrect(x, y, w, h, h / 2);
+  ui_c(on ? ui_cBg : ui_cText, on ? 1 : 0.75);
+  gfx_circle(on ? x + w - h / 2 - 1 : x + h / 2, y + h / 2 - 0.5, h / 2 - 3 * ui_s, 1, 1);
+  ui_label(label, hot);
+  strcpy(#ui_txt, on ? "On" : "Off"); ui_value(on ? ui_cAccent : ui_cMuted);
+);
+
+// Click = next option, right-click = previous, Cmd/Ctrl/Alt-click = default. Option names come from the slider's {A,B,C} list.
+function ui_choice(idx, label) local(n, k, w, h, x, y, hot, m) (
+  ui_cell();
+  n = ui_max[idx] - ui_min[idx] + 1; k = slider(idx) - ui_min[idx];
+  ui_hit && ui_press ? ( (mouse_cap & 52) ? ui_reset(idx) : ( ui_set(idx, ui_min[idx] + (k + 1) % n); slider_automate(2 ^ (idx - 1), 1); ); );
+  ui_hit && ui_rpress ? ( ui_set(idx, ui_min[idx] + (k + n - 1) % n); slider_automate(2 ^ (idx - 1), 1); );
+  k = slider(idx) - ui_min[idx]; hot = ui_hit;
+  w = min(ui_rw - 12 * ui_s, 104 * ui_s); h = 24 * ui_s;
+  x = ui_rx + (ui_rw - w) / 2; y = ui_by + (ui_bh - h) / 2;
+  ui_cm(ui_cPanel2, ui_cLine, hot ? 0.9 : 0.35); ui_rrect(x, y, w, h, 6 * ui_s);
+  ui_c(hot ? ui_cAccent : ui_cLine, 1); gfx_roundrect(x, y, w - 1, h - 1, 6 * ui_s, 1);
+  ui_c(ui_cText, 1); strcpy(#ui_txt, idx * 8 + k); ui_ctext(x, y, w, h);
+  // small arrows at both ends: it steps
+  m = y + h / 2; ui_c(hot ? ui_cAccent : ui_cMuted, 1);
+  gfx_triangle(x + 7 * ui_s, m, x + 11 * ui_s, m - 3.5 * ui_s, x + 11 * ui_s, m + 3.5 * ui_s);
+  gfx_triangle(x + w - 7 * ui_s, m, x + w - 11 * ui_s, m - 3.5 * ui_s, x + w - 11 * ui_s, m + 3.5 * ui_s);
+  ui_label(label, hot);
+  sprintf(#ui_txt, "%d / %d", k + 1, n); ui_value(ui_cMuted);
+);
+
+// level: the peak (linear) the audio thread kept with max(); reset it to 0 after the call.
+// Holds a fast attack and a 30 dB/s release, drawn from -60 to +6 dB.
+function ui_meter(level, label) local(db, p, now, base, w, h, x, y, t, fh, z) (
+  ui_cell();
+  now = time_precise(); base = ui_mtr + ui_mi * 2; ui_mi += 1;
+  db = 20 * log10(max(level, 0.000001));
+  p = ui_mtr[base] - 30 * (now - ui_mtr[base + 1]);
+  ui_mtr[base] = max(max(db, p), -60); ui_mtr[base + 1] = now;
+  w = 8 * ui_s; h = ui_bh;
+  x = ui_rx + (ui_rw - w) / 2; y = ui_by;
+  ui_cm(ui_cPanel2, ui_cLine, 0.5); ui_rrect(x, y, w, h, w / 2);
+  t = (ui_mtr[base] + 60) / 66; fh = h * t;
+  fh > 1 ? (
+    ui_c(ui_mtr[base] > -0.5 ? ui_cBad : (ui_mtr[base] > -6 ? ui_cWarn : ui_cLive), 1);
+    ui_rrect(x, y + h - fh, w, fh, min(w / 2, fh / 2));
+  );
+  // ticks at 0 and -12 dB
+  z = y + h * 6 / 66; ui_c(ui_cMuted, 0.8); gfx_rect(x - 4 * ui_s, z, 3 * ui_s, max(1, ui_s));
+  gfx_rect(x + w + ui_s, z, 3 * ui_s, max(1, ui_s));
+  z = y + h * 18 / 66; ui_c(ui_cMuted, 0.4); gfx_rect(x - 3 * ui_s, z, 2 * ui_s, max(1, ui_s));
+  gfx_rect(x + w + ui_s, z, 2 * ui_s, max(1, ui_s));
+  ui_label(label, 0);
+  ui_mtr[base] > -59.5 ? sprintf(#ui_txt, "%.1f", ui_mtr[base]) : strcpy(#ui_txt, "-inf");
+  ui_value(ui_mtr[base] > -0.5 ? ui_cBad : ui_cMuted);
+);
+
+// The Advanced drawer. Closed: a bar along the bottom. Open: a panel that slides up over the
+// core view (which keeps its size and dims behind it). Returns 1 while visible: draw the
+// Advanced rows then. Close it with the bar or a click above it (or Esc, only when the FX window
+// sends all keyboard input to the plug-in; see the header).
+function ui_section(label) local(y, hit, k) (
+  ui_bar == 0 ? ui_bar = 28 * ui_s;
+  y = ui_sy;
+  ui_e > 0 ? (
+    ui_c(ui_cBg, 0.62 * ui_e); gfx_rect(0, 0, gfx_w, y);
+    ui_adv_open && ui_press && mouse_y < y && !ui_modal ? ( ui_adv_open = 0; ui_press = 0; );
+    // soft shadow above the panel
+    k = 0; loop(6, ui_c(0, 0.05 * ui_e * (6 - k)); gfx_rect(0, y - k * ui_s - ui_s, gfx_w, ui_s); k += 1;);
+  );
+  ui_c(ui_cPanel, 1); ui_rrect(0, y, gfx_w, gfx_h - y + 14 * ui_s, 12 * ui_s);
+  ui_c(ui_cLine, 1); gfx_roundrect(0, y, gfx_w - 1, gfx_h - y + 14 * ui_s, 12 * ui_s, 1);
+  hit = mouse_y >= y && mouse_y < y + ui_bar && mouse_x >= 0 && mouse_x < gfx_w && !ui_modal;
+  ui_footer(y, ui_bar) ? hit = 0;
+  hit && ui_press ? ( ui_adv_open = !ui_adv_open; ui_press = 0; );
+  // grab handle, title, chevron
+  ui_cm(ui_cLine, ui_cMuted, hit ? 0.5 : 0.25); ui_rrect(gfx_w / 2 - 14 * ui_s, y + 5 * ui_s, 28 * ui_s, 3 * ui_s, 1.5 * ui_s);
+  gfx_setfont(2); ui_caps(label);
+  ui_c(hit || ui_adv_open ? ui_cAccent : ui_cMuted, 1);
+  gfx_measurestr(#ui_txt, ui_tw, ui_th);
+  gfx_x = ui_pad + 2 * ui_s; gfx_y = y + (ui_bar - ui_th) / 2 + 2 * ui_s; gfx_drawstr(#ui_txt);
+  gfx_setfont(1);
+  ui_c(hit ? ui_cAccent : ui_cMuted, 1); ui_chev(gfx_w - ui_pad - 6 * ui_s, y + ui_bar / 2 + ui_s, !ui_adv_open);
+  ui_core = 0;
+  ui_y = y + ui_bar; ui_rowh = ui_arowh;
+  ui_e > 0;
+);

@@ -37,6 +37,7 @@ For each tool call:
 - how long it took
 - for key and chord detection: whether it read MIDI, rendered audio or a file, which engine it used, how many chords it found and how sure it was of the key (never the key or the chords)
 - for plugin research runs (`/learn-plugin`, or `/mixer` or `/mastering` looking up a plugin they don't know): how the run ended (new record, refined, plugin not installed, failed to load, LoreKit not connected), which skill started it and how many plugins it researched at once, how long it took, the plugin's category (`compressor`, `eq`, …) and style (`transparent`, `vintage`, …) and its format (VST3, AU, CLAP, JS, …, and whether it's an instrument), its number of parameters as a range (`16-63`), how many were tested, how many sources were cited and questions left open, and whether the scratch track was cleaned up. Anything outside these fixed lists is sent as `other`. Never the plugin's name, and never details that point to one plugin in combination, such as its exact parameter count or whether it has a built-in record
+- for plugins made with `/make-plugin`: whether each write was accepted or why it was refused (a fixed list: `written`, `refused_lint`, `refused_breaking`, `refused_exists`, `refused_name`, `refused_presets`, `refused_accent`, `failed`), whether it replaced an earlier version, and the plugin's **size and shape** as capped counts and ranges: how many controls it has, how many are in the core view and how many under Advanced, the file size as a range (`8-16k`), the version number, how many lint problems and warnings there were and how many suggested presets were written (never their names or values), and whether its accent colour is automatic, a named colour or a custom one (`auto`, `named`, `custom`; never the colour itself). When a run ends: how it ended (`shipped`, `compile_failed`, `checks_failed`, `abandoned`), how many rounds it took, how many checks passed and failed, which of the three shipped examples it started from (or `none`) and how long it took. Never the plugin's name, what you asked for, its code or any control's label. The plugins themselves contain no telemetry
 - reaper-mcp version, OS type and version, Node.js version
 - a random install id (`~/.reaper-mcp/install-id`), so one person's calls can be grouped without knowing who they are
 
@@ -47,7 +48,7 @@ Plus periodic health numbers for the REAPER bridge, such as whether it's running
 ## What is never sent
 
 - your projects, track names, plugin names or settings
-- tool parameters (values, positions, names you type), apart from the fixed values and counts a plugin research run reports (above)
+- tool parameters (values, positions, names you type), apart from the fixed values and counts a plugin research run or a `/make-plugin` run reports (above)
 - error messages or stack traces, which can contain any of the above
 - file paths, your user name, host name or machine id
 - audio, MIDI or anything rendered

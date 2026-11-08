@@ -106,6 +106,7 @@ export const REAPER_ASSETS = [
   'mcp_crest_factor.jsfx',
   'mcp_midi_emitter.jsfx',
   'mcp_gain_trace.jsfx',
+  'mcp_ui.jsfx-inc',
   'mcp_snapshot_lib.lua',
   'mcp_plan_lib.lua',
   'mcp_actions_lib.lua',
@@ -511,6 +512,8 @@ export const MCP_TOOL_NAMES = [
   'get_builtin_knowledge',
   // plugin research runs → usage telemetry (TS-only, no bridge command)
   'report_plugin_research',
+  'write_jsfx',
+  'report_plugin_build',
   // Note: 'render_track_to_wav', 'render_tracks_to_wav', 'remove_mcp_meters' (measure_tracks cleanup), 'insert_stem_tracks'
   // (the insertTracks option of separate_stems) and 'get_fx_state' / 'set_fx_state' / 'extension_call'
   // (extension plumbing) are internal

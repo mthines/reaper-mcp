@@ -30,6 +30,7 @@ Files installed INTO the REAPER DAW by the `setup` command. These run inside REA
 | `mcp_correlation_meter.jsfx` | JSFX/EEL2 | Stereo correlation and width analysis |
 | `mcp_crest_factor.jsfx` | JSFX/EEL2 | Crest factor (peak-to-RMS) measurement |
 | `mcp_gain_trace.jsfx` | JSFX/EEL2 | Pre/post gain trace for pumping/ducking: pair it around a chain (Mode pre/post, same Slot), read p5/p1/std after playback. No `1e9`-style literals (EEL2 rejects them; `jsfx-lint.test.ts` checks) |
+| `mcp_ui.jsfx-inc` | JSFX/EEL2 | The `@gfx` toolkit generated plugins inline (`write_jsfx` pastes it into their `@init`). Canonical source: edit here, never in a generated plugin. Globals are `ui_`-prefixed; sliders must be unnamed; no `1e9`-style literals |
 | `install.sh` | Shell | Manual install helper |
 
 ## Lua Bridge (`mcp_bridge.lua`)

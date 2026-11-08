@@ -158,6 +158,11 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
     description: 'Built-in mix knowledge (read-only, curated in LoreKit): list/search plugin records and mixing lessons, read one by key. The user\'s own LoreKit layer (user:: keys) overrides it. report_plugin_research ends a plugin research run.',
     tools: ['list_builtin_knowledge', 'get_builtin_knowledge', 'report_plugin_research'],
   },
+  plugin_authoring: {
+    name: 'plugin_authoring',
+    description: 'Make a plugin for the user (/make-plugin): write_jsfx writes a self-contained JSFX plugin with the shared UI toolkit into Effects/reaper-mcp-generated/ (linted first, an existing slider is never renumbered); report_plugin_build ends a run. Load, parameter reads and checks use the fx and analysis tools.',
+    tools: ['write_jsfx', 'report_plugin_build'],
+  },
 };
 
 /**

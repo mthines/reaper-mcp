@@ -1,0 +1,86 @@
+desc:Tape Sat
+// accent: orange
+import mcp_ui.jsfx-inc
+
+// A soft saturator with a tilt EQ after it. Core view: Drive, Tone, Mix, Output. Advanced: bias
+// (asymmetry), wow and flutter (a wobbling short delay), and a cheap 2x oversampling switch.
+
+slider1:6<0,24,0.1>Drive
+slider2:0<-1,1,0.01>Tone
+slider3:1<0,1,0.01>Mix
+slider4:0<-24,12,0.1>Output
+slider5:0<0,0.5,0.01>Bias
+slider6:0<0,1,0.01>Wow
+slider7:0<0,1,0.01>Flutter
+slider8:0<0,1,1>2x
+
+@init
+  ui_ptr = ui_mem;
+  function alloc(n) ( ui_ptr += n; ui_ptr - n; );
+  dn = floor(srate * 0.02) + 4;                 // 20 ms modulation delay
+  dl = alloc(dn); dr = alloc(dn); memset(dl, 0, dn); memset(dr, 0, dn); dpos = 0;
+  wph = 0; fph = 0;
+
+  // rational soft clip, close to tanh and cheap
+  function sat(x) ( x = min(3, max(-3, x)); x * (27 + x * x) / (27 + 9 * x * x); );
+
+  function update() (
+    drive = 10 ^ (slider1 / 20);
+    tilt = slider2 * 0.5;
+    mix = slider3;
+    gain = 10 ^ (slider4 / 20);
+    bias = slider5;
+    wow = slider6 * 0.003 * srate;              // up to 3 ms
+    flut = slider7 * 0.0004 * srate;            // up to 0.4 ms
+    wstep = 0.6 / srate; fstep = 7 / srate;
+    lpa = 1 - exp(-2 * $pi * 1000 / srate);     // tilt pivot, 1 kHz
+    os = slider8 > 0.5;
+    comp = 1 / sat(drive * 0.5);                // keeps the level near unity as drive rises
+  );
+  update();
+  ui_boot(0);
+
+@slider
+  update();
+
+@block
+  ui_changed() ? update();
+
+@sample
+  // wow and flutter: read the input back through a delay that wobbles
+  dl[dpos] = spl0; dr[dpos] = spl1;
+  wph += wstep; wph >= 1 ? wph -= 1; fph += fstep; fph >= 1 ? fph -= 1;
+  d = 2 + wow * (0.5 + 0.5 * sin(2 * $pi * wph)) + flut * (0.5 + 0.5 * sin(2 * $pi * fph));
+  ri = dpos - d; ri < 0 ? ri += dn;
+  i0 = floor(ri); f = ri - i0; i1 = i0 + 1; i1 >= dn ? i1 = 0;
+  xl = dl[i0] + (dl[i1] - dl[i0]) * f;
+  xr = dr[i0] + (dr[i1] - dr[i0]) * f;
+  dpos += 1; dpos >= dn ? dpos = 0;
+
+  // saturate, with a second pass on the midpoint when 2x is on
+  yl = sat(xl * drive + bias) - sat(bias);
+  yr = sat(xr * drive + bias) - sat(bias);
+  os ? (
+    yl = (yl + sat((xl + pxl) * 0.5 * drive + bias) - sat(bias)) * 0.5;
+    yr = (yr + sat((xr + pxr) * 0.5 * drive + bias) - sat(bias)) * 0.5;
+  );
+  pxl = xl; pxr = xr;
+  yl *= comp; yr *= comp;
+
+  // tilt: low part up and high part down, or the other way round
+  lowl += (yl - lowl) * lpa; lowr += (yr - lowr) * lpa;
+  yl = lowl * (1 - tilt) + (yl - lowl) * (1 + tilt);
+  yr = lowr * (1 - tilt) + (yr - lowr) * (1 + tilt);
+
+  spl0 = (spl0 * (1 - mix) + yl * mix) * gain;
+  spl1 = (spl1 * (1 - mix) + yr * mix) * gain;
+
+@gfx 340 250
+  ui_begin(1, 1) ? (
+    ui_row(4);
+    ui_knob(1, "Drive", 1); ui_knob(2, "Tone", 0); ui_knob(3, "Mix", 2); ui_knob(4, "Output", 1);
+    ui_section("Advanced") ? (
+      ui_row(4); ui_knob(5, "Bias", 0); ui_knob(6, "Wow", 2); ui_knob(7, "Flutter", 2); ui_toggle(8, "2x");
+    );
+    ui_end();
+  );

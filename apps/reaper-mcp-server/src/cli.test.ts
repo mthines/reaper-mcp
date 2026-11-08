@@ -208,7 +208,8 @@ describe('cli helpers', () => {
       expect(REAPER_ASSETS).toContain('mcp_arrange_lib.lua');
       expect(REAPER_ASSETS).toContain('mcp_fxstate_lib.lua');
       expect(REAPER_ASSETS).toContain('mcp_extensions_lib.lua');
-      expect(REAPER_ASSETS.length).toBe(27);
+      expect(REAPER_ASSETS).toContain('mcp_ui.jsfx-inc');
+      expect(REAPER_ASSETS.length).toBe(28);
     });
 
     it('retires the gfx snapshot manager (replaced by the status page Snapshots tab)', () => {

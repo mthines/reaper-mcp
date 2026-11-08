@@ -1,0 +1,59 @@
+desc:Width / Bass Mono
+// accent: teal
+import mcp_ui.jsfx-inc
+
+// Widens the stereo image and keeps the low end mono: the side signal is high-passed at the crossover,
+// so everything below it is identical in both channels. Core view: Width, Mono below, Output and a
+// level meter. Advanced: the crossover slope and mid/side trims.
+
+slider1:1<0,2,0.01>Width
+slider2:120<20,300,1>Mono below
+slider3:0<-24,12,0.1>Output
+slider4:1<0,1,1{12 dB,24 dB}>Slope
+slider5:0<-12,12,0.1>Mid
+slider6:0<-12,12,0.1>Side
+
+@init
+  function update() local(w0, c, alpha, a0) (
+    width = slider1;
+    gain = 10 ^ (slider3 / 20);
+    steep = slider4 > 0.5;
+    mid = 10 ^ (slider5 / 20); side = 10 ^ (slider6 / 20);
+    // 2nd-order Butterworth low-pass (RBJ), run once or twice on the side signal
+    w0 = 2 * $pi * slider2 / srate; c = cos(w0); alpha = sin(w0) / 1.4142;
+    a0 = 1 + alpha;
+    b0 = (1 - c) / 2 / a0; b1 = (1 - c) / a0;
+    a1 = -2 * c / a0; a2 = (1 - alpha) / a0;
+  );
+  update();
+  ui_boot(1);
+
+@slider
+  update();
+
+@block
+  ui_changed() ? update();
+
+@sample
+  m = (spl0 + spl1) * 0.5 * mid;
+  s = (spl0 - spl1) * 0.5 * side;
+  y = b0 * s + z1; z1 = b1 * s - a1 * y + z2; z2 = b0 * s - a2 * y;
+  steep ? (
+    y2 = b0 * y + z3; z3 = b1 * y - a1 * y2 + z4; z4 = b0 * y - a2 * y2;
+    y = y2;
+  );
+  s = (s - y) * width;                  // the side signal without its lows
+  spl0 = (m + s) * gain;
+  spl1 = (m - s) * gain;
+  pk = max(pk, max(abs(spl0), abs(spl1)));
+
+@gfx 340 250
+  ui_begin(1, 1) ? (
+    ui_row(4);
+    ui_knob(1, "Width", 2); ui_knob(2, "Mono below", 3); ui_knob(3, "Output", 1); ui_meter(pk, "Out");
+    pk = 0;
+    ui_section("Advanced") ? (
+      ui_row(3); ui_choice(4, "Slope"); ui_knob(5, "Mid", 1); ui_knob(6, "Side", 1);
+    );
+    ui_end();
+  );

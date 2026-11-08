@@ -727,6 +727,13 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
       return `found the ${str(p.band) ? `${p.band} ` : ''}hits in ${str(p.path) ? fileName(p.path) : on(e)}${between(p.startTime, p.endTime)}`;
     },
   },
+  write_jsfx: {
+    title: 'Write a plugin',
+    did: (e) => {
+      const p = paramsOf(e);
+      return `${p.overwrite === true ? 'updated' : 'wrote'} the plugin ${str(p.name) ? quoted(str(p.name) as string) : ''}`.trim();
+    },
+  },
   create_transient_automation: {
     title: 'Write automation from the hits',
     did: (e) => {

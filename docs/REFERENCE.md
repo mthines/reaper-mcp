@@ -318,12 +318,12 @@ out of version control.
 ```
 reaper-mcp/
 ├── apps/
-│   ├── reaper-mcp-server/        # MCP server (187 tools, esbuild bundle)
+│   ├── reaper-mcp-server/        # MCP server (189 tools, esbuild bundle)
 │   └── bridge-ui/                # Bridge status page (React → one self-contained HTML file)
 ├── libs/protocol/                # Shared TypeScript types
 ├── libs/extension-api/           # The contract extensions are written against (docs/EXTENSIONS.md)
 ├── extensions/                   # Opt-in extensions: vital (synth patches), helix (.hlx presets)
-├── .claude/skills/               # Mix skills (/mixer, /critique, /mastering, /editing, /learn-plugin, /new-extension, /mix-memory)
+├── .claude/skills/               # Mix skills (/mixer, /critique, /mastering, /editing, /learn-plugin, /make-plugin, /new-extension, /mix-memory)
 ├── knowledge/                    # AI mix engineer knowledge base (symlinked into ~/.claude/knowledge)
 │   ├── genres/                   # Genre mixing conventions
 │   ├── workflows/                # Step-by-step mixing workflows
