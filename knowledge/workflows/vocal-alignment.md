@@ -25,7 +25,7 @@ The ear decides in the end. These steps find the problems the agent can measure 
 1. **Keep the originals.** Copy the guide and each double to new tracks (`T ref`, `T edit` are fine as temporary names, delete them when done) and edit the copies. Never touch the user's items or solo state. Tracks created without a master send are silent in playback but still render, so turn the master send on for tracks the user will audition.
 2. **Pick the guide.** The louder, tighter take. A quiet backing vocal against a loud lead is a good test: onsets are found per source file, so level does not matter.
 3. **Dry run.** `align_audio_to_guide` with `dryRun: true`: read the offset before and after (avg and max ms) per double. Start with `strength` around 0.8 and a `maxShiftMs` under the typical phrase gap; raise it only when hits are missed.
-4. **Apply** (same call without `dryRun`), then `verify_edit` against the kept copy with `timeScale: 1` for a pure alignment (stretch markers keep the length) and `expect: "changed"`. A clean result has no click and a small null residual only where the markers moved audio.
+4. **Apply** (same call without `dryRun`), then `verify_edit` against the kept copy with `timeScale: 1` for a pure alignment (stretch markers keep the length) and `expect: "changed"`. Judge it by the `discontinuity` check (no click) and the align call's after-offsets; the null residual is one number for the whole window and under `expect: "changed"` is only reported, so it does not say where audio moved.
 5. **Listen** before accepting: play the aligned range with the guide. The tool checks for damage, not for taste.
 
 ## Stretching a vocal: what the checks mean
@@ -34,7 +34,7 @@ Measured on a real lead and backings with REAPER's stretch (42 edits, two listen
 
 - **Pitch-kept stretches** from 0.92x to 1.25x sound clean: pitch drift within a few cents, tone under 1.5 dB.
 - **Below 0.9x** a pitch-kept slow-down gets audible stretch artifacts (0.80x clearly, 0.85x and 0.88x slightly, 0.90x clean). They pass pitch, tone and transients; `verify_edit` adds a **dropout** check there (deepest loudness dip under the original, warn from 12 dB). The line is provisional (one phrase), and the rate gate does most of the work: treat anything below 0.9x as "listen first", and use it as a dub rather than a lead.
-- **A plain speed change** (preserve pitch cleared, so the pitch follows the speed) is reported as `info`, not a warning: pitch moves by `1200*log2(rate)` cents and the tone moves with it. Up to about 1.5 semitones was accepted by ear. A pitch move the speed does not explain still warns.
+- **A plain speed change** (preserve pitch cleared, so the pitch follows the speed) is reported as `info`, not a warning, when the speed alone predicts a pitch move of at least 55 cents (rates outside about 0.97x-1.03x): pitch moves by `1200*log2(rate)` cents and the tone moves with it. Up to about 1.5 semitones was accepted by ear. Nearer 1.0 the move is too small to tell from an error, so a drift of 20 cents or more there still warns, and so does any pitch move the speed does not explain.
 - A pitch shift with the timing unchanged (`timeScale` 1) gets no pitch check; shifting and stretching in one edit does.
 - A pass is evidence, not proof. Ratings near the audible edge are noisy (the same audio was heard as artifacted once and clean twice).
 

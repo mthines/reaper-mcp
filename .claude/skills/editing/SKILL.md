@@ -272,7 +272,7 @@ use `knowledge/workflows/vocal-alignment.md`; load it first. In short:
    source files, so take FX such as Melodyne are not heard.
 3. Check the result with `verify_edit` (`timeScale` = the playback rate,
    `expect: "changed"` for a stretch), then **tell the user which edits to
-   listen to**. A plain speed change is reported as info (pitch follows speed);
+   listen to**. A plain speed change (rates outside about 0.97x-1.03x) is reported as info (pitch follows speed);
    a pitch-kept slow-down below 0.9x gets stretch artifacts that only the
    dropout check and the user's ear catch. A pass is evidence, not a verdict.
 4. Put each copied item straight at its final position; batch-moving items on a
