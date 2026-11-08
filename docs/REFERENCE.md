@@ -87,12 +87,18 @@ if it is running.
 
 ### Start the Lua Bridge in REAPER
 
-After setup, load the bridge in REAPER:
+`setup` adds a block to the top of REAPER's `Scripts/__startup.lua`, which REAPER runs at
+launch, so the bridge starts with REAPER: start or restart REAPER after setup. The block runs
+`mcp_bridge.lua` as its own action, so running it from the Action List still stops it. Turn it
+off in the bridge window under **Settings → Start with REAPER** (persistent ExtState
+`MCPBridge/cfg_autostart`); the block stays and skips the bridge. To remove it, delete the lines
+between `-- reaper-mcp: start the bridge with REAPER (begin)` and `(end)`.
 
-1. Open REAPER
-2. **Actions > Show action list > Load ReaScript**
-3. Select `mcp_bridge.lua` from your REAPER Scripts folder
-4. Click **Run** — the bridge runs persistently in the background
+To start it by hand instead (REAPER already open):
+
+1. **Actions > Show action list > Load ReaScript**
+2. Select `mcp_bridge.lua` from your REAPER Scripts folder
+3. Click **Run** — the bridge runs persistently in the background
 
 The bridge opens its status window (see below). Without the web interface it
 prints a one-line note to REAPER's console instead.

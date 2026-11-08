@@ -10,7 +10,8 @@
 # Steps: install deps → build → install the REAPER bridge → symlink the mix
 # skills + knowledge into ~/.claude → configure Claude Code (tool allow-list,
 # user-scope MCP server, .mcp.json) → link the `reaper-mcp` CLI (best effort).
-# The only manual step left is loading mcp_bridge.lua in REAPER (a GUI action).
+# setup also adds the bridge to REAPER's startup script, so it starts with REAPER; the
+# only step left is starting (or restarting) REAPER.
 #
 # Idempotent: safe to re-run after pulling updates. Prints one line per step;
 # the full output goes to tmp/install.log (or stream it with --verbose).
@@ -103,12 +104,14 @@ fi
 # Optional: a `reaper-mcp` command on PATH (doctor/status). Nothing depends on it.
 ( cd dist/apps/reaper-mcp-server && "${PNPM[@]}" link --global ) >> "$LOG" 2>&1 || true
 
-BRIDGE="$(sed -n 's/^ *3\. Select: //p' "$LOG" | tail -n 1)"
+BRIDGE="$(sed -n 's/^ *select \(.*\) and click Run\.$/\1/p' "$LOG" | tail -n 1)"
 TILDE="~"; BRIDGE="${BRIDGE/#"$HOME"/$TILDE}"
 cat <<EOF
 
-✅ Done! One step left: in REAPER, open
-   Actions → Show action list → Load ReaScript…
+✅ Done! One step left: start REAPER (or restart it if it's open).
+   The bridge now starts with REAPER; turn that off in the bridge
+   window under Settings → Start with REAPER.
+   Rather not restart? Actions → Show action list → Load ReaScript…,
    pick mcp_bridge.lua and click Run.
    ${BRIDGE:+($BRIDGE)}
 

@@ -14,7 +14,7 @@ reaper-mcp setup     # installs the bridge and status page into REAPER
 reaper-mcp init      # connects Claude Code and adds the mix skills
 ```
 
-Then, in REAPER: **Actions → Show action list → Load ReaScript…**, pick `mcp_bridge.lua` and click **Run**.
+Then start REAPER (or restart it): `setup` adds the bridge to REAPER's startup script, so it starts with REAPER. Turn that off in the bridge window under **Settings → Start with REAPER**. Without a restart: **Actions → Show action list → Load ReaScript…**, pick `mcp_bridge.lua` and click **Run**.
 
 Open Claude Code in any folder and try:
 

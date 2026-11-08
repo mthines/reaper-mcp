@@ -190,11 +190,15 @@ Nothing else to install. When a new version is out, the bridge window in REAPER 
 <sub>A real run, recorded by our install test (<code>scripts/test-install.sh</code>). The very first
 download takes about a minute.</sub>
 
-### 3 · Click Run in REAPER
+### 3 · Start REAPER
 
-In REAPER: **Actions → Show action list → Load ReaScript…**, pick **`mcp_bridge.lua`**
-and click **Run**. A small status window opens, showing the bridge is live. 🟢
-Running it again stops the bridge.
+Start REAPER, or restart it if it was open: the installer added the bridge to REAPER's
+startup script, so it starts with REAPER. A small status window opens, showing the bridge
+is live. 🟢 Don't want it starting on its own? Turn off **Settings → Start with REAPER** in
+that window.
+
+Rather not restart? **Actions → Show action list → Load ReaScript…**, pick **`mcp_bridge.lua`**
+and click **Run**. Running it again stops the bridge.
 
 **Now open Claude Code in any folder (your song folder is perfect) and start mixing:**
 
