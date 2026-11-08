@@ -221,6 +221,19 @@ Then reload the Lua bridge in REAPER:
 1. **Stop** the running bridge script: Actions > Running Scripts > stop `mcp_bridge.lua`
 2. **Reload** the updated script: Actions > Load ReaScript > select `mcp_bridge.lua` > Run
 
+### ReaPack and a dev clone
+
+ReaPack (see the README) installs the bridge, JSFX and status page into `Scripts/reaper-mcp/MCP Bridge/`,
+`Effects/reaper-mcp/Meters/` and `reaper_www_root/`. REAPER prefers those copies: the autostart block starts ReaPack's
+bridge and the meters load from `Meters/`. So in a REAPER that has the ReaPack packages, your local changes
+(`setup`, `./scripts/install.sh`, `pnpm dev:bridge`, Rebuild & reload) are written to `Scripts/` and `Effects/reaper-mcp/`
+and never run. The symptom is "I changed the Lua and nothing happened".
+
+Pick one owner per REAPER. To develop from a clone, uninstall the ReaPack packages first (Extensions > ReaPack >
+Manage repositories > right-click `reaper-mcp` > Uninstall packages, then remove the repository), then run
+`./scripts/install.sh`. `reaper-mcp setup` from a clone warns when it finds ReaPack's copy. To switch back to ReaPack, import the repository again and install the packages. An npm install's `setup` then leaves
+the files to ReaPack; a clone keeps copying and warning.
+
 ### When is a bridge update needed?
 
 The MCP server (TypeScript) and the Lua bridge (REAPER) are **two separate components**. When you add new MCP tools:

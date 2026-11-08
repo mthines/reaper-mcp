@@ -14,7 +14,7 @@ import { homedir, platform } from 'node:os';
 import { exec as execCb, execFileSync } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
 import { installClaudeAssets } from './claude-assets.js';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, autostartCheck, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, autostartCheck, setupFilesPlan, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
 import { detectInstalled, setupSidecar } from './setup-sidecar.js';
 import { firstRunTelemetryNotice, resolveTelemetry, saveTelemetryChoice, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
@@ -38,8 +38,8 @@ async function setup(): Promise<void> {
 
   // ReaPack owns the files once it has installed the bridge: copying them to Scripts/ and Effects/ as
   // well would give an Action List with every script twice and a bridge ReaPack updates never touch.
-  const viaReaPack = existsSync(join(scriptsDir, 'reaper-mcp', 'MCP Bridge', 'mcp_bridge.lua'));
-  if (viaReaPack) {
+  const filesPlan = setupFilesPlan(existsSync(join(scriptsDir, 'reaper-mcp', 'MCP Bridge', 'mcp_bridge.lua')), findCloneRoot(__dirname) !== null);
+  if (filesPlan === 'leave') {
     console.log('The bridge is installed by ReaPack: leaving its scripts, JSFX and status page to ReaPack.');
     console.log('Setup only turns on starting with REAPER and the web interface.\n');
     installBridgeAutostart(scriptsDir);
@@ -48,6 +48,11 @@ async function setup(): Promise<void> {
     console.log('Restart REAPER (or run the bridge once from the Action List) and add reaper-mcp to Claude Code: reaper-mcp doctor');
     if (port) console.log(`The bridge opens its status window on start: http://localhost:${port}/${BRIDGE_UI_FILE}`);
     return;
+  }
+  if (filesPlan === 'install-with-warning') {
+    console.log('WARNING: ReaPack has installed the bridge too, and REAPER prefers its copy (Scripts/reaper-mcp/MCP Bridge/ and');
+    console.log('Effects/reaper-mcp/Meters/) over the files this checkout installs. Your local changes will not run until you');
+    console.log('uninstall the reaper-mcp packages in ReaPack (Manage repositories > reaper-mcp > Uninstall packages).\n');
   }
 
   console.log('Installing Lua scripts...');
