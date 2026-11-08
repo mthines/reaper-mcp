@@ -1,7 +1,8 @@
 # Teaching Protocol (explain mode)
 
 How the agent works when the user started **`/teach`**: someone new to REAPER who wants to learn what is being done
-and why, not just get a result. `/mixer`, `/editing` and `/mastering` follow this file whenever explain mode is on.
+and why, not just get a result. `/mixer`, `/editing`, `/mastering` and `/critique` follow this file whenever explain
+mode is on.
 Explain mode is on only when the user typed `/teach` in this conversation; it stays on until they say stop
 ("stop explaining", "just do it").
 
