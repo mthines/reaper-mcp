@@ -496,7 +496,7 @@ It has no model of its own, so the AI is whichever one your client runs.
 | **Other MCP clients** (Claude Desktop, Cursor, VS Code, …) | Not tested. The tools work from any client that runs a local stdio server: [config](docs/REFERENCE.md#other-mcp-clients). The skills only load where the client reads `SKILL.md` files. |
 
 **Typed or voice?**
-Typed. reaper-mcp never listens to a microphone: it gets text from your client.
+Typed. reaper-mcp never listens to a microphone for instructions: it gets text from your client.
 Speaking works if your client or your OS dictation turns it into text first.
 
 **Local models**
@@ -523,7 +523,8 @@ Where your data goes:
 - **LoreKit, built-in layer:** the skills look up shared plugin knowledge with a public read-only key,
   so search terms such as plugin names reach LoreKit even if you never connect it.
 - **LoreKit, your layer** (only if you connect it) stores what the skills learn about plugins and your preferences.
-- **Usage telemetry** (on by default, [easy to turn off](#-privacy--telemetry)) sends tool names, errors and timings, never content.
+- **Usage telemetry** (on by default, [easy to turn off](#-privacy--telemetry)) sends tool names, the kind of
+  error and timings, never content. The bridge page has its own switch: [TELEMETRY.md](TELEMETRY.md#the-bridge-page).
 
 ---
 
