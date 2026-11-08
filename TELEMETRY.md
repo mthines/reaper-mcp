@@ -45,7 +45,7 @@ Plus periodic health numbers for the REAPER bridge, such as whether it's running
 ## What is never sent
 
 - your projects, track names, plugin names or settings
-- tool parameters (values, positions, names you type)
+- tool parameters (values, positions, names you type), apart from the fixed values and counts a plugin research run reports (above)
 - error messages or stack traces, which can contain any of the above
 - file paths, your user name, host name or machine id
 - audio, MIDI or anything rendered
