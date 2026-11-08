@@ -12,7 +12,8 @@ Say this once, at the start, in your own words and short:
 
 - The mixing advice comes from a language model plus this project's knowledge files, not from an engineer listening
   to the song. Measurements (LUFS, spectrum, correlation) are real; the taste is a starting point.
-- Their ears decide. Every change can be undone, and a snapshot is saved before the first one.
+- Their ears decide. Edits to the project can be undone (a few global REAPER options, like the metronome, cannot), and a
+  snapshot is saved before the first change.
 
 Then for each "why", say where it comes from: a knowledge file (name it: "from `workflows/gain-staging.md`") or
 general mixing practice ("a common rule of thumb"). When a choice is taste (how much reverb, how bright), say it is
