@@ -129,6 +129,7 @@ reaper-mcp/
     critique/SKILL.md         # /critique — read-only analysis ("roast my mix")
     mastering/SKILL.md        # /mastering — mix-bus mastering to a LUFS target
     editing/SKILL.md          # /editing — MIDI, arrangement, comping, A/B variants in fixed lanes
+    teach/SKILL.md            # /teach — beginner mode (slash-only): explains each change, links the REAPER concept, how to do it by hand, bridge page link (knowledge/reference/teaching.md)
     learn-plugin/SKILL.md     # /learn-plugin — research + live-probe a plugin via plugin-researcher, ask only the gaps (LoreKit)
     make-plugin/SKILL.md      # /make-plugin — make the user a plugin (JSFX + shared UI toolkit): spec, write_jsfx, load, measure, iterate; examples/ holds three
     new-extension/SKILL.md    # /new-extension — build an extension for a plugin's internals: probe its state, write tools + tests, prove them live
@@ -140,6 +141,7 @@ reaper-mcp/
     genres/                   # Genre mixing conventions (targets, frequency balance, dynamics)
     workflows/                # Step-by-step mixing workflows (gain-staging, vocal-chain, etc.)
     reference/                # Reference material (frequencies, metering, compression, perceived loudness, memory-protocol)
+                              # reaper-concepts.md: the REAPER concepts /teach links (checked by teach-knowledge.test.ts); teaching.md: explain mode's rhythm
                               # Balance/EQ decisions use perceived values only (LU, kDb), never raw dBFS: reference/perceived-loudness.md
                               # Plugin knowledge + process lessons live in LoreKit, scope project::reaper-mcp
 
@@ -745,6 +747,8 @@ export function registerExampleTools(server: McpServer): void {
   );
 }
 ```
+
+A successful write's reply also gets a last text block, `Bridge page (before/after view): <url>`, added by the tool wrapper (`page-link.ts`) from the `_page` the bridge returns; tools need do nothing for it.
 
 Then register in `server.ts`:
 ```typescript

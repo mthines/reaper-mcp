@@ -258,8 +258,8 @@ breakdown is in [docs/REFERENCE.md](docs/REFERENCE.md#installation).
 
 ## 🎚️ Meet your engineers
 
-Seven skills, each tuned for a job. Type the slash command, or just describe what you
-want and the right one starts.
+Nine skills, each tuned for a job. Type the slash command, or just describe what you
+want and the right one starts (all but `/teach`, which starts only when you type it).
 
 | | Skill | What it does | Try |
 |---|---|---|---|
@@ -267,6 +267,7 @@ want and the right one starts.
 | 🔥 | **`/critique`** | "Roast my mix." A measured report of what to fix. **Changes nothing.** | `/critique What's holding this mix back?` |
 | ✂️ | **`/editing`** | Edits notes, arrangement and timing, and compares two versions of a part in lanes | `/editing Make the chorus half-time` |
 | 💿 | **`/mastering`** | A mastering chain on the mix bus, aimed at a platform's loudness | `/mastering Master this for Spotify` |
+| 🧑‍🏫 | **`/teach`** | Beginner mode, for anyone new to REAPER: one change at a time, saying what it changes and why, the REAPER concept behind it, how to do it yourself with your own shortcuts, and a link to the before/after on the bridge page. Honest that its mixing advice comes from a model. Starts only when you type `/teach` | `/teach Help me balance my drums` |
 | 🎓 | **`/learn-plugin`** | Researches a plugin you own, tests it live and saves it to LoreKit, asking you only what it can't work out | `/learn-plugin JST Gain Reduction Deluxe` |
 | 🛠️ | **`/make-plugin`** | Makes you a plugin for a need no plugin covers. A simple core view, the rest in an Advanced drawer, a few presets that show how to use it, proven by measurement. It's just a plugin afterwards, no bridge or server needed | `/make-plugin randomly mutate my samples and add reverb` |
 | 🧩 | **`/new-extension`** | Builds or updates an [extension](#-extensions-teach-it-your-plugin) that edits a plugin's internals (wavetables, mod matrix, patch state) and proves it live on a scratch track | `/new-extension Serum` |

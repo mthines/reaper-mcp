@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { getTracer, emitLog, exceptionAttributes, getToolDurationHistogram, redactHome } from './telemetry.js';
 import { classifyBridgeError, isSystemError } from './bridge.js';
+import { collectPageLinks, withPageLink } from './page-link.js';
 import { registerProjectTools } from './tools/project.js';
 import { registerTrackTools } from './tools/tracks.js';
 import { registerFxTools } from './tools/fx.js';
@@ -96,7 +97,8 @@ export function instrumentToolHandlers(server: McpServer): void {
         },
         async (span) => {
           try {
-            const result = await originalCb(...cbArgs);
+            const collected = await collectPageLinks(() => originalCb(...cbArgs));
+            const result = withPageLink(collected.result, collected.links);
             const res = result as { isError?: boolean; content?: { text?: string }[] };
             if (res?.isError) {
               // Tool-level failure reported to the client (semconv: error.type=tool_error).

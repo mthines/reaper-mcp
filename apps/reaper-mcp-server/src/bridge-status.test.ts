@@ -79,7 +79,7 @@ async function startBridge(setup = '', files: Record<string, string> = {}) {
         local body = f:read("a"); f:close()
         return body
       `);
-      return JSON.parse(body) as { success: boolean; error?: string };
+      return JSON.parse(body) as { success: boolean; error?: string; _page?: string };
     },
     async set(key: string, value: string) {
       lua.global.set('V', value);
@@ -1436,5 +1436,46 @@ describe('stuck web-server sockets', () => {
     await bridge.eval('(function() skew = 31 end)()');
     expect((await bridge.status()).web).toBeUndefined();
     expect(await bridge.eval('#lsof_calls')).toBe(0);
+  });
+});
+
+describe('status page link on writes', () => {
+  const INI = { '/reaper/reaper.ini': `[REAPER]\ncsurf_0=HTTP 0 8123 '' 'mcp_bridge.html' 0 ''\ncsurf_cnt=1\n` };
+  const NO_WINDOW = `ext["MCPBridge/cfg_open_on_start"] = "0"; os.execute = function() return true end`;
+
+  it('answers a write with the link to its own entry on the page, at the port REAPER serves it on', async () => {
+    const bridge = await startBridge(NO_WINDOW, INI);
+    await bridge.send('get_project_info');
+    const res = (await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -3 }));
+    const { recent } = await bridge.status();
+    expect(recent[0].c).toBe('set_track_property');
+    expect(res._page).toBe(`http://localhost:8123/mcp_bridge.html?view=%22calls%22&entry=${recent[0].n}`);
+  });
+
+  it('gives no link for a read, a refused write or a write blocked by read-only', async () => {
+    const bridge = await startBridge(NO_WINDOW, INI);
+    const read = (await bridge.send('list_tracks'));
+    const refused = (await bridge.send('set_track_property', { trackIndex: 99, property: 'volume', value: -3 }));
+    await bridge.set('cfg_readonly', '1');
+    const blocked = (await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -3 }));
+    expect(read._page).toBeUndefined();
+    expect(refused.success).toBe(false);
+    expect(refused._page).toBeUndefined();
+    expect(blocked.success).toBe(false);
+    expect(blocked._page).toBeUndefined();
+  });
+
+  it('gives no link for the meter cleanup a measurement ends with', async () => {
+    const bridge = await startBridge(NO_WINDOW, INI);
+    const cleanup = await bridge.send('remove_mcp_meters', { trackIndices: '[0]' });
+    expect(cleanup.success).toBe(true);
+    expect(cleanup._page).toBeUndefined();
+  });
+
+  it('gives no link when REAPER has no web interface', async () => {
+    const bridge = await startBridge(NO_WINDOW, { '/reaper/reaper.ini': '[REAPER]\ncsurf_cnt=0\n' });
+    const res = (await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -3 }));
+    expect(res.success).toBe(true);
+    expect(res._page).toBeUndefined();
   });
 });

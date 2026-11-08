@@ -31,6 +31,13 @@ while preserving the mix's character.
 **Mastering is subtle** — moves are fractions of a dB. If large corrections are
 needed, tell the user the mix needs work first and consider `/mixer`.
 
+## Explain mode (`/teach`)
+
+When the user started `/teach` in this conversation, explain mode is on: load `reference/teaching.md` and follow it
+for every change (what, why, the REAPER concept from `reference/reaper-concepts.md`, how to do it by hand, the
+before/after and the bridge page link, then pause). It sets the pace and what gets said; this skill's rules still
+decide what to do. Explain mode is never on otherwise.
+
 ## Targets
 
 Default to **-14 LUFS, -1.0 dBTP** (safe for all streaming) unless the user names

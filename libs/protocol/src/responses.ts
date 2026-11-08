@@ -10,6 +10,8 @@ export interface BridgeResponse {
   data?: unknown;
   error?: string;
   timestamp: number;
+  /** On a successful write: the command's entry on the bridge status page (its before/after view). */
+  _page?: string;
 }
 
 // --- Per-command response data types ---

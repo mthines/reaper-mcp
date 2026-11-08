@@ -38,6 +38,13 @@ cleanup, arrangement edits) are in `knowledge/workflows/editing.md`; load it for
 audio cleanup. Voice sketches and stem separation use the workflows below, not
 the recorded-track cleanup procedure.
 
+## Explain mode (`/teach`)
+
+When the user started `/teach` in this conversation, explain mode is on: load `reference/teaching.md` and follow it
+for every change (what, why, the REAPER concept from `reference/reaper-concepts.md`, how to do it by hand, the
+before/after and the bridge page link, then pause). It sets the pace and what gets said; this skill's rules still
+decide what to do. Explain mode is never on otherwise.
+
 ## Rules that save sessions
 
 1. **Re-list before every index-based write.** The user edits the session while

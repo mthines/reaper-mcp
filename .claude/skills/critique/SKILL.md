@@ -32,6 +32,12 @@ changes.** After the report, ask which problems to fix first and hand off to
 Back every claim with a measurement — never "it's muddy", always "200–400 Hz
 sits +4 dB above the average curve".
 
+## Explain mode (`/teach`)
+
+When the user started `/teach` in this conversation, explain mode is on: load `reference/teaching.md` and follow its
+honesty rules, and link the REAPER concept (`reference/reaper-concepts.md`) behind each finding. Explain mode is
+never on otherwise.
+
 ## Memory — recall first, and learn from your analysis
 
 Per `reference/memory-protocol.md` (the self-improvement loop is general to every

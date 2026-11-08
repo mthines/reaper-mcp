@@ -17,6 +17,7 @@ import {
   type LogLevel,
 } from './telemetry.js';
 import { getSessionInfo } from './session.js';
+import { notePageLink } from './page-link.js';
 
 const POLL_INTERVAL_MS = 10;
 
@@ -392,6 +393,7 @@ export async function sendCommand(
             const handlerMs = rawResponse['_handlerMs'] as number | undefined;
             const pickupMs = rawResponse['_pickupMs'] as number | undefined;
             const deferCycle = rawResponse['_deferCycle'] as number | undefined;
+            notePageLink(rawResponse['_page']);
 
             const errorType = response.success ? undefined : classifyBridgeError(response.error);
 
