@@ -196,7 +196,7 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
     did: (e) => {
       const v = projectOf(e);
       if (!v?.tempo || !v.ts) return 'read the project’s tempo, time signature and sample rate';
-      const rate = v.sr ? ` at ${+(v.sr / 1000).toFixed(1)} kHz` : '';
+      const rate = v.sr ? ` at ${+(v.sr / 1000).toFixed(2)} kHz` : '';
       return `read the project info: ${+v.tempo.toFixed(2)} BPM in ${v.ts[0]}/${v.ts[1]}${rate}${v.tracks !== undefined ? `, ${v.tracks} ${v.tracks === 1 ? 'track' : 'tracks'}` : ''}`;
     },
   },
@@ -829,7 +829,7 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
     title: 'Read the project settings',
     did: (e) => {
       const v = projectOf(e);
-      return v?.sr ? `read the project settings: ${+(v.sr / 1000).toFixed(1)} kHz${v.title ? `, titled ${quoted(v.title)}` : ''}` : 'read the project settings';
+      return v?.sr ? `read the project settings: ${+(v.sr / 1000).toFixed(2)} kHz${v.title ? `, titled ${quoted(v.title)}` : ''}` : 'read the project settings';
     },
   },
   set_project_settings: {
