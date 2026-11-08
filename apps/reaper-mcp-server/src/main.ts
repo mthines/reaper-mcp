@@ -231,7 +231,7 @@ async function init(): Promise<void> {
     console.log('\nIf you haven\'t yet, install the bridge:');
   }
   console.log('  reaper-mcp setup           # Lua bridge + JSFX → REAPER');
-  console.log('then load mcp_bridge.lua in REAPER.');
+  console.log('then start (or restart) REAPER: the bridge starts with it.');
   if (!findCloneRoot(__dirname)) console.log('\nWant it to remember plugins and your corrections? Connect LoreKit (free): https://lorekit.io. /learn-plugin will walk you through it.');
   console.log('\nTry: /mixer "Please gain stage my tracks"  ·  /critique "Roast my mix"');
 }
@@ -671,11 +671,11 @@ Usage:
 Quick Start (from npm):
   npm install -g @mthines/reaper-mcp
   reaper-mcp setup && reaper-mcp init     # bridge into REAPER, tools + skills into Claude Code
-  # then load mcp_bridge.lua in REAPER (Actions > Load ReaScript > Run)
+  # then start (or restart) REAPER: the bridge starts with it
 
 Quick Start (from your clone):
   ./scripts/install.sh        # build, link CLI, bridge, symlink skills + knowledge, configure
-  # then load mcp_bridge.lua in REAPER (Actions > Load ReaScript > Run)
+  # then start (or restart) REAPER: the bridge starts with it
 
 Then in Claude Code:
   /mixer "Please gain stage my tracks"   ·   /critique "Roast my mix"
