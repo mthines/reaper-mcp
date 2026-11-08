@@ -152,8 +152,9 @@ export function writeJsfx(input: WriteArgs): ToolResult {
   const dir = generatedDir();
   const path = join(dir, `${slug}.jsfx`);
   const existing = existsSync(path) ? readFileSync(path, 'utf8') : undefined;
-  // no accent given: keep the one the source carries, else the one the plugin already has
-  accentToken ??= readAccentToken(input.source) ?? (existing !== undefined ? readAccentToken(existing) : undefined);
+  // no accent given: keep the one the plugin already has. A new plugin never inherits the `// accent:` line of the
+  // example it was copied from: it gets its own colour from its name (auto) unless the caller names one.
+  accentToken ??= existing !== undefined ? readAccentToken(existing) : undefined;
   const accent = resolveAccent(slug, accentToken === 'auto' ? undefined : accentToken);
   if (existing !== undefined && !overwrite) {
     record({ outcome: 'refused_exists', overwrite });

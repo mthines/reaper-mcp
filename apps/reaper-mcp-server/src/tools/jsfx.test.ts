@@ -221,6 +221,12 @@ describe('write_jsfx accent', () => {
     expect(`#${first}`).toBe(body(r).accent.color);
   });
 
+  it('gives a new plugin its own colour even when the source carries the example\'s accent line', async () => {
+    const r = await call({ name: 'Bit Crusher', source: `// accent: orange\n${SRC()}` });
+    expect(body(r).accent.kind).toBe('auto');
+    expect(readFileSync(file('bit-crusher'), 'utf8')).not.toContain('// accent: orange');
+  });
+
   it('keeps an accent the user picked through a later edit that does not mention it', async () => {
     await call({ name: 'Secret Name', source: SRC(), accent: '#FF8800' });
     expect(theme('secret-name')).toBe('ff8800');
