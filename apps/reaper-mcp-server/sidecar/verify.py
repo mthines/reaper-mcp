@@ -258,7 +258,8 @@ def pitch_drift(reference: np.ndarray, edited: np.ndarray, sample_rate: int, rat
     cents = 1200.0 * np.log2(edit_f0[both] / ref_f0[index][both])
     drift = float(np.median(cents))
     expected = 1200.0 * np.log2(rate)  # what a plain speed change (pitch follows the speed) would do
-    varispeed = abs(expected) >= PITCH_WARN_CENTS and abs(drift - expected) <= VARISPEED_TOLERANCE_CENTS
+    # Only when the speed change alone would warn by more than the tolerance: nearer 1.0 the window reaches zero drift
+    varispeed = abs(expected) >= PITCH_WARN_CENTS + VARISPEED_TOLERANCE_CENTS and abs(drift - expected) <= VARISPEED_TOLERANCE_CENTS
     return {
         "verdict": "info" if varispeed else "warn" if abs(drift) >= PITCH_WARN_CENTS else "ok",
         "driftCents": round(drift, 1),

@@ -364,3 +364,17 @@ def test_a_piece_of_a_slow_down_that_went_missing_is_found():
 def test_mild_slow_downs_and_speed_ups_are_not_checked_for_dropouts():
     assert "dropout" not in _character(_voice(4), _slowed(0.92), 0.92)
     assert "dropout" not in _character(_voice(4), _voice(4, rate=1.1), 1.1)
+
+
+def test_a_pitch_error_on_a_nearly_unchanged_speed_still_warns():
+    reference = _voice(4)
+    off = _resampled(_voice(4, pitch_scale=2 ** (0.25 / 12)), 1.02)  # a quarter tone further than the speed alone
+    checks = _character(reference, off, 1.02)
+    assert checks["pitch"]["verdict"] == "warn"
+    assert "varispeed" not in checks["pitch"]
+
+
+def test_a_pitch_kept_stretch_of_a_couple_of_percent_is_ok_not_a_speed_change():
+    checks = _character(_voice(4), _voice(4, rate=1.02), 1.02)
+    assert checks["pitch"]["verdict"] == "ok"
+    assert "varispeed" not in checks["pitch"]
