@@ -95,9 +95,10 @@ async function setup(): Promise<void> {
     console.log(`  Not found: ${join(wwwSrc, BRIDGE_UI_FILE)} (build bridge-ui first)`);
   }
 
+  // Before the web-interface step: Ctrl+C at its "Quit REAPER to finish" prompt ends setup there
+  installBridgeAutostart(scriptsDir);
   const webPort = await enableWebInterface();
   await registerSnapshotActions();
-  installBridgeAutostart(scriptsDir);
 
   console.log('\nSetup complete!\n');
   console.log('Next steps:');
