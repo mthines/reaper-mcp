@@ -5386,8 +5386,9 @@ local function run_command(cmd)
 
   record_command(cmd, handler_ms, response.success, response.error, response.data, before)
   -- A write that worked: link its entry on the status page (its before/after view), at the port REAPER serves
-  -- the page on. false = no web interface, so reaper.ini is read once, not on every write.
-  if response.success and not internal and not readonly_allows(cmd.type) then
+  -- the page on. false = no web interface, so reaper.ini is read once, not on every write. Meter cleanup after a
+  -- measurement is housekeeping, not the user's change, so it gets no link.
+  if response.success and not internal and not readonly_allows(cmd.type) and cmd.type ~= "remove_mcp_meters" then
     if web_watch.port == nil then web_watch.port = find_web_port() or false end
     if web_watch.port then
       response._page = "http://localhost:" .. web_watch.port .. "/mcp_bridge.html?view=calls&entry=" .. status.seq

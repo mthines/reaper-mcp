@@ -1465,6 +1465,13 @@ describe('status page link on writes', () => {
     expect(blocked._page).toBeUndefined();
   });
 
+  it('gives no link for the meter cleanup a measurement ends with', async () => {
+    const bridge = await startBridge(NO_WINDOW, INI);
+    const cleanup = await bridge.send('remove_mcp_meters', { trackIndices: '[0]' });
+    expect(cleanup.success).toBe(true);
+    expect(cleanup._page).toBeUndefined();
+  });
+
   it('gives no link when REAPER has no web interface', async () => {
     const bridge = await startBridge(NO_WINDOW, { '/reaper/reaper.ini': '[REAPER]\ncsurf_cnt=0\n' });
     const res = (await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -3 }));
