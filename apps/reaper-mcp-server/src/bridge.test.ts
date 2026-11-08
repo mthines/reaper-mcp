@@ -192,7 +192,10 @@ describe('bridge', () => {
   });
 
   describe('sendCommand while the bridge is down', () => {
-    beforeEach(() => minutesLater());
+    beforeEach(() => {
+      minutesLater();
+      mockedReaddir.mockResolvedValue([] as unknown as Awaited<ReturnType<typeof readdir>>);
+    });
 
     it.each([
       ['never ran', INSTALLED, /Script: mcp_bridge\.lua/],
@@ -271,6 +274,27 @@ describe('bridge', () => {
 
       expect((await render).success).toBe(true);
       expect((await next).success).toBe(true);
+    });
+
+    it('waits behind another session\'s command that REAPER is still running, though the heartbeat is old', async () => {
+      // Another server's render: its command file stays in the bridge folder until REAPER has run it
+      resourceFolder({ 'heartbeat.json': 3 * 60_000, 'command_other-session.json': 3 * 60_000, ...INSTALLED });
+      mockedReaddir.mockResolvedValue(['command_other-session.json', 'heartbeat.json'] as unknown as Awaited<ReturnType<typeof readdir>>);
+      mockedWriteFile.mockResolvedValue(undefined);
+      mockedUnlink.mockResolvedValue(undefined);
+      mockedReadFile.mockResolvedValueOnce(JSON.stringify({ id: 'test-uuid-1234', success: true, data: {}, timestamp: Date.now() }));
+
+      expect((await sendCommand('get_project_info')).success).toBe(true);
+    });
+
+    it('ignores a command file left behind long ago', async () => {
+      resourceFolder({ 'heartbeat.json': 60 * 60_000, 'command_crashed.json': 20 * 60_000, ...INSTALLED });
+      mockedReaddir.mockResolvedValue(['command_crashed.json', 'heartbeat.json'] as unknown as Awaited<ReturnType<typeof readdir>>);
+
+      const result = await sendCommand('get_project_info');
+
+      expect(classifyBridgeError(result.error)).toBe('bridge_not_running');
+      expect(mockedWriteFile).not.toHaveBeenCalled();
     });
 
     it('sends a command right after REAPER answered, though the heartbeat has not caught up, until a minute passes', async () => {

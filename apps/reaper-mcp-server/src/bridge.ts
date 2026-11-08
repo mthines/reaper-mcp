@@ -222,7 +222,30 @@ async function bridgeDown(): Promise<BridgeStatus | undefined> {
   const status = await getBridgeState();
   if (status.state === 'connected') return undefined;
   if (status.state === 'stale' && (status.heartbeatAgeMs ?? 0) < BRIDGE_DOWN_AFTER_MS) return undefined;
+  if (status.state === 'stale' && (await otherCommandPending())) return undefined;
   return status;
+}
+
+/** Longer than any render (offline analysis renders up to 900 s of audio): an older command file is a leftover. */
+const PENDING_COMMAND_MAX_AGE_MS = 15 * 60_000;
+
+/**
+ * Whether another server's command is still waiting in the bridge folder. Every Claude Code session runs
+ * its own server against the one bridge, which deletes a command file only after running it, so one here
+ * means REAPER may be busy with another session's render rather than closed.
+ */
+async function otherCommandPending(): Promise<boolean> {
+  const dir = getBridgeDir();
+  try {
+    for (const file of await readdir(dir)) {
+      if (!file.startsWith('command_') || !file.endsWith('.json')) continue;
+      const info = await stat(join(dir, file)).catch(() => null);
+      if (info && Date.now() - info.mtimeMs < PENDING_COMMAND_MAX_AGE_MS) return true;
+    }
+  } catch {
+    // No readable bridge folder: nothing pending
+  }
+  return false;
 }
 
 /**
