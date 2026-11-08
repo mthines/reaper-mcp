@@ -2026,7 +2026,20 @@ end
 -- Tries to place inside an "MCP Meters" FX Container (REAPER 7.06+).
 -- Falls back to direct insertion on older REAPER versions.
 -- Returns the FX index (possibly container-addressed) on success, or nil + error.
+-- The JSFX live in Effects/reaper-mcp/ when `reaper-mcp setup` installed them and in
+-- Effects/reaper-mcp/Meters/ when ReaPack did (it adds the package's category as a folder).
+local function resolve_jsfx_name(fx_name)
+  local base = fx_name:match("^reaper%-mcp/(.+)$")
+  if not base then return fx_name end
+  local fx_dir = reaper.GetResourcePath() .. "/Effects/reaper-mcp/"
+  if file_exists(fx_dir .. base .. ".jsfx") then return fx_name end
+  if file_exists(fx_dir .. "Meters/" .. base .. ".jsfx") then return "reaper-mcp/Meters/" .. base end
+  return fx_name
+end
+
 function ensure_jsfx_on_track(track, fx_name)
+  local logical_name = fx_name
+  fx_name = resolve_jsfx_name(fx_name)
   -- REAPER names a JSFX "JS: <desc> [<path>]" but leaves the path out for some
   -- (seen live: the MIDI emitter is just "JS: MCP MIDI Emitter"), so match either.
   local desc = ({
@@ -2035,7 +2048,7 @@ function ensure_jsfx_on_track(track, fx_name)
     ["reaper-mcp/mcp_correlation_meter"] = "JS: MCP Correlation Meter",
     ["reaper-mcp/mcp_crest_factor"] = "JS: MCP Crest Factor Meter",
     ["reaper-mcp/mcp_midi_emitter"] = "JS: MCP MIDI Emitter",
-  })[fx_name]
+  })[logical_name]
   local function is_it(name)
     return name and (name:find(fx_name, 1, true) or (desc and name:find(desc, 1, true) == 1))
   end
@@ -4702,7 +4715,7 @@ local function check_health(now)
   local fx_dir = reaper.GetResourcePath() .. "/Effects/reaper-mcp/"
   local missing = {}
   for _, f in ipairs(JSFX_FILES) do
-    if not file_exists(fx_dir .. f) then missing[#missing + 1] = f end
+    if not file_exists(fx_dir .. f) and not file_exists(fx_dir .. "Meters/" .. f) then missing[#missing + 1] = f end
   end
   local installed = script_path and read_file(script_path)
   local next_health = {

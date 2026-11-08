@@ -141,6 +141,7 @@ reaper-mcp/
                               # Plugin knowledge + process lessons live in LoreKit, scope project::reaper-mcp
 
   scripts/
+    reapack-index.mjs         # Generate the ReaPack index.xml (bridge scripts, JSFX, status page) from reaper/; the release job attaches it to the GitHub release (releases/latest/download/index.xml). ReaPack puts JSFX in Effects/reaper-mcp/Meters/ and scripts in Scripts/reaper-mcp/MCP Bridge/, so the bridge resolves JSFX in both folders and the autostart block falls back to that script path
     prepare-npm-package.mjs   # Assemble the npm package in dist/apps/reaper-mcp-server (the root README with its install section swapped for `apps/reaper-mcp-server/NPM_INSTALL.md` and absolute image/link URLs via `src/npm-readme.mjs`, LICENSE, status page, version); run by the release job
     sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (clone install; an npm install copies them with `install-skills`)
     ext-call.mjs              # Call any tool on a fresh `reaper-mcp serve` (so a new extension can be tried without restarting Claude Code): --list [prefix] | <tool> [json]
