@@ -1,11 +1,12 @@
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error plain .mjs script
-import { buildIndex, listAssets } from '../../../scripts/reapack-index.mjs';
+// @ts-expect-error plain .mjs module
+import { buildIndex, listAssets } from './reapack-index.mjs';
 import { BRIDGE_UI_FILE, REAPER_ASSETS } from './cli.js';
 
 const urlFor = (kind: string, file: string) => `https://example.test/${kind}/${file}`;
-const index = buildIndex({ version: '1.2.3', urlFor, time: '2026-01-01T00:00:00Z' }) as string;
+const assets = listAssets(join(__dirname, '../../../reaper'));
+const index = buildIndex({ version: '1.2.3', urlFor, time: '2026-01-01T00:00:00Z', assets }) as string;
 const sources = [...index.matchAll(/<source file="([^"]+)"/g)].map((m) => m[1]);
 
 describe('the ReaPack index', () => {
@@ -24,12 +25,11 @@ describe('the ReaPack index', () => {
   });
 
   it('puts every file of reaper/ that REAPER loads in the index, so a new library cannot be forgotten', () => {
-    const { scripts, effects } = listAssets(join(__dirname, '../../../reaper'));
-    for (const f of [...scripts, ...effects]) expect(sources).toContain(f);
+    for (const f of [...assets.scripts, ...assets.effects]) expect(sources).toContain(f);
   });
 
   it('is well-formed: one root, escaped URLs', () => {
-    const escaped = buildIndex({ version: '1', urlFor: () => 'https://x.test/a?b=1&c=2', time: 'T' }) as string;
+    const escaped = buildIndex({ version: '1', urlFor: () => 'https://x.test/a?b=1&c=2', time: 'T', assets }) as string;
     expect(escaped).toContain('a?b=1&amp;c=2');
     expect(escaped.startsWith('<?xml')).toBe(true);
   });

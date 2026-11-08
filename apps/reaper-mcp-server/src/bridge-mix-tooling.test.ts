@@ -251,8 +251,12 @@ const FAKE_CONTAINER = `
   container_cache = {}
   items = {}
   inserts = 0
+  added = {}
+  files = { ["/r/Effects/reaper-mcp/mcp_midi_emitter.jsfx"] = true, ["/r/Effects/reaper-mcp/mcp_lufs_meter.jsfx"] = true }
+  file_exists = function(path) return files[path] == true end
   find_or_create_mcp_container = function() return 0 end
   reaper = {
+    GetResourcePath = function() return "/r" end,
     TrackFX_GetEnabled = function() return true end,
     TrackFX_GetCount = function() return 1 end,
     TrackFX_GetNamedConfigParm = function(_, _, key)
@@ -263,6 +267,7 @@ const FAKE_CONTAINER = `
     TrackFX_GetFXName = function(_, addr) return true, items[addr - 1000 + 1] end,
     TrackFX_AddByName = function(_, name)
       inserts = inserts + 1
+      added[#added + 1] = name
       items[#items + 1] = name:find("emitter") and "JS: MCP MIDI Emitter"
         or "JS: MCP LUFS Meter [reaper-mcp/mcp_lufs_meter.jsfx]"
       return 5
@@ -285,6 +290,23 @@ describe('ensure_jsfx_on_track', () => {
       local a, err = ensure_jsfx_on_track("T0", "reaper-mcp/mcp_lufs_meter")
       assert(a == 1001, tostring(a) .. " " .. tostring(err))
       assert(ensure_jsfx_on_track("T0", "reaper-mcp/mcp_lufs_meter") == 1001 and inserts == 1)
+    `);
+  });
+});
+
+describe('ensure_jsfx_on_track with the JSFX installed by ReaPack', () => {
+  it('inserts the meter from the Meters folder ReaPack puts the package in', async () => {
+    await run(FAKE_CONTAINER + 'files = { ["/r/Effects/reaper-mcp/Meters/mcp_lufs_meter.jsfx"] = true }', fn('ensure_jsfx_on_track'), `
+      local a, err = ensure_jsfx_on_track("T0", "reaper-mcp/mcp_lufs_meter")
+      assert(a == 1000, tostring(a) .. " " .. tostring(err))
+      assert(added[1] == "reaper-mcp/Meters/mcp_lufs_meter", added[1])
+    `);
+  });
+
+  it('keeps the plain folder when setup installed the JSFX there', async () => {
+    await run(FAKE_CONTAINER, fn('ensure_jsfx_on_track'), `
+      assert(ensure_jsfx_on_track("T0", "reaper-mcp/mcp_lufs_meter") == 1000)
+      assert(added[1] == "reaper-mcp/mcp_lufs_meter", added[1])
     `);
   });
 });
