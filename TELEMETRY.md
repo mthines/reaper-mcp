@@ -40,6 +40,8 @@ For each tool call:
 - reaper-mcp version, OS type and version, Node.js version
 - a random install id (`~/.reaper-mcp/install-id`), so one person's calls can be grouped without knowing who they are
 
+Once per server start, whether an MCP client (your agent) connected to it — just that it did, not which client. A server started with no agent attached, by a script or a package scanner, is not counted as someone using reaper-mcp.
+
 Plus periodic health numbers for the REAPER bridge, such as whether it's running and how fast its loop runs, and whether the bridge answered at startup and, if not, which setup step is missing: REAPER not found, bridge not installed, never started, or stopped (one of those words, never a path). The same word is attached to any tool call refused because the bridge wasn't running.
 
 ## What is never sent

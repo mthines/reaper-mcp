@@ -6,7 +6,7 @@ import { createServer } from './server.js';
 import { checkExtensions, loadExtensions } from './extensions.js';
 import { extensionCommand } from './extension-cli.js';
 import { ensureBridgeDir, isBridgeRunning, getBridgeState, bridgeDownMessage, cleanupStaleFiles, readBridgeEvents, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
-import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges, emitLog, exceptionAttributes, readServiceVersion, reportConsentChange } from './telemetry.js';
+import { initTelemetry, shutdownTelemetry, getTracer, recordClientConnected, registerBridgeGauges, emitLog, exceptionAttributes, readServiceVersion, reportConsentChange } from './telemetry.js';
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -534,7 +534,10 @@ async function serve(): Promise<void> {
       const transport = new StdioServerTransport();
 
       await server.connect(transport);
-      server.server.oninitialized = () => setSessionClient(server.server.getClientVersion()?.name);
+      server.server.oninitialized = () => {
+        setSessionClient(server.server.getClientVersion()?.name);
+        recordClientConnected();
+      };
       startSessionPing();
       startupSpan.setStatus({ code: SpanStatusCode.OK });
       log('MCP server connected via stdio');

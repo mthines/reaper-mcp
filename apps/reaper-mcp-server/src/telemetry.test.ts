@@ -4,8 +4,10 @@ import { createServer, type IncomingHttpHeaders } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { SpanKind } from '@opentelemetry/api';
 import { core, tracing } from '@opentelemetry/sdk-node';
-import { readInstallId, reportConsentChange } from './telemetry.js';
+import { CLIENT_CONNECTED_SPAN, readInstallId, recordClientConnected, reportConsentChange } from './telemetry.js';
+import { AnonymizingSpanExporter } from './telemetry-consent.js';
 
 describe('readInstallId', () => {
   it('creates an id on first run and returns the same one after', () => {
@@ -24,6 +26,25 @@ describe('readInstallId', () => {
 
   it('returns undefined instead of throwing when the dir is unwritable', () => {
     expect(readInstallId('/dev/null/not-a-dir')).toBeUndefined();
+  });
+});
+
+describe('recordClientConnected', () => {
+  it('sends one INTERNAL span that usage telemetry keeps, so a launch with an agent attached can be told apart', () => {
+    const memory = new tracing.InMemorySpanExporter();
+    const provider = new tracing.BasicTracerProvider({
+      spanProcessors: [new tracing.SimpleSpanProcessor(new AnonymizingSpanExporter(memory))],
+    });
+
+    recordClientConnected(provider.getTracer('test'));
+
+    const spans = memory.getFinishedSpans();
+    expect(spans).toHaveLength(1);
+    const [span] = spans;
+    expect(span.name).toBe(CLIENT_CONNECTED_SPAN);
+    // Not SERVER: usage queries count SERVER spans as tool calls
+    expect(span.kind).toBe(SpanKind.INTERNAL);
+    expect(span.attributes).toEqual({ 'mcp.method.name': 'notifications/initialized' });
   });
 });
 
