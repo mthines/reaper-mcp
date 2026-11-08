@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import type { Check } from './doctor-report.js';
 
 /** Resolve asset path — checks sibling, parent, and walks up to repo root for dev/source usage */
 export function resolveAssetDir(baseDir: string, name: string): string {
@@ -241,6 +242,53 @@ export function ensureBridgeAutostart(startup: string): { text: string; changed:
     text = block + eol + eol + startup;
   }
   return { text, changed: text !== startup };
+}
+
+/**
+ * One value from the text of REAPER's reaper-extstate.ini, where persistent ExtState lives
+ * (`[Section]` headers, `key=value` lines). Undefined when the section or key is not there.
+ */
+export function readExtState(ini: string, section: string, key: string): string | undefined {
+  let inSection = false;
+  for (const line of ini.split(/\r?\n/)) {
+    const header = /^\s*\[(.*)\]\s*$/.exec(line);
+    if (header) {
+      inSection = header[1] === section;
+    } else if (inSection) {
+      const eq = line.indexOf('=');
+      if (eq !== -1 && line.slice(0, eq).trim() === key) return line.slice(eq + 1).trim();
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The doctor's "Start with REAPER" row: whether REAPER's Scripts/__startup.lua holds the block setup
+ * writes, and whether the bridge window's setting turned it off (MCPBridge/cfg_autostart "0" in
+ * reaper-extstate.ini). A missing block is a warning, never a failure: the bridge still works when
+ * started by hand. REAPER keeps persistent ExtState in memory and saves the file itself, so while it
+ * runs the file can lag a change made in the bridge window; the row says so then.
+ */
+export function autostartCheck(startup: string | null, extstate: string | null, reaperRunning: boolean): Check {
+  const label = 'Start with REAPER';
+  if (startup === null || !startup.includes(AUTOSTART_MARKER)) {
+    return {
+      label,
+      status: 'warn',
+      detail: 'Not in REAPER\'s Scripts/__startup.lua: run mcp_bridge.lua by hand in each REAPER session',
+      fix: 'reaper-mcp setup',
+    };
+  }
+  const saved = reaperRunning ? ' (as REAPER last saved it)' : '';
+  if (extstate !== null && readExtState(extstate, 'MCPBridge', 'cfg_autostart') === '0') {
+    return {
+      label,
+      status: 'info',
+      detail: `Off in the bridge window${saved}: run mcp_bridge.lua by hand in each REAPER session`,
+      fix: 'turn it back on in the bridge window: Settings → Start with REAPER',
+    };
+  }
+  return { label, status: 'ok', detail: `On · REAPER's startup script runs the bridge at launch${saved}` };
 }
 
 /** All MCP tool names registered by the server */

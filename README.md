@@ -230,8 +230,8 @@ breakdown is in [docs/REFERENCE.md](docs/REFERENCE.md#installation).
 
 <br>
 
-- **Run `npm run doctor`** in the `reaper-mcp` folder. It checks the bridge, the
-  knowledge and the Claude Code config.
+- **Run `npm run doctor`** in the `reaper-mcp` folder. It checks the bridge, whether it
+  starts with REAPER, the knowledge and the Claude Code config.
 - **Is the bridge running?** The status window shows 🟢 when it is. If not, run
   `mcp_bridge.lua` again from REAPER's action list.
 - **Claude Code doesn't see REAPER?** Install Claude Code first, then run

@@ -92,7 +92,8 @@ launch, so the bridge starts with REAPER: start or restart REAPER after setup. T
 `mcp_bridge.lua` as its own action, so running it from the Action List still stops it. Turn it
 off in the bridge window under **Settings → Start with REAPER** (persistent ExtState
 `MCPBridge/cfg_autostart`); the block stays and skips the bridge. To remove it, delete the lines
-between `-- reaper-mcp: start the bridge with REAPER (begin)` and `(end)`.
+between `-- reaper-mcp: start the bridge with REAPER (begin)` and `(end)`. `reaper-mcp doctor`
+shows whether the block is there and whether the setting is off (its **Start with REAPER** row).
 
 To start it by hand instead (REAPER already open):
 

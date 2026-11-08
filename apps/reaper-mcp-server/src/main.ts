@@ -14,7 +14,7 @@ import { homedir, platform } from 'node:os';
 import { exec as execCb, execFileSync } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
 import { installClaudeAssets } from './claude-assets.js';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, autostartCheck, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
 import { detectInstalled, setupSidecar } from './setup-sidecar.js';
 import { firstRunTelemetryNotice, resolveTelemetry, saveTelemetryChoice, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
@@ -330,6 +330,15 @@ async function doctor(): Promise<void> {
       ? { label: 'Lua bridge', status: 'ok', detail: 'Connected' }
       : { label: 'Lua bridge', status: 'fail', detail: 'Not detected', fix: 'reaper-mcp setup, then run mcp_bridge.lua in REAPER' },
   );
+
+  // Whether the bridge starts with REAPER: the block setup writes into Scripts/__startup.lua, and the
+  // bridge window's Start with REAPER setting (persistent ExtState, saved in reaper-extstate.ini)
+  const readIfExists = (path: string) => (existsSync(path) ? readFileSync(path, 'utf-8') : null);
+  core.push(autostartCheck(
+    readIfExists(join(getReaperScriptsPath(), '__startup.lua')),
+    readIfExists(join(getReaperResourcePath(), 'reaper-extstate.ini')),
+    await isReaperRunning(),
+  ));
 
   const globalClaudeDir = join(homedir(), '.claude');
   const localSkills = existsSync(join(process.cwd(), '.claude', 'skills', 'mixer', 'SKILL.md'));
