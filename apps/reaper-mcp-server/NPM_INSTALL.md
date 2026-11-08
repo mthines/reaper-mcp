@@ -25,11 +25,15 @@ reaper-mcp init      # connects Claude Code and adds the mix skills
 That's it. No clone, no build. To update later, run `npm install -g @mthines/reaper-mcp` again,
 then `reaper-mcp setup`. The bridge window in REAPER also shows an **Update** notice.
 
-### 3 · Click Run in REAPER
+### 3 · Start REAPER
 
-In REAPER: **Actions → Show action list → Load ReaScript…**, pick **`mcp_bridge.lua`**
-and click **Run**. A small status window opens, showing the bridge is live. 🟢
-Running it again stops the bridge.
+Start REAPER, or restart it if it was open: `reaper-mcp setup` added the bridge to REAPER's
+startup script, so it starts with REAPER. A small status window opens, showing the bridge
+is live. 🟢 Don't want it starting on its own? Turn off **Settings → Start with REAPER** in
+that window.
+
+Rather not restart? **Actions → Show action list → Load ReaScript…**, pick **`mcp_bridge.lua`**
+and click **Run**. Running it again stops the bridge.
 
 **Now open Claude Code in any folder (your song folder is perfect) and start mixing:**
 
@@ -42,7 +46,7 @@ Running it again stops the bridge.
 
 <br>
 
-- **Run `reaper-mcp doctor`.** It checks the bridge, the skills and the Claude Code config, and says how to fix what's off.
+- **Run `reaper-mcp doctor`.** It checks the bridge, whether it starts with REAPER, the skills and the Claude Code config, and says how to fix what's off.
 - **Is the bridge running?** The status window shows 🟢 when it is. If not, run `mcp_bridge.lua` again from REAPER's action list.
 - **Claude Code doesn't see REAPER?** Install Claude Code first, then run `reaper-mcp init` again.
 - **Missing skills?** `reaper-mcp install-skills` copies them into `~/.claude` (it never overwrites files you edited).

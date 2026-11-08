@@ -1005,9 +1005,13 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
 - Settings the page writes via `/_/SET/EXTSTATE[PERSIST]/MCPBridge/<key>/<0|1>`, echoed back in `status.settings`:
   `cfg_paused` (in-memory: every non-`_` command fails until resumed or REAPER restarts), `cfg_readonly` (persistent:
   only `get_`/`list_`/`read_`/`analyze_`/`search_`/`measure_` + transport/navigation pass — `readonly_allows()`,
-  mirrored by `commandKind()` in `src/lib/commands.ts`), `cfg_open_on_start` (persistent, overrides `OPEN_UI_ON_START`).
+  mirrored by `commandKind()` in `src/lib/commands.ts`), `cfg_open_on_start` (persistent, overrides `OPEN_UI_ON_START`),
+  `cfg_autostart` (persistent, default on: read at REAPER's launch by the block `setup` writes at the top of
+  `Scripts/__startup.lua` — `AUTOSTART_BLOCK` / `ensureBridgeAutostart()` in `cli.ts` — which runs `mcp_bridge.lua` as its own
+  action unless it is `"0"`; the bridge only echoes it as `settings.autostart`).
   Desktop error notifications are page-side (Notification API + localStorage).
-- `status.health` (re-checked every 10s): SWS present, JSFX installed in `Effects/reaper-mcp/`, and `outdated` when the
+- `status.health` (re-checked every 10s): SWS present, JSFX installed in `Effects/reaper-mcp/`, `autostart` when
+  `Scripts/__startup.lua` holds the startup block (the Settings toggle explains how to add it when not), and `outdated` when the
   installed `mcp_bridge.lua` differs from the running copy (setup ran; restart the script). Tested in wasmoon by
   `bridge-status.test.ts`.
 - One-click update and restart (`status.control`): the page checks GitHub's latest release (cached 6h in

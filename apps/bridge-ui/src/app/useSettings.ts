@@ -7,6 +7,7 @@ const SETTING_FIELD: Record<SettingKey, keyof BridgeSettings> = {
   cfg_readonly: 'readonly',
   cfg_open_on_start: 'openOnStart',
   cfg_dev: 'dev',
+  cfg_autostart: 'autostart',
 };
 
 /**
@@ -18,7 +19,7 @@ export function useSettings(status: BridgeStatus | null): [BridgeSettings | null
   const echoed = status?.settings ?? null;
 
   // Each new echo drops the clicks the bridge has confirmed (adjusted while rendering, as React suggests)
-  const echoedKey = echoed && `${echoed.paused}/${echoed.readonly}/${echoed.openOnStart}/${echoed.dev}`;
+  const echoedKey = echoed && `${echoed.paused}/${echoed.readonly}/${echoed.openOnStart}/${echoed.dev}/${echoed.autostart}`;
   const [seenEcho, setSeenEcho] = useState(echoedKey);
   if (echoed && echoedKey !== seenEcho) {
     setSeenEcho(echoedKey);

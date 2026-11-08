@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { LuaFactory } from 'wasmoon';
+import { renderDoctor } from './doctor-report.js';
 import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureWebInterface, ensureSnapshotActions, findCloneRoot, isDevClone, updateConfigText, REAPER_ASSETS, RETIRED_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, autostartCheck, readExtState, findCloneRoot, isDevClone, updateConfigText, REAPER_ASSETS, RETIRED_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `reaper-mcp-test-${randomUUID()}`);
@@ -379,5 +381,135 @@ describe('ensureSnapshotActions', () => {
 
   it('creates the file for a REAPER that has no custom actions yet', () => {
     expect(ensureSnapshotActions('').kb.split('\n').filter(Boolean)).toHaveLength(3);
+  });
+});
+
+describe('ensureBridgeAutostart', () => {
+  it('writes the block into a REAPER that has no startup script yet', () => {
+    const { text, changed } = ensureBridgeAutostart('');
+    expect(changed).toBe(true);
+    expect(text).toContain('-- reaper-mcp: start the bridge with REAPER (begin)');
+    expect(text.endsWith('-- reaper-mcp: start the bridge with REAPER (end)\n')).toBe(true);
+  });
+
+  it('keeps the user\'s own startup code, after the block', () => {
+    const own = 'reaper.Main_OnCommand(40001, 0)\n';
+    const { text } = ensureBridgeAutostart(own);
+    expect(text.endsWith(own)).toBe(true);
+    expect(text.indexOf('(begin)')).toBeLessThan(text.indexOf('40001'));
+  });
+
+  it('changes nothing the second time', () => {
+    const once = ensureBridgeAutostart('-- mine\n').text;
+    expect(ensureBridgeAutostart(once)).toEqual({ text: once, changed: false });
+  });
+
+  it('replaces an older block in place, leaving the code around it', () => {
+    const old = '-- before\n-- reaper-mcp: start the bridge with REAPER (begin)\nold_code()\n-- reaper-mcp: start the bridge with REAPER (end)\n-- after\n';
+    const { text, changed } = ensureBridgeAutostart(old);
+    expect(changed).toBe(true);
+    expect(text).not.toContain('old_code');
+    expect(text.startsWith('-- before\n-- reaper-mcp: start the bridge with REAPER (begin)\n')).toBe(true);
+    expect(text.endsWith('(end)\n-- after\n')).toBe(true);
+  });
+
+  it('keeps Windows line endings', () => {
+    const { text } = ensureBridgeAutostart('-- mine\r\nreturn\r\n');
+    expect(text.split('\r\n').length).toBeGreaterThan(5);
+    expect(text.replace(/\r\n/g, '')).not.toContain('\n');
+  });
+});
+
+describe('the autostart block, run by REAPER at launch (wasmoon)', () => {
+  /** Run a startup script setup wrote, ahead of the user's own (ending in a top-level return), against a fake REAPER. */
+  async function launchReaper({ setting = '', bridgeInstalled = true } = {}) {
+    const lua = await new LuaFactory().createEngine();
+    try {
+      lua.global.set('SETTING', setting);
+      lua.global.set('INSTALLED', bridgeInstalled);
+      await lua.doString(`
+        reaper = {
+          GetResourcePath = function() return "/reaper" end,
+          GetExtState = function(section, key)
+            if section == "MCPBridge" and key == "cfg_autostart" then return SETTING end
+            return ""
+          end,
+          file_exists = function(path) return INSTALLED and path == "/reaper/Scripts/mcp_bridge.lua" end,
+          AddRemoveReaScript = function(add, section, path, commit) registered = path; return 41234 end,
+          Main_OnCommand = function(id) ran = id end,
+        }
+      `);
+      await lua.doString(ensureBridgeAutostart('own_startup_ran = true\nreturn\n').text);
+      return {
+        ran: lua.global.get('ran') as number | null,
+        registered: lua.global.get('registered') as string | null,
+        ownStartupRan: lua.global.get('own_startup_ran') as boolean | null,
+      };
+    } finally {
+      lua.global.close();
+    }
+  }
+
+  it('starts mcp_bridge.lua as its own action, then runs the user\'s startup code', async () => {
+    expect(await launchReaper()).toEqual({ ran: 41234, registered: '/reaper/Scripts/mcp_bridge.lua', ownStartupRan: true });
+  });
+
+  it('leaves the bridge stopped once Start with REAPER is turned off in the bridge window', async () => {
+    expect(await launchReaper({ setting: '0' })).toMatchObject({ ran: null, ownStartupRan: true });
+  });
+
+  it('does nothing when the bridge script is not installed', async () => {
+    expect(await launchReaper({ bridgeInstalled: false })).toMatchObject({ ran: null, registered: null, ownStartupRan: true });
+  });
+});
+
+describe('readExtState', () => {
+  const ini = '[SomeScript]\r\ncfg_autostart=1\r\n[MCPBridge]\r\ncfg_readonly=1\r\ncfg_autostart=0\r\n[Other]\r\nx=y\r\n';
+
+  it('reads a key from its own section only', () => {
+    expect(readExtState(ini, 'MCPBridge', 'cfg_autostart')).toBe('0');
+    expect(readExtState(ini, 'SomeScript', 'cfg_autostart')).toBe('1');
+    expect(readExtState(ini, 'MCPBridge', 'cfg_dev')).toBeUndefined();
+    expect(readExtState('', 'MCPBridge', 'cfg_autostart')).toBeUndefined();
+  });
+});
+
+describe('doctor: Start with REAPER', () => {
+  const startup = ensureBridgeAutostart('-- the user\'s own startup code\n').text;
+  const turnedOff = '[MCPBridge]\ncfg_open_on_start=1\ncfg_autostart=0\n';
+
+  it('is on when REAPER\'s startup script holds the block and the setting was never turned off', () => {
+    expect(autostartCheck(startup, null, false)).toMatchObject({ status: 'ok', detail: expect.stringMatching(/^On/) });
+    expect(autostartCheck(startup, '[MCPBridge]\ncfg_autostart=1\n', false).status).toBe('ok');
+  });
+
+  it('reports the bridge window\'s setting turned off, with how to turn it back on', () => {
+    expect(autostartCheck(startup, turnedOff, false)).toMatchObject({
+      status: 'info',
+      detail: expect.stringMatching(/^Off in the bridge window/),
+      fix: 'turn it back on in the bridge window: Settings → Start with REAPER',
+    });
+  });
+
+  it('ignores the same key saved by another script', () => {
+    expect(autostartCheck(startup, '[SomeScript]\ncfg_autostart=0\n', false).status).toBe('ok');
+  });
+
+  it('warns, with setup as the fix, when the startup script is missing or lacks the block', () => {
+    for (const missing of [null, '-- someone else\'s startup script\n']) {
+      expect(autostartCheck(missing, turnedOff, false)).toMatchObject({ status: 'warn', fix: 'reaper-mcp setup' });
+    }
+  });
+
+  it('says the setting is as REAPER last saved it while REAPER runs', () => {
+    expect(autostartCheck(startup, turnedOff, true).detail).toContain('(as REAPER last saved it)');
+    expect(autostartCheck(startup, turnedOff, false).detail).not.toContain('last saved');
+  });
+
+  it('never makes the doctor report a problem: the bridge still works when started by hand', () => {
+    const out = renderDoctor([{ title: 'Core', checks: [autostartCheck(null, null, false)] }]);
+    expect(out).toContain('! Start with REAPER  Not in REAPER\'s Scripts/__startup.lua');
+    expect(out).toContain('→ reaper-mcp setup');
+    expect(out).toContain('All good.');
   });
 });

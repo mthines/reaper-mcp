@@ -11,6 +11,11 @@ export interface BridgeSettings {
   openOnStart: boolean;
   /** Developer mode: Rebuild & reload instead of release updates. Absent on bridges older than it */
   dev?: boolean;
+  /**
+   * Start with REAPER: the startup block `reaper-mcp setup` writes into Scripts/__startup.lua runs the
+   * bridge at launch unless this is off. Absent on bridges older than it
+   */
+  autostart?: boolean;
 }
 
 export interface BridgeHealth {
@@ -19,6 +24,8 @@ export interface BridgeHealth {
   missingJsfx?: string[];
   /** The installed mcp_bridge.lua changed since this copy started (setup ran): restart it */
   outdated: boolean;
+  /** REAPER's Scripts/__startup.lua holds the block that starts the bridge. Absent on bridges older than it */
+  autostart?: boolean;
 }
 
 /** Sockets REAPER's web server still holds after their client hung up; it stops answering near `limit`. */
@@ -145,7 +152,7 @@ export function liveness(status: BridgeStatus | null, lastChangeAt: number, now:
   return now - lastChangeAt > 3000 ? 'stale' : 'live';
 }
 
-export type SettingKey = 'cfg_paused' | 'cfg_readonly' | 'cfg_open_on_start' | 'cfg_dev';
+export type SettingKey = 'cfg_paused' | 'cfg_readonly' | 'cfg_open_on_start' | 'cfg_dev' | 'cfg_autostart';
 
 /**
  * Write one setting through the web interface. Pause is in-memory (clears when REAPER restarts so

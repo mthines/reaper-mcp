@@ -20,7 +20,7 @@ not_collected:
 events:
   settings_opened: {}
   setting_changed:
-    setting: [paused, readonly, open_on_start, dev, error_notifications, usage_stats]
+    setting: [paused, readonly, open_on_start, dev, autostart, error_notifications, usage_stats]
     enabled: boolean
     source: [settings, notice]
   app_install_clicked:
