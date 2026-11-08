@@ -27,8 +27,8 @@ interface ToolResult {
 
 /** The tool's reply with the last write's page link added as its own text block; unchanged on an error or no write. */
 export function withPageLink<T>(result: T, links: string[]): T {
-  const res = result as ToolResult | undefined;
+  const reply = result as ToolResult | undefined;
   const last = links[links.length - 1];
-  if (!last || !res || res.isError || !Array.isArray(res.content)) return result;
-  return { ...res, content: [...res.content, { type: 'text', text: `Bridge page (before/after view): ${last}` }] } as T;
+  if (!last || !reply || reply.isError || !Array.isArray(reply.content)) return result;
+  return { ...reply, content: [...reply.content, { type: 'text', text: `Bridge page (before/after view): ${last}` }] } as T;
 }
