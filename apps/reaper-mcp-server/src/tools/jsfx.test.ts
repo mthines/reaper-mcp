@@ -121,6 +121,12 @@ describe('write_jsfx', () => {
     expect(r.isError).toBeUndefined();
   });
 
+  it('does not call an unchanged slider breaking when its option labels repeat', async () => {
+    const choice = SRC('slider2:0<0,3,1{Off,,On,}>Mode\n').replace('ui_end();', 'ui_choice(2, "Mode"); ui_end();');
+    await call({ name: 'Repeat', source: choice });
+    expect((await call({ name: 'Repeat', source: choice, overwrite: true })).isError).toBeUndefined();
+  });
+
   it('refuses a name with no letters or digits', async () => {
     expect((await call({ name: '!!!', source: SRC() })).isError).toBe(true);
   });

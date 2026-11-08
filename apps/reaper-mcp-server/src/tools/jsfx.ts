@@ -106,7 +106,7 @@ export function breakingChanges(before: SliderSpec[], after: SliderSpec[]): stri
   for (const old of before) {
     const now = after.find((s) => s.index === old.index);
     if (!now) out.push(`slider${old.index} "${old.name}" was removed`);
-    else if (now.min !== old.min || now.max !== old.max || now.step !== old.step || now.options.length !== old.options.length || old.options.some((o, i) => now.options.includes(o) && now.options.indexOf(o) !== i)) {
+    else if (now.min !== old.min || now.max !== old.max || now.step !== old.step || now.options.length !== old.options.length || old.options.some((o, i) => now.options[i] !== o && now.options.includes(o))) {
       out.push(`slider${old.index} "${old.name}" changed range, step or options`);
     }
   }
