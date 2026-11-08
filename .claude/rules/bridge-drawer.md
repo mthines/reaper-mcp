@@ -73,6 +73,13 @@ changed?" in their words, before anything technical. Every tool follows the same
 - **Zoom only along project time**: views already scoped to the change's own window (Envelope, Lanes zoomed to
   their takes, Stretch inside one item) get no switch.
 
+## Every tool gets a card
+
+Even a simple read or write draws something: readouts, a row, a state. A drawer with only the summary sentence and
+"No params" is a gap, not a finished tool. A new command ships with its card (summary in `mcp_edit_views_lib.lua`,
+kind in `edit-views.ts`, view, story, example), and the drawer fails review without one. Commands that still have no
+card: run an audit against `EDIT_VIEW_COMMANDS` + `MEASURED_COMMANDS` and close the list as you touch each area.
+
 ## Adding a tool
 
 `TOOLS` and `DEMO_CALLS` are `Record<LoggedCommand, …>`: a new command fails typecheck until it has a title, a

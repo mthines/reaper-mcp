@@ -9,7 +9,7 @@ import type { LoggedCommand } from '@reaper-mcp/protocol';
  */
 export const DEMO_CALLS: Record<LoggedCommand, Record<string, unknown> | 'example'> = {
   // Project & tracks
-  get_project_info: {},
+  get_project_info: 'example',
   list_tracks: 'example',
   get_track_properties: 'example',
   set_track_property: 'example',
@@ -35,7 +35,7 @@ export const DEMO_CALLS: Record<LoggedCommand, Record<string, unknown> | 'exampl
   play: {},
   stop: {},
   record: {},
-  get_transport_state: {},
+  get_transport_state: 'example',
   set_cursor_position: 'example',
   // MIDI
   create_midi_item: { trackIndex: 7, startPosition: 32, endPosition: 40 },
@@ -171,7 +171,7 @@ export const DEMO_CALLS: Record<LoggedCommand, Record<string, unknown> | 'exampl
   set_render_settings: { format: 'wav', bitDepth: 24, bounds: 'project', secondaryFormat: 'none' },
   render_project: 'example',
   render_versions: 'example',
-  get_project_settings: {},
+  get_project_settings: 'example',
   set_project_settings: { title: 'Midnight Drive', author: 'You' },
   // Items & takes
   insert_audio_file: 'example',

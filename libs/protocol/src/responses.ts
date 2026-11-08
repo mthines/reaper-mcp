@@ -24,6 +24,7 @@ export interface ProjectInfo {
   sampleRate: number;
   isPlaying: boolean;
   isRecording: boolean;
+  isPaused?: boolean;
   cursorPosition: number;
 }
 

@@ -180,7 +180,7 @@ describe('measurement results in the log', () => {
   it('keeps meter readings, rounded, and nothing for other commands', async () => {
     const bridge = await startBridge('api.Track_GetPeakInfo = function(_, ch) return ch == 0 and 0.5 or 0.25 end');
     await bridge.send('read_track_meters', { trackIndex: 0 });
-    await bridge.send('get_project_info', {});
+    await bridge.send('stop', {});
     const { recent } = await bridge.status();
     expect(recent[1].r).toEqual({ peakL: -6.02, peakR: -12.04, rmsL: -9.03, rmsR: -15.05 });
     expect(recent[0].r).toBeUndefined();
@@ -448,6 +448,24 @@ const POOLED_ENVELOPE = `${VOLUME_ENVELOPE}
 `;
 
 describe('edit views in the log', () => {
+  it('keeps what a project read answered: tempo, time signature, sample rate and the transport state', async () => {
+    const bridge = await startBridge('');
+    expect((await bridge.send('get_project_info', {})).success).toBe(true);
+    const { r } = (await bridge.status()).recent[0];
+    expect(r).toMatchObject({ tempo: expect.any(Number), ts: [expect.any(Number), expect.any(Number)], sr: expect.any(Number), state: 0 });
+    expect((await bridge.send('get_transport_state', {})).success).toBe(true);
+    expect((await bridge.status()).recent[0].r).toMatchObject({ state: 0 });
+  });
+
+  it('shows the project file name, not its path, and a paused project as paused', async () => {
+    const bridge = await startBridge(`
+      api.EnumProjects = function() return 0, "/Users/me/Music/Midnight Drive.rpp" end
+      api.GetPlayState = function() return 2 end
+    `);
+    expect((await bridge.send('get_project_info', {})).success).toBe(true);
+    expect((await bridge.status()).recent[0].r).toMatchObject({ name: 'Midnight Drive.rpp', state: 2 });
+  });
+
   it('shows a record change per track with the input, monitoring and mode before it', async () => {
     const bridge = await startBridge(`
       api.GetNumAudioInputs = function() return 8 end

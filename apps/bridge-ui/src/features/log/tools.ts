@@ -59,6 +59,11 @@ function readMeters(e: CommandEntry, { previous, now }: { previous?: CommandEntr
   return `read the levels on ${targetOf(e) ?? 'a track'}: peaks at ${fmt(peak)} dB, RMS ${fmt(rms)} dB${verdict}${since}`;
 }
 
+/** The project read the bridge recorded for a call, if it carries one */
+const projectOf = (e: CommandEntry) => {
+  const v = editViewOf(e);
+  return v?.kind === 'project' ? v : null;
+};
 const sources = (r: { lfo?: unknown; acs?: unknown; link?: unknown }) =>
   [r.lfo && 'an LFO', r.acs && 'an audio follower', r.link && 'a parameter link'].filter(Boolean) as string[];
 const list = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
@@ -186,7 +191,15 @@ const lufs = (v: number | undefined) => (v === undefined ? null : `${signed(v, 1
 /** One entry per command the log can show: a new command fails typecheck until it has a title and a sentence */
 export const TOOLS: Record<LoggedCommand, ToolInfo> = {
   // Project & tracks
-  get_project_info: { title: 'Read the project info', did: () => 'read the project’s tempo, time signature and sample rate' },
+  get_project_info: {
+    title: 'Read the project info',
+    did: (e) => {
+      const v = projectOf(e);
+      if (!v?.tempo || !v.ts) return 'read the project’s tempo, time signature and sample rate';
+      const rate = v.sr ? ` at ${+(v.sr / 1000).toFixed(2)} kHz` : '';
+      return `read the project info: ${+v.tempo.toFixed(2)} BPM in ${v.ts[0]}/${v.ts[1]}${rate}${v.tracks !== undefined ? `, ${v.tracks} ${v.tracks === 1 ? 'track' : 'tracks'}` : ''}`;
+    },
+  },
   list_tracks: {
     title: 'List the tracks',
     did: (e) => {
@@ -293,7 +306,15 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
   play: { title: 'Start playback', did: () => 'started playback' },
   stop: { title: 'Stop playback', did: () => 'stopped playback' },
   record: { title: 'Start recording', did: () => 'started recording on the armed tracks' },
-  get_transport_state: { title: 'Read the transport', did: () => 'checked whether REAPER is playing and where the cursor is' },
+  get_transport_state: {
+    title: 'Read the transport',
+    did: (e) => {
+      const v = projectOf(e);
+      if (!v || v.state === undefined) return 'checked whether REAPER is playing and where the cursor is';
+      const word = ['stopped', 'playing', 'paused', 'recording'][v.state];
+      return `checked the transport: REAPER is ${word}${v.cur !== undefined ? `, the cursor at ${time(v.cur)}` : ''}`;
+    },
+  },
   set_cursor_position: { title: 'Move the edit cursor', did: (e) => (num(paramsOf(e).position) === undefined ? null : `moved the edit cursor to ${time(num(paramsOf(e).position) as number)}`) },
   // MIDI
   create_midi_item: { title: 'Create a MIDI item', did: (e) => `created an empty MIDI item on ${on(e)}${between(paramsOf(e).startPosition, paramsOf(e).endPosition)}` },
@@ -804,7 +825,13 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
       return `rendered ${countOf(paramsOf(e).versions, 'version', v?.kind === 'render' ? plural(v.groups.length, 'version') : 'several versions')} of the mix`;
     },
   },
-  get_project_settings: { title: 'Read the project settings', did: () => 'read the project settings' },
+  get_project_settings: {
+    title: 'Read the project settings',
+    did: (e) => {
+      const v = projectOf(e);
+      return v?.sr ? `read the project settings: ${+(v.sr / 1000).toFixed(2)} kHz${v.title ? `, titled ${quoted(v.title)}` : ''}` : 'read the project settings';
+    },
+  },
   set_project_settings: {
     title: 'Change the project settings',
     did: (e) => {

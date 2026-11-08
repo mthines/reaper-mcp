@@ -574,6 +574,7 @@ function handlers.get_project_info(params)
     sampleRate = sr,
     isPlaying = (play_state & 1) ~= 0,
     isRecording = (play_state & 4) ~= 0,
+    isPaused = (play_state & 2) ~= 0,
     cursorPosition = cursor_pos,
   }
 end

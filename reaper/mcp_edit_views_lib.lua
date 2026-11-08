@@ -1345,6 +1345,39 @@ local function lane_view(params, data, before)
   return r
 end
 
+-- Project and transport reads: whichever of these the handler answered (get_project_info, get_transport_state,
+-- get_project_settings), as one flat record. state: 0 stopped, 1 playing, 2 paused, 3 recording
+local PROJECT_COMMANDS = { get_project_info = true, get_transport_state = true, get_project_settings = true }
+local function project_view(data)
+  if type(data) ~= "table" then return nil end
+  local r = {}
+  local function text(k, v) if type(v) == "string" then r[k] = v end end
+  -- get_project_info's name is the full .rpp path; the card shows the file name
+  text("name", type(data.name) == "string" and (data.name:match("[^/\\]+$") or "") or nil)
+  text("title", data.title); text("author", data.author)
+  r.tracks = type(data.trackCount) == "number" and data.trackCount or nil
+  r.tempo = round2(data.tempo)
+  if type(data.timeSignatureNumerator) == "number" and type(data.timeSignatureDenominator) == "number" then
+    r.ts = { data.timeSignatureNumerator, data.timeSignatureDenominator }
+  end
+  r.sr = type(data.sampleRate) == "number" and math.floor(data.sampleRate) or nil
+  if data.useProjectSampleRate ~= nil then r.forced = data.useProjectSampleRate and 1 or 0 end
+  -- `false or nil` is nil, so each flag is read on its own: a stopped transport still has a state
+  local function flag(a, b) if a ~= nil then return a end return b end
+  local recording = flag(data.isRecording, data.recording)
+  local playing = flag(data.isPlaying, data.playing)
+  local paused = flag(data.isPaused, data.paused)
+  if recording ~= nil or playing ~= nil or paused ~= nil then
+    r.state = recording and 3 or (paused and 2 or (playing and 1 or 0))
+  end
+  r.cur = round2(data.cursorPosition)
+  r.pos = (playing or recording) and round2(data.playPosition) or nil
+  if data["repeat"] ~= nil then r.rep = data["repeat"] and 1 or 0 end
+  if data.metronome ~= nil then r.metro = data.metronome and 1 or 0 end
+  if type(data.notes) == "string" then r.notes = #data.notes end
+  return next(r) and r or nil
+end
+
 -- The state a write is about to change, read before its handler runs (nil for every other command)
 function M.before(cmd_type, params)
   if cmd_type == "set_track_property" or cmd_type == "set_multiple_track_properties" then
@@ -1426,6 +1459,8 @@ function M.summary(cmd_type, params, data, before)
     return time_view(before)
   elseif cmd_type == "set_selected_items" then
     return selection_view(before)
+  elseif PROJECT_COMMANDS[cmd_type] then
+    return project_view(data)
   elseif cmd_type == "render_tracks_to_wav" then
     return waves_view(params, data)
   elseif ROUTING_COMMANDS[cmd_type] then

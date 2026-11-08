@@ -1,0 +1,9 @@
+/* Project read: the file name, readouts, and one bar drawn as its beats */
+.name { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.by { color: var(--muted); }
+.beats { display: flex; gap: 4px; height: 14px; }
+.beats > span { flex: 1 1 0; min-width: 3px; border-radius: 2px; }
+.down { background: var(--accent); }
+.beat { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.lgDown { width: 12px; height: 8px; background: var(--accent); }
+.lgBeat { width: 12px; height: 8px; background: color-mix(in srgb, var(--accent) 35%, transparent); }
