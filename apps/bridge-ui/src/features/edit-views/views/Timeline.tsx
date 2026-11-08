@@ -115,7 +115,8 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
   const selecting = v.selected !== undefined;
   const picked = lanes.reduce((n, l) => n + (l.picked ?? []).filter((i) => !(l.wasPicked ?? []).includes(i)).length, 0);
   const dropped = lanes.reduce((n, l) => n + (l.wasPicked ?? []).filter((i) => !(l.picked ?? []).includes(i)).length, 0);
-  const unselected = lanes.some((l) => l.items.length > (l.picked ?? []).length);
+  // An item drawn plain: neither selected now nor dashed as selected before
+  const unselected = lanes.some((l) => l.items.some((_, i) => !l.picked?.includes(i) && !l.wasPicked?.includes(i)));
   return (
     <>
       {v.op ? (

@@ -98,10 +98,10 @@ function measurementExampleList(): Example[] {
   };
   const renders = { trackIndices: [0, 1, 2], startTime: 30, endTime: 35, commandId: 'example' };
   const waves = call('render_tracks_to_wav', renders, {
-    durationSeconds: 5, rendered: 2, cached: 1, tracks: [lane('Kick', 0.9, 0.02, -16.8), lane('Snare', 0.55, 0.03, -19.4), lane('Vox', 0.2, 0.05, -26.1)],
+    durationSeconds: 5, start: 30, rendered: 2, cached: 1, tracks: [lane('Kick', 0.9, 0.02, -16.8), lane('Snare', 0.55, 0.03, -19.4), lane('Vox', 0.2, 0.05, -26.1)],
   }, { ms: 1320 });
   const wavesClipped = call('render_tracks_to_wav', { ...renders, trackIndices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }, {
-    durationSeconds: 5, rendered: 12, cached: 0, more: 4,
+    durationSeconds: 5, start: 30, rendered: 12, cached: 0, more: 4,
     tracks: [lane('Drums', 1.1, 0.06, -9.2, 41), lane('Bass', 0.5, 0.05, -17.5), lane('Gtr L', 0.35, 0.04, -21.2), lane('Gtr R', 0.35, 0.04, -21.4),
       lane('Keys', 0.12, 0.02, -30.1), lane('Pad', 0.06, 0.03, -34.8), lane('Vox', 0.28, 0.05, -23.3), lane('Verb', 0.08, 0.02, -33.9)],
   }, { ms: 4210 });
@@ -234,7 +234,7 @@ function measurementExampleList(): Example[] {
     example('Waveform · clipped', waveClipped, 'Clipped samples counted and named'),
     example('Waveform · quiet', waveQuiet, 'Quiet material still fills the height'),
     example('Waveforms', waves, 'Three tracks rendered in one pass, one reused; the previous call dashed', earlier(waves, {
-      durationSeconds: 5, rendered: 3, cached: 0, tracks: [lane('Kick', 1.1, 0.06, -12.4, 18), lane('Snare', 0.55, 0.03, -19.4), lane('Vox', 0.2, 0.05, -26.1)],
+      durationSeconds: 5, start: 30, rendered: 3, cached: 0, tracks: [lane('Kick', 1.1, 0.06, -12.4, 18), lane('Snare', 0.55, 0.03, -19.4), lane('Vox', 0.2, 0.05, -26.1)],
     })),
     example('Waveforms · clipped, more tracks', wavesClipped, 'Twelve rendered, eight drawn; the drums clip'),
     example('Offline analysis', offline, 'Sections, band balance, resonances; previous call ghosted', earlier(offline, { ...offlineR, lufs: -11.6 })),

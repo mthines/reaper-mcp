@@ -34,8 +34,8 @@ export type Measurement =
   | { kind: 'crest'; crestFactor?: number; peakLevel?: number; rmsLevel?: number }
   | { kind: 'spectrum'; peakDb?: number; rmsDb?: number; fftSize?: number; sampleRate?: number; bands: number[] }
   | { kind: 'waveform'; peakDb?: number; rmsDb?: number; clipped?: number; durationSeconds?: number; channels?: number; hi: number[]; lo: number[] }
-  /** Several renders over the same range, one waveform per track (`more` = rendered but not drawn; `cached` = reused renders) */
-  | { kind: 'waveforms'; durationSeconds?: number; rendered?: number; cached?: number; more?: number; tracks: WaveTrack[] }
+  /** Several renders over the same range, one waveform per track (`more` = rendered but not drawn; `cached` = reused renders; `start` = the range's start in project seconds; `approx` = clipping counted from a sample of the file) */
+  | { kind: 'waveforms'; durationSeconds?: number; start?: number; approx?: number; rendered?: number; cached?: number; more?: number; tracks: WaveTrack[] }
   /** Offline analysis (sidecar): BS.1770 loudness, LRA, peaks, sections [start, end, LUFS], band balance (share of
    *  energy in dB, sub..brilliance, null = silent), resonances [Hz, dB above the local spectrum], and a reference */
   | {
@@ -82,7 +82,7 @@ const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[]
   read_track_crest: { kind: 'crest', fields: ['crestFactor', 'peakLevel', 'rmsLevel'] },
   read_track_spectrum: { kind: 'spectrum', fields: ['peakDb', 'rmsDb', 'fftSize', 'sampleRate'] },
   render_track_to_wav: { kind: 'waveform', fields: ['peakDb', 'rmsDb', 'clipped', 'durationSeconds', 'channels'] },
-  render_tracks_to_wav: { kind: 'waveforms', fields: ['durationSeconds', 'rendered', 'cached', 'more'] },
+  render_tracks_to_wav: { kind: 'waveforms', fields: ['durationSeconds', 'start', 'approx', 'rendered', 'cached', 'more'] },
   // Composed by the server (sidecar) and logged with `_log_result`
   analyze_track_offline: { kind: 'offline', fields: ['lufs', 'lra', 'tp', 'peak', 'crest', 'dur', 'sib'] },
   analyze_audio_file: { kind: 'offline', fields: ['lufs', 'lra', 'tp', 'peak', 'crest', 'dur', 'sib'] },

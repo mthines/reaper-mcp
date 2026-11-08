@@ -19,25 +19,26 @@ export function Waveforms({ m, entry, previous }: { m: Extract<Measurement, { ki
   const uid = useId().replace(/:/g, '');
   const p = parseParams(entry.p);
   const startTime = p && typeof p === 'object' ? (p as Record<string, unknown>).startTime : undefined;
-  const start = typeof startTime === 'number' ? startTime : 0;
+  const start = m.start ?? (typeof startTime === 'number' ? startTime : 0);
   const end = start + (m.durationSeconds ?? 0);
   const peaks = m.tracks.map((t) => t.peakDb ?? -150);
   const loudest = Math.max(...peaks);
   const clipped = m.tracks.reduce((n, t) => n + (t.clipped ?? 0), 0);
   const drawn = m.tracks.length;
   const hot = loudest > -6;
-  /** The previous call's render of the same track (by name), when it has as many slices to lay over this one */
-  const ghost = (t: (typeof m.tracks)[number]) => {
-    const was = t.name ? previous?.tracks.find((x) => x.name === t.name) : undefined;
-    return was && was.hi.length === t.hi.length ? was : undefined;
-  };
+  /** The previous call's render of the same track (by name) over the same range: another range is another audio */
+  const sameRange = previous && previous.start !== undefined && previous.start === m.start && previous.durationSeconds === m.durationSeconds;
+  const ghost = (t: (typeof m.tracks)[number]) => (sameRange && t.name ? previous.tracks.find((x) => x.name === t.name) : undefined);
   const ghosted = m.tracks.some((t) => ghost(t));
   return (
     <>
       <div className={chartStyles.measureReadouts}>
         <Readout label="Tracks" value={String(drawn + (m.more ?? 0))} title={m.tracks.map((t) => t.name).join(', ')} />
         <Readout label="Loudest" value={fmt(loudest)} unit="dBFS" zone={clipped > 0 ? 'over' : zoneOf(loudest)} word="" title="Highest peak of any track" />
-        <Readout label="Clipped" value={String(clipped)} unit="samples" zone={clipped > 0 ? 'over' : 'ok'} word={clipped > 0 ? '' : undefined} />
+        <Readout
+          label="Clipped" value={`${m.approx ? '~' : ''}${clipped}`} unit="samples" zone={clipped > 0 ? 'over' : 'ok'} word={clipped > 0 ? '' : undefined}
+          title={m.approx ? 'Counted on every few samples of a long render, so an estimate that can miss short clips' : undefined}
+        />
       </div>
       <svg width="0" height="0" aria-hidden className={styles.defs}>
         <defs>

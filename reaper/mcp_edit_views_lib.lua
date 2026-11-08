@@ -970,7 +970,8 @@ local function wav_waveform(path, buckets, max_samples)
   end
   for b = 1, buckets do hi[b], lo[b] = round2(hi[b]), round2(lo[b]) end
   local db = function(v) return v > 0 and round2(20 * math.log(v, 10)) or -150 end
-  return { hi = hi, lo = lo, peakDb = db(peak), rmsDb = db(math.sqrt(sum / count)), clipped = clipped, channels = channels }
+  -- The stride read is the second value, so a caller that merges the table into a result never carries it
+  return { hi = hi, lo = lo, peakDb = db(peak), rmsDb = db(math.sqrt(sum / count)), clipped = clipped, channels = channels }, stride
 end
 
 -- render_tracks_to_wav: one waveform per rendered track on a shared time axis, read from the cached files (the
@@ -981,25 +982,30 @@ local WAVES_BUCKETS = 60
 local WAVES_MAX_SAMPLES = 300000
 local WAVES_BUDGET_S = 1.0
 
-local function waves_view(data)
+local function waves_view(params, data)
   if type(data) ~= "table" or type(data.tracks) ~= "table" then return nil end
   local clock = api.time_precise
   local started = clock and clock() or 0
-  local rows, more, duration = {}, 0, nil
+  local rows, more, duration, approx = {}, 0, nil, false
   for _, t in ipairs(data.tracks) do
     duration = duration or round2(t.durationSeconds)
-    local ok, wave = false, nil
+    local ok, wave, stride = false, nil, 1
     if #rows < WAVES_MAX_TRACKS and (not clock or clock() - started < WAVES_BUDGET_S) then
-      ok, wave = pcall(wav_waveform, t.wavPath, WAVES_BUCKETS, WAVES_MAX_SAMPLES)
+      ok, wave, stride = pcall(wav_waveform, t.wavPath, WAVES_BUCKETS, WAVES_MAX_SAMPLES)
     end
     if ok and wave then
-      rows[#rows + 1] = { name = t.trackName or "", hi = wave.hi, lo = wave.lo, peakDb = wave.peakDb, rmsDb = wave.rmsDb, clipped = wave.clipped }
+      -- Past the sample cap only every `stride`th frame is read: the clipped count is scaled up and marked approximate
+      if (stride or 1) > 1 then approx = true end
+      rows[#rows + 1] = { name = t.trackName or "", hi = wave.hi, lo = wave.lo, peakDb = wave.peakDb, rmsDb = wave.rmsDb, clipped = wave.clipped * (stride or 1) }
     else
       more = more + 1
     end
   end
   if #rows == 0 then return nil end
-  return { tracks = rows, more = more > 0 and more or nil, durationSeconds = duration, rendered = data.rendered or 0, cached = data.cached or 0 }
+  return {
+    tracks = rows, more = more > 0 and more or nil, durationSeconds = duration, start = round2(tonumber(params.startTime)),
+    approx = approx and 1 or nil, rendered = data.rendered or 0, cached = data.cached or 0,
+  }
 end
 
 -- Mixing depth views: built from the handler's own result, which carries the state before
@@ -1421,7 +1427,7 @@ function M.summary(cmd_type, params, data, before)
   elseif cmd_type == "set_selected_items" then
     return selection_view(before)
   elseif cmd_type == "render_tracks_to_wav" then
-    return waves_view(data)
+    return waves_view(params, data)
   elseif ROUTING_COMMANDS[cmd_type] then
     -- A write reads the same track it read before (remove_send can leave nothing to resolve by index)
     local tr = before and before.track or routing_track(params)

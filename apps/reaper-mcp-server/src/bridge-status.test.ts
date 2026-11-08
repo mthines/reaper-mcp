@@ -325,7 +325,8 @@ describe('measurement results in the log', () => {
     const r = (await bridge.status()).recent[0].r as {
       durationSeconds: number; rendered: number; cached: number; tracks: Array<{ name: string; hi: number[]; lo: number[]; peakDb: number; clipped: number }>;
     };
-    expect(r).toMatchObject({ durationSeconds: 1, rendered: 1, cached: 0 });
+    expect(r).toMatchObject({ durationSeconds: 1, start: 2, rendered: 1, cached: 0 });
+    expect(r).not.toHaveProperty('approx');
     expect(r.tracks).toHaveLength(1);
     expect(r.tracks[0].name).toBe('Kick');
     expect(r.tracks[0].hi).toHaveLength(60);
@@ -336,6 +337,29 @@ describe('measurement results in the log', () => {
     // Rendering the same range again reuses the file, and still draws it
     await render('abd');
     expect((await bridge.status()).recent[0].r).toMatchObject({ rendered: 0, cached: 1, tracks: [{ name: 'Kick' }] });
+  });
+
+  it('counts clipping on a long render from a sample and says so', async () => {
+    // 400k frames of full-scale mono is past the sample cap, so every other frame is read and the count doubled
+    const bridge = await startBridge(`
+      local render = {}
+      api.GetTempPath = function() return "/tmp/" end
+      api.GetSetProjectInfo_String = function(_, k, v, set) if set then render[k] = v end return true, render[k] or "" end
+      api.Main_OnCommand = function(id)
+        if id ~= 42230 then return end
+        local data = string.rep(string.pack("<i2", 32767), 400000)
+        local fmt = string.pack("<I2I2I4I4I2I2", 1, 1, 44100, 88200, 2, 16)
+        local f = io.open(render.RENDER_FILE .. render.RENDER_PATTERN .. ".wav", "wb")
+        f:write("RIFF", string.pack("<I4", 4 + 8 + #fmt + 8 + #data), "WAVE", "fmt ", string.pack("<I4", #fmt), fmt,
+          "data", string.pack("<I4", #data), data)
+        f:close()
+      end
+    `);
+    const res = await bridge.send('render_tracks_to_wav', { trackIndices: '[0]', startTime: 0, endTime: 9, commandId: 'abc' });
+    expect(res.success).toBe(true);
+    const r = (await bridge.status()).recent[0].r as { approx: number; tracks: Array<{ clipped: number }> };
+    expect(r.approx).toBe(1);
+    expect(r.tracks[0].clipped).toBe(400000);
   });
 
   it('keeps no waveforms when the rendered files cannot be read', async () => {

@@ -112,3 +112,18 @@ export const AFirstSelectionHasNothingToLetGo: Story = {
     await expect(c.getByText('Not selected')).toBeInTheDocument();
   },
 };
+
+export const MovingTheSelectionToTheNextItemLegendsOnlyWhatIsDrawn: Story = {
+  args: {
+    v: {
+      kind: 'timeline', regions: [], markers: [], tempo: [[0, 120, 4, 4, 0]], len: 100, selected: 1, wasSelected: 1,
+      lanes: [{ t: 'Gtr L', items: [[10, 10, 0, 0, 0, 0], [30, 10, 0, 0, 0, 0]], picked: [1], wasPicked: [0] }],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await expect(c.getByText('Was selected')).toBeInTheDocument();
+    // Both items are selected or dashed: nothing is drawn plain, so no entry for it
+    await expect(c.queryByText('Not selected')).not.toBeInTheDocument();
+  },
+};
