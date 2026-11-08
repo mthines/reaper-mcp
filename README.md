@@ -517,8 +517,9 @@ Nothing. There is no reaper-mcp model and nothing is trained on your sessions.
 The skills and [`knowledge/`](knowledge/) are plain text: opinions and checklists your model reads, which you can edit or skip.
 Where your data goes:
 
-- **Your model** sees what the tools return: track names, FX settings, meter readings, file paths.
-  Audio and MIDI stay on your machine; analysis that needs audio runs in the optional local Python sidecar ([`reaper-mcp setup-sidecar`](docs/REFERENCE.md#cli-commands)).
+- **Your model** sees what the tools return: track names, FX settings, meter readings, file paths,
+  and MIDI notes when a tool reads them.
+  Audio stays on your machine; analysis that needs audio runs in the optional local Python sidecar ([`reaper-mcp setup-sidecar`](docs/REFERENCE.md#cli-commands)).
 - **LoreKit** (only if you connect it) stores what the skills learn about plugins and your preferences.
 - **Usage telemetry** (on by default, [easy to turn off](#-privacy--telemetry)) sends tool names, errors and timings, never content.
 
