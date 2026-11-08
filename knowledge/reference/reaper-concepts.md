@@ -210,7 +210,8 @@ input picks which audio or MIDI input each one listens to; monitoring lets you h
 
 ## Undo
 
-**What it is:** every change the agent makes is one undo step, so undoing once takes back exactly that change.
+**What it is:** every edit the agent makes through a tool is one undo step, named `MCP: …`. One change can take
+several steps (and measuring adds its own), so undo by name: the undo history lists every step.
 **By hand:** Edit → Undo (Ctrl+Z, Cmd+Z on a Mac); Edit → Undo history lists every step.
 **Tools:** `undo_project`, `redo_project`.
 **Learn more:** search the User Guide for `undo history`.
