@@ -300,6 +300,37 @@ instead of just giving advice:
 
 ---
 
+## 🛠️ Make your own plugin
+
+Nothing on the shelf does what you want? Ask for it. **`/make-plugin`** writes you a real
+REAPER plugin, loads it, listens to it and fixes it until it does what you asked. Afterwards
+it's **just a plugin**: it keeps working with no bridge, no server and no Claude.
+
+> 🎲 *"/make-plugin randomly mutate my samples and add reverb"*
+>
+> 🔥 *"/make-plugin a tape saturator, warm by default, with a drive and a tone"*
+>
+> ↔️ *"/make-plugin keep everything under 120 Hz in mono and widen the rest"*
+
+<p>
+  <img src="docs/assets/make-plugin-core.png" alt="A generated plugin, Mutate Verb: four large knobs in the core view and a collapsed Advanced header." width="49%">
+  <img src="docs/assets/make-plugin-advanced.png" alt="The same plugin with the Advanced drawer open over the core view, showing six more knobs." width="49%">
+</p>
+
+- 🎛️ **A simple core, the rest on demand.** A few big knobs up front; everything else lives in an **Advanced** drawer that overlays the view instead of squeezing it.
+- 🎨 **Its own look.** Every plugin gets its own accent colour, so a growing set is easy to tell apart. Ask for another colour and it keeps it.
+- ⌨️ **Type a value.** Double-click a knob to type an exact number; Cmd/Ctrl-click resets it.
+- 🎚️ **Presets that teach.** It ships a few suggested presets, so you see how the plugin is meant to be used.
+- 📏 **Proven by measurement.** It renders with the plugin on and off and checks the audio changed, because a plugin that fails to compile still loads in REAPER.
+- 🗂️ **Easy to find.** Plugins land in your FX list as `… (reaper-mcp)`, and old versions are kept.
+
+📖 How it works, the toolkit, the examples and the limits: **[docs/PLUGIN-AUTHORING.md](docs/PLUGIN-AUTHORING.md)**
+
+> 🚧 **Coming next:** graphs. Frequency displays with band selection (for an EQ or a multiband
+> compressor), spectrum and gain-reduction meters, and a MIDI keyboard.
+
+---
+
 ## 🧩 Extensions: teach it your plugin
 
 Out of the box it controls any plugin through its knobs. But some of what makes a sound
