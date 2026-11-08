@@ -144,7 +144,8 @@ describe('analyze_track_aesthetics', () => {
     const res = await cb({ trackIndex: 0 });
 
     expect(res.isError).toBe(true);
-    expect(res.content[0].text).toContain('setup-sidecar');
+    expect(res.content[0].text).toContain('reaper-mcp setup-sidecar');
+    expect(res.content[0].text).not.toContain('dist/');
     expect(res.content[0].text).toContain('not installed');
   });
 

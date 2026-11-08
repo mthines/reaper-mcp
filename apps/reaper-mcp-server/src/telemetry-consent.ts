@@ -219,6 +219,10 @@ const ALLOWED_SPAN_ATTRIBUTES = new Set([
   'reaper.bridge.handler_ms',
   'reaper.bridge.pickup_ms',
   'reaper.bridge.poll_attempts',
+  // Whether the bridge answered at startup and, when not, which setup step is missing
+  // (a fixed set: connected, stale, never_started, not_installed, no_reaper — never a path)
+  'reaper.bridge.connected',
+  'reaper.bridge.state',
   // detect_key / detect_chords: where they read from and how sure they were, never the key or chords
   'reaper.key.source',
   'reaper.key.confidence',

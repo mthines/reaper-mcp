@@ -5,11 +5,11 @@
  * heartbeat, the bridge page's tool log) stays out of usage telemetry, the way
  * the bridge status page hides it; internal commands a tool runs are traced.
  */
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, mkdir, readdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { metrics as otelMetrics, trace } from '@opentelemetry/api';
+import { metrics as otelMetrics, trace, SpanStatusCode } from '@opentelemetry/api';
 import { metrics, node, tracing } from '@opentelemetry/sdk-node';
 import type { CommandType } from '@reaper-mcp/protocol';
 import { sendCommand, pollBridgeDiagnostics } from './bridge.js';
@@ -82,6 +82,7 @@ describe('bridge telemetry', () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     clearInterval(responder);
     delete process.env['REAPER_RESOURCE_PATH'];
     await rm(root, { recursive: true, force: true });
@@ -112,6 +113,23 @@ describe('bridge telemetry', () => {
     const metered = await meteredMethods();
     expect(metered).not.toContain('_session');
     expect(metered).not.toContain('_log_result');
+  });
+
+  it('reports a command refused because the bridge never started, with the bridge state, and sends nothing', async () => {
+    // Earlier tests' answers are long past: an answer within the last minute counts as REAPER being up
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 10 * 60_000 });
+    await rm(join(bridgeDir, 'heartbeat.json'));
+    await writeFile(join(root, 'Scripts', 'mcp_bridge.lua'), '-- installed by reaper-mcp setup');
+
+    const res = await sendCommand('get_project_info');
+
+    expect(res.success).toBe(false);
+    expect(received).toEqual([]);
+    const [span] = spans.getFinishedSpans();
+    expect(span?.name).toBe('reaper.Bridge/get_project_info');
+    expect(span?.attributes).toMatchObject({ 'error.type': 'bridge_not_running', 'reaper.bridge.state': 'never_started' });
+    // Not a bug in the bridge: the status stays unset, like a refused request
+    expect(span?.status.code).toBe(SpanStatusCode.UNSET);
   });
 
   it.each(['_chord_grid', '_item_range', '_midi_pitch_profile'])(

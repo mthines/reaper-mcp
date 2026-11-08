@@ -74,11 +74,21 @@ export async function ensureBridgeDir(): Promise<string> {
 }
 
 // Bounded `error.type` values for bridge commands (metric + span attribute).
-export type BridgeErrorType = 'timeout' | 'handler_crash' | 'unknown_command' | 'internal_error' | 'command_failed';
+export type BridgeErrorType =
+  | 'timeout'
+  | 'bridge_not_running'
+  | 'handler_crash'
+  | 'unknown_command'
+  | 'internal_error'
+  | 'command_failed';
 
-/** Classify a failed bridge response by the error prefixes mcp_bridge.lua writes. */
+/** Prefix of the error a command gets when it is refused because the bridge is down. */
+const BRIDGE_NOT_RUNNING_PREFIX = 'Bridge not running:';
+
+/** Classify a failed bridge response by the error prefixes mcp_bridge.lua (and sendCommand) write. */
 export function classifyBridgeError(error: string | undefined): BridgeErrorType {
   if (error?.startsWith('Timeout:')) return 'timeout';
+  if (error?.startsWith(BRIDGE_NOT_RUNNING_PREFIX)) return 'bridge_not_running';
   if (error?.startsWith('Handler error:')) return 'handler_crash';
   if (error?.startsWith('Unknown command type')) return 'unknown_command';
   // A handler that caught its own broken assumption (a bug, not a bad request)
@@ -86,9 +96,156 @@ export function classifyBridgeError(error: string | undefined): BridgeErrorType 
   return 'command_failed';
 }
 
-/** Everything but `command_failed` (the request was refused) is a fault in the system. */
+/**
+ * A fault in the system, as opposed to a refused request (`command_failed`) or a bridge the
+ * user has not started (`bridge_not_running`): neither is a bug, and both keep the span status unset.
+ */
 export function isSystemError(type: BridgeErrorType): boolean {
-  return type !== 'command_failed';
+  return type !== 'command_failed' && type !== 'bridge_not_running';
+}
+
+// ---------------------------------------------------------------------------
+// Bridge state
+// ---------------------------------------------------------------------------
+
+/** The bridge writes heartbeat.json every second; older than this, it is not answering right now. */
+const HEARTBEAT_FRESH_MS = 5_000;
+
+/**
+ * Past this heartbeat age a command is refused at once instead of waiting out its timeout.
+ * Well above HEARTBEAT_FRESH_MS: a render blocks REAPER's defer loop, and the heartbeat with it
+ * (a 4-minute folder track took ~55 s), so a heartbeat a few seconds old can still answer.
+ */
+export const BRIDGE_DOWN_AFTER_MS = 60_000;
+
+/**
+ * What the files in REAPER's resource folder say about the bridge, checked in this order.
+ * Bounded: exported as the `reaper.bridge.state` span attribute.
+ * - `connected`: heartbeat written in the last 5 s
+ * - `stale`: a heartbeat exists but is older (REAPER closed, the script stopped, or REAPER busy)
+ * - `never_started`: the script is installed but has never written a heartbeat here
+ *   (the bridge never deletes it, so a missing heartbeat means it never ran)
+ * - `not_installed`: no `Scripts/mcp_bridge.lua` (`reaper-mcp setup` never ran for this folder)
+ * - `no_reaper`: no `reaper.ini` (REAPER never ran here, or REAPER_RESOURCE_PATH points elsewhere)
+ */
+export type BridgeState = 'connected' | 'stale' | 'never_started' | 'not_installed' | 'no_reaper';
+
+export interface BridgeStatus {
+  state: BridgeState;
+  /** Age of the heartbeat file, when there is one. */
+  heartbeatAgeMs?: number;
+}
+
+async function heartbeatAgeMs(): Promise<number | undefined> {
+  try {
+    const info = await stat(join(getBridgeDir(), 'heartbeat.json'));
+    return Math.max(0, Date.now() - info.mtimeMs);
+  } catch {
+    return undefined;
+  }
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Where the bridge stands, from the heartbeat and the files `reaper-mcp setup` installs. */
+export async function getBridgeState(): Promise<BridgeStatus> {
+  const age = await heartbeatAgeMs();
+  if (age !== undefined) return { state: age < HEARTBEAT_FRESH_MS ? 'connected' : 'stale', heartbeatAgeMs: age };
+  const resource = getReaperResourcePath();
+  if (await exists(join(resource, 'Scripts', 'mcp_bridge.lua'))) return { state: 'never_started' };
+  if (await exists(join(resource, 'reaper.ini'))) return { state: 'not_installed' };
+  return { state: 'no_reaper' };
+}
+
+const START_BRIDGE =
+  'Start the bridge: in REAPER, open Actions → Show action list, select "Script: mcp_bridge.lua" and click Run ' +
+  '(the first time, use Load ReaScript… and pick mcp_bridge.lua from REAPER\'s Scripts folder). ' +
+  'It runs until REAPER closes.';
+
+function formatAge(ms: number): string {
+  const s = Math.round(ms / 1000);
+  if (s < 120) return `${s} s`;
+  const min = Math.round(s / 60);
+  if (min < 120) return `${min} min`;
+  return `${Math.round(min / 60)} h`;
+}
+
+/** What to tell the user when the bridge is not answering: what is wrong and the step that fixes it. */
+export function bridgeDownMessage(status: BridgeStatus, resourcePath: string = getReaperResourcePath()): string {
+  switch (status.state) {
+    case 'connected':
+      return 'The REAPER bridge is running.';
+    case 'stale':
+      // Running mcp_bridge.lua again stops a bridge that is running (set_action_options), so a busy
+      // REAPER, or one whose bridge started with it, must not be told to run it
+      return `${BRIDGE_NOT_RUNNING_PREFIX} REAPER has not answered for ${formatAge(status.heartbeatAgeMs ?? 0)}. ` +
+        'If REAPER is open and rendering or showing a dialog, finish or close it and try again: running mcp_bridge.lua ' +
+        'while the bridge is only busy stops it. If REAPER is closed, start it and try again. ' +
+        `If REAPER is open and idle, the bridge stopped. ${START_BRIDGE} Then try again.`;
+    case 'never_started':
+      return `${BRIDGE_NOT_RUNNING_PREFIX} the bridge script is installed but has never run in this REAPER. ` +
+        `${START_BRIDGE} Then try again.`;
+    case 'not_installed':
+      return `${BRIDGE_NOT_RUNNING_PREFIX} the bridge script is not installed in REAPER (no Scripts/mcp_bridge.lua in ${resourcePath}). ` +
+        `Run in a terminal: reaper-mcp setup. ${START_BRIDGE}`;
+    case 'no_reaper':
+      return `${BRIDGE_NOT_RUNNING_PREFIX} no REAPER settings in ${resourcePath}: REAPER is not installed there or has never been started. ` +
+        'Start REAPER once (or set REAPER_RESOURCE_PATH to the folder REAPER shows under Options → Show REAPER resource path in explorer/finder), ' +
+        `then run in a terminal: reaper-mcp setup. ${START_BRIDGE}`;
+  }
+}
+
+/** Commands this process is still waiting on; REAPER may be busy with one (a render stops the heartbeat). */
+let inFlight = 0;
+
+/**
+ * When REAPER last answered one of this process's commands (ms since epoch). The bridge rewrites its
+ * heartbeat only on the defer tick after a long command (main_loop reads the clock before it runs
+ * commands), so straight after a 60 s render the heartbeat is stale although REAPER just answered.
+ */
+let lastAnswerAt = 0;
+
+/**
+ * The bridge's state when a command should be refused without waiting (no heartbeat, or one older than
+ * BRIDGE_DOWN_AFTER_MS); never while a command of ours is in flight, or within that window of REAPER's last answer.
+ */
+async function bridgeDown(): Promise<BridgeStatus | undefined> {
+  if (inFlight > 0) return undefined;
+  if (Date.now() - lastAnswerAt < BRIDGE_DOWN_AFTER_MS) return undefined;
+  const status = await getBridgeState();
+  if (status.state === 'connected') return undefined;
+  if (status.state === 'stale' && (status.heartbeatAgeMs ?? 0) < BRIDGE_DOWN_AFTER_MS) return undefined;
+  if (status.state === 'stale' && (await otherCommandPending())) return undefined;
+  return status;
+}
+
+/** Longer than any render (offline analysis renders up to 900 s of audio): an older command file is a leftover. */
+const PENDING_COMMAND_MAX_AGE_MS = 15 * 60_000;
+
+/**
+ * Whether another server's command is still waiting in the bridge folder. Every Claude Code session runs
+ * its own server against the one bridge, which deletes a command file only after running it, so one here
+ * means REAPER may be busy with another session's render rather than closed.
+ */
+async function otherCommandPending(): Promise<boolean> {
+  const dir = getBridgeDir();
+  try {
+    for (const file of await readdir(dir)) {
+      if (!file.startsWith('command_') || !file.endsWith('.json')) continue;
+      const info = await stat(join(dir, file)).catch(() => null);
+      if (info && Date.now() - info.mtimeMs < PENDING_COMMAND_MAX_AGE_MS) return true;
+    }
+  } catch {
+    // No readable bridge folder: nothing pending
+  }
+  return false;
 }
 
 /**
@@ -151,8 +308,29 @@ export async function sendCommand(
         if (!untraced) getCommandDurationHistogram().record((Date.now() - startMs) / 1000, attrs);
       };
 
+      let counted = false;
       try {
         if (profiling) t['spanSetup'] = now() - t0;
+
+        // REAPER is closed or the bridge never started: say so now, with the step that fixes
+        // it, rather than after the full timeout with a guess.
+        const down = await bridgeDown();
+        if (down) {
+          span.setAttribute('reaper.bridge.state', down.state);
+          const message = bridgeDownMessage(down);
+          if (!untraced) {
+            emitLog(
+              'warn',
+              `Bridge command ${type} not sent: the bridge is not running (${down.state})`,
+              { 'rpc.method': type, 'error.type': 'bridge_not_running', 'reaper.bridge.state': down.state },
+              { eventName: 'reaper.bridge.command.not_sent' },
+            );
+          }
+          finish('bridge_not_running');
+          return { id: randomUUID(), success: false, error: message, timestamp: Date.now() };
+        }
+        inFlight++;
+        counted = true;
 
         const tDir = now();
         const dir = await ensureBridgeDir();
@@ -197,6 +375,7 @@ export async function sendCommand(
             const tRead = now();
             const data = await readFile(responsePath, 'utf-8');
             const response: BridgeResponse = JSON.parse(data);
+            lastAnswerAt = Date.now();
             if (profiling) t['readParse'] = now() - tRead;
             if (profiling) t['pollWait'] = now() - tPoll - (t['readParse'] ?? 0);
 
@@ -307,6 +486,8 @@ export async function sendCommand(
         });
         finish(errorType);
         throw err;
+      } finally {
+        if (counted) inFlight--;
       }
     }
   );
@@ -316,15 +497,8 @@ export async function sendCommand(
  * Check if the bridge appears to be running by looking for a heartbeat file.
  */
 export async function isBridgeRunning(): Promise<boolean> {
-  const dir = getBridgeDir();
-  const heartbeatPath = join(dir, 'heartbeat.json');
-  try {
-    const info = await stat(heartbeatPath);
-    // Consider bridge running if heartbeat was updated in the last 5 seconds
-    return Date.now() - info.mtimeMs < 5_000;
-  } catch {
-    return false;
-  }
+  const age = await heartbeatAgeMs();
+  return age !== undefined && age < HEARTBEAT_FRESH_MS;
 }
 
 /**
