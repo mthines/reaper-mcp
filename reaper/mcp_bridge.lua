@@ -728,6 +728,12 @@ function handlers.add_fx(params)
     instantiate = -1000 - math.floor(params.position)
   end
 
+  -- ReaPack installs the JSFX under Effects/reaper-mcp/Meters/ (see ensure_jsfx_on_track)
+  local jsfx_base = fx_name:match("^[%w%s]*:?%s*reaper%-mcp/([%w_]+)$")
+  if jsfx_base and file_exists(reaper.GetResourcePath() .. "/Effects/reaper-mcp/Meters/" .. jsfx_base .. ".jsfx") then
+    fx_name = fx_name:gsub("reaper%-mcp/", "reaper-mcp/Meters/", 1)
+  end
+
   reaper.Undo_BeginBlock()
   local fx_idx = reaper.TrackFX_AddByName(track, fx_name, false, instantiate)
   if fx_idx < 0 then
@@ -2027,6 +2033,14 @@ end
 -- Falls back to direct insertion on older REAPER versions.
 -- Returns the FX index (possibly container-addressed) on success, or nil + error.
 function ensure_jsfx_on_track(track, fx_name)
+  -- The JSFX live in Effects/reaper-mcp/ when `reaper-mcp setup` installed them and in
+  -- Effects/reaper-mcp/Meters/ when ReaPack did (it adds the package's category as a folder). ReaPack's copy wins:
+  -- it is the one that gets updates, while setup's older copy may still sit in the plain folder.
+  local logical_name = fx_name
+  local base = fx_name:match("^reaper%-mcp/(.+)$")
+  if base and file_exists(reaper.GetResourcePath() .. "/Effects/reaper-mcp/Meters/" .. base .. ".jsfx") then
+    fx_name = "reaper-mcp/Meters/" .. base
+  end
   -- REAPER names a JSFX "JS: <desc> [<path>]" but leaves the path out for some
   -- (seen live: the MIDI emitter is just "JS: MCP MIDI Emitter"), so match either.
   local desc = ({
@@ -2035,7 +2049,7 @@ function ensure_jsfx_on_track(track, fx_name)
     ["reaper-mcp/mcp_correlation_meter"] = "JS: MCP Correlation Meter",
     ["reaper-mcp/mcp_crest_factor"] = "JS: MCP Crest Factor Meter",
     ["reaper-mcp/mcp_midi_emitter"] = "JS: MCP MIDI Emitter",
-  })[fx_name]
+  })[logical_name]
   local function is_it(name)
     return name and (name:find(fx_name, 1, true) or (desc and name:find(desc, 1, true) == 1))
   end
@@ -4702,7 +4716,7 @@ local function check_health(now)
   local fx_dir = reaper.GetResourcePath() .. "/Effects/reaper-mcp/"
   local missing = {}
   for _, f in ipairs(JSFX_FILES) do
-    if not file_exists(fx_dir .. f) then missing[#missing + 1] = f end
+    if not file_exists(fx_dir .. f) and not file_exists(fx_dir .. "Meters/" .. f) then missing[#missing + 1] = f end
   end
   local installed = script_path and read_file(script_path)
   local next_health = {

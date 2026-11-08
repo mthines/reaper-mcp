@@ -36,6 +36,20 @@ async function setup(): Promise<void> {
 
   const reaperDir = resolveAssetDir(__dirname, 'reaper');
 
+  // ReaPack owns the files once it has installed the bridge: copying them to Scripts/ and Effects/ as
+  // well would give an Action List with every script twice and a bridge ReaPack updates never touch.
+  const viaReaPack = existsSync(join(scriptsDir, 'reaper-mcp', 'MCP Bridge', 'mcp_bridge.lua'));
+  if (viaReaPack) {
+    console.log('The bridge is installed by ReaPack: leaving its scripts, JSFX and status page to ReaPack.');
+    console.log('Setup only turns on starting with REAPER and the web interface.\n');
+    installBridgeAutostart(scriptsDir);
+    const port = await enableWebInterface();
+    console.log('\nSetup complete!\n');
+    console.log('Restart REAPER (or run the bridge once from the Action List) and add reaper-mcp to Claude Code: reaper-mcp doctor');
+    if (port) console.log(`The bridge opens its status window on start: http://localhost:${port}/${BRIDGE_UI_FILE}`);
+    return;
+  }
+
   console.log('Installing Lua scripts...');
   // Install every Lua asset (bridge, its libraries, the shared snapshot library
   // and the A/B action scripts). REAPER_ASSETS

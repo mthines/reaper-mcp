@@ -141,6 +141,7 @@ reaper-mcp/
                               # Plugin knowledge + process lessons live in LoreKit, scope project::reaper-mcp
 
   scripts/
+    reapack-index.mjs         # Generate the ReaPack index.xml (bridge scripts, JSFX, status page) from reaper/; the release job attaches it to the GitHub release (releases/latest/download/index.xml). ReaPack puts JSFX in Effects/reaper-mcp/Meters/ and scripts in Scripts/reaper-mcp/MCP Bridge/, so the bridge resolves JSFX in both folders (Meters/ first) and the autostart block prefers that script path over Scripts/mcp_bridge.lua; `reaper-mcp setup` leaves the files to ReaPack once it installed the bridge
     prepare-npm-package.mjs   # Assemble the npm package in dist/apps/reaper-mcp-server (the root README with its install section swapped for `apps/reaper-mcp-server/NPM_INSTALL.md` and absolute image/link URLs via `src/npm-readme.mjs`, LICENSE, status page, version); run by the release job
     sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (clone install; an npm install copies them with `install-skills`)
     ext-call.mjs              # Call any tool on a fresh `reaper-mcp serve` (so a new extension can be tried without restarting Claude Code): --list [prefix] | <tool> [json]
@@ -1011,7 +1012,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   `Scripts/__startup.lua` — `AUTOSTART_BLOCK` / `ensureBridgeAutostart()` in `cli.ts` — which runs `mcp_bridge.lua` as its own
   action unless it is `"0"`; the bridge only echoes it as `settings.autostart`).
   Desktop error notifications are page-side (Notification API + localStorage).
-- `status.health` (re-checked every 10s): SWS present, JSFX installed in `Effects/reaper-mcp/`, `autostart` when
+- `status.health` (re-checked every 10s): SWS present, JSFX installed in `Effects/reaper-mcp/` (or its `Meters/` folder, where ReaPack puts them), `autostart` when
   `Scripts/__startup.lua` holds the startup block (the Settings toggle explains how to add it when not), and `outdated` when the
   installed `mcp_bridge.lua` differs from the running copy (setup ran; restart the script). Tested in wasmoon by
   `bridge-status.test.ts`.

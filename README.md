@@ -190,6 +190,18 @@ Nothing else to install. When a new version is out, the bridge window in REAPER 
 <sub>A real run, recorded by our install test (<code>scripts/test-install.sh</code>). The very first
 download takes about a minute.</sub>
 
+<details>
+<summary><b>Prefer ReaPack for the REAPER side?</b></summary>
+
+In REAPER: **Extensions → ReaPack → Import repositories…**, paste
+`https://github.com/mthines/reaper-mcp/releases/latest/download/index.xml`, then **Browse packages**,
+search `reaper-mcp` and install the three packages (bridge, meters, status page). ReaPack then offers
+updates like any other package. The server and Claude Code side is still
+`npm install -g @mthines/reaper-mcp && reaper-mcp init` (ReaPack can't edit REAPER's startup script or
+turn on its web interface, so run `reaper-mcp setup` once too if you want the bridge to start with REAPER).
+
+</details>
+
 ### 3 · Start REAPER
 
 Start REAPER, or restart it if it was open: the installer added the bridge to REAPER's

@@ -25,6 +25,18 @@ reaper-mcp init      # connects Claude Code and adds the mix skills
 That's it. No clone, no build. To update later, run `npm install -g @mthines/reaper-mcp` again,
 then `reaper-mcp setup`. The bridge window in REAPER also shows an **Update** notice.
 
+<details>
+<summary><b>Prefer ReaPack for the REAPER side?</b></summary>
+
+In REAPER: **Extensions → ReaPack → Import repositories…**, paste
+`https://github.com/mthines/reaper-mcp/releases/latest/download/index.xml`, then **Browse packages**,
+search `reaper-mcp` and install the three packages (bridge, meters, status page). ReaPack then offers
+updates like any other package. The server and Claude Code side is still
+`npm install -g @mthines/reaper-mcp && reaper-mcp init` (ReaPack can't edit REAPER's startup script or
+turn on its web interface, so run `reaper-mcp setup` once too if you want the bridge to start with REAPER).
+
+</details>
+
 ### 3 · Start REAPER
 
 Start REAPER, or restart it if it was open: `reaper-mcp setup` added the bridge to REAPER's

@@ -390,6 +390,13 @@ jobs:
             npm publish --provenance --access public
           fi
 
+      - name: Generate the ReaPack index
+        # Attached to the release: ReaPack users add .../releases/latest/download/index.xml, which
+        # always points at the newest full release (a beta is a prerelease, so never "latest").
+        run: |
+          node scripts/reapack-index.mjs --version "${{ needs.version.outputs.version }}" \
+            --ui dist/apps/bridge-ui/mcp_bridge.html --out dist/index.xml
+
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -429,7 +436,12 @@ jobs:
           \`\`\`bash
           npm install -g @mthines/reaper-mcp@${TAG#v}
           reaper-mcp setup && reaper-mcp init
-          \`\`\`" \
+          \`\`\`
+
+          ## ReaPack
+
+          Add \`https://github.com/mthines/reaper-mcp/releases/latest/download/index.xml\` under Extensions > ReaPack > Import repositories to install and update the REAPER side from ReaPack." \
+            dist/index.xml dist/apps/bridge-ui/mcp_bridge* \
             $PRERELEASE_FLAG
 
       - name: Comment on PR (beta releases)

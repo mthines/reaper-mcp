@@ -30,12 +30,17 @@ async function run(setup: string, name: string, check: string): Promise<void> {
 
 const FAKE_FX = `
   calls = {}
+  names = {}
+  files = {}
+  file_exists = function(path) return files[path] == true end
   reaper = {
+    GetResourcePath = function() return "/r" end,
     GetTrack = function(_, i) if i == 0 then return "TR" end end,
     Undo_BeginBlock = function() end,
     Undo_EndBlock = function() end,
     -- Like REAPER: 0 only looks up an existing instance, so a new FX is "not found".
     TrackFX_AddByName = function(_, name, _, inst)
+      names[#names + 1] = name
       calls[#calls + 1] = inst
       if inst == 0 then return -1 end
       if inst <= -1000 then return -1000 - inst end
@@ -58,6 +63,23 @@ describe('add_fx position', () => {
       assert(calls[3] == -1 and r.fxIndex == 3, "no position appends")
       r = handlers.add_fx({ trackIndex = 0, fxName = "ReaEQ", position = -1 })
       assert(calls[4] == -1, "-1 appends")
+    `);
+  });
+});
+
+describe('add_fx with the JSFX installed by ReaPack', () => {
+  it('adds the gain trace from the Meters folder when only ReaPack put it there', async () => {
+    await run(FAKE_FX + 'files["/r/Effects/reaper-mcp/Meters/mcp_gain_trace.jsfx"] = true', 'add_fx', `
+      assert(handlers.add_fx({ trackIndex = 0, fxName = "JS: reaper-mcp/mcp_gain_trace" }))
+      assert(names[1] == "JS: reaper-mcp/Meters/mcp_gain_trace", names[1])
+    `);
+  });
+
+  it('leaves the name alone when the JSFX is where setup puts it, and for other plugins', async () => {
+    await run(FAKE_FX + 'files["/r/Effects/reaper-mcp/mcp_gain_trace.jsfx"] = true', 'add_fx', `
+      handlers.add_fx({ trackIndex = 0, fxName = "JS: reaper-mcp/mcp_gain_trace" })
+      handlers.add_fx({ trackIndex = 0, fxName = "VST3: Pro-Q 3" })
+      assert(names[1] == "JS: reaper-mcp/mcp_gain_trace" and names[2] == "VST3: Pro-Q 3")
     `);
   });
 });
