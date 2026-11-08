@@ -14,8 +14,9 @@ import { Stems } from './Stems.js';
 import { VerifyEdit } from './VerifyEdit.js';
 import { StereoBands } from './StereoBands.js';
 import { Waveform } from './Waveform.js';
+import { Waveforms } from './Waveforms.js';
 
 /** A call's result (`<Measurement entry … />`), one part per kind, and the readouts they are built from */
-export const Measurement = Object.assign(MeasurementView, { Readout, Level, Scale, Loudness, Spectrum, Waveform, Offline, Alignment, Aesthetics, Key, Chords, LoudnessCurve, StereoBands, Masking, Stems, VerifyEdit });
+export const Measurement = Object.assign(MeasurementView, { Readout, Level, Scale, Loudness, Spectrum, Waveform, Waveforms, Offline, Alignment, Aesthetics, Key, Chords, LoudnessCurve, StereoBands, Masking, Stems, VerifyEdit });
 
 export { fmt, zoneOf, type Zone } from './format.js';

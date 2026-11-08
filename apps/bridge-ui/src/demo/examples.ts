@@ -91,6 +91,21 @@ function measurementExampleList(): Example[] {
   const waveClipped = call('render_track_to_wav', { ...render, trackIndex: 1 }, { ...waveform(1.1, 0.06), rmsDb: -11.2, clipped: 37 }, { ms: 1043 });
   const waveQuiet = call('render_track_to_wav', { ...render, trackIndex: 2 }, { ...waveform(0.06, 0.004), rmsDb: -42.5, clipped: 0 }, { ms: 870 });
 
+  // Several renders in one pass: one waveform per track, 60 slices each
+  const lane = (name: string, top: number, bed: number, rmsDb: number, clipped = 0) => {
+    const w = waveform(top, bed);
+    return { name, hi: w.hi.filter((_, i) => i % 2 === 0), lo: w.lo.filter((_, i) => i % 2 === 0), peakDb: w.peakDb, rmsDb, clipped };
+  };
+  const renders = { trackIndices: [0, 1, 2], startTime: 30, endTime: 35, commandId: 'example' };
+  const waves = call('render_tracks_to_wav', renders, {
+    durationSeconds: 5, start: 30, rendered: 2, cached: 1, tracks: [lane('Kick', 0.9, 0.02, -16.8), lane('Snare', 0.55, 0.03, -19.4), lane('Vox', 0.2, 0.05, -26.1)],
+  }, { ms: 1320 });
+  const wavesClipped = call('render_tracks_to_wav', { ...renders, trackIndices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }, {
+    durationSeconds: 5, start: 30, rendered: 12, cached: 0, more: 4,
+    tracks: [lane('Drums', 1.1, 0.06, -9.2, 41), lane('Bass', 0.5, 0.05, -17.5), lane('Gtr L', 0.35, 0.04, -21.2), lane('Gtr R', 0.35, 0.04, -21.4),
+      lane('Keys', 0.12, 0.02, -30.1), lane('Pad', 0.06, 0.03, -34.8), lane('Vox', 0.28, 0.05, -23.3), lane('Verb', 0.08, 0.02, -33.9)],
+  }, { ms: 4210 });
+
   // Sidecar tools, logged by the server with `_log_result`
   const SONG_SECTIONS = [-16.2, -15.8, -11.4, -9.6, -9.1, -12.8, -15.1, -9.2, -8.7, -9.4, -14, -18.5].map((l, i) => [i * 15, i * 15 + 15, l]);
   const offlineR = {
@@ -222,6 +237,10 @@ function measurementExampleList(): Example[] {
     example('Waveform', wave, 'A render’s waveform on a dB scale; hover for values', earlier(wave, { ...waveform(0.45), rmsDb: -21.2, clipped: 0 })),
     example('Waveform · clipped', waveClipped, 'Clipped samples counted and named'),
     example('Waveform · quiet', waveQuiet, 'Quiet material still fills the height'),
+    example('Waveforms', waves, 'Three tracks rendered in one pass, one reused; the previous call dashed', earlier(waves, {
+      durationSeconds: 5, start: 30, rendered: 3, cached: 0, tracks: [lane('Kick', 1.1, 0.06, -12.4, 18), lane('Snare', 0.55, 0.03, -19.4), lane('Vox', 0.2, 0.05, -26.1)],
+    })),
+    example('Waveforms · clipped, more tracks', wavesClipped, 'Twelve rendered, eight drawn; the drums clip'),
     example('Offline analysis', offline, 'Sections, band balance, resonances; previous call ghosted', earlier(offline, { ...offlineR, lufs: -11.6 })),
     example('Offline · against a reference', offlineRef, 'Loudness and band balance against a reference file'),
     example('Audio file', audioFile, 'A reference on disk, no REAPER involved', earlier(audioFile, { ...offlineR, lufs: -8.6 })),
@@ -709,6 +728,17 @@ function editExampleList(): Example[] {
     gtrL([[16, 30, 0.5, 2, 0, 1], [48, 31, 0, 0.5, 0, 1], ITEMS[2]]));
   const fadesSet = call('set_item_fades', track(4, { itemIndex: 0, fadeInLength: 0.02, fadeOutLength: 0.5, fadeOutShape: 2 }), gtrL([[16, 30, 0.02, 0.5, 0, 0], ITEMS[1], ITEMS[2]]));
   const fileInserted = call('insert_audio_file', track(4, { filePath: '/Users/you/Music/Samples/riser.wav', position: 44 }), gtrL([ITEMS[0], [44, 4, 0, 0, 0, 0], ITEMS[1], ITEMS[2]]));
+  const PICK_ITEMS = '[{"trackIndex":4,"itemIndex":0},{"trackIndex":4,"itemIndex":1},{"trackIndex":5,"itemIndex":0}]';
+  const GTR_R = [[16, 30, 0, 0, 0, 0], [160, 31, 0, 4, 0, 0]];
+  const itemsPicked = call('set_selected_items', { items: PICK_ITEMS, mode: 'replace' }, {
+    ...timeline(SONG_REGIONS, SONG_MARKERS, SONG_TEMPO, undefined),
+    lanes: [{ t: 'Gtr L', items: ITEMS, picked: [0, 1], wasPicked: [2] }, { t: 'Gtr R', items: GTR_R, picked: [0] }],
+    selected: 3, wasSelected: 1,
+  });
+  const itemsPickedFirst = call('set_selected_items', { items: '[{"trackIndex":4,"itemIndex":1}]', mode: 'replace' }, {
+    ...timeline(SONG_REGIONS, SONG_MARKERS, SONG_TEMPO, undefined),
+    lanes: [{ t: 'Gtr L', items: ITEMS, picked: [1] }], selected: 1, wasSelected: 0,
+  });
   const selectionRead = call('get_time_selection', {}, { ...timeline(SONG_REGIONS, SONG_MARKERS, SONG_TEMPO, undefined), sel: [48, 80], cur: 48 });
   const cursorMoved = call('set_cursor_position', { position: 64.5 }, {
     ...timeline(SONG_REGIONS, SONG_MARKERS, SONG_TEMPO, undefined), sel: [48, 80], cur: 64.5, wasSel: [48, 80], wasCur: 48,
@@ -862,6 +892,8 @@ function editExampleList(): Example[] {
     example('Item deleted', itemDeleted, 'The last item gone, dashed'),
     example('Item changed', itemChanged, 'A fade-in added'),
     example('Items changed', itemsMuted, 'Two items muted'),
+    example('Items selected', itemsPicked, 'Three items on two tracks; the one selected before is dashed'),
+    example('Items selected · first selection', itemsPickedFirst, 'Nothing was selected before; the other items sit dimmed'),
     example('Item fades', fadesSet, 'A short fade-in and a shorter fade-out'),
     example('Audio file inserted', fileInserted, 'A riser before the chorus'),
     example('Time selection read', selectionRead, 'Selection and cursor, as they are'),

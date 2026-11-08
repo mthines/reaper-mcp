@@ -297,6 +297,86 @@ describe('measurement results in the log', () => {
     expect(r.peakDb).toBe(0);
     expect(r.clipped).toBe(1000); // 500 frames × 2 channels at full scale
   });
+
+  it('draws a waveform per track of a multi-track render, from the files the bridge keeps', async () => {
+    // The render writes 1 s of 16-bit mono at 1 kHz at a tenth of full scale
+    const bridge = await startBridge(`
+      local render = {}
+      api.GetTempPath = function() return "/tmp/" end
+      api.GetSetProjectInfo_String = function(_, k, v, set) if set then render[k] = v end return true, render[k] or "" end
+      api.Main_OnCommand = function(id)
+        if id ~= 42230 then return end
+        local frames = {}
+        for i = 0, 999 do frames[#frames + 1] = string.pack("<i2", i % 2 == 0 and 3277 or -3277) end
+        local data = table.concat(frames)
+        local fmt = string.pack("<I2I2I4I4I2I2", 1, 1, 1000, 2000, 2, 16)
+        local f = io.open(render.RENDER_FILE .. render.RENDER_PATTERN .. ".wav", "wb")
+        f:write("RIFF", string.pack("<I4", 4 + 8 + #fmt + 8 + #data), "WAVE", "fmt ", string.pack("<I4", #fmt), fmt,
+          "data", string.pack("<I4", #data), data)
+        f:close()
+      end
+    `);
+    const render = (commandId: string) =>
+      bridge.send('render_tracks_to_wav', { trackIndices: '[0]', startTime: 2, endTime: 3, commandId }) as Promise<{ success: boolean; data?: Record<string, unknown> }>;
+    const res = await render('abc');
+    expect(res.success).toBe(true);
+    expect(JSON.stringify(res.data)).not.toContain('"hi"'); // the agent's answer stays as it was
+
+    const r = (await bridge.status()).recent[0].r as {
+      durationSeconds: number; rendered: number; cached: number; tracks: Array<{ name: string; hi: number[]; lo: number[]; peakDb: number; clipped: number }>;
+    };
+    expect(r).toMatchObject({ durationSeconds: 1, start: 2, rendered: 1, cached: 0 });
+    expect(r).not.toHaveProperty('approx');
+    expect(r.tracks).toHaveLength(1);
+    expect(r.tracks[0].name).toBe('Kick');
+    expect(r.tracks[0].hi).toHaveLength(60);
+    expect(r.tracks[0].hi[10]).toBeCloseTo(0.1, 2);
+    expect(r.tracks[0].lo[10]).toBeCloseTo(-0.1, 2);
+    expect(r.tracks[0].clipped).toBe(0);
+
+    // Rendering the same range again reuses the file, and still draws it
+    await render('abd');
+    expect((await bridge.status()).recent[0].r).toMatchObject({ rendered: 0, cached: 1, tracks: [{ name: 'Kick' }] });
+  });
+
+  it('counts clipping on a long render from a sample and says so', async () => {
+    // 400k frames of full-scale mono is past the sample cap, so every other frame is read and the count doubled
+    const bridge = await startBridge(`
+      local render = {}
+      api.GetTempPath = function() return "/tmp/" end
+      api.GetSetProjectInfo_String = function(_, k, v, set) if set then render[k] = v end return true, render[k] or "" end
+      api.Main_OnCommand = function(id)
+        if id ~= 42230 then return end
+        local data = string.rep(string.pack("<i2", 32767), 400000)
+        local fmt = string.pack("<I2I2I4I4I2I2", 1, 1, 44100, 88200, 2, 16)
+        local f = io.open(render.RENDER_FILE .. render.RENDER_PATTERN .. ".wav", "wb")
+        f:write("RIFF", string.pack("<I4", 4 + 8 + #fmt + 8 + #data), "WAVE", "fmt ", string.pack("<I4", #fmt), fmt,
+          "data", string.pack("<I4", #data), data)
+        f:close()
+      end
+    `);
+    const res = await bridge.send('render_tracks_to_wav', { trackIndices: '[0]', startTime: 0, endTime: 9, commandId: 'abc' });
+    expect(res.success).toBe(true);
+    const r = (await bridge.status()).recent[0].r as { approx: number; tracks: Array<{ clipped: number }> };
+    expect(r.approx).toBe(1);
+    expect(r.tracks[0].clipped).toBe(400000);
+  });
+
+  it('keeps no waveforms when the rendered files cannot be read', async () => {
+    const bridge = await startBridge(`
+      local render = {}
+      api.GetTempPath = function() return "/tmp/" end
+      api.GetSetProjectInfo_String = function(_, k, v, set) if set then render[k] = v end return true, render[k] or "" end
+      api.Main_OnCommand = function(id)
+        if id ~= 42230 then return end
+        local f = io.open(render.RENDER_FILE .. render.RENDER_PATTERN .. ".wav", "wb")
+        f:write("RIFF"); f:close()
+      end
+    `);
+    const res = await bridge.send('render_tracks_to_wav', { trackIndices: '[0]', startTime: 0, endTime: 5, commandId: 'abc' });
+    expect(res.success).toBe(true);
+    expect((await bridge.status()).recent[0].r).toBeUndefined();
+  });
 });
 
 const MIDI_ITEM = `
@@ -971,6 +1051,53 @@ describe('arrangement view in the log', () => {
     const r = (await bridge.status()).recent[0].r;
     expect(r).toMatchObject({ moreTracks: 2 });
     expect(r?.lanes).toHaveLength(4);
+  });
+
+  it('selection view in the log: a lane per track with selected items, which ones are selected now and were before', async () => {
+    const bridge = await startBridge(`
+      for t = 1, 2 do
+        api.tracks[t] = api.tracks[t] or { name = "T" .. t, guid = "{T" .. t .. "}", vals = {}, fx = {}, sends = {}, chunk = "" }
+        api.tracks[t].items = {}
+        for i = 1, 3 do api.tracks[t].items[i] = { vals = { D_POSITION = i * 10, D_LENGTH = 5 }, takes = {} } end
+      end
+      api.tracks[1].items[3].selected = true
+      api.tracks[2].items[1].selected = true
+    `);
+    const pick = [{ trackIndex: 0, itemIndex: 0 }, { trackIndex: 0, itemIndex: 1 }];
+    const res = await bridge.send('set_selected_items', { items: JSON.stringify(pick), mode: 'replace' });
+    expect(res.success, res.error).toBe(true);
+    const r = (await bridge.status()).recent[0].r as { selected: number; wasSelected: number; lanes: Array<Record<string, unknown>> };
+    expect(r).toMatchObject({ selected: 2, wasSelected: 2 });
+    // The second track only appears for what it let go of
+    expect(r.lanes).toHaveLength(2);
+    expect(r.lanes[0]).toMatchObject({ picked: [0, 1], wasPicked: [2] });
+    expect(r.lanes[0].items).toEqual([[10, 5, 0, 0, 0, 0], [20, 5, 0, 0, 0, 0], [30, 5, 0, 0, 0, 0]]);
+    expect(r.lanes[1]).toMatchObject({ wasPicked: [0] });
+    expect(r.lanes[1]).not.toHaveProperty('picked');
+  });
+
+  it('selection view in the log: adding keeps what was selected, and six tracks draw four lanes', async () => {
+    const bridge = await startBridge(`
+      for t = 1, 6 do
+        api.tracks[t] = api.tracks[t] or { name = "T" .. t, guid = "{T" .. t .. "}", vals = {}, fx = {}, sends = {}, chunk = "" }
+        api.tracks[t].items = { { vals = { D_POSITION = t, D_LENGTH = 1 }, takes = {} } }
+      end
+      api.tracks[1].items[1].selected = true
+    `);
+    const items = [1, 2, 3, 4, 5].map((t) => ({ trackIndex: t, itemIndex: 0 }));
+    const res = await bridge.send('set_selected_items', { items: JSON.stringify(items), mode: 'add' });
+    expect(res.success, res.error).toBe(true);
+    const r = (await bridge.status()).recent[0].r as { selected: number; wasSelected: number; moreTracks: number; lanes: Array<Record<string, unknown>> };
+    expect(r).toMatchObject({ selected: 6, wasSelected: 1, moreTracks: 2 });
+    expect(r.lanes).toHaveLength(4);
+    expect(r.lanes[0]).toMatchObject({ picked: [0], wasPicked: [0] });
+  });
+
+  it('selection view in the log: a refused selection keeps no view', async () => {
+    const bridge = await startBridge();
+    const res = await bridge.send('set_selected_items', { items: JSON.stringify([{ trackIndex: 0, itemIndex: 99 }]) });
+    expect(res.success).toBe(false);
+    expect((await bridge.status()).recent[0].r).toBeUndefined();
   });
 
   it('arrangement view in the log: a refused edit keeps no view', async () => {

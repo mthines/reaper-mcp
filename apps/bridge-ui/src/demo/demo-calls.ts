@@ -84,7 +84,7 @@ export const DEMO_CALLS: Record<LoggedCommand, Record<string, unknown> | 'exampl
   // Selection
   get_selected_tracks: {},
   set_selected_tracks: { tracks: '["Kick In","Snare Top"]', mode: 'replace' },
-  set_selected_items: { items: '[{"trackIndex":4,"itemIndex":0}]', mode: 'replace' },
+  set_selected_items: 'example',
   get_time_selection: 'example',
   set_time_selection: 'example',
   // Markers & regions
@@ -145,7 +145,7 @@ export const DEMO_CALLS: Record<LoggedCommand, Record<string, unknown> | 'exampl
   set_fx_state: { trackIndex: 3, fxIndex: 0, inFile: 'fxstate_8c21.in', expectName: 'Vital' },
   extension_call: { extension: 'vital', command: 'summarize', paramsJson: '{"trackIndex":3}' },
   render_track_to_wav: 'example',
-  render_tracks_to_wav: { trackIndices: [0, 1, 2], startTime: 30, endTime: 50, commandId: 'demo' },
+  render_tracks_to_wav: 'example',
   // Sidecar analysis (logged by the server)
   analyze_track_aesthetics: 'example',
   analyze_track_offline: 'example',

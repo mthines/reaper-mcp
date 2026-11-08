@@ -73,3 +73,57 @@ export const HoveringTheTempoLaneShowsTheNearestMarker: Story = {
     await expect(c.queryByRole('tooltip')).not.toBeInTheDocument();
   },
 };
+
+const selection = (title: 'Items selected' | 'Items selected · first selection') => {
+  const x = editExamples('timeline').find((e) => e.title === title);
+  if (!x) throw new Error(`no example ${title}`);
+  return x.v;
+};
+
+export const ASelectionChangeCountsWhatWasPickedUpAndLetGo: Story = {
+  args: { v: selection('Items selected') },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await expect(c.getByText('1 → 3')).toBeInTheDocument();
+    await expect(c.getByTitle('Items that were not selected before')).toHaveTextContent('3');
+    await expect(c.getByTitle('Items that were selected before and are not now')).toHaveTextContent('1');
+    // Every mark has its legend entry
+    await expect(c.getAllByText('Selected')).toHaveLength(2); // the readout and the legend entry
+    await expect(c.getByText('Was selected')).toBeInTheDocument();
+  },
+};
+
+export const ItemsNameTheirSelectionStateOnHover: Story = {
+  args: { v: selection('Items selected') },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await expect(c.getAllByTitle(/ · selected$/)).toHaveLength(3);
+    await expect(c.getAllByTitle(/ · was selected$/)).toHaveLength(1);
+  },
+};
+
+export const AFirstSelectionHasNothingToLetGo: Story = {
+  args: { v: selection('Items selected · first selection') },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await expect(c.getByText('1')).toBeInTheDocument();
+    await expect(c.queryByText('Let go')).not.toBeInTheDocument();
+    await expect(c.queryByText('Was selected')).not.toBeInTheDocument();
+    await expect(c.getByText('Not selected')).toBeInTheDocument();
+  },
+};
+
+export const MovingTheSelectionToTheNextItemLegendsOnlyWhatIsDrawn: Story = {
+  args: {
+    v: {
+      kind: 'timeline', regions: [], markers: [], tempo: [[0, 120, 4, 4, 0]], len: 100, selected: 1, wasSelected: 1,
+      lanes: [{ t: 'Gtr L', items: [[10, 10, 0, 0, 0, 0], [30, 10, 0, 0, 0, 0]], picked: [1], wasPicked: [0] }],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await expect(c.getByText('Was selected')).toBeInTheDocument();
+    // Both items are selected or dashed: nothing is drawn plain, so no entry for it
+    await expect(c.queryByText('Not selected')).not.toBeInTheDocument();
+  },
+};

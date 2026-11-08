@@ -33,6 +33,10 @@
 /* Items per track, and the time selection / edit cursor across the whole timeline */
 .evTimeline { position: relative; }
 .evLaneWrap { display: flex; flex-direction: column; gap: 2px; }
+.evItemPicked { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 50%, transparent); }
+.evItemIdle { border-color: var(--line-2); background: color-mix(in srgb, var(--muted) 12%, transparent); }
+.lgPicked { width: 10px; height: 8px; border: 1px solid var(--accent); border-radius: 2px; background: color-mix(in srgb, var(--accent) 50%, transparent); }
+.lgIdle { width: 10px; height: 8px; border: 1px solid var(--line-2); border-radius: 2px; background: color-mix(in srgb, var(--muted) 12%, transparent); }
 .evItem.evNew { outline: 1.5px solid var(--accent); outline-offset: -1.5px; }
 .evItem.evGone { background: none; border: 1px dashed var(--muted); }
 .evLaneEmpty { position: absolute; left: 0; line-height: 22px; }

@@ -177,6 +177,8 @@ function measured<K extends Measurement['kind']>(e: CommandEntry, kind: K): Extr
   const m = measurementOf(e);
   return m?.kind === kind ? (m as Extract<Measurement, { kind: K }>) : null;
 }
+/** The checks of verify_edit as a musician names them */
+const VERIFY_WORD: Record<string, string> = { null: 'the waveform comparison', discontinuity: 'clicks', pitch: 'pitch', tone: 'tone', transients: 'transients' };
 /** A number with a real minus sign, as the readouts print it: −14 */
 const signed = (v: number, digits?: number) => (digits === undefined ? String(v) : v.toFixed(digits)).replace('-', '−');
 const lufs = (v: number | undefined) => (v === undefined ? null : `${signed(v, 1)} LUFS`);
@@ -467,7 +469,16 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
   // Selection
   get_selected_tracks: { title: 'Read the track selection', did: () => 'checked which tracks are selected' },
   set_selected_tracks: { title: 'Select tracks', did: (e) => `${paramsOf(e).mode === 'add' ? 'added' : 'selected'} ${names(paramsOf(e).tracks) ?? 'tracks'}${paramsOf(e).mode === 'add' ? ' to the selection' : ''}` },
-  set_selected_items: { title: 'Select items', did: (e) => `selected ${countOf(paramsOf(e).items, 'item', 'items')}` },
+  set_selected_items: {
+    title: 'Select items',
+    did: (e) => {
+      const v = editViewOf(e);
+      if (v?.kind !== 'timeline' || v.selected === undefined) return `selected ${countOf(paramsOf(e).items, 'item', 'items')}`;
+      const where = (v.lanes ?? []).filter((l) => l.picked?.length).map((l) => quoted(l.t));
+      const before = v.wasSelected ? ` (${v.wasSelected} ${v.wasSelected === 1 ? 'was' : 'were'} selected before)` : '';
+      return `selected ${plural(v.selected, 'item')}${where.length ? ` on ${list(where)}` : ''}${before}`;
+    },
+  },
   get_time_selection: { title: 'Read the time selection', did: () => 'checked the time selection' },
   set_time_selection: { title: 'Set the time selection', did: (e) => `selected the time${between(paramsOf(e).start, paramsOf(e).end)}` },
   // Markers & regions
@@ -648,7 +659,21 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
   },
   remove_mcp_meters: { title: 'Remove the agent’s meters', did: (e) => `removed the meters it had added to ${countOf(paramsOf(e).trackIndices, 'track', 'the tracks')}` },
   render_track_to_wav: { title: 'Render a clip to listen to', did: (e) => `rendered ${on(e)}${between(paramsOf(e).startTime, paramsOf(e).endTime)} to a file to analyse` },
-  render_tracks_to_wav: { title: 'Render several clips to listen to', did: (e) => `rendered ${countOf(paramsOf(e).trackIndices, 'track', 'the tracks')}${between(paramsOf(e).startTime, paramsOf(e).endTime)} in one pass to analyse` },
+  render_tracks_to_wav: {
+    title: 'Render several clips to listen to',
+    did: (e) => {
+      const p = paramsOf(e);
+      const base = `rendered ${countOf(p.trackIndices, 'track', 'the tracks')}${between(p.startTime, p.endTime)} in one pass to analyse`;
+      const m = measured(e, 'waveforms');
+      if (!m) return base;
+      const total = m.tracks.length + (m.more ?? 0);
+      const reused = !m.cached ? '' : m.cached >= total ? ', all reused from an earlier render' : `, ${m.cached} reused from an earlier render`;
+      const peaks = m.tracks.flatMap((t) => (t.peakDb === undefined ? [] : [t.peakDb]));
+      const loudest = peaks.length ? `, the loudest peaking at ${signed(Math.max(...peaks), 1)} dBFS` : '';
+      const clipped = m.tracks.reduce((n, t) => n + (t.clipped ?? 0), 0);
+      return `${base}${reused}${loudest}${clipped ? `, with ${plural(clipped, 'sample')} clipped` : ''}`;
+    },
+  },
   analyze_track_aesthetics: {
     title: 'Score the sound quality',
     did: (e) => {
@@ -687,7 +712,12 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
     did: (e) => {
       const p = paramsOf(e);
       const against = str(p.referencePath) ? fileName(p.referencePath) : (trackName(p.referenceTrack) ?? 'the audio from before the edit');
-      return `checked the edit on ${on(e)} against ${against}`;
+      const base = `checked the edit on ${on(e)} against ${against}`;
+      const m = measured(e, 'verify');
+      const word = m?.verdict === 'ok' ? 'it passed' : m?.verdict === 'warn' ? 'worth a listen' : m?.verdict === 'fail' ? 'it failed' : null;
+      if (!m || !word) return base;
+      const worry = m.checks.filter((c) => c[1] === 'warn' || c[1] === 'fail').map((c) => VERIFY_WORD[c[0]] ?? c[0]);
+      return `${base}: ${word}${worry.length ? ` (${list(worry)})` : ''}`;
     },
   },
   detect_transients: {

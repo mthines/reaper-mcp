@@ -616,6 +616,57 @@ local function item_view(params, before)
   return r
 end
 
+-- Item selection: the media items selected, per track (0-based item indexes), tracks without any left out
+local function selected_items()
+  local out = {}
+  for t = 0, (api.CountTracks(0) or 0) - 1 do
+    local tr = api.GetTrack(0, t)
+    local picked
+    for i = 0, (api.CountTrackMediaItems(tr) or 0) - 1 do
+      if api.IsMediaItemSelected(api.GetTrackMediaItem(tr, i)) then
+        picked = picked or {}
+        picked[#picked + 1] = i
+      end
+    end
+    if picked then out[t] = picked end
+  end
+  return out
+end
+
+-- The timeline with a lane per track that has selected items, now or before (the first four): every item on the
+-- track, which ones are selected (`picked`) and which were (`wasPicked`)
+local function selection_view(before)
+  local now, was = selected_items(), before or {}
+  local order, seen = {}, {}
+  for _, set in ipairs({ now, was }) do
+    for t in pairs(set) do
+      if not seen[t] then seen[t] = true; order[#order + 1] = t end
+    end
+  end
+  table.sort(order)
+  local r = timeline_snapshot()
+  r.lanes, r.selected, r.wasSelected = {}, 0, 0
+  for _, picked in pairs(now) do r.selected = r.selected + #picked end
+  for _, picked in pairs(was) do r.wasSelected = r.wasSelected + #picked end
+  local all = {}
+  for i = 1, math.min(#order, 4) do
+    local t = order[i]
+    local tr = api.GetTrack(0, t)
+    local lane = { t = name_of(tr), items = track_items(tr) }
+    local function within(list)
+      local out = {}
+      for _, idx in ipairs(list or {}) do if idx < EDIT_MAX_MARKS then out[#out + 1] = idx end end
+      return #out > 0 and out or nil
+    end
+    lane.picked, lane.wasPicked = within(now[t]), within(was[t])
+    r.lanes[i] = lane
+    for _, it in ipairs(lane.items) do all[#all + 1] = it end
+  end
+  if #order > 4 then r.moreTracks = #order - 4 end
+  r.len = project_length(r, all)
+  return r
+end
+
 -- Arrangement edits: the whole timeline before and after, a lane for up to four tracks the
 -- edit touches, and the span it worked on (copied from, opened, cut) and where it copied to
 local ARRANGE = {}
@@ -871,7 +922,8 @@ local WAVE_MAX_SAMPLES = 2000000 -- longer renders are read with a stride
 local WAV_SAMPLE = { [1] = { [16] = { "<i2", 32768 }, [24] = { "<i3", 8388608 }, [32] = { "<i4", 2147483648 } },
                      [3] = { [32] = { "<f", 1 }, [64] = { "<d", 1 } } }
 
-local function wav_waveform(path)
+local function wav_waveform(path, buckets, max_samples)
+  buckets, max_samples = buckets or WAVE_BUCKETS, max_samples or WAVE_MAX_SAMPLES
   if type(path) ~= "string" then return nil end
   local f = io.open(path, "rb")
   if not f then return nil end
@@ -897,12 +949,12 @@ local function wav_waveform(path)
   local frame_bytes = width * channels
   local frames = data_len // frame_bytes
   if frames < 1 then return nil end
-  local stride = math.max(1, math.ceil(frames * channels / WAVE_MAX_SAMPLES))
+  local stride = math.max(1, math.ceil(frames * channels / max_samples))
   local hi, lo = {}, {}
-  for b = 1, WAVE_BUCKETS do hi[b], lo[b] = 0, 0 end
+  for b = 1, buckets do hi[b], lo[b] = 0, 0 end
   local peak, sum, count, clipped = 0, 0, 0, 0
   for fr = 0, frames - 1, stride do
-    local b = fr * WAVE_BUCKETS // frames + 1
+    local b = fr * buckets // frames + 1
     local at = data_pos + fr * frame_bytes
     for _ = 1, channels do
       local v = string.unpack(fmt, s, at) / scale
@@ -916,9 +968,44 @@ local function wav_waveform(path)
       count = count + 1
     end
   end
-  for b = 1, WAVE_BUCKETS do hi[b], lo[b] = round2(hi[b]), round2(lo[b]) end
+  for b = 1, buckets do hi[b], lo[b] = round2(hi[b]), round2(lo[b]) end
   local db = function(v) return v > 0 and round2(20 * math.log(v, 10)) or -150 end
-  return { hi = hi, lo = lo, peakDb = db(peak), rmsDb = db(math.sqrt(sum / count)), clipped = clipped, channels = channels }
+  -- The stride read is the second value, so a caller that merges the table into a result never carries it
+  return { hi = hi, lo = lo, peakDb = db(peak), rmsDb = db(math.sqrt(sum / count)), clipped = clipped, channels = channels }, stride
+end
+
+-- render_tracks_to_wav: one waveform per rendered track on a shared time axis, read from the cached files (the
+-- bridge keeps them). Coarser than a single render's (fewer slices, a stride through long files) and read within
+-- a time budget, so a 16-track render does not hold the main thread; tracks past the cap or the budget are counted
+local WAVES_MAX_TRACKS = 8
+local WAVES_BUCKETS = 60
+local WAVES_MAX_SAMPLES = 300000
+local WAVES_BUDGET_S = 1.0
+
+local function waves_view(params, data)
+  if type(data) ~= "table" or type(data.tracks) ~= "table" then return nil end
+  local clock = api.time_precise
+  local started = clock and clock() or 0
+  local rows, more, duration, approx = {}, 0, nil, false
+  for _, t in ipairs(data.tracks) do
+    duration = duration or round2(t.durationSeconds)
+    local ok, wave, stride = false, nil, 1
+    if #rows < WAVES_MAX_TRACKS and (not clock or clock() - started < WAVES_BUDGET_S) then
+      ok, wave, stride = pcall(wav_waveform, t.wavPath, WAVES_BUCKETS, WAVES_MAX_SAMPLES)
+    end
+    if ok and wave then
+      -- Past the sample cap only every `stride`th frame is read: the clipped count is scaled up and marked approximate
+      if (stride or 1) > 1 then approx = true end
+      rows[#rows + 1] = { name = t.trackName or "", hi = wave.hi, lo = wave.lo, peakDb = wave.peakDb, rmsDb = wave.rmsDb, clipped = wave.clipped * (stride or 1) }
+    else
+      more = more + 1
+    end
+  end
+  if #rows == 0 then return nil end
+  return {
+    tracks = rows, more = more > 0 and more or nil, durationSeconds = duration, start = round2(tonumber(params.startTime)),
+    approx = approx and 1 or nil, rendered = data.rendered or 0, cached = data.cached or 0,
+  }
 end
 
 -- Mixing depth views: built from the handler's own result, which carries the state before
@@ -1284,6 +1371,8 @@ function M.before(cmd_type, params)
     return ARRANGE.before(cmd_type, params)
   elseif cmd_type == "set_time_selection" or cmd_type == "set_cursor_position" then
     return time_state()
+  elseif cmd_type == "set_selected_items" then
+    return selected_items()
   elseif ROUTING_COMMANDS[cmd_type] and cmd_type ~= "get_track_routing" then
     local tr = routing_track(params)
     return tr and { track = tr, routes = routes_of(tr) }
@@ -1335,6 +1424,10 @@ function M.summary(cmd_type, params, data, before)
     return ARRANGE.view(cmd_type, params, data, before)
   elseif TIME_COMMANDS[cmd_type] then
     return time_view(before)
+  elseif cmd_type == "set_selected_items" then
+    return selection_view(before)
+  elseif cmd_type == "render_tracks_to_wav" then
+    return waves_view(params, data)
   elseif ROUTING_COMMANDS[cmd_type] then
     -- A write reads the same track it read before (remove_send can leave nothing to resolve by index)
     local tr = before and before.track or routing_track(params)

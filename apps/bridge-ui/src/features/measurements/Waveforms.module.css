@@ -1,0 +1,10 @@
+/* Several renders: a name and a waveform per track, one shared time axis under them */
+.defs { position: absolute; }
+.lanes { display: flex; flex-direction: column; gap: 4px; }
+.lane { display: grid; grid-template-columns: minmax(56px, 26%) minmax(0, 1fr); align-items: center; gap: 8px; }
+.lane svg { display: block; width: 100%; height: 40px; }
+.name { min-width: 0; font-size: 10.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shape { fill-opacity: 0.55; stroke-width: 0.8; stroke-linejoin: round; }
+/* The axis lines up with the waveforms, not the names */
+.axis { margin-left: calc(26% + 8px); }
+@container (max-width: 300px) { .lane { grid-template-columns: minmax(44px, 22%) minmax(0, 1fr); } .axis { margin-left: calc(22% + 8px); } }
