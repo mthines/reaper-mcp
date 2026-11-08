@@ -268,10 +268,10 @@ export function registerOfflineTools(server: McpServer): void {
     "reference's own, with where it happens and which channel (a click or hard splice). Use expect 'identical' (default) for edits that " +
     'should leave the sound alone apart from level, delay and polarity (alignment, gain, split, crossfade): the residual ' +
     'is judged ok/warn/fail. Use "changed" for EQ, compression and the like: the residual is reported without a ' +
-    'verdict. Set timeScale to the stretch factor when the edit changed the timing: the waveform null is then skipped ' +
-    'and only the click check runs. The reference is another track (e.g. a copy you kept) or an audio file of the same ' +
-    'range from before the edit (a bounce), not an undo. Keep a reference track unmuted so it renders. Pitch, formant and transient checks are not included: they ' +
-    'need a baseline per source. A passing result is evidence, not a replacement for listening. Requires the Python sidecar.',
+    'verdict. Set timeScale to the playback rate when the edit changed the timing (1.1 = the edit is 10% shorter): the waveform null is then skipped ' +
+    'and the click check runs with three warn-only character checks against the reference warped through that rate: pitch drift in cents ' +
+    '(skipped for unpitched material), tone (long-term spectrum distance in dB) and transients (smeared attacks).  The reference is another track (e.g. a copy you kept) or an audio file of the same ' +
+    'range from before the edit (a bounce), not an undo. Keep a reference track unmuted so it renders. The tone check misses a phase vocoder\'s smearing and the transient check is blind on drums. A passing result is evidence, not a replacement for listening. Requires the Python sidecar.',
     {
       trackIndex: z.coerce.number().int().min(0).describe('Zero-based index of the edited track'),
       referenceTrack: z.coerce.number().int().min(0).optional()
@@ -284,7 +284,7 @@ export function registerOfflineTools(server: McpServer): void {
       expect: z.enum(['identical', 'changed']).optional().default('identical')
         .describe('"identical": only level, delay and polarity may differ; "changed": report the residual without a verdict'),
       timeScale: z.coerce.number().min(0.1).max(10).optional().default(1)
-        .describe('1 = the edit kept the timing (default). Any other value (a stretch) skips the waveform null'),
+        .describe('Playback rate: 1 = the edit kept the timing (default); 1.1 = the edit is 10% shorter. Any other value skips the waveform null and runs the pitch, tone and transient checks instead'),
       maxLagMs: z.coerce.number().min(0.1).max(100).optional().default(DEFAULT_MAX_LAG_MS)
         .describe(`Largest delay to search either way in ms (default ${DEFAULT_MAX_LAG_MS})`),
     },

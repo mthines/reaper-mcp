@@ -13,8 +13,16 @@ experiment behind the tool (github.com/mthines/reaper-mcp issue 69):
   splice or a click scores far above anything a clean edit produces. Judged against
   the reference's own score, so a source that is naturally spiky is not flagged.
 
-Pitch, formant and transient checks were source-dependent in the experiment (they
-need a pitch range and a baseline per source), so they are not part of this module.
+When the timing changed (a stretch, `time_scale` != 1) the null cannot run, so three
+"character" checks compare the edit with the reference warped through the known time
+map instead (experiment: github.com/mthines/reaper-mcp issue 81). They only ever warn:
+
+* Pitch drift: median cents between matching voiced frames. The pitch range comes from
+  the reference itself; material without a stable pitch is skipped, with the reason.
+* Tone: rms dB difference of the long-term spectrum (40 mel bands, gain removed). Catches
+  varispeed, pitch shifts and added noise; blind to a phase vocoder's smearing.
+* Transients: log ratio of spectral-flux peakiness. Only a drop counts (smearing lowers
+  it); blind on drum-like material.
 """
 
 from __future__ import annotations
@@ -33,6 +41,13 @@ CLICK_WARN_SCORE = 6.0
 CLICK_WARN_RATIO = 2.0
 
 SILENCE = 1e-6
+
+# Character checks (only when the timing changed): warn lines from the issue 81 experiment
+PITCH_WARN_CENTS = 20.0
+TONE_WARN_DB = 0.7
+TRANSIENT_WARN_LOG = -0.25
+MIN_VOICED_FRAMES = 12
+MIN_VOICED_SHARE = 0.25
 
 
 def _mono(audio: np.ndarray) -> np.ndarray:
@@ -159,6 +174,131 @@ def _worst_channel(reference: np.ndarray, edited: np.ndarray, edge_samples: int)
     return best or (discontinuity_score(edit_ch[0]), discontinuity_score(ref_ch[0]), None)
 
 
+def _stft_power(x: np.ndarray, n_fft: int = 2048, hop: int = 512) -> np.ndarray:
+    """(frames, bins) power spectrum with a Hann window; zero-padded to at least one frame."""
+    if len(x) < n_fft:
+        x = np.pad(x, (0, n_fft - len(x)))
+    frames = np.lib.stride_tricks.sliding_window_view(x, n_fft)[::hop]
+    return np.abs(np.fft.rfft(frames * np.hanning(n_fft), axis=1)) ** 2
+
+
+def _normalised(x: np.ndarray) -> np.ndarray:
+    """Peak 0.5, so level-dependent measures compare like with like."""
+    return x / (np.max(np.abs(x)) + 1e-12) * 0.5
+
+
+def _f0_track(x: np.ndarray, sample_rate: int, lo: float, hi: float,
+              frame: int = 4096, hop: int = 1024) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Per-frame f0 (Hz) and a voiced mask from the normalised square difference function:
+    the first peak within 10% of the highest in the lag range [sr/hi, sr/lo], parabolic
+    interpolation, voiced above 0.8. Frames hop by `hop` samples.
+    """
+    if len(x) < frame:
+        x = np.pad(x, (0, frame - len(x)))
+    frames = np.lib.stride_tricks.sliding_window_view(x, frame)[::hop] * np.hanning(frame)
+    size = 2 * frame
+    spec = np.fft.rfft(frames, size, axis=1)
+    acf = np.fft.irfft(np.abs(spec) ** 2, size, axis=1)[:, :frame]
+    sq = np.cumsum(frames ** 2, axis=1)
+    total = sq[:, -1:]
+    # m[tau] = sum_{i<N-tau} (x_i^2 + x_{i+tau}^2): the energy left after dropping the last tau and the first tau samples
+    head = np.concatenate([np.zeros((len(frames), 1)), sq[:, :-1]], axis=1)
+    tail = total - sq[:, ::-1]  # sum of the last tau squares, indexed by tau-1
+    tail = np.concatenate([np.zeros((len(frames), 1)), tail[:, :-1]], axis=1)
+    m = (total - tail) + (total - head)
+    nsdf = 2 * acf / (m + 1e-12)
+    lag_lo, lag_hi = max(2, int(sample_rate / hi)), min(frame - 2, int(sample_rate / lo))
+    window = nsdf[:, lag_lo:lag_hi]
+    f0 = np.full(len(frames), np.nan)
+    voiced = np.zeros(len(frames), dtype=bool)
+    for i, row in enumerate(window):
+        top = float(row.max())
+        if top < 0.8:
+            continue
+        peaks = np.where((row[1:-1] > row[:-2]) & (row[1:-1] >= row[2:]) & (row[1:-1] >= 0.9 * top))[0]
+        if len(peaks) == 0:
+            continue
+        k = int(peaks[0]) + 1
+        a, b, c = row[k - 1], row[k], row[k + 1]
+        denom = a - 2 * b + c
+        shift = 0.5 * (a - c) / denom if abs(denom) > 1e-12 else 0.0
+        f0[i] = sample_rate / (lag_lo + k + shift)
+        voiced[i] = True
+    return f0, voiced
+
+
+def pitch_drift(reference: np.ndarray, edited: np.ndarray, sample_rate: int, rate: float) -> dict[str, Any]:
+    """
+    Median cents between the edit and the reference at matching voiced frames (`rate` > 1: the edit is
+    shorter, so edit time t is reference time t * rate). The range comes from the reference; a pass
+    that finds no stable pitch is skipped with the reason.
+    """
+    wide_f0, wide_voiced = _f0_track(reference, sample_rate, 50.0, 1000.0)
+    if wide_voiced.mean() < MIN_VOICED_SHARE or wide_voiced.sum() < MIN_VOICED_FRAMES:
+        return {"verdict": "skipped", "reason": "no stable pitch in the reference (unpitched material)"}
+    centre = float(np.median(wide_f0[wide_voiced]))
+    lo, hi = max(40.0, centre / 2.0), min(1500.0, centre * 2.0)
+    if centre < 50.0 * 1.05 or centre > 1000.0 * 0.95:
+        return {"verdict": "skipped", "reason": "the pitch tracker stayed at the edge of its range (no reliable pitch)"}
+    ref_f0, ref_voiced = _f0_track(reference, sample_rate, lo, hi)
+    edit_f0, edit_voiced = _f0_track(edited, sample_rate, lo, hi)
+    index = np.round(np.arange(len(edit_f0)) * rate).astype(int)
+    inside = index < len(ref_f0)
+    index, edit_f0, edit_voiced = index[inside], edit_f0[inside], edit_voiced[inside]
+    both = ref_voiced[index] & edit_voiced
+    if both.sum() < MIN_VOICED_FRAMES:
+        return {"verdict": "skipped", "reason": "too few voiced frames in both to compare"}
+    cents = 1200.0 * np.log2(edit_f0[both] / ref_f0[index][both])
+    drift = float(np.median(cents))
+    return {
+        "verdict": "warn" if abs(drift) >= PITCH_WARN_CENTS else "ok",
+        "driftCents": round(drift, 1),
+        "referenceHz": round(centre, 1),
+        "framesCompared": int(both.sum()),
+    }
+
+
+def _mel_filterbank(sample_rate: int, n_fft: int = 2048, bands: int = 40) -> np.ndarray:
+    """Triangular mel filters, 60 Hz to 10 kHz (or 95% of Nyquist): (bands, bins)."""
+    to_mel = lambda f: 2595.0 * np.log10(1.0 + f / 700.0)
+    from_mel = lambda m: 700.0 * (10.0 ** (m / 2595.0) - 1.0)
+    points = from_mel(np.linspace(to_mel(60.0), to_mel(min(10000.0, sample_rate / 2.0 * 0.95)), bands + 2))
+    freqs = np.fft.rfftfreq(n_fft, 1.0 / sample_rate)
+    bank = np.zeros((bands, len(freqs)))
+    for i in range(bands):
+        left, centre, right = points[i:i + 3]
+        bank[i] = np.maximum(0.0, np.minimum((freqs - left) / (centre - left), (right - freqs) / (right - centre)))
+    return bank
+
+
+def _long_term_bands(x: np.ndarray, sample_rate: int) -> np.ndarray:
+    """Mean dB per mel band over the frames within 40 dB of the loudest (a mean of dB, so sparse bursts do not dominate)."""
+    levels = 10.0 * np.log10(_stft_power(x) @ _mel_filterbank(sample_rate).T + 1e-10)
+    frame_level = levels.mean(axis=1)
+    return levels[frame_level > frame_level.max() - 40.0].mean(axis=0)
+
+
+def tone_difference(reference: np.ndarray, edited: np.ndarray, sample_rate: int) -> dict[str, Any]:
+    """Rms dB difference of the long-term spectrum, overall gain removed."""
+    delta = _long_term_bands(reference, sample_rate) - _long_term_bands(edited, sample_rate)
+    distance = float(np.sqrt(np.mean((delta - delta.mean()) ** 2)))
+    return {"verdict": "warn" if distance >= TONE_WARN_DB else "ok", "distanceDb": round(distance, 2)}
+
+
+def _flux_peakiness(x: np.ndarray) -> float:
+    power = _stft_power(x, 1024, 256)
+    logged = np.log1p(np.sqrt(power) * 20.0)
+    flux = np.maximum(np.diff(logged, axis=0), 0.0).sum(axis=1)
+    return float(np.percentile(flux, 99) / (np.mean(flux) + 1e-9))
+
+
+def transient_change(reference: np.ndarray, edited: np.ndarray) -> dict[str, Any]:
+    """Log ratio of spectral-flux peakiness, edit over reference; only a drop (smeared attacks) warns."""
+    ratio = float(np.log(_flux_peakiness(_normalised(edited)) / _flux_peakiness(_normalised(reference))))
+    return {"verdict": "warn" if ratio <= TRANSIENT_WARN_LOG else "ok", "fluxLogRatio": round(ratio, 3)}
+
+
 def _click_verdict(edit_score: float | None, ref_score: float | None) -> str:
     if edit_score is None:
         return "unknown"
@@ -213,6 +353,10 @@ def verify_edit(reference: np.ndarray, edited: np.ndarray, sample_rate: int, *,
 
     if abs(time_scale - 1.0) > 1e-6:
         checks["null"] = {"verdict": "skipped", "reason": "timing changed (timeScale != 1): a waveform null needs the same timing"}
+        ref_mono, edit_mono = _mono(reference), _mono(edited)
+        checks["pitch"] = pitch_drift(ref_mono, edit_mono, sample_rate, time_scale)
+        checks["tone"] = tone_difference(ref_mono, edit_mono, sample_rate)
+        checks["transients"] = transient_change(ref_mono, edit_mono)
     else:
         null = compensated_null(reference, edited, sample_rate, max_lag_ms)
         if "error" in null:
