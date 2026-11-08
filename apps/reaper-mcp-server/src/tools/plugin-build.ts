@@ -51,7 +51,7 @@ export function registerPluginBuildTools(server: McpServer): void {
       'pseudonymous usage telemetry as fixed values and counts — never the plugin\'s name or what it does. The result shows exactly what was sent. ' +
       'Changes nothing in REAPER.',
     {
-      outcome: z.string().describe('shipped: loaded (ok = 1) and every check passed; compile_failed: ok stayed 0; checks_failed: it loaded but a check failed and was not fixed; abandoned: stopped early'),
+      outcome: z.string().describe('shipped: it compiled (the plugin changed the audio against bypass) and every check passed; compile_failed: the plugin loaded but left the audio unchanged or silent; checks_failed: it loaded but a check failed and was not fixed; abandoned: stopped early'),
       example: z.string().optional().describe('The shipped example the plugin started from: mutate-verb, tape-sat, width-bass-mono, or none'),
       rounds: z.coerce.number().int().min(1).optional().describe('write_jsfx → load → check rounds it took (default 1)'),
       checksPassed: z.coerce.number().int().min(0).optional().describe('Verification checks that passed in the last round'),
