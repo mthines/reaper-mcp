@@ -331,6 +331,27 @@ export function getTracer(): Tracer {
 }
 
 /**
+ * Name of the span recorded once an MCP client has finished the initialize handshake.
+ * Usage dashboards count a launch, and a person, only when it has this span (or a tool
+ * call): a server started without an agent attached — a script, a package scanner
+ * running each new npm release — never sends it.
+ */
+export const CLIENT_CONNECTED_SPAN = 'mcp client connected';
+
+/**
+ * Record that an MCP client connected to this server process. INTERNAL, not SERVER:
+ * usage queries count SERVER spans as tool calls.
+ */
+export function recordClientConnected(tracer: Tracer = getTracer()): void {
+  tracer
+    .startSpan(CLIENT_CONNECTED_SPAN, {
+      kind: SpanKind.INTERNAL,
+      attributes: { 'mcp.method.name': 'notifications/initialized' },
+    })
+    .end();
+}
+
+/**
  * Returns the named meter for this instrumentation scope.
  * Safe to call before `initTelemetry()` — returns a no-op meter when not
  * initialised.
