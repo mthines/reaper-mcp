@@ -36,7 +36,7 @@ export function Waveforms({ m, entry, previous }: { m: Extract<Measurement, { ki
     <>
       <div className={chartStyles.measureReadouts}>
         <Readout label="Tracks" value={String(drawn + (m.more ?? 0))} title={m.tracks.map((t) => t.name).join(', ')} />
-        <Readout label="Loudest" value={fmt(loudest)} unit="dBFS" zone={clipped > 0 ? 'over' : zoneOf(loudest)} word={clipped > 0 ? 'clipped' : undefined} title="Highest peak of any track" />
+        <Readout label="Loudest" value={fmt(loudest)} unit="dBFS" zone={clipped > 0 ? 'over' : zoneOf(loudest)} word="" title="Highest peak of any track" />
         <Readout label="Clipped" value={String(clipped)} unit="samples" zone={clipped > 0 ? 'over' : 'ok'} word={clipped > 0 ? '' : undefined} />
       </div>
       <svg width="0" height="0" aria-hidden className={styles.defs}>
