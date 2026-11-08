@@ -10,6 +10,7 @@ const CHECKS: Record<string, [string, string]> = {
   pitch: ['Pitch', 'drift against the original'],
   tone: ['Tone', 'spectral balance against the original'],
   transients: ['Transients', 'attack sharpness against the original'],
+  dropout: ['Dropouts', 'where a slow-down goes quiet against the original'],
 };
 
 const VERDICT: Record<string, string> = { ok: 'Passed', warn: 'Worth a listen', fail: 'Failed', info: 'Reported', skipped: 'Skipped', unknown: 'Unknown' };

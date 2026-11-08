@@ -270,11 +270,35 @@ def test_a_stretch_that_keeps_the_pitch_passes_every_character_check():
     assert checks["transients"]["verdict"] == "ok"
 
 
-def test_varispeed_is_reported_as_pitch_drift_in_cents():
+def test_a_plain_speed_change_is_reported_as_pitch_drift_in_cents_not_warned():
     reference = _voice(4)
     checks = _character(reference, _resampled(reference, 1.1), 1.1)
-    assert checks["pitch"]["verdict"] == "warn"
+    assert checks["pitch"]["verdict"] == "info"
+    assert checks["pitch"]["varispeed"] is True
     assert checks["pitch"]["driftCents"] == pytest.approx(1200 * np.log2(1.1), abs=15)
+    assert checks["pitch"]["expectedCents"] == pytest.approx(1200 * np.log2(1.1), abs=0.2)
+
+
+def test_a_slow_down_that_moves_the_pitch_is_also_a_plain_speed_change():
+    reference = _voice(4)
+    checks = _character(reference, _resampled(reference, 0.92), 0.92)
+    assert checks["pitch"]["verdict"] == "info"
+    assert checks["pitch"]["driftCents"] < -100
+
+
+def test_a_pitch_error_the_speed_change_does_not_explain_still_warns_after_a_speed_change():
+    reference = _voice(4)
+    off = _resampled(_voice(4, pitch_scale=2 ** (1.0 / 12)), 1.1)  # a semitone further up than the speed alone
+    checks = _character(reference, off, 1.1)
+    assert checks["pitch"]["verdict"] == "warn"
+    assert "varispeed" not in checks["pitch"]
+
+
+def test_the_tone_shift_of_a_speed_change_is_reported_not_warned():
+    reference = _voice(4)
+    checks = _character(reference, _resampled(reference, 1.25), 1.25)
+    assert checks["tone"]["distanceDb"] >= verify.TONE_WARN_DB
+    assert checks["tone"]["verdict"] == "info"
 
 
 def test_a_half_semitone_error_is_found():
@@ -313,5 +337,44 @@ def test_character_checks_only_run_when_the_timing_changed(source):
 
 def test_a_character_warning_makes_the_verdict_a_warning_never_a_fail():
     reference = _voice(4)
-    result = verify.verify_edit(reference, _resampled(reference, 1.1), SR, time_scale=1.1)
+    off = _resampled(_voice(4, pitch_scale=2 ** (1.0 / 12)), 1.1)
+    result = verify.verify_edit(reference, off, SR, time_scale=1.1)
     assert result["verdict"] == "warn"
+
+
+def _slowed(rate):
+    return _voice(4, rate=rate)
+
+
+def test_a_clean_big_slow_down_reports_a_shallow_dip_and_passes():
+    checks = _character(_voice(4), _slowed(0.8), 0.8)
+    assert checks["dropout"]["verdict"] == "ok"
+    assert checks["dropout"]["deepestDipDb"] < verify.DROPOUT_WARN_DB
+
+
+def test_a_piece_of_a_slow_down_that_went_missing_is_found():
+    edited = _slowed(0.8).copy()
+    mid = len(edited) // 2
+    edited[mid:mid + int(0.08 * SR)] *= 0.02  # 80 ms gone while the original keeps sounding there
+    checks = _character(_voice(4), edited, 0.8)
+    assert checks["dropout"]["verdict"] == "warn"
+    assert checks["dropout"]["deepestDipDb"] >= verify.DROPOUT_WARN_DB
+
+
+def test_mild_slow_downs_and_speed_ups_are_not_checked_for_dropouts():
+    assert "dropout" not in _character(_voice(4), _slowed(0.92), 0.92)
+    assert "dropout" not in _character(_voice(4), _voice(4, rate=1.1), 1.1)
+
+
+def test_a_pitch_error_on_a_nearly_unchanged_speed_still_warns():
+    reference = _voice(4)
+    off = _resampled(_voice(4, pitch_scale=2 ** (0.25 / 12)), 1.02)  # a quarter tone further than the speed alone
+    checks = _character(reference, off, 1.02)
+    assert checks["pitch"]["verdict"] == "warn"
+    assert "varispeed" not in checks["pitch"]
+
+
+def test_a_pitch_kept_stretch_of_a_couple_of_percent_is_ok_not_a_speed_change():
+    checks = _character(_voice(4), _voice(4, rate=1.02), 1.02)
+    assert checks["pitch"]["verdict"] == "ok"
+    assert "varispeed" not in checks["pitch"]

@@ -44,7 +44,13 @@ SILENCE = 1e-6
 
 # Character checks (only when the timing changed): warn lines from the issue 81 experiment
 PITCH_WARN_CENTS = 20.0
-TONE_WARN_DB = 0.7
+TONE_WARN_DB = 1.5
+# A drift this close to what the speed change alone predicts is a plain speed change (varispeed), reported, not warned
+VARISPEED_TOLERANCE_CENTS = 35.0
+# Slow-downs below this rate stretch audible artifacts into a vocal (listening test, issue 81 follow-up: 0.80, 0.85
+# and 0.88 had them, 0.90 and up did not). The dropout check runs only there; the line is provisional (one phrase).
+DROPOUT_MAX_RATE = 0.9
+DROPOUT_WARN_DB = 12.0
 TRANSIENT_WARN_LOG = -0.25
 MIN_VOICED_FRAMES = 12
 MIN_VOICED_SHARE = 0.25
@@ -251,11 +257,15 @@ def pitch_drift(reference: np.ndarray, edited: np.ndarray, sample_rate: int, rat
         return {"verdict": "skipped", "reason": "too few voiced frames in both to compare"}
     cents = 1200.0 * np.log2(edit_f0[both] / ref_f0[index][both])
     drift = float(np.median(cents))
+    expected = 1200.0 * np.log2(rate)  # what a plain speed change (pitch follows the speed) would do
+    # Only when the speed change alone would warn by more than the tolerance: nearer 1.0 the window reaches zero drift
+    varispeed = abs(expected) >= PITCH_WARN_CENTS + VARISPEED_TOLERANCE_CENTS and abs(drift - expected) <= VARISPEED_TOLERANCE_CENTS
     return {
-        "verdict": "warn" if abs(drift) >= PITCH_WARN_CENTS else "ok",
+        "verdict": "info" if varispeed else "warn" if abs(drift) >= PITCH_WARN_CENTS else "ok",
         "driftCents": round(drift, 1),
         "referenceHz": round(centre, 1),
         "framesCompared": int(both.sum()),
+        **({"varispeed": True, "expectedCents": round(expected, 1)} if varispeed else {}),
     }
 
 
@@ -279,11 +289,19 @@ def _long_term_bands(x: np.ndarray, sample_rate: int) -> np.ndarray:
     return levels[frame_level > frame_level.max() - 40.0].mean(axis=0)
 
 
-def tone_difference(reference: np.ndarray, edited: np.ndarray, sample_rate: int) -> dict[str, Any]:
-    """Rms dB difference of the long-term spectrum, overall gain removed."""
+def tone_difference(reference: np.ndarray, edited: np.ndarray, sample_rate: int, varispeed: bool = False) -> dict[str, Any]:
+    """
+    Rms dB difference of the long-term spectrum, overall gain removed. After a plain speed change the whole
+    spectrum moves with the pitch by design, so a distance over the line is reported, not warned.
+    """
     delta = _long_term_bands(reference, sample_rate) - _long_term_bands(edited, sample_rate)
     distance = float(np.sqrt(np.mean((delta - delta.mean()) ** 2)))
-    return {"verdict": "warn" if distance >= TONE_WARN_DB else "ok", "distanceDb": round(distance, 2)}
+    over = distance >= TONE_WARN_DB
+    return {
+        "verdict": ("info" if varispeed else "warn") if over else "ok",
+        "distanceDb": round(distance, 2),
+        **({"reason": "the spectrum moves with the pitch after a plain speed change"} if over and varispeed else {}),
+    }
 
 
 def _flux_peakiness(x: np.ndarray) -> float:
@@ -297,6 +315,39 @@ def transient_change(reference: np.ndarray, edited: np.ndarray) -> dict[str, Any
     """Log ratio of spectral-flux peakiness, edit over reference; only a drop (smeared attacks) warns."""
     ratio = float(np.log(_flux_peakiness(_normalised(edited)) / _flux_peakiness(_normalised(reference))))
     return {"verdict": "warn" if ratio <= TRANSIENT_WARN_LOG else "ok", "fluxLogRatio": round(ratio, 3)}
+
+
+def _envelope_db(x: np.ndarray, sample_rate: int, window: float = 0.03, hop: float = 0.01) -> np.ndarray:
+    w, h = int(window * sample_rate), int(hop * sample_rate)
+    frames = (len(x) - w) // h
+    return 10.0 * np.log10(np.array([np.mean(x[i * h:i * h + w] ** 2) for i in range(frames)]) + 1e-12)
+
+
+def slowdown_dropout(reference: np.ndarray, edited: np.ndarray, sample_rate: int, rate: float) -> dict[str, Any]:
+    """
+    Where does the edit go quiet while the reference, warped through the speed change, does not? A big slow-down
+    can drop or smear a piece of the signal: the loudness (30 ms frames, level matched, small lag searched)
+    falls far below the reference at one spot. Reports the deepest dip in dB; only slow-downs below
+    DROPOUT_MAX_RATE are checked. Unvalidated beyond one vocal phrase, and a steep onset moved a few ms also dips.
+    """
+    hop = 0.01
+    ref_env, edit_env = _envelope_db(reference, sample_rate, hop=hop), _envelope_db(edited, sample_rate, hop=hop)
+    if len(ref_env) < 10 or len(edit_env) < 10:
+        return {"verdict": "skipped", "reason": "too short for a loudness comparison"}
+    best: tuple[float, np.ndarray] | None = None
+    for lag in np.arange(-0.03, 0.0301, hop):
+        positions = ((np.arange(len(edit_env)) * hop * rate + lag) / hop).clip(0, len(ref_env) - 1)
+        warped = np.interp(positions, np.arange(len(ref_env)), ref_env)
+        active = warped > warped.max() - 30.0
+        if active.sum() < 10:
+            return {"verdict": "skipped", "reason": "too quiet for a loudness comparison"}
+        diff = (edit_env - warped)[active]
+        diff = diff - np.median(diff)
+        score = float(np.sqrt(np.mean(diff ** 2)))
+        if best is None or score < best[0]:
+            best = (score, diff)
+    dip = float(-best[1].min())
+    return {"verdict": "warn" if dip >= DROPOUT_WARN_DB else "ok", "deepestDipDb": round(dip, 1)}
 
 
 def _click_verdict(edit_score: float | None, ref_score: float | None) -> str:
@@ -355,8 +406,10 @@ def verify_edit(reference: np.ndarray, edited: np.ndarray, sample_rate: int, *,
         checks["null"] = {"verdict": "skipped", "reason": "timing changed (timeScale != 1): a waveform null needs the same timing"}
         ref_mono, edit_mono = _mono(reference), _mono(edited)
         checks["pitch"] = pitch_drift(ref_mono, edit_mono, sample_rate, time_scale)
-        checks["tone"] = tone_difference(ref_mono, edit_mono, sample_rate)
+        checks["tone"] = tone_difference(ref_mono, edit_mono, sample_rate, bool(checks["pitch"].get("varispeed")))
         checks["transients"] = transient_change(ref_mono, edit_mono)
+        if time_scale < DROPOUT_MAX_RATE:
+            checks["dropout"] = slowdown_dropout(ref_mono, edit_mono, sample_rate, time_scale)
     else:
         null = compensated_null(reference, edited, sample_rate, max_lag_ms)
         if "error" in null:

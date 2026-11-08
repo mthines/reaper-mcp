@@ -70,7 +70,7 @@ export function alignmentSummary(data: Obj): Obj {
   };
 }
 
-const VERIFY_CHECKS = ['null', 'discontinuity', 'pitch', 'tone', 'transients'];
+const VERIFY_CHECKS = ['null', 'discontinuity', 'pitch', 'tone', 'transients', 'dropout'];
 
 /** One verify_edit check as [name, verdict, headline value, detail], in words the page draws as they are */
 function verifyRow(key: string, c: Obj): [string, string, string, string] {
@@ -91,9 +91,20 @@ function verifyRow(key: string, c: Obj): [string, string, string, string] {
       return [key, verdict, f(c['score'], 1, '×'), at === undefined ? '' : `at ${at.toFixed(2)} s${num(c['channel']) !== undefined ? `, channel ${(num(c['channel']) as number) + 1}` : ''}`];
     }
     case 'pitch':
-      return [key, verdict, f(c['driftCents'], 0, ' cents'), typeof c['reason'] === 'string' ? (c['reason'] as string) : f(c['referenceHz'], 0, ' Hz reference')];
+      return [
+        key,
+        verdict,
+        f(c['driftCents'], 0, ' cents'),
+        typeof c['reason'] === 'string'
+          ? (c['reason'] as string)
+          : c['varispeed'] === true
+            ? `plain speed change (expected ${f(c['expectedCents'], 0, ' cents')})`
+            : f(c['referenceHz'], 0, ' Hz reference'),
+      ];
     case 'tone':
-      return [key, verdict, f(c['distanceDb'], 2, ' dB'), ''];
+      return [key, verdict, f(c['distanceDb'], 2, ' dB'), typeof c['reason'] === 'string' ? (c['reason'] as string) : ''];
+    case 'dropout':
+      return [key, verdict, f(c['deepestDipDb'], 1, ' dB'), typeof c['reason'] === 'string' ? (c['reason'] as string) : 'deepest dip under the original'];
     default:
       return [key, verdict, f(c['fluxLogRatio'], 2, ''), typeof c['reason'] === 'string' ? (c['reason'] as string) : ''];
   }
