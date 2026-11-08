@@ -89,7 +89,7 @@ slider10:0<-12,12,0.1>High gain
   ui_glevel(20 * log10(max(env[min(2, ui_fsel)], 0.000001)));
   fresh ? (
     i = 0;
-    loop(2048, work[i * 2] = ring[i] * win[i]; work[i * 2 + 1] = 0; i += 1;);
+    loop(2048, work[i * 2] = ring[(rp + i) % 2048] * win[i]; work[i * 2 + 1] = 0; i += 1;);
     fft(work, 2048); fft_permute(work, 2048);
     i = 0;
     loop(1024, mag[i] = sqrt(work[i * 2] * work[i * 2] + work[i * 2 + 1] * work[i * 2 + 1]) / 512; i += 1;);

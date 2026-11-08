@@ -199,7 +199,7 @@ export function lintJsfx(source: string): LintFinding[] {
     }
   }
   const init = secs.get('init')?.text ?? '';
-  if (!/\bui_boot\s*\(/.test(init)) add('no-ui-boot', 'error', '@init must call ui_boot(animated) after the plugin\'s own setup (animated = 1 when the UI has a meter).');
+  if (!/\bui_boot\s*\(/.test(init)) add('no-ui-boot', 'error', '@init must call ui_boot(animated) after the plugin\'s own setup (animated = 1 when the UI has a meter, 2 when it has graph feeds, 0 when static).');
   if (!/\bui_changed\s*\(/.test(secs.get('block')?.text ?? '') && !/\bui_changed\s*\(/.test(secs.get('sample')?.text ?? '')) {
     add('no-changed', 'error', '@block must call ui_changed() ? update(); so a knob moved in @gfx reaches the DSP.');
   }
@@ -242,7 +242,7 @@ export function lintJsfx(source: string): LintFinding[] {
     if (/\/=?\s*srate\b/.test(sample.text)) add('sample-divide-srate', 'warning', 'Dividing by srate per sample: compute the coefficient in update() once.', sample.line);
   }
   for (const m of code.matchAll(/\b(?:buf|mem|memory)\w*\s*=\s*(\d+)\s*;/g)) {
-    if (Number(m[1]) < 1024) add('low-memory-index', 'warning', `A buffer starts at index ${m[1]}: memory below ui_mem (1024) is reserved for the toolkit. Allocate from ui_mem.`, lineOf(m.index ?? 0));
+    if (Number(m[1]) < 2048) add('low-memory-index', 'warning', `A buffer starts at index ${m[1]}: memory below ui_mem (2048) is reserved for the toolkit. Allocate from ui_mem.`, lineOf(m.index ?? 0));
   }
   return findings;
 }

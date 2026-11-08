@@ -198,7 +198,7 @@ Then Steps 4-8.
 - `1e9`-style literals make EEL2 reject the whole plugin and run no code. Write `1000000000`.
 - `local()` is only valid inside a function, never at the top of `@sample`/`@block`.
 - Named sliders (`slider1:g=0<...`) do not keep their value in `sliderN`: always unnamed.
-- Memory below `ui_mem` (1024) belongs to the toolkit: allocate from it.
+- Memory below `ui_mem` (2048) belongs to the toolkit: allocate from it.
 - `@init` runs again whenever playback starts (and on a sample-rate change). Anything it assigns
   is reset on Play: keep UI and interaction state out of unguarded `@init` assignments.
 - `rand()` cannot be seeded: use the seeded generator in `examples/mutate-verb.jsfx` when a

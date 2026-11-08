@@ -18,6 +18,11 @@ const rules = (src: string) => lintJsfx(src).map((f) => f.rule);
 const without = (src: string, line: string) => src.replace(line, '');
 
 describe('lintJsfx', () => {
+  it('warns about a buffer placed inside the toolkit graph data (below 2048)', () => {
+    expect(rules(OK.replace('update(); ui_boot(0);', 'update(); buf = 1200; ui_boot(0);'))).toContain('low-memory-index');
+    expect(rules(OK.replace('update(); ui_boot(0);', 'update(); buf = 2048; ui_boot(0);'))).not.toContain('low-memory-index');
+  });
+
   it('passes the smallest valid plugin without findings', () => {
     expect(lintJsfx(OK)).toEqual([]);
   });
