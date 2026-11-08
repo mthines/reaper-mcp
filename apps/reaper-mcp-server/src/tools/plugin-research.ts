@@ -47,10 +47,12 @@ const runStarts = new Map<string, number>();
 /**
  * Note when a scratch track appears, so report_plugin_research can time the run. Called with
  * every track name add_track and run_plan create; other names are ignored. Memory only.
+ * A tag seen again starts a new run: an earlier run with that tag never reported.
  */
 export function noteScratchTrack(name: string | undefined, now = Date.now()): void {
   const tag = name?.trim().match(SCRATCH_TRACK)?.[1]?.trim();
-  if (!tag || runStarts.has(tag)) return;
+  if (!tag) return;
+  runStarts.delete(tag);
   if (runStarts.size >= MAX_OPEN_RUNS) runStarts.delete(runStarts.keys().next().value as string);
   runStarts.set(tag, now);
 }

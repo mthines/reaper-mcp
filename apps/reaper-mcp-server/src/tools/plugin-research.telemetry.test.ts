@@ -119,6 +119,20 @@ describe('report_plugin_research', () => {
     expect(reportSpan()?.attributes['reaper.plugin_research.duration_s']).toBe(184);
   });
 
+  it('times a reused tag from its latest scratch track, not from a run that never reported', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-08T09:00:00Z'));
+    const t = tools();
+    await t['add_track']({ name: '[MCP] plugin-research REAEQ' }, { requestId: 1 }); // this run never reports
+
+    vi.setSystemTime(new Date('2026-11-08T10:00:00Z'));
+    await t['add_track']({ name: '[MCP] plugin-research REAEQ' }, { requestId: 2 });
+    vi.setSystemTime(new Date('2026-11-08T10:00:45Z'));
+    await t['report_plugin_research']({ outcome: 'new', scratchTag: 'REAEQ' }, { requestId: 3 });
+
+    expect(reportSpan()?.attributes['reaper.plugin_research.duration_s']).toBe(45);
+  });
+
   it('times a run whose scratch track run_plan created, and leaves out a run it never saw start', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-08T10:00:00Z'));
