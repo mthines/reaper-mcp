@@ -132,7 +132,7 @@ Shipped baseline at the project `.claude/knowledge/` or `~/.claude/knowledge/`
 - `genres/{genre}.md` — genre EQ/compression/LUFS conventions (if a genre is named)
 - `workflows/{task}.md` — step-by-step procedures; map the request to one:
   gain-staging · session-prep · vocal-chain · drum-bus · low-end · stereo-image ·
-  master-bus · stem-prep · delivery · section-levels · transient-lighting
+  master-bus · stem-prep · delivery · section-levels · transient-lighting · editing · vocal-alignment
 - `reference/*.md` — frequencies, compression, metering, perceived-loudness, aesthetics-scoring,
   common-mistakes (read these instead of guessing).
 
