@@ -1449,7 +1449,7 @@ describe('status page link on writes', () => {
     const res = (await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -3 }));
     const { recent } = await bridge.status();
     expect(recent[0].c).toBe('set_track_property');
-    expect(res._page).toBe(`http://localhost:8123/mcp_bridge.html?view=calls&entry=${recent[0].n}`);
+    expect(res._page).toBe(`http://localhost:8123/mcp_bridge.html?view=%22calls%22&entry=${recent[0].n}`);
   });
 
   it('gives no link for a read, a refused write or a write blocked by read-only', async () => {

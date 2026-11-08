@@ -5391,7 +5391,7 @@ local function run_command(cmd)
   if response.success and not internal and not readonly_allows(cmd.type) and cmd.type ~= "remove_mcp_meters" then
     if web_watch.port == nil then web_watch.port = find_web_port() or false end
     if web_watch.port then
-      response._page = "http://localhost:" .. web_watch.port .. "/mcp_bridge.html?view=calls&entry=" .. status.seq
+      response._page = "http://localhost:" .. web_watch.port .. "/mcp_bridge.html?view=%22calls%22&entry=" .. status.seq
     end
   end
   if snaps_lib_ok then snaps_lib.after_command(cmd, response) end
