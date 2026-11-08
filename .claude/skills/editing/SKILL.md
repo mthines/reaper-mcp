@@ -3,12 +3,12 @@ name: editing
 description: >
   Edits a live REAPER session through the reaper MCP tools: MIDI parts (writing,
   rewriting, quantizing, importing), arrangement (split, move, copy, insert or
-  remove time), timing and phase, crossfades and comping, voice recordings into
+  remove time), timing and phase, vocal alignment and stretch checks, crossfades and comping, voice recordings into
   arrangements, audio stem separation, and A/B-testing variations in fixed lanes.
   Changes notes and items, not levels or FX; use /mixer for those. Use when asked
   to edit, rewrite, tighten, comp, change the groove, compare parts, turn humming
   or beatboxing into music, or split a recording into stems. Triggers on "edit
-  the drums", "change the chorus", "make a variation", "A/B these takes",
+  the drums", "align the backing vocals", "change the chorus", "make a variation", "A/B these takes",
   "comp this", "tighten the timing", "compose from this recording", "turn my
   humming into a song", "split stems", "/editing".
 argument-hint: '[what to edit, voice recording, stems, or versions to compare]'
@@ -260,6 +260,23 @@ Gotchas:
 - A full A/B is a lane choice plus a mix snapshot: lanes for notes and
   arrangement, snapshots (`/mixer`) for faders, EQ and the master.
 - For a few-note tweak, edit in place; lanes are for whole alternatives.
+
+## Aligning and stretching vocals
+
+Tightening doubles, harmonies or backing vocals to a lead, and judging a stretch,
+use `knowledge/workflows/vocal-alignment.md`; load it first. In short:
+
+1. Edit **copies** on temporary tracks (the user's items and solo state stay
+   untouched) and delete them when the user is done.
+2. `align_audio_to_guide` with `dryRun` first, then apply; it reads the items'
+   source files, so take FX such as Melodyne are not heard.
+3. Check the result with `verify_edit` (`timeScale` = the playback rate,
+   `expect: "changed"` for a stretch), then **tell the user which edits to
+   listen to**. A plain speed change is reported as info (pitch follows speed);
+   a pitch-kept slow-down below 0.9x gets stretch artifacts that only the
+   dropout check and the user's ear catch. A pass is evidence, not a verdict.
+4. Put each copied item straight at its final position; batch-moving items on a
+   track re-sorts their indexes.
 
 ## Workflow
 
