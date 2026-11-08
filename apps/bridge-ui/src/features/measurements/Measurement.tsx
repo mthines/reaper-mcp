@@ -11,6 +11,7 @@ import { Level, Readout, Scale } from './Readout.js';
 import { Spectrum } from './Spectrum.js';
 import { Stems } from './Stems.js';
 import { StereoBands } from './StereoBands.js';
+import { VerifyEdit } from './VerifyEdit.js';
 import { Waveform } from './Waveform.js';
 import { fmt, pct, targetOf, tipLine, zoneOf } from './format.js';
 import { HoverTip } from '../../components/index.js';
@@ -56,6 +57,7 @@ const TITLE: Record<Measurement['kind'], string> = {
   stereo: 'Stereo by band',
   masking: 'Masking',
   stems: 'Stems',
+  verify: 'Edit check',
   correlation: 'Stereo correlation',
   crest: 'Dynamics',
   spectrum: 'Spectrum',
@@ -122,6 +124,8 @@ function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | un
       return <Masking m={m} />;
     case 'stems':
       return <Stems m={m} />;
+    case 'verify':
+      return <VerifyEdit m={m} />;
     case 'correlation': {
       const c = m.correlation;
       const wc = same('correlation', previous)?.correlation;
@@ -217,6 +221,8 @@ function headline(m: Measurement): { value: number; label: string; unit: string;
     }
     case 'masking':
       return v(m.pairs[0]?.[2], 'Worst pair', '', true);
+    case 'verify':
+      return null;
     case 'stems':
       return m.secs && m.proc ? v(m.secs / m.proc, 'Speed', '× real time', true) : null;
   }

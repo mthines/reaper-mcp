@@ -56,7 +56,7 @@ def _ensure_predictor() -> None:
     except ImportError as exc:
         _predictor_error = (
             f"audiobox-aesthetics not installed: {exc}. "
-            f"Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar"
+            "Run in a terminal: reaper-mcp setup-sidecar"
         )
     except Exception as exc:  # noqa: BLE001
         _predictor_error = f"Failed to initialize predictor: {exc}"

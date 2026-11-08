@@ -35,6 +35,7 @@ import {
   consentReportAllowed,
   resolveTelemetry,
   type ConsentChange,
+  type TelemetryMode,
 } from './telemetry-consent.js';
 
 // ---------------------------------------------------------------------------
@@ -103,6 +104,16 @@ export function readInstallId(dir = join(homedir(), '.reaper-mcp')): string | un
 // ---------------------------------------------------------------------------
 
 let sdk: NodeSDK | null = null;
+let startedMode: TelemetryMode | undefined;
+
+/**
+ * The mode this process exports in: decided once by initTelemetry(), so a later
+ * `reaper-mcp telemetry off` doesn't change it until a restart. Before init (tests,
+ * scripts that never call it) it falls back to the saved choice.
+ */
+export function activeTelemetryMode(): TelemetryMode {
+  return startedMode ?? resolveTelemetry().mode;
+}
 
 /**
  * Initialise the OpenTelemetry SDK.  Call this once, early in the process
@@ -115,6 +126,7 @@ export async function initTelemetry(): Promise<void> {
   if (sdk) return; // already initialised
 
   const decision = resolveTelemetry();
+  startedMode = decision.mode;
   if (decision.mode === 'off') {
     // No SDK at all: an SDK with no OTEL_* settings would still default to OTLP on localhost.
     console.error(`[reaper-mcp] Telemetry off (${decision.reason})`);

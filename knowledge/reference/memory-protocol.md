@@ -230,21 +230,26 @@ always read-merge-write the `user::` key.
 
 ### Bootstrapping an unknown plugin
 Asked to use a plugin neither layer knows, create a user record *before* mixing
-with it. Dispatch the **`plugin-researcher`** agent with the plugin name (and
-what you need it for) and wait for its one-paragraph report. That keeps the web
+with it. Dispatch the **`plugin-researcher`** agent with the plugin name (what
+you need it for, and a `Dispatched by: <your skill>` line) and wait for its
+one-paragraph report. That keeps the web
 pages and parameter dumps out of your context. Its steps, which you follow
 inline when the agent isn't available:
 
 1. **Research the web** (`WebSearch` / `WebFetch`): what it is, its category and
    character, key parameters, typical settings. Prefer the manufacturer's manual.
-2. **Test it on a scratch track** (`[MCP] plugin-research`, never the user's
+2. **Test it on a scratch track** (`[MCP] plugin-research <TAG>`, never the user's
    tracks): `get_fx_parameters` for the **real parameter names and indices** of
    this build (ground truth). Probe the key params at 0/0.25/0.5/0.75/1 and read
    the formatted values back to get their scaling. Then delete the scratch track.
 3. **Write the record** above: research in the main sections, the verified param
    map and scaling under `## Learned notes`. The preference is a proposal from
    the field guide.
-4. **Then use it**, and keep refining it as you go. Mention the proposed
+4. **Count the run**: one `report_plugin_research` call, also when you stopped
+   early, with `caller` set to your skill. Its fields are in the
+   plugin-researcher's last step (`~/.claude/agents/plugin-researcher.md`, in a
+   clone `.claude/agents/plugin-researcher.md`); it never sends the plugin's name.
+5. **Then use it**, and keep refining it as you go. Mention the proposed
    preference to the user once; don't block the mix on it.
 
 `/learn-plugin` runs the same agent, then asks the user only what it couldn't

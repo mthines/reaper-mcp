@@ -70,6 +70,47 @@ export function alignmentSummary(data: Obj): Obj {
   };
 }
 
+const VERIFY_CHECKS = ['null', 'discontinuity', 'pitch', 'tone', 'transients'];
+
+/** One verify_edit check as [name, verdict, headline value, detail], in words the page draws as they are */
+function verifyRow(key: string, c: Obj): [string, string, string, string] {
+  const verdict = typeof c['verdict'] === 'string' ? (c['verdict'] as string) : 'unknown';
+  const f = (v: unknown, digits: number, unit: string) => (num(v) === undefined ? '' : `${(num(v) as number).toFixed(digits)}${unit}`);
+  switch (key) {
+    case 'null': {
+      const parts = [
+        num(c['delayMs']) ? `delay ${f(c['delayMs'], 2, ' ms')}` : '',
+        num(c['gainDb']) ? `gain ${f(c['gainDb'], 1, ' dB')}` : '',
+        c['polarityInverted'] === true ? 'polarity inverted' : '',
+        typeof c['reason'] === 'string' ? (c['reason'] as string) : '',
+      ].filter(Boolean);
+      return [key, verdict, f(c['residualDb'], 1, ' dB'), parts.join(', ')];
+    }
+    case 'discontinuity': {
+      const at = num(c['atSeconds']);
+      return [key, verdict, f(c['score'], 1, '×'), at === undefined ? '' : `at ${at.toFixed(2)} s${num(c['channel']) !== undefined ? `, channel ${(num(c['channel']) as number) + 1}` : ''}`];
+    }
+    case 'pitch':
+      return [key, verdict, f(c['driftCents'], 0, ' cents'), typeof c['reason'] === 'string' ? (c['reason'] as string) : f(c['referenceHz'], 0, ' Hz reference')];
+    case 'tone':
+      return [key, verdict, f(c['distanceDb'], 2, ' dB'), ''];
+    default:
+      return [key, verdict, f(c['fluxLogRatio'], 2, ''), typeof c['reason'] === 'string' ? (c['reason'] as string) : ''];
+  }
+}
+
+/** verify_edit: the overall verdict, what was expected, and one row per check that ran */
+export function verifySummary(name: string, ref: string | undefined, result: Obj): Obj {
+  const checks = obj(result['checks']);
+  return {
+    name,
+    ...(ref ? { ref } : {}),
+    verdict: result['verdict'],
+    expect: result['expect'],
+    checks: VERIFY_CHECKS.filter((k) => checks[k]).map((k) => verifyRow(k, obj(checks[k]))),
+  };
+}
+
 /** analyze_track_aesthetics: the four scores and the level they were judged at */
 export function aestheticsSummary(data: Obj): Obj {
   return {

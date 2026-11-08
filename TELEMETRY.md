@@ -36,15 +36,16 @@ For each tool call:
 - whether it succeeded, and if not, the **kind** of error (`timeout`, `tool_error`, …)
 - how long it took
 - for key and chord detection: whether it read MIDI, rendered audio or a file, which engine it used, how many chords it found and how sure it was of the key (never the key or the chords)
+- for plugin research runs (`/learn-plugin`, or `/mixer` or `/mastering` looking up a plugin they don't know): how the run ended (new record, refined, plugin not installed, failed to load, LoreKit not connected), which skill started it and how many plugins it researched at once, how long it took, the plugin's category (`compressor`, `eq`, …) and style (`transparent`, `vintage`, …) and its format (VST3, AU, CLAP, JS, …, and whether it's an instrument), its number of parameters as a range (`16-63`), how many were tested, how many sources were cited and questions left open, and whether the scratch track was cleaned up. Anything outside these fixed lists is sent as `other`. Never the plugin's name, and never details that point to one plugin in combination, such as its exact parameter count or whether it has a built-in record
 - reaper-mcp version, OS type and version, Node.js version
 - a random install id (`~/.reaper-mcp/install-id`), so one person's calls can be grouped without knowing who they are
 
-Plus periodic health numbers for the REAPER bridge, such as whether it's running and how fast its loop runs.
+Plus periodic health numbers for the REAPER bridge, such as whether it's running and how fast its loop runs, and whether the bridge answered at startup and, if not, which setup step is missing: REAPER not found, bridge not installed, never started, or stopped (one of those words, never a path). The same word is attached to any tool call refused because the bridge wasn't running.
 
 ## What is never sent
 
 - your projects, track names, plugin names or settings
-- tool parameters (values, positions, names you type)
+- tool parameters (values, positions, names you type), apart from the fixed values and counts a plugin research run reports (above)
 - error messages or stack traces, which can contain any of the above
 - file paths, your user name, host name or machine id
 - audio, MIDI or anything rendered

@@ -16,6 +16,7 @@ import { homedir, platform } from 'node:os';
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { getTracer, emitLog, getSidecarDurationHistogram, redactHome } from './telemetry.js';
 import { copySidecarScript } from './setup-sidecar.js';
+import { SETUP_SIDECAR_HINT } from './sidecar-hint.js';
 
 // ---------------------------------------------------------------------------
 // Paths (must match setup-sidecar.ts constants)
@@ -438,8 +439,7 @@ class SidecarClientImpl implements SidecarClient {
   private async send(method: string, params: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
     if (!this.isAvailable()) {
       throw new Error(
-        'Audio understanding sidecar not installed. ' +
-        'Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar'
+        `Audio understanding sidecar not installed. ${SETUP_SIDECAR_HINT}`
       );
     }
 
@@ -627,14 +627,14 @@ class SidecarClientImpl implements SidecarClient {
         }
       }).catch((err: Error) => {
         for (const [id, { reject }] of this.pending.entries()) {
-          reject(new Error(`Sidecar restart failed: ${err.message}. Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar`));
+          reject(new Error(`Sidecar restart failed: ${err.message}. ${SETUP_SIDECAR_HINT}`));
           this.pending.delete(id);
         }
       });
     } else {
       // Already tried once — fail all pending
       for (const [id, { reject }] of this.pending.entries()) {
-        reject(new Error('Python sidecar unavailable after restart attempt. Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar'));
+        reject(new Error(`Python sidecar unavailable after restart attempt. ${SETUP_SIDECAR_HINT}`));
         this.pending.delete(id);
       }
     }

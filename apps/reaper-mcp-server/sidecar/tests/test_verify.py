@@ -241,3 +241,77 @@ def test_a_polarity_flip_of_one_channel_fails_instead_of_being_called_silent():
 
 def test_empty_audio_is_refused_as_too_short():
     assert "too short" in verify.verify_edit(np.zeros(0), np.zeros(0), SR)["error"]
+
+
+# --- stretch character checks (timeScale != 1): pitch drift, tone, transients -------------------
+
+def _voice(seconds: float, pitch_scale: float = 1.0, rate: float = 1.0) -> np.ndarray:
+    """A harmonic tone with a slow pitch contour. `rate` > 1 plays the same contour faster (shorter) at the same pitch."""
+    t = np.arange(int(seconds / rate * SR)) / SR
+    f0 = pitch_scale * (150 + 30 * np.sin(2 * np.pi * 0.5 * t * rate))
+    phase = 2 * np.pi * np.cumsum(f0) / SR
+    return 0.2 * sum(np.sin(h * phase) / h for h in range(1, 10))
+
+
+def _resampled(x: np.ndarray, rate: float) -> np.ndarray:
+    """Varispeed: plays x `rate` times faster, so pitch moves with the speed."""
+    return np.interp(np.arange(0, len(x) - 1, rate), np.arange(len(x)), x)
+
+
+def _character(reference, edited, rate):
+    return verify.verify_edit(reference, edited, SR, time_scale=rate)["checks"]
+
+
+def test_a_stretch_that_keeps_the_pitch_passes_every_character_check():
+    checks = _character(_voice(4), _voice(4, rate=1.1), 1.1)
+    assert checks["pitch"]["verdict"] == "ok"
+    assert abs(checks["pitch"]["driftCents"]) < 10
+    assert checks["tone"]["verdict"] == "ok"
+    assert checks["transients"]["verdict"] == "ok"
+
+
+def test_varispeed_is_reported_as_pitch_drift_in_cents():
+    reference = _voice(4)
+    checks = _character(reference, _resampled(reference, 1.1), 1.1)
+    assert checks["pitch"]["verdict"] == "warn"
+    assert checks["pitch"]["driftCents"] == pytest.approx(1200 * np.log2(1.1), abs=15)
+
+
+def test_a_half_semitone_error_is_found():
+    checks = _character(_voice(4), _voice(4, pitch_scale=2 ** (0.5 / 12), rate=1.1), 1.1)
+    assert checks["pitch"]["verdict"] == "warn"
+    assert checks["pitch"]["driftCents"] == pytest.approx(50, abs=12)
+
+
+def test_unpitched_material_skips_the_pitch_check_and_says_why():
+    noise = np.random.default_rng(0).standard_normal(4 * SR) * 0.1
+    checks = _character(noise, noise[: int(len(noise) / 1.1)], 1.1)
+    assert checks["pitch"]["verdict"] == "skipped"
+    assert "pitch" in checks["pitch"]["reason"]
+
+
+def test_added_noise_changes_the_tone_and_warns():
+    reference = _voice(4)
+    rng = np.random.default_rng(3)
+    noisy = _voice(4, rate=1.1) + rng.standard_normal(len(_voice(4, rate=1.1))) * 0.02
+    assert _character(reference, noisy, 1.1)["tone"]["verdict"] == "warn"
+
+
+def test_smeared_attacks_lower_the_transient_score_and_warn():
+    rng = np.random.default_rng(1)
+    hits = np.zeros(4 * SR)
+    for position in range(0, 4 * SR, SR // 4):
+        hits[position:position + 600] = rng.standard_normal(600) * np.exp(-np.arange(600) / 120)
+    hits += rng.standard_normal(len(hits)) * 0.002
+    smeared = np.convolve(hits, np.hanning(int(0.04 * SR)) / np.hanning(int(0.04 * SR)).sum(), mode="same")
+    assert _character(hits, smeared[: int(len(hits) / 1.1)], 1.1)["transients"]["verdict"] == "warn"
+
+
+def test_character_checks_only_run_when_the_timing_changed(source):
+    assert "pitch" not in verify.verify_edit(source, source.copy(), SR)["checks"]
+
+
+def test_a_character_warning_makes_the_verdict_a_warning_never_a_fail():
+    reference = _voice(4)
+    result = verify.verify_edit(reference, _resampled(reference, 1.1), SR, time_scale=1.1)
+    assert result["verdict"] == "warn"

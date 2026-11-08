@@ -119,11 +119,12 @@ describe('analyze_track_offline', () => {
     expect(sendCommandMock).not.toHaveBeenCalled();
   });
 
-  it('says how to install the sidecar when it is missing', async () => {
+  it('says how to install the sidecar when it is missing, with the CLI rather than a path inside the clone', async () => {
     sidecar(false);
     const result = await tool('analyze_track_offline')({ trackIndex: 0 });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('setup-sidecar');
+    expect(result.content[0].text).toContain('Run in a terminal: reaper-mcp setup-sidecar');
+    expect(result.content[0].text).not.toContain('dist/');
   });
 
   it('deletes the render even when the analysis fails', async () => {

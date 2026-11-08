@@ -4,6 +4,7 @@ import type { PlanOp } from '@reaper-mcp/protocol';
 import { sendCommand } from '../bridge.js';
 import { actionRef, actionSection } from './actions.js';
 import { itemRefs } from './arrange.js';
+import { noteScratchTrack } from './plugin-research.js';
 
 /**
  * Applying a plan can re-instantiate many plugins (add_fx, graft_fxchain), which
@@ -198,6 +199,7 @@ export function registerPlanTools(server: McpServer): void {
       if (!res.success) {
         return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
       }
+      if (!dryRun) for (const op of ops as PlanOp[]) if (op.op === 'add_track') noteScratchTrack(op.name);
       return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
     },
   );

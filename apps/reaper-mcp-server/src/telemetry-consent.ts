@@ -219,6 +219,10 @@ const ALLOWED_SPAN_ATTRIBUTES = new Set([
   'reaper.bridge.handler_ms',
   'reaper.bridge.pickup_ms',
   'reaper.bridge.poll_attempts',
+  // Whether the bridge answered at startup and, when not, which setup step is missing
+  // (a fixed set: connected, stale, never_started, not_installed, no_reaper — never a path)
+  'reaper.bridge.connected',
+  'reaper.bridge.state',
   // detect_key / detect_chords: where they read from and how sure they were, never the key or chords
   'reaper.key.source',
   'reaper.key.confidence',
@@ -228,6 +232,22 @@ const ALLOWED_SPAN_ATTRIBUTES = new Set([
   // opt-in/opt-out counts: on or off, and where the choice was made
   'reaper.telemetry.consent.state',
   'reaper.telemetry.consent.source',
+  // report_plugin_research: how a plugin research run went, as closed values and capped
+  // counts (tools/plugin-research.ts). Never the plugin's name, and nothing that singles
+  // one out in combination: no exact parameter count, no built-in or extension flag.
+  'reaper.plugin_research.outcome',
+  'reaper.plugin_research.caller',
+  'reaper.plugin_research.batch_size',
+  'reaper.plugin_research.params_probed',
+  'reaper.plugin_research.open_questions',
+  'reaper.plugin_research.sources',
+  'reaper.plugin_research.cleaned_up',
+  'reaper.plugin_research.duration_s',
+  'reaper.plugin.category',
+  'reaper.plugin.style',
+  'reaper.plugin.format',
+  'reaper.plugin.instrument',
+  'reaper.plugin.params_total',
 ]);
 
 /**

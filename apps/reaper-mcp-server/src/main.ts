@@ -5,7 +5,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createServer } from './server.js';
 import { checkExtensions, loadExtensions } from './extensions.js';
 import { extensionCommand } from './extension-cli.js';
-import { ensureBridgeDir, isBridgeRunning, cleanupStaleFiles, readBridgeEvents, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
+import { ensureBridgeDir, isBridgeRunning, getBridgeState, bridgeDownMessage, cleanupStaleFiles, readBridgeEvents, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
 import { initTelemetry, shutdownTelemetry, getTracer, registerBridgeGauges, emitLog, exceptionAttributes, readServiceVersion, reportConsentChange } from './telemetry.js';
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
@@ -524,26 +524,30 @@ async function serve(): Promise<void> {
         log(`Cleaned up ${cleaned} stale bridge files`);
       }
 
-      // Check bridge connectivity in a child span
-      const bridgeRunning = await tracer.startActiveSpan('check bridge connection', { kind: SpanKind.INTERNAL }, async (bridgeSpan) => {
-        const running = await isBridgeRunning();
+      // Check bridge connectivity in a child span. `reaper.bridge.state` says which setup step
+      // is missing when it is not connected (both attributes are in the usage telemetry).
+      const bridge = await tracer.startActiveSpan('check bridge connection', { kind: SpanKind.INTERNAL }, async (bridgeSpan) => {
+        const status = await getBridgeState();
+        const running = status.state === 'connected';
         bridgeSpan.setAttribute('reaper.bridge.connected', running);
+        bridgeSpan.setAttribute('reaper.bridge.state', status.state);
         if (!running) {
-          emitLog('warn', 'Lua bridge not detected at startup — commands will time out until it is started', {
+          emitLog('warn', 'Lua bridge not detected at startup — commands are refused until it is started', {
             'reaper.bridge.connected': false,
+            'reaper.bridge.state': status.state,
           });
-          log('WARNING: Lua bridge does not appear to be running in REAPER.');
-          log('Commands will timeout until the bridge script is started.');
-          log('Run "reaper-mcp setup" for installation instructions.');
+          log(`WARNING: Lua bridge does not appear to be running in REAPER (${status.state}).`);
+          log(bridgeDownMessage(status));
         } else {
           bridgeSpan.setStatus({ code: SpanStatusCode.OK });
           log('Lua bridge detected — connected to REAPER');
         }
         bridgeSpan.end();
-        return running;
+        return status;
       });
 
-      startupSpan.setAttribute('reaper.bridge.connected', bridgeRunning);
+      startupSpan.setAttribute('reaper.bridge.connected', bridge.state === 'connected');
+      startupSpan.setAttribute('reaper.bridge.state', bridge.state);
 
       const server = createServer();
       for (const ext of await loadExtensions(server)) {
@@ -627,8 +631,10 @@ switch (command) {
 
   case 'status': {
     (async () => {
-      const running = await isBridgeRunning();
-      console.log(`Bridge status: ${running ? 'CONNECTED' : 'NOT DETECTED'}`);
+      const status = await getBridgeState();
+      const running = status.state === 'connected';
+      console.log(`Bridge status: ${running ? 'CONNECTED' : `NOT DETECTED (${status.state})`}`);
+      if (!running) console.log(bridgeDownMessage(status));
       process.exit(running ? 0 : 1);
     })();
     break;

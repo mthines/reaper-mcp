@@ -83,7 +83,7 @@ reaper-mcp/
 
     sidecar/                  # Python sidecar for semantic audio analysis (opt-in)
       server.py               # JSON-RPC server (Meta Audiobox Aesthetics, CC-BY 4.0)
-      verify.py               # verify_edit: delay/gain/polarity-compensated null + discontinuity (click) check, ok/warn/fail
+      verify.py               # verify_edit: delay/gain/polarity-compensated null + discontinuity (click) check, ok/warn/fail; with timeScale != 1 also pitch drift, tone and transient checks (warn only)
       mixcheck.py             # Loudness curve, stereo correlation per band, masking between tracks
       separation.py           # Stem separation with Demucs (opt-in: setup-sidecar --with-separation)
       requirements.txt        # Pinned Python deps
@@ -141,7 +141,7 @@ reaper-mcp/
                               # Plugin knowledge + process lessons live in LoreKit, scope project::reaper-mcp
 
   scripts/
-    prepare-npm-package.mjs   # Assemble the npm package in dist/apps/reaper-mcp-server (README, LICENSE, status page, version); run by the release job
+    prepare-npm-package.mjs   # Assemble the npm package in dist/apps/reaper-mcp-server (the root README with its install section swapped for `apps/reaper-mcp-server/NPM_INSTALL.md` and absolute image/link URLs via `src/npm-readme.mjs`, LICENSE, status page, version); run by the release job
     sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (clone install; an npm install copies them with `install-skills`)
     ext-call.mjs              # Call any tool on a fresh `reaper-mcp serve` (so a new extension can be tried without restarting Claude Code): --list [prefix] | <tool> [json]
     plugin-list.mjs           # Rebuild docs/PLUGINS.md's built-in plugin table from LoreKit (logic: apps/bridge-ui/src/features/plugins/plugin-list.mjs)
@@ -191,7 +191,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | Vite + React Compiler → single HTML | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (186 total)
+## MCP Tools (187 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template, `measure_track_alignment` and `verify_edit` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -406,7 +406,7 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `analyze_track_offline` | `tools/offline.ts` | Render a track or the master once (up to 900 s, no playback) and analyze it: integrated LUFS (BS.1770 gated), LRA (EBU 3342), true peak, sample peak, crest, per-section loudness, band balance, resonance and sibilance hints; with `referencePath`, loudness and tonal-balance deltas against that file |
 | `analyze_audio_file` | `tools/offline.ts` | The same analysis for an audio file on disk (reference song, bounce, stem); no REAPER involved |
 | `measure_track_alignment` | `tools/offline.ts` | Render two tracks over the same window (≤30 s) and cross-correlate: delay (ms, samples), polarity, correlation, and absolute `suggestedPlayOffsetMs` / `suggestedPhase` for `set_track_property` (include the track's current offset and polarity) |
-| `verify_edit` | `tools/offline.ts` | Check an edit's result against the audio from before it (a reference track or a bounce of the same range, ≤60 s): delay/gain/polarity-compensated null (residual dB) and a discontinuity (click) check, each with ok/warn/fail; `expect: "changed"` reports the residual without a verdict, `timeScale` ≠ 1 (a stretch) skips the null. Logic in `sidecar/verify.py`. Thresholds are first values from two sources (vocal, bass); pitch/formant/transient checks need a baseline per source and are not included |
+| `verify_edit` | `tools/offline.ts` | Check an edit's result against the audio from before it (a reference track or a bounce of the same range, ≤60 s): delay/gain/polarity-compensated null (residual dB) and a discontinuity (click) check, each with ok/warn/fail; `expect: "changed"` reports the residual without a verdict, `timeScale` ≠ 1 (a stretch, as a playback rate) skips the null and runs pitch drift (cents), tone (dB) and transient checks instead, warn only. Logic in `sidecar/verify.py`. Thresholds come from the issue 81 experiment (6 sources, 12 edits each); the tone check misses phase-vocoder smearing and the transient check is blind on drums |
 | `detect_transients` | `tools/transients.ts` | Hits in a track (rendered, ≤900 s) or an audio file (MP3 too; `filePosition` maps it to project time): time, strength 0..1, dominant band (low/mid/high), peakDb, plus tempo, per-band counts and per-section density; filter by `band`/`bands`/`sensitivity`/`minGapMs`/`minStrength`, paginated |
 | `create_transient_automation` | `tools/transients.ts` | Detect, then write one pulse per hit (attack, hold, exponential/linear decay, scaled by strength) onto an existing envelope — e.g. lighting that flashes on the kicks. Replaces the range's points (REAPER keeps an envelope's last point on a range delete; it becomes the first pulse point), `dryRun` returns the points. TS-composed over `remove_envelope_points` / `insert_envelope_points` |
 
@@ -459,12 +459,13 @@ Each takes a track (rendered post-FX, `-1` = master) or a file `path`; `measure_
 |------|------|-------------|
 | `run_plan` | `tools/plan.ts` | Execute an ordered list of ops in **one** bridge call and **one** undo block, all-or-nothing, with `$refs`, `dryRun`, `idempotencyKey`, and an optional `snapshotBefore` |
 
-### Built-in Mix Knowledge (2)
+### Built-in Mix Knowledge (3)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `list_builtin_knowledge` | `tools/knowledge.ts` | List (summaries, tag filter) or full-text search the built-in plugin records and mixing lessons |
 | `get_builtin_knowledge` | `tools/knowledge.ts` | Read one built-in record by key (`plugins::…` / `mixing-lessons::…`) |
+| `report_plugin_research` | `tools/plugin-research.ts` | The plugin-researcher's last call: how the run went (outcome, caller, batch, category, style, format, parameter range, counts) on the tool's span for usage telemetry, timed from its `[MCP] plugin-research <TAG>` scratch track (`add_track` / `run_plan` note it, in memory). Never the plugin's name, nor a combination that singles one out |
 
 TS-only (no bridge command): JSON-RPC to LoreKit with a bundled **public read-only** `lk_ro_` token
 (`BUILTIN_LOREKIT_TOKEN`, scoped to `project::reaper-mcp` + the `reaper-mcp` org; override with
@@ -528,7 +529,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 186 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 187 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
@@ -787,7 +788,7 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 | `apps/reaper-mcp-server/src/tools/aesthetics.ts` | `analyze_track_aesthetics` tool registration |
 | `apps/reaper-mcp-server/src/tools/offline.ts` | `analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment`, `verify_edit` |
 | `apps/reaper-mcp-server/src/tools/transients.ts` | `detect_transients`, `create_transient_automation` (pulse generation in `pulsePoints()`) |
-| `apps/reaper-mcp-server/sidecar/verify.py` | Compensated null and discontinuity checks for `verify_edit` (numpy only; the click check leaves out the window's first and last `maxLagMs`, the null twice that) |
+| `apps/reaper-mcp-server/sidecar/verify.py` | Compensated null and discontinuity checks for `verify_edit` (numpy only; with `timeScale` != 1 the null is replaced by pitch drift (NSDF tracker, range from the reference), tone (40-mel long-term spectrum) and transient (spectral-flux peakiness, drops only) checks, thresholds from the issue 81 experiment; the click check leaves out the window's first and last `maxLagMs`, the null twice that) |
 | `apps/reaper-mcp-server/sidecar/mixcheck.py` | Loudness curve, per-band stereo correlation, third-octave masking (numpy only) |
 | `apps/reaper-mcp-server/sidecar/separation.py` | Demucs stem separation (soundfile I/O, never demucs's torchaudio I/O) |
 | `apps/reaper-mcp-server/src/tools/mixcheck.ts` | `analyze_loudness_curve`, `analyze_stereo_bands`, `measure_masking`, `separate_stems` |
