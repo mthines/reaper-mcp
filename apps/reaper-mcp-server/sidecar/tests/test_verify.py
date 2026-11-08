@@ -270,11 +270,35 @@ def test_a_stretch_that_keeps_the_pitch_passes_every_character_check():
     assert checks["transients"]["verdict"] == "ok"
 
 
-def test_varispeed_is_reported_as_pitch_drift_in_cents():
+def test_a_plain_speed_change_is_reported_as_pitch_drift_in_cents_not_warned():
     reference = _voice(4)
     checks = _character(reference, _resampled(reference, 1.1), 1.1)
-    assert checks["pitch"]["verdict"] == "warn"
+    assert checks["pitch"]["verdict"] == "info"
+    assert checks["pitch"]["varispeed"] is True
     assert checks["pitch"]["driftCents"] == pytest.approx(1200 * np.log2(1.1), abs=15)
+    assert checks["pitch"]["expectedCents"] == pytest.approx(1200 * np.log2(1.1), abs=0.2)
+
+
+def test_a_slow_down_that_moves_the_pitch_is_also_a_plain_speed_change():
+    reference = _voice(4)
+    checks = _character(reference, _resampled(reference, 0.92), 0.92)
+    assert checks["pitch"]["verdict"] == "info"
+    assert checks["pitch"]["driftCents"] < -100
+
+
+def test_a_pitch_error_the_speed_change_does_not_explain_still_warns_after_a_speed_change():
+    reference = _voice(4)
+    off = _resampled(_voice(4, pitch_scale=2 ** (1.0 / 12)), 1.1)  # a semitone further up than the speed alone
+    checks = _character(reference, off, 1.1)
+    assert checks["pitch"]["verdict"] == "warn"
+    assert "varispeed" not in checks["pitch"]
+
+
+def test_the_tone_shift_of_a_speed_change_is_reported_not_warned():
+    reference = _voice(4)
+    checks = _character(reference, _resampled(reference, 1.25), 1.25)
+    assert checks["tone"]["distanceDb"] >= verify.TONE_WARN_DB
+    assert checks["tone"]["verdict"] == "info"
 
 
 def test_a_half_semitone_error_is_found():
@@ -313,5 +337,6 @@ def test_character_checks_only_run_when_the_timing_changed(source):
 
 def test_a_character_warning_makes_the_verdict_a_warning_never_a_fail():
     reference = _voice(4)
-    result = verify.verify_edit(reference, _resampled(reference, 1.1), SR, time_scale=1.1)
+    off = _resampled(_voice(4, pitch_scale=2 ** (1.0 / 12)), 1.1)
+    result = verify.verify_edit(reference, off, SR, time_scale=1.1)
     assert result["verdict"] == "warn"

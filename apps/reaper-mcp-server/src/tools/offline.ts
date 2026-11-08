@@ -270,7 +270,9 @@ export function registerOfflineTools(server: McpServer): void {
     'is judged ok/warn/fail. Use "changed" for EQ, compression and the like: the residual is reported without a ' +
     'verdict. Set timeScale to the playback rate when the edit changed the timing (1.1 = the edit is 10% shorter): the waveform null is then skipped ' +
     'and the click check runs with three warn-only character checks against the reference warped through that rate: pitch drift in cents ' +
-    '(skipped for unpitched material), tone (long-term spectrum distance in dB) and transients (smeared attacks).  The reference is another track (e.g. a copy you kept) or an audio file of the same ' +
+    '(skipped for unpitched material), tone (long-term spectrum distance in dB, line 1.5 dB, provisional) and transients (smeared attacks). ' +
+    'When the pitch moved by what the speed change alone causes (a plain speed change, pitch follows speed), pitch and tone are reported as info, not warned; ' +
+    'a pitch move the speed does not explain still warns. None of them hears the stretch artifact of a large slow-down: listen to those.   The reference is another track (e.g. a copy you kept) or an audio file of the same ' +
     'range from before the edit (a bounce), not an undo. Keep a reference track unmuted so it renders. The tone check misses a phase vocoder\'s smearing and the transient check is blind on drums. A passing result is evidence, not a replacement for listening. Requires the Python sidecar.',
     {
       trackIndex: z.coerce.number().int().min(0).describe('Zero-based index of the edited track'),

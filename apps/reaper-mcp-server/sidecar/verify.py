@@ -44,7 +44,9 @@ SILENCE = 1e-6
 
 # Character checks (only when the timing changed): warn lines from the issue 81 experiment
 PITCH_WARN_CENTS = 20.0
-TONE_WARN_DB = 0.7
+TONE_WARN_DB = 1.5
+# A drift this close to what the speed change alone predicts is a plain speed change (varispeed), reported, not warned
+VARISPEED_TOLERANCE_CENTS = 35.0
 TRANSIENT_WARN_LOG = -0.25
 MIN_VOICED_FRAMES = 12
 MIN_VOICED_SHARE = 0.25
@@ -251,11 +253,14 @@ def pitch_drift(reference: np.ndarray, edited: np.ndarray, sample_rate: int, rat
         return {"verdict": "skipped", "reason": "too few voiced frames in both to compare"}
     cents = 1200.0 * np.log2(edit_f0[both] / ref_f0[index][both])
     drift = float(np.median(cents))
+    expected = 1200.0 * np.log2(rate)  # what a plain speed change (pitch follows the speed) would do
+    varispeed = abs(expected) >= PITCH_WARN_CENTS and abs(drift - expected) <= VARISPEED_TOLERANCE_CENTS
     return {
-        "verdict": "warn" if abs(drift) >= PITCH_WARN_CENTS else "ok",
+        "verdict": "info" if varispeed else "warn" if abs(drift) >= PITCH_WARN_CENTS else "ok",
         "driftCents": round(drift, 1),
         "referenceHz": round(centre, 1),
         "framesCompared": int(both.sum()),
+        **({"varispeed": True, "expectedCents": round(expected, 1)} if varispeed else {}),
     }
 
 
@@ -279,11 +284,19 @@ def _long_term_bands(x: np.ndarray, sample_rate: int) -> np.ndarray:
     return levels[frame_level > frame_level.max() - 40.0].mean(axis=0)
 
 
-def tone_difference(reference: np.ndarray, edited: np.ndarray, sample_rate: int) -> dict[str, Any]:
-    """Rms dB difference of the long-term spectrum, overall gain removed."""
+def tone_difference(reference: np.ndarray, edited: np.ndarray, sample_rate: int, varispeed: bool = False) -> dict[str, Any]:
+    """
+    Rms dB difference of the long-term spectrum, overall gain removed. After a plain speed change the whole
+    spectrum moves with the pitch by design, so a distance over the line is reported, not warned.
+    """
     delta = _long_term_bands(reference, sample_rate) - _long_term_bands(edited, sample_rate)
     distance = float(np.sqrt(np.mean((delta - delta.mean()) ** 2)))
-    return {"verdict": "warn" if distance >= TONE_WARN_DB else "ok", "distanceDb": round(distance, 2)}
+    over = distance >= TONE_WARN_DB
+    return {
+        "verdict": ("info" if varispeed else "warn") if over else "ok",
+        "distanceDb": round(distance, 2),
+        **({"reason": "the spectrum moves with the pitch after a plain speed change"} if over and varispeed else {}),
+    }
 
 
 def _flux_peakiness(x: np.ndarray) -> float:
@@ -355,7 +368,7 @@ def verify_edit(reference: np.ndarray, edited: np.ndarray, sample_rate: int, *,
         checks["null"] = {"verdict": "skipped", "reason": "timing changed (timeScale != 1): a waveform null needs the same timing"}
         ref_mono, edit_mono = _mono(reference), _mono(edited)
         checks["pitch"] = pitch_drift(ref_mono, edit_mono, sample_rate, time_scale)
-        checks["tone"] = tone_difference(ref_mono, edit_mono, sample_rate)
+        checks["tone"] = tone_difference(ref_mono, edit_mono, sample_rate, bool(checks["pitch"].get("varispeed")))
         checks["transients"] = transient_change(ref_mono, edit_mono)
     else:
         null = compensated_null(reference, edited, sample_rate, max_lag_ms)
