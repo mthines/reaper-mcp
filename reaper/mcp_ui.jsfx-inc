@@ -511,7 +511,7 @@ function ui_cell() (
            && !(ui_core && ui_blocked) && !ui_modal;
   // every widget is one block centred in its cell: label, body (a knob's height), value.
   // The same for every cell of a row, so labels and values line up across widget types.
-  ui_kr = max(4 * ui_s, min(64 * ui_s, min(ui_rw / 2 - 8 * ui_s, (ui_rh - 2 * ui_lh - 22 * ui_s) / 2)));
+  ui_kr = max(4 * ui_s, min(64 * ui_s, min(ui_rw / 2 - 8 * ui_s, (ui_rowh - 2 * ui_lh - 22 * ui_s) / 2)));   // a tall cell keeps the knob size of a normal row
   ui_lby = ui_ry + (ui_rh - 2 * ui_lh - 12 * ui_s - 2 * ui_kr) / 2;
   ui_by = ui_lby + ui_lh + 6 * ui_s; ui_bh = 2 * ui_kr;
 );
@@ -705,6 +705,11 @@ function ui_gfeed(buf, n) local(p, b0, b1, m, j, db, old, nyq) (
     b1 = min(n - 1, max(b0, floor(20 * exp((p + 1) / ui_gn * 6.907755) / nyq * n) - 1));
     m = 0; j = b0;
     loop(b1 - b0 + 1, m = max(m, buf[j]); j += 1;);
+    // a point narrower than one bin: lean between the two bins around its centre (no stairs at the low end)
+    b1 == b0 && b0 < n - 1 ? (
+      j = 20 * exp((p + 0.5) / ui_gn * 6.907755) / nyq * n - b0;
+      m = buf[b0] * (1 - min(1, max(0, j))) + buf[b0 + 1] * min(1, max(0, j));
+    );
     db = 20 * log10(max(m, 0.000001));
     old = ui_fg[p];
     ui_gput(p, db > old ? old + (db - old) * 0.7 : old + (db - old) * 0.12);
@@ -783,7 +788,7 @@ function ui_freqgraph(label) local(px, py, pw, ph, i, f, m, mult, x, y, y0, x0, 
       i += 1;
     );
     ui_caps(label); gfx_measurestr(#ui_txt, ui_tw, ui_th);
-    ui_c(ui_cMuted, 0.6); gfx_x = ui_gx + ui_gw - ui_tw - 2 * ui_s; gfx_y = gb + 4 * ui_s; gfx_drawstr(#ui_txt);
+    ui_c(ui_cMuted, 0.5); gfx_x = ui_gx + ui_gw - ui_tw - 2 * ui_s; gfx_y = ui_gy + ui_gh - ui_th - 3 * ui_s; gfx_drawstr(#ui_txt);
     gfx_setfont(1);
 
     // the trace: a filled area under a line
@@ -791,8 +796,10 @@ function ui_freqgraph(label) local(px, py, pw, ph, i, f, m, mult, x, y, y0, x0, 
     loop(ui_gn - 1,
       x = ui_gx + ui_gw * i / (ui_gn - 1); y = ui_gyof(ui_fg[i]);
       (y0 < gb - 0.5 || y < gb - 0.5) ? (
-        ui_c(ui_cAccent, 0.14);
-        gfx_triangle(x0, y0, x, y, x, gb); gfx_triangle(x0, y0, x, gb, x0, gb);
+        ui_c(ui_cAccent, 0.16);
+        a = floor(x0); b = floor(x); y = (y0 + y) / 2;
+        gfx_rect(a, y, max(1, b - a), gb - y);
+        y = ui_gyof(ui_fg[i]);
         ui_c(ui_cAccent, 0.85); gfx_line(x0, y0, x, y, 1);
       );
       x0 = x; y0 = y; i += 1;
