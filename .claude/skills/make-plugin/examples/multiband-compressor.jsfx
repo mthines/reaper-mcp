@@ -1,0 +1,126 @@
+desc:Multiband Compressor
+// accent: orange
+import mcp_ui.jsfx-inc
+
+// Three bands with Linkwitz-Riley 4th-order crossovers (the bands sum flat), one compressor per band.
+// Core view: a log frequency graph of the output with the two crossovers as draggable handles (drag them
+// to pick the bands in Hz), per-band gain-reduction bars, and Threshold, Ratio and Output. Advanced: the
+// compressor's transfer curve with the live level of the selected band, attack, release, and a trim
+// per band. Click a band on the graph or a bar to select it.
+
+slider1:200<40,800,1>Low crossover
+slider2:2500<1000,12000,1>High crossover
+slider3:-18<-60,0,0.1>Threshold
+slider4:3<1,20,0.1>Ratio
+slider5:0<-12,12,0.1>Output
+slider6:10<1,100,1>Attack
+slider7:120<20,1000,1>Release
+slider8:0<-12,12,0.1>Low gain
+slider9:0<-12,12,0.1>Mid gain
+slider10:0<-12,12,0.1>High gain
+
+@init
+  ui_ptr = ui_mem;
+  function alloc(n) ( ui_ptr += n; ui_ptr - n; );
+  cf = alloc(20);        // biquad coefficients: low-pass and high-pass at both crossovers, 5 each
+  st = alloc(48);        // biquad states: 12 stages per channel, 2 each
+  ring = alloc(2048);    // the last 2048 output samples (mono) for the spectrum
+  work = alloc(4096);    // the FFT's complex buffer
+  win = alloc(2048);     // Hann window
+  mag = alloc(1024);     // magnitudes handed to the graph
+  env = alloc(3);        // each band's level follower
+  grpk = alloc(3);       // gain reduction peak since the last block, per band
+  grshow = alloc(3);     // what the meter shows: the peak, released slowly
+  i = 0; loop(2048, win[i] = 0.5 - 0.5 * cos(2 * $pi * i / 2048); i += 1;);
+
+  // one 2nd-order Butterworth section (RBJ), both a low-pass and a high-pass; two in a row make a
+  // Linkwitz-Riley 4th-order slope
+  function coefs(c, f) local(w0, k, alpha, a0) (
+    w0 = 2 * $pi * min(f, srate * 0.45) / srate; k = cos(w0); alpha = sin(w0) / 1.41421356;
+    a0 = 1 + alpha;
+    cf[c] = (1 - k) / 2 / a0; cf[c + 1] = (1 - k) / a0; cf[c + 2] = cf[c]; cf[c + 3] = -2 * k / a0; cf[c + 4] = (1 - alpha) / a0;           // low-pass
+    cf[c + 5] = (1 + k) / 2 / a0; cf[c + 6] = -(1 + k) / a0; cf[c + 7] = cf[c + 5]; cf[c + 8] = cf[c + 3]; cf[c + 9] = cf[c + 4];          // high-pass
+  );
+  function bq(c, s, x) local(y) (
+    y = cf[c] * x + st[s];
+    st[s] = cf[c + 1] * x - cf[c + 3] * y + st[s + 1];
+    st[s + 1] = cf[c + 2] * x - cf[c + 4] * y;
+    y;
+  );
+  // the gain reduction (dB, 0 or more) of a level (dB) against the threshold, with a 6 dB soft knee
+  function reduce(lvl) local(over) (
+    over = lvl - thr;
+    over <= -3 ? 0 : over >= 3 ? over * slope : slope * (over + 3) * (over + 3) / 12;
+  );
+  // follow one band: returns its linear gain and keeps the gain reduction peak
+  function band(k, x) local(a, g, gr) (
+    a = abs(x);
+    env[k] += (a - env[k]) * (a > env[k] ? ca : cr);
+    g = 1;
+    env[k] > tlo ? (
+      gr = reduce(20 * log10(env[k]));
+      gr > grpk[k] ? grpk[k] = gr;
+      g = exp(-gr * 0.11512925);
+    );
+    g;
+  );
+  function update() (
+    coefs(0, slider1); coefs(10, slider2);
+    thr = slider3; slope = 1 - 1 / slider4;
+    tlo = 10 ^ ((thr - 3) / 20);            // below this level nothing is reduced: skip the logarithm
+    ca = 1 - exp(-1 / (slider6 * 0.001 * srate)); cr = 1 - exp(-1 / (slider7 * 0.001 * srate));
+    out = 10 ^ (slider5 / 20);
+    t0 = 10 ^ (slider8 / 20); t1 = 10 ^ (slider9 / 20); t2 = 10 ^ (slider10 / 20);
+  );
+  update();
+  ui_boot(2);
+
+@slider
+  update();
+
+@block
+  ui_changed() ? update();
+  k = 0;
+  loop(3,
+    grshow[k] = max(grpk[k], grshow[k] * 0.85); grpk[k] = 0;
+    ui_gr(k, grshow[k]);
+    k += 1;
+  );
+  ui_glevel(20 * log10(max(env[min(2, ui_fsel)], 0.000001)));
+  fresh ? (
+    i = 0;
+    loop(2048, work[i * 2] = ring[i] * win[i]; work[i * 2 + 1] = 0; i += 1;);
+    fft(work, 2048); fft_permute(work, 2048);
+    i = 0;
+    loop(1024, mag[i] = sqrt(work[i * 2] * work[i * 2] + work[i * 2 + 1] * work[i * 2 + 1]) / 512; i += 1;);
+    ui_gfeed(mag, 1024);
+    fresh = 0;
+  );
+
+@sample
+  // left (s 0..23) and right (s 24..47): split at the low crossover, split the rest at the high one,
+  // and run the low band through an all-pass at the high one so the three bands add up flat
+  lo = bq(0, 0, bq(0, 2, spl0));      hi = bq(5, 4, bq(5, 6, spl0));
+  md = bq(10, 8, bq(10, 10, hi));     hh = bq(15, 12, bq(15, 14, hi));
+  lo = bq(10, 16, bq(10, 18, lo)) + bq(15, 20, bq(15, 22, lo));
+  ro = bq(0, 24, bq(0, 26, spl1));    ri = bq(5, 28, bq(5, 30, spl1));
+  rm = bq(10, 32, bq(10, 34, ri));    rh = bq(15, 36, bq(15, 38, ri));
+  ro = bq(10, 40, bq(10, 42, ro)) + bq(15, 44, bq(15, 46, ro));
+  g0 = band(0, max(abs(lo), abs(ro))); g1 = band(1, max(abs(md), abs(rm))); g2 = band(2, max(abs(hh), abs(rh)));
+  spl0 = (lo * g0 * t0 + md * g1 * t1 + hh * g2 * t2) * out;
+  spl1 = (ro * g0 * t0 + rm * g1 * t1 + rh * g2 * t2) * out;
+  ring[rp] = (spl0 + spl1) * 0.5; rp += 1;
+  rp >= 2048 ? ( rp = 0; fresh = 1; );
+
+@gfx 440 360
+  ui_begin(3, 3) ? (
+    ui_tall(2); ui_row(1);
+    ui_freqgraph("Crossovers"); ui_fhandle(1, "Low crossover"); ui_fhandle(2, "High crossover");
+    ui_row(4);
+    ui_grmeter(3, "Reduction"); ui_knob(3, "Threshold", 1); ui_knob(4, "Ratio", 0); ui_knob(5, "Output", 1);
+    ui_section("Advanced") ? (
+      ui_tall(2); ui_row(3); ui_transfer(3, 4, 6); ui_knob(6, "Attack", 4); ui_knob(7, "Release", 4);
+      ui_row(3); ui_knob(8, "Low gain", 1); ui_knob(9, "Mid gain", 1); ui_knob(10, "High gain", 1);
+    );
+    ui_end();
+  );

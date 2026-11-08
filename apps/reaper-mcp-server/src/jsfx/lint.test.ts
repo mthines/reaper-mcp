@@ -114,6 +114,29 @@ describe('lintJsfx', () => {
     expect(rules(OK.replace('ui_end();', 'c = gfx_getchar(); ui_end();'))).toContain('own-key-handling');
   });
 
+  it('unknown-ui-call: refuses a misspelled toolkit function, which EEL2 would compile to nothing', () => {
+    const f = lintJsfx(OK.replace('ui_knob(1, "Gain", 1);', 'ui_knbo(1, "Gain", 1);'));
+    expect(errorsOf(f).map((x) => x.rule)).toContain('unknown-ui-call');
+    expect(f.find((x) => x.rule === 'unknown-ui-call')?.line).toBe(11);
+    expect(rules(OK.replace('ui_end();', 'function ui_mine(a) ( a; ); ui_mine(1); ui_end();'))).not.toContain('unknown-ui-call');
+  });
+
+  it('ui-arity: refuses a toolkit call with the wrong number of arguments, but not a comma inside a label', () => {
+    expect(rules(OK.replace('ui_knob(1, "Gain", 1);', 'ui_knob(1, "Gain");'))).toContain('ui-arity');
+    expect(rules(OK.replace('ui_knob(1, "Gain", 1);', 'ui_knob(1, "Gain", 1, 2);'))).toContain('ui-arity');
+    expect(rules(OK.replace('ui_knob(1, "Gain", 1);', 'ui_knob(1, "Gain, in dB", 1);'))).toEqual([]);
+    expect(rules(OK.replace('ui_end();', 'ui_end(1);'))).toContain('ui-arity');
+  });
+
+  it('counts a graph as one widget and binds band handles and the transfer curve to their sliders', () => {
+    const sliders = [1, 2, 3, 4].map((i) => `slider${i}:100<20,2000,1>S${i}`).join('\n');
+    const src = `desc:G\n${sliders}\n@init\nui_boot(2);\n@block\nui_changed() ? 0;\n@gfx 300 200\nui_begin(2,0) ? ( ui_row(1); ui_freqgraph("X"); ui_fhandle(1, "a"); ui_fhandle(2, "b"); ui_row(1); ui_transfer(3, 4, 6); ui_end(); );\n`;
+    expect(lintJsfx(src)).toEqual([]);
+    expect(widgetCounts(src)).toEqual({ core: 2, advanced: 0 });
+    expect(rules(src.replace('ui_transfer(3, 4, 6)', 'ui_transfer(3, 9, 6)'))).toContain('widget-unknown-slider');
+    expect(rules(src.replace('ui_fhandle(2, "b");', ''))).toContain('slider-without-widget');
+  });
+
   it('only ever reports rules from the closed list (they become a metric attribute)', () => {
     const messy = OK.replace('slider1:0<', 'slider1:g=9<').replace('@init', 'options:gmem=x\n@init');
     for (const f of lintJsfx(messy)) expect(LINT_RULES).toContain(f.rule);

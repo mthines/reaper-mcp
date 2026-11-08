@@ -16,6 +16,7 @@ export const LINT_RULES = [
   'science-literal', 'local-top-level', 'gmem', 'no-gfx', 'no-ui-begin', 'no-ui-boot', 'no-changed',
   'widget-unknown-slider', 'slider-without-widget', 'core-overflow', 'no-serialize',
   'advanced-overflow', 'sample-loop', 'sample-memset', 'sample-divide-srate', 'file-size', 'low-memory-index', 'two-arg-minmax', 'ui-state-reset', 'accent-assign', 'own-key-handling', 'too-many-options',
+  'unknown-ui-call', 'ui-arity',
 ] as const;
 export type LintRule = (typeof LINT_RULES)[number];
 
@@ -25,6 +26,23 @@ export interface LintFinding {
   message: string;
   line?: number;
 }
+
+/**
+ * Every function the toolkit defines (`reaper/mcp_ui.jsfx-inc`) and its argument count. EEL2 compiles a
+ * call to an undefined function, or one with the wrong argument count, into a plugin that silently loads
+ * and does nothing, so a typo like `ui_knbo(...)` has to be caught here. `toolkit.test.ts` keeps this
+ * table equal to the toolkit's own definitions.
+ */
+export const UI_API: Readonly<Record<string, number>> = {
+  ui_meta: 5, ui_boot: 1, ui_changed: 0, ui_c: 2, ui_mixc: 3, ui_theme: 1, ui_cm: 3, ui_q: 2, ui_set: 2,
+  ui_rrect: 5, ui_ring: 6, ui_caps: 1, ui_ctext: 4, ui_chev: 3, ui_bgbuild: 0, ui_bg: 0, ui_fmted: 2,
+  ui_edopen: 5, ui_edcommit: 0, ui_edkey: 1, ui_keys: 0, ui_namedraw: 0, ui_begin: 2, ui_footer: 2,
+  ui_float: 4, ui_popover: 0, ui_arow: 5, ui_aboutdraw: 0, ui_end: 0, ui_tall: 1, ui_row: 1, ui_cell: 0, ui_label: 2,
+  ui_value: 1, ui_fmtv: 2, ui_reset: 1, ui_ctl: 5, ui_knob: 3, ui_toggle: 2, ui_choice: 2, ui_meter: 2,
+  ui_section: 1, ui_gput: 2, ui_gset: 2, ui_gfeed: 2, ui_gr: 2, ui_glevel: 1, ui_kkey: 2, ui_fxof: 1,
+  ui_fof: 1, ui_gyof: 1, ui_freqgraph: 1, ui_fpill: 2, ui_fhandle: 2, ui_grmeter: 2, ui_tcurve: 4,
+  ui_transfer: 3, ui_keyboard: 3,
+};
 
 /** At most this many widgets before the first ui_section: the core view stays small. */
 export const MAX_CORE_WIDGETS = 5;
@@ -75,9 +93,45 @@ function sections(code: string): Map<string, { text: string; line: number }> {
   return out;
 }
 
-const WIDGET = /\bui_(knob|toggle|choice)\s*\(\s*(\d+)/g;
-const METER = /\bui_meter\s*\(/g;
-const countWidgets = (t: string) => [...t.matchAll(WIDGET)].length + [...t.matchAll(METER)].length;
+/** Widgets bound to a slider by its first argument; a band handle counts here (it uses a slider) but not as a widget. */
+const WIDGET = /\bui_(knob|toggle|choice|fhandle)\s*\(\s*(\d+)/g;
+/** The transfer curve reads two sliders: threshold and ratio. */
+const TRANSFER = /\bui_transfer\s*\(\s*(\d+)\s*,\s*(\d+)/g;
+/** What counts toward the core and Advanced limits: one per widget the user sees (a graph's handles are part of it). */
+const COUNTED = /\bui_(knob|toggle|choice|meter|freqgraph|grmeter|transfer|keyboard)\s*\(/g;
+const GRAPHS = /\bui_(freqgraph|grmeter|transfer|keyboard)\s*\(/g;
+const countWidgets = (t: string) => [...t.matchAll(COUNTED)].length;
+
+/** Calls of `ui_*` functions with their argument count (strings and nested calls skipped): [name, args, offset]. */
+function uiCalls(code: string): { name: string; args: number; at: number }[] {
+  const out: { name: string; args: number; at: number }[] = [];
+  for (const m of code.matchAll(/\b(ui_\w+)\s*\(/g)) {
+    const at = m.index ?? 0;
+    if (/\bfunction\s+$/.test(code.slice(Math.max(0, at - 12), at))) continue;
+    let depth = 1;
+    let args = 0;
+    let any = false;
+    let inString = false;
+    for (let i = at + m[0].length; i < code.length && depth > 0; i++) {
+      const ch = code[i];
+      if (inString) {
+        if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        any = true;
+      } else if (ch === '(') {
+        depth++;
+        any = true;
+      } else if (ch === ')') depth--;
+      else if (ch === ',' && depth === 1) args++;
+      else if (/\S/.test(ch)) any = true;
+    }
+    out.push({ name: m[1], args: any ? args + 1 : 0, at });
+  }
+  return out;
+}
 
 export function lintJsfx(source: string): LintFinding[] {
   const findings: LintFinding[] = [];
@@ -134,6 +188,12 @@ export function lintJsfx(source: string): LintFinding[] {
       used.add(idx);
       if (!byIndex.has(idx)) add('widget-unknown-slider', 'error', `ui_${m[1]}(${idx}, ...) points at slider${idx}, which is not declared.`, gfx.line + gfx.text.slice(0, m.index).split('\n').length);
     }
+    for (const m of gfx.text.matchAll(TRANSFER)) {
+      for (const idx of [Number(m[1]), Number(m[2])]) {
+        used.add(idx);
+        if (!byIndex.has(idx)) add('widget-unknown-slider', 'error', `ui_transfer(${m[1]}, ${m[2]}, ...) points at slider${idx}, which is not declared.`, gfx.line + gfx.text.slice(0, m.index).split('\n').length);
+      }
+    }
     for (const s of sliders) {
       if (!s.hidden && !used.has(s.index)) add('slider-without-widget', 'error', `slider${s.index} "${s.name}" has no widget in @gfx. Draw it, or hide it with a leading "-" in its label.`);
     }
@@ -158,6 +218,16 @@ export function lintJsfx(source: string): LintFinding[] {
   // the toolkit reads the keyboard while its value box is open: a plugin reading it too steals the keys
   for (const m of code.matchAll(/\bgfx_getchar\s*\(/g)) {
     add('own-key-handling', 'warning', 'The plugin reads the keyboard (gfx_getchar): the toolkit does that while a value box is open, so typed values would go missing. Leave keyboard and mouse handling to the toolkit.', lineOf(m.index ?? 0));
+  }
+
+  const own = new Set([...code.matchAll(/\bfunction\s+(ui_\w+)/g)].map((m) => m[1]));
+  for (const c of uiCalls(code)) {
+    const expected = UI_API[c.name];
+    if (expected === undefined) {
+      if (!own.has(c.name)) add('unknown-ui-call', 'error', `${c.name}() is not a toolkit function: REAPER would compile the call to nothing and the widget would silently not draw. Check the spelling against reference/toolkit.md.`, lineOf(c.at));
+    } else if (c.args !== expected) {
+      add('ui-arity', 'error', `${c.name}() takes ${expected} argument${expected === 1 ? '' : 's'}, this call has ${c.args}: EEL2 would drop the whole plugin or read the wrong values.`, lineOf(c.at));
+    }
   }
 
   for (const c of wrongMinMaxCalls(code)) {
@@ -185,4 +255,10 @@ export function widgetCounts(source: string): { core: number; advanced: number }
   const gfx = sections(stripComments(source.replace(/\r\n/g, '\n'))).get('gfx')?.text ?? '';
   const at = gfx.search(/\bui_section\s*\(/);
   return { core: countWidgets(at === -1 ? gfx : gfx.slice(0, at)), advanced: at === -1 ? 0 : countWidgets(gfx.slice(at)) };
+}
+
+/** How many graph widgets (frequency graph, gain-reduction bars, transfer curve, keyboard) the plugin draws. */
+export function graphWidgetCount(source: string): number {
+  const gfx = sections(stripComments(source.replace(/\r\n/g, '\n'))).get('gfx')?.text ?? '';
+  return [...gfx.matchAll(GRAPHS)].length;
 }

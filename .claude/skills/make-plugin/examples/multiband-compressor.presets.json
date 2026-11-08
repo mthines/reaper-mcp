@@ -1,0 +1,7 @@
+[
+  { "name": "Gentle glue", "values": { "Threshold": -20, "Ratio": 2, "Attack": 20, "Release": 200 } },
+  { "name": "Tame the lows", "values": { "Low crossover": 150, "Threshold": -24, "Ratio": 4, "Attack": 15, "Release": 150, "Low gain": -1 } },
+  { "name": "De-harsh highs", "values": { "High crossover": 4500, "Threshold": -22, "Ratio": 3.5, "Attack": 3, "Release": 80, "High gain": -1.5 } },
+  { "name": "Loud and even", "values": { "Threshold": -28, "Ratio": 6, "Attack": 5, "Release": 100, "Output": 3 } },
+  { "name": "Neutral", "values": { "Threshold": 0, "Ratio": 1 } }
+]

@@ -256,6 +256,7 @@ const ALLOWED_SPAN_ATTRIBUTES = new Set([
   'reaper.jsfx.sliders',
   'reaper.jsfx.widgets.core',
   'reaper.jsfx.widgets.advanced',
+  'reaper.jsfx.graphs',
   'reaper.jsfx.size',
   'reaper.jsfx.version',
   'reaper.jsfx.toolkit_version',
