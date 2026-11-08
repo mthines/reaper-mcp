@@ -97,6 +97,16 @@ describe('report_plugin_research', () => {
     });
   });
 
+  it('leaves out what the researcher did not give, instead of sending "other"', async () => {
+    await tools()['report_plugin_research']({ outcome: 'not_installed' }, { requestId: 1 });
+
+    const attributes = reportSpan()?.attributes ?? {};
+    for (const key of ['reaper.plugin.category', 'reaper.plugin.style', 'reaper.plugin.format', 'reaper.plugin.instrument', 'reaper.plugin.params_total', 'reaper.plugin_research.cleaned_up']) {
+      expect(attributes).not.toHaveProperty(key);
+    }
+    expect(attributes).toMatchObject({ 'reaper.plugin_research.outcome': 'not_installed' });
+  });
+
   it('turns free text into "other" and puts no plugin name or tag on the span', async () => {
     await tools()['report_plugin_research']({
       outcome: 'refined', category: 'my bus glue thing', style: 'Pro-Q 4 (FabFilter) [R2R]', format: 'Waves Shell', scratchTag: 'PROQ4',

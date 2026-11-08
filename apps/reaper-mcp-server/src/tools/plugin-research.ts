@@ -81,6 +81,11 @@ export function fxFormat(prefix: string | undefined): { format: (typeof FX_FORMA
   return { format, instrument };
 }
 
+function fxAttributes(prefix: string): Record<string, string | boolean> {
+  const { format, instrument } = fxFormat(prefix);
+  return { 'reaper.plugin.format': format, 'reaper.plugin.instrument': instrument };
+}
+
 /** A plugin's parameter count in coarse buckets: the exact number can identify the plugin. */
 export function paramsBucket(total: number | undefined): string | undefined {
   if (total === undefined) return undefined;
@@ -114,7 +119,6 @@ export function registerPluginResearchTools(server: McpServer): void {
       scratchTag: z.string().optional().describe('The <TAG> of your "[MCP] plugin-research <TAG>" track, so the server can time the run. Never sent.'),
     },
     async (args) => {
-      const { format, instrument } = fxFormat(args.format);
       const seconds = runSeconds(args.scratchTag);
       const bucket = paramsBucket(args.paramsTotal);
       const attributes: Record<string, string | number | boolean> = {
@@ -126,10 +130,10 @@ export function registerPluginResearchTools(server: McpServer): void {
         'reaper.plugin_research.sources': Math.min(args.sources ?? 0, MAX_COUNT.sources),
         ...(args.cleanedUp !== undefined ? { 'reaper.plugin_research.cleaned_up': args.cleanedUp } : {}),
         ...(seconds !== undefined ? { 'reaper.plugin_research.duration_s': seconds } : {}),
-        'reaper.plugin.category': closed(PLUGIN_CATEGORIES, args.category),
-        'reaper.plugin.style': closed(PLUGIN_STYLES, args.style),
-        'reaper.plugin.format': format,
-        'reaper.plugin.instrument': instrument,
+        // given but unknown → "other"; not given → left out, so a missing value never reads as one
+        ...(args.category !== undefined ? { 'reaper.plugin.category': closed(PLUGIN_CATEGORIES, args.category) } : {}),
+        ...(args.style !== undefined ? { 'reaper.plugin.style': closed(PLUGIN_STYLES, args.style) } : {}),
+        ...(args.format !== undefined ? fxAttributes(args.format) : {}),
         ...(bucket ? { 'reaper.plugin.params_total': bucket } : {}),
       };
       trace.getActiveSpan()?.setAttributes(attributes);
