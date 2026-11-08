@@ -15,6 +15,7 @@ vi.mock('../bridge.js', async (importOriginal) => ({ ...(await importOriginal<ob
 
 import { sendCommand } from '../bridge.js';
 import { instrumentToolHandlers } from '../server.js';
+import { initTelemetry } from '../telemetry.js';
 import { registerStructureTools } from './structure.js';
 import { registerPlanTools } from './plan.js';
 import { registerPluginResearchTools } from './plugin-research.js';
@@ -133,8 +134,11 @@ describe('report_plugin_research', () => {
     expect(reportSpan()?.attributes).not.toHaveProperty('reaper.plugin_research.duration_s');
   });
 
-  it('sends nothing, and says so, when usage telemetry is off', async () => {
+  // Last: initTelemetry() fixes the mode for the rest of this file's process.
+  it('reports the mode the server started in, not a choice saved after it started', async () => {
     vi.stubEnv('DO_NOT_TRACK', '1');
+    await initTelemetry(); // off: returns before any SDK starts
+    vi.stubEnv('DO_NOT_TRACK', '');
 
     const res = await tools()['report_plugin_research']({ outcome: 'not_installed' }, { requestId: 1 });
 

@@ -1,7 +1,7 @@
 import { z } from 'zod/v4';
 import { trace } from '@opentelemetry/api';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { resolveTelemetry } from '../telemetry-consent.js';
+import { activeTelemetryMode } from '../telemetry.js';
 
 /**
  * report_plugin_research: the plugin-researcher's last call, so usage telemetry can count
@@ -132,7 +132,7 @@ export function registerPluginResearchTools(server: McpServer): void {
       };
       trace.getActiveSpan()?.setAttributes(attributes);
 
-      const { mode } = resolveTelemetry();
+      const mode = activeTelemetryMode();
       const result = { telemetry: mode, sent: mode === 'off' ? {} : attributes };
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     },
