@@ -37,8 +37,8 @@ export const FX_FORMATS = ['VST', 'VST3', 'AU', 'CLAP', 'JS', 'LV2', 'DX'] as co
  */
 const MAX_COUNT = { batch: 20, probed: 64, questions: 20, sources: 10 } as const;
 
-/** The scratch track the plugin-researcher adds: `[MCP] plugin-research <TAG>`. */
-const SCRATCH_TRACK = /^\[MCP\] plugin-research (\S.*)$/;
+/** The scratch track a plugin-researcher (`[MCP] plugin-research <TAG>`) or a /make-plugin run (`[MCP] make-plugin <TAG>`) adds. */
+const SCRATCH_TRACK = /^\[MCP\] (?:plugin-research|make-plugin) (\S.*)$/;
 /** Runs longer than this were left open (the report never came), so they are not timed. */
 const MAX_RUN_MS = 2 * 60 * 60 * 1000;
 const MAX_OPEN_RUNS = 50;
@@ -58,7 +58,7 @@ export function noteScratchTrack(name: string | undefined, now = Date.now()): vo
 }
 
 /** Seconds since the scratch track with this tag appeared, then forgotten; undefined when unknown. */
-function runSeconds(tag: string | undefined, now = Date.now()): number | undefined {
+export function runSeconds(tag: string | undefined, now = Date.now()): number | undefined {
   const key = tag?.trim();
   const start = key ? runStarts.get(key) : undefined;
   if (key) runStarts.delete(key);

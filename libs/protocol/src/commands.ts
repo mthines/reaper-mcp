@@ -229,7 +229,8 @@ export type LoggedTool =
   | 'detect_chords'
   | 'transcribe_voice_sketch'
   | 'detect_transients'
-  | 'create_transient_automation';
+  | 'create_transient_automation'
+  | 'write_jsfx';
 
 /** Every command the bridge's log can show: the bridge's own commands and the tools the server logs there */
 export type LoggedCommand = CommandType | LoggedTool;

@@ -37,6 +37,8 @@ import { registerCompositionTools } from './tools/composition.js';
 import { registerVoiceSketchTools } from './tools/voice-sketch.js';
 import { registerKnowledgeTools } from './tools/knowledge.js';
 import { registerPluginResearchTools } from './tools/plugin-research.js';
+import { registerJsfxTools } from './tools/jsfx.js';
+import { registerPluginBuildTools } from './tools/plugin-build.js';
 
 // Cap for free-text error messages on span status (full text goes to the log).
 const MAX_STATUS_MESSAGE = 256;
@@ -182,6 +184,8 @@ export function createServer(): McpServer {
   registerVoiceSketchTools(server);
   registerKnowledgeTools(server);
   registerPluginResearchTools(server);
+  registerJsfxTools(server);
+  registerPluginBuildTools(server);
 
   return server;
 }

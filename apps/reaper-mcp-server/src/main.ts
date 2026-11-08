@@ -14,6 +14,8 @@ import { homedir, platform } from 'node:os';
 import { exec as execCb, execFileSync } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
 import { installClaudeAssets } from './claude-assets.js';
+import { installExamplePlugins } from './jsfx/examples.js';
+import { loadToolkit, generatedDir, presetsDir } from './tools/jsfx.js';
 import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, autostartCheck, setupFilesPlan, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
 import { detectInstalled, setupSidecar } from './setup-sidecar.js';
 import { firstRunTelemetryNotice, resolveTelemetry, saveTelemetryChoice, TELEMETRY_DOC_URL } from './telemetry-consent.js';
@@ -102,6 +104,16 @@ async function setup(): Promise<void> {
       console.log(`  Not found: ${src}`);
     }
   }
+
+  // The /make-plugin examples as ready-to-use plugins (an example you edited is left alone)
+  console.log('\nInstalling example plugins...');
+  const examplesDir = join(resolveAssetDir(__dirname, 'claude'), 'skills', 'make-plugin', 'examples');
+  const examples = installExamplePlugins(examplesDir, join(generatedDir(), 'examples'), loadToolkit(), presetsDir());
+  for (const f of examples.installed) console.log(`  Installed: reaper-mcp-generated/examples/${f}`);
+  for (const f of examples.kept) console.log(`  Kept your edited copy: reaper-mcp-generated/examples/${f}`);
+  for (const [f, names] of Object.entries(examples.presets)) if (names.length) console.log(`  Presets for ${f}: ${names.join(', ')}`);
+  for (const e of examples.presetErrors) console.log(`  Skipped presets (invalid): ${e}`);
+  if (!examples.installed.length && !examples.kept.length) console.log(`  Not found: ${examplesDir}`);
 
   // Bridge status UI (page + PWA manifest, service worker, icons), served by REAPER's web
   // interface from reaper_www_root/. Built by the bridge-ui project into dist/apps/bridge-ui

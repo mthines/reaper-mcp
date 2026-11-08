@@ -268,6 +268,7 @@ want and the right one starts.
 | ✂️ | **`/editing`** | Edits notes, arrangement and timing, and compares two versions of a part in lanes | `/editing Make the chorus half-time` |
 | 💿 | **`/mastering`** | A mastering chain on the mix bus, aimed at a platform's loudness | `/mastering Master this for Spotify` |
 | 🎓 | **`/learn-plugin`** | Researches a plugin you own, tests it live and saves it to LoreKit, asking you only what it can't work out | `/learn-plugin JST Gain Reduction Deluxe` |
+| 🛠️ | **`/make-plugin`** | Makes you a plugin for a need no plugin covers. A simple core view, the rest in an Advanced drawer, a few presets that show how to use it, proven by measurement. It's just a plugin afterwards, no bridge or server needed | `/make-plugin randomly mutate my samples and add reverb` |
 | 🧩 | **`/new-extension`** | Builds or updates an [extension](#-extensions-teach-it-your-plugin) that edits a plugin's internals (wavetables, mod matrix, patch state) and proves it live on a scratch track | `/new-extension Serum` |
 | 🗂️ | **`/mix-memory`** | Shows what it remembers, and tidies it up | `/mix-memory What do you know about Pro-C 2?` |
 
@@ -503,7 +504,7 @@ Speaking works if your client or your OS dictation turns it into text first.
 They work, if your client can run one and the model is good at tool calling.
 Nobody has tested a local model end to end yet, so treat it as an experiment. What to expect:
 
-- **Context:** the 187 tool schemas take about **51k tokens** before you type a word.
+- **Context:** the 189 tool schemas take about **51k tokens** before you type a word.
   You need a context window of at least 64k, and 128k is more realistic for a session.
 - **Tool calling:** the mix skills chain 10 to 30 tool calls per task with exact track and FX indexes.
   A model that invents parameters or drops JSON fields fails there.

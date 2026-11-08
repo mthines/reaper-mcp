@@ -153,6 +153,7 @@ export const DEMO_CALLS: Record<LoggedCommand, Record<string, unknown> | 'exampl
   measure_track_alignment: 'example',
   verify_edit: 'example',
   detect_transients: { trackIndex: 1, startTime: 0, endTime: 30, band: 'low' },
+  write_jsfx: { name: 'mutate-verb', overwrite: false },
   create_transient_automation: { trackIndex: 1, targetTrack: 'Lights', envelopeIndex: 0, startTime: 0, endTime: 30, band: 'low' },
   analyze_loudness_curve: 'example',
   analyze_stereo_bands: 'example',

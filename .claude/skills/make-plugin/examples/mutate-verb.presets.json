@@ -1,0 +1,6 @@
+[
+  { "name": "Subtle glue", "values": { "Mutate": 0.15, "Size": 0.35, "Mix": 0.15, "Pitch range": 0, "Reverse": 0, "Bright": 0.5, "Pre-delay": 15, "Damping": 0.5 } },
+  { "name": "Ghost tails", "values": { "Mutate": 0.6, "Size": 0.85, "Mix": 0.4, "Output": -2, "Pitch range": 5, "Reverse": 0.6, "Bright": 0.35, "Pre-delay": 40, "Damping": 0.6 } },
+  { "name": "Broken tape", "values": { "Mutate": 0.9, "Size": 0.5, "Mix": 0.5, "Output": -3, "Pitch range": 12, "Reverse": 0.4, "Bright": 0.8, "Pre-delay": 5, "Damping": 0.2 } },
+  { "name": "Dark room", "values": { "Mutate": 0.3, "Size": 0.6, "Mix": 0.3, "Pitch range": 3, "Reverse": 0.1, "Bright": 0.15, "Pre-delay": 20, "Damping": 0.85 } }
+]

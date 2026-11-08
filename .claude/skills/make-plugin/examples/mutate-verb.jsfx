@@ -1,0 +1,148 @@
+desc:Mutate Verb
+// accent: violet
+import mcp_ui.jsfx-inc
+
+// Every hit that comes in is answered a moment later by a mutated afterimage of itself: a short grain
+// of what was just played, at a random pitch, maybe reversed, through a random low-pass, thrown into a
+// reverb. Core view: Mutate, Size, Mix, Output. Everything else is under Advanced.
+
+slider1:0.5<0,1,0.01>Mutate
+slider2:0.5<0,1,0.01>Size
+slider3:0.3<0,1,0.01>Mix
+slider4:0<-24,12,0.1>Output
+slider5:1<1,999,1>Seed
+slider6:7<0,12,1>Pitch range
+slider7:0.3<0,1,0.01>Reverse
+slider8:0.6<0,1,0.01>Bright
+slider9:10<0,100,1>Pre-delay
+slider10:0.4<0,1,0.01>Damping
+
+@init
+  ui_ptr = ui_mem;
+  function alloc(n) ( ui_ptr += n; ui_ptr - n; );
+
+  // capture buffer (the grain reads from it), 0.6 s per channel
+  bufn = floor(srate * 0.6);
+  bufl = alloc(bufn); bufr = alloc(bufn);
+  memset(bufl, 0, bufn); memset(bufr, 0, bufn);
+  wpos = 0;
+  glen = floor(srate * 0.25); ginv = 1 / glen;
+
+  // pre-delay line
+  plen = floor(srate * 0.1) + 2; pdbuf = alloc(plen); memset(pdbuf, 0, plen); ppos = 0;
+
+  // reverb: 4 combs + 2 all-passes per side (right side a little longer), lengths from 44.1 kHz
+  k = srate / 44100;
+  tl = alloc(4); tl[0] = 1116; tl[1] = 1188; tl[2] = 1277; tl[3] = 1356;
+  ta = alloc(2); ta[0] = 556; ta[1] = 441;
+  cs = alloc(8 * 4); aps = alloc(4 * 3);
+  i = 0;
+  loop(8,
+    len = floor((tl[i % 4] + (i >= 4 ? 23 : 0)) * k);
+    p = cs + i * 4; p[0] = alloc(len); memset(p[0], 0, len); p[1] = len; p[2] = 0; p[3] = 0;
+    i += 1;
+  );
+  i = 0;
+  loop(4,
+    len = floor((ta[i % 2] + (i >= 2 ? 23 : 0)) * k);
+    p = aps + i * 3; p[0] = alloc(len); memset(p[0], 0, len); p[1] = len; p[2] = 0;
+    i += 1;
+  );
+
+  function rnd() ( rs = (rs * 1664525 + 1013904223) % 4294967296; rs / 4294967296; );
+
+  function comb(i, x) local(p, b, l, pos, y, lp) (
+    p = cs + i * 4; b = p[0]; l = p[1]; pos = p[2];
+    y = b[pos];
+    lp = p[3] = y * (1 - damp) + p[3] * damp;
+    b[pos] = x + lp * fb;
+    pos += 1; pos >= l ? pos = 0; p[2] = pos;
+    y;
+  );
+
+  function allpass(i, x) local(p, b, l, pos, z) (
+    p = aps + i * 3; b = p[0]; l = p[1]; pos = p[2];
+    z = b[pos]; b[pos] = x + z * 0.5;
+    pos += 1; pos >= l ? pos = 0; p[2] = pos;
+    z - x;
+  );
+
+  function start_grain() local(semi) (
+    semi = (rnd() * 2 - 1) * prange;
+    grate = 2 ^ (semi / 12);
+    grev = rnd() < rev;
+    gstart = wpos - glen; gstart < 0 ? gstart += bufn;
+    ga = 1 - exp(-2 * $pi * (300 + (bright * 0.6 + rnd() * 0.4) * 12000) / srate);
+    gp = 0; gon = 1; gfl = 0; gfr = 0;
+  );
+
+  // coefficients: here, never per sample
+  function update() (
+    mutate = slider1;
+    fb = 0.7 + slider2 * 0.28;
+    mix = slider3;
+    gain = 10 ^ (slider4 / 20);
+    prange = slider6; rev = slider7; bright = slider8;
+    pdn = floor(slider9 * 0.001 * srate);
+    damp = 0.05 + slider10 * 0.85;
+    glevel = 0.5 + 0.5 * mutate;
+    slider5 != lastseed ? ( lastseed = slider5; rs = slider5 * 7919; );
+  );
+  update();
+  ui_boot(0);
+
+@slider
+  update();
+
+@block
+  ui_changed() ? update();
+
+@sample
+  // a hit: the fast envelope jumps over the slow one
+  a = max(abs(spl0), abs(spl1));
+  ef += (a - ef) * 0.01;
+  es += (a - es) * 0.0003;
+  cool > 0 ? cool -= 1;
+  (ef > es * 2.5 && ef > 0.02 && cool <= 0 && pend <= 0 && !gon) ? (
+    cool = srate * 0.12;
+    rnd() < mutate ? pend = glen;
+  );
+  pend > 0 ? ( pend -= 1; pend <= 0 ? start_grain(); );
+
+  bufl[wpos] = spl0; bufr[wpos] = spl1;
+
+  gl = 0; gr = 0;
+  gon ? (
+    idx = gstart + (grev ? glen - gp : gp); idx >= bufn ? idx -= bufn;
+    i0 = min(floor(idx), bufn - 1); f = idx - i0;
+    i1 = i0 + 1; i1 >= bufn ? i1 = 0;
+    w = sin($pi * gp * ginv) * glevel;
+    gfl += ((bufl[i0] + (bufl[i1] - bufl[i0]) * f) - gfl) * ga;
+    gfr += ((bufr[i0] + (bufr[i1] - bufr[i0]) * f) - gfr) * ga;
+    gl = gfl * w; gr = gfr * w;
+    gp += grate; gp >= glen ? gon = 0;
+  );
+  wpos += 1; wpos >= bufn ? wpos = 0;
+
+  dl = spl0 + gl; dr = spl1 + gr;
+  rin = (dl + dr) * 0.5;
+  pdbuf[ppos] = rin;
+  ridx = ppos - pdn; ridx < 0 ? ridx += plen;
+  rin = pdbuf[ridx] * 0.015;
+  ppos += 1; ppos >= plen ? ppos = 0;
+
+  wl = allpass(0, allpass(1, comb(0, rin) + comb(1, rin) + comb(2, rin) + comb(3, rin)));
+  wr = allpass(2, allpass(3, comb(4, rin) + comb(5, rin) + comb(6, rin) + comb(7, rin)));
+  spl0 = (dl * (1 - mix) + wl * 3 * mix) * gain;
+  spl1 = (dr * (1 - mix) + wr * 3 * mix) * gain;
+
+@gfx 380 250
+  ui_begin(1, 2) ? (
+    ui_row(4);
+    ui_knob(1, "Mutate", 2); ui_knob(2, "Size", 2); ui_knob(3, "Mix", 2); ui_knob(4, "Output", 1);
+    ui_section("Advanced") ? (
+      ui_row(3); ui_knob(5, "Seed", 5); ui_knob(6, "Pitch range", 5); ui_knob(7, "Reverse", 2);
+      ui_row(3); ui_knob(8, "Bright", 2); ui_knob(9, "Pre-delay", 4); ui_knob(10, "Damping", 2);
+    );
+    ui_end();
+  );
