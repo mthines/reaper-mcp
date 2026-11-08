@@ -18,7 +18,7 @@ import { instrumentToolHandlers } from '../server.js';
 import { initTelemetry } from '../telemetry.js';
 import { registerStructureTools } from './structure.js';
 import { registerPlanTools } from './plan.js';
-import { registerPluginResearchTools } from './plugin-research.js';
+import { paramsBucket, registerPluginResearchTools } from './plugin-research.js';
 
 const spans = new tracing.InMemorySpanExporter();
 
@@ -173,6 +173,42 @@ describe('report_plugin_research', () => {
     const reports = spans.getFinishedSpans().filter((s) => s.name === 'tools/call report_plugin_research');
     expect(reports).toHaveLength(2);
     for (const span of reports) expect(span.attributes).not.toHaveProperty('reaper.plugin_research.duration_s');
+  });
+
+  it('sends the parameter count only as a range, with the edges where they belong', () => {
+    expect([0, 1, 15, 16, 63, 64, 255, 256, 2048].map(paramsBucket)).toEqual(
+      ['none', '1-15', '1-15', '16-63', '16-63', '64-255', '64-255', '256+', '256+'],
+    );
+    expect(paramsBucket(undefined)).toBeUndefined();
+  });
+
+  it('does not time a run that reports more than two hours after its scratch track appeared', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-08T08:00:00Z'));
+    const registered = tools();
+    await registered['add_track']({ name: '[MCP] plugin-research STALE' }, { requestId: 1 });
+
+    vi.setSystemTime(new Date('2026-11-08T10:00:01Z'));
+    await registered['report_plugin_research']({ outcome: 'new', scratchTag: 'STALE' }, { requestId: 2 });
+
+    expect(reportSpan()?.attributes).not.toHaveProperty('reaper.plugin_research.duration_s');
+  });
+
+  it('keeps the 50 newest open runs and forgets the oldest', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-08T10:00:00Z'));
+    const registered = tools();
+    for (let i = 0; i <= 50; i++) {
+      await registered['add_track']({ name: `[MCP] plugin-research RUN${i}` }, { requestId: i });
+    }
+
+    vi.setSystemTime(new Date('2026-11-08T10:00:30Z'));
+    await registered['report_plugin_research']({ outcome: 'new', scratchTag: 'RUN0' }, { requestId: 100 });
+    expect(reportSpan()?.attributes).not.toHaveProperty('reaper.plugin_research.duration_s');
+
+    spans.reset();
+    await registered['report_plugin_research']({ outcome: 'new', scratchTag: 'RUN50' }, { requestId: 101 });
+    expect(reportSpan()?.attributes['reaper.plugin_research.duration_s']).toBe(30);
   });
 
   // Last: initTelemetry() fixes the mode for the rest of this file's process.
