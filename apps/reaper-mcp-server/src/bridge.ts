@@ -159,7 +159,9 @@ export async function getBridgeState(): Promise<BridgeStatus> {
   const age = await heartbeatAgeMs();
   if (age !== undefined) return { state: age < HEARTBEAT_FRESH_MS ? 'connected' : 'stale', heartbeatAgeMs: age };
   const resource = getReaperResourcePath();
+  // `reaper-mcp setup` copies the bridge to Scripts/, ReaPack to Scripts/reaper-mcp/MCP Bridge/
   if (await exists(join(resource, 'Scripts', 'mcp_bridge.lua'))) return { state: 'never_started' };
+  if (await exists(join(resource, 'Scripts', 'reaper-mcp', 'MCP Bridge', 'mcp_bridge.lua'))) return { state: 'never_started' };
   if (await exists(join(resource, 'reaper.ini'))) return { state: 'not_installed' };
   return { state: 'no_reaper' };
 }
@@ -194,7 +196,7 @@ export function bridgeDownMessage(status: BridgeStatus, resourcePath: string = g
         `${START_BRIDGE} Then try again.`;
     case 'not_installed':
       return `${BRIDGE_NOT_RUNNING_PREFIX} the bridge script is not installed in REAPER (no Scripts/mcp_bridge.lua in ${resourcePath}). ` +
-        `Run in a terminal: reaper-mcp setup. ${START_BRIDGE}`;
+        `Run in a terminal: reaper-mcp setup (or install the reaper-mcp packages from ReaPack). ${START_BRIDGE}`;
     case 'no_reaper':
       return `${BRIDGE_NOT_RUNNING_PREFIX} no REAPER settings in ${resourcePath}: REAPER is not installed there or has never been started. ` +
         'Start REAPER once (or set REAPER_RESOURCE_PATH to the folder REAPER shows under Options → Show REAPER resource path in explorer/finder), ' +

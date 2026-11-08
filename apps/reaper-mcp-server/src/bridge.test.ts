@@ -179,6 +179,11 @@ describe('bridge', () => {
   });
 
   describe('getBridgeState', () => {
+    it('counts the copy ReaPack installed as an installed bridge', async () => {
+      resourceFolder({ 'MCP Bridge/mcp_bridge.lua': 0, 'reaper.ini': 0 });
+      expect((await getBridgeState()).state).toBe('never_started');
+    });
+
     it.each([
       ['connected', { 'heartbeat.json': 1_000, ...INSTALLED }],
       ['stale', { 'heartbeat.json': 10 * 60_000, ...INSTALLED }],

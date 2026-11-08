@@ -213,8 +213,8 @@ export const AUTOSTART_BLOCK = [
   '-- Written by `reaper-mcp setup`. Turn it off in the bridge window: Settings → Start with REAPER.',
   'do',
   '  local scripts = reaper.GetResourcePath() .. "/Scripts/"',
-  '  local bridge = scripts .. "mcp_bridge.lua"',
-  '  if not reaper.file_exists(bridge) then bridge = scripts .. "reaper-mcp/MCP Bridge/mcp_bridge.lua" end', // ReaPack's copy
+  '  local bridge = scripts .. "reaper-mcp/MCP Bridge/mcp_bridge.lua"', // ReaPack's copy, kept current by ReaPack
+  '  if not reaper.file_exists(bridge) then bridge = scripts .. "mcp_bridge.lua" end',
   '  if reaper.GetExtState("MCPBridge", "cfg_autostart") ~= "0" and reaper.file_exists(bridge) then',
   '    local id = reaper.AddRemoveReaScript(true, 0, bridge, true)',
   '    if id and id > 0 then reaper.Main_OnCommand(id, 0) end',

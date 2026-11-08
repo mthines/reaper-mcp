@@ -422,12 +422,12 @@ describe('ensureBridgeAutostart', () => {
 
 describe('the autostart block, run by REAPER at launch (wasmoon)', () => {
   /** Run a startup script setup wrote, ahead of the user's own (ending in a top-level return), against a fake REAPER. */
-  async function launchReaper({ setting = '', bridgeInstalled = true, installedAt = '/reaper/Scripts/mcp_bridge.lua' } = {}) {
+  async function launchReaper({ setting = '', bridgeInstalled = true, installedAt = ['/reaper/Scripts/mcp_bridge.lua'] } = {}) {
     const lua = await new LuaFactory().createEngine();
     try {
       lua.global.set('SETTING', setting);
       lua.global.set('INSTALLED', bridgeInstalled);
-      lua.global.set('INSTALLED_AT', installedAt);
+      lua.global.set('INSTALLED_AT', installedAt.join('|'));
       await lua.doString(`
         reaper = {
           GetResourcePath = function() return "/reaper" end,
@@ -435,7 +435,7 @@ describe('the autostart block, run by REAPER at launch (wasmoon)', () => {
             if section == "MCPBridge" and key == "cfg_autostart" then return SETTING end
             return ""
           end,
-          file_exists = function(path) return INSTALLED and path == INSTALLED_AT end,
+          file_exists = function(path) return INSTALLED and ("|" .. INSTALLED_AT .. "|"):find("|" .. path .. "|", 1, true) ~= nil end,
           AddRemoveReaScript = function(add, section, path, commit) registered = path; return 41234 end,
           Main_OnCommand = function(id) ran = id end,
         }
@@ -457,7 +457,13 @@ describe('the autostart block, run by REAPER at launch (wasmoon)', () => {
 
   it('starts the copy ReaPack installed when setup has not put one in Scripts/', async () => {
     const reapack = '/reaper/Scripts/reaper-mcp/MCP Bridge/mcp_bridge.lua';
-    expect(await launchReaper({ installedAt: reapack })).toEqual({ ran: 41234, registered: reapack, ownStartupRan: true });
+    expect(await launchReaper({ installedAt: [reapack] })).toEqual({ ran: 41234, registered: reapack, ownStartupRan: true });
+  });
+
+  it('prefers ReaPack\'s copy when both exist, since ReaPack keeps that one current', async () => {
+    const reapack = '/reaper/Scripts/reaper-mcp/MCP Bridge/mcp_bridge.lua';
+    const both = await launchReaper({ installedAt: ['/reaper/Scripts/mcp_bridge.lua', reapack] });
+    expect(both.registered).toBe(reapack);
   });
 
   it('leaves the bridge stopped once Start with REAPER is turned off in the bridge window', async () => {

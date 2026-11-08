@@ -728,6 +728,13 @@ function handlers.add_fx(params)
     instantiate = -1000 - math.floor(params.position)
   end
 
+  -- ReaPack installs the JSFX under Effects/reaper-mcp/Meters/ (see ensure_jsfx_on_track)
+  local jsfx_base = fx_name:match("^[%w%s]*:?%s*reaper%-mcp/([%w_]+)$")
+  if jsfx_base and not file_exists(reaper.GetResourcePath() .. "/Effects/reaper-mcp/" .. jsfx_base .. ".jsfx")
+      and file_exists(reaper.GetResourcePath() .. "/Effects/reaper-mcp/Meters/" .. jsfx_base .. ".jsfx") then
+    fx_name = fx_name:gsub("reaper%-mcp/", "reaper-mcp/Meters/", 1)
+  end
+
   reaper.Undo_BeginBlock()
   local fx_idx = reaper.TrackFX_AddByName(track, fx_name, false, instantiate)
   if fx_idx < 0 then
