@@ -48,6 +48,12 @@ describe('lintJsfx', () => {
     expect(rules(two.replace('>Extra', '>-Extra'))).not.toContain('slider-without-widget');
   });
 
+  it('refuses a choice with more than 8 options, because the toolkit has 8 label slots per slider', () => {
+    const many = (n: number) => OK.replace('slider1:0<-24,12,0.1>Gain', `slider1:0<0,${n - 1},1{${Array.from({ length: n }, (_, i) => `O${i}`).join(',')}}>Gain`);
+    expect(rules(many(9))).toContain('too-many-options');
+    expect(rules(many(8))).not.toContain('too-many-options');
+  });
+
   it('refuses a widget that points at a slider nobody declared', () => {
     expect(rules(OK.replace('ui_knob(1,', 'ui_knob(7,'))).toContain('widget-unknown-slider');
   });

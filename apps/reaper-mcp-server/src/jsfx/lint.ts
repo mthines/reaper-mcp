@@ -8,11 +8,14 @@
  */
 import { MAX_USER_SLIDERS, parseSliders } from './inline.js';
 
+/** The toolkit keeps 8 label slots per slider (`ui_meta` strings at index*8+k), also read by `ui_choice`. */
+const MAX_CHOICE_OPTIONS = 8;
+
 export const LINT_RULES = [
   'no-desc', 'bad-slider', 'named-slider', 'slider-limit', 'duplicate-slider', 'default-out-of-range',
   'science-literal', 'local-top-level', 'gmem', 'no-gfx', 'no-ui-begin', 'no-ui-boot', 'no-changed',
   'widget-unknown-slider', 'slider-without-widget', 'core-overflow', 'no-serialize',
-  'advanced-overflow', 'sample-loop', 'sample-memset', 'sample-divide-srate', 'file-size', 'low-memory-index', 'two-arg-minmax', 'ui-state-reset', 'accent-assign', 'own-key-handling',
+  'advanced-overflow', 'sample-loop', 'sample-memset', 'sample-divide-srate', 'file-size', 'low-memory-index', 'two-arg-minmax', 'ui-state-reset', 'accent-assign', 'own-key-handling', 'too-many-options',
 ] as const;
 export type LintRule = (typeof LINT_RULES)[number];
 
@@ -97,6 +100,7 @@ export function lintJsfx(source: string): LintFinding[] {
     seen.add(s.index);
     if (s.index < 1 || s.index > MAX_USER_SLIDERS) add('slider-limit', 'error', `slider${s.index}: use slider1..slider${MAX_USER_SLIDERS}.`);
     if (s.named) add('named-slider', 'error', `slider${s.index} is named: the toolkit reads sliders by number, and a named slider's sliderN stays 0. Declare it unnamed (slider${s.index}:${s.default}<...>) and read slider${s.index}.`);
+    if (s.options.length > MAX_CHOICE_OPTIONS) add('too-many-options', 'error', `slider${s.index} has ${s.options.length} options: the toolkit shows at most ${MAX_CHOICE_OPTIONS}, and a ninth would show another slider's label. Use a knob or split the choice.`);
     if (s.default < Math.min(s.min, s.max) || s.default > Math.max(s.min, s.max)) add('default-out-of-range', 'error', `slider${s.index}: default ${s.default} is outside ${s.min}..${s.max}.`);
   }
 

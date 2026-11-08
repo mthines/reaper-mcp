@@ -32,7 +32,7 @@ Every widget is one block, label above, control, value below, sized the same acr
 |---|---|---|
 | `ui_knob(idx, "Label", fmt)` | knob, label above, value below | any range |
 | `ui_toggle(idx, "Label")` | on/off pill | `<0,1,1>` |
-| `ui_choice(idx, "Label")` | box showing the option, click = next, right-click = previous | `<0,N-1,1{A,B,C}>` |
+| `ui_choice(idx, "Label")` | box showing the option, click = next, right-click = previous | `<0,N-1,1{A,B,C}>`, at most 8 options (lint `too-many-options`) |
 | `ui_meter(level, "Label")` | vertical peak meter, -60..+6 dB, holds and falls 30 dB/s | none: pass the peak you kept with `max()` in `@sample`, then set it back to 0 |
 | `ui_section("Label")` | the Advanced drawer (bar when closed, panel over the core when open); returns 1 while visible | none |
 
