@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, ensureWebInterface, ensureSnapshotActions, findCloneRoot, isDevClone, updateConfigText, REAPER_ASSETS, RETIRED_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureWebInterface, ensureSnapshotActions, findCloneRoot, isDevClone, updateConfigText, REAPER_ASSETS, RETIRED_ASSETS, KNOWLEDGE_DIRS } from './cli.js';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `reaper-mcp-test-${randomUUID()}`);
@@ -36,6 +36,31 @@ describe('cli helpers', () => {
       expect(hasUserMcpServer(join(tmp, 'missing.json'))).toBe(false);
       writeFileSync(path, '{ not json');
       expect(hasUserMcpServer(path)).toBe(false);
+    });
+  });
+
+  describe('userMcpServerIsStale', () => {
+    const write = (server: unknown) => {
+      const path = join(tmp, '.claude.json');
+      writeFileSync(path, JSON.stringify({ mcpServers: { reaper: server } }));
+      return path;
+    };
+
+    it('is true when the registered script no longer exists', () => {
+      const path = write({ command: process.execPath, args: [join(tmp, 'gone', 'main.js'), 'serve'] });
+      expect(userMcpServerIsStale(path)).toBe(true);
+    });
+
+    it('is false when the registered node and script both exist', () => {
+      const main = join(tmp, 'main.js');
+      writeFileSync(main, '');
+      expect(userMcpServerIsStale(write({ command: process.execPath, args: [main, 'serve'] }))).toBe(false);
+    });
+
+    it('is false for a PATH command, no server, or an unreadable file', () => {
+      expect(userMcpServerIsStale(write({ command: 'reaper-mcp', args: ['serve'] }))).toBe(false);
+      expect(userMcpServerIsStale(write(undefined))).toBe(false);
+      expect(userMcpServerIsStale(join(tmp, 'missing.json'))).toBe(false);
     });
   });
 
@@ -225,18 +250,22 @@ describe('package integrity', () => {
     expect(pkg.dependencies['zod']).toBeDefined();
   });
 
-  // Clone-only model: the CLI resolves skills/knowledge from the repo source tree
-  // (resolveAssetDir walks up), so dist only carries the bridge + sidecar assets.
+  // The npm package carries the bridge, sidecar and the skills install-skills copies into ~/.claude.
   it.skipIf(!distExists)('dist contains all REAPER assets', () => {
     for (const asset of REAPER_ASSETS) {
       expect(existsSync(join(distDir, 'reaper', asset)), `missing reaper/${asset}`).toBe(true);
     }
   });
 
-  it.skipIf(!distExists)('dist does NOT bundle the copy-path assets (clone-only)', () => {
-    expect(existsSync(join(distDir, 'knowledge'))).toBe(false);
-    expect(existsSync(join(distDir, 'claude-skills'))).toBe(false);
-    expect(existsSync(join(distDir, 'claude-rules'))).toBe(false);
+  it.skipIf(!distExists)('dist carries the skills, agents and knowledge that install-skills copies', () => {
+    expect(existsSync(join(distDir, 'claude', 'skills', 'learn-plugin', 'SKILL.md'))).toBe(true);
+    expect(existsSync(join(distDir, 'claude', 'agents', 'plugin-researcher.md'))).toBe(true);
+    expect(existsSync(join(distDir, 'claude', 'knowledge', 'reference', 'lorekit-setup.md'))).toBe(true);
+  });
+
+  it.skipIf(!distExists)('dist leaves the repo-only knowledge files out of the package', () => {
+    expect(existsSync(join(distDir, 'claude', 'knowledge', 'CLAUDE.md'))).toBe(false);
+    expect(existsSync(join(distDir, 'claude', 'knowledge', 'contributions'))).toBe(false);
   });
 
   it('mixer skill + memory protocol resolve from the repo source tree', () => {

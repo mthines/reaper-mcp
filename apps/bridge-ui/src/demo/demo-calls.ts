@@ -151,6 +151,7 @@ export const DEMO_CALLS: Record<LoggedCommand, Record<string, unknown> | 'exampl
   analyze_track_offline: 'example',
   analyze_audio_file: 'example',
   measure_track_alignment: 'example',
+  verify_edit: { trackIndex: 2, referenceTrack: 1, startTime: 0, durationSeconds: 10 },
   detect_transients: { trackIndex: 1, startTime: 0, endTime: 30, band: 'low' },
   create_transient_automation: { trackIndex: 1, targetTrack: 'Lights', envelopeIndex: 0, startTime: 0, endTime: 30, band: 'low' },
   analyze_loudness_curve: 'example',
@@ -214,5 +215,7 @@ export const DEMO_CALLS: Record<LoggedCommand, Record<string, unknown> | 'exampl
   unfreeze_tracks: 'example',
   apply_fx_to_items: 'example',
   add_stretch_markers: 'example',
+  edit_stretch_markers: 'example',
   quantize_audio: 'example',
+  align_audio_to_guide: 'example',
 };

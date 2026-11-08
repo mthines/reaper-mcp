@@ -682,6 +682,14 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
       return `found ${on(e)} ${late} ${trackName(p.referenceTrack) ?? 'the reference'}${m.inv ? ', with its polarity inverted' : ''}`;
     },
   },
+  verify_edit: {
+    title: 'Check the result of an edit',
+    did: (e) => {
+      const p = paramsOf(e);
+      const against = str(p.referencePath) ? fileName(p.referencePath) : (trackName(p.referenceTrack) ?? 'the audio from before the edit');
+      return `checked the edit on ${on(e)} against ${against}`;
+    },
+  },
   detect_transients: {
     title: 'Find the hits',
     did: (e) => {
@@ -866,6 +874,8 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
   unfreeze_tracks: { title: 'Unfreeze tracks', did: (e) => `unfroze ${names(paramsOf(e).tracks) ?? 'tracks'}, bringing the plugins back live` },
   apply_fx_to_items: { title: 'Render plugins into items', did: (e) => `rendered the plugins into ${countOf(paramsOf(e).items, 'item', 'items')} as a new take (the old take stays)` },
   add_stretch_markers: { title: 'Add stretch markers', did: (e) => `added ${countOf(paramsOf(e).markers, 'stretch marker', 'stretch markers')} to ${item(paramsOf(e))} on ${on(e)}` },
+  edit_stretch_markers: { title: 'Edit stretch markers', did: (e) => `edited ${countOf(paramsOf(e).edits, 'stretch marker', 'stretch markers')} in ${item(paramsOf(e))} on ${on(e)}` },
+  align_audio_to_guide: { title: 'Align audio to a guide', did: (e) => `pulled the hits in ${item(paramsOf(e))} on ${on(e)} onto the guide with stretch markers${paramsOf(e).dryRun === true ? ' (dry run — nothing written)' : ''}` },
   quantize_audio: { title: 'Quantize audio', did: (e) => `pulled the hits in ${item(paramsOf(e))} on ${on(e)} toward ${gridName(paramsOf(e).grid)} with stretch markers` },
 };
 

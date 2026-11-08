@@ -1,5 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 
 /** Resolve asset path — checks sibling, parent, and walks up to repo root for dev/source usage */
@@ -76,6 +76,21 @@ export function hasUserMcpServer(claudeJsonPath: string): boolean {
   try {
     const config = JSON.parse(readFileSync(claudeJsonPath, 'utf-8'));
     return Boolean(config?.mcpServers?.reaper);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True when the user-scope `reaper` server points at a node binary or script that no longer exists
+ * (a Node switch with nvm or Homebrew, a moved global package). Entries without absolute paths are never stale.
+ */
+export function userMcpServerIsStale(claudeJsonPath: string): boolean {
+  try {
+    const server = JSON.parse(readFileSync(claudeJsonPath, 'utf-8'))?.mcpServers?.reaper;
+    if (!server) return false;
+    const paths = [server.command, ...(Array.isArray(server.args) ? server.args : [])].filter((p): p is string => typeof p === 'string' && isAbsolute(p));
+    return paths.some((p) => !existsSync(p));
   } catch {
     return false;
   }
@@ -369,6 +384,7 @@ export const MCP_TOOL_NAMES = [
   'analyze_track_offline',
   'analyze_audio_file',
   'measure_track_alignment',
+  'verify_edit',
   'detect_transients',
   'create_transient_automation',
   // mixing depth
@@ -385,7 +401,9 @@ export const MCP_TOOL_NAMES = [
   'unfreeze_tracks',
   'apply_fx_to_items',
   'add_stretch_markers',
+  'edit_stretch_markers',
   'quantize_audio',
+  'align_audio_to_guide',
   'analyze_loudness_curve',
   'analyze_stereo_bands',
   'measure_masking',

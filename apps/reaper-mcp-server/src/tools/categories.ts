@@ -66,7 +66,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
     tools: [
       'list_media_items', 'get_media_item_properties', 'set_media_item_properties', 'set_media_items_properties',
       'split_media_item', 'delete_media_item', 'move_media_item', 'trim_media_item',
-      'add_stretch_marker', 'get_stretch_markers', 'delete_stretch_marker', 'add_stretch_markers', 'quantize_audio', 'apply_fx_to_items',
+      'add_stretch_marker', 'get_stretch_markers', 'delete_stretch_marker', 'add_stretch_markers', 'edit_stretch_markers', 'quantize_audio', 'align_audio_to_guide', 'apply_fx_to_items',
     ],
   },
   arrange: {
@@ -107,8 +107,8 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   },
   analysis: {
     name: 'analysis',
-    description: 'Audio metering and analysis: peak/RMS meters, FFT spectrum, LUFS loudness, stereo correlation, crest factor, one-call multi-metric measurement (measure_tracks), perceptual aesthetics scores, offline render-based loudness/LRA/true-peak/spectrum with reference comparison, multi-mic time alignment, transient detection and transient-driven automation e.g. for lighting, loudness over time, stereo correlation per band, masking between tracks, stem separation (the render-based tools need the Python sidecar; stem separation also its --with-separation install), musical key detection (MIDI notes, or audio via the sidecar)',
-    tools: ['read_track_meters', 'read_track_spectrum', 'read_track_lufs', 'read_track_correlation', 'read_track_crest', 'measure_tracks', 'analyze_track_aesthetics', 'analyze_track_offline', 'analyze_audio_file', 'measure_track_alignment', 'detect_transients', 'create_transient_automation', 'analyze_loudness_curve', 'analyze_stereo_bands', 'measure_masking', 'separate_stems', 'detect_key', 'detect_chords'],
+    description: 'Audio metering and analysis: peak/RMS meters, FFT spectrum, LUFS loudness, stereo correlation, crest factor, one-call multi-metric measurement (measure_tracks), perceptual aesthetics scores, offline render-based loudness/LRA/true-peak/spectrum with reference comparison, multi-mic time alignment, checking the result of an edit against the audio from before it (verify_edit), transient detection and transient-driven automation e.g. for lighting, loudness over time, stereo correlation per band, masking between tracks, stem separation (the render-based tools need the Python sidecar; stem separation also its --with-separation install), musical key detection (MIDI notes, or audio via the sidecar)',
+    tools: ['read_track_meters', 'read_track_spectrum', 'read_track_lufs', 'read_track_correlation', 'read_track_crest', 'measure_tracks', 'analyze_track_aesthetics', 'analyze_track_offline', 'analyze_audio_file', 'measure_track_alignment', 'verify_edit', 'detect_transients', 'create_transient_automation', 'analyze_loudness_curve', 'analyze_stereo_bands', 'measure_masking', 'separate_stems', 'detect_key', 'detect_chords'],
   },
   discovery: {
     name: 'discovery',

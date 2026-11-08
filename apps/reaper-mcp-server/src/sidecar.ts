@@ -78,6 +78,19 @@ export interface AlignParams {
   maxLagMs?: number;
 }
 
+/** Params of the sidecar's verify_edit method. */
+export interface VerifyEditParams {
+  /** Audio from before the edit */
+  referencePath: string;
+  /** Audio after the edit */
+  path: string;
+  /** "identical": only level, delay and polarity may differ; "changed": report the residual without a verdict */
+  expect?: 'identical' | 'changed';
+  /** 1 = the edit kept the timing; anything else skips the waveform null */
+  timeScale?: number;
+  maxLagMs?: number;
+}
+
 /** Params of the sidecar's chroma method (pitch-class energy, for detect_key and detect_chords). */
 export interface ChromaParams {
   path: string;
@@ -232,6 +245,8 @@ export interface SidecarClient {
   analyzeAudio(params: AnalyzeAudioParams): Promise<Record<string, unknown>>;
   /** Delay and polarity of one file relative to another. */
   align(params: AlignParams): Promise<Record<string, unknown>>;
+  /** Checks on an edit's result: compensated null and discontinuity against the audio from before. */
+  verifyEdit(params: VerifyEditParams): Promise<Record<string, unknown>>;
   /** Transient (onset) times with strength, dominant band and a tempo estimate. */
   transients(params: TransientsParams): Promise<Record<string, unknown>>;
   /** Short-term and momentary loudness over time, loudest/quietest windows, spans over a target. */
@@ -307,6 +322,10 @@ class SidecarClientImpl implements SidecarClient {
 
   align(params: AlignParams): Promise<Record<string, unknown>> {
     return this.call('align', { ...params }) as Promise<Record<string, unknown>>;
+  }
+
+  verifyEdit(params: VerifyEditParams): Promise<Record<string, unknown>> {
+    return this.call('verify_edit', { ...params }) as Promise<Record<string, unknown>>;
   }
 
   transients(params: TransientsParams): Promise<Record<string, unknown>> {

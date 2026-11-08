@@ -35,7 +35,7 @@ export function Stretch({ v }: { v: Extract<EditView, { kind: "stretch" }> }) {
         {v.off ? (
           <>
             <Measurement.Readout label="Hits moved" value={`${moved} of ${moves.length + (v.more ?? 0)}`} />
-            <Measurement.Readout label="Timing off" title="Average distance of the hits from the grid" value={`${Math.round(v.off[0])} → ${Math.round(v.off[1])}`} unit="ms" zone={v.off[1] > 10 ? "hot" : "ok"} word="" />
+            <Measurement.Readout label="Timing off" title={`Average distance of the hits from the ${v.guide ? "guide" : "grid"}`} value={`${Math.round(v.off[0])} → ${Math.round(v.off[1])}`} unit="ms" zone={v.off[1] > 10 ? "hot" : "ok"} word="" />
           </>
         ) : (
           <Measurement.Readout label="Markers" value={v.was ? `${v.was.length} → ${(v.marks ?? []).length}` : String((v.marks ?? []).length)} />
@@ -43,7 +43,7 @@ export function Stretch({ v }: { v: Extract<EditView, { kind: "stretch" }> }) {
         <Measurement.Readout label="Item length" value={clock(v.len, 2)} />
       </div>
       <svg viewBox={`0 0 ${SW} ${SH}`} preserveAspectRatio="none" className={styles.stretch} role="img"
-        aria-label={v.off ? `${moved} hits moved toward the grid` : `${(v.marks ?? []).length} stretch markers`}>
+        aria-label={v.off ? `${moved} hits moved toward the ${v.guide ? "guide" : "grid"}` : `${(v.marks ?? []).length} stretch markers`}>
         <rect className={styles.item} x={0} y={8} width={SW} height={SH - 16} rx={3} />
         {(v.grid ?? []).map((g, i) => (
           <line key={`g${i}`} className={styles.grid} x1={x(g)} x2={x(g)} y1={8} y2={SH - 8} vectorEffect="non-scaling-stroke" />

@@ -1,6 +1,6 @@
 {
   "name": "@mthines/reaper-mcp",
-  "version": "0.68.0",
+  "version": "0.70.4",
   "type": "module",
   "description": "MCP server for controlling REAPER DAW — real-time mixing, FX control, and frequency analysis for AI agents",
   "license": "MIT",
@@ -25,6 +25,19 @@
   ],
   "bin": {
     "reaper-mcp": "./main.js"
+  },
+  "files": [
+    "main.js",
+    "reaper",
+    "sidecar",
+    "claude",
+    "bridge-ui",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

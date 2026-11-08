@@ -43,7 +43,8 @@ This is an **Nx monorepo** with **pnpm workspaces**.
 reaper-mcp/
   apps/reaper-mcp-server/     # Main MCP server application (TypeScript, esbuild)
     src/
-      main.ts                 # CLI entry point: serve | setup | setup-sidecar | init | doctor | status
+      main.ts                 # CLI entry point: serve | setup | setup-sidecar | install-skills | init | doctor | status
+      claude-assets.ts        # install-skills: copies the skills, agents and knowledge shipped in the npm package into ~/.claude (hash manifest, never overwrites edits)
       server.ts               # McpServer creation, tool registration
       bridge.ts               # File-based IPC: sendCommand(), isBridgeRunning(), etc.
       sidecar.ts              # Python subprocess lifecycle + JSON-RPC client (getSidecarClient())
@@ -71,16 +72,18 @@ reaper-mcp/
         tempo.ts              # get_tempo_map, add/edit/delete_tempo_marker, set_project_tempo
         envelopes.ts          # envelope points (read/insert/edit/delete, dB on volume envelopes) + automation items (logic in reaper/mcp_envelopes_lib.lua)
         aesthetics.ts         # analyze_track_aesthetics (requires Python sidecar)
-        offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment (sidecar, no model)
+        offline.ts            # analyze_track_offline, analyze_audio_file, measure_track_alignment, verify_edit (sidecar, no model)
         transients.ts         # detect_transients, create_transient_automation (sidecar onsets → envelope pulses, e.g. lighting)
         composition.ts        # quantize_midi, transform_midi, import_midi_file (SMF parsed in smf.ts), detect_key (key.ts), detect_chords (chords.ts; logic in reaper/mcp_midi_lib.lua)
         mixcheck.ts           # analyze_loudness_curve, analyze_stereo_bands, measure_masking, separate_stems (sidecar)
         plan.ts               # run_plan (multi-op plan executor; logic in reaper/mcp_plan_lib.lua)
         recording.ts          # record setup (inputs, monitoring, punch), fixed lanes, comp_lanes (logic in reaper/mcp_recording_lib.lua)
         mixing.ts             # automation mode, FX modulation + pins, monitoring FX, freeze, render in place, stretch markers, quantize_audio (logic in reaper/mcp_mixing_lib.lua)
+        align.ts              # align_audio_to_guide (onset pairing in src/align.ts; markers written by align_stretch in reaper/mcp_mixing_lib.lua)
 
     sidecar/                  # Python sidecar for semantic audio analysis (opt-in)
       server.py               # JSON-RPC server (Meta Audiobox Aesthetics, CC-BY 4.0)
+      verify.py               # verify_edit: delay/gain/polarity-compensated null + discontinuity (click) check, ok/warn/fail
       mixcheck.py             # Loudness curve, stereo correlation per band, masking between tracks
       separation.py           # Stem separation with Demucs (opt-in: setup-sidecar --with-separation)
       requirements.txt        # Pinned Python deps
@@ -119,7 +122,7 @@ reaper-mcp/
     build-config.mjs          # Build-time constants (version, LoreKit, Dash0) + the React Compiler's Babel options, shared by Vite, vitest and Storybook
     vite-reaper-dev.mjs       # pnpm dev:bridge's REAPER side: /_/ proxied over one socket, reaper/ installed on save
 
-  .claude/skills/             # Mix skills (one dir per skill, each with SKILL.md), symlinked into ~/.claude/skills by scripts/sync-symlinks.sh
+  .claude/skills/             # Mix skills (one dir per skill, each with SKILL.md), symlinked into ~/.claude/skills by scripts/sync-symlinks.sh (clone) or copied by `reaper-mcp install-skills` (npm)
     mixer/SKILL.md            # /mixer — executes mixes (live session, reads/writes memory)
     critique/SKILL.md         # /critique — read-only analysis ("roast my mix")
     mastering/SKILL.md        # /mastering — mix-bus mastering to a LUFS target
@@ -127,10 +130,10 @@ reaper-mcp/
     learn-plugin/SKILL.md     # /learn-plugin — research + live-probe a plugin via plugin-researcher, ask only the gaps (LoreKit)
     new-extension/SKILL.md    # /new-extension — build an extension for a plugin's internals: probe its state, write tools + tests, prove them live
     mix-memory/SKILL.md       # /mix-memory — recall / consolidate / promote memory
-  .claude/agents/             # Subagents, symlinked into ~/.claude/agents by scripts/sync-symlinks.sh
+  .claude/agents/             # Subagents, symlinked into ~/.claude/agents by scripts/sync-symlinks.sh (clone) or copied by `reaper-mcp install-skills` (npm)
     plugin-researcher.md      # Web research + scratch-track probing → user::plugins:: record; used by /learn-plugin, /mixer, /mastering
 
-  knowledge/                  # Knowledge base + memory; symlinked into ~/.claude/knowledge (primary install)
+  knowledge/                  # Knowledge base + memory; symlinked into ~/.claude/knowledge (clone) or copied by `install-skills` (npm)
     genres/                   # Genre mixing conventions (targets, frequency balance, dynamics)
     workflows/                # Step-by-step mixing workflows (gain-staging, vocal-chain, etc.)
     reference/                # Reference material (frequencies, metering, compression, perceived loudness, memory-protocol)
@@ -138,7 +141,8 @@ reaper-mcp/
                               # Plugin knowledge + process lessons live in LoreKit, scope project::reaper-mcp
 
   scripts/
-    sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (primary install model)
+    prepare-npm-package.mjs   # Assemble the npm package in dist/apps/reaper-mcp-server (the root README with its install section swapped for `apps/reaper-mcp-server/NPM_INSTALL.md` and absolute image/link URLs via `src/npm-readme.mjs`, LICENSE, status page, version); run by the release job
+    sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (clone install; an npm install copies them with `install-skills`)
     ext-call.mjs              # Call any tool on a fresh `reaper-mcp serve` (so a new extension can be tried without restarting Claude Code): --list [prefix] | <tool> [json]
     plugin-list.mjs           # Rebuild docs/PLUGINS.md's built-in plugin table from LoreKit (logic: apps/bridge-ui/src/features/plugins/plugin-list.mjs)
 
@@ -174,7 +178,7 @@ reaper-mcp/
 
 ### Where mix knowledge lives
 
-- **`knowledge/`** (genres, workflows, reference) — curated markdown read on demand by the mix skills; symlinked into `~/.claude/knowledge`.
+- **`knowledge/`** (genres, workflows, reference) — curated markdown read on demand by the mix skills; symlinked into `~/.claude/knowledge` in a clone, copied there by `install-skills` from an npm install.
 - **Plugin knowledge and process lessons** live in **LoreKit**, scope `project::reaper-mcp` — one record per plugin (tags `plugin-knowledge`, `category::…`, `preference::…`, `fx::…`) and lessons (`loop::mixing-lessons`), in two layers: the **built-in** layer (keys `plugins::<vendor>/<plugin>` / `mixing-lessons::<slug>`, owned by the `reaper-mcp` LoreKit org, tag `layer::built-in`, read by everyone through the server's `list_builtin_knowledge` / `get_builtin_knowledge` tools) and each user's own layer on top (keys `user::plugins::…` / `user::mixing-lessons::…`, tag `layer::user`, via the user's own LoreKit `memory.*`). The user's record wins. The skills only ever write `user::` keys; the maintainer moves records into the built-in layer with `/mix-memory publish`.
 - **`docs/PLUGINS.md`** lists every built-in plugin record (table between `<!-- plugin-list:start/end -->`, rebuilt by `node scripts/plugin-list.mjs`, never by hand). A publisher's `/mix-memory publish` (and `/learn-plugin`, which offers to publish) rebuild it in the clone; the `Plugin list` workflow rebuilds it on `main` after every `Plugin contributions` run and daily (direct publishes from the bridge page). Contract: `knowledge/reference/memory-protocol.md`.
 
@@ -187,9 +191,9 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | Vite + React Compiler → single HTML | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (183 total)
+## MCP Tools (186 total)
 
-Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template and `measure_track_alignment` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
+Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template, `measure_track_alignment` and `verify_edit` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
 ### Project & Tracks (5)
 
@@ -394,7 +398,7 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `read_track_crest` | `tools/analysis.ts` | Crest factor (peak-to-RMS ratio) |
 | `measure_tracks` | `tools/analysis.ts` | Play, collect LUFS/crest/correlation/spectrum for 1–8 tracks in one call, stop, then remove the meters it inserted (`keepMeters` keeps them). A metric that returned no data goes to the track's `errors` instead of zeros (TS-composed; cleanup via internal `remove_mcp_meters`) |
 
-### Offline & Perceptual Audio Analysis (6) — Requires Python Sidecar
+### Offline & Perceptual Audio Analysis (7) — Requires Python Sidecar
 
 | Tool | File | Description |
 |------|------|-------------|
@@ -402,6 +406,7 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `analyze_track_offline` | `tools/offline.ts` | Render a track or the master once (up to 900 s, no playback) and analyze it: integrated LUFS (BS.1770 gated), LRA (EBU 3342), true peak, sample peak, crest, per-section loudness, band balance, resonance and sibilance hints; with `referencePath`, loudness and tonal-balance deltas against that file |
 | `analyze_audio_file` | `tools/offline.ts` | The same analysis for an audio file on disk (reference song, bounce, stem); no REAPER involved |
 | `measure_track_alignment` | `tools/offline.ts` | Render two tracks over the same window (≤30 s) and cross-correlate: delay (ms, samples), polarity, correlation, and absolute `suggestedPlayOffsetMs` / `suggestedPhase` for `set_track_property` (include the track's current offset and polarity) |
+| `verify_edit` | `tools/offline.ts` | Check an edit's result against the audio from before it (a reference track or a bounce of the same range, ≤60 s): delay/gain/polarity-compensated null (residual dB) and a discontinuity (click) check, each with ok/warn/fail; `expect: "changed"` reports the residual without a verdict, `timeScale` ≠ 1 (a stretch) skips the null. Logic in `sidecar/verify.py`. Thresholds are first values from two sources (vocal, bass); pitch/formant/transient checks need a baseline per source and are not included |
 | `detect_transients` | `tools/transients.ts` | Hits in a track (rendered, ≤900 s) or an audio file (MP3 too; `filePosition` maps it to project time): time, strength 0..1, dominant band (low/mid/high), peakDb, plus tempo, per-band counts and per-section density; filter by `band`/`bands`/`sensitivity`/`minGapMs`/`minStrength`, paginated |
 | `create_transient_automation` | `tools/transients.ts` | Detect, then write one pulse per hit (attack, hold, exponential/linear decay, scaled by strength) onto an existing envelope — e.g. lighting that flashes on the kicks. Replaces the range's points (REAPER keeps an envelope's last point on a range delete; it becomes the first pulse point), `dryRun` returns the points. TS-composed over `remove_envelope_points` / `insert_envelope_points` |
 
@@ -416,7 +421,7 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `set_track_lanes` | `tools/recording.ts` | Fixed lanes on/off, lane count, names, which lane plays alone or which lanes play layered |
 | `comp_lanes` | `tools/recording.ts` | Comp from lanes: `{start, end, lane}` ranges (max 200, no overlaps) copied onto a new exclusive comp lane with crossfades; a range a lane has no audio for is refused with the gap |
 
-### Mixing Depth (14)
+### Mixing Depth (16)
 
 | Tool | File | Description |
 |------|------|-------------|
@@ -433,6 +438,8 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 | `unfreeze_tracks` | `tools/mixing.ts` | Restore one freeze layer (41644); refuses a track that is not frozen |
 | `apply_fx_to_items` | `tools/mixing.ts` | Render in place: track + take FX to a new active take (40209/40361/41993); the old take stays |
 | `add_stretch_markers` | `tools/mixing.ts` | Many stretch markers on an audio item in one call and one undo point |
+| `edit_stretch_markers` | `tools/mixing.ts` | Edit existing markers by index in one call and one undo point: position (item seconds), sourcePosition, slope (-1..1); all edits checked against the whole list first (out of order, repeated or out of range refuses everything) |
+| `align_audio_to_guide` | `tools/align.ts` | Vocal alignment: onsets of a guide item and 1-8 doubles (sidecar `transients`, source files), paired in order within `maxShiftMs` (`align.ts`), then a stretch marker per hit moves the double onto the guide; `strength`, `dryRun`, `protectConsonants` (high-band hits keep a rigid `consonantMs` tail); per double the offset before/after (avg/max ms); a guide with stretch markers is refused (TS-composed over `get_media_item_properties` + the `align_audio_to_guide` bridge command) |
 | `quantize_audio` | `tools/mixing.ts` | Hits from the sidecar (`transients`), then stretch markers moved toward the grid (strength, window, swing); returns the timing offset before/after (TS-composed over `get_media_item_properties` + the `quantize_audio` bridge command) |
 
 ### Mix Checks (4) — Requires Python Sidecar
@@ -521,7 +528,7 @@ other tenancy it does, and the owning account must keep nothing private in that 
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 183 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 186 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 
@@ -607,6 +614,7 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, 
 
 ### Mixing Depth Concepts
 
+- **Aligning to a guide** (`align_audio_to_guide`): the pairing is a monotonic match (dynamic programming) of the guide's hits (project time) to the double's (source time → project time), a pair never further apart than `maxShiftMs`, a hit left alone costing `maxShiftMs`. Hits come from each item's source file, so take FX and existing stretch markers are not heard: the double's markers are replaced (re-running is idempotent), a guide that has some is refused. `align_stretch` skips a hit whose move would cross the previous marker, anchors both item ends, and `strength` scales each hit's move; consonant tails are `extra` pairs (same shift as their hit, not counted in the offsets). `edit_stretch_markers` rewrites the whole marker list in order after checking every edit, so a marker's index is the one `get_stretch_markers` lists.
 - **Logic lives in `reaper/mcp_mixing_lib.lua`** (pure Lua over an injected API, unit-tested via wasmoon in `mixing-lib.test.ts`); the bridge handlers decode the nested JSON params and pass `reaper` in.
 - **Modulation** goes through `TrackFX_Get/SetNamedConfigParm` keys `param.N.{mod,lfo,acs,plink}.*` (REAPER 6.37+). Reads fail until a parameter has modulation; an unknown key's write fails, so every write is checked and the whole edit is one undo point (seen live: undo removes it).
 - **Pins** are bit masks per pin (`TrackFX_Get/SetPinMappings`, low and high 32 channels). ReaComp has 4 inputs; pins 2/3 (0-based) are its sidechain and default to channels 3/4.
@@ -757,7 +765,7 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 
 - **Opt-in**: The sidecar is installed separately via `setup-sidecar`. `pnpm install` and `pnpm nx build` never touch Python.
 - **Lazy spawn**: The sidecar process spawns on the first sidecar tool call, not at server startup; the aesthetics model loads only on the first `analyze` request.
-- **JSON-RPC methods**: `analyze` (aesthetics, with optional `normalizeLufs`), `analyze_audio` (loudness/spectrum/reference, `sidecar/analysis.py`), `align` (cross-correlation delay + polarity), `loudness_curve` / `stereo_bands` / `masking` (`sidecar/mixcheck.py`), `separate` (Demucs, `sidecar/separation.py`: model loaded once per process, CUDA/MPS/CPU with a CPU fallback, `REAPER_MCP_SEPARATION_DEVICE` overrides; a separation call gets its own timeout, ~90 s + 3 s per audio second), `transients` (per-band spectral-flux onsets: low <150 Hz, mid, high >4 kHz, each band scaled to its own 99th percentile so a kick counts as much as a hat; dominant band by mean per-bin log rise; tempo from the onset autocorrelation), `chroma` (12-bin pitch-class energy, per segment for chords), `chords` / `chords_status` (lv-chordia, `sidecar/chords.py`, opt-in: Harte-labelled segments in file seconds; a range is cut to a temp WAV first; the TS side maps the labels onto the bar/beat grid by largest overlap in `chords.ts` and takes the key from the chords' tones weighted by duration).
+- **JSON-RPC methods**: `analyze` (aesthetics, with optional `normalizeLufs`), `analyze_audio` (loudness/spectrum/reference, `sidecar/analysis.py`), `align` (cross-correlation delay + polarity), `verify_edit` (`sidecar/verify.py`: compensated null + discontinuity check on an edit's result), `loudness_curve` / `stereo_bands` / `masking` (`sidecar/mixcheck.py`), `separate` (Demucs, `sidecar/separation.py`: model loaded once per process, CUDA/MPS/CPU with a CPU fallback, `REAPER_MCP_SEPARATION_DEVICE` overrides; a separation call gets its own timeout, ~90 s + 3 s per audio second), `transients` (per-band spectral-flux onsets: low <150 Hz, mid, high >4 kHz, each band scaled to its own 99th percentile so a kick counts as much as a hat; dominant band by mean per-bin log rise; tempo from the onset autocorrelation), `chroma` (12-bin pitch-class energy, per segment for chords), `chords` / `chords_status` (lv-chordia, `sidecar/chords.py`, opt-in: Harte-labelled segments in file seconds; a range is cut to a temp WAV first; the TS side maps the labels onto the bar/beat grid by largest overlap in `chords.ts` and takes the key from the chords' tones weighted by duration).
 - **Audio loading**: always `soundfile` (`analysis.load_audio`). torchaudio 2.9+ removed `info()` and moved `load()` to torchcodec, so never call `torchaudio.load`/`torchaudio.info`; `torchaudio.functional` (filters, resampling) is fine.
 - **Loudness**: `analysis.py` implements ITU-R BS.1770-4 (K-weighting, 400 ms blocks, -70/-10 gates, channels summed) and EBU 3342 LRA; `tests/test_analysis.py` checks them against the EBU 3341/3342 reference signals.
 - **Lifecycle**: Sidecar receives SIGTERM when the MCP server receives SIGINT/SIGTERM. Managed via `getSidecarClient().shutdown()` in `main.ts`.
@@ -777,8 +785,9 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 | `apps/reaper-mcp-server/src/sidecar.ts` | Node.js subprocess lifecycle + JSON-RPC client |
 | `apps/reaper-mcp-server/src/setup-sidecar.ts` | `setup-sidecar` CLI command implementation |
 | `apps/reaper-mcp-server/src/tools/aesthetics.ts` | `analyze_track_aesthetics` tool registration |
-| `apps/reaper-mcp-server/src/tools/offline.ts` | `analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment` |
+| `apps/reaper-mcp-server/src/tools/offline.ts` | `analyze_track_offline`, `analyze_audio_file`, `measure_track_alignment`, `verify_edit` |
 | `apps/reaper-mcp-server/src/tools/transients.ts` | `detect_transients`, `create_transient_automation` (pulse generation in `pulsePoints()`) |
+| `apps/reaper-mcp-server/sidecar/verify.py` | Compensated null and discontinuity checks for `verify_edit` (numpy only; the click check leaves out the window's first and last `maxLagMs`, the null twice that) |
 | `apps/reaper-mcp-server/sidecar/mixcheck.py` | Loudness curve, per-band stereo correlation, third-octave masking (numpy only) |
 | `apps/reaper-mcp-server/sidecar/separation.py` | Demucs stem separation (soundfile I/O, never demucs's torchaudio I/O) |
 | `apps/reaper-mcp-server/src/tools/mixcheck.ts` | `analyze_loudness_curve`, `analyze_stereo_bands`, `measure_masking`, `separate_stems` |
@@ -1107,13 +1116,13 @@ ESLint enforces dependency rules via `@nx/enforce-module-boundaries`:
   command in `e2e/fixtures/status.json`, a status feed recorded from the real bridge, in the built page at the narrowest (320 px),
   default and widest drawer, and fails on anything drawn outside the drawer or a console error. CI runs it. Add an entry
   to the fixture when you add a view (record it by running the commands through the wasmoon bridge and saving `MCPBridge/status`).
-- **Sidecar tests in CI**: the `sidecar` job runs `test_analysis.py` and `test_mixcheck.py` with CPU torch (Demucs and
+- **Sidecar tests in CI**: the `sidecar` job runs `test_analysis.py`, `test_mixcheck.py`, `test_verify.py` (and the chord and voice-sketch tests) with CPU torch (Demucs and
   the aesthetics model are not installed there).
 - **Validate changes with tests**: Always write small, simple, and effective tests to validate your changes. Prefer focused tests that check one behaviour well. If modifying existing code, add or update tests to cover the change before considering it complete.
 
 ## Running the MCP Server
 
-Clone-only model: clone the fork, run the one-command installer, done.
+Two ways in: clone the fork and run the one-command installer (below), or `npm install -g @mthines/reaper-mcp` then `reaper-mcp setup && reaper-mcp init` (no clone; the release job publishes it with provenance, `scripts/prepare-npm-package.mjs` assembles the package).
 
 ```bash
 # Full setup from a fresh clone (deps, build, link CLI, bridge, symlinks, config)
@@ -1145,12 +1154,13 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 | `setup` | Install Lua bridge + JSFX analyzers into REAPER |
 | `setup-sidecar` | Install the Python sidecar (opt-in, Python 3.10+, venv at `~/.reaper-mcp/sidecar-venv/`). In a terminal it shows a picker: core analysis (required), Audiobox Aesthetics weights (831 MB, default on), stem separation (Demucs, ~110 MB), chord model (lv-chordia, ~135 MB), each with what it enables, why and its size. No prompt without a TTY, in CI, with `--yes`/`-y`/`--non-interactive` or with any component flag: `--all`, `--with-separation`, `--with-chords`, `--without-aesthetics` (defaults: core + aesthetics). `--list [--json]` prints the components and what is installed. An existing install gets only the missing picked parts; the scripts are always refreshed. |
 | `extension` | Manage opt-in extensions: `list`, `add <name\|folder\|git-url>`, `link <folder>`, `remove <name>`, `new <name>` (see `docs/EXTENSIONS.md`) |
-| `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` that runs the clone's built `main.js` (copy-free) |
+| `install-skills` | Copy the mix skills, agents and knowledge shipped in the npm package into `~/.claude` (never overwrites files the user edited or owns, skips symlinked folders; a clone uses `scripts/sync-symlinks.sh`). `--dry-run` previews. `init` runs it for an npm install |
+| `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` that runs the clone's built `main.js` (copy-free). From an npm install it instead registers the server at user scope with `claude mcp add --scope user` (replacing an entry whose node or `main.js` no longer exists) and runs `install-skills` |
 | `doctor` | Verify all components are configured correctly (includes 4 sidecar sub-checks) |
 | `status` | Check if Lua bridge is running in REAPER |
 
 > Skills + knowledge are wired by `scripts/sync-symlinks.sh` (symlinks into
-> `~/.claude`), not by a CLI command — the repo is the source of truth.
+> `~/.claude`) in a clone, and by `reaper-mcp install-skills` (a copy) from an npm install — the repo is the source of truth.
 
 ### Claude Code MCP Config
 
@@ -1165,5 +1175,6 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 }
 ```
 
-Generated by `reaper-mcp init`: it runs your clone's built `main.js` by absolute
+Generated by `reaper-mcp init` in a clone (an npm install registers the server at user scope
+instead, with `claude mcp add`): it runs your clone's built `main.js` by absolute
 path, so it works without the `reaper-mcp` command on PATH.
