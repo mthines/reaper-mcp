@@ -158,6 +158,23 @@ describe('report_plugin_research', () => {
     expect(reportSpan()?.attributes).not.toHaveProperty('reaper.plugin_research.duration_s');
   });
 
+  it('starts no timer for a scratch track that failed to add or was only a run_plan dry run', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-08T10:00:00Z'));
+    const t = tools();
+    vi.mocked(sendCommand).mockResolvedValueOnce({ id: 't', success: false, error: 'REAPER is busy', timestamp: 0 });
+    await t['add_track']({ name: '[MCP] plugin-research FAILED' }, { requestId: 1 });
+    await t['run_plan']({ ops: [{ op: 'add_track', name: '[MCP] plugin-research DRYRUN' }], dryRun: true }, { requestId: 2 });
+
+    vi.setSystemTime(new Date('2026-11-08T10:02:00Z'));
+    await t['report_plugin_research']({ outcome: 'load_failed', scratchTag: 'FAILED' }, { requestId: 3 });
+    await t['report_plugin_research']({ outcome: 'new', scratchTag: 'DRYRUN' }, { requestId: 4 });
+
+    const reports = spans.getFinishedSpans().filter((s) => s.name === 'tools/call report_plugin_research');
+    expect(reports).toHaveLength(2);
+    for (const span of reports) expect(span.attributes).not.toHaveProperty('reaper.plugin_research.duration_s');
+  });
+
   // Last: initTelemetry() fixes the mode for the rest of this file's process.
   it('reports the mode the server started in, not a choice saved after it started', async () => {
     vi.stubEnv('DO_NOT_TRACK', '1');
