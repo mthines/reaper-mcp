@@ -266,6 +266,40 @@ claude mcp add --scope user reaper -- node /path/to/reaper-mcp/dist/apps/reaper-
 
 Claude Code reads a `.mcp.json` only in the folder it is opened in.
 
+### Other MCP clients
+
+Any client that starts a local stdio MCP server can use the tools. Only Claude Code
+is tested. Run `./scripts/install.sh` (or `reaper-mcp setup`) first so the bridge is
+in REAPER, then give the client the same command:
+
+```json
+{
+  "mcpServers": {
+    "reaper": {
+      "command": "node",
+      "args": ["/path/to/reaper-mcp/dist/apps/reaper-mcp-server/main.js", "serve"]
+    }
+  }
+}
+```
+
+With a global install (`npm install -g @mthines/reaper-mcp`), the command is
+`reaper-mcp` with args `["serve"]`. Where the file goes depends on the client
+(Claude Desktop: `claude_desktop_config.json`; Cursor: `.cursor/mcp.json`); see
+its MCP docs.
+
+What differs from Claude Code:
+
+- **Permissions:** `reaper-mcp init` pre-approves the tools only in Claude Code.
+  Other clients ask per tool, or use their own allow-list.
+- **Skills:** `/mixer`, `/critique`, `/mastering` and `/editing` are `SKILL.md`
+  files in `.claude/skills/`. A client that does not load skills still has every
+  tool, without the mixing workflow; pasting a skill's `SKILL.md` into the chat
+  gets you most of it.
+- **Context budget:** the server lists all 187 tools (about 51k tokens of schemas)
+  at once. `list_tool_categories` gives a compact overview, but clients still load
+  every schema. Local models need a context window of 64k or more.
+
 ### Running from source (development)
 
 For an edit-reload loop without rebuilding, run the server from the TypeScript

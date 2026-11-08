@@ -23,7 +23,7 @@ You chat in plain English in Claude Code, by keyboard (or dictation, if you like
 [![macOS · Windows · Linux](https://img.shields.io/badge/macOS_·_Windows_·_Linux-1a1240?style=for-the-badge)](#-install-in-3-steps)
 [![MIT](https://img.shields.io/badge/license-MIT-ff7a45?style=for-the-badge)](LICENSE)
 
-[**Install in 3 steps**](#-install-in-3-steps) · [See it work](#-just-type-what-you-hear) · [What you get](#-why-producers-use-it) · [Watch it work](#-see-what-your-agent-is-doing) · [Extensions](#-extensions-teach-it-your-plugin) · [FAQ](#-faq)
+[**Install in 3 steps**](#-install-in-3-steps) · [See it work](#-just-type-what-you-hear) · [What you get](#-why-producers-use-it) · [Watch it work](#-see-what-your-agent-is-doing) · [Extensions](#-extensions-teach-it-your-plugin) · [Clients & models](#-clients-and-models) · [FAQ](#-faq)
 
 </div>
 
@@ -483,6 +483,47 @@ that reads or writes your session.</sub>
 
 ---
 
+## 🤖 Clients and models
+
+reaper-mcp is an [MCP](https://modelcontextprotocol.io) server: a set of REAPER tools any MCP client can call.
+It has no model of its own, so the AI is whichever one your client runs.
+
+**Tested clients**
+
+| Client | Status |
+|---|---|
+| **Claude Code** | Tested daily. The installer sets it up, and the `/mixer`, `/critique`, `/mastering` and `/editing` skills are written for it. |
+| **Other MCP clients** (Claude Desktop, Cursor, VS Code, …) | Not tested. The tools work from any client that runs a local stdio server: [config](docs/REFERENCE.md#other-mcp-clients). The skills only load where the client reads `SKILL.md` files. |
+
+**Typed or voice?**
+Typed. reaper-mcp never listens to a microphone: it gets text from your client.
+Speaking works if your client or your OS dictation turns it into text first.
+
+**Local models**
+They work, if your client can run one and the model is good at tool calling.
+Nobody has tested a local model end to end yet, so treat it as an experiment. What to expect:
+
+- **Context:** the 187 tool schemas take about **51k tokens** before you type a word.
+  You need a context window of at least 64k, and 128k is more realistic for a session.
+- **Tool calling:** the mix skills chain 10 to 30 tool calls per task with exact track and FX indexes.
+  A model that invents parameters or drops JSON fields fails there.
+  Pick an instruction-tuned model your client lists with native tool calling, the biggest your machine runs.
+- **Speed:** each turn sends those 51k tokens again, so on a laptop GPU expect slow turns.
+
+Tried one? [Tell us how it went](https://github.com/mthines/reaper-mcp/issues/72), and we'll list what works here.
+
+**What is it trained on?**
+Nothing. There is no reaper-mcp model and nothing is trained on your sessions.
+The skills and [`knowledge/`](knowledge/) are plain text: opinions and checklists your model reads, which you can edit or skip.
+Where your data goes:
+
+- **Your model** sees what the tools return: track names, FX settings, meter readings, file paths.
+  Audio and MIDI stay on your machine; analysis that needs audio runs in the optional local Python sidecar ([`reaper-mcp setup-sidecar`](docs/REFERENCE.md#cli-commands)).
+- **LoreKit** (only if you connect it) stores what the skills learn about plugins and your preferences.
+- **Usage telemetry** (on by default, [easy to turn off](#-privacy--telemetry)) sends tool names, errors and timings, never content.
+
+---
+
 ## 🔒 Privacy & telemetry
 
 Hi 👋 reaper-mcp isn't a company — it's just me. I'm a developer who loves making music,
@@ -518,6 +559,20 @@ would say it to an engineer.
 No. You type to it in Claude Code, like any chat. "Talking" means plain language, not
 a microphone. Nothing listens to you. If you'd rather speak, use your OS dictation or a
 voice-to-text tool; the agent just sees the text.
+</details>
+
+<details>
+<summary><b>Does it work with other AI apps or local models?</b></summary>
+<br>
+The tools work from any MCP client, and with a local model if it handles tool calling well and has a big enough
+context window. Only Claude Code is tested. See <a href="#-clients-and-models">Clients and models</a>.
+</details>
+
+<details>
+<summary><b>What is it trained on?</b></summary>
+<br>
+Nothing. It brings no model of its own and trains nothing; you bring the model. The skills are optional opinions in
+plain text. <a href="#-clients-and-models">Where your data goes</a>.
 </details>
 
 <details>
