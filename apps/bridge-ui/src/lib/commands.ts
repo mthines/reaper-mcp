@@ -65,6 +65,8 @@ export type Measurement =
   /** Masking between tracks (sidecar): band centres, the most masked pairs [a, b, overall, score per band], conflicts
    *  [a, b, Hz, score, suggestion] */
   | { kind: 'masking'; tracks: string[]; hz: number[]; pairs: [string, string, number, number[]][]; conflicts: [string, string, number | null, number | null, string][] }
+  /** Edit verification (sidecar): the overall verdict and one row [check, verdict, value, detail] per check that ran */
+  | { kind: 'verify'; name?: string; ref?: string; verdict?: string; expect?: string; checks: [string, string, string, string][] }
   /** Stem separation (sidecar, Demucs): each stem [name, LUFS, peak dBFS], speed, and the tracks it inserted */
   | { kind: 'stems'; name?: string; model?: string; device?: string; secs?: number; proc?: number; inserted?: number; folder?: string; muted?: number; stems: [string, number | null, number | null][] };
 
@@ -86,6 +88,7 @@ const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[]
   analyze_stereo_bands: { kind: 'stereo', fields: ['dur'] },
   measure_masking: { kind: 'masking', fields: [] },
   separate_stems: { kind: 'stems', fields: ['secs', 'proc', 'inserted', 'muted'] },
+  verify_edit: { kind: 'verify', fields: [] },
 };
 
 /** Every command the drawer draws a result for */
@@ -131,8 +134,8 @@ export function measurementOf(e: CommandEntry): Measurement | null {
     if (!isNumbers(e.r.bands)) return null;
     out.bands = e.r.bands;
   }
-  if (spec.kind === 'offline' || spec.kind === 'alignment' || spec.kind === 'aesthetics' || spec.kind === 'curve' || spec.kind === 'stereo' || spec.kind === 'stems') {
-    for (const f of ['name', 'ref', 'term', 'model', 'device', 'folder']) if (typeof e.r[f] === 'string') out[f] = e.r[f];
+  if (spec.kind === 'offline' || spec.kind === 'alignment' || spec.kind === 'aesthetics' || spec.kind === 'curve' || spec.kind === 'stereo' || spec.kind === 'stems' || spec.kind === 'verify') {
+    for (const f of ['name', 'ref', 'term', 'model', 'device', 'folder', 'verdict', 'expect']) if (typeof e.r[f] === 'string') out[f] = e.r[f];
   }
   const r = e.r;
   const numOrNull = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
@@ -159,6 +162,10 @@ export function measurementOf(e: CommandEntry): Measurement | null {
     out.hz = r.hz;
     out.pairs = rows(r.pairs).filter((p) => Array.isArray(p[3])).map((p) => [String(p[0]), String(p[1]), numOrNull(p[2]) ?? 0, (p[3] as unknown[]).map((x) => numOrNull(x) ?? 0)]);
     out.conflicts = rows(r.conflicts).map((c) => [String(c[0]), String(c[1]), numOrNull(c[2]), numOrNull(c[3]), typeof c[4] === 'string' ? c[4] : '']);
+  }
+  if (spec.kind === 'verify') {
+    out.checks = rows(r.checks).filter((c) => typeof c[0] === 'string' && typeof c[1] === 'string').map((c) => [c[0], c[1], typeof c[2] === 'string' ? c[2] : '', typeof c[3] === 'string' ? c[3] : '']);
+    if ((out.checks as unknown[]).length === 0) return null;
   }
   if (spec.kind === 'stems') {
     out.stems = rows(r.stems).filter((x) => typeof x[0] === 'string').map((x) => [x[0], numOrNull(x[1]), numOrNull(x[2])]);

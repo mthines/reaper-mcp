@@ -1,0 +1,11 @@
+/* Edit check: the verdict is a word first, colour second */
+.verdict { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; }
+.verdict b { font-size: 15px; font-weight: 500; }
+.verdict:where([data-verdict="ok"]) b { color: var(--ok, var(--text)); }
+.verdict:where([data-verdict="warn"]) b { color: var(--warn); }
+.verdict:where([data-verdict="fail"]) b { color: var(--bad); }
+.value { font-weight: 400; }
+.word { color: var(--muted); }
+[data-verdict="warn"] > .word { color: var(--warn); }
+[data-verdict="fail"] > .word, [data-verdict="fail"] > .value { color: var(--bad); }
+[data-verdict="warn"] > .value { color: var(--warn); }
