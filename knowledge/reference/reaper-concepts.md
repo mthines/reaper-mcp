@@ -222,7 +222,7 @@ several steps (and measuring adds its own), so undo by name: the undo history li
 between "before" and "after" while listening. Not the same as REAPER's own project undo.
 **By hand:** the Snapshots view on the bridge page, or the snapshot actions in REAPER's action list.
 **Tools:** `snapshot_save`, `snapshot_restore`, `snapshot_list`.
-**Learn more:** the project README, section on snapshots.
+**Learn more:** `docs/TOOLS.md` in the reaper-mcp repo, section "Snapshots (A/B Testing)".
 
 ## Rendering
 
