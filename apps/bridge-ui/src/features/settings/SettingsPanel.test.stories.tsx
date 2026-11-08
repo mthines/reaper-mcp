@@ -51,9 +51,9 @@ export const OffersNoRestartWhenTheBridgeCannotRelaunch: Story = {
 
 export const TurnsStartWithReaperOff: Story = {
   play: async ({ canvasElement, args }) => {
-    const toggle = within(canvasElement).getByRole('switch', { name: /Start with REAPER/ });
-    await expect(toggle).toBeChecked();
-    await userEvent.click(toggle);
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('switch', { name: /Start with REAPER/ })).toBeChecked();
+    await userEvent.click(canvas.getByText('Start with REAPER'));
     await expect(args.onSet).toHaveBeenCalledWith('cfg_autostart', false);
   },
 };
