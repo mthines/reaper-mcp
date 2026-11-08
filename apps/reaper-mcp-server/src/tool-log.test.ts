@@ -86,4 +86,9 @@ describe('tool results for the status page', () => {
     expect((summary['checks'] as unknown[][]).map((r) => [r[0], r[1]])).toEqual([['null', 'skipped'], ['discontinuity', 'ok'], ['pitch', 'warn'], ['tone', 'warn'], ['transients', 'ok']]);
     expect((summary['checks'] as unknown[][])[2]).toEqual(['pitch', 'warn', '165 cents', '140 Hz reference']);
   });
+
+  it('shows the dropout check of a big slow-down as its deepest dip', () => {
+    const summary = verifySummary('Lead', undefined, { verdict: 'warn', expect: 'changed', checks: { dropout: { verdict: 'warn', deepestDipDb: 16.3 } } });
+    expect(summary['checks']).toEqual([['dropout', 'warn', '16.3 dB', 'deepest dip under the original']]);
+  });
 });

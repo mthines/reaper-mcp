@@ -340,3 +340,27 @@ def test_a_character_warning_makes_the_verdict_a_warning_never_a_fail():
     off = _resampled(_voice(4, pitch_scale=2 ** (1.0 / 12)), 1.1)
     result = verify.verify_edit(reference, off, SR, time_scale=1.1)
     assert result["verdict"] == "warn"
+
+
+def _slowed(rate):
+    return _voice(4, rate=rate)
+
+
+def test_a_clean_big_slow_down_reports_a_shallow_dip_and_passes():
+    checks = _character(_voice(4), _slowed(0.8), 0.8)
+    assert checks["dropout"]["verdict"] == "ok"
+    assert checks["dropout"]["deepestDipDb"] < verify.DROPOUT_WARN_DB
+
+
+def test_a_piece_of_a_slow_down_that_went_missing_is_found():
+    edited = _slowed(0.8).copy()
+    mid = len(edited) // 2
+    edited[mid:mid + int(0.08 * SR)] *= 0.02  # 80 ms gone while the original keeps sounding there
+    checks = _character(_voice(4), edited, 0.8)
+    assert checks["dropout"]["verdict"] == "warn"
+    assert checks["dropout"]["deepestDipDb"] >= verify.DROPOUT_WARN_DB
+
+
+def test_mild_slow_downs_and_speed_ups_are_not_checked_for_dropouts():
+    assert "dropout" not in _character(_voice(4), _slowed(0.92), 0.92)
+    assert "dropout" not in _character(_voice(4), _voice(4, rate=1.1), 1.1)

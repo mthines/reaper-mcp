@@ -70,7 +70,7 @@ export function alignmentSummary(data: Obj): Obj {
   };
 }
 
-const VERIFY_CHECKS = ['null', 'discontinuity', 'pitch', 'tone', 'transients'];
+const VERIFY_CHECKS = ['null', 'discontinuity', 'pitch', 'tone', 'transients', 'dropout'];
 
 /** One verify_edit check as [name, verdict, headline value, detail], in words the page draws as they are */
 function verifyRow(key: string, c: Obj): [string, string, string, string] {
@@ -94,6 +94,8 @@ function verifyRow(key: string, c: Obj): [string, string, string, string] {
       return [key, verdict, f(c['driftCents'], 0, ' cents'), typeof c['reason'] === 'string' ? (c['reason'] as string) : f(c['referenceHz'], 0, ' Hz reference')];
     case 'tone':
       return [key, verdict, f(c['distanceDb'], 2, ' dB'), ''];
+    case 'dropout':
+      return [key, verdict, f(c['deepestDipDb'], 1, ' dB'), typeof c['reason'] === 'string' ? (c['reason'] as string) : 'deepest dip under the original'];
     default:
       return [key, verdict, f(c['fluxLogRatio'], 2, ''), typeof c['reason'] === 'string' ? (c['reason'] as string) : ''];
   }
