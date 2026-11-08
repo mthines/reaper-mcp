@@ -38,8 +38,8 @@ takes a few tool calls. No `run_plan` batches of unrelated edits in explain mode
 6. **Show it**: the before and after you measured (re-measure; do not assume). The tool reply ends with a
    "Bridge page (before/after view): <url>" line on a write: offer that link in one line ("see it drawn on the
    bridge page: <url>"). Never open it yourself (no `open`, no `curl`): REAPER's web server leaks a connection on
-   every scripted request. No line in the reply means the web interface is off, or the call only moved the cursor
-   or time selection (those count as navigation, not writes); skip the offer.
+   every scripted request. No line in the reply means there is nothing to show for that call (a read, a
+   navigation step, a failed call) or the web interface is off; skip the offer.
 7. **Undo**: one line. Every tool call that writes is its own undo step, and measuring adds steps too (the
    meter cleanup is "MCP: Remove meters"), so never promise a number of Ctrl+Z presses. Say: "Ask me to undo this,
    or use Edit → Undo history in REAPER: this change's steps are the ones named MCP: …". When asked, call
