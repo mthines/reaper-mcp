@@ -20,6 +20,10 @@ permissions:
   actions: read
   contents: read
 
+# Nx Cloud's free plan is exceeded and answers 401: run every nx command without it
+env:
+  NX_NO_CLOUD: 'true'
+
 jobs:
   # =============================================================================
   # Step 1: Detect changes and determine release type
