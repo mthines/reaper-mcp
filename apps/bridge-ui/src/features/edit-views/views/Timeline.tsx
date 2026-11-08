@@ -111,6 +111,11 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
   const itemsAdded = laneDiffs.reduce((n, d) => n + d.added.size, 0);
   const itemsRemoved = laneDiffs.reduce((n, d) => n + d.removed.length, 0);
   const itemWrite = lanes.some((l) => l.was);
+  // A selection change: the items picked up and let go, counted over the lanes drawn
+  const selecting = v.selected !== undefined;
+  const picked = lanes.reduce((n, l) => n + (l.picked ?? []).filter((i) => !(l.wasPicked ?? []).includes(i)).length, 0);
+  const dropped = lanes.reduce((n, l) => n + (l.wasPicked ?? []).filter((i) => !(l.picked ?? []).includes(i)).length, 0);
+  const unselected = lanes.some((l) => l.items.length > (l.picked ?? []).length);
   return (
     <>
       {v.op ? (
@@ -125,6 +130,23 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
             unit={v.sel ? "s" : undefined}
           />
           <Measurement.Readout label="Cursor" value={clock(v.cur ?? 0, 1)} />
+        </div>
+      ) : selecting ? (
+        <div className={chartStyles.measureReadouts}>
+          <Measurement.Readout
+            label="Selected"
+            value={v.wasSelected !== undefined && v.wasSelected !== v.selected ? `${v.wasSelected} → ${v.selected}` : String(v.selected)}
+            unit={v.selected === 1 ? "item" : "items"}
+          />
+          {picked > 0 || dropped > 0 ? (
+            <>
+              {picked > 0 && <Measurement.Readout label="Picked up" value={String(picked)} title="Items that were not selected before" />}
+              {dropped > 0 && <Measurement.Readout label="Let go" value={String(dropped)} title="Items that were selected before and are not now" />}
+            </>
+          ) : (
+            <Measurement.Readout label="Changed" value="nothing" />
+          )}
+          <Measurement.Readout label={lanes.length > 1 ? "Tracks" : "Track"} value={lanes.map((l) => l.t).join(", ")} />
         </div>
       ) : v.lanes ? (
         <div className={chartStyles.measureReadouts}>
@@ -282,11 +304,14 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
             was={lane.was}
             win={win}
             name={lane.t}
+            selection={selecting ? { picked: lane.picked ?? [], was: lane.wasPicked ?? [] } : undefined}
           />
         ))}
         {v.moreTracks ? (
           <span className={chartStyles.evMore}>
-            +{v.moreTracks} more {v.moreTracks === 1 ? "track" : "tracks"} changed the same way
+            {selecting
+              ? `+${v.moreTracks} more ${v.moreTracks === 1 ? "track" : "tracks"} with selected items, not drawn`
+              : `+${v.moreTracks} more ${v.moreTracks === 1 ? "track" : "tracks"} changed the same way`}
           </span>
         ) : null}
         {(varies || tempos.added.size > 0 || tempos.removed.length > 0) && (
@@ -312,6 +337,15 @@ export function Timeline({ v }: { v: Extract<EditView, { kind: "timeline" }> }) 
               : []),
             [chartStyles.lgNewMark, v.op === "normalize" ? "New gain" : "Added or changed"],
             [chartStyles.lgGoneMark, "Before"],
+          ]}
+        />
+      )}
+      {selecting && (
+        <Legend
+          items={[
+            [styles.lgPicked, "Selected"],
+            ...(dropped > 0 ? [[chartStyles.lgGoneMark, "Was selected"] as [string, string]] : []),
+            ...(unselected ? [[styles.lgIdle, "Not selected"] as [string, string]] : []),
           ]}
         />
       )}
@@ -441,17 +475,23 @@ function ItemsLane({
   was,
   win,
   name,
+  selection,
 }: {
   items: Item[];
   was?: Item[];
   /** The seconds drawn, start to end: items outside it are clipped */
   win: [number, number];
   name?: string;
+  /** A selection change: which items (by index) are selected now and were before */
+  selection?: { picked: number[]; was: number[] };
 }) {
   const at = (t: number) => `${pct(t, win[0], win[1])}%`;
   const width = (it: Item) =>
     `calc(${pct(it[0] + it[1], win[0], win[1]) - pct(it[0], win[0], win[1])}% - 1px)`;
   const { added, removed } = timelineDiff<Item>(items, was);
+  const picked = new Set(selection?.picked);
+  const wasPicked = new Set(selection?.was);
+  const state = (i: number) => (picked.has(i) ? "selected" : wasPicked.has(i) ? "was selected" : "not selected");
   return (
     <div className={styles.evLaneWrap}>
       {name && <div className={styles.evLaneName}>{name}</div>}
@@ -467,9 +507,12 @@ function ItemsLane({
         {items.map((it, i) => (
           <span
             key={i}
-            className={cx(styles.evItem, it[4] ? styles.evItemMidi : '', it[5] ? styles.evItemMuted : '', added.has(it) ? styles.evNew : '')}
+            className={cx(
+              styles.evItem, it[4] ? styles.evItemMidi : '', it[5] ? styles.evItemMuted : '', added.has(it) ? styles.evNew : '',
+              selection && (picked.has(i) ? styles.evItemPicked : wasPicked.has(i) ? styles.evGone : styles.evItemIdle),
+            )}
             style={{ left: at(it[0]), width: width(it) }}
-            title={`${it[4] ? "MIDI" : "Audio"} item · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}${it[5] ? " · muted" : ""}${it[6] !== undefined ? ` · gain ${signedDb(it[6])} dB` : ""}`}
+            title={`${it[4] ? "MIDI" : "Audio"} item · ${clock(it[0], 1)}–${clock(it[0] + it[1], 1)}${it[5] ? " · muted" : ""}${it[6] !== undefined ? ` · gain ${signedDb(it[6])} dB` : ""}${selection ? ` · ${state(i)}` : ""}`}
           >
             {it[6] !== undefined && added.has(it) && <b className={cx(styles.evItemGain, 'mono')}>{signedDb(it[6])}</b>}
             {it[2] > 0 && (

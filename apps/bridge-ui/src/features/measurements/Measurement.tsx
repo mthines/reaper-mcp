@@ -13,6 +13,7 @@ import { Stems } from './Stems.js';
 import { StereoBands } from './StereoBands.js';
 import { VerifyEdit } from './VerifyEdit.js';
 import { Waveform } from './Waveform.js';
+import { Waveforms } from './Waveforms.js';
 import { fmt, pct, targetOf, tipLine, zoneOf } from './format.js';
 import { HoverTip } from '../../components/index.js';
 import { formatAgo } from '../../lib/format.js';
@@ -62,6 +63,7 @@ const TITLE: Record<Measurement['kind'], string> = {
   crest: 'Dynamics',
   spectrum: 'Spectrum',
   waveform: 'Waveform',
+  waveforms: 'Waveforms',
 };
 
 /** The previous call's result when it measured the same kind of thing, for the ghost marks */
@@ -184,6 +186,8 @@ function render(m: Measurement, entry: CommandEntry, previous: CommandEntry | un
     }
     case 'waveform':
       return <Waveform m={m} entry={entry} previous={same('waveform', previous)} />;
+    case 'waveforms':
+      return <Waveforms m={m} entry={entry} previous={same('waveforms', previous)} />;
   }
 }
 
@@ -222,6 +226,7 @@ function headline(m: Measurement): { value: number; label: string; unit: string;
     case 'masking':
       return v(m.pairs[0]?.[2], 'Worst pair', '', true);
     case 'verify':
+    case 'waveforms':
       return null;
     case 'stems':
       return m.secs && m.proc ? v(m.secs / m.proc, 'Speed', '× real time', true) : null;

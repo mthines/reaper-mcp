@@ -24,6 +24,9 @@ export interface CommandEntry {
 }
 
 /** A measuring command's result, typed by what it measured; numbers the bridge couldn't read are left out. */
+/** One track's render as min/max slices (−1..1) with its peak and RMS in dBFS and the samples at full scale */
+export interface WaveTrack { name: string; hi: number[]; lo: number[]; peakDb?: number; rmsDb?: number; clipped?: number }
+
 export type Measurement =
   | { kind: 'meters'; peakL?: number; peakR?: number; rmsL?: number; rmsR?: number }
   | { kind: 'lufs'; integrated?: number; shortTerm?: number; momentary?: number; truePeakL?: number; truePeakR?: number; duration?: number }
@@ -31,6 +34,8 @@ export type Measurement =
   | { kind: 'crest'; crestFactor?: number; peakLevel?: number; rmsLevel?: number }
   | { kind: 'spectrum'; peakDb?: number; rmsDb?: number; fftSize?: number; sampleRate?: number; bands: number[] }
   | { kind: 'waveform'; peakDb?: number; rmsDb?: number; clipped?: number; durationSeconds?: number; channels?: number; hi: number[]; lo: number[] }
+  /** Several renders over the same range, one waveform per track (`more` = rendered but not drawn; `cached` = reused renders) */
+  | { kind: 'waveforms'; durationSeconds?: number; rendered?: number; cached?: number; more?: number; tracks: WaveTrack[] }
   /** Offline analysis (sidecar): BS.1770 loudness, LRA, peaks, sections [start, end, LUFS], band balance (share of
    *  energy in dB, sub..brilliance, null = silent), resonances [Hz, dB above the local spectrum], and a reference */
   | {
@@ -77,6 +82,7 @@ const MEASUREMENTS: Record<string, { kind: Measurement['kind']; fields: string[]
   read_track_crest: { kind: 'crest', fields: ['crestFactor', 'peakLevel', 'rmsLevel'] },
   read_track_spectrum: { kind: 'spectrum', fields: ['peakDb', 'rmsDb', 'fftSize', 'sampleRate'] },
   render_track_to_wav: { kind: 'waveform', fields: ['peakDb', 'rmsDb', 'clipped', 'durationSeconds', 'channels'] },
+  render_tracks_to_wav: { kind: 'waveforms', fields: ['durationSeconds', 'rendered', 'cached', 'more'] },
   // Composed by the server (sidecar) and logged with `_log_result`
   analyze_track_offline: { kind: 'offline', fields: ['lufs', 'lra', 'tp', 'peak', 'crest', 'dur', 'sib'] },
   analyze_audio_file: { kind: 'offline', fields: ['lufs', 'lra', 'tp', 'peak', 'crest', 'dur', 'sib'] },
@@ -202,6 +208,21 @@ export function measurementOf(e: CommandEntry): Measurement | null {
       .filter((c) => typeof c[0] === 'number' && typeof c[1] === 'number' && typeof c[2] === 'string')
       .map((c) => [c[0], c[1], c[2], typeof c[3] === 'string' ? c[3] : '']);
     if ((out.ch as unknown[]).length === 0) return null;
+  }
+  if (spec.kind === 'waveforms') {
+    const tracks = (Array.isArray(r.tracks) ? r.tracks : []).flatMap((t): WaveTrack[] => {
+      if (!t || typeof t !== 'object') return [];
+      const w = t as Record<string, unknown>;
+      if (!isNumbers(w.hi) || !isNumbers(w.lo) || w.hi.length !== w.lo.length) return [];
+      return [{
+        name: typeof w.name === 'string' ? w.name : '', hi: w.hi, lo: w.lo,
+        ...(typeof w.peakDb === 'number' ? { peakDb: w.peakDb } : {}),
+        ...(typeof w.rmsDb === 'number' ? { rmsDb: w.rmsDb } : {}),
+        ...(typeof w.clipped === 'number' ? { clipped: w.clipped } : {}),
+      }];
+    });
+    if (tracks.length === 0) return null;
+    out.tracks = tracks;
   }
   if (spec.kind === 'waveform') {
     const { hi, lo } = e.r;

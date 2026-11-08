@@ -121,3 +121,25 @@ export const ShowsABandsShareOnHover: Story = {
     await expect(canvas.queryByRole('tooltip')).toBeNull();
   },
 };
+
+export const DrawsOneWaveformPerRenderedTrackAndNamesClipping: Story = {
+  args: of('Waveforms · clipped, more tracks'),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getAllByRole('img', { name: /^Waveform of / })).toHaveLength(8);
+    await expect(canvas.getByRole('img', { name: /^Waveform of Drums, peak .* 41 clipped samples$/ })).toBeInTheDocument();
+    await expect(canvas.getByText('+4 more tracks rendered, not drawn')).toBeInTheDocument();
+    await expect(canvas.getByText(/Clipping/)).toBeInTheDocument();
+  },
+};
+
+export const ShowsATracksPeakAndTheOneBeforeOnHover: Story = {
+  args: of('Waveforms'),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.hover(canvas.getByText('Kick'));
+    const tip = canvas.getByRole('tooltip').textContent ?? '';
+    await expect(tip).toMatch(/Peak −?[\d.]+ dBFS · RMS −[\d.]+ dBFS/);
+    await expect(tip).toMatch(/Previous call: peak/);
+  },
+};

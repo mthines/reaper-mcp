@@ -39,8 +39,11 @@ export type FxSlot = [string, string, string, string];
 export interface FxChain { t: string; fx: FxSlot[]; was?: FxSlot[] }
 /** A route: [kind s send / r receive / h hardware out, the other end, volume dB, pan −1..1, flags: M muted] */
 export type Route = ['s' | 'r' | 'h', string, number, number, string];
-/** One track's items for an item edit; `was` is the lane before it */
-export interface ItemLane { t: string; items: Item[]; was?: Item[] }
+/**
+ * One track's items for an item edit; `was` is the lane before it. A selection change instead lists which items
+ * (indexes into `items`) are selected now (`picked`) and were before (`wasPicked`)
+ */
+export interface ItemLane { t: string; items: Item[]; was?: Item[]; picked?: number[]; wasPicked?: number[] }
 
 /** A track's record state: [name, 1 = armed, input ("In 3/4"), monitor (off/on/auto), record mode] */
 export type RecordRow = [string, number, string, string, string];
@@ -89,6 +92,8 @@ export type EditView =
       sel?: [number, number]; cur?: number; wasSel?: [number, number] | null; wasCur?: number;
       /** Arrangement edits: the op, the span it copied from / opened / cut, where it copied to, and tracks without a lane */
       op?: ArrangeOp; span?: [number, number]; to?: [number, number]; moreTracks?: number;
+      /** Item selection changes: how many items are selected now and were before, across the whole project */
+      selected?: number; wasSelected?: number;
     } & TimelineState)
   | { kind: 'mixer'; tracks: MixRow[]; total: number; from?: number; master?: MixRow; ids?: string[]; was?: { tracks: MixRow[]; ids: string[] } }
   | { kind: 'fxChain'; chains: FxChain[] }
@@ -137,7 +142,7 @@ const kinds: Array<[EditView['kind'], string[]]> = [
     'move_media_item', 'split_media_item', 'trim_media_item', 'delete_media_item', 'set_media_item_properties',
     'set_media_items_properties', 'set_item_fades', 'insert_audio_file', 'list_midi_items',
     'set_time_selection', 'get_time_selection', 'set_cursor_position',
-    'copy_media_items', 'insert_time', 'remove_time', 'copy_section', 'process_items',
+    'copy_media_items', 'insert_time', 'remove_time', 'copy_section', 'process_items', 'set_selected_items',
   ]],
   ['mixer', ['list_tracks', 'add_track', 'delete_track', 'move_track', 'set_track_folder', 'set_track_info']],
   ['fxChain', [
@@ -280,7 +285,11 @@ export function editViewOf(e: CommandEntry): EditView | null {
         ? (r.lanes as unknown[]).flatMap((l): ItemLane[] => {
             if (!l || typeof l !== 'object' || !str((l as ItemLane).t)) return [];
             const lane = l as Record<string, unknown>;
-            return [{ t: lane.t as string, items: items(lane.items), ...(Array.isArray(lane.was) ? { was: items(lane.was) } : {}) }];
+            return [{
+              t: lane.t as string, items: items(lane.items), ...(Array.isArray(lane.was) ? { was: items(lane.was) } : {}),
+              ...(numbers(lane.picked) && lane.picked.length ? { picked: lane.picked } : {}),
+              ...(numbers(lane.wasPicked) && lane.wasPicked.length ? { wasPicked: lane.wasPicked } : {}),
+            }];
           })
         : undefined;
       return {
@@ -297,6 +306,8 @@ export function editViewOf(e: CommandEntry): EditView | null {
         ...(pair(r.span) ? { span: r.span } : {}),
         ...(pair(r.to) ? { to: r.to } : {}),
         ...(num(r.moreTracks) && r.moreTracks > 0 ? { moreTracks: r.moreTracks } : {}),
+        ...(num(r.selected) ? { selected: r.selected } : {}),
+        ...(num(r.wasSelected) ? { wasSelected: r.wasSelected } : {}),
       };
     }
     case 'mixer': {
@@ -506,6 +517,13 @@ export function focusOf(v: Extract<EditView, { kind: 'timeline' }>, len: number)
   span(v.to);
   if (!v.op) {
     for (const lane of v.lanes ?? []) {
+      // A selection change: the items that were picked or dropped, else the ones picked again
+      const picked = new Set(lane.picked), wasPicked = new Set(lane.wasPicked);
+      const flipped = [...picked, ...wasPicked].filter((i) => picked.has(i) !== wasPicked.has(i));
+      for (const i of flipped.length || v.selected === undefined ? flipped : [...picked]) {
+        const it = lane.items[i];
+        if (it) points.push(it[0], it[0] + it[1]);
+      }
       if (!lane.was) continue;
       const { added, removed } = timelineDiff<Item>(lane.items, lane.was);
       const edges = (items: Iterable<Item>) => [...items].flatMap((it) => [it[0], it[0] + it[1]]);

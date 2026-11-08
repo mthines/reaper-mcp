@@ -1,6 +1,7 @@
 import { useId, useState, type PointerEvent } from 'react';
 import { Readout } from './Readout.js';
 import { fmt, zoneOf } from './format.js';
+import { WAVE_HEAT, waveOffset, waveOutline } from './wave.js';
 import { parseParams, type CommandEntry, type Measurement } from '../../lib/commands.js';
 import { cx } from '../../lib/cx.js';
 import chartStyles from '../../styles/chart.module.css';
@@ -8,15 +9,6 @@ import styles from './Waveform.module.css';
 
 const WW = 320;
 const WH = 84;
-/** The waveform's dB scale: silence at the centre line, full scale at the edges */
-const WAVE_FLOOR = -48;
-const waveScale = (v: number) => {
-  const a = Math.min(1, Math.abs(v));
-  const h = a > 0 ? Math.max(0, (20 * Math.log10(a) - WAVE_FLOOR) / -WAVE_FLOOR) : 0;
-  return v < 0 ? -h : h;
-};
-/** Distance from the top (0) to the centre (0.5) at which a level sits, for gradient stops and grid lines */
-const waveOffset = (db: number) => (1 - (db - WAVE_FLOOR) / -WAVE_FLOOR) / 2;
 
 /**
  * The rendered audio as min/max per slice, all channels, on a dB scale down to −48 dB so quiet material
@@ -26,11 +18,7 @@ export function Waveform({ m, entry, previous }: { m: Extract<Measurement, { kin
   const uid = useId().replace(/:/g, '');
   const [hover, setHover] = useState<number | null>(null);
   const n = m.hi.length;
-  const y = (v: number) => ((1 - waveScale(v)) / 2) * WH;
-  const outline = (w: { hi: number[]; lo: number[] }) => {
-    const at = (vals: number[]) => vals.map((v, i) => `${((i / (vals.length - 1)) * WW).toFixed(1)},${y(v).toFixed(1)}`);
-    return `M${at(w.hi).join('L')}L${at(w.lo).reverse().join('L')}Z`;
-  };
+  const outline = (w: { hi: number[]; lo: number[] }) => waveOutline(w, WW, WH);
   const shape = outline(m);
   const p = parseParams(entry.p);
   const start = p && typeof p === 'object' && typeof (p as Record<string, unknown>).startTime === 'number' ? ((p as Record<string, unknown>).startTime as number) : 0;
@@ -58,12 +46,7 @@ export function Waveform({ m, entry, previous }: { m: Extract<Measurement, { kin
         <svg viewBox={`0 0 ${WW} ${WH}`} preserveAspectRatio="none" onPointerMove={onMove} onPointerLeave={() => setHover(null)} role="img" aria-label={`Waveform of the rendered audio, peak ${fmt(m.peakDb)} dBFS${clipped ? `, ${m.clipped} clipped samples` : ''}`}>
           <defs>
             <linearGradient id={`wave-heat-${uid}`} gradientUnits="userSpaceOnUse" x1={0} x2={0} y1={0} y2={WH}>
-              {[
-                [0, 'bad'],
-                [-1, 'warn'],
-                [-6, 'warn'],
-                [-18, 'accent'],
-              ].flatMap(([db, c]) => {
+              {WAVE_HEAT.flatMap(([db, c]) => {
                 const o = waveOffset(db as number);
                 return [<stop key={`t${db}`} offset={o} stopColor={`var(--${c})`} />, <stop key={`b${db}`} offset={1 - o} stopColor={`var(--${c})`} />];
               }).sort((a, b) => Number(a.props.offset) - Number(b.props.offset))}

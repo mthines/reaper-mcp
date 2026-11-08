@@ -923,7 +923,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
 - Measurement results: the bridge keeps a compact result `r` (built in `reaper/mcp_edit_views_lib.lua`, which keeps
   `mcp_bridge.lua` under Lua's 200-locals limit) on meters/LUFS/correlation/crest/spectrum entries
   (`RESULT_FIELDS`, 48 spectrum bands) and, for `render_track_to_wav`, a waveform read from the WAV before the server
-  deletes it (`wav_waveform()`: 120 min/max slices, peak/RMS dBFS, clipped sample count; drawn on a dB scale to −48). `src/features/measurements/` draws them (one component per kind),
+  deletes it (`wav_waveform()`: 120 min/max slices, peak/RMS dBFS, clipped sample count; drawn on a dB scale to −48). `render_tracks_to_wav` keeps one coarser waveform per track (≤8 tracks, 60 slices, read within a 1 s budget, the rest counted as `more`), drawn as `Waveforms`: one lane per track on a shared axis, the previous call's lane of the same name dashed. `src/features/measurements/` draws them (one component per kind),
   colored by value (amber from −6 dB, red at 0), with the previous call on the same track ghosted (dashed/hollow) and
   its headline value and change in a "Previous call" line. Add a measuring command in `RESULT_FIELDS`, `MEASUREMENTS`
   (`src/lib/commands.ts`), a `Measurement` kind and an example in `src/demo/examples.ts` together.
@@ -941,7 +941,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   plugin's own readout; faders and pan dots show their value on hover, `HoverTip`), the automation window an edit touched (padded 25%, at least 4 s; automation items drawn as blocks tinted by
   pool with their name and shared curve, moved/deleted items and a changed pool's old curve dashed, items the call left unchanged dimmed), MIDI notes as a piano
   roll (first 256, `more` counts the rest; added notes solid, removed dashed), `analyze_midi` velocity per pitch,
-  markers/regions/tempo/items on one timeline, `list_tracks` as a mixer, and `run_plan`'s ops; also FX chains
+  markers/regions/tempo/items on one timeline, `list_tracks` as a mixer, `set_selected_items` as item lanes (items selected now solid, selected before dashed, the rest dimmed; `picked` / `wasPicked` per lane), and `run_plan`'s ops; also FX chains
   (add/remove/move/copy/bypass/offline/rename/preset, `get_track_properties`: slots marked added/moved/changed/removed by
   FX GUID), item edits as one lane per touched track with the items before dashed, track structure edits on the mixer
   (tracks diffed by GUID), routing (a signal-flow diagram — receives wired in on the left, sends and hardware outs out on the right, wires as thick as their level; hovering a name or wire shows its level and pan and marks its row, hovering a row lights its wire — over rows grouped under Receives from / Sends to / Hardware outputs with level bars, the old level ghosted), the time
