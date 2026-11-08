@@ -296,7 +296,7 @@ What differs from Claude Code:
   files in `.claude/skills/`. A client that does not load skills still has every
   tool, without the mixing workflow; pasting a skill's `SKILL.md` into the chat
   gets you most of it.
-- **Context budget:** the server lists all 187 tools (about 51k tokens of schemas)
+- **Context budget:** the server lists all 189 tools (about 51k tokens of schemas)
   at once. `list_tool_categories` gives a compact overview, but clients still load
   every schema. Local models need a context window of 64k or more.
 

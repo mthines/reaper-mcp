@@ -504,7 +504,7 @@ Speaking works if your client or your OS dictation turns it into text first.
 They work, if your client can run one and the model is good at tool calling.
 Nobody has tested a local model end to end yet, so treat it as an experiment. What to expect:
 
-- **Context:** the 187 tool schemas take about **51k tokens** before you type a word.
+- **Context:** the 189 tool schemas take about **51k tokens** before you type a word.
   You need a context window of at least 64k, and 128k is more realistic for a session.
 - **Tool calling:** the mix skills chain 10 to 30 tool calls per task with exact track and FX indexes.
   A model that invents parameters or drops JSON fields fails there.
