@@ -463,6 +463,11 @@ function editExampleList(): Example[] {
   const recordMode = call('set_record_mode', { mode: 'time_selection', punchStart: 62.5, punchEnd: 78 }, {
     mode: 'time_selection', path: 'Audio', punch: [62.5, 78], was: { mode: 'normal', path: 'media' },
   });
+  const projectInfo = call('get_project_info', {}, { name: 'Midnight Drive.rpp', tracks: 24, tempo: 128, ts: [4, 4], sr: 48000, state: 0, cur: 62.5 });
+  const transportRecording = call('get_transport_state', {}, { state: 3, cur: 62.5, pos: 71.3, tempo: 96, ts: [7, 8] });
+  const projectSettings = call('get_project_settings', {}, {
+    sr: 44100, forced: 1, title: 'Midnight Drive', author: 'You', rep: 1, metro: 0, notes: 120,
+  });
   const TAKES = [['Take 1', 1], ['Take 2', 0], ['Take 3', 0]];
   const TAKE_ITEMS = [[60, 32, 0, 0], [60, 32, 1, 0], [60, 14, 2, 0], [77, 15, 2, 0]];
   const lanesListed = call('get_track_lanes', { track: 'Lead Vox' }, { t: 'Lead Vox', fixed: 1, lanes: TAKES, items: TAKE_ITEMS, len: 92 });
@@ -841,6 +846,9 @@ function editExampleList(): Example[] {
     example('Render · off target', renderOver, 'Louder than the target, true peak over 0'),
     example('Render · stems', renderStems, 'One file per selected track, 32-bit float, no target'),
     example('Render · versions', renderVersions, 'Full, instrumental and TV mix in one call; muted tracks named'),
+    example('Project info', projectInfo, 'Tempo, time signature as the beats of one bar, sample rate, track count and cursor'),
+    example('Transport · recording', transportRecording, 'Seven beats to the bar; the playhead apart from the cursor'),
+    example('Project settings', projectSettings, 'Title, author, forced sample rate, repeat and metronome'),
     example('Record setup', recordSetup, 'Armed tracks with input, monitoring and mode; auto-punch on a time selection'),
     example('Track armed', trackArmed, 'Arm, input and monitoring changed: old values struck through'),
     example('Record mode set', recordMode, 'Normal → auto-punch with a punch range and a new record path'),

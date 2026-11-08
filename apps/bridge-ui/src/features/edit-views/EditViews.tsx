@@ -7,6 +7,7 @@ import { MidiStats } from './views/MidiStats.js';
 import { Mixer } from './views/Mixer.js';
 import { PianoRoll } from './views/PianoRoll.js';
 import { Plan } from './views/Plan.js';
+import { Project } from './views/Project.js';
 import { Lanes } from './views/Lanes.js';
 import { Record } from './views/Record.js';
 import { Modulation } from './views/Modulation.js';
@@ -56,6 +57,7 @@ const TITLE: Record<EditView["kind"], string> = {
   pins: "Plugin pins",
   stretch: "Stretch markers",
   render: "Rendered files",
+  project: "Project",
 };
 
 /** Listings show what is there; every other edit view is a write that shows before and after */
@@ -81,6 +83,9 @@ const LISTINGS = new Set([
   "get_fx_param_modulation",
   "get_fx_pins",
   "list_monitoring_fx",
+  "get_project_info",
+  "get_transport_state",
+  "get_project_settings",
 ]);
 
 function render(v: EditView): ReactNode {
@@ -115,5 +120,7 @@ function render(v: EditView): ReactNode {
       return <Pins v={v} />;
     case "stretch":
       return <Stretch v={v} />;
+    case "project":
+      return <Project v={v} />;
   }
 }

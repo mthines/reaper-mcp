@@ -9,6 +9,7 @@ import { MidiStats } from './views/MidiStats.js';
 import { Mixer } from './views/Mixer.js';
 import { PianoRoll } from './views/PianoRoll.js';
 import { Plan } from './views/Plan.js';
+import { Project } from './views/Project.js';
 import { Lanes } from './views/Lanes.js';
 import { Record } from './views/Record.js';
 import { Modulation } from './views/Modulation.js';
@@ -20,6 +21,6 @@ import { Timeline } from './views/Timeline.js';
 import { ZoomSwitch } from './views/ZoomSwitch.js';
 
 /** `EditView.Section` is the drawer's card for a call; the rest draw one kind of view each */
-export const EditView = { Section: EditViewSection, Changes, Envelope, PianoRoll, MidiStats, Timeline, Mixer, Plan, FxChains, Routing, Render, Record, Lanes, Modulation, Pins, Stretch, Counts, ZoomSwitch, ChangeMark, ChangeLegend, Legend };
+export const EditView = { Section: EditViewSection, Changes, Envelope, PianoRoll, MidiStats, Timeline, Mixer, Plan, Project, FxChains, Routing, Render, Record, Lanes, Modulation, Pins, Stretch, Counts, ZoomSwitch, ChangeMark, ChangeLegend, Legend };
 
 export { editKindOf, editViewOf, type EditView as EditViewData, type SlotChange } from './edit-views.js';

@@ -73,6 +73,18 @@ export type RenderFile = [string, number, number, number, number, number[], numb
 /** One version of a render (`v` "" for a plain render), the tracks it muted and its files */
 export interface RenderGroup { v: string; m: string[]; f: RenderFile[] }
 
+/** Transport state as the bridge sends it: 0 stopped, 1 playing, 2 paused, 3 recording */
+export type TransportState = 0 | 1 | 2 | 3;
+export type ProjectView = {
+  kind: 'project';
+  /** Project file name ("" = never saved), track count */
+  name?: string; tracks?: number;
+  tempo?: number; ts?: [number, number]; sr?: number; forced?: boolean;
+  state?: TransportState; cur?: number; pos?: number;
+  /** Project settings: title, author, loop repeat, metronome, and how long the notes are */
+  title?: string; author?: string; repeat?: boolean; metro?: boolean; notes?: number;
+};
+
 export type EditView =
   | { kind: 'changes'; rows: ChangeRow[]; more?: number }
   | {
@@ -116,6 +128,7 @@ export type EditView =
    * average offset from the grid before/after (ms); a batch add shows the markers now and before
    */
   | { kind: 'stretch'; len: number; moves?: [number, number][]; more?: number; grid?: number[]; off?: [number, number]; guide?: boolean; marks?: number[]; was?: number[] }
+  | ProjectView
   | {
       kind: 'render'; fmt: string; src: string; groups: RenderGroup[]; more?: number;
       /** Bit depth or MP3 kbps, the normalize mode and target (dB), and the limiter ceiling (dB, `tp` true peak) */
@@ -158,6 +171,7 @@ const kinds: Array<[EditView['kind'], string[]]> = [
   ['pins', ['get_fx_pins', 'set_fx_pins']],
   ['stretch', ['add_stretch_markers', 'edit_stretch_markers', 'quantize_audio', 'align_audio_to_guide']],
   ['render', ['render_project', 'render_versions']],
+  ['project', ['get_project_info', 'get_transport_state', 'get_project_settings']],
 ];
 for (const [kind, commands] of kinds) for (const c of commands) KIND_OF[c] = kind;
 
@@ -369,6 +383,21 @@ export function editViewOf(e: CommandEntry): EditView | null {
         ...(str(r.norm) ? { norm: r.norm, ...(num(r.nt) ? { nt: r.nt } : {}) } : {}),
         ...(num(r.lim) ? { lim: r.lim, tp: r.tp === true } : {}),
       };
+    }
+    case 'project': {
+      const state = [0, 1, 2, 3].includes(r.state as number) ? (r.state as TransportState) : undefined;
+      const ts = Array.isArray(r.ts) && num(r.ts[0]) && num(r.ts[1]) && r.ts[0] > 0 && r.ts[1] > 0 ? ([r.ts[0], r.ts[1]] as [number, number]) : undefined;
+      const view: ProjectView = {
+        kind,
+        ...(str(r.name) ? { name: r.name } : {}), ...(num(r.tracks) ? { tracks: r.tracks } : {}),
+        ...(num(r.tempo) && r.tempo > 0 ? { tempo: r.tempo } : {}), ...(ts ? { ts } : {}),
+        ...(num(r.sr) && r.sr > 0 ? { sr: r.sr } : {}), ...(num(r.forced) ? { forced: r.forced === 1 } : {}),
+        ...(state !== undefined ? { state } : {}), ...(num(r.cur) ? { cur: r.cur } : {}), ...(num(r.pos) ? { pos: r.pos } : {}),
+        ...(str(r.title) ? { title: r.title } : {}), ...(str(r.author) ? { author: r.author } : {}),
+        ...(num(r.rep) ? { repeat: r.rep === 1 } : {}), ...(num(r.metro) ? { metro: r.metro === 1 } : {}),
+        ...(num(r.notes) ? { notes: r.notes } : {}),
+      };
+      return Object.keys(view).length > 1 ? view : null;
     }
     case 'plan': {
       const ops = tuples<[string, string]>(r.ops, [str, str]);

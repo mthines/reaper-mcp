@@ -25,6 +25,20 @@ describe('edit views in the drawer', () => {
     expect(pins).toContain('as it is now');
     expect(pins).not.toContain('before → after');
   });
+  it('draws a project read: tempo, the bar as its beats, sample rate and an unsaved project', () => {
+    const html = drawer('get_project_info', { name: '', tracks: 3, tempo: 120, ts: [7, 8], sr: 44100, state: 0, cur: 12.5 });
+    expect(html).toContain('>Project<');
+    expect(html).toContain('as it is now');
+    expect(html).toContain('Not saved yet');
+    expect(html).toContain('44.1');
+    expect(html).toContain('7/8');
+    expect(html).toContain('One bar: 7 beats');
+    expect(html).toContain('1.75');
+  });
+  it('shows a recording transport in the hot zone and nothing for an empty project read', () => {
+    expect(drawer('get_transport_state', { state: 3, cur: 1, pos: 2, tempo: 90, ts: [4, 4] })).toContain('Recording');
+    expect(drawer('get_project_info', {})).toBe('');
+  });
   it('counts the lanes past the drawn ones', () => {
     const html = drawer('get_track_lanes', { t: 'Vox', fixed: 1, lanes: [['Take 1', 1], ['Take 2', 0]], items: [], len: 4, more: 8 });
     expect(html).toContain('+8 more lanes not drawn');
