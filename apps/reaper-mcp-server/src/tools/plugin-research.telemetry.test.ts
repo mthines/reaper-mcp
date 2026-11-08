@@ -81,6 +81,21 @@ describe('report_plugin_research', () => {
     expect(JSON.parse(res.content[0].text)).toEqual({ telemetry: 'default', sent: expected });
   });
 
+  it('caps counts and maps unknown outcomes and callers instead of refusing the report', async () => {
+    await tools()['report_plugin_research']({
+      outcome: 'overlay', caller: 'some-other-skill', batchSize: 35, paramsProbed: 500, openQuestions: 99, sources: 40,
+    }, { requestId: 1 });
+
+    expect(reportSpan()?.attributes).toMatchObject({
+      'reaper.plugin_research.outcome': 'refined',
+      'reaper.plugin_research.caller': 'other',
+      'reaper.plugin_research.batch_size': 20,
+      'reaper.plugin_research.params_probed': 64,
+      'reaper.plugin_research.open_questions': 20,
+      'reaper.plugin_research.sources': 10,
+    });
+  });
+
   it('turns free text into "other" and puts no plugin name or tag on the span', async () => {
     await tools()['report_plugin_research']({
       outcome: 'refined', category: 'my bus glue thing', style: 'Pro-Q 4 (FabFilter) [R2R]', format: 'Waves Shell', scratchTag: 'PROQ4',

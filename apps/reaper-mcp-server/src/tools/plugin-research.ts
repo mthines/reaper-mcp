@@ -31,6 +31,12 @@ export const PLUGIN_STYLES = ['transparent', 'character', 'vintage', 'modern', '
 
 export const FX_FORMATS = ['VST', 'VST3', 'AU', 'CLAP', 'JS', 'LV2', 'DX'] as const;
 
+/**
+ * Caps for the counts. A larger value is sent as the cap rather than refused: a refused
+ * call is rejected before the traced handler runs, so the run would leave no span at all.
+ */
+const MAX_COUNT = { batch: 20, probed: 64, questions: 20, sources: 10 } as const;
+
 /** The scratch track the plugin-researcher adds: `[MCP] plugin-research <TAG>`. */
 const SCRATCH_TRACK = /^\[MCP\] plugin-research (\S.*)$/;
 /** Runs longer than this were left open (the report never came), so they are not timed. */
@@ -91,18 +97,18 @@ export function registerPluginResearchTools(server: McpServer): void {
       'the plugin\'s name. The result shows exactly what was sent. Changes nothing in REAPER.',
     {
       outcome: z
-        .enum(OUTCOMES)
+        .string()
         .describe('new: a new record; refined: an existing record of yours, or an overlay on a built-in one; not_installed: no installed FX matched; load_failed: add_fx failed; no_lorekit: LoreKit not connected, nothing saved'),
       category: z.string().optional().describe('The record\'s category (e.g. "compressor"); the first one if it has several'),
       style: z.string().optional().describe('The record\'s style: transparent, character, vintage, modern or surgical'),
       format: z.string().optional().describe('The format prefix of the FX name: VST, VST3, AU, CLAP, JS, LV2, DX, with an instrument\'s "i" (VST3i) as REAPER shows it'),
       paramsTotal: z.coerce.number().int().min(0).optional().describe('How many parameters get_fx_parameters listed (sent only as a range)'),
-      paramsProbed: z.coerce.number().int().min(0).max(64).optional().describe('Parameters probed live in Step 4 (0 if not inspected)'),
-      openQuestions: z.coerce.number().int().min(0).max(20).optional().describe('Open questions in the report, preference included'),
-      sources: z.coerce.number().int().min(0).max(10).optional().describe('Web sources the record cites'),
+      paramsProbed: z.coerce.number().int().min(0).optional().describe('Parameters probed live in Step 4 (0 if not inspected)'),
+      openQuestions: z.coerce.number().int().min(0).optional().describe('Open questions in the report, preference included'),
+      sources: z.coerce.number().int().min(0).optional().describe('Web sources the record cites'),
       cleanedUp: z.boolean().optional().describe('The scratch track was deleted and nothing else changed (false: report it first)'),
-      caller: z.enum(CALLERS).optional().describe('Who dispatched the research: the prompt\'s "Dispatched by" line (default other)'),
-      batchSize: z.coerce.number().int().min(1).max(20).optional().describe('Plugins researched in the same request: the prompt\'s "Batch" line (default 1)'),
+      caller: z.string().optional().describe('Who dispatched the research: the prompt\'s "Dispatched by" line — learn-plugin, mixer or mastering (default other)'),
+      batchSize: z.coerce.number().int().min(1).optional().describe('Plugins researched in the same request: the prompt\'s "Batch" line (default 1)'),
       scratchTag: z.string().optional().describe('The <TAG> of your "[MCP] plugin-research <TAG>" track, so the server can time the run. Never sent.'),
     },
     async (args) => {
@@ -110,12 +116,12 @@ export function registerPluginResearchTools(server: McpServer): void {
       const seconds = runSeconds(args.scratchTag);
       const bucket = paramsBucket(args.paramsTotal);
       const attributes: Record<string, string | number | boolean> = {
-        'reaper.plugin_research.outcome': args.outcome,
-        'reaper.plugin_research.caller': args.caller ?? 'other',
-        'reaper.plugin_research.batch_size': args.batchSize ?? 1,
-        'reaper.plugin_research.params_probed': args.paramsProbed ?? 0,
-        'reaper.plugin_research.open_questions': args.openQuestions ?? 0,
-        'reaper.plugin_research.sources': args.sources ?? 0,
+        'reaper.plugin_research.outcome': closed(OUTCOMES, args.outcome.trim().toLowerCase() === 'overlay' ? 'refined' : args.outcome),
+        'reaper.plugin_research.caller': args.caller === undefined ? 'other' : closed(CALLERS, args.caller),
+        'reaper.plugin_research.batch_size': Math.min(args.batchSize ?? 1, MAX_COUNT.batch),
+        'reaper.plugin_research.params_probed': Math.min(args.paramsProbed ?? 0, MAX_COUNT.probed),
+        'reaper.plugin_research.open_questions': Math.min(args.openQuestions ?? 0, MAX_COUNT.questions),
+        'reaper.plugin_research.sources': Math.min(args.sources ?? 0, MAX_COUNT.sources),
         ...(args.cleanedUp !== undefined ? { 'reaper.plugin_research.cleaned_up': args.cleanedUp } : {}),
         ...(seconds !== undefined ? { 'reaper.plugin_research.duration_s': seconds } : {}),
         'reaper.plugin.category': closed(PLUGIN_CATEGORIES, args.category),
