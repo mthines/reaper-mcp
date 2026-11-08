@@ -199,7 +199,7 @@ export function bridgeDownMessage(status: BridgeStatus, resourcePath: string = g
   }
 }
 
-/** Commands this process has sent and is still waiting on. */
+/** Commands this process is still waiting on; REAPER may be busy with one (a render stops the heartbeat). */
 let inFlight = 0;
 
 /**
@@ -210,10 +210,8 @@ let inFlight = 0;
 let lastAnswerAt = 0;
 
 /**
- * The bridge's state when a command should be refused without waiting: no heartbeat at all, or one
- * older than BRIDGE_DOWN_AFTER_MS. Never while a command of ours is still waiting: REAPER may be busy
- * with it (a long render stops the heartbeat), and the new one should queue behind it as before.
- * Nor within BRIDGE_DOWN_AFTER_MS of REAPER's last answer, which is fresher news than the heartbeat.
+ * The bridge's state when a command should be refused without waiting (no heartbeat, or one older than
+ * BRIDGE_DOWN_AFTER_MS); never while a command of ours is in flight, or within that window of REAPER's last answer.
  */
 async function bridgeDown(): Promise<BridgeStatus | undefined> {
   if (inFlight > 0) return undefined;
