@@ -203,12 +203,21 @@ export function bridgeDownMessage(status: BridgeStatus, resourcePath: string = g
 let inFlight = 0;
 
 /**
+ * When REAPER last answered one of this process's commands (ms since epoch). The bridge rewrites its
+ * heartbeat only on the defer tick after a long command (main_loop reads the clock before it runs
+ * commands), so straight after a 60 s render the heartbeat is stale although REAPER just answered.
+ */
+let lastAnswerAt = 0;
+
+/**
  * The bridge's state when a command should be refused without waiting: no heartbeat at all, or one
  * older than BRIDGE_DOWN_AFTER_MS. Never while a command of ours is still waiting: REAPER may be busy
  * with it (a long render stops the heartbeat), and the new one should queue behind it as before.
+ * Nor within BRIDGE_DOWN_AFTER_MS of REAPER's last answer, which is fresher news than the heartbeat.
  */
 async function bridgeDown(): Promise<BridgeStatus | undefined> {
   if (inFlight > 0) return undefined;
+  if (Date.now() - lastAnswerAt < BRIDGE_DOWN_AFTER_MS) return undefined;
   const status = await getBridgeState();
   if (status.state === 'connected') return undefined;
   if (status.state === 'stale' && (status.heartbeatAgeMs ?? 0) < BRIDGE_DOWN_AFTER_MS) return undefined;
@@ -342,6 +351,7 @@ export async function sendCommand(
             const tRead = now();
             const data = await readFile(responsePath, 'utf-8');
             const response: BridgeResponse = JSON.parse(data);
+            lastAnswerAt = Date.now();
             if (profiling) t['readParse'] = now() - tRead;
             if (profiling) t['pollWait'] = now() - tPoll - (t['readParse'] ?? 0);
 

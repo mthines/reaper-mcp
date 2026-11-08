@@ -46,6 +46,17 @@ function resourceFolder(files: Record<string, number>): void {
 
 const INSTALLED = { 'mcp_bridge.lua': 0, 'reaper.ini': 0 };
 
+/**
+ * Jump the clock (Date only, timers stay real) ten minutes past the previous jump, so REAPER's answers
+ * to earlier tests are long past: an answer within the last minute counts as REAPER being up.
+ */
+let clockShift = 0;
+function minutesLater(): void {
+  vi.useRealTimers();
+  clockShift += 10 * 60_000;
+  vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + clockShift });
+}
+
 // The global logger provider can be set only once per process: register one
 // whose emit every test can inspect.
 const emit = vi.fn();
@@ -63,6 +74,7 @@ describe('bridge', () => {
 
   afterEach(() => {
     delete process.env['REAPER_RESOURCE_PATH'];
+    vi.useRealTimers();
   });
 
   describe('ensureBridgeDir', () => {
@@ -180,6 +192,8 @@ describe('bridge', () => {
   });
 
   describe('sendCommand while the bridge is down', () => {
+    beforeEach(() => minutesLater());
+
     it.each([
       ['never ran', INSTALLED, /Script: mcp_bridge\.lua/],
       ['is not installed', { 'reaper.ini': 0 }, /Run in a terminal: reaper-mcp setup/],
@@ -248,6 +262,24 @@ describe('bridge', () => {
 
       expect((await render).success).toBe(true);
       expect((await next).success).toBe(true);
+    });
+
+    it('sends a command right after REAPER answered, though the heartbeat has not caught up, until a minute passes', async () => {
+      mockedWriteFile.mockResolvedValue(undefined);
+      mockedUnlink.mockResolvedValue(undefined);
+      mockedReadFile.mockImplementation(async (path) =>
+        JSON.stringify({ id: /response_(.+)\.json$/.exec(String(path))?.[1], success: true, data: {}, timestamp: Date.now() }));
+      resourceFolder({ 'heartbeat.json': 0, ...INSTALLED });
+      expect((await sendCommand('render_track_to_wav' as never)).success).toBe(true);
+
+      // REAPER rewrites the heartbeat only on the tick after a long render: still old when the next command goes out
+      resourceFolder({ 'heartbeat.json': 90_000, ...INSTALLED });
+      expect((await sendCommand('get_project_info')).success).toBe(true);
+
+      vi.setSystemTime(Date.now() + 61_000);
+      const late = await sendCommand('get_project_info');
+      expect(late.success).toBe(false);
+      expect(classifyBridgeError(late.error)).toBe('bridge_not_running');
     });
   });
 
