@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aestheticsSummary, alignmentSummary, curveSummary, maskingSummary, offlineSummary, stemsSummary, stereoBandsSummary } from './tool-log.js';
+import { aestheticsSummary, alignmentSummary, curveSummary, maskingSummary, offlineSummary, stemsSummary, stereoBandsSummary, verifySummary } from './tool-log.js';
 
 describe('tool results for the status page', () => {
   it('keeps the loudness, sections, band balance and reference deltas of an analysis', () => {
@@ -68,5 +68,22 @@ describe('tool results for the status page', () => {
   it('keeps each stem\'s loudness and peak, and how many tracks were inserted', () => {
     expect(stemsSummary('Mix', { model: 'htdemucs', device: 'mps', seconds: 20, processingSeconds: 8, stems: [{ stem: 'drums', lufs: -16, peakDbfs: -1 }], inserted: { folderName: 'Mix stems', tracks: [{}] } }))
       .toEqual({ name: 'Mix', model: 'htdemucs', device: 'mps', secs: 20, proc: 8, stems: [['drums', -16, -1]], inserted: 1, folder: 'Mix stems' });
+  });
+
+  it('keeps the verdict and one row per check that ran, with the stretch checks named', () => {
+    const summary = verifySummary('Vox take 2', 'Vox', {
+      verdict: 'warn',
+      expect: 'identical',
+      checks: {
+        null: { verdict: 'skipped', reason: 'timing changed' },
+        discontinuity: { verdict: 'ok', score: 3.2, atSeconds: 1.5, channel: 1 },
+        pitch: { verdict: 'warn', driftCents: 164.6, referenceHz: 140 },
+        tone: { verdict: 'warn', distanceDb: 4.13 },
+        transients: { verdict: 'ok', fluxLogRatio: -0.04 },
+      },
+    });
+    expect(summary).toMatchObject({ name: 'Vox take 2', ref: 'Vox', verdict: 'warn' });
+    expect((summary['checks'] as unknown[][]).map((r) => [r[0], r[1]])).toEqual([['null', 'skipped'], ['discontinuity', 'ok'], ['pitch', 'warn'], ['tone', 'warn'], ['transients', 'ok']]);
+    expect((summary['checks'] as unknown[][])[2]).toEqual(['pitch', 'warn', '165 cents', '140 Hz reference']);
   });
 });

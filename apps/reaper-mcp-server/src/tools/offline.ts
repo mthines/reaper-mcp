@@ -23,7 +23,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
 import { discardRender, renderTrack, renderTracks } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
-import { alignmentSummary, logToolResult, offlineSummary } from '../tool-log.js';
+import { alignmentSummary, logToolResult, offlineSummary, verifySummary } from '../tool-log.js';
 
 const SIDECAR_NOT_INSTALLED_MSG =
   'Audio understanding sidecar not installed. ' +
@@ -319,7 +319,7 @@ export function registerOfflineTools(server: McpServer): void {
           maxLagMs: maxLagMs ?? DEFAULT_MAX_LAG_MS,
         });
         if (typeof result['error'] === 'string') return refuse(result['error']);
-        logToolResult('verify_edit', args, startedAt, null);
+        logToolResult('verify_edit', args, startedAt, verifySummary(edited.trackName, referenceTrack != null ? rendered[0].trackName : undefined, result));
         return text({
           trackIndex,
           trackName: edited.trackName,
