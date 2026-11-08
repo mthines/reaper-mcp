@@ -1,0 +1,128 @@
+/**
+ * What a plugin research run reports: fixed values and capped counts on the tool's span, the
+ * run's length timed from its scratch track, and the same attributes back to the agent as
+ * what was sent — observed through an in-memory span exporter, with the bridge stubbed and the
+ * saved telemetry choice in a temporary home folder.
+ */
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { node, tracing } from '@opentelemetry/sdk-node';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+
+vi.mock('../bridge.js', async (importOriginal) => ({ ...(await importOriginal<object>()), sendCommand: vi.fn() }));
+
+import { sendCommand } from '../bridge.js';
+import { instrumentToolHandlers } from '../server.js';
+import { registerStructureTools } from './structure.js';
+import { registerPlanTools } from './plan.js';
+import { registerPluginResearchTools } from './plugin-research.js';
+
+const spans = new tracing.InMemorySpanExporter();
+
+type Handler = (args: Record<string, unknown>, extra: unknown) => Promise<{ content: { text: string }[]; isError?: boolean }>;
+
+function tools(): Record<string, Handler> {
+  const registered: Record<string, Handler> = {};
+  const server = { tool: (...a: unknown[]) => { registered[a[0] as string] = a[a.length - 1] as Handler; } };
+  instrumentToolHandlers(server as unknown as McpServer);
+  registerStructureTools(server as unknown as McpServer);
+  registerPlanTools(server as unknown as McpServer);
+  registerPluginResearchTools(server as unknown as McpServer);
+  return registered;
+}
+
+const reportSpan = () => spans.getFinishedSpans().find((s) => s.name === 'tools/call report_plugin_research');
+
+describe('report_plugin_research', () => {
+  let home: string;
+
+  beforeAll(() => {
+    new node.NodeTracerProvider({ spanProcessors: [new tracing.SimpleSpanProcessor(spans)] }).register();
+  });
+
+  beforeEach(() => {
+    spans.reset();
+    home = mkdtempSync(join(tmpdir(), 'reaper-mcp-home-'));
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
+    for (const k of ['DO_NOT_TRACK', 'REAPER_MCP_TELEMETRY', 'OTEL_TRACES_EXPORTER', 'OTEL_METRICS_EXPORTER', 'OTEL_LOGS_EXPORTER']) vi.stubEnv(k, '');
+    vi.mocked(sendCommand).mockResolvedValue({ id: 't', success: true, data: { index: 7 }, timestamp: 0 });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('records the run as fixed values and capped counts, and tells the agent what was sent', async () => {
+    const res = await tools()['report_plugin_research']({
+      outcome: 'new', category: 'Compressor, multiband', style: 'Transparent', format: 'VST3i:',
+      paramsTotal: 40, paramsProbed: 9, openQuestions: 2, sources: 3, cleanedUp: true, caller: 'learn-plugin', batchSize: 3,
+    }, { requestId: 1 });
+
+    const expected = {
+      'reaper.plugin_research.outcome': 'new',
+      'reaper.plugin_research.caller': 'learn-plugin',
+      'reaper.plugin_research.batch_size': 3,
+      'reaper.plugin_research.params_probed': 9,
+      'reaper.plugin_research.open_questions': 2,
+      'reaper.plugin_research.sources': 3,
+      'reaper.plugin_research.cleaned_up': true,
+      'reaper.plugin.category': 'compressor',
+      'reaper.plugin.style': 'transparent',
+      'reaper.plugin.format': 'VST3',
+      'reaper.plugin.instrument': true,
+      'reaper.plugin.params_total': '16-63',
+    };
+    expect(reportSpan()?.attributes).toMatchObject(expected);
+    expect(JSON.parse(res.content[0].text)).toEqual({ telemetry: 'default', sent: expected });
+  });
+
+  it('turns free text into "other" and puts no plugin name or tag on the span', async () => {
+    await tools()['report_plugin_research']({
+      outcome: 'refined', category: 'my bus glue thing', style: 'Pro-Q 4 (FabFilter) [R2R]', format: 'Waves Shell', scratchTag: 'PROQ4',
+    }, { requestId: 1 });
+
+    const attributes = reportSpan()?.attributes;
+    expect(attributes).toMatchObject({ 'reaper.plugin.category': 'other', 'reaper.plugin.style': 'other', 'reaper.plugin.format': 'other' });
+    expect(JSON.stringify(attributes)).not.toMatch(/Pro-Q|PROQ4|R2R|bus glue|Waves/);
+  });
+
+  it('times the run from the scratch track add_track created to the report', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-08T10:00:00Z'));
+    const t = tools();
+    await t['add_track']({ name: '[MCP] plugin-research PROC2' }, { requestId: 1 });
+
+    vi.setSystemTime(new Date('2026-11-08T10:03:04Z'));
+    await t['report_plugin_research']({ outcome: 'new', scratchTag: 'PROC2' }, { requestId: 2 });
+
+    expect(reportSpan()?.attributes['reaper.plugin_research.duration_s']).toBe(184);
+  });
+
+  it('times a run whose scratch track run_plan created, and leaves out a run it never saw start', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-08T10:00:00Z'));
+    const t = tools();
+    await t['run_plan']({ ops: [{ op: 'add_track', name: '[MCP] plugin-research VITAL', as: '$t' }] }, { requestId: 1 });
+
+    vi.setSystemTime(new Date('2026-11-08T10:01:30Z'));
+    await t['report_plugin_research']({ outcome: 'new', scratchTag: 'VITAL' }, { requestId: 2 });
+    expect(reportSpan()?.attributes['reaper.plugin_research.duration_s']).toBe(90);
+
+    spans.reset();
+    await t['report_plugin_research']({ outcome: 'new', scratchTag: 'NEVERSEEN' }, { requestId: 3 });
+    expect(reportSpan()?.attributes).not.toHaveProperty('reaper.plugin_research.duration_s');
+  });
+
+  it('sends nothing, and says so, when usage telemetry is off', async () => {
+    vi.stubEnv('DO_NOT_TRACK', '1');
+
+    const res = await tools()['report_plugin_research']({ outcome: 'not_installed' }, { requestId: 1 });
+
+    expect(JSON.parse(res.content[0].text)).toEqual({ telemetry: 'off', sent: {} });
+  });
+});
