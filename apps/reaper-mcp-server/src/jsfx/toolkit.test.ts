@@ -68,7 +68,7 @@ describe('toolkit 1.3: the frequency graph', () => {
     const draw = body('ui_freqgraph');
     for (const label of ['100', '1000', '10000']) expect(draw).toContain(label);
     expect(draw).toContain('ui_fg[i]');
-    expect(draw).toContain('gfx_triangle');
+    expect(draw).toContain('gfx_line'); // the trace line over its filled columns
     expect(draw).toContain('ui_fsel');
   });
 

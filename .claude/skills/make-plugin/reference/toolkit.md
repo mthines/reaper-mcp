@@ -36,6 +36,24 @@ Every widget is one block, label above, control, value below, sized the same acr
 | `ui_meter(level, "Label")` | vertical peak meter, -60..+6 dB, holds and falls 30 dB/s | none: pass the peak you kept with `max()` in `@sample`, then set it back to 0 |
 | `ui_section("Label")` | the Advanced drawer (bar when closed, panel over the core when open); returns 1 while visible | none |
 
+### Graph widgets (toolkit 1.3)
+
+| Call | Draws | Feed / slider |
+|---|---|---|
+| `ui_freqgraph("Label")` | log frequency graph, 20 Hz-20 kHz, gridlines and labels, the fed trace, the selected band; a click between handles selects a band | trace: `ui_gfeed(buf, n)` with `n` FFT magnitudes (linear, low to high) from `@block`, or `ui_gset(i, db)` for a curve point (`i` 0..95) |
+| `ui_fhandle(idx, "Label")` | a draggable band edge on the graph, bound to slider `idx` in Hz; drag, wheel, double-click for a value box, modifier-click resets; stays between its neighbours; automates like a knob | a Hz slider, e.g. `<40,800,1>`; call it after `ui_freqgraph`, in left-to-right order |
+| `ui_grmeter(n, "Label")` | `n` (1-8) gain-reduction bars hanging from the top, amber from 6 dB, red from 12; a click selects the band | `ui_gr(k, db)` per band from `@block` (db 0 or more) |
+| `ui_transfer(thr_idx, ratio_idx, knee_db)` | a compressor transfer curve that follows the two sliders, with a live level dot | `ui_glevel(db)` from `@block` |
+| `ui_keyboard(lo, hi, "Label")` | piano keys `lo`..`hi` (MIDI notes), lit while held | `ui_kkey(note, vel)` on note on, `ui_kkey(note, 0)` on note off |
+| `ui_tall(span)` | the next `ui_row` is `span` times as tall (a graph needs height); knobs in it keep their size | none |
+
+Use `ui_boot(2)` in a plugin with these feeds: it redraws only when a feed, a control or the window
+changed, so silence costs nothing (`ui_boot(1)` redraws every frame, `ui_boot(0)` only on change).
+Feeds are rounded to a visible step before they count as change. A graph widget counts as one
+widget for the core limit. The selected band is `ui_fsel` (0-based), which the plugin may read.
+Memory map: 0..1023 core, 1024+ graph data (`ui_fg` trace, `ui_ge` band edges, `ui_grm`, `ui_kb`),
+`ui_mem` (2048) is where your buffers start. `examples/multiband-compressor.jsfx` uses them all.
+
 `fmt` for knobs: `0` number (`0.00`), `1` dB, `2` percent of 0..1, `3` Hz or kHz, `4` ms, `5` integer.
 
 Interaction (all automatic, the FabFilter/Serum convention): drag up/down (200 px = the full
@@ -51,7 +69,8 @@ when the user turns on the FX window's **+ > Send all keyboard input to plug-in*
 the plugin; then it closes the value box, the About dialog, then the drawer (and the window
 closes with its close button, as every key now goes to the plugin).
 
-Every plugin also gets, with no code of its own: a small "reaper-mcp" credit at the bottom right
+Every plugin also gets, with no code of its own: its name in small spaced capitals at the top-left
+(hidden in a very narrow window), and a small "reaper-mcp" credit at the bottom right
 (in the drawer bar, or the bottom padding when there is no drawer; hidden in a narrow window).
 A click opens the **About** dialog drawn in the plugin: what reaper-mcp is, the repository
 address as plain text (JSFX cannot open a browser or write the clipboard), and this plugin's
@@ -83,8 +102,10 @@ restores it with the project.
 - No `gmem`, no named sliders, no scientific-notation literals, no `slider33` and up.
 - `max()`/`min()` with exactly two arguments; no `local()` at the top of `@sample`/`@block`.
 - A warning when the plugin assigns `ui_adv_open`.
+- `unknown-ui-call` (a `ui_` function the toolkit does not define) and `ui-arity` (wrong argument
+  count) are errors: EEL2 would otherwise fail silently.
 
 ## Memory
 
-Memory below `ui_mem` (1024) belongs to the toolkit. Allocate your buffers from it (the examples
+Memory below `ui_mem` belongs to the toolkit. Allocate your buffers from it (the examples
 use a tiny `alloc(n)`).

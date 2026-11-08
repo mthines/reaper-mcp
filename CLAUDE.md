@@ -489,8 +489,10 @@ browser), with its UI drawn by the shared `@gfx` toolkit `reaper/mcp_ui.jsfx-inc
 | `write_jsfx` | `tools/jsfx.ts` | Write a plugin to `Effects/reaper-mcp-generated/<slug>.jsfx`: lints the source (`src/jsfx/lint.ts`), inlines the toolkit (`src/jsfx/inline.ts`, so the file is self-contained), bumps the version, keeps the old file in `~/.config/reaper-mcp/jsfx-history/`. An existing slider is never renumbered or re-ranged without `breaking: true` (saved automation would break). Optional `presets` (≤8, values checked against each slider, one bad value refuses the call) go into REAPER's own preset file `presets/js-reaper-mcp-generated_<slug>_jsfx.ini` (`src/jsfx/presets.ts`), merged so the user's own presets are kept. Optional `accent` (`auto` = from the slug, a name, or `#rrggbb`; kept as `// accent:` in the file, a later write without it keeps it; bad input refuses the call; `src/jsfx/accent.ts`). `desc:` gets ` (reaper-mcp)` appended once (`DEVELOPER_SUFFIX`); slug, file and preset paths are unchanged. TS-only: loading uses `add_fx` |
 | `report_plugin_build` | `tools/plugin-build.ts` | The skill's last call: outcome (shipped / compile_failed / checks_failed / abandoned), rounds, checks passed, the example it started from. Closed values and capped counts only, like `report_plugin_research` |
 
+Toolkit v1.3 adds graph widgets (`ui_freqgraph`, `ui_fhandle`, `ui_grmeter`, `ui_transfer`, `ui_keyboard`, `ui_tall`), a plugin-name header on every plugin and activity-driven redraw (`ui_boot(2)`); the lint refuses unknown `ui_` calls and wrong argument counts (`unknown-ui-call`, `ui-arity`, table `UI_API` kept equal to the toolkit by a test). Four shipped examples (`multiband-compressor` is the graph one). Memory map: 0..1023 core, 1024+ graph data, `ui_mem` 2048 for plugin buffers.
+
 Telemetry: both set closed values on the tool's span (`reaper.jsfx.*`, `reaper.plugin_build.*`, all in the allow-list in
-`telemetry-consent.ts`); lint findings count in `reaper.jsfx.lint.findings` by rule id. Never the plugin's name, the request,
+`telemetry-consent.ts`); lint findings count in `reaper.jsfx.lint.findings` by rule id, graph widgets in `reaper.jsfx.graphs` (a count). Never the plugin's name, the request,
 its source or a control label. Generated plugins themselves contain no telemetry.
 
 ### Actions Proxy (3)

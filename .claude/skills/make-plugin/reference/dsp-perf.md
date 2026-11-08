@@ -12,4 +12,5 @@ The plugin runs in REAPER's audio thread, once per sample. Check every line of `
 8. **Report latency.** A look-ahead needs `pdc_delay = samples;` and `pdc_bot_ch = 0; pdc_top_ch = 2;`.
 9. **Smooth with one-pole filters per sample only where a click would be audible** (gain); everything else can change at block rate in `@block`.
 10. **The UI is free.** `@gfx` runs on another thread and redraws only when something changed; do not put DSP in it. Share values with `@sample` only as scalars (a peak kept with `max()`).
+12. **Graphs (`ui_freqgraph` and friends): feed the UI cheaply.** `ui_gfeed` wants one FFT every 2048 samples at most (a ring buffer filled in `@sample`, the `fft` run in `@block`, never per sample); `ui_gr` / `ui_glevel` / `ui_kkey` are scalar writes. Use `ui_boot(2)` so silence stops redrawing. The graph widgets never allocate in `@gfx`.
 11. **No scientific notation** (`1e-9`): EEL2 drops the whole plugin. Write `0.000000001`.
