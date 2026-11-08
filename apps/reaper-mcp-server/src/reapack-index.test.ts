@@ -19,6 +19,12 @@ describe('the ReaPack index', () => {
     expect(main).toEqual(['mcp_bridge.lua', 'mcp_snapshot_next.lua', 'mcp_snapshot_prev.lua', 'mcp_snapshot_quick_save.lua']);
   });
 
+  it('ships the status page with its manifest, service worker and icons', () => {
+    const files = ['mcp_bridge.html', 'mcp_bridge.webmanifest', 'mcp_bridge_sw.js', 'mcp_bridge_icon_192.png'];
+    const full = buildIndex({ version: '1', urlFor, time: 'T', assets, uiFiles: files }) as string;
+    for (const f of files) expect(full).toContain(`<source file="${f}">https://example.test/ui/${f}`);
+  });
+
   it('carries the release version and links its changelog', () => {
     expect(index).toContain('<version name="1.2.3"');
     expect(index).toContain('releases/tag/v1.2.3');

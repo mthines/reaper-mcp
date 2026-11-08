@@ -25,9 +25,9 @@ export function listAssets(dir) {
 }
 
 /**
- * @param {{version: string, urlFor: (kind: 'reaper'|'ui', file: string) => string, time?: string, uiAvailable?: boolean, assets?: ReturnType<typeof listAssets>}} o
+ * @param {{version: string, urlFor: (kind: 'reaper'|'ui', file: string) => string, time?: string, uiFiles?: string[], assets?: ReturnType<typeof listAssets>}} o
  */
-export function buildIndex({ version, urlFor, time = new Date().toISOString().replace(/\.\d+Z$/, 'Z'), uiAvailable = true, assets }) {
+export function buildIndex({ version, urlFor, time = new Date().toISOString().replace(/\.\d+Z$/, 'Z'), uiFiles = ['mcp_bridge.html'], assets }) {
   const ver = (body) =>
     `      <version name="${esc(version)}" author="mthines" time="${time}">\n${body}\n      </version>`;
   const src = (file, url, attrs = '') => `        <source file="${esc(file)}"${attrs}>${esc(url)}</source>`;
@@ -53,10 +53,10 @@ ${ver(`${bridgeSources.join('\n')}\n${changelog}`)}
 ${ver(effectSources.join('\n'))}
       </reapack>
     </category>`);
-  if (uiAvailable) {
+  if (uiFiles.length) {
     pkgs.push(`    <category name="Web Interfaces">
       <reapack name="reaper-mcp bridge status.www" type="webinterface" desc="Bridge status page">
-${ver(src('mcp_bridge.html', urlFor('ui', 'mcp_bridge.html')))}
+${ver(uiFiles.map((f) => src(f, urlFor('ui', f))).join('\n'))}
       </reapack>
     </category>`);
   }

@@ -441,7 +441,7 @@ jobs:
           ## ReaPack
 
           Add \`https://github.com/mthines/reaper-mcp/releases/latest/download/index.xml\` under Extensions > ReaPack > Import repositories to install and update the REAPER side from ReaPack." \
-            dist/index.xml dist/apps/bridge-ui/mcp_bridge.html \
+            dist/index.xml dist/apps/bridge-ui/mcp_bridge* \
             $PRERELEASE_FLAG
 
       - name: Comment on PR (beta releases)

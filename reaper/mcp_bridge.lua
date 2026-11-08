@@ -730,8 +730,7 @@ function handlers.add_fx(params)
 
   -- ReaPack installs the JSFX under Effects/reaper-mcp/Meters/ (see ensure_jsfx_on_track)
   local jsfx_base = fx_name:match("^[%w%s]*:?%s*reaper%-mcp/([%w_]+)$")
-  if jsfx_base and not file_exists(reaper.GetResourcePath() .. "/Effects/reaper-mcp/" .. jsfx_base .. ".jsfx")
-      and file_exists(reaper.GetResourcePath() .. "/Effects/reaper-mcp/Meters/" .. jsfx_base .. ".jsfx") then
+  if jsfx_base and file_exists(reaper.GetResourcePath() .. "/Effects/reaper-mcp/Meters/" .. jsfx_base .. ".jsfx") then
     fx_name = fx_name:gsub("reaper%-mcp/", "reaper-mcp/Meters/", 1)
   end
 
@@ -2035,11 +2034,11 @@ end
 -- Returns the FX index (possibly container-addressed) on success, or nil + error.
 function ensure_jsfx_on_track(track, fx_name)
   -- The JSFX live in Effects/reaper-mcp/ when `reaper-mcp setup` installed them and in
-  -- Effects/reaper-mcp/Meters/ when ReaPack did (it adds the package's category as a folder).
+  -- Effects/reaper-mcp/Meters/ when ReaPack did (it adds the package's category as a folder). ReaPack's copy wins:
+  -- it is the one that gets updates, while setup's older copy may still sit in the plain folder.
   local logical_name = fx_name
   local base = fx_name:match("^reaper%-mcp/(.+)$")
-  if base and not file_exists(reaper.GetResourcePath() .. "/Effects/reaper-mcp/" .. base .. ".jsfx")
-      and file_exists(reaper.GetResourcePath() .. "/Effects/reaper-mcp/Meters/" .. base .. ".jsfx") then
+  if base and file_exists(reaper.GetResourcePath() .. "/Effects/reaper-mcp/Meters/" .. base .. ".jsfx") then
     fx_name = "reaper-mcp/Meters/" .. base
   end
   -- REAPER names a JSFX "JS: <desc> [<path>]" but leaves the path out for some

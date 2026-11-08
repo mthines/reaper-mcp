@@ -303,6 +303,13 @@ describe('ensure_jsfx_on_track with the JSFX installed by ReaPack', () => {
     `);
   });
 
+  it('prefers the Meters copy when an older setup copy is still in the plain folder', async () => {
+    await run(FAKE_CONTAINER + 'files["/r/Effects/reaper-mcp/Meters/mcp_lufs_meter.jsfx"] = true; files["/r/Effects/reaper-mcp/mcp_lufs_meter.jsfx"] = true', fn('ensure_jsfx_on_track'), `
+      assert(ensure_jsfx_on_track("T0", "reaper-mcp/mcp_lufs_meter") == 1000)
+      assert(added[1] == "reaper-mcp/Meters/mcp_lufs_meter", added[1])
+    `);
+  });
+
   it('keeps the plain folder when setup installed the JSFX there', async () => {
     await run(FAKE_CONTAINER, fn('ensure_jsfx_on_track'), `
       assert(ensure_jsfx_on_track("T0", "reaper-mcp/mcp_lufs_meter") == 1000)

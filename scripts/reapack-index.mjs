@@ -6,8 +6,8 @@
 //
 // The index itself is built by apps/reaper-mcp-server/src/reapack-index.mjs.
 
-import { existsSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { REPO, buildIndex, listAssets } from '../apps/reaper-mcp-server/src/reapack-index.mjs';
 
@@ -20,11 +20,12 @@ const version = get('--version') ?? '0.0.0-local';
 const uiPath = get('--ui') ?? join(root, 'dist', 'apps', 'bridge-ui', 'mcp_bridge.html');
 const tag = `v${version}`;
 const urlFor = local
-  ? (kind, file) => pathToFileURL(kind === 'ui' ? uiPath : join(root, 'reaper', file)).href
+  ? (kind, file) => pathToFileURL(kind === 'ui' ? join(dirname(uiPath), file) : join(root, 'reaper', file)).href
   : (kind, file) =>
       kind === 'ui'
         ? `https://github.com/${REPO}/releases/download/${tag}/${file}`
         : `https://raw.githubusercontent.com/${REPO}/${tag}/reaper/${file}`;
-const uiAvailable = !local || existsSync(uiPath);
-writeFileSync(out, buildIndex({ version, urlFor, uiAvailable, assets: listAssets(join(root, 'reaper')) }));
+// The page and its PWA files (manifest, service worker, icons): all mcp_bridge*, as setup copies them
+const uiFiles = existsSync(uiPath) ? readdirSync(dirname(uiPath)).filter((f) => f.startsWith('mcp_bridge')).sort() : [];
+writeFileSync(out, buildIndex({ version, urlFor, uiFiles, assets: listAssets(join(root, 'reaper')) }));
 console.log(`wrote ${out}`);
