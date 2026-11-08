@@ -36,6 +36,13 @@ them rather than expecting a catalog here. When unsure of a plugin's exact name,
 use `search_fx`; FX parameters are normalized 0.0–1.0, so read `get_fx_parameters`
 before setting one.
 
+## Explain mode (`/teach`)
+
+When the user started `/teach` in this conversation, explain mode is on: load `reference/teaching.md` and follow it
+for every change (what, why, the REAPER concept from `reference/reaper-concepts.md`, how to do it by hand, the
+before/after and the bridge page link, then pause). It sets the pace and what gets said; this skill's rules still
+decide what to do. Explain mode is never on otherwise.
+
 ## Core principles
 
 1. **Snapshot before changes** — `snapshot_save`, so the user can A/B and revert.

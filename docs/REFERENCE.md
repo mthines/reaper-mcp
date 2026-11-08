@@ -357,7 +357,7 @@ reaper-mcp/
 ├── libs/protocol/                # Shared TypeScript types
 ├── libs/extension-api/           # The contract extensions are written against (docs/EXTENSIONS.md)
 ├── extensions/                   # Opt-in extensions: vital (synth patches), helix (.hlx presets)
-├── .claude/skills/               # Mix skills (/mixer, /critique, /mastering, /editing, /learn-plugin, /make-plugin, /new-extension, /mix-memory)
+├── .claude/skills/               # Mix skills (/mixer, /critique, /mastering, /editing, /teach, /learn-plugin, /make-plugin, /new-extension, /mix-memory)
 ├── knowledge/                    # AI mix engineer knowledge base (symlinked into ~/.claude/knowledge)
 │   ├── genres/                   # Genre mixing conventions
 │   ├── workflows/                # Step-by-step mixing workflows
