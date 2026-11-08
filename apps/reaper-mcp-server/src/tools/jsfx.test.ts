@@ -114,6 +114,13 @@ describe('write_jsfx', () => {
     expect((await call({ name: 'Order', source: reordered, overwrite: true, breaking: true })).isError).toBeUndefined();
   });
 
+  it('allows fixing the spelling of a choice option, since saved values store its position', async () => {
+    const choice = SRC('slider2:0<0,1,1{Of,On}>Mode\n').replace('ui_end();', 'ui_choice(2, "Mode"); ui_end();');
+    await call({ name: 'Typo', source: choice });
+    const r = await call({ name: 'Typo', source: choice.replace('{Of,On}', '{Off,On}'), overwrite: true });
+    expect(r.isError).toBeUndefined();
+  });
+
   it('refuses a name with no letters or digits', async () => {
     expect((await call({ name: '!!!', source: SRC() })).isError).toBe(true);
   });

@@ -100,13 +100,13 @@ function record(shape: ShapeInput): void {
   }
 }
 
-/** The existing slider an edit changed in range, step or options (count or order): saved automation would point at the wrong thing. */
+/** The existing slider an edit changed in range, step or options (count or a moved option): saved automation would point at the wrong thing. */
 export function breakingChanges(before: SliderSpec[], after: SliderSpec[]): string[] {
   const out: string[] = [];
   for (const old of before) {
     const now = after.find((s) => s.index === old.index);
     if (!now) out.push(`slider${old.index} "${old.name}" was removed`);
-    else if (now.min !== old.min || now.max !== old.max || now.step !== old.step || now.options.length !== old.options.length || now.options.some((o, i) => o !== old.options[i])) {
+    else if (now.min !== old.min || now.max !== old.max || now.step !== old.step || now.options.length !== old.options.length || old.options.some((o, i) => now.options.includes(o) && now.options.indexOf(o) !== i)) {
       out.push(`slider${old.index} "${old.name}" changed range, step or options`);
     }
   }
