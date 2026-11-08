@@ -354,9 +354,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing (OIDC, no token) needs npm 11.5.1 or newer; Node 22 ships npm 10
+      - name: Use an npm that supports trusted publishing
+        run: npm install -g npm@11.6.2
 
       - run: pnpm install --frozen-lockfile
 
@@ -367,10 +371,10 @@ jobs:
       - name: Prepare npm package
         run: node scripts/prepare-npm-package.mjs "${{ needs.version.outputs.version }}"
 
+      # Authenticates with the package's trusted publisher (npmjs.com → Settings →
+      # Trusted Publisher: ci.yml, environment npm-publish), so no NPM_TOKEN is used
       - name: Publish to npm
         working-directory: dist/apps/reaper-mcp-server
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.version.outputs.version }}"
           # A re-run after a publish that worked must not fail on the version npm already has
