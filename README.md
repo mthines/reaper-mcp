@@ -520,7 +520,9 @@ Where your data goes:
 - **Your model** sees what the tools return: track names, FX settings, meter readings, file paths,
   and MIDI notes when a tool reads them.
   Audio stays on your machine; analysis that needs audio runs in the optional local Python sidecar ([`reaper-mcp setup-sidecar`](docs/REFERENCE.md#cli-commands)).
-- **LoreKit** (only if you connect it) stores what the skills learn about plugins and your preferences.
+- **LoreKit, built-in layer:** the skills look up shared plugin knowledge with a public read-only key,
+  so search terms such as plugin names reach LoreKit even if you never connect it.
+- **LoreKit, your layer** (only if you connect it) stores what the skills learn about plugins and your preferences.
 - **Usage telemetry** (on by default, [easy to turn off](#-privacy--telemetry)) sends tool names, errors and timings, never content.
 
 ---
