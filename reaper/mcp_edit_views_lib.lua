@@ -1352,7 +1352,9 @@ local function project_view(data)
   if type(data) ~= "table" then return nil end
   local r = {}
   local function text(k, v) if type(v) == "string" then r[k] = v end end
-  text("name", data.name); text("title", data.title); text("author", data.author)
+  -- get_project_info's name is the full .rpp path; the card shows the file name
+  text("name", type(data.name) == "string" and (data.name:match("[^/\\]+$") or "") or nil)
+  text("title", data.title); text("author", data.author)
   r.tracks = type(data.trackCount) == "number" and data.trackCount or nil
   r.tempo = round2(data.tempo)
   if type(data.timeSignatureNumerator) == "number" and type(data.timeSignatureDenominator) == "number" then
@@ -1364,8 +1366,9 @@ local function project_view(data)
   local function flag(a, b) if a ~= nil then return a end return b end
   local recording = flag(data.isRecording, data.recording)
   local playing = flag(data.isPlaying, data.playing)
-  if recording ~= nil or playing ~= nil or data.paused ~= nil then
-    r.state = recording and 3 or (data.paused and 2 or (playing and 1 or 0))
+  local paused = flag(data.isPaused, data.paused)
+  if recording ~= nil or playing ~= nil or paused ~= nil then
+    r.state = recording and 3 or (paused and 2 or (playing and 1 or 0))
   end
   r.cur = round2(data.cursorPosition)
   r.pos = (playing or recording) and round2(data.playPosition) or nil

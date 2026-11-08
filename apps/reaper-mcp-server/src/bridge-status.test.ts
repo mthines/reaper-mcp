@@ -457,6 +457,15 @@ describe('edit views in the log', () => {
     expect((await bridge.status()).recent[0].r).toMatchObject({ state: 0 });
   });
 
+  it('shows the project file name, not its path, and a paused project as paused', async () => {
+    const bridge = await startBridge(`
+      api.EnumProjects = function() return 0, "/Users/me/Music/Midnight Drive.rpp" end
+      api.GetPlayState = function() return 2 end
+    `);
+    expect((await bridge.send('get_project_info', {})).success).toBe(true);
+    expect((await bridge.status()).recent[0].r).toMatchObject({ name: 'Midnight Drive.rpp', state: 2 });
+  });
+
   it('shows a record change per track with the input, monitoring and mode before it', async () => {
     const bridge = await startBridge(`
       api.GetNumAudioInputs = function() return 8 end
