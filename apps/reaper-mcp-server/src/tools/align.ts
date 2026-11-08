@@ -10,10 +10,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sendCommand } from '../bridge.js';
 import { getSidecarClient } from '../sidecar.js';
 import { MAX_HITS, buildPairs, projectTime, type DoubleGeometry, type Hit } from '../align.js';
+import { SETUP_SIDECAR_HINT } from '../sidecar-hint.js';
 
 const SIDECAR_NOT_INSTALLED_MSG =
-  'Audio understanding sidecar not installed. ' +
-  'Run: node dist/apps/reaper-mcp-server/main.js setup-sidecar';
+  `Audio understanding sidecar not installed. ${SETUP_SIDECAR_HINT}`;
 
 /** Longest item whose hits are detected (seconds of source audio), as quantize_audio. */
 const MAX_ALIGN_SECONDS = 900;
