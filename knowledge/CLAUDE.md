@@ -2,7 +2,7 @@
 
 Curated audio engineering knowledge read on demand by the mix skills (`/mixer`,
 `/mastering`, `/critique`, …). Symlinked into `~/.claude/knowledge` by
-`scripts/sync-symlinks.sh`. Markdown files with YAML frontmatter.
+`scripts/sync-symlinks.sh` in a clone, or copied there by `reaper-mcp install-skills` from an npm install. Markdown files with YAML frontmatter.
 
 ## File Organization
 

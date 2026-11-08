@@ -43,7 +43,8 @@ This is an **Nx monorepo** with **pnpm workspaces**.
 reaper-mcp/
   apps/reaper-mcp-server/     # Main MCP server application (TypeScript, esbuild)
     src/
-      main.ts                 # CLI entry point: serve | setup | setup-sidecar | init | doctor | status
+      main.ts                 # CLI entry point: serve | setup | setup-sidecar | install-skills | init | doctor | status
+      claude-assets.ts        # install-skills: copies the skills, agents and knowledge shipped in the npm package into ~/.claude (hash manifest, never overwrites edits)
       server.ts               # McpServer creation, tool registration
       bridge.ts               # File-based IPC: sendCommand(), isBridgeRunning(), etc.
       sidecar.ts              # Python subprocess lifecycle + JSON-RPC client (getSidecarClient())
@@ -121,7 +122,7 @@ reaper-mcp/
     build-config.mjs          # Build-time constants (version, LoreKit, Dash0) + the React Compiler's Babel options, shared by Vite, vitest and Storybook
     vite-reaper-dev.mjs       # pnpm dev:bridge's REAPER side: /_/ proxied over one socket, reaper/ installed on save
 
-  .claude/skills/             # Mix skills (one dir per skill, each with SKILL.md), symlinked into ~/.claude/skills by scripts/sync-symlinks.sh
+  .claude/skills/             # Mix skills (one dir per skill, each with SKILL.md), symlinked into ~/.claude/skills by scripts/sync-symlinks.sh (clone) or copied by `reaper-mcp install-skills` (npm)
     mixer/SKILL.md            # /mixer — executes mixes (live session, reads/writes memory)
     critique/SKILL.md         # /critique — read-only analysis ("roast my mix")
     mastering/SKILL.md        # /mastering — mix-bus mastering to a LUFS target
@@ -129,10 +130,10 @@ reaper-mcp/
     learn-plugin/SKILL.md     # /learn-plugin — research + live-probe a plugin via plugin-researcher, ask only the gaps (LoreKit)
     new-extension/SKILL.md    # /new-extension — build an extension for a plugin's internals: probe its state, write tools + tests, prove them live
     mix-memory/SKILL.md       # /mix-memory — recall / consolidate / promote memory
-  .claude/agents/             # Subagents, symlinked into ~/.claude/agents by scripts/sync-symlinks.sh
+  .claude/agents/             # Subagents, symlinked into ~/.claude/agents by scripts/sync-symlinks.sh (clone) or copied by `reaper-mcp install-skills` (npm)
     plugin-researcher.md      # Web research + scratch-track probing → user::plugins:: record; used by /learn-plugin, /mixer, /mastering
 
-  knowledge/                  # Knowledge base + memory; symlinked into ~/.claude/knowledge (primary install)
+  knowledge/                  # Knowledge base + memory; symlinked into ~/.claude/knowledge (clone) or copied by `install-skills` (npm)
     genres/                   # Genre mixing conventions (targets, frequency balance, dynamics)
     workflows/                # Step-by-step mixing workflows (gain-staging, vocal-chain, etc.)
     reference/                # Reference material (frequencies, metering, compression, perceived loudness, memory-protocol)
@@ -140,7 +141,8 @@ reaper-mcp/
                               # Plugin knowledge + process lessons live in LoreKit, scope project::reaper-mcp
 
   scripts/
-    sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (primary install model)
+    prepare-npm-package.mjs   # Assemble the npm package in dist/apps/reaper-mcp-server (README, LICENSE, status page, version); run by the release job
+    sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (clone install; an npm install copies them with `install-skills`)
     ext-call.mjs              # Call any tool on a fresh `reaper-mcp serve` (so a new extension can be tried without restarting Claude Code): --list [prefix] | <tool> [json]
     plugin-list.mjs           # Rebuild docs/PLUGINS.md's built-in plugin table from LoreKit (logic: apps/bridge-ui/src/features/plugins/plugin-list.mjs)
 
@@ -176,7 +178,7 @@ reaper-mcp/
 
 ### Where mix knowledge lives
 
-- **`knowledge/`** (genres, workflows, reference) — curated markdown read on demand by the mix skills; symlinked into `~/.claude/knowledge`.
+- **`knowledge/`** (genres, workflows, reference) — curated markdown read on demand by the mix skills; symlinked into `~/.claude/knowledge` in a clone, copied there by `install-skills` from an npm install.
 - **Plugin knowledge and process lessons** live in **LoreKit**, scope `project::reaper-mcp` — one record per plugin (tags `plugin-knowledge`, `category::…`, `preference::…`, `fx::…`) and lessons (`loop::mixing-lessons`), in two layers: the **built-in** layer (keys `plugins::<vendor>/<plugin>` / `mixing-lessons::<slug>`, owned by the `reaper-mcp` LoreKit org, tag `layer::built-in`, read by everyone through the server's `list_builtin_knowledge` / `get_builtin_knowledge` tools) and each user's own layer on top (keys `user::plugins::…` / `user::mixing-lessons::…`, tag `layer::user`, via the user's own LoreKit `memory.*`). The user's record wins. The skills only ever write `user::` keys; the maintainer moves records into the built-in layer with `/mix-memory publish`.
 - **`docs/PLUGINS.md`** lists every built-in plugin record (table between `<!-- plugin-list:start/end -->`, rebuilt by `node scripts/plugin-list.mjs`, never by hand). A publisher's `/mix-memory publish` (and `/learn-plugin`, which offers to publish) rebuild it in the clone; the `Plugin list` workflow rebuilds it on `main` after every `Plugin contributions` run and daily (direct publishes from the bridge page). Contract: `knowledge/reference/memory-protocol.md`.
 
@@ -1120,7 +1122,7 @@ ESLint enforces dependency rules via `@nx/enforce-module-boundaries`:
 
 ## Running the MCP Server
 
-Clone-only model: clone the fork, run the one-command installer, done.
+Two ways in: clone the fork and run the one-command installer (below), or `npm install -g @mthines/reaper-mcp` then `reaper-mcp setup && reaper-mcp init` (no clone; the release job publishes it with provenance, `scripts/prepare-npm-package.mjs` assembles the package).
 
 ```bash
 # Full setup from a fresh clone (deps, build, link CLI, bridge, symlinks, config)
@@ -1152,12 +1154,13 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 | `setup` | Install Lua bridge + JSFX analyzers into REAPER |
 | `setup-sidecar` | Install the Python sidecar (opt-in, Python 3.10+, venv at `~/.reaper-mcp/sidecar-venv/`). In a terminal it shows a picker: core analysis (required), Audiobox Aesthetics weights (831 MB, default on), stem separation (Demucs, ~110 MB), chord model (lv-chordia, ~135 MB), each with what it enables, why and its size. No prompt without a TTY, in CI, with `--yes`/`-y`/`--non-interactive` or with any component flag: `--all`, `--with-separation`, `--with-chords`, `--without-aesthetics` (defaults: core + aesthetics). `--list [--json]` prints the components and what is installed. An existing install gets only the missing picked parts; the scripts are always refreshed. |
 | `extension` | Manage opt-in extensions: `list`, `add <name\|folder\|git-url>`, `link <folder>`, `remove <name>`, `new <name>` (see `docs/EXTENSIONS.md`) |
-| `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` that runs the clone's built `main.js` (copy-free) |
+| `install-skills` | Copy the mix skills, agents and knowledge shipped in the npm package into `~/.claude` (never overwrites files the user edited or owns, skips symlinked folders; a clone uses `scripts/sync-symlinks.sh`). `--dry-run` previews. `init` runs it for an npm install |
+| `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` that runs the clone's built `main.js` (copy-free). From an npm install it instead registers the server at user scope with `claude mcp add --scope user` (replacing an entry whose node or `main.js` no longer exists) and runs `install-skills` |
 | `doctor` | Verify all components are configured correctly (includes 4 sidecar sub-checks) |
 | `status` | Check if Lua bridge is running in REAPER |
 
 > Skills + knowledge are wired by `scripts/sync-symlinks.sh` (symlinks into
-> `~/.claude`), not by a CLI command — the repo is the source of truth.
+> `~/.claude`) in a clone, and by `reaper-mcp install-skills` (a copy) from an npm install — the repo is the source of truth.
 
 ### Claude Code MCP Config
 
@@ -1172,5 +1175,6 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 }
 ```
 
-Generated by `reaper-mcp init`: it runs your clone's built `main.js` by absolute
+Generated by `reaper-mcp init` in a clone (an npm install registers the server at user scope
+instead, with `claude mcp add`): it runs your clone's built `main.js` by absolute
 path, so it works without the `reaper-mcp` command on PATH.
