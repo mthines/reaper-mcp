@@ -91,6 +91,12 @@ function fxAttributes(prefix: string): Record<string, string | boolean> {
   return { 'reaper.plugin.format': format, 'reaper.plugin.instrument': instrument };
 }
 
+/** A whole, non-negative count from a number or numeric string; blank, null or anything else is "not known". */
+function knownCount(value: number | string | null | undefined): number | undefined {
+  const count = typeof value === 'string' ? (value.trim() ? Number(value) : NaN) : value ?? NaN;
+  return Number.isInteger(count) && count >= 0 ? count : undefined;
+}
+
 /** A plugin's parameter count in coarse buckets: the exact number can identify the plugin. */
 export function paramsBucket(total: number | undefined): string | undefined {
   if (total === undefined) return undefined;
@@ -114,7 +120,8 @@ export function registerPluginResearchTools(server: McpServer): void {
       category: z.string().optional().describe('The record\'s category (e.g. "compressor"); the first one if it has several'),
       style: z.string().optional().describe('The record\'s style: transparent, character, vintage, modern or surgical'),
       format: z.string().optional().describe('The format prefix of the FX name: VST, VST3, AU, CLAP, JS, LV2, DX, with an instrument\'s "i" (VST3i) as REAPER shows it'),
-      paramsTotal: z.coerce.number().int().min(0).optional().describe('How many parameters get_fx_parameters listed (sent only as a range)'),
+      // not z.coerce: it turns "" and null into 0, which would be sent as a real "none"
+      paramsTotal: z.union([z.number(), z.string()]).nullable().optional().describe('How many parameters get_fx_parameters listed (sent only as a range); leave out when not known'),
       paramsProbed: z.coerce.number().int().min(0).optional().describe('Parameters probed live in Step 4 (0 if not inspected)'),
       openQuestions: z.coerce.number().int().min(0).optional().describe('Open questions in the report, preference included'),
       sources: z.coerce.number().int().min(0).optional().describe('Web sources the record cites'),
@@ -128,7 +135,7 @@ export function registerPluginResearchTools(server: McpServer): void {
       const style = given(args.style);
       const format = given(args.format);
       const seconds = runSeconds(args.scratchTag);
-      const bucket = paramsBucket(args.paramsTotal);
+      const bucket = paramsBucket(knownCount(args.paramsTotal));
       const attributes: Record<string, string | number | boolean> = {
         'reaper.plugin_research.outcome': closed(OUTCOMES, args.outcome.trim().toLowerCase() === 'overlay' ? 'refined' : args.outcome),
         'reaper.plugin_research.caller': args.caller === undefined ? 'other' : closed(CALLERS, args.caller),

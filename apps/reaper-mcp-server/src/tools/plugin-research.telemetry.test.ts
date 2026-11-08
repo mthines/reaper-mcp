@@ -175,6 +175,18 @@ describe('report_plugin_research', () => {
     for (const span of reports) expect(span.attributes).not.toHaveProperty('reaper.plugin_research.duration_s');
   });
 
+  it('treats a blank or null parameter count as not known, and reads a numeric string', async () => {
+    const registered = tools();
+    for (const paramsTotal of ['', '  ', null, 'many', -3]) {
+      spans.reset();
+      await registered['report_plugin_research']({ outcome: 'not_installed', paramsTotal }, { requestId: 1 });
+      expect(reportSpan()?.attributes).not.toHaveProperty('reaper.plugin.params_total');
+    }
+    spans.reset();
+    await registered['report_plugin_research']({ outcome: 'new', paramsTotal: '40' }, { requestId: 2 });
+    expect(reportSpan()?.attributes['reaper.plugin.params_total']).toBe('16-63');
+  });
+
   it('sends the parameter count only as a range, with the edges where they belong', () => {
     expect([0, 1, 15, 16, 63, 64, 255, 256, 2048].map(paramsBucket)).toEqual(
       ['none', '1-15', '1-15', '16-63', '16-63', '64-255', '64-255', '256+', '256+'],
