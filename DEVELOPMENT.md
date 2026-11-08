@@ -231,7 +231,10 @@ and never run. The symptom is "I changed the Lua and nothing happened".
 
 Pick one owner per REAPER. To develop from a clone, uninstall the ReaPack packages first (Extensions > ReaPack >
 Manage repositories > right-click `reaper-mcp` > Uninstall packages, then remove the repository), then run
-`./scripts/install.sh`. `reaper-mcp setup` from a clone warns when it finds ReaPack's copy. To switch back to ReaPack, import the repository again and install the packages. An npm install's `setup` then leaves
+`./scripts/install.sh`. `reaper-mcp setup` from a clone warns when it finds ReaPack's copy. After uninstalling, run `./scripts/install.sh` (or `setup`) again: ReaPack's uninstall also removes the status page that
+the earlier `setup` overwrote. To switch back to ReaPack, delete the clone's own copies (`Scripts/mcp_*.lua`,
+`Effects/reaper-mcp/mcp_*.jsfx`; otherwise the snapshot actions show up twice in the Action List), import the repository
+again and install the packages. An npm install's `setup` then leaves
 the files to ReaPack; a clone keeps copying and warning.
 
 ### When is a bridge update needed?

@@ -52,7 +52,8 @@ async function setup(): Promise<void> {
   if (filesPlan === 'install-with-warning') {
     console.log('WARNING: ReaPack has installed the bridge too, and REAPER prefers its copy (Scripts/reaper-mcp/MCP Bridge/ and');
     console.log('Effects/reaper-mcp/Meters/) over the files this checkout installs. Your local changes will not run until you');
-    console.log('uninstall the reaper-mcp packages in ReaPack (Manage repositories > reaper-mcp > Uninstall packages).\n');
+    console.log('uninstall the reaper-mcp packages in ReaPack (Manage repositories > reaper-mcp > Uninstall packages),\n');
+    console.log('then run setup again: this run also overwrote the status page ReaPack installed, which uninstalling removes.\n');
   }
 
   console.log('Installing Lua scripts...');
