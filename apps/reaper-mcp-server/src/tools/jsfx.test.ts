@@ -106,6 +106,14 @@ describe('write_jsfx', () => {
     expect(allowed.isError).toBeUndefined();
   });
 
+  it('refuses reordered choice options unless breaking is set, because saved values would select another option', async () => {
+    const choice = SRC('slider2:0<0,1,1{Off,On}>Mode\n').replace('ui_end();', 'ui_choice(2, "Mode"); ui_end();');
+    await call({ name: 'Order', source: choice });
+    const reordered = choice.replace('{Off,On}', '{On,Off}');
+    expect((await call({ name: 'Order', source: reordered, overwrite: true })).isError).toBe(true);
+    expect((await call({ name: 'Order', source: reordered, overwrite: true, breaking: true })).isError).toBeUndefined();
+  });
+
   it('refuses a name with no letters or digits', async () => {
     expect((await call({ name: '!!!', source: SRC() })).isError).toBe(true);
   });
