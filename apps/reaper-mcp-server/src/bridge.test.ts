@@ -212,6 +212,15 @@ describe('bridge', () => {
       expect(mockedWriteFile).not.toHaveBeenCalled(); // no command file left behind for REAPER
     });
 
+    it('never tells a REAPER that is only busy to run the bridge script, which would stop it', async () => {
+      resourceFolder({ 'heartbeat.json': 5 * 60_000, ...INSTALLED });
+
+      const { error } = await sendCommand('get_project_info');
+
+      expect(error).toMatch(/rendering or showing a dialog, finish or close it and try again/);
+      expect(error).toMatch(/If REAPER is open and idle, the bridge stopped\. Start the bridge/);
+    });
+
     it('logs the refusal as a warning that names the bridge state', async () => {
       emit.mockClear();
       vi.spyOn(console, 'error').mockImplementation(() => undefined);

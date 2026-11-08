@@ -183,9 +183,12 @@ export function bridgeDownMessage(status: BridgeStatus, resourcePath: string = g
     case 'connected':
       return 'The REAPER bridge is running.';
     case 'stale':
+      // Running mcp_bridge.lua again stops a bridge that is running (set_action_options), so a busy
+      // REAPER, or one whose bridge started with it, must not be told to run it
       return `${BRIDGE_NOT_RUNNING_PREFIX} REAPER has not answered for ${formatAge(status.heartbeatAgeMs ?? 0)}. ` +
-        `REAPER is closed, the mcp_bridge.lua script was stopped, or REAPER is busy or showing a dialog. ` +
-        `${START_BRIDGE} Then try again.`;
+        'If REAPER is open and rendering or showing a dialog, finish or close it and try again: running mcp_bridge.lua ' +
+        'while the bridge is only busy stops it. If REAPER is closed, start it and try again. ' +
+        `If REAPER is open and idle, the bridge stopped. ${START_BRIDGE} Then try again.`;
     case 'never_started':
       return `${BRIDGE_NOT_RUNNING_PREFIX} the bridge script is installed but has never run in this REAPER. ` +
         `${START_BRIDGE} Then try again.`;
