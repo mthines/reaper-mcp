@@ -123,6 +123,8 @@ export function isSystemError(type: BridgeErrorType): boolean {
  * copy REAPER is running comes from another release: REAPER started an old copy (a second
  * install, or one loaded before an update) or the bridge was not restarted after one.
  * Restarting it loads the installed copy; updating comes first when that copy is old too.
+ * The bridge's own text stays at the end: renderTracks (render.ts) falls back to one track at a
+ * time when it finds "Unknown command type" in the error.
  */
 export function outdatedBridgeMessage(command: string, bridgeError: string): string {
   return `${BRIDGE_OUTDATED_PREFIX} the REAPER bridge does not know the command '${command}', so the mcp_bridge.lua ` +
