@@ -22,6 +22,14 @@ export const SaysItIsADemoAndShowsHowToGetStarted: Story = {
 };
 
 export const CopiesTheCommands: Story = {
+  // The stage is shared by every story's play function: put the real clipboard back afterwards
+  beforeEach: () => {
+    const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    return () => {
+      if (original) Object.defineProperty(navigator, 'clipboard', original);
+      else delete (navigator as { clipboard?: unknown }).clipboard;
+    };
+  },
   play: async ({ canvasElement }) => {
     const written: string[] = [];
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: (t: string) => (written.push(t), Promise.resolve()) } });
