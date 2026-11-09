@@ -1,7 +1,7 @@
-# Plan: closing the gap to xDarkzx/Reaper-MCP
+# Plan: composition tools, tool profiles and reach
 
-Source: the comparison of this project against https://github.com/xDarkzx/Reaper-MCP (README and file tree only; no code run).
-We are ahead on measurement, safety, knowledge, the status page and depth. The gaps are in composition shortcuts,
+Inspired by [xDarkzx/Reaper-MCP](https://github.com/xDarkzx/Reaper-MCP), which ships several of these ideas.
+We are strong on measurement, safety, knowledge, the status page and depth. What is left is composition shortcuts,
 sample/loop workflow, one-call recipes, tool-count control and onboarding outside macOS + Claude Code.
 
 Rules for every item: follow "Adding New MCP Tools" in CLAUDE.md (8 places), `z.coerce.number()`, behaviour tests,
