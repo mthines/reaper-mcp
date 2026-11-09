@@ -47,7 +47,7 @@
 //   @serialize file_var(0, ui_adv_open);   // added for you when the plugin has none
 
 ui_ver = 1.3;
-ui_hm = 0; ui_ho = 0;   // the header knobs' sliders (ui_header), 0 = none
+ui_hm = 0; ui_ho = 0;   // the header bars' sliders (ui_header), 0 = none
 
 // Design tokens: the bridge status page's palette (apps/bridge-ui/src/styles.css). The accent is
 // the plugin's own: write_jsfx emits ui_theme($xRRGGBB) after this block (from the plugin's name,
