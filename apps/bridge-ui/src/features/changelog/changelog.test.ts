@@ -55,6 +55,10 @@ describe('releases', () => {
     expect(visibleReleases(releases, true)).toHaveLength(3);
   });
 
+  it('lists a linked beta even with betas hidden', () => {
+    expect(visibleReleases(releases, false, '0.80.0-beta.104.1').map((r) => r.version)).toEqual(['0.80.0-beta.104.1', '0.80.0', '0.79.0']);
+  });
+
   it('offers the newest stable release only when it is newer than the install', () => {
     expect(availableUpdate(releases, '0.79.0')?.version).toBe('0.80.0');
     expect(availableUpdate(releases, '0.80.0')).toBeNull();

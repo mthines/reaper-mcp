@@ -40,7 +40,18 @@
   display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px;
   margin: 0; font: inherit;
 }
-.version { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); }
+.version {
+  padding: 0; border: 0; background: none; cursor: pointer;
+  font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text);
+}
+.version:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+/* The release a link points at: a tinted band that flashes once as it scrolls in */
+.release { scroll-margin-top: 12px; border-radius: 10px; }
+.release:where([data-linked]) { background: rgba(124, 196, 255, 0.06); box-shadow: 0 0 0 8px rgba(124, 196, 255, 0.06); animation: linked-flash 1.6s ease-out; }
+@keyframes linked-flash {
+  0%, 25% { background: rgba(124, 196, 255, 0.2); box-shadow: 0 0 0 8px rgba(124, 196, 255, 0.2); }
+}
+@media (prefers-reduced-motion: reduce) { .release:where([data-linked]) { animation: none; } }
 .release:where([data-kind='beta']) .version { font-size: 12px; font-weight: 500; color: var(--muted); }
 .date { margin-left: auto; font-size: 11.5px; color: var(--faint); }
 

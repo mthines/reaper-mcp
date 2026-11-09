@@ -115,9 +115,9 @@ export function groupChanges(changes: Change[]): { id: ChangeGroup; title: strin
   return GROUPS.map((g) => ({ ...g, changes: changes.filter((c) => c.group === g.id) })).filter((g) => g.changes.length > 0);
 }
 
-/** Releases to list: stable ones, plus every beta when asked for. */
-export function visibleReleases(releases: ChangelogRelease[], betas: boolean): ChangelogRelease[] {
-  return betas ? releases : releases.filter((r) => !r.prerelease);
+/** Releases to list: stable ones, plus every beta when asked for, and a linked beta (`?release=`) either way. */
+export function visibleReleases(releases: ChangelogRelease[], betas: boolean, linked: string | null = null): ChangelogRelease[] {
+  return betas ? releases : releases.filter((r) => !r.prerelease || r.version === linked);
 }
 
 /** The newest stable release when it is newer than what is installed. */

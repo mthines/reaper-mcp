@@ -175,3 +175,39 @@ export const LinksEachVersionToItsReleaseNotes: Story = {
     await expect(canvas.queryByRole('link', { name: 'Release notes' })).not.toBeInTheDocument();
   },
 };
+
+const releaseParam = () => new URLSearchParams(location.search).get('release');
+const resetUrl = () => {
+  history.replaceState(null, '', location.pathname);
+  return () => history.replaceState(null, '', location.pathname);
+};
+
+/** A version click links to that release: the URL names it and the release is marked as the one linked */
+export const LinksToAReleaseFromItsVersion: Story = {
+  beforeEach: resetUrl,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Link to v0.79.0' }));
+    await expect(releaseParam()).toBe('"0.79.0"');
+    await expect(canvas.getByRole('button', { name: 'Link to v0.79.0' }).closest('li')).toHaveAttribute('aria-current', 'location');
+    await expect(canvas.getByRole('button', { name: 'Link to v0.80.0' }).closest('li')).not.toHaveAttribute('aria-current');
+  },
+};
+
+/** Opening a link to a beta shows that beta with betas hidden, highlighted; closing the drawer drops the link */
+export const OpensALinkToABetaAndDropsItOnClose: Story = {
+  beforeEach: () => {
+    const beta = releases.find((r) => r.prerelease)?.version;
+    history.replaceState(null, '', `${location.pathname}?release=${encodeURIComponent(JSON.stringify(beta))}`);
+    return () => history.replaceState(null, '', location.pathname);
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const beta = releases.find((r) => r.prerelease)?.version;
+    await expect(canvas.getByRole('button', { name: `Link to v${beta}` }).closest('li')).toHaveAttribute('aria-current', 'location');
+    await expect(canvas.getAllByText('Beta')).toHaveLength(1);
+    await userEvent.click(canvas.getByRole('button', { name: 'Close what’s new' }));
+    await waitFor(() => expect(releaseParam()).toBeNull());
+    await expect(args.onClose).toHaveBeenCalled();
+  },
+};

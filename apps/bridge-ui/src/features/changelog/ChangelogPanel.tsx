@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { Icon, ResizeHandle, Toggle, useDrawerWidth } from '../../components/index.js';
 import { useCommand } from '../command/index.js';
 import { REPO_URL } from '../../lib/links.js';
 import { load, save } from '../../lib/storage.js';
+import { isStringOrNull, useUrlState } from '../../lib/url-state.js';
 import { track } from '../../lib/analytics.js';
 import { updateLog } from '../../lib/update.js';
 import type { BridgeUpdate } from '../../lib/status.js';
@@ -49,11 +50,18 @@ export function ChangelogPanel({
 }) {
   const width = useDrawerWidth();
   const [betas, setBetas] = useState(() => load(BETAS_KEY) === '1');
+  // `?release=0.78.0`: the release a link points at, scrolled to and highlighted (a version click sets it)
+  const [linked, setLinked] = useUrlState<string | null>('release', null, { validate: isStringOrNull });
+  const close = () => {
+    setLinked(null);
+    onClose();
+  };
+  const onEscape = useEffectEvent(close);
   useEffect(() => {
-    const onKey = (ev: KeyboardEvent) => ev.key === 'Escape' && onClose();
+    const onKey = (ev: KeyboardEvent) => ev.key === 'Escape' && onEscape();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, []);
   const chooseBetas = (on: boolean) => {
     track({ name: 'changelog_betas_toggled', shown: on });
     save(BETAS_KEY, on ? '1' : '0');
@@ -68,7 +76,7 @@ export function ChangelogPanel({
     onSelect: () => chooseBetas(!betas),
   });
   const ready = releases.status === 'ready' ? releases.releases : null;
-  const shown = ready ? visibleReleases(ready, betas) : [];
+  const shown = ready ? visibleReleases(ready, betas, linked) : [];
   const waiting = ready ? availableUpdate(ready, current) : null;
 
   return (
@@ -78,7 +86,7 @@ export function ChangelogPanel({
         <div className={drawerStyles.drawerTitle}>
           <Icon.Spark /> What’s new
         </div>
-        <button className="icon-btn" onClick={onClose} aria-label="Close what’s new" title="Close (Esc)">
+        <button className="icon-btn" onClick={close} aria-label="Close what’s new" title="Close (Esc)">
           <Icon.Close />
         </button>
       </div>
@@ -109,6 +117,9 @@ export function ChangelogPanel({
                 release={r}
                 highlights={highlightsFor(r, highlights)}
                 current={current}
+                linked={r.version === linked}
+                layout={`${shown.length}:${highlights.length}`}
+                onLink={() => setLinked(r.version)}
               />
             ))}
           </ol>
@@ -185,14 +196,46 @@ function UpdateCard({
   );
 }
 
-function ReleaseItem({ release, highlights, current }: { release: ChangelogRelease; highlights: Highlight[]; current: string }) {
+function ReleaseItem({
+  release,
+  highlights,
+  current,
+  linked,
+  layout,
+  onLink,
+}: {
+  release: ChangelogRelease;
+  highlights: Highlight[];
+  current: string;
+  /** The release `?release=` points at: scrolled into view and highlighted */
+  linked: boolean;
+  /** Changes when content above it can move it (highlights or releases arriving), so a linked release scrolls again */
+  layout: string;
+  onLink: () => void;
+}) {
+  const ref = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (!linked) return;
+    const smooth = typeof matchMedia === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    ref.current?.scrollIntoView?.({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
+  }, [linked, layout]);
   const newer = isNewer(release, current);
   const installed = release.version === current;
   const groups = groupChanges(release.changes);
   return (
-    <li className={styles.release} data-state={newer ? 'new' : installed ? 'installed' : 'old'} data-kind={release.prerelease ? 'beta' : 'stable'}>
+    <li
+      ref={ref}
+      id={`release-${release.version}`}
+      className={styles.release}
+      data-state={newer ? 'new' : installed ? 'installed' : 'old'}
+      data-kind={release.prerelease ? 'beta' : 'stable'}
+      data-linked={linked ? '' : undefined}
+      aria-current={linked ? 'location' : undefined}
+    >
       <h3 className={styles.releaseHead}>
-        <span className={styles.version}>v{release.version}</span>
+        <button className={styles.version} onClick={onLink} title="Link to this release" aria-label={`Link to v${release.version}`}>
+          v{release.version}
+        </button>
         <a className={styles.notesLink} href={release.url} target="_blank" rel="noreferrer" aria-label={`Release notes for v${release.version}`} title="Release notes on GitHub">
           <Icon.External />
         </a>

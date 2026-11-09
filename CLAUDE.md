@@ -932,7 +932,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   changes in one tick become one history entry), so Back/Forward step through it and a link or reload reopens it.
   Params: `view`, `range`, `span` (dragged timeline span), `filter` (all/errors), `q` (search; replaces, never pushes, written to the URL 300 ms after typing pauses via
   `debounceMs` while the page updates at once; each view keeps its own search, so switching views never carries one over),
-  `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, and on Plugins `coverage`, `inProject`, `plugin`
+  `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, `changelog` (What's new open) and `release` (the release a version click links to: scrolled to and highlighted), and on Plugins `coverage`, `inProject`, `plugin`
   (open plugin by FX name). Opening, closing or switching a drawer by click (a row, "Previous call") pushes; ↑/↓ between rows replaces. `view` and `range` default
   to the last pick in localStorage, so the bridge's bare `mcp_bridge.html` opens where you left off. Use it for any new
   state a viewer would want to go back to or share (tabs, filters, an open drawer); keep transient UI (hover, drag,
