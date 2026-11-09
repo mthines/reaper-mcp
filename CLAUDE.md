@@ -1122,6 +1122,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   event there and in `TrackEvent` together, never with names, search text, tokens or paths. The destination is the
   server's `DEFAULT_DESTINATION` (read by `build-config.mjs` from `telemetry-consent.ts`), service `reaper-mcp-bridge-ui`.
   On by default, off via Settings → Privacy, GPC/DNT, or `?demo`; fetch/xhr tracing stays off (the page polls the bridge).
+- Hosted build (public demo + changelog on Vercel, `*.vercel.app`): `vercel.json` runs `scripts/snapshot-releases.mjs` (GitHub releases into the gitignored `changelog/releases.snapshot.json`) then `BRIDGE_HOSTED=1 nx build bridge-ui`. `__HOSTED__` makes the page always the demo (`demo-mode.ts`), bakes the releases and `highlights.json` in (no GitHub call from a visitor's browser) and copies `changelog/` beside the page for the media. `/` is the demo, `/changelog` (= `?page=changelog`, `Changelog.PageRoute` from `main.tsx`, no bridge polling) the changelog as a page; `?release=0.79.1` or `#release-0.79.1` opens one release. A new release needs a redeploy to show (deploy hook or push). Without `BRIDGE_HOSTED` the build is exactly the REAPER page.
 - Payload shapes live in `apps/bridge-ui/src/lib/status.ts` (`BridgeStatus`) and `src/lib/timeline.ts` (`BridgeHistory`, `LongHistory`) and
   `publish_status()` / `publish_history()` / `publish_log()` in `mcp_bridge.lua` — change both together.
 

@@ -196,7 +196,7 @@ function UpdateCard({
   );
 }
 
-function ReleaseItem({
+export function ReleaseItem({
   release,
   highlights,
   current,
@@ -206,7 +206,8 @@ function ReleaseItem({
 }: {
   release: ChangelogRelease;
   highlights: Highlight[];
-  current: string;
+  /** The installed version, or null where nothing is installed (the public changelog page) */
+  current: string | null;
   /** The release `?release=` points at: scrolled into view and highlighted */
   linked: boolean;
   /** Changes when content above it can move it (highlights or releases arriving), so a linked release scrolls again */
@@ -219,8 +220,8 @@ function ReleaseItem({
     const smooth = typeof matchMedia === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
     ref.current?.scrollIntoView?.({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
   }, [linked, layout]);
-  const newer = isNewer(release, current);
-  const installed = release.version === current;
+  const newer = current !== null && isNewer(release, current);
+  const installed = current !== null && release.version === current;
   const groups = groupChanges(release.changes);
   return (
     <li
