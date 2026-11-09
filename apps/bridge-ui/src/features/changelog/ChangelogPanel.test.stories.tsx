@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { CommandProvider } from '../command/index.js';
 import { exampleReleaseJson } from '../../demo/examples.js';
 import { BETAS_KEY } from './changelog.js';
 import { Changelog, parseReleases } from './index.js';
@@ -105,5 +106,29 @@ export const ShowsHighlightsOnTheReleaseThatShippedThem: Story = {
     await expect(within(release).getByText('What’s new, right on the bridge page')).toBeInTheDocument();
     await expect(within(release).getByText('Sends render in one pass')).toBeInTheDocument();
     await expect(within(release).getByText('Links open the right view')).toBeInTheDocument();
+  },
+};
+
+/** The betas toggle is in the palette too (⌘K → Show betas), and its label follows the state */
+export const ShowsBetasFromThePalette: Story = {
+  decorators: [
+    (Story) => (
+      <CommandProvider>
+        <Story />
+      </CommandProvider>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(page.queryByText('Beta')).not.toBeInTheDocument();
+    await userEvent.keyboard('{Control>}k{/Control}');
+    await userEvent.type(await page.findByRole('combobox', { name: 'Search commands' }), 'betas');
+    await userEvent.click(page.getByRole('option', { name: /Show betas/ }));
+    await waitFor(() => expect(page.queryByRole('dialog')).toBeNull());
+    await expect(page.getByText('Beta')).toBeInTheDocument();
+    await userEvent.keyboard('{Control>}k{/Control}');
+    await userEvent.type(await page.findByRole('combobox', { name: 'Search commands' }), 'betas');
+    await expect(page.getByRole('option', { name: /Hide betas/ })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
   },
 };

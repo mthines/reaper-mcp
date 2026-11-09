@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Icon, Toggle } from '../../components/index.js';
+import { useCommand } from '../command/index.js';
 import { REPO_URL } from '../../lib/links.js';
 import { load, save } from '../../lib/storage.js';
 import { track } from '../../lib/analytics.js';
@@ -60,6 +61,14 @@ export function ChangelogPanel({
     save(BETAS_KEY, on ? '1' : '0');
     setBetas(on);
   };
+  useCommand({
+    contextual: true,
+    id: 'changelog-betas',
+    label: betas ? 'Hide betas' : 'Show betas',
+    group: 'What’s new',
+    description: 'prerelease beta pull request changelog',
+    onSelect: () => chooseBetas(!betas),
+  });
   const ready = releases.status === 'ready' ? releases.releases : null;
   const shown = ready ? visibleReleases(ready, betas) : [];
   const waiting = ready ? availableUpdate(ready, current) : null;
