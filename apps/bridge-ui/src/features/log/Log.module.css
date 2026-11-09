@@ -66,3 +66,11 @@
   .toolbar { flex-wrap: nowrap; padding: 6px; }
   .search { min-width: 0; }
 }
+
+.spinner {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid var(--line-2); border-top-color: var(--muted);
+  animation: logSpin 0.8s linear infinite;
+}
+@keyframes logSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }

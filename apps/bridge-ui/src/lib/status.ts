@@ -1,5 +1,5 @@
 import type { CommandEntry } from './commands.js';
-import type { SavedLog } from './log.js';
+import type { OlderPage, SavedLog } from './log.js';
 import type { Session } from './sessions.js';
 import type { BridgeHistory, LongHistory } from './timeline.js';
 import type { KnowledgeFeed } from '../features/plugins/index.js';
@@ -93,11 +93,12 @@ export interface BridgeStatus {
  * One web-interface request that pings `ui_seen` (the bridge checks it on start so it doesn't
  * open a second window while this page is open) and reads the status and timeline keys.
  */
-export function statusRequestUrl(now: number, extraKeys: string[] = [], logWant?: number): string {
+export function statusRequestUrl(now: number, extraKeys: string[] = [], logWant?: number, logOlder?: string): string {
   // log_want asks the bridge to publish its saved log; it answers on its next loop, echoing the value
   const ask = logWant === undefined ? '' : `;SET/EXTSTATE/MCPBridge/log_want/${logWant}`;
+  const older = logOlder === undefined ? '' : `;SET/EXTSTATE/MCPBridge/log_older/${logOlder}`;
   const extra = extraKeys.map((k) => `;GET/EXTSTATE/MCPBridge/${k}`).join('');
-  return `/_/SET/EXTSTATE/MCPBridge/ui_seen/${now}${ask};GET/EXTSTATE/MCPBridge/status;GET/EXTSTATE/MCPBridge/history${extra}`;
+  return `/_/SET/EXTSTATE/MCPBridge/ui_seen/${now}${ask}${older};GET/EXTSTATE/MCPBridge/status;GET/EXTSTATE/MCPBridge/history${extra}`;
 }
 
 /**
@@ -136,8 +137,17 @@ export function parseLongHistoryReply(body: string): LongHistory | null {
 }
 
 export function parseLogReply(body: string): SavedLog | null {
-  const parsed = parseExtStateKey(body, 'log') as { req?: unknown; entries?: unknown } | null;
-  return parsed && Array.isArray(parsed.entries) ? { req: String(parsed.req ?? ''), entries: parsed.entries as CommandEntry[] } : null;
+  const parsed = parseExtStateKey(body, 'log') as { req?: unknown; entries?: unknown; older?: unknown } | null;
+  return parsed && Array.isArray(parsed.entries)
+    ? { req: String(parsed.req ?? ''), entries: parsed.entries as CommandEntry[], older: parsed.older === true }
+    : null;
+}
+
+export function parseOlderReply(body: string): OlderPage | null {
+  const parsed = parseExtStateKey(body, 'log_page') as { req?: unknown; entries?: unknown; more?: unknown } | null;
+  return parsed && Array.isArray(parsed.entries)
+    ? { req: String(parsed.req ?? ''), entries: parsed.entries as CommandEntry[], more: parsed.more === true }
+    : null;
 }
 
 function unescapeReaper(v: string): string {

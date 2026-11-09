@@ -913,14 +913,20 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
 - The bridge publishes JSON to **non-persistent ExtState** `MCPBridge/status` (in memory, no disk IO): counters,
   defer-loop timing, and the last 50 commands (`n` seq, type, handler ms, ok, error). Throttled to ≤5 Hz and only
   when something changed, plus a 1s liveness tick. `_`-prefixed internal commands are excluded.
-- The page polls `/_/GET/EXTSTATE/MCPBridge/status` every 500 ms (paused while the tab is hidden), keeps a
-  1000-entry log in the browser, and renders entirely outside REAPER — no gfx/ImGui redraw on the main thread.
+- The page polls `/_/GET/EXTSTATE/MCPBridge/status` every 500 ms (paused while the tab is hidden), keeps its
+  log in the browser (the bridge's newest 2000, more as older segments load), and renders entirely outside REAPER — no gfx/ImGui redraw on the main thread.
 - Persistence: every logged command is appended to `<bridge dir>/history_log.jsonl` and the timeline is saved to
-  `history.json` (every 30s and on exit); both reload on start, pruned to 7 days and the newest 1000 entries, and
-  `n` continues across restarts (also saved in `history.json`). The saved log is published as ExtState `MCPBridge/log`
-  (newest first) only on request: the page writes `MCPBridge/log_want/<ts>` on open, after a bridge restart, and when
-  the 50-entry window skipped entries; the bridge answers once with `req` echoing it, and the page keeps only the answer
-  to its latest request.
+  `history.json` (every 30s and on exit); both reload on start and are pruned to 7 days, and `n` continues across
+  restarts (also saved in `history.json`). The newest 2000 commands stay in memory and in `history_log.jsonl` (which holds
+  exactly them); when it outgrows that, the oldest 500 rotate into a segment file
+  `history_log_<first n>_<last n>_<last t>.jsonl` (a segment goes once its newest entry is past the 7 days). The memory part is
+  published as ExtState `MCPBridge/log` (newest first, with `older` = segments exist) only on request: the page writes
+  `MCPBridge/log_want/<ts>` on open, after a bridge restart, and when the 50-entry window skipped entries; the bridge answers
+  once with `req` echoing it, and the page keeps only the answer to its latest request. Older commands load one segment per
+  request, on demand: the end of the Calls list is a sentinel (IntersectionObserver rooted in the list, a screenful ahead) that
+  asks while the range or selected span reaches further back than the page holds (`needOlder` in `Log.tsx`), showing a
+  loading row; the page writes `MCPBridge/log_older/<id>-<oldest n it holds>` and reads `MCPBridge/log_page`
+  (`{req, entries, more}`); `useBridgeFeed` keeps the cursor and `loading`. The page holds at most `LOG_MAX` (10,000) entries.
 - Timeline: per-10s buckets for the last hour (sparse, `[id, total, errors, slow, sumMs]`) in ExtState
   `MCPBridge/history` (≤ 1 Hz), and 1m (24h) + 10m (7d) tiers in `MCPBridge/history_long` (≤ every 10s, polled every
   10s). The page draws each range (5m–7d, a listbox combo box) from the finest tier covering it (`timelineBars()`);

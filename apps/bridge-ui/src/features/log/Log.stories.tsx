@@ -16,6 +16,8 @@ const meta = {
     selection: null,
     rangeKey: '1h',
     oldestKept: log[log.length - 1]?.t ?? null,
+    older: { more: false, loading: false },
+    onLoadOlder: fn(),
     sessions,
     knowledge: DEMO_KNOWLEDGE,
     view: 'calls',
@@ -48,5 +50,7 @@ export const Sessions: Story = { args: { view: 'sessions' } };
 export const Plugins: Story = { args: { view: 'plugins' } };
 
 export const Paused: Story = { args: { paused: true } };
+
+export const LoadingOlder: Story = { args: { rangeKey: '1h', older: { more: true, loading: true } } };
 
 export const Empty: Story = { args: { log: [], oldestKept: null } };

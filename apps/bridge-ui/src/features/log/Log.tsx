@@ -7,7 +7,6 @@ import { SessionsView } from './SessionsView.js';
 import { ToolsView } from './ToolsView.js';
 import { OUTCOME_TAG } from './outcome.js';
 import { load } from '../../lib/storage.js';
-import { LOG_MAX } from '../../lib/log.js';
 import { measurementHistory, outcomeOf, type CommandEntry } from '../../lib/commands.js';
 import { matchesQuery, parseQuery } from '../../lib/search.js';
 import { hasToolCalls, isConnected, sessionHue, sessionName, type Session } from '../../lib/sessions.js';
@@ -50,6 +49,8 @@ export function Log({
   rangeKey,
   onRange,
   oldestKept,
+  older,
+  onLoadOlder,
   onClearSelection,
   sessions,
   knowledge,
@@ -70,6 +71,10 @@ export function Log({
   onRange: (key: RangeKey) => void;
   /** Time of the oldest entry the page holds, before the selection filter */
   oldestKept: number | null;
+  /** Older commands the bridge keeps in files: more to load, and whether a load is under way */
+  older: { more: boolean; loading: boolean };
+  /** Ask for the next older segment; called when the end of the list is about to scroll into view */
+  onLoadOlder: () => void;
   onClearSelection: () => void;
   sessions: Map<string, Session>;
   knowledge?: KnowledgeFeed;
@@ -137,13 +142,33 @@ export function Log({
     );
   }, [log, sessionFilter, filter, query]);
   const rows = useMemo(() => (since === null ? matches : matches.filter((e) => e.t >= since)), [matches, since]);
-  const older = matches.length - rows.length;
+  const olderCount = matches.length - rows.length;
   // The smallest wider range that brings in the next older match
   const wider = useMemo(() => {
     const next = matches[rows.length];
     if (!range || !next) return null;
     return RANGES.find((r) => r.ms > range.ms && next.t >= now - r.ms) ?? RANGES[RANGES.length - 1];
   }, [matches, rows.length, range, now]);
+
+  // Older commands load as the end of the list nears the viewport: only while the window the viewer is
+  // looking at (the selected span, else the range) reaches further back than what the page holds
+  const reachesBack = selection ? selection.start : since;
+  const needOlder = older.more && oldestKept !== null && reachesBack !== null && oldestKept > reachesBack;
+  const [rowsEl, setRowsEl] = useState<HTMLDivElement | null>(null);
+  const [endEl, setEndEl] = useState<HTMLDivElement | null>(null);
+  const [nearEnd, setNearEnd] = useState(false);
+  useEffect(() => {
+    if (!rowsEl || !endEl || typeof IntersectionObserver === 'undefined') return;
+    // Rooted in the scrolling list, so the margin counts: a screenful ahead of the end
+    const io = new IntersectionObserver((entries) => setNearEnd(entries.some((x) => x.isIntersecting)), { root: rowsEl, rootMargin: '0px 0px 600px 0px' });
+    io.observe(endEl);
+    return () => io.disconnect();
+  }, [rowsEl, endEl]);
+  // Without IntersectionObserver there is nothing to wait for
+  const canObserve = typeof IntersectionObserver !== 'undefined';
+  useEffect(() => {
+    if (endEl && (nearEnd || !canObserve) && needOlder && !older.loading) onLoadOlder();
+  }, [endEl, nearEnd, canObserve, needOlder, older.loading, onLoadOlder]);
 
   // Esc clears the chart selection where its banner shows; true when there was one to clear
   const clearChartSelection = (): boolean => {
@@ -388,8 +413,12 @@ export function Log({
           <span>
             Showing <b>{log.length.toLocaleString()}</b> command{log.length === 1 ? '' : 's'} from{' '}
             <span className="mono">{spanLabel(selection)}</span>
-            {(oldestKept === null || selection.start < oldestKept) && (
-              <span className={styles.selectionNote}> · the log keeps the latest {LOG_MAX.toLocaleString()}; older commands are only counted in the chart</span>
+            {needOlder ? (
+              <span className={styles.selectionNote}> · loading older commands…</span>
+            ) : (
+              (oldestKept === null || selection.start < oldestKept) && (
+                <span className={styles.selectionNote}> · no older commands are kept; earlier ones are only counted in the chart</span>
+              )
             )}
           </span>
           <button className="btn" onClick={onClearSelection} title="Clear selection (Esc)">
@@ -425,12 +454,12 @@ export function Log({
             showCalls({ session, tool: '' });
           }} />
       ) : (
-        <div className={listStyles.rows} role="log" aria-live="off">
+        <div ref={setRowsEl} className={listStyles.rows} role="log" aria-live="off">
           {rows.length === 0 ? (
             <div className={listStyles.empty}>
               {log.length === 0
                 ? 'No commands yet. New ones show up here as your agent sends them.'
-                : older > 0 && range
+                : olderCount > 0 && range
                   ? `Nothing in the ${range.label.toLowerCase()}.`
                   : filter === 'errors' && !query
                     ? 'No errors. Nice.'
@@ -445,10 +474,16 @@ export function Log({
               onSelect={selectRow}
             />
           )}
-          {wider && (
+          {needOlder && (
+            <div ref={setEndEl} className={styles.logMore} role="status">
+              <span className={styles.spinner} aria-hidden="true" />
+              Loading older commands…
+            </div>
+          )}
+          {wider && !needOlder && (
             <div className={styles.logMore}>
               <span>
-                {older.toLocaleString()} older {older === 1 ? 'command' : 'commands'}
+                {olderCount.toLocaleString()} older {olderCount === 1 ? 'command' : 'commands'}
               </span>
               <button className="btn btn-sm" onClick={() => onRange(wider.key)}>
                 Show {wider.label.toLowerCase()}

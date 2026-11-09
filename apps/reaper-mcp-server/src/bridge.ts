@@ -80,29 +80,55 @@ export type BridgeErrorType =
   | 'bridge_not_running'
   | 'handler_crash'
   | 'unknown_command'
+  | 'bridge_outdated'
   | 'internal_error'
   | 'command_failed';
 
 /** Prefix of the error a command gets when it is refused because the bridge is down. */
 const BRIDGE_NOT_RUNNING_PREFIX = 'Bridge not running:';
 
+/** Prefix of the error a command gets when the bridge running in REAPER predates it (see outdatedBridgeMessage). */
+const BRIDGE_OUTDATED_PREFIX = 'Bridge outdated:';
+
+/** What mcp_bridge.lua answers when its handlers table has no entry for the command. */
+const UNKNOWN_COMMAND_PREFIX = 'Unknown command type';
+
 /** Classify a failed bridge response by the error prefixes mcp_bridge.lua (and sendCommand) write. */
 export function classifyBridgeError(error: string | undefined): BridgeErrorType {
   if (error?.startsWith('Timeout:')) return 'timeout';
   if (error?.startsWith(BRIDGE_NOT_RUNNING_PREFIX)) return 'bridge_not_running';
+  if (error?.startsWith(BRIDGE_OUTDATED_PREFIX)) return 'bridge_outdated';
   if (error?.startsWith('Handler error:')) return 'handler_crash';
-  if (error?.startsWith('Unknown command type')) return 'unknown_command';
+  if (error?.startsWith(UNKNOWN_COMMAND_PREFIX)) return 'unknown_command';
   // A handler that caught its own broken assumption (a bug, not a bad request)
   if (error?.startsWith('Internal error:')) return 'internal_error';
   return 'command_failed';
 }
 
 /**
- * A fault in the system, as opposed to a refused request (`command_failed`) or a bridge the
- * user has not started (`bridge_not_running`): neither is a bug, and both keep the span status unset.
+ * A fault in the system, as opposed to a refused request (`command_failed`), a bridge the
+ * user has not started (`bridge_not_running`) or one they have not restarted since an update
+ * (`bridge_outdated`): none of them is a bug, and all keep the span status unset.
  */
 export function isSystemError(type: BridgeErrorType): boolean {
-  return type !== 'command_failed' && type !== 'bridge_not_running';
+  return type !== 'command_failed' && type !== 'bridge_not_running' && type !== 'bridge_outdated';
+}
+
+/**
+ * What to tell the user when the running bridge does not know a command this server sends.
+ * @param command - The command the server sent.
+ * @param bridgeError - The bridge's own error text, kept at the end of the message.
+ * @returns The `Bridge outdated:` error with the steps that fix it.
+ */
+export function outdatedBridgeMessage(command: string, bridgeError: string): string {
+  // bridge-coverage.test.ts keeps every command's handler in the same release and extensions answer through
+  // extension_call, so an unknown command means REAPER runs another release's bridge. render.ts falls back to
+  // one-track renders on "Unknown command type", so the bridge's own text stays at the end.
+  return `${BRIDGE_OUTDATED_PREFIX} the REAPER bridge does not know the command '${command}', so the mcp_bridge.lua ` +
+    'running in REAPER is from a different reaper-mcp release than this server. Restart the bridge so it loads the ' +
+    'installed copy: restart REAPER, or stop mcp_bridge.lua and run it again from Actions → Show action list. ' +
+    'If it still happens, update the REAPER side (Extensions → ReaPack → Synchronize packages when ReaPack installed ' +
+    `it, otherwise run in a terminal: reaper-mcp setup), then restart REAPER. (The bridge said: ${bridgeError})`;
 }
 
 // ---------------------------------------------------------------------------
@@ -395,7 +421,12 @@ export async function sendCommand(
             const deferCycle = rawResponse['_deferCycle'] as number | undefined;
             notePageLink(rawResponse['_page']);
 
-            const errorType = response.success ? undefined : classifyBridgeError(response.error);
+            let errorType = response.success ? undefined : classifyBridgeError(response.error);
+            // A command this release ships that the running bridge has no handler for: a stale bridge, not a bug
+            if (errorType === 'unknown_command') {
+              response.error = outdatedBridgeMessage(type, response.error ?? `${UNKNOWN_COMMAND_PREFIX}: ${type}`);
+              errorType = 'bridge_outdated';
+            }
 
             span.setAttribute('reaper.bridge.poll_attempts', pollAttempts);
             if (handlerMs != null) {
@@ -416,8 +447,8 @@ export async function sendCommand(
             if (errorType) {
               // A handler rejecting the request (bad track index, missing FX) is an expected
               // outcome, like an HTTP 4xx: error.type says why, but the span status stays
-              // unset and the log is a warning. A Lua crash, unknown command or internal error
-              // is a system error.
+              // unset and the log is a warning, as is a bridge that predates the command. A Lua
+              // crash or internal error is a system error.
               const systemError = isSystemError(errorType);
               if (systemError) span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(response.error ?? 'Bridge error') });
               emitLog(

@@ -5100,29 +5100,72 @@ local function load_history()
 end
 
 -- Command log: every logged command is appended to history_log.jsonl (like bridge_events.jsonl)
--- and reloaded on start, so the page's log survives a restart. Kept to the newest LOG_KEEP_MAX
--- entries within the week the timeline covers; the file is compacted on start and whenever it
--- has grown by LOG_KEEP_MAX lines. Published as ExtState `log` (newest first) only when the page
--- asks by writing ExtState `log_want` (it does on open, after a restart and on a gap): encoding a
--- thousand entries on every change would cost the main thread for a key that is rarely read.
-local LOG_FILE = bridge_dir .. "history_log.jsonl"
-local LOG_KEEP_MAX = 1000
-local LOG_KEEP_MS = HISTORY_TIERS[#HISTORY_TIERS].keep
+-- and reloaded on start, so the page's log survives a restart. The newest LOG_MEM_MAX entries
+-- stay in memory (and in that file, which always holds exactly them); when it grows past that,
+-- the oldest LOG_SEGMENT_MAX move into a segment file history_log_<first n>_<last n>_<last t>.jsonl.
+-- Segments are dropped once their newest entry is older than the week the timeline covers.
+-- The saved log is published as ExtState `log` (newest first, with `older` = segments exist) only
+-- when the page asks by writing ExtState `log_want` (on open, after a restart and on a gap): encoding
+-- thousands of entries on every change would cost the main thread for a key that is rarely read.
+-- Older entries come one segment per request: ExtState `log_older` = "<id>-<before n>" is answered
+-- with ExtState `log_page` = {req = id, entries (newest first), more}.
+-- (One table for the state and helpers: the main chunk is close to Lua's limit of 200 locals.)
 local saved_log = {} -- newest first
-local log_appends = 0
-local last_log_request = ""
+local logs = {
+  file = bridge_dir .. "history_log.jsonl",
+  mem_max = 2000,
+  segment_max = 500,
+  keep_ms = HISTORY_TIERS[#HISTORY_TIERS].keep,
+  segments = {}, -- newest first: { first, last, t, path }
+  last_want = "",
+  last_older = "",
+}
 
-local function compact_log()
+function logs.scan()
+  logs.segments = {}
+  local cutoff = now_ms() - logs.keep_ms
+  local i = 0
+  while true do
+    local fn = reaper.EnumerateFiles(bridge_dir, i)
+    if not fn then break end
+    local first, last, t = fn:match("^history_log_(%d+)_(%d+)_(%d+)%.jsonl$")
+    if first then
+      local path = bridge_dir .. fn
+      if tonumber(t) < cutoff then os.remove(path)
+      else logs.segments[#logs.segments + 1] = { first = tonumber(first), last = tonumber(last), t = tonumber(t), path = path } end
+    end
+    i = i + 1
+  end
+  table.sort(logs.segments, function(a, b) return a.first > b.first end)
+end
+
+function logs.compact()
   local lines = {}
   for i = #saved_log, 1, -1 do lines[#lines + 1] = json_encode(saved_log[i]) end
-  write_file(LOG_FILE, #lines > 0 and table.concat(lines, "\n") .. "\n" or "")
-  log_appends = 0
+  write_file(logs.file, #lines > 0 and table.concat(lines, "\n") .. "\n" or "")
+end
+
+-- Move the `count` oldest entries of saved_log into a segment file and rewrite the active file
+function logs.rotate(count)
+  count = math.min(count, #saved_log)
+  if count <= 0 then return end
+  local lines = {}
+  for i = #saved_log, #saved_log - count + 1, -1 do lines[#lines + 1] = json_encode(saved_log[i]) end
+  local newest = saved_log[#saved_log - count + 1]
+  local oldest = saved_log[#saved_log]
+  local path = string.format("%shistory_log_%d_%d_%d.jsonl", bridge_dir, oldest.n, newest.n, newest.t)
+  if write_file(path, table.concat(lines, "\n") .. "\n") then
+    for _ = 1, count do saved_log[#saved_log] = nil end
+  end
+  logs.compact()
+  logs.scan()
 end
 
 local function load_log()
-  local content = read_file(LOG_FILE)
+  logs.scan()
+  local content = read_file(logs.file)
   if not content or not plan_lib_ok then return end
-  local cutoff = now_ms() - LOG_KEEP_MS
+  local cutoff = now_ms() - logs.keep_ms
   local entries = {} -- oldest first, as written
   for line in content:gmatch("[^\n]+") do
     local ok, e = pcall(plan_lib.json_decode, line)
@@ -5130,27 +5173,48 @@ local function load_log()
       entries[#entries + 1] = e
     end
   end
-  for i = #entries, math.max(1, #entries - LOG_KEEP_MAX + 1), -1 do saved_log[#saved_log + 1] = entries[i] end
-  compact_log()
+  for i = #entries, 1, -1 do saved_log[#saved_log + 1] = entries[i] end
+  -- A file longer than memory holds (an older bridge, or a changed limit) moves its oldest entries to segments
+  while #saved_log > logs.mem_max do logs.rotate(math.min(logs.segment_max, #saved_log - logs.mem_max)) end
+  logs.compact()
 end
 
 local function append_log(entry)
   table.insert(saved_log, 1, entry)
-  saved_log[LOG_KEEP_MAX + 1] = nil
-  log_appends = log_appends + 1
-  if log_appends >= LOG_KEEP_MAX then return compact_log() end
-  local f = io.open(LOG_FILE, "a")
+  if #saved_log > logs.mem_max then return logs.rotate(logs.segment_max) end
+  local f = io.open(logs.file, "a")
   if not f then return end
   f:write(json_encode(entry) .. "\n")
   f:close()
 end
 
 local function publish_log()
-  local req = reaper.GetExtState(STATUS_SECTION, "log_want")
-  if req == "" or req == last_log_request then return end
-  last_log_request = req
-  -- req echoes the page's request so it can tell this answer from an older one
-  reaper.SetExtState(STATUS_SECTION, "log", json_encode({ v = 1, req = req, entries = saved_log }), false)
+  local req = reaper.GetExtState(STATUS_SECTION, "log_want") or ""
+  if req ~= "" and req ~= logs.last_want then
+    logs.last_want = req
+    -- req echoes the page's request so it can tell this answer from an older one
+    reaper.SetExtState(STATUS_SECTION, "log", json_encode({ v = 1, req = req, older = #logs.segments > 0, entries = saved_log }), false)
+  end
+  local older = reaper.GetExtState(STATUS_SECTION, "log_older") or ""
+  if older ~= "" and older ~= logs.last_older then
+    logs.last_older = older
+    local id, before = older:match("^(%d+)%-(%d+)$")
+    if not id or not plan_lib_ok then return end
+    before = tonumber(before)
+    local entries, more = {}, false
+    for i, seg in ipairs(logs.segments) do
+      if seg.last < before then
+        local content = read_file(seg.path) or ""
+        for line in content:gmatch("[^\n]+") do
+          local ok, e = pcall(plan_lib.json_decode, line)
+          if ok and type(e) == "table" and type(e.n) == "number" then table.insert(entries, 1, e) end
+        end
+        more = logs.segments[i + 1] ~= nil
+        break
+      end
+    end
+    reaper.SetExtState(STATUS_SECTION, "log_page", json_encode({ v = 1, req = id, more = more, entries = entries }), false)
+  end
 end
 
 load_history()
