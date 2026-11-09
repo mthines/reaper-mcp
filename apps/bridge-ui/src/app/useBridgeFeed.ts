@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { parseExtStateReply, parseHistoryReply, parseLogReply, parseLongHistoryReply, statusRequestUrl, type BridgeStatus } from '../lib/status.js';
+import { parseExtStateReply, parseHistoryReply, parseLogReply, parseLongHistoryReply, parseOlderReply, statusRequestUrl, type BridgeStatus } from '../lib/status.js';
 import { DEMO } from './demo-mode.js';
 import { load, save } from '../lib/storage.js';
 import { fetchText } from '../lib/fetch-text.js';
-import { mergeLog, restoreLog, type SavedLog } from '../lib/log.js';
+import { LOG_MAX, mergeLog, restoreLog, type OlderPage, type SavedLog } from '../lib/log.js';
 import type { BridgeHistory, LongHistory } from '../lib/timeline.js';
 import type { CommandEntry } from '../lib/commands.js';
 
@@ -21,6 +21,8 @@ interface Feed {
   /** Local clock when status.ts last changed (liveness) */
   lastChangeAt: number;
   log: CommandEntry[];
+  /** Older commands the bridge keeps in segment files: more to load, and whether a load is under way */
+  older: { more: boolean; loading: boolean };
 }
 
 const LONG_HISTORY_POLL_MS = 10_000;
@@ -29,8 +31,8 @@ const CLEARED_KEY = 'mcp-bridge-cleared-through';
 const CLEARED_AT_KEY = 'mcp-bridge-cleared-at';
 
 /** Poll the bridge's ExtState through REAPER's web interface; pauses while the tab is hidden. */
-export function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; clearedAt: number } {
-  const [feed, setFeed] = useState<Feed>({ status: null, history: null, longHistory: null, reachable: true, lastChangeAt: 0, log: [] });
+export function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; clearedAt: number; loadOlder: () => void } {
+  const [feed, setFeed] = useState<Feed>({ status: null, history: null, longHistory: null, reachable: true, lastChangeAt: 0, log: [], older: { more: false, loading: false } });
   const pausedRef = useRef(paused);
   useEffect(() => {
     pausedRef.current = paused;
@@ -44,6 +46,17 @@ export function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; c
   // Only the answer to the latest request counts, so an older snapshot can't leave a hole.
   const needLogRef = useRef(true);
   const logWantRef = useRef<{ req: number; at: number } | null>(null);
+  // Older segments, one request each: `cursor` is the oldest sequence number held so far (the bridge answers with the
+  // segment below it), `wanted` is set by the log when the end of its list is about to scroll into view
+  const olderRef = useRef<{ cursor: number | null; more: boolean; wanted: boolean; pending: { id: number; at: number } | null }>({
+    cursor: null,
+    more: false,
+    wanted: false,
+    pending: null,
+  });
+  const loadOlder = () => {
+    if (olderRef.current.more) olderRef.current.wanted = true;
+  };
 
   useEffect(() => {
     const demo = DEMO;
@@ -57,6 +70,7 @@ export function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; c
       reachable: boolean,
       longHistory?: LongHistory | null,
       saved?: SavedLog | null,
+      page?: OlderPage | null,
     ) =>
       setFeed((prev) => {
         const changed = status !== null && status.ts !== prev.status?.ts;
@@ -66,6 +80,7 @@ export function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; c
         const renumbered = newest !== undefined && newest < Math.max(clearedThroughRef.current, restarted ? (prev.log[0]?.n ?? 0) : 0);
         if (renumbered) {
           clearedThroughRef.current = 0;
+          olderRef.current = { cursor: null, more: false, wanted: false, pending: null };
           save(CLEARED_KEY, '0');
           save(CLEARED_AT_KEY, '0');
           setClearedAt(0);
@@ -76,7 +91,22 @@ export function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; c
           log = restoreLog(log, saved.entries, clearedThroughRef.current);
           needLogRef.current = false;
           logWantRef.current = null;
+          // The segments start below the saved log; a page that already went further down keeps its place
+          if (olderRef.current.cursor === null) {
+            olderRef.current.cursor = saved.entries.reduce((m, e) => Math.min(m, e.n), Infinity);
+            olderRef.current.more = saved.older === true && Number.isFinite(olderRef.current.cursor);
+          }
         }
+        const pending = olderRef.current.pending;
+        if (page && pending && page.req === String(pending.id)) {
+          log = restoreLog(log, page.entries, clearedThroughRef.current);
+          olderRef.current.cursor = page.entries.reduce((m, e) => Math.min(m, e.n), olderRef.current.cursor ?? Infinity);
+          olderRef.current.more = page.more && page.entries.length > 0;
+          olderRef.current.pending = null;
+          olderRef.current.wanted = false;
+        }
+        // The page holds as many as it keeps: older segments would only push their own entries out again
+        if (log.length >= LOG_MAX) olderRef.current.more = false;
         if (status && !pausedRef.current) {
           const oldest = incoming[incoming.length - 1]?.n;
           if (restarted || (oldest !== undefined && log.length > 0 && oldest > log[0].n + 1)) needLogRef.current = true;
@@ -89,6 +119,7 @@ export function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; c
           reachable,
           lastChangeAt: changed ? Date.now() : prev.lastChangeAt,
           log,
+          older: { more: olderRef.current.more, loading: olderRef.current.pending !== null || olderRef.current.wanted },
         };
       });
 
@@ -107,8 +138,13 @@ export function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; c
         // Ask once, then read until the answer arrives; ask again if it hasn't after 5s
         const ask = wantLog && (!logWantRef.current || now - logWantRef.current.at > 5000);
         if (ask) logWantRef.current = { req: now, at: now };
-        const extra = [...(wantLong ? ['history_long'] : []), ...(wantLog ? ['log'] : [])];
-        const body = await fetchText(statusRequestUrl(now, extra, ask ? now : undefined));
+        // An older segment: asked once, read until it arrives, asked again if it hasn't after 5s
+        const o = olderRef.current;
+        const wantOlder = o.more && o.cursor !== null && (o.wanted || o.pending !== null) && !pausedRef.current;
+        const askOlder = wantOlder && (!o.pending || now - o.pending.at > 5000);
+        if (askOlder) o.pending = { id: now, at: now };
+        const extra = [...(wantLong ? ['history_long'] : []), ...(wantLog ? ['log'] : []), ...(wantOlder ? ['log_page'] : [])];
+        const body = await fetchText(statusRequestUrl(now, extra, ask ? now : undefined, askOlder ? `${now}-${o.cursor}` : undefined));
         if (body === null) apply(null, null, false);
         else {
           if (wantLong) lastLongPoll = now;
@@ -118,6 +154,7 @@ export function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; c
             true,
             wantLong ? parseLongHistoryReply(body) : undefined,
             wantLog ? parseLogReply(body) : undefined,
+            wantOlder ? parseOlderReply(body) : undefined,
           );
         }
       }
@@ -141,5 +178,5 @@ export function useBridgeFeed(paused: boolean): Feed & { clearLog: () => void; c
     });
   };
 
-  return { ...feed, clearLog, clearedAt };
+  return { ...feed, clearLog, clearedAt, loadOlder };
 }
