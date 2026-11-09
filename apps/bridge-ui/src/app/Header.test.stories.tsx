@@ -58,6 +58,8 @@ export const TheMenuOffersTheUpdateAndWhatsNew: Story = {
     await expect(args.onOpenChangelog).toHaveBeenCalled();
     await userEvent.click(canvas.getByRole('button', { name: 'More (update available)', hidden: true }));
     await userEvent.click(canvas.getByRole('menuitem', { name: 'What’s new in v99.0.0', hidden: true }));
-    await expect(args.onOpenUpdate).toHaveBeenCalled();
+    // Opened from the menu, so it counts as the menu, not the header pill
+    await expect(args.onOpenChangelog).toHaveBeenCalledTimes(2);
+    await expect(args.onOpenUpdate).not.toHaveBeenCalled();
   },
 };

@@ -173,7 +173,7 @@ function HeaderMenu({
             </button>
           )}
           {update && (
-            <button role="menuitem" className={styles.menuAccent} onClick={pick(update)}>
+            <button role="menuitem" className={styles.menuAccent} onClick={pick(onOpenChangelog ?? update)}>
               What’s new in v{updateVersion}
             </button>
           )}
