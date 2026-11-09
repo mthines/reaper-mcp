@@ -128,9 +128,37 @@ describe('toolkit 1.3: gain reduction and the transfer curve', () => {
     expect(curve).toContain('x + (1 / r - 1) * (d + w / 2) * (d + w / 2) / (2 * w)'); // inside the knee
     expect(curve).toContain('t + d / r'); // above it
     const transfer = body('ui_transfer');
-    expect(transfer).toContain('slider(thr_idx)');
-    expect(transfer).toContain('max(1, slider(ratio_idx))');
+    expect(transfer).toContain('slider(thr_idx + k)');
+    expect(transfer).toContain('max(1, slider(ratio_idx + k))');
     expect(transfer).toContain('ui_glv');
+  });
+});
+
+describe('toolkit 1.3: per-band thresholds', () => {
+  it('band threshold: hovering a band and dragging up or down moves that band\'s threshold slider, kept in its range', () => {
+    const draw = body('ui_fthresh');
+    expect(draw).toContain('mouse_x >= a && mouse_x < b'); // anywhere inside the band
+    expect(draw).toMatch(/ui_acc - \(mouse_y - ui_ly\) \* 72 \/ ui_gh/); // up = higher
+    expect(draw).toMatch(/ui_set\(idx, ui_q\(idx, ui_acc\)\)/);
+    expect(draw).toMatch(/slider_automate\(2 \^ \(idx - 1\), 1\)/);
+    expect(draw).toContain('ui_gany = 2'); // vertical resize cursor
+  });
+
+  it('band threshold: the wheel changes that band\'s ratio and a click selects the band', () => {
+    const draw = body('ui_fthresh');
+    expect(draw).toMatch(/ui_set\(rdx, ui_q\(rdx, slider\(rdx\)/);
+    expect(draw).toContain('ui_fsel = k');
+  });
+
+  it('band threshold: a press on a handle never starts a threshold drag', () => {
+    expect(body('ui_fthresh')).toMatch(/abs\(mouse_x - ui_fxof\(slider\(ui_ge\[i\]\)\)\) < 9 \* ui_s/);
+  });
+
+  it('selected band: the knob and the transfer curve follow the selected band', () => {
+    expect(body('ui_bandknob')).toContain('ui_knob(first_idx + k, #ui_bl, fmt)');
+    expect(body('ui_bandknob')).toContain('min(floor(ui_fsel), n - 1)');
+    expect(body('ui_transfer')).toContain('slider(thr_idx + k)');
+    expect(body('ui_transfer')).toContain('slider(ratio_idx + k)');
   });
 });
 

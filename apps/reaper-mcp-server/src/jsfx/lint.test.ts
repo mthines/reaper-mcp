@@ -18,6 +18,26 @@ const rules = (src: string) => lintJsfx(src).map((f) => f.rule);
 const without = (src: string, line: string) => src.replace(line, '');
 
 describe('lintJsfx', () => {
+  it('counts the sliders a band knob and the threshold lines cover as drawn, and refuses one that is not declared', () => {
+    const base = `desc:Bands
+slider1:200<40,800,1>Low crossover
+slider2:-18<-60,0,0.1>Low threshold
+slider3:-18<-60,0,0.1>High threshold
+slider4:3<1,20,0.1>Low ratio
+slider5:3<1,20,0.1>High ratio
+@init
+ui_boot(2);
+@block
+ui_changed();
+@gfx 300 200
+ui_begin(2, 0) ? ( ui_tall(2); ui_row(1); ui_freqgraph("Bands"); ui_fhandle(1, "X"); ui_fthresh(2, 4, 2);
+  ui_row(2); ui_bandknob(2, 2, "Threshold", 1); ui_bandknob(4, 2, "Ratio", 0); ui_end(); );
+`;
+    expect(rules(base)).not.toContain('slider-without-widget');
+    expect(rules(base.replace('ui_bandknob(4, 2,', 'ui_bandknob(4, 3,'))).toContain('widget-unknown-slider');
+    expect(rules(base.replace('ui_fthresh(2, 4, 2);', ''))).not.toContain('slider-without-widget'); // the band knobs still cover them
+  });
+
   it('warns about a buffer placed inside the toolkit graph data (below 2048)', () => {
     expect(rules(OK.replace('update(); ui_boot(0);', 'update(); buf = 1200; ui_boot(0);'))).toContain('low-memory-index');
     expect(rules(OK.replace('update(); ui_boot(0);', 'update(); buf = 2048; ui_boot(0);'))).not.toContain('low-memory-index');

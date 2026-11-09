@@ -78,7 +78,9 @@ describe('the multiband compressor example', () => {
     expect(source).toMatch(/ui_freqgraph\(/);
     expect(source.match(/ui_fhandle\(/g)).toHaveLength(2);
     expect(source).toMatch(/ui_grmeter\(3,/);
-    expect(source).toMatch(/ui_transfer\(3, 4,/);
+    expect(source).toMatch(/ui_fthresh\(3, 6, 3\)/); // a threshold line and a ratio per band
+    expect(source.match(/ui_bandknob\(/g)).toHaveLength(3); // threshold, ratio and gain of the selected band
+    expect(source).toMatch(/ui_transfer\(3, 6,/);
     const { core, advanced } = widgetCounts(source);
     expect(core).toBe(5);
     expect(advanced).toBeLessThanOrEqual(MAX_ADVANCED_WIDGETS);

@@ -49,7 +49,7 @@ Besides knobs, toggles, choices and the level meter, the toolkit (v1.3) draws gr
 handles `ui_fhandle` bound to Hz sliders, `ui_grmeter` (per-band gain reduction), `ui_transfer` (a
 compressor curve with the live level) and `ui_keyboard` (MIDI notes). A multiband compressor
 (`examples/multiband-compressor.jsfx`) shows the crossovers on the spectrum, drag them to pick the
-bands in Hz, and the bars show how much each band is compressed. Every plugin also shows its name,
+bands in Hz, every band has its own threshold line (hover a band and drag up or down; click a band and the Threshold, Ratio and Gain knobs edit it), and the bars show how much each band is compressed. Every plugin also shows its name,
 small and in spaced capitals, at the top-left. Graph feeds redraw only on activity
 (`ui_boot(2)`). Reference: `.claude/skills/make-plugin/reference/toolkit.md`. The lint refuses a
 `ui_` call the toolkit does not define and a wrong argument count (`unknown-ui-call`, `ui-arity`),

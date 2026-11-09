@@ -1,7 +1,70 @@
 [
-  { "name": "Gentle glue", "values": { "Threshold": -20, "Ratio": 2, "Attack": 20, "Release": 200 } },
-  { "name": "Tame the lows", "values": { "Low crossover": 150, "Threshold": -24, "Ratio": 4, "Attack": 15, "Release": 150, "Low gain": -1 } },
-  { "name": "De-harsh highs", "values": { "High crossover": 4500, "Threshold": -22, "Ratio": 3.5, "Attack": 3, "Release": 80, "High gain": -1.5 } },
-  { "name": "Loud and even", "values": { "Threshold": -28, "Ratio": 6, "Attack": 5, "Release": 100, "Output": 3 } },
-  { "name": "Neutral", "values": { "Threshold": 0, "Ratio": 1 } }
+ {
+  "name": "Gentle glue",
+  "values": {
+   "Low threshold": -20,
+   "Mid threshold": -20,
+   "High threshold": -20,
+   "Low ratio": 2,
+   "Mid ratio": 2,
+   "High ratio": 2,
+   "Attack": 20,
+   "Release": 200
+  }
+ },
+ {
+  "name": "Tame the lows",
+  "values": {
+   "Low crossover": 150,
+   "Low threshold": -26,
+   "Low ratio": 4,
+   "Mid threshold": -14,
+   "Mid ratio": 1.5,
+   "High threshold": -12,
+   "High ratio": 1.5,
+   "Attack": 15,
+   "Release": 150,
+   "Low gain": -1
+  }
+ },
+ {
+  "name": "De-harsh highs",
+  "values": {
+   "High crossover": 4500,
+   "Low threshold": 0,
+   "Low ratio": 1,
+   "Mid threshold": -14,
+   "Mid ratio": 1.5,
+   "High threshold": -24,
+   "High ratio": 3.5,
+   "Attack": 3,
+   "Release": 80,
+   "High gain": -1.5
+  }
+ },
+ {
+  "name": "Loud and even",
+  "values": {
+   "Low threshold": -28,
+   "Mid threshold": -28,
+   "High threshold": -28,
+   "Low ratio": 6,
+   "Mid ratio": 6,
+   "High ratio": 6,
+   "Attack": 5,
+   "Release": 100,
+   "Output": 3
+  }
+ },
+ {
+  "name": "Neutral",
+  "values": {
+   "Low threshold": 0,
+   "Mid threshold": 0,
+   "High threshold": 0,
+   "Low ratio": 1,
+   "Mid ratio": 1,
+   "High ratio": 1
+  }
+ }
 ]

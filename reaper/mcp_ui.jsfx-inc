@@ -486,7 +486,7 @@ function ui_aboutdraw() local(w, h, x, y, lh, nd, rows, bx, cy, hitx) (
 );
 
 function ui_end() (
-  ui_gany != ui_gcur ? ( gfx_setcursor(ui_gany ? 32644 : 32512); ui_gcur = ui_gany; );   // a band handle: resize cursor
+  ui_gany != ui_gcur ? ( gfx_setcursor(ui_gany == 2 ? 32645 : (ui_gany ? 32644 : 32512)); ui_gcur = ui_gany; );   // a band handle: resize cursor
   ui_gany = 0;
   ui_bar == 0 ? ui_footer(gfx_h - ui_pad - 6 * ui_s, ui_pad + 6 * ui_s);
   ui_ed ? ui_popover() : ui_about ? ui_aboutdraw();
@@ -863,7 +863,69 @@ function ui_fhandle(idx, label) local(k, f, x, hit, t, lo, hi, nf, hot, drag) (
   gfx_setfont(1);
 );
 
-// ---- gain reduction -----------------------------------------------------------------------------
+// ---- per-band thresholds ---------------------------------------------------------------------------
+
+// A threshold line across each band of the frequency graph, one slider per band (thr_first, thr_first + 1, ...,
+// in dB, -60..0 on the graph's dB axis) and one ratio slider per band (ratio_first, ...). Hover a band
+// and drag up or down to move its threshold, wheel to change its ratio, a click selects it (ui_fsel);
+// double-click types a value, Cmd/Ctrl/Alt-click resets. n is the number of bands (the handles + 1).
+// Call it after ui_freqgraph and its ui_fhandles.
+function ui_fthresh(thr_first, ratio_first, n) local(k, a, b, x, y, idx, rdx, lo, hi, hot, drag, near, i, sel, t) (
+  n = max(1, min(8, floor(n)));
+  k = 0;
+  loop(n,
+    idx = thr_first + k; rdx = ratio_first + k;
+    lo = k == 0 ? 20 : slider(ui_ge[k - 1]); hi = k == n - 1 ? 20000 : slider(ui_ge[k]);
+    a = ui_fxof(lo); b = ui_fxof(hi);
+    near = 0; i = 0;
+    loop(n - 1, abs(mouse_x - ui_fxof(slider(ui_ge[i]))) < 9 * ui_s ? near = 1; i += 1;);
+    hot = !near && !(ui_core && ui_blocked) && !ui_modal && ui_active == 0 && mouse_x >= a && mouse_x < b
+          && mouse_y >= ui_gy && mouse_y < ui_gy + ui_gh;
+    hot && ui_press ? (
+      ui_fsel = k; t = time_precise();
+      (mouse_cap & 52) ? ui_reset(idx) :
+      (ui_lci == idx && t - ui_lct < 0.45) ? ui_edopen(idx, 1, "Threshold", (a + b) / 2, ui_gyof(slider(idx))) :
+      ( ui_active = idx; ui_ly = mouse_y; ui_acc = slider(idx); ui_lci = idx; ui_lct = t; );
+      ui_press = 0;
+    );
+    ui_active == idx && ui_down ? (
+      ui_acc = min(ui_max[idx], max(ui_min[idx], ui_acc - (mouse_y - ui_ly) * 72 / ui_gh));
+      ui_ly = mouse_y;
+      ui_set(idx, ui_q(idx, ui_acc));
+    );
+    hot && mouse_wheel != 0 ? ui_set(rdx, ui_q(rdx, slider(rdx) + sign(mouse_wheel) * 0.5));
+    ui_active == idx && ui_rel ? ( slider_automate(2 ^ (idx - 1), 1); ui_active = 0; );
+    drag = ui_active == idx;
+    (hot || drag) ? ui_gany = 2;
+    sel = k == ui_fsel;
+    // the band's wash when hovered, then its threshold line (bright when selected)
+    (hot || drag) ? ( ui_c(ui_cAccent, 0.07); gfx_rect(a, ui_gy, max(1, b - a), ui_gh); );
+    y = ui_gyof(slider(idx));
+    ui_c(drag ? ui_cAccentAct : (sel || hot ? ui_cAccentHi : ui_cAccent), drag ? 1 : (sel ? 0.95 : (hot ? 0.8 : 0.4)));
+    gfx_rect(a + 2 * ui_s, y, max(1, b - a - 4 * ui_s), max(1, sel ? 2 * ui_s : ui_s));
+    (sel || hot || drag) && b - a > 60 * ui_s ? (
+      gfx_setfont(2);
+      sprintf(#ui_txt, "%.0f dB  %.1f:1", slider(idx), slider(rdx));
+      gfx_measurestr(#ui_txt, ui_tw, ui_th);
+      ui_c(drag || sel ? ui_cAccent : ui_cText, 1);
+      gfx_x = a + 6 * ui_s; gfx_y = y - ui_th - 3 * ui_s; gfx_drawstr(#ui_txt);
+      gfx_setfont(1);
+    );
+    k += 1;
+  );
+);
+
+// A knob for the selected band's slider: slider first_idx + ui_fsel of n, its label prefixed with the
+// band's name (Low / Mid / High for 3 bands, Low / High for 2, else Band N).
+function ui_bandknob(first_idx, n, label, fmt) local(k) (
+  n = max(1, floor(n)); k = max(0, min(floor(ui_fsel), n - 1));
+  n == 3 ? strcpy(#ui_bn, k == 0 ? "Low" : (k == 1 ? "Mid" : "High")) :
+  n == 2 ? strcpy(#ui_bn, k == 0 ? "Low" : "High") : sprintf(#ui_bn, "Band %d", k + 1);
+  sprintf(#ui_bl, "%s %s", #ui_bn, label);
+  ui_knob(first_idx + k, #ui_bl, fmt);
+);
+
+// ---- gain reduction ---------------------------------------------------------------------------------
 
 // n bars (1..8) side by side, one per band, hanging from the top: the more reduction, the longer the
 // bar (0..24 dB), amber from 6 dB, red from 12. Feed them with ui_gr(k, dB). A click on a bar selects
@@ -900,15 +962,16 @@ function ui_grmeter(n, label) local(k, bw, gap, gw, x0, x, h, v, fh, sw, bx, hit
 
 // A compressor's transfer curve, input dB across and output dB up (-60..0), the 1:1 line behind it,
 // the threshold marked on the axis, and a dot at the live input level (ui_glevel). thr_idx and
-// ratio_idx are the threshold (dB) and ratio sliders, knee_db the soft-knee width (0 = hard).
+// ratio_idx are the first threshold (dB) and ratio sliders; with a frequency graph it shows the selected
+// band's (slider + ui_fsel), knee_db the soft-knee width (0 = hard).
 function ui_tcurve(x, t, r, w) local(d) (
   d = x - t;
   (w > 0 && d > 0 - w / 2 && d < w / 2) ? x + (1 / r - 1) * (d + w / 2) * (d + w / 2) / (2 * w) :
   d <= 0 ? x : t + d / r;
 );
-function ui_transfer(thr_idx, ratio_idx, knee_db) local(t, r, bs, bx, by, i, x, y, x0, y0, lv, ly, tx) (
+function ui_transfer(thr_idx, ratio_idx, knee_db) local(k, t, r, bs, bx, by, i, x, y, x0, y0, lv, ly, tx) (
   ui_cell();
-  t = slider(thr_idx); r = max(1, slider(ratio_idx));
+  k = max(0, min(floor(ui_fsel), ui_gnb)); t = slider(thr_idx + k); r = max(1, slider(ratio_idx + k));
   bs = min(ui_rw - 16 * ui_s, ui_rh - 26 * ui_s);
   bs > 30 * ui_s ? (
     bx = ui_rx + (ui_rw - bs) / 2; by = ui_ry + 6 * ui_s;

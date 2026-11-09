@@ -42,8 +42,10 @@ Every widget is one block, label above, control, value below, sized the same acr
 |---|---|---|
 | `ui_freqgraph("Label")` | log frequency graph, 20 Hz-20 kHz, gridlines and labels, the fed trace, the selected band; a click between handles selects a band | trace: `ui_gfeed(buf, n)` with `n` FFT magnitudes (linear, low to high) from `@block`, or `ui_gset(i, db)` for a curve point (`i` 0..95) |
 | `ui_fhandle(idx, "Label")` | a draggable band edge on the graph, bound to slider `idx` in Hz; drag, wheel, double-click for a value box, modifier-click resets; stays between its neighbours; automates like a knob | a Hz slider, e.g. `<40,800,1>`; call it after `ui_freqgraph`, in left-to-right order |
+| `ui_fthresh(thr_first, ratio_first, n)` | a threshold line across each of `n` bands (the handles + 1) on the graph; hover a band and drag up/down to move its threshold, wheel = its ratio, click selects it | `n` threshold sliders from `thr_first` (dB, -60..0) and `n` ratio sliders from `ratio_first`; call it after the handles |
+| `ui_bandknob(first_idx, n, "Label", fmt)` | a knob on the selected band's slider (`first_idx + ui_fsel`), labelled with the band (Low / Mid / High, else Band N) | `n` sliders from `first_idx`; counts as one widget |
 | `ui_grmeter(n, "Label")` | `n` (1-8) gain-reduction bars hanging from the top, amber from 6 dB, red from 12; a click selects the band | `ui_gr(k, db)` per band from `@block` (db 0 or more) |
-| `ui_transfer(thr_idx, ratio_idx, knee_db)` | a compressor transfer curve that follows the two sliders, with a live level dot | `ui_glevel(db)` from `@block` |
+| `ui_transfer(thr_idx, ratio_idx, knee_db)` | a compressor transfer curve that follows the threshold and ratio sliders (the selected band's, `thr_idx + ui_fsel`, with a graph), with a live level dot | `ui_glevel(db)` from `@block` |
 | `ui_keyboard(lo, hi, "Label")` | piano keys `lo`..`hi` (MIDI notes), lit while held | `ui_kkey(note, vel)` on note on, `ui_kkey(note, 0)` on note off |
 | `ui_tall(span)` | the next `ui_row` is `span` times as tall (a graph needs height); knobs in it keep their size | none |
 
