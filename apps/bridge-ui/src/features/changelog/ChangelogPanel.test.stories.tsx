@@ -164,3 +164,14 @@ export const ListsEveryReleasesChangesWithoutAClick: Story = {
     await expect(within(canvasElement).getByText(/align doubles to a guide/)).toBeVisible();
   },
 };
+
+/** Each version links to its GitHub release notes, from an icon next to the version number */
+export const LinksEachVersionToItsReleaseNotes: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: 'Release notes for v0.80.0' });
+    await expect(link).toHaveAttribute('href', releases.find((r) => r.version === '0.80.0')?.url);
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(canvas.queryByRole('link', { name: 'Release notes' })).not.toBeInTheDocument();
+  },
+};

@@ -193,6 +193,9 @@ function ReleaseItem({ release, highlights, current }: { release: ChangelogRelea
     <li className={styles.release} data-state={newer ? 'new' : installed ? 'installed' : 'old'} data-kind={release.prerelease ? 'beta' : 'stable'}>
       <h3 className={styles.releaseHead}>
         <span className={styles.version}>v{release.version}</span>
+        <a className={styles.notesLink} href={release.url} target="_blank" rel="noreferrer" aria-label={`Release notes for v${release.version}`} title="Release notes on GitHub">
+          <Icon.External />
+        </a>
         {newer && <span className={styles.badge} data-badge="new">New</span>}
         {installed && <span className={styles.badge} data-badge="installed">Installed</span>}
         {release.prerelease && <span className={styles.badge} data-badge="beta">Beta</span>}
@@ -224,9 +227,6 @@ function ReleaseItem({ release, highlights, current }: { release: ChangelogRelea
             </section>
           ),
         )}
-        <a className={styles.notesLink} href={release.url} target="_blank" rel="noreferrer">
-          Release notes
-        </a>
       </div>
     </li>
   );
