@@ -3,7 +3,7 @@
   "highlights": [
     {
       "id": "whats-new-drawer",
-      "version": "0.80.0",
+      "pr": 102,
       "kind": "animation",
       "group": "new",
       "title": "What’s new, right on the bridge page",
