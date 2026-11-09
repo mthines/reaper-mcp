@@ -42,7 +42,7 @@ describe('toolkit 1.3: the plugin name header', () => {
     expect(draw).toMatch(/y = 15 \* ui_s - ui_th \/ 2;/); // centred on the header band's line, level with the bars
     expect(draw).toMatch(/\+ 1\.6 \* ui_s/); // letter spacing
     expect(body('ui_begin')).toMatch(/ui_y = ui_ytop;/);
-    expect(body('ui_begin')).toMatch(/ui_ytop = 30 \* ui_s;/); // the band is centred on y = 15, so the gap above and below it is equal, with or without Mix / Output
+    expect(body('ui_begin')).toMatch(/ui_ytop = 25 \* ui_s;/); // the band is centred on y = 15, so the gap above and below it is equal, with or without Mix / Output
   });
 
   it('name header: hides in a very narrow window instead of colliding with the controls', () => {
@@ -331,5 +331,15 @@ describe('toolkit 1.3: idle redraw', () => {
     for (const fn of ['ui_freqgraph', 'ui_fhandle', 'ui_grmeter', 'ui_transfer', 'ui_keyboard']) {
       expect(body(fn), fn).not.toMatch(/\b(memset|memcpy|alloc|gfx_setimgdim)\s*\(/);
     }
+  });
+});
+
+describe('toolkit 1.3: the About dialog documents the controls', () => {
+  it('lists the gestures every control shares, and drops them last in a window too short for them', () => {
+    const about = body('ui_aboutdraw');
+    for (const line of ['"Drag"', '"Shift-drag"', '"Wheel"', '"Dbl-click"', '"Cmd-click"']) expect(about).toContain(line);
+    expect(about).toContain('"CONTROLS"');
+    expect(about).toMatch(/kb = av >= /); // shown only while the dialog fits the window
+    expect(about).toMatch(/h = .*kb \* 91 \* ui_s/); // and the dialog grows by exactly its height
   });
 });

@@ -106,7 +106,7 @@ plain text since JSFX cannot open a URL, and the plugin's name, version, toolkit
 control count and the day it was written; `ui_credit = 0` in the toolkit hides it).
 
 Gestures follow the FabFilter/Serum convention: drag, Shift-drag for fine, wheel, double-click
-to type a value (Enter sets it, a click outside cancels), Cmd/Ctrl/Alt-click to reset. Esc never
+to type a value (Enter sets it, a click outside cancels), Cmd/Ctrl/Alt-click to reset. The same list is in the plugin's About dialog (click the reaper-mcp credit), under **Controls**. Esc never
 reaches a plugin in a floating FX window with REAPER's defaults: REAPER closes the window first
 (probed in 7.40). With the window's **+ > Send all keyboard input to plug-in** on, Esc closes the
 value box, the About dialog, then the drawer.
@@ -125,7 +125,7 @@ green, amber and red). `write_jsfx`'s `accent`:
 
 An unknown name or a bad hex refuses the whole call (outcome `refused_accent`). Every auto and
 named accent has a contrast ratio of at least 7 on the background (tested). The examples use
-violet (Mutate Verb), orange (Tape Sat) and teal (Width / Bass Mono).
+violet (Mutate Verb), orange (Tape Sat), teal (Width / Bass Mono) and blue (Multiband Compressor), so the shipped examples are told apart at a glance.
 
 The background is a very subtle vertical gradient (a hair lighter and tinted at the top, a hair
 darker at the bottom) with film grain from one 128 px noise tile, rendered once into an

@@ -386,14 +386,18 @@ function ui_arow(x, y, w, label, val) (
   ui_c(ui_cText, 1); gfx_x = x + 70 * ui_s; gfx_y = y; gfx_drawstr(val);
 );
 
-// The About dialog: what reaper-mcp is, where to find it, and this plugin's facts. Closes on a
-// click outside it or on its x. In a short window the description lines go first.
-function ui_aboutdraw() local(w, h, x, y, lh, nd, rows, bx, cy, hitx) (
+// The About dialog: what reaper-mcp is, where to find it, this plugin's facts and how the controls are
+// used (the gestures every knob, bar and handle shares). Closes on a click outside it or on its x. In a
+// short window the description lines go first, then the plugin's facts; the gestures stay while they fit.
+function ui_aboutdraw() local(w, h, x, y, lh, nd, rows, bx, cy, hitx, kb, av) (
   lh = 13 * ui_s;
-  nd = max(0, min(3, floor((gfx_h - 16 * ui_s - 186 * ui_s) / lh)));
-  rows = nd > 0 ? 6 : max(2, min(6, floor((gfx_h - 16 * ui_s - 108 * ui_s) / lh)));
+  av = gfx_h - 16 * ui_s;
+  kb = av >= 225 * ui_s + 2 * lh;   // the gesture block: a heading and five lines
+  av -= kb * 91 * ui_s;
+  nd = av - 186 * ui_s >= 3 * lh ? 3 : 0;   // the description is all three lines or none, never cut mid-sentence
+  rows = nd > 0 ? 6 : max(2, min(6, floor((av - 108 * ui_s) / lh)));
   w = min(gfx_w - 16 * ui_s, 300 * ui_s);
-  h = (12 + 22 + 6 + 4 + 28 + 10 + 16 + 10) * ui_s + nd * lh + rows * lh;
+  h = (12 + 22 + 6 + 4 + 28 + 10 + 16 + 10) * ui_s + nd * lh + rows * lh + kb * 91 * ui_s;
   x = (gfx_w - w) / 2; y = max(8 * ui_s, (gfx_h - h) / 2);
   bx = x + w - 26 * ui_s;
   hitx = mouse_x >= bx && mouse_x < bx + 20 * ui_s && mouse_y >= y + 8 * ui_s && mouse_y < y + 28 * ui_s;
@@ -434,6 +438,16 @@ function ui_aboutdraw() local(w, h, x, y, lh, nd, rows, bx, cy, hitx) (
     );
     rows > 4 ? ( sprintf(#ui_txt, "%d", ui_nctl); ui_arow(x, y, w, "Controls", #ui_txt); y += lh; );
     rows > 5 ? ( ui_arow(x, y, w, "Written", strlen(#ui_date) ? #ui_date : "-"); y += lh; );
+    kb ? (
+      y += 10 * ui_s;
+      ui_c(ui_cLine, 1); gfx_rect(x, y - 6 * ui_s, w - 28 * ui_s, max(1, ui_s));
+      gfx_setfont(2); ui_c(ui_cMuted, 1); gfx_x = x; gfx_y = y; gfx_drawstr("CONTROLS"); y += 16 * ui_s;
+      ui_arow(x, y, w, "Drag", "change the value"); y += lh;
+      ui_arow(x, y, w, "Shift-drag", "fine adjust (10x finer)"); y += lh;
+      ui_arow(x, y, w, "Wheel", "step the value"); y += lh;
+      ui_arow(x, y, w, "Dbl-click", "type an exact value"); y += lh;
+      ui_arow(x, y, w, "Cmd-click", "reset to default (Ctrl, Alt too)"); y += lh;
+    );
     gfx_setfont(1);
   );
 );
@@ -593,7 +607,7 @@ function ui_begin(core_rows, adv_rows) local(h, i, now, e, top) (
     gfx_setfont(4, "Arial", 15 * ui_s, 'b');
     gfx_setfont(5, "Arial", 8.5 * ui_s, 'b');
     gfx_setfont(1);
-    ui_ytop = 30 * ui_s;   // the header band is 16 px centred on y = 15: the same 7 px above it and below it
+    ui_ytop = 25 * ui_s;   // name and bars are centred on y = 15; the first row's own padding makes the gap below match the 11 px above
     ui_nlim = gfx_w - ui_pad - ((ui_hm > 0) + (ui_ho > 0)) * 118 * ui_s;
     ui_namedraw();
     ui_core = 1;
