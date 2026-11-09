@@ -75,7 +75,10 @@ export function ChangelogPanel({
         </button>
       </div>
       <div className={drawerStyles.drawerBody}>
-        <UpdateCard current={current} waiting={waiting} canUpdate={canUpdate} update={update} onUpdate={onUpdate} />
+        {/* Never "up to date" before the releases are in: the list says it is loading or couldn't reach GitHub */}
+        {(ready || update?.state === 'running') && (
+          <UpdateCard current={current} waiting={waiting} canUpdate={canUpdate} update={update} onUpdate={onUpdate} />
+        )}
         <div className={styles.toolbar}>
           <Toggle label="Show betas" hint="One per pull request, before it ships in a release" on={betas} onChange={chooseBetas} />
         </div>

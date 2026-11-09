@@ -70,6 +70,25 @@ export const SaysWhenUpToDate: Story = {
   },
 };
 
+/** Right after the Update available pill: never "up to date" while the releases load or when GitHub can't be reached */
+export const ClaimsNothingBeforeTheReleasesLoad: Story = {
+  args: { releases: { status: 'loading' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Loading releases from GitHub…')).toBeInTheDocument();
+    await expect(canvas.queryByText('You’re up to date')).not.toBeInTheDocument();
+  },
+};
+
+export const ClaimsNothingWhenGitHubCantBeReached: Story = {
+  args: { releases: { status: 'error' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText(/Couldn’t reach GitHub/)).toBeInTheDocument();
+    await expect(canvas.queryByText('You’re up to date')).not.toBeInTheDocument();
+  },
+};
+
 export const ClosesOnEscape: Story = {
   play: async ({ args }) => {
     await userEvent.keyboard('{Escape}');
