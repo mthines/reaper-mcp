@@ -144,6 +144,14 @@ describe('toolkit 1.3: per-band thresholds', () => {
     expect(draw).toContain('ui_gany = 2'); // vertical resize cursor
   });
 
+  it('band gain: Shift-drag moves the band\'s gain slider instead, 0.15 dB a pixel, and says so in the label', () => {
+    const draw = body('ui_fthresh');
+    expect(draw).toContain('ui_active = sh ? gdx : idx');
+    expect(draw).toMatch(/ui_acc - \(mouse_y - ui_ly\) \* 0\.15/);
+    expect(draw).toContain('dB gain');
+    expect(draw).toMatch(/slider_automate\(2 \^ \(gdx - 1\), 1\)/);
+  });
+
   it('band threshold: the wheel changes that band\'s ratio and a click selects the band', () => {
     const draw = body('ui_fthresh');
     expect(draw).toMatch(/ui_set\(rdx, ui_q\(rdx, slider\(rdx\)/);
@@ -159,6 +167,24 @@ describe('toolkit 1.3: per-band thresholds', () => {
     expect(body('ui_bandknob')).toContain('min(floor(ui_fsel), n - 1)');
     expect(body('ui_transfer')).toContain('slider(thr_idx + k)');
     expect(body('ui_transfer')).toContain('slider(ratio_idx + k)');
+  });
+});
+
+describe('toolkit 1.3: before and after', () => {
+  it('compare: the input trace is its own line over the output, labelled, and only drawn while it is switched on', () => {
+    const draw = body('ui_freqgraph');
+    expect(draw).toMatch(/ui_fcmp \? \(/);
+    expect(draw).toContain('ui_fi[i]');
+    expect(draw).toContain('ui_caps("Input")');
+    expect(draw).toContain('ui_caps("Output")');
+    expect(body('ui_gshow')).toContain('ui_fcmp = on > 0.5');
+  });
+
+  it('compare: the input feed writes its own trace and hands the output back, and a toggle redraws', () => {
+    const feed = body('ui_gfeed2');
+    expect(feed).toContain('ui_gt = ui_fi');
+    expect(feed).toContain('ui_gt = ui_fg');
+    expect(body('ui_begin')).toMatch(/ui_fcmp \* 67/);
   });
 });
 
@@ -186,10 +212,12 @@ describe('toolkit 1.3: the memory map', () => {
       { name: 'ui_ge', size: 16 },
       { name: 'ui_grm', size: 8 },
       { name: 'ui_kb', size: 128 },
+      { name: 'ui_fi', size: number('ui_gn') }, // the input trace of the before/after view
     ].map((r) => ({ ...r, start: number(r.name) }));
     for (const r of regions) expect(r.start, r.name).toBeGreaterThanOrEqual(1024);
     for (let i = 1; i < regions.length; i++) expect(regions[i].start).toBeGreaterThanOrEqual(regions[i - 1].start + regions[i - 1].size);
     expect(number('ui_mem')).toBeGreaterThanOrEqual(regions[regions.length - 1].start + 128);
+    expect(number('ui_mem')).toBeGreaterThanOrEqual(number('ui_fi') + 128);
   });
 
   it('memory map: the core keeps its reserved range below 1024', () => {

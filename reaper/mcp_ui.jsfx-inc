@@ -22,7 +22,8 @@
 //   1152..1167  ui_ge   band edges: the slider index of each draggable handle (16)
 //   1168..1199  ui_grm  gain reduction per band in dB (8) -- slots 8..31 spare
 //   1200..1327  ui_kb   MIDI keyboard: velocity per note 0..127 (0 = off)
-//   1328..2047  spare for the toolkit
+//   1328..1455  ui_fi   the input trace for the before/after view (same 96 points as ui_fg)
+//   1456..2047  spare for the toolkit
 //   2048..      ui_mem  the plugin
 // Every global starts with ui_. Sliders must be UNNAMED (slider1:0.5<0,1,0.01>Label): named
 // sliders do not keep their value in sliderN, which the toolkit reads through slider(idx).
@@ -73,7 +74,7 @@ ui_pver = 0; ui_nctl = 0; ui_akind = 0; ui_example = 0;
 ui_min = 0; ui_max = 65; ui_def = 130; ui_stp = 195;
 ui_mtr = 400;          // meter state: 2 slots per meter (level in dB, last time)
 ui_gn = 96;            // frequency graph trace points (log-spaced); at most 128
-ui_fg = 1024; ui_ge = 1152; ui_grm = 1168; ui_kb = 1200;   // graph widgets' memory, see the map above
+ui_fg = 1024; ui_ge = 1152; ui_grm = 1168; ui_kb = 1200; ui_fi = 1328; ui_gt = ui_fg;   // graph widgets' memory, see the map above
 ui_mem = 2048;         // first free memory index for the plugin's own buffers
 // REAPER re-runs @init when playback starts (and on sample-rate changes): the UI state below
 // is set once, so pressing Play never closes the drawer or drops a drag. Plugin code must not
@@ -86,7 +87,7 @@ ui_ready ? ( ui_hash = -1; ) : (
   ui_about = 0;        // About dialog open
   ui_glv = -90;        // live level for the transfer curve (-90 = none)
   ui_fsel = 0;         // selected band of the frequency graph (the plugin reads it)
-  ui_gi = 0; loop(128, ui_fg[ui_gi] = -120; ui_gi += 1;);   // an empty trace
+  ui_gi = 0; loop(128, ui_fg[ui_gi] = -120; ui_fi[ui_gi] = -120; ui_gi += 1;); ui_fcmp = 0;   // an empty trace
   ui_ready = 1;
 );
 
@@ -346,7 +347,7 @@ function ui_begin(core_rows, adv_rows) local(h, i, now, e, top) (
 
   h = gfx_w * 7 + gfx_h * 13 + mouse_x * 3 + mouse_y * 5 + mouse_cap * 11 + ui_adv_open * 17
       + mouse_wheel * 23 + floor(now * 2) * 19 + ui_p * 29 + ui_ed * 31 + ui_edv * 37 + ui_about * 41
-      + ui_fh * 43 + ui_fh2 * 47 + ui_fh3 * 53 + ui_fh4 * 59 + ui_fsel * 61;
+      + ui_fh * 43 + ui_fh2 * 47 + ui_fh3 * 53 + ui_fh4 * 59 + ui_fsel * 61 + ui_fcmp * 67;
   i = 1; loop(64, h += slider(i) * (i + 0.37); i += 1;);
   ui_dirty = ui_animated == 1 || h != ui_hash || (ui_p > 0 && ui_p < 1);
   ui_hash = h;
@@ -688,9 +689,9 @@ function ui_section(label) local(y, hit, k) (
 
 // One trace point (dB). Internal: use ui_gset or ui_gfeed.
 function ui_gput(i, v) local(q0, q1) (
-  q0 = floor((ui_fg[i] + 120) / 1.5); q1 = floor((v + 120) / 1.5);
+  q0 = floor((ui_gt[i] + 120) / 1.5); q1 = floor((v + 120) / 1.5);
   ui_fh += (q1 - q0) * (1 + i % 7);
-  ui_fg[i] = v;
+  ui_gt[i] = v;
 );
 
 // Trace point i (0..ui_gn-1, log-spaced from 20 Hz to 20 kHz) in dB: any curve the plugin computes.
@@ -711,11 +712,17 @@ function ui_gfeed(buf, n) local(p, b0, b1, m, j, db, old, nyq) (
       m = buf[b0] * (1 - min(1, max(0, j))) + buf[b0 + 1] * min(1, max(0, j));
     );
     db = 20 * log10(max(m, 0.000001));
-    old = ui_fg[p];
+    old = ui_gt[p];
     ui_gput(p, db > old ? old + (db - old) * 0.7 : old + (db - old) * 0.12);
     p += 1;
   );
 );
+
+// The same for the input, drawn as a second, lighter line while ui_gshow(1): the before/after view. Feed it
+// only while it is shown (a second FFT costs).
+function ui_gfeed2(buf, n) ( ui_gt = ui_fi; ui_gfeed(buf, n); ui_gt = ui_fg; );
+// Show (1) or hide (0) the input trace; call it in @gfx before ui_freqgraph with the compare toggle's slider.
+function ui_gshow(on) ( ui_fcmp = on > 0.5; );
 
 // Gain reduction of band k (0..7) in dB, as a positive number (6 = 6 dB of reduction).
 function ui_gr(k, db) local(q0, q1) (
@@ -805,6 +812,22 @@ function ui_freqgraph(label) local(px, py, pw, ph, i, f, m, mult, x, y, y0, x0, 
       x0 = x; y0 = y; i += 1;
     );
 
+    // the input trace over it, with a legend (before/after)
+    ui_fcmp ? (
+      i = 1; x0 = ui_gx; y0 = ui_gyof(ui_fi[0]);
+      loop(ui_gn - 1,
+        x = ui_gx + ui_gw * i / (ui_gn - 1); y = ui_gyof(ui_fi[i]);
+        (y0 < gb - 0.5 || y < gb - 0.5) ? ( ui_c(ui_cText, 0.6); gfx_line(x0, y0, x, y, 1); );
+        x0 = x; y0 = y; i += 1;
+      );
+      gfx_setfont(2);
+      ui_caps("Output"); gfx_measurestr(#ui_txt, ui_tw, ui_th); a = ui_tw;
+      ui_c(ui_cAccent, 1); gfx_x = ui_gx + ui_gw - a - 4 * ui_s; gfx_y = ui_gy + 34 * ui_s; gfx_drawstr(#ui_txt);
+      ui_caps("Input"); gfx_measurestr(#ui_txt, ui_tw, ui_th);
+      ui_c(ui_cText, 0.7); gfx_x = ui_gx + ui_gw - a - ui_tw - 16 * ui_s; gfx_y = ui_gy + 34 * ui_s; gfx_drawstr(#ui_txt);
+      gfx_setfont(1);
+    );
+
     // a press between handles picks that band
     near = 0; i = 0;
     loop(n, ex = ui_fxof(slider(ui_ge[i])); abs(mouse_x - ex) < 9 * ui_s ? near = 1; i += 1;);
@@ -868,13 +891,14 @@ function ui_fhandle(idx, label) local(k, f, x, hit, t, lo, hi, nf, hot, drag) (
 // A threshold line across each band of the frequency graph, one slider per band (thr_first, thr_first + 1, ...,
 // in dB, -60..0 on the graph's dB axis) and one ratio slider per band (ratio_first, ...). Hover a band
 // and drag up or down to move its threshold, wheel to change its ratio, a click selects it (ui_fsel);
-// double-click types a value, Cmd/Ctrl/Alt-click resets. n is the number of bands (the handles + 1).
+// Shift-drag moves the band's gain instead (gain_first, ...), double-click types a threshold, Cmd/Ctrl/Alt-click
+// resets it (with Shift, the gain). n is the number of bands (the handles + 1).
 // Call it after ui_freqgraph and its ui_fhandles.
-function ui_fthresh(thr_first, ratio_first, n) local(k, a, b, x, y, idx, rdx, lo, hi, hot, drag, near, i, sel, t) (
+function ui_fthresh(thr_first, ratio_first, gain_first, n) local(k, a, b, x, y, idx, rdx, gdx, lo, hi, hot, drag, gdrag, near, i, sel, t, sh) (
   n = max(1, min(8, floor(n)));
   k = 0;
   loop(n,
-    idx = thr_first + k; rdx = ratio_first + k;
+    idx = thr_first + k; rdx = ratio_first + k; gdx = gain_first + k;
     lo = k == 0 ? 20 : slider(ui_ge[k - 1]); hi = k == n - 1 ? 20000 : slider(ui_ge[k]);
     a = ui_fxof(lo); b = ui_fxof(hi);
     near = 0; i = 0;
@@ -883,9 +907,10 @@ function ui_fthresh(thr_first, ratio_first, n) local(k, a, b, x, y, idx, rdx, lo
           && mouse_y >= ui_gy && mouse_y < ui_gy + ui_gh;
     hot && ui_press ? (
       ui_fsel = k; t = time_precise();
-      (mouse_cap & 52) ? ui_reset(idx) :
+      sh = mouse_cap & 8;   // Shift: this drag moves the band's gain instead of its threshold
+      (mouse_cap & 52) ? ui_reset(sh ? gdx : idx) :
       (ui_lci == idx && t - ui_lct < 0.45) ? ui_edopen(idx, 1, "Threshold", (a + b) / 2, ui_gyof(slider(idx))) :
-      ( ui_active = idx; ui_ly = mouse_y; ui_acc = slider(idx); ui_lci = idx; ui_lct = t; );
+      ( ui_active = sh ? gdx : idx; ui_ly = mouse_y; ui_acc = slider(ui_active); ui_lci = idx; ui_lct = t; );
       ui_press = 0;
     );
     ui_active == idx && ui_down ? (
@@ -894,8 +919,14 @@ function ui_fthresh(thr_first, ratio_first, n) local(k, a, b, x, y, idx, rdx, lo
       ui_set(idx, ui_q(idx, ui_acc));
     );
     hot && mouse_wheel != 0 ? ui_set(rdx, ui_q(rdx, slider(rdx) + sign(mouse_wheel) * 0.5));
+    ui_active == gdx && ui_down ? (
+      ui_acc = min(ui_max[gdx], max(ui_min[gdx], ui_acc - (mouse_y - ui_ly) * 0.15));
+      ui_ly = mouse_y;
+      ui_set(gdx, ui_q(gdx, ui_acc));
+    );
     ui_active == idx && ui_rel ? ( slider_automate(2 ^ (idx - 1), 1); ui_active = 0; );
-    drag = ui_active == idx;
+    ui_active == gdx && ui_rel ? ( slider_automate(2 ^ (gdx - 1), 1); ui_active = 0; );
+    gdrag = ui_active == gdx; drag = ui_active == idx || gdrag;
     (hot || drag) ? ui_gany = 2;
     sel = k == ui_fsel;
     // the band's wash when hovered, then its threshold line (bright when selected)
@@ -905,7 +936,8 @@ function ui_fthresh(thr_first, ratio_first, n) local(k, a, b, x, y, idx, rdx, lo
     gfx_rect(a + 2 * ui_s, y, max(1, b - a - 4 * ui_s), max(1, sel ? 2 * ui_s : ui_s));
     (sel || hot || drag) && b - a > 60 * ui_s ? (
       gfx_setfont(2);
-      sprintf(#ui_txt, "%.0f dB  %.1f:1", slider(idx), slider(rdx));
+      (gdrag || (hot && (mouse_cap & 8) && !drag)) ? sprintf(#ui_txt, "%+.1f dB gain", slider(gdx)) :
+        sprintf(#ui_txt, "%.0f dB  %.1f:1", slider(idx), slider(rdx));
       gfx_measurestr(#ui_txt, ui_tw, ui_th);
       ui_c(drag || sel ? ui_cAccent : ui_cText, 1);
       gfx_x = a + 6 * ui_s; gfx_y = y - ui_th - 3 * ui_s; gfx_drawstr(#ui_txt);

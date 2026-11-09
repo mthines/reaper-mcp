@@ -25,17 +25,19 @@ slider2:-18<-60,0,0.1>Low threshold
 slider3:-18<-60,0,0.1>High threshold
 slider4:3<1,20,0.1>Low ratio
 slider5:3<1,20,0.1>High ratio
+slider6:0<-12,12,0.1>Low gain
+slider7:0<-12,12,0.1>High gain
 @init
 ui_boot(2);
 @block
 ui_changed();
 @gfx 300 200
-ui_begin(2, 0) ? ( ui_tall(2); ui_row(1); ui_freqgraph("Bands"); ui_fhandle(1, "X"); ui_fthresh(2, 4, 2);
-  ui_row(2); ui_bandknob(2, 2, "Threshold", 1); ui_bandknob(4, 2, "Ratio", 0); ui_end(); );
+ui_begin(2, 0) ? ( ui_tall(2); ui_row(1); ui_freqgraph("Bands"); ui_fhandle(1, "X"); ui_fthresh(2, 4, 6, 2);
+  ui_row(2); ui_bandknob(2, 2, "Threshold", 1); ui_bandknob(4, 2, "Ratio", 0); ui_bandknob(6, 2, "Gain", 1); ui_end(); );
 `;
     expect(rules(base)).not.toContain('slider-without-widget');
-    expect(rules(base.replace('ui_bandknob(4, 2,', 'ui_bandknob(4, 3,'))).toContain('widget-unknown-slider');
-    expect(rules(base.replace('ui_fthresh(2, 4, 2);', ''))).not.toContain('slider-without-widget'); // the band knobs still cover them
+    expect(rules(base.replace('ui_bandknob(6, 2,', 'ui_bandknob(6, 4,'))).toContain('widget-unknown-slider');
+    expect(rules(base.replace('ui_fthresh(2, 4, 6, 2);', ''))).not.toContain('slider-without-widget'); // the band knobs still cover them
   });
 
   it('warns about a buffer placed inside the toolkit graph data (below 2048)', () => {
