@@ -26,3 +26,4 @@ storybook-static/
 debug-storybook.log
 .auth/
 apps/bridge-ui/changelog/releases.snapshot.json
+.vercel

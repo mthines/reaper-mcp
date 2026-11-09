@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Toggle } from '../../components/index.js';
+import { InstallBanner, Toggle } from '../../components/index.js';
 import { REPO_URL } from '../../lib/links.js';
 import { load, save } from '../../lib/storage.js';
 import { isStringOrNull, useUrlState } from '../../lib/url-state.js';
@@ -42,6 +42,7 @@ export function ChangelogPage({
 
   return (
     <main className={styles.page}>
+      {__HOSTED__ && <InstallBanner />}
       <header className={styles.head}>
         <div>
           <h1 className={styles.title}>What’s new in reaper-mcp</h1>
