@@ -116,17 +116,14 @@ export function isSystemError(type: BridgeErrorType): boolean {
 
 /**
  * What to tell the user when the running bridge does not know a command this server sends.
- *
- * Every command the server sends has a handler in the mcp_bridge.lua of the same release
- * (bridge-coverage.test.ts fails the build otherwise), and extension commands go through
- * `extension_call`, which answers with its own errors. So "Unknown command type" means the
- * copy REAPER is running comes from another release: REAPER started an old copy (a second
- * install, or one loaded before an update) or the bridge was not restarted after one.
- * Restarting it loads the installed copy; updating comes first when that copy is old too.
- * The bridge's own text stays at the end: renderTracks (render.ts) falls back to one track at a
- * time when it finds "Unknown command type" in the error.
+ * @param command - The command the server sent.
+ * @param bridgeError - The bridge's own error text, kept at the end of the message.
+ * @returns The `Bridge outdated:` error with the steps that fix it.
  */
 export function outdatedBridgeMessage(command: string, bridgeError: string): string {
+  // bridge-coverage.test.ts keeps every command's handler in the same release and extensions answer through
+  // extension_call, so an unknown command means REAPER runs another release's bridge. render.ts falls back to
+  // one-track renders on "Unknown command type", so the bridge's own text stays at the end.
   return `${BRIDGE_OUTDATED_PREFIX} the REAPER bridge does not know the command '${command}', so the mcp_bridge.lua ` +
     'running in REAPER is from a different reaper-mcp release than this server. Restart the bridge so it loads the ' +
     'installed copy: restart REAPER, or stop mcp_bridge.lua and run it again from Actions → Show action list. ' +
