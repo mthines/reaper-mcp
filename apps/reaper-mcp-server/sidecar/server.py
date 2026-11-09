@@ -465,8 +465,13 @@ def handle_chords(request_id: Any, params: dict) -> str:
     """
     import chords
 
-    # The chord model loads a whole file itself (librosa, so an .m4a works); soundfile reads only a cut range.
-    error = _check_file(request_id, params, "path", readable=False)
+    # The chord model loads a whole file itself (librosa, so an .m4a works); a cut range is read through soundfile
+    # (the same test as chords.recognize). A startTime that is not a number is refused below, after the file check.
+    try:
+        ranged = float(params.get("startTime", 0)) > 0 or params.get("endTime") is not None
+    except (TypeError, ValueError):
+        ranged = True
+    error = _check_file(request_id, params, "path", readable=ranged)
     if error:
         return error
     try:

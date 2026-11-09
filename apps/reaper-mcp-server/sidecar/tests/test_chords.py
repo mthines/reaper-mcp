@@ -98,6 +98,18 @@ def test_a_whole_file_soundfile_cannot_open_still_reaches_the_model(tmp_path, mo
     assert result["segments"] == [{"start": 0.0, "end": 2.0, "label": "A:min"}]
 
 
+def test_a_range_of_a_file_soundfile_cannot_open_is_refused_as_unreadable_input(tmp_path, fake_model):
+    # A range is cut out with soundfile, so the file has to open there: say it is the input, not a failure.
+    song = tmp_path / "song.m4a"
+    song.write_bytes(b"not a format soundfile reads")
+
+    error = call("chords", path=str(song), startTime=1, endTime=3)["error"]
+
+    assert error["code"] == -32000
+    assert error["message"].startswith(f"Audio file unreadable: {song}")
+    assert fake_model == []
+
+
 def test_refuses_an_unknown_vocabulary_and_a_missing_file(wav, fake_model):
     assert call("chords", path=wav, vocabulary="jazz")["error"]["code"] == -32602
     assert "not found" in call("chords", path="/nope/missing.wav")["error"]["message"]
