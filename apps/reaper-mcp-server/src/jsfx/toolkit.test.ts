@@ -39,16 +39,16 @@ describe('toolkit 1.3: the plugin name header', () => {
     expect(body('ui_begin')).toContain('ui_namedraw()');
     expect(draw).toContain('ui_caps(#ui_name)');
     expect(draw).toMatch(/x = ui_pad;/);
-    expect(draw).toMatch(/y = 4 \* ui_s;/);
+    expect(draw).toMatch(/y = 15 \* ui_s - ui_th \/ 2;/); // centred on the header band's line, level with the bars
     expect(draw).toMatch(/\+ 1\.6 \* ui_s/); // letter spacing
     expect(body('ui_begin')).toMatch(/ui_y = ui_ytop;/);
-    expect(body('ui_begin')).toMatch(/ui_ytop = ui_pad \+ \(\(ui_hm \|\| ui_ho\) \? 20 : 8\) \* ui_s/); // a gap under the name, more with header knobs
+    expect(body('ui_begin')).toMatch(/ui_ytop = 25 \* ui_s;/); // the band is centred on y = 15, so the gap above and below it is equal, with or without Mix / Output
   });
 
   it('name header: hides in a very narrow window instead of colliding with the controls', () => {
     expect(body('ui_namedraw')).toMatch(/gfx_w >= 150 \* ui_s/);
     expect(body('ui_namedraw')).toMatch(/x < ui_nlim/);
-    expect(body('ui_begin')).toMatch(/ui_nlim = gfx_w - ui_pad - \(\(ui_hm > 0\) \+ \(ui_ho > 0\)\) \* 66 \* ui_s/); // the name stops before the header knobs
+    expect(body('ui_begin')).toMatch(/ui_nlim = gfx_w - ui_pad - \(\(ui_hm > 0\) \+ \(ui_ho > 0\)\) \* 118 \* ui_s/); // the name stops before the header bars
   });
 
   it('name header: the plugin name that write_jsfx inlines is the desc without the developer suffix', () => {
@@ -58,23 +58,26 @@ describe('toolkit 1.3: the plugin name header', () => {
   });
 });
 
-describe('toolkit 1.3: the header knobs', () => {
-  it('header knobs: Output is the rightmost, Mix to its left, drawn only when the plugin has them and the window is wide enough', () => {
+describe('toolkit 1.3: the header bars', () => {
+  it('header bars: Output is the rightmost, Mix to its left, drawn only when the plugin has them and the window is wide enough', () => {
     const begin = body('ui_begin');
-    expect(begin).toMatch(/\(ui_hm \|\| ui_ho\) && gfx_w >= 240 \* ui_s/);
-    expect(begin.indexOf('ui_hknob(ui_ho')).toBeLessThan(begin.indexOf('ui_hknob(ui_hm'));
+    expect(begin).toMatch(/\(ui_hm \|\| ui_ho\) && gfx_w >= 280 \* ui_s/);
+    expect(begin.indexOf('ui_hbar(ui_ho')).toBeLessThan(begin.indexOf('ui_hbar(ui_hm'));
     expect(body('ui_header')).toContain('ui_hm = max(0, floor(m))');
   });
 
-  it('header knobs: they have the knob gestures (drag, wheel, double-click, reset) and show the value while hovered', () => {
-    const knob = body('ui_hknob');
-    expect(knob).toContain('ui_ctl(idx, fmt, label, cx, cy + 12 * ui_s)');
-    expect(knob).toMatch(/hot \? ui_fmtv\(fmt, slider\(idx\)\) : ui_caps\(label\)/);
+  it('header bars: they have the knob gestures (drag, wheel, double-click, reset) and show the value while hovered', () => {
+    const bar = body('ui_hbar');
+    expect(bar).toContain('ui_reset(idx)');
+    expect(bar).toContain('ui_edopen(idx, fmt, label');
+    expect(bar).toContain('mouse_wheel');
+    expect(bar).toMatch(/\(mouse_x - ui_lx\)/); // a horizontal drag, like Vital's bar
+    expect(bar).toMatch(/hot \? ui_fmtv\(fmt, slider\(idx\)\) : ui_caps\(label\)/);
   });
 
-  it('header knobs: every function is defined before the one that calls it (EEL2 fails silently otherwise)', () => {
+  it('header bars: every function is defined before the one that calls it (EEL2 fails silently otherwise)', () => {
     const at = (n: string) => code.indexOf(`function ${n}(`);
-    for (const [fn, dep] of [['ui_hknob', 'ui_ctl'], ['ui_hknob', 'ui_fmtv'], ['ui_hknob', 'ui_ring'], ['ui_begin', 'ui_hknob'], ['ui_begin', 'ui_namedraw']]) {
+    for (const [fn, dep] of [['ui_hbar', 'ui_reset'], ['ui_hbar', 'ui_fmtv'], ['ui_hbar', 'ui_edopen'], ['ui_begin', 'ui_hbar'], ['ui_begin', 'ui_namedraw']]) {
       expect(at(dep), `${dep} before ${fn}`).toBeLessThan(at(fn));
     }
   });
@@ -236,6 +239,48 @@ describe('toolkit 1.3: the MIDI keyboard', () => {
   });
 });
 
+describe('toolkit 1.3: per-band levels', () => {
+  it('band level: hover a band and drag up or down for its level across the graph height, Shift = fine, wheel = a step', () => {
+    const draw = body('ui_fband');
+    expect(draw).toContain('mouse_x >= a && mouse_x < b');
+    expect(draw).toMatch(/ui_acc - \(mouse_y - ui_ly\) \* \(mx - mn\) \/ ui_gh/);
+    expect(draw).toMatch(/\(mouse_cap & 8\) \? 0\.2 : 1/);
+    expect(draw).toMatch(/mouse_wheel != 0/);
+    expect(draw).toMatch(/slider_automate\(2 \^ \(idx - 1\), 1\)/);
+    expect(draw).toContain('ui_fsel = k'); // a click selects the band, which ui_bandknob follows
+  });
+
+  it('band level: only runs a drag it started', () => {
+    expect(body('ui_fband')).toMatch(/ui_ftd && ui_active == idx && ui_down/);
+  });
+});
+
+describe('toolkit 1.3: playing the keyboard', () => {
+  it('playable keys: a press on a key queues a note on, a drag across keys moves it, and a release queues the note off', () => {
+    const keyboard = body('ui_keyboard');
+    expect(keyboard).toMatch(/ui_active = 64; ui_kheld = hn \+ 1; ui_kput\(hn, vel\)/);
+    expect(keyboard).toMatch(/hn \+ 1 != ui_kheld/); // glissando
+    expect(keyboard).toMatch(/ui_active == 64 && !ui_down/); // release, even outside the window
+    expect(keyboard).toMatch(/hn < 0 \? hn = hw/); // a black key wins over the white key under it
+  });
+
+  it('playable keys: the plugin reads the queue in @block with ui_kpoll, which ends when the queue is empty', () => {
+    const poll = body('ui_kpoll');
+    expect(poll).toContain('ui_kq[32] != ui_kq[33]');
+    expect(poll).toMatch(/ui_kn = /);
+    expect(poll).toMatch(/ui_kv = /);
+  });
+
+  it('playable keys: the queue sits above the graph regions and below the plugin memory', () => {
+    const t = toolkit;
+    const kq = Number(t.match(/ui_kq = (\d+)/)?.[1]);
+    const fi = Number(t.match(/ui_fi = (\d+)/)?.[1]);
+    const mem = Number(t.match(/ui_mem = (\d+)/)?.[1]);
+    expect(kq).toBeGreaterThanOrEqual(fi + 128); // ui_fi holds 128 points
+    expect(kq + 34).toBeLessThanOrEqual(mem);
+  });
+});
+
 describe('toolkit 1.3: the memory map', () => {
   it('memory map: graph data starts at 1024 or above, in regions that never overlap', () => {
     const regions = [
@@ -286,5 +331,22 @@ describe('toolkit 1.3: idle redraw', () => {
     for (const fn of ['ui_freqgraph', 'ui_fhandle', 'ui_grmeter', 'ui_transfer', 'ui_keyboard']) {
       expect(body(fn), fn).not.toMatch(/\b(memset|memcpy|alloc|gfx_setimgdim)\s*\(/);
     }
+  });
+});
+
+describe('toolkit 1.3: the About dialog documents the controls', () => {
+  it('lists the gestures every control shares, and drops them last in a window too short for them', () => {
+    const about = body('ui_aboutdraw');
+    for (const line of ['"Drag"', '"Shift-drag"', '"Wheel"', '"Dbl-click"', '"Cmd-click"']) expect(about).toContain(line);
+    expect(about).toContain('"CONTROLS"');
+    expect(about).toMatch(/kb = av >= /); // shown only while the dialog fits the window
+    expect(about).toMatch(/h = .*kb \* 91 \* ui_s/); // and the dialog grows by exactly its height
+  });
+});
+
+describe('toolkit 1.3: the key queue', () => {
+  it('keeps room for the note-off of every queued note-on', () => {
+    const put = body('ui_kput');
+    expect(put).toMatch(/f >= \(vel > 0 \? 2 : 1\)/);
   });
 });

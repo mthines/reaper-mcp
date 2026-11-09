@@ -23,7 +23,8 @@
 //   1168..1199  ui_grm  gain reduction per band in dB (8) -- slots 8..31 spare
 //   1200..1327  ui_kb   MIDI keyboard: velocity per note 0..127 (0 = off)
 //   1328..1455  ui_fi   the input trace for the before/after view (same 96 points as ui_fg)
-//   1456..2047  spare for the toolkit
+//   1456..1489  ui_kq   the keys played with the mouse: 16 note/velocity slots, then head and tail (ui_kpoll)
+//   1490..2047  spare for the toolkit
 //   2048..      ui_mem  the plugin
 // Every global starts with ui_. Sliders must be UNNAMED (slider1:0.5<0,1,0.01>Label): named
 // sliders do not keep their value in sliderN, which the toolkit reads through slider(idx).
@@ -46,7 +47,7 @@
 //   @serialize file_var(0, ui_adv_open);   // added for you when the plugin has none
 
 ui_ver = 1.3;
-ui_hm = 0; ui_ho = 0;   // the header knobs' sliders (ui_header), 0 = none
+ui_hm = 0; ui_ho = 0;   // the header bars' sliders (ui_header), 0 = none
 
 // Design tokens: the bridge status page's palette (apps/bridge-ui/src/styles.css). The accent is
 // the plugin's own: write_jsfx emits ui_theme($xRRGGBB) after this block (from the plugin's name,
@@ -75,7 +76,7 @@ ui_pver = 0; ui_nctl = 0; ui_akind = 0; ui_example = 0;
 ui_min = 0; ui_max = 65; ui_def = 130; ui_stp = 195;
 ui_mtr = 400;          // meter state: 2 slots per meter (level in dB, last time)
 ui_gn = 96;            // frequency graph trace points (log-spaced); at most 128
-ui_fg = 1024; ui_ge = 1152; ui_grm = 1168; ui_kb = 1200; ui_fi = 1328; ui_gt = ui_fg;   // graph widgets' memory, see the map above
+ui_fg = 1024; ui_ge = 1152; ui_grm = 1168; ui_kb = 1200; ui_fi = 1328; ui_kq = 1456; ui_gt = ui_fg;   // graph widgets' memory, see the map above
 ui_mem = 2048;         // first free memory index for the plugin's own buffers
 // REAPER re-runs @init when playback starts (and on sample-rate changes): the UI state below
 // is set once, so pressing Play never closes the drawer or drops a drag. Plugin code must not
@@ -304,8 +305,9 @@ function ui_namedraw() local(x, y, i, c, n) (
   gfx_w >= 150 * ui_s ? (
     gfx_setfont(5);
     ui_caps(#ui_name);
-    x = ui_pad; y = 4 * ui_s;
-    ui_c(ui_cAccent, 0.9); gfx_circle(x + 1.5 * ui_s, y + 4.5 * ui_s, 1.5 * ui_s, 1, 1);
+    gfx_measurestr("A", ui_tw, ui_th);
+    x = ui_pad; y = 15 * ui_s - ui_th / 2;   // centred on the header band, level with the Mix / Output bars
+    ui_c(ui_cAccent, 0.9); gfx_circle(x + 1.5 * ui_s, 15 * ui_s, 1.5 * ui_s, 1, 1);
     x += 8 * ui_s;
     ui_c(ui_cMuted, 0.85);
     i = 0; n = strlen(#ui_txt);
@@ -384,14 +386,18 @@ function ui_arow(x, y, w, label, val) (
   ui_c(ui_cText, 1); gfx_x = x + 70 * ui_s; gfx_y = y; gfx_drawstr(val);
 );
 
-// The About dialog: what reaper-mcp is, where to find it, and this plugin's facts. Closes on a
-// click outside it or on its x. In a short window the description lines go first.
-function ui_aboutdraw() local(w, h, x, y, lh, nd, rows, bx, cy, hitx) (
+// The About dialog: what reaper-mcp is, where to find it, this plugin's facts and how the controls are
+// used (the gestures every knob, bar and handle shares). Closes on a click outside it or on its x. In a
+// short window the description lines go first, then the plugin's facts; the gestures stay while they fit.
+function ui_aboutdraw() local(w, h, x, y, lh, nd, rows, bx, cy, hitx, kb, av) (
   lh = 13 * ui_s;
-  nd = max(0, min(3, floor((gfx_h - 16 * ui_s - 186 * ui_s) / lh)));
-  rows = nd > 0 ? 6 : max(2, min(6, floor((gfx_h - 16 * ui_s - 108 * ui_s) / lh)));
+  av = gfx_h - 16 * ui_s;
+  kb = av >= 225 * ui_s + 2 * lh;   // the gesture block: a heading and five lines
+  av -= kb * 91 * ui_s;
+  nd = av - 186 * ui_s >= 3 * lh ? 3 : 0;   // the description is all three lines or none, never cut mid-sentence
+  rows = nd > 0 ? 6 : max(2, min(6, floor((av - 108 * ui_s) / lh)));
   w = min(gfx_w - 16 * ui_s, 300 * ui_s);
-  h = (12 + 22 + 6 + 4 + 28 + 10 + 16 + 10) * ui_s + nd * lh + rows * lh;
+  h = (12 + 22 + 6 + 4 + 28 + 10 + 16 + 10) * ui_s + nd * lh + rows * lh + kb * 91 * ui_s;
   x = (gfx_w - w) / 2; y = max(8 * ui_s, (gfx_h - h) / 2);
   bx = x + w - 26 * ui_s;
   hitx = mouse_x >= bx && mouse_x < bx + 20 * ui_s && mouse_y >= y + 8 * ui_s && mouse_y < y + 28 * ui_s;
@@ -432,6 +438,16 @@ function ui_aboutdraw() local(w, h, x, y, lh, nd, rows, bx, cy, hitx) (
     );
     rows > 4 ? ( sprintf(#ui_txt, "%d", ui_nctl); ui_arow(x, y, w, "Controls", #ui_txt); y += lh; );
     rows > 5 ? ( ui_arow(x, y, w, "Written", strlen(#ui_date) ? #ui_date : "-"); y += lh; );
+    kb ? (
+      y += 10 * ui_s;
+      ui_c(ui_cLine, 1); gfx_rect(x, y - 6 * ui_s, w - 28 * ui_s, max(1, ui_s));
+      gfx_setfont(2); ui_c(ui_cMuted, 1); gfx_x = x; gfx_y = y; gfx_drawstr("CONTROLS"); y += 16 * ui_s;
+      ui_arow(x, y, w, "Drag", "change the value"); y += lh;
+      ui_arow(x, y, w, "Shift-drag", "fine adjust (10x finer)"); y += lh;
+      ui_arow(x, y, w, "Wheel", "step the value"); y += lh;
+      ui_arow(x, y, w, "Dbl-click", "type an exact value"); y += lh;
+      ui_arow(x, y, w, "Cmd-click", "reset to default (Ctrl, Alt too)"); y += lh;
+    );
     gfx_setfont(1);
   );
 );
@@ -511,32 +527,60 @@ function ui_ctl(idx, fmt, label, x, y) local(lo, hi, st, t, fine) (
 );
 
 // Mix and Output in the top right of every plugin that has them: call ui_header(mix_idx, out_idx) in @gfx
-// before ui_begin (0 = this plugin has no such slider). Two small knobs with the usual gestures; the
+// before ui_begin (0 = this plugin has no such slider). Two slim horizontal bars with the usual gestures; the
 // label shows the value while you hover or drag. Do not draw those two sliders as widgets as well.
 function ui_header(m, o) ( ui_hm = max(0, floor(m)); ui_ho = max(0, floor(o)); );
 
-// One small header knob whose right edge is xr; returns the x of the next one to its left.
-function ui_hknob(idx, label, fmt, xr) local(r, cx, cy, lo, hi, t, t0, a0, a1, av, aa, th, hot, tw0) (
-  r = 8 * ui_s; cx = xr - r - 2 * ui_s; cy = 15 * ui_s;
-  ui_hit = !(ui_core && ui_blocked) && !ui_modal && mouse_x >= xr - 62 * ui_s && mouse_x < xr && mouse_y >= 4 * ui_s && mouse_y < 26 * ui_s;
-  ui_ctl(idx, fmt, label, cx, cy + 12 * ui_s);
-  lo = ui_min[idx]; hi = ui_max[idx];
+// A pill exactly h pixels tall: the end caps are circles of diameter h, so they never stick out past the bar.
+function ui_pill(x, y, w, h) local(r) (
+  r = h / 2;
+  w <= h ? gfx_rect(x, y, w, h) : (
+    gfx_rect(x + r, y, w - h, h);
+    gfx_circle(x + r - 0.5, y + r - 0.5, r - 0.5, 1, 1);
+    gfx_circle(x + w - r - 0.5, y + r - 0.5, r - 0.5, 1, 1);
+  );
+);
+
+// One slim horizontal bar (like the level bar in Vital's header) whose right edge is xr; returns the x of the
+// next one to its left. Drag left or right (Shift = fine), wheel, double-click to type, modifier-click resets.
+// The header band is centred on y = 15 px, the same line the plugin name sits on.
+function ui_hbar(idx, label, fmt, xr) local(bw, bh, bx, cy, by, lo, hi, st, t, t0, hot, tt, x0, x1) (
+  bw = 58 * ui_s; bh = 6 * ui_s; bx = xr - bw; cy = 15 * ui_s;
+  by = cy - 0.5 * ui_s;   // the caps' ink sits half a pixel above the line box's middle: the bar follows the ink
+  lo = ui_min[idx]; hi = ui_max[idx]; st = ui_stp[idx];
+  ui_hit = !(ui_core && ui_blocked) && !ui_modal && mouse_x >= xr - 112 * ui_s && mouse_x < xr && mouse_y >= cy - 10 * ui_s && mouse_y < cy + 10 * ui_s;
+  ui_hit && ui_press ? (
+    tt = time_precise();
+    (mouse_cap & 52) ? ui_reset(idx) :
+    (ui_lci == idx && tt - ui_lct < 0.45) ? ui_edopen(idx, fmt, label, bx, cy + 12 * ui_s) :
+    ( ui_active = idx; ui_lx = mouse_x; ui_acc = slider(idx); ui_lci = idx; ui_lct = tt; );
+  );
+  ui_active == idx && ui_down ? (
+    ui_acc = min(hi, max(lo, ui_acc + (mouse_x - ui_lx) / (bw * ((mouse_cap & 8) ? 10 : 1)) * (hi - lo)));
+    ui_lx = mouse_x;
+    ui_set(idx, ui_q(idx, ui_acc));
+  );
+  ui_hit && mouse_wheel != 0 ? (
+    ui_set(idx, ui_q(idx, slider(idx) + sign(mouse_wheel) * (st > 0 ? st : (hi - lo) / ((mouse_cap & 8) ? 200 : 40))));
+  );
+  ui_active == idx && ui_rel ? ( slider_automate(2 ^ (idx - 1), 1); ui_active = 0; );
   t = min(1, max(0, (slider(idx) - lo) / (hi - lo)));
   t0 = (lo < 0 && hi > 0) ? -lo / (hi - lo) : 0;
   hot = ui_active == idx || ui_hit;
-  th = max(2 * ui_s, r * 0.22);
-  a0 = -2.35; a1 = 2.35; av = a0 + (a1 - a0) * t; aa = a0 + (a1 - a0) * t0;
-  ui_c(hot ? ui_cTrackHot : ui_cTrack, 1); ui_ring(cx, cy, r - th, r, a0, a1);
-  abs(t - t0) > 0.002 ? ( ui_c(ui_active == idx ? ui_cAccentAct : (hot ? ui_cAccentHi : ui_cAccent), 1); ui_ring(cx, cy, r - th, r, min(aa, av), max(aa, av)); );
-  ui_cm(ui_cPanel2, ui_cLine, hot ? 0.9 : 0.4); gfx_circle(cx, cy, r - th - ui_s, 1, 1);
-  ui_c(hot ? ui_cAccent : ui_cText, 1); gfx_circle(cx + sin(av) * (r - th - 3 * ui_s), cy - cos(av) * (r - th - 3 * ui_s), max(1, ui_s), 1, 1);
+  ui_c(hot ? ui_cTrackHot : ui_cTrack, 1); ui_pill(bx, by - bh / 2, bw, bh);
+  abs(t - t0) > 0.002 ? (
+    x0 = bx + bw * min(t, t0); x1 = bx + bw * max(t, t0);
+    ui_c(ui_active == idx ? ui_cAccentAct : (hot ? ui_cAccentHi : ui_cAccent), 1);
+    ui_pill(x0, by - bh / 2, max(1, x1 - x0), bh);
+  );
+  ui_c(hot ? ui_cText : ui_cMuted, 1); gfx_rect(bx + bw * t - ui_s / 2, by - bh, max(1, ui_s), bh * 2);
   gfx_setfont(2);
   hot ? ui_fmtv(fmt, slider(idx)) : ui_caps(label);
   gfx_measurestr(#ui_txt, ui_tw, ui_th);
   ui_c(ui_active == idx ? ui_cAccent : (hot ? ui_cText : ui_cMuted), 1);
-  gfx_x = cx - r - 5 * ui_s - ui_tw; gfx_y = cy - ui_th / 2; gfx_drawstr(#ui_txt);
+  gfx_x = bx - 6 * ui_s - ui_tw; gfx_y = cy - ui_th / 2; gfx_drawstr(#ui_txt);
   gfx_setfont(1);
-  xr - 66 * ui_s;
+  xr - 118 * ui_s;
 );
 
 // Returns 1 when the frame needs drawing. Nothing changed = nothing drawn, the old frame stays.
@@ -574,15 +618,15 @@ function ui_begin(core_rows, adv_rows) local(h, i, now, e, top) (
     gfx_setfont(4, "Arial", 15 * ui_s, 'b');
     gfx_setfont(5, "Arial", 8.5 * ui_s, 'b');
     gfx_setfont(1);
-    ui_ytop = ui_pad + ((ui_hm || ui_ho) ? 20 : 8) * ui_s;   // below the name (and the header knobs)
-    ui_nlim = gfx_w - ui_pad - ((ui_hm > 0) + (ui_ho > 0)) * 66 * ui_s;
+    ui_ytop = 25 * ui_s;   // name and bars are centred on y = 15; the first row's own padding makes the gap below match the 11 px above
+    ui_nlim = gfx_w - ui_pad - ((ui_hm > 0) + (ui_ho > 0)) * 118 * ui_s;
     ui_namedraw();
     ui_core = 1;
     ui_blocked = adv_rows > 0 && (ui_adv_open || ui_p > 0);
-    (ui_hm || ui_ho) && gfx_w >= 240 * ui_s ? (
+    (ui_hm || ui_ho) && gfx_w >= 280 * ui_s ? (
       i = gfx_w - ui_pad;
-      ui_ho ? i = ui_hknob(ui_ho, "Output", 1, i);
-      ui_hm ? i = ui_hknob(ui_hm, "Mix", 2, i);
+      ui_ho ? i = ui_hbar(ui_ho, "Output", 1, i);
+      ui_hm ? i = ui_hbar(ui_hm, "Mix", 2, i);
     );
     // core: the window minus the drawer's closed bar (or the footer line when there is no drawer)
     ui_rowh = (gfx_h - ui_ytop - (adv_rows > 0 ? ui_bar + 4 * ui_s : ui_pad + (ui_credit ? 6 * ui_s : 0))) / max(1, core_rows);
@@ -781,6 +825,24 @@ function ui_kkey(note, vel) local(n, q0, q1) (
   q0 = ui_kb[n] > 0; q1 = vel > 0;
   ui_fh3 += (q1 - q0) * (n + 1);
   ui_kb[n] = q1 ? min(127, max(1, vel)) : 0;
+);
+
+// The keys the user plays with the mouse reach @block through a small queue (ui_kq: 16 slots of note and
+// velocity, then a head and a tail). ui_kput is called by the keyboard widget; the plugin calls ui_kpoll() in
+// @block until it returns 0: each 1 means ui_kn is a note and ui_kv its velocity (0 = note off).
+// A note-on is queued only while two slots are free, so every queued note-on keeps room for its note-off
+// (a full queue drops the newest event; a lost note-off would leave the note stuck when @block resumes).
+function ui_kput(note, vel) local(t, f) (
+  t = (ui_kq[33] + 1) % 16;
+  f = (ui_kq[32] - ui_kq[33] + 15) % 16;   // free slots
+  f >= (vel > 0 ? 2 : 1) ? ( ui_kq[ui_kq[33] * 2] = note; ui_kq[ui_kq[33] * 2 + 1] = vel; ui_kq[33] = t; );
+);
+function ui_kpoll() (
+  ui_kq[32] != ui_kq[33] ? (
+    ui_kn = ui_kq[ui_kq[32] * 2]; ui_kv = ui_kq[ui_kq[32] * 2 + 1];
+    ui_kq[32] = (ui_kq[32] + 1) % 16;
+    1;
+  ) : 0;
 );
 
 // ---- frequency graph ----------------------------------------------------------------------------
@@ -984,6 +1046,58 @@ function ui_fthresh(thr_first, ratio_first, gain_first, n) local(k, a, b, x, y, 
   );
 );
 
+// ---- per-band levels --------------------------------------------------------------------------------
+
+// A level line across each band of the frequency graph, one slider per band (first_idx .. first_idx + n - 1, any
+// range, drawn across the graph's height), for a plugin whose bands each have one amount (an EQ's gain, a split's
+// level). Hover a band and drag up or down to change its level, Shift-drag for fine steps, wheel for small steps,
+// a click selects the band (ui_fsel, which ui_bandknob follows), double-click types a value, Cmd/Ctrl/Alt-click
+// resets it. fmt is the knob formats (1 = dB). n is the number of bands (the handles + 1). Call it after the handles.
+function ui_fband(first_idx, n, fmt) local(k, a, b, y, idx, lo, hi, hot, drag, near, i, sel, t, mn, mx) (
+  n = max(1, min(8, floor(n)));
+  k = 0;
+  loop(n,
+    idx = first_idx + k; mn = ui_min[idx]; mx = ui_max[idx];
+    lo = k == 0 ? 20 : slider(ui_ge[k - 1]); hi = k == n - 1 ? 20000 : slider(ui_ge[k]);
+    a = ui_fxof(lo); b = ui_fxof(hi);
+    y = ui_gy + ui_gh * (1 - (slider(idx) - mn) / (mx - mn));
+    near = 0; i = 0;
+    loop(n - 1, abs(mouse_x - ui_fxof(slider(ui_ge[i]))) < 9 * ui_s ? near = 1; i += 1;);
+    hot = !near && !(ui_core && ui_blocked) && !ui_modal && ui_active == 0 && mouse_x >= a && mouse_x < b
+          && mouse_y >= ui_gy && mouse_y < ui_gy + ui_gh;
+    hot && ui_press ? (
+      ui_fsel = k; t = time_precise();
+      (mouse_cap & 52) ? ui_reset(idx) :
+      (ui_lci == idx && t - ui_lct < 0.45) ? ui_edopen(idx, fmt, "Level", (a + b) / 2, y) :
+      ( ui_active = idx; ui_ftd = 1; ui_ly = mouse_y; ui_acc = slider(idx); ui_lci = idx; ui_lct = t; );
+      ui_press = 0;
+    );
+    ui_ftd && ui_active == idx && ui_down ? (   // only a drag this widget started
+      ui_acc = min(mx, max(mn, ui_acc - (mouse_y - ui_ly) * (mx - mn) / ui_gh * ((mouse_cap & 8) ? 0.2 : 1)));
+      ui_ly = mouse_y;
+      ui_set(idx, ui_q(idx, ui_acc));
+    );
+    hot && mouse_wheel != 0 ? ui_set(idx, ui_q(idx, slider(idx) + sign(mouse_wheel) * (ui_stp[idx] > 0 ? ui_stp[idx] : (mx - mn) / 48)));   // a stepped slider moves one step, or ui_q would round the nudge away
+    ui_active == idx && ui_rel ? ( slider_automate(2 ^ (idx - 1), 1); ui_active = 0; ui_ftd = 0; );
+    drag = ui_active == idx;
+    (hot || drag) ? ui_gany = 2;
+    sel = k == ui_fsel;
+    y = ui_gy + ui_gh * (1 - (slider(idx) - mn) / (mx - mn));
+    (hot || drag) ? ( ui_c(ui_cAccent, 0.07); gfx_rect(a, ui_gy, max(1, b - a), ui_gh); );
+    ui_c(drag ? ui_cAccentAct : (sel || hot ? ui_cAccentHi : ui_cAccent), drag ? 1 : (sel ? 0.95 : (hot ? 0.8 : 0.4)));
+    gfx_rect(a + 2 * ui_s, y, max(1, b - a - 4 * ui_s), max(1, sel ? 2 * ui_s : ui_s));
+    (sel || hot || drag) && b - a > 50 * ui_s ? (
+      gfx_setfont(2);
+      fmt == 1 ? sprintf(#ui_txt, "%+.1f dB", slider(idx)) : ui_fmtv(fmt, slider(idx));
+      gfx_measurestr(#ui_txt, ui_tw, ui_th);
+      ui_c(drag || sel ? ui_cAccent : ui_cText, 1);
+      gfx_x = a + 6 * ui_s; gfx_y = max(ui_gy + 2 * ui_s, y - ui_th - 3 * ui_s); gfx_drawstr(#ui_txt);
+      gfx_setfont(1);
+    );
+    k += 1;
+  );
+);
+
 // A knob for the selected band's slider: slider first_idx + ui_fsel of n, its label prefixed with the
 // band's name (Low / Mid / High for 3 bands, Low / High for 2, else Band N).
 function ui_bandknob(first_idx, n, label, fmt) local(k) (
@@ -1076,23 +1190,27 @@ function ui_transfer(thr_idx, ratio_idx, knee_db) local(k, t, r, bs, bx, by, i, 
 // ---- MIDI keyboard ------------------------------------------------------------------------------
 
 // Piano keys lo..hi (MIDI notes; start and end on white keys: C, D, E, F, G, A, B), the notes fed with
-// ui_kkey lit in the accent. Display only: a JSFX cannot send MIDI from @gfx.
-function ui_keyboard(lo, hi, label) local(nw, n, pc, wi, ww, kx, ky, kw, kh, bk, x, v, k) (
+// ui_kkey lit in the accent. Playable: a click or drag queues notes the plugin reads with ui_kpoll() in @block
+// (a JSFX cannot send MIDI from @gfx, so the plugin sounds them itself).
+function ui_keyboard(lo, hi, label) local(nw, n, pc, wi, ww, kx, ky, kw, kh, bk, x, v, k, hn, hw, vel) (
   ui_cell();
   nw = 0; n = lo;
   loop(hi - lo + 1, ((2 ^ (n % 12)) & 1354) ? 0 : nw += 1; n += 1;);
   kw = ui_rw - 8 * ui_s; kx = ui_rx + 4 * ui_s; ky = ui_ry + 16 * ui_s;
-  kh = min(ui_rh - 20 * ui_s, 90 * ui_s);
+  kh = min(ui_rh - 20 * ui_s, 52 * ui_s);
+  ky = ui_ry + ui_rh - kh - 4 * ui_s;   // along the bottom of its cell
   nw > 0 && kh > 16 * ui_s ? (
     ww = kw / nw;
     gfx_setfont(2); ui_caps(label);
-    ui_c(ui_cMuted, 1); gfx_x = kx; gfx_y = ui_ry + 2 * ui_s; gfx_drawstr(#ui_txt);
+    ui_c(ui_cMuted, 1); gfx_x = kx; gfx_y = ky - 14 * ui_s; gfx_drawstr(#ui_txt);
     gfx_setfont(1);
+    hn = -1; hw = -1;
     // white keys
     wi = 0; n = lo;
     loop(hi - lo + 1,
       ((2 ^ (n % 12)) & 1354) ? 0 : (
         x = kx + wi * ww; v = ui_kb[n] > 0;
+        mouse_x >= x && mouse_x < x + ww && mouse_y >= ky && mouse_y < ky + kh ? hw = n;
         v ? ui_c(ui_cAccent, 1) : ui_cm(ui_cPanel2, ui_cText, 0.82);
         ui_rrect(x + 0.5 * ui_s, ky, ww - ui_s, kh, 3 * ui_s);
         wi += 1;
@@ -1105,12 +1223,26 @@ function ui_keyboard(lo, hi, label) local(nw, n, pc, wi, ww, kx, ky, kw, kh, bk,
       ((2 ^ (n % 12)) & 1354) ? (
         wi > 0 ? (
           bk = ww * 0.6; x = kx + wi * ww - bk / 2; v = ui_kb[n] > 0;
+          mouse_x >= x && mouse_x < x + bk && mouse_y >= ky && mouse_y < ky + kh * 0.62 ? hn = n;
           ui_c(ui_cLine, 1); ui_rrect(x - ui_s, ky, bk + 2 * ui_s, kh * 0.62 + ui_s, 3 * ui_s);
           v ? ui_cm(ui_cAccent, ui_cBg, 0.35) : ui_cm(ui_cBg, ui_cPanel2, 0.5);
           ui_rrect(x, ky, bk, kh * 0.62, 3 * ui_s);
         );
       ) : wi += 1;
       n += 1;
+    );
+    // play the keys: press = note on (higher up the key = softer), drag across keys = glissando, release = note off
+    hn < 0 ? hn = hw;
+    vel = floor(35 + 92 * min(1, max(0, (mouse_y - ky) / kh)));
+    hn >= 0 && ui_active == 0 && ui_press && !(ui_core && ui_blocked) && !ui_modal ? (
+      ui_active = 64; ui_kheld = hn + 1; ui_kput(hn, vel); ui_kkey(hn, vel); ui_press = 0;
+    );
+    ui_active == 64 && ui_down && hn >= 0 && hn + 1 != ui_kheld ? (
+      ui_kput(ui_kheld - 1, 0); ui_kkey(ui_kheld - 1, 0);
+      ui_kheld = hn + 1; ui_kput(hn, vel); ui_kkey(hn, vel);
+    );
+    ui_active == 64 && !ui_down ? (
+      ui_kput(ui_kheld - 1, 0); ui_kkey(ui_kheld - 1, 0); ui_kheld = 0; ui_active = 0;
     );
   );
 );

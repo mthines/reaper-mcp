@@ -80,7 +80,7 @@ Cut before you add. If a control could be a sensible fixed value, make it one. P
 example in `examples/` (`mutate-verb.jsfx` random and granular plus reverb, `tape-sat.jsfx`
 nonlinear plus tilt EQ, `width-bass-mono.jsfx` linear stereo plus meter, `multiband-compressor.jsfx` frequency graph with
 crossover handles in Hz, per-band gain reduction and a transfer curve via `ui_freqgraph`,
-`ui_fhandle`, `ui_grmeter`, `ui_transfer`; `ui_keyboard` shows MIDI notes) and read it. Each has its
+`ui_fhandle`, `ui_fthresh`, `ui_grmeter`, `ui_transfer`; `ui_fband` gives bands one level each and `ui_keyboard` shows and plays MIDI notes; no shipped example uses those two, see `reference/toolkit.md`) and read it. Each has its
 suggested presets beside it (`<name>.presets.json`): the shape `write_jsfx` takes.
 
 ### Step 2: Write the source
@@ -94,6 +94,22 @@ example and change what the spec changes. The shape is always:
   `ui_mem`; compute coefficients in `update()`, called from `@init`, `@slider` and
   `@block: ui_changed() ? update();`.
 - `@gfx` draws the core row(s), then `ui_section("Advanced") ? ( ... )` for the rest.
+- **Bands on a frequency graph are always directly editable, unless the user says otherwise.** A plugin
+  with bands (a crossover, a multiband or split, an EQ) draws `ui_freqgraph` with a `ui_fhandle` per
+  band edge, and then **a per-band control on the graph itself**: `ui_fthresh(thr, ratio, gain, n)` for
+  dynamics (hover a band and drag up or down for its threshold, Shift-drag for its gain, wheel for its
+  ratio) or `ui_fband(first, n, fmt)` for one level per band (drag up or down, Shift = fine). Both
+  select the band on a click, and one `ui_bandknob(first, n, "Label", fmt)` per band parameter edits
+  the selected band. Never ship bands whose only controls are plain knobs: the multiband example is
+  the model.
+- **A keyboard is for playing as well as showing, and it sits along the bottom.** `ui_keyboard(21, 108,
+  "Keys")` (the full range, or 36-96 for a small window; make the window wide enough, about 700 px for
+  88 keys) as the **last** core row, below the knobs, short and full width like Vital's and Odin's. A
+  click or a drag across the keys plays. The keys fill the bottom of their cell, so the keyboard row must be the
+  last of the `ui_begin` core rows and the count must match the rows you draw (`ui_tall(2)` on the knob row
+  above it makes the keys a short strip right above the Advanced bar): read it in `@block` with `while (ui_kpoll()) ( ui_kv > 0 ?
+  <note on ui_kn, ui_kv> : <note off ui_kn> );` next to the MIDI-in loop (a synth turns them into
+  voices, a MIDI effect `midisend`s them). Notes from MIDI light the keys with `ui_kkey(note, vel)`.
 - Do not write the toolkit: `write_jsfx` inlines it.
 - Never assign `ui_adv_open` (or any `ui_` state) in plugin code: REAPER re-runs `@init` when
   playback starts, so the Advanced drawer would snap shut on Play (lint `ui-state-reset`).

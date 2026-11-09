@@ -42,16 +42,31 @@ work as usual.
 toolkit block is replaced by the current one. An existing slider is never renumbered, re-ranged
 or removed without `breaking: true`, because projects store automation by slider number.
 
-## Header knobs
+## Header bars
 
-Mix and Output sit in the top right of every plugin that has them (`ui_header(mix, out)`), small and always visible, so the core view holds only what is special about the plugin.
+Mix and Output sit in the top right of every plugin that has them (`ui_header(mix, out)`) as slim horizontal bars, vertically centred with the plugin name and always visible, so the core view holds only what is special about the plugin.
+
+## Gallery
+
+What a generated plugin can draw today. Every window has the plugin name top-left and, when the plugin has them,
+Mix and Output as bars top-right; the Advanced drawer sits along the bottom. Screenshots are real REAPER 7 windows.
+
+| | |
+|---|---|
+| **Knobs** (`ui_knob`): Tape Sat, two core knobs and Mix / Output in the header<br><img src="assets/make-plugin/tape-sat.png" width="420" alt="Tape Sat: two large knobs, Mix and Output bars in the header"> | **Frequency graph with draggable bands** (`ui_freqgraph`, `ui_fhandle`, `ui_fthresh`): Multiband Compressor, crossovers in Hz and a threshold line per band, reduction bars below<br><img src="assets/make-plugin/multiband-compressor.png" width="420" alt="Multiband Compressor: log frequency graph with two crossover handles and per-band threshold lines"> |
+| **Per-band levels** (`ui_fband`, `ui_bandknob`): Split Tilt, one level per side of the crossover, drag a band up or down<br><img src="assets/make-plugin/split-tilt.png" width="420" alt="Split Tilt: frequency graph with a crossover handle and a level line per band"> | **Transfer curve and reduction meter** (`ui_transfer`, `ui_grmeter`): Squash<br><img src="assets/make-plugin/squash.png" width="420" alt="Squash: compressor transfer curve with the threshold line and a gain-reduction meter"> |
+| **Playable keyboard** (`ui_keyboard`, read with `ui_kpoll`): Key Voice, 88 keys along the bottom, click or drag to play<br><img src="assets/make-plugin/key-voice.png" width="420" alt="Key Voice: three controls above an 88-key keyboard"> | |
+
+The shots were taken while a broadband test signal played, so the graphs show the live spectrum trace.
+The sources are in `.claude/skills/make-plugin/examples/` (Tape Sat, Multiband Compressor); Split Tilt, Squash and
+Key Voice were built with `/make-plugin` to show the widgets.
 
 ## Graphs
 
 Besides knobs, toggles, choices and the level meter, the toolkit (v1.3) draws graphs a plugin feeds:
 `ui_freqgraph` (a log 20 Hz-20 kHz frequency graph with a spectrum trace) with draggable band
 handles `ui_fhandle` bound to Hz sliders, `ui_grmeter` (per-band gain reduction), `ui_transfer` (a
-compressor curve with the live level) and `ui_keyboard` (MIDI notes). A multiband compressor
+compressor curve with the live level) and `ui_keyboard` (MIDI notes, playable by mouse). A multiband compressor
 (`examples/multiband-compressor.jsfx`) shows the crossovers on the spectrum, drag them to pick the
 bands in Hz, every band has its own threshold line (hover a band and drag up or down, Shift-drag for its gain; click a band and the Threshold, Ratio and Gain knobs edit it), and the bars show how much each band is compressed. A Compare input toggle in Advanced draws the input spectrum over the output one (before and after). Every plugin also shows its name,
 small and in spaced capitals, at the top-left. Graph feeds redraw only on activity
@@ -91,7 +106,7 @@ plain text since JSFX cannot open a URL, and the plugin's name, version, toolkit
 control count and the day it was written; `ui_credit = 0` in the toolkit hides it).
 
 Gestures follow the FabFilter/Serum convention: drag, Shift-drag for fine, wheel, double-click
-to type a value (Enter sets it, a click outside cancels), Cmd/Ctrl/Alt-click to reset. Esc never
+to type a value (Enter sets it, a click outside cancels), Cmd/Ctrl/Alt-click to reset. The same list is in the plugin's About dialog (click the reaper-mcp credit), under **Controls**. Esc never
 reaches a plugin in a floating FX window with REAPER's defaults: REAPER closes the window first
 (probed in 7.40). With the window's **+ > Send all keyboard input to plug-in** on, Esc closes the
 value box, the About dialog, then the drawer.
@@ -110,7 +125,7 @@ green, amber and red). `write_jsfx`'s `accent`:
 
 An unknown name or a bad hex refuses the whole call (outcome `refused_accent`). Every auto and
 named accent has a contrast ratio of at least 7 on the background (tested). The examples use
-violet (Mutate Verb), orange (Tape Sat) and teal (Width / Bass Mono).
+violet (Mutate Verb), orange (Tape Sat), teal (Width / Bass Mono) and blue (Multiband Compressor), so the shipped examples are told apart at a glance.
 
 The background is a very subtle vertical gradient (a hair lighter and tinted at the top, a hair
 darker at the bottom) with film grain from one 128 px noise tile, rendered once into an

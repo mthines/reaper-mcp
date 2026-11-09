@@ -1,5 +1,5 @@
 desc:Multiband Compressor
-// accent: orange
+// accent: blue
 import mcp_ui.jsfx-inc
 
 // Three bands with Linkwitz-Riley 4th-order crossovers (the bands sum flat), one compressor per band.
