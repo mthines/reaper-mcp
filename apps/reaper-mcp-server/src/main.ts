@@ -27,6 +27,7 @@ import { repairBridgeInstall, repairNotices, writeBridgeVersion, type BridgeRepa
 import { addNotice } from './notices.js';
 import { checkForUpdate, updateCheckDisabled } from './update-check.js';
 import { offerSidecarSetup } from './sidecar-offer.js';
+import { autostartInstalled, isReaperProcessRunning, setupHealthAttributes } from './setup-health.js';
 
 const execAsync = promisifyUtil(execCb);
 
@@ -173,13 +174,7 @@ async function cloneState(repo: string): Promise<CloneState> {
 
 /** REAPER rewrites reaper.ini from memory on exit, so only edit it while REAPER is closed. */
 async function isReaperRunning(): Promise<boolean> {
-  const cmd = platform() === 'win32' ? 'tasklist /FI "IMAGENAME eq reaper.exe" /NH' : 'pgrep -xi reaper';
-  try {
-    const { stdout } = await execAsync(cmd);
-    return platform() === 'win32' ? /reaper\.exe/i.test(stdout) : true;
-  } catch {
-    return false; // pgrep exits 1 when nothing matches
-  }
+  return (await isReaperProcessRunning(10_000)) ?? false;
 }
 
 /** Turn on REAPER's web browser interface so the bridge can open its status window. Returns the port, or null. */
@@ -632,6 +627,9 @@ async function serve(): Promise<void> {
 
       startupSpan.setAttribute('reaper.bridge.connected', bridge.state === 'connected');
       startupSpan.setAttribute('reaper.bridge.state', bridge.state);
+      // Why the bridge is down (REAPER closed, or open with the bridge stopped): looked up meanwhile, set below
+      const reaperRunning = bridge.state === 'connected' ? Promise.resolve(undefined) : isReaperProcessRunning();
+
       if (repair && !repair.skipped) {
         const version = readServiceVersion();
         if (repair.bridgeChanged) startupSpan.setAttribute('reaper.bridge.files_updated', true);
@@ -664,6 +662,13 @@ async function serve(): Promise<void> {
       };
       startSessionPing();
       notifyNewerRelease(log);
+      // After oninitialized is set, so awaiting here can't miss the client's initialized notification
+      startupSpan.setAttributes(setupHealthAttributes({
+        status: bridge,
+        reaperRunning: await reaperRunning,
+        autostart: autostartInstalled(getReaperScriptsPath()),
+        sidecarInstalled: getSidecarClient().isAvailable(),
+      }));
       startupSpan.setStatus({ code: SpanStatusCode.OK });
       log('MCP server connected via stdio');
     } catch (error) {

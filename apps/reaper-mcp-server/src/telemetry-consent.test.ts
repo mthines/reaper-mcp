@@ -254,6 +254,24 @@ describe('AnonymizingSpanExporter', () => {
     });
   });
 
+  it('keeps how far setup got at startup: REAPER running, heartbeat age range, autostart, sidecar', async () => {
+    const sink = new tracing.InMemorySpanExporter();
+    const provider = new tracing.BasicTracerProvider({
+      spanProcessors: [new tracing.SimpleSpanProcessor(new AnonymizingSpanExporter(sink))],
+    });
+    const health = {
+      'reaper.bridge.state': 'stale',
+      'reaper.app.running': true,
+      'reaper.bridge.heartbeat_age': '1h-1d',
+      'reaper.bridge.autostart': false,
+      'reaper.sidecar.installed': false,
+    };
+    provider.getTracer('test').startSpan('reaper-mcp startup', { attributes: health }).end();
+    await provider.forceFlush();
+
+    expect(sink.getFinishedSpans()[0].attributes).toEqual(health);
+  });
+
   it('keeps whether a start brought REAPER\'s files up to its release', async () => {
     const sink = new tracing.InMemorySpanExporter();
     const provider = new tracing.BasicTracerProvider({

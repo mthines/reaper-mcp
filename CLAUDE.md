@@ -51,6 +51,7 @@ reaper-mcp/
       notices.ts              # One-time notices for the user, appended to the first tool result (updated bridge, newer release)
       update-check.ts         # serve (npm installs): ask npm at most once a day for a newer release, notice at most once a day
       sidecar-offer.ts        # End of setup: offer the Python sidecar (audio tools fail without it)
+      setup-health.ts         # Startup span: REAPER running?, heartbeat age range, autostart, sidecar installed (usage telemetry)
       sidecar.ts              # Python subprocess lifecycle + JSON-RPC client (getSidecarClient())
       setup-sidecar.ts        # setup-sidecar CLI command: component picker (TTY) or flags, Python check, venv, deps, weights, add-ons
       tools/
