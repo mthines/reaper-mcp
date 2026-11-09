@@ -557,6 +557,8 @@ function notifyNewerRelease(log: (...args: unknown[]) => void): void {
     .catch(() => undefined);
 }
 
+const REPAIR_FAILED = "Could not update REAPER's reaper-mcp files";
+
 /** repairBridgeInstall() for this build's files; never fails `serve` (an unwritable folder only skips it). */
 function repairReaperSide(log: (...args: unknown[]) => void): BridgeRepair | undefined {
   try {
@@ -568,7 +570,7 @@ function repairReaperSide(log: (...args: unknown[]) => void): BridgeRepair | und
       wwwSrcDir: resolveAssetDir(__dirname, 'bridge-ui'),
     }, readServiceVersion(), { inClone: findCloneRoot(__dirname) !== null });
   } catch (err) {
-    log(`Could not update REAPER's reaper-mcp files: ${err instanceof Error ? err.message : String(err)}`);
+    log(`${REPAIR_FAILED}: ${err instanceof Error ? err.message : String(err)}`);
     return undefined;
   }
 }
@@ -633,8 +635,8 @@ async function serve(): Promise<void> {
       if (repair?.skipped === 'failed') {
         // Otherwise a repair that threw looks like one with nothing to do
         startupSpan.setAttribute('reaper.bridge.files_update_failed', true);
-        log(`Could not update REAPER's reaper-mcp files (${repair.error}); the next start tries again`);
-        emitLog('warn', "Could not update REAPER's reaper-mcp files", { 'error.type': repair.error ?? 'Error' });
+        log(`${REPAIR_FAILED} (${repair.error}); the next start tries again`);
+        emitLog('warn', REPAIR_FAILED, { 'error.type': repair.error ?? 'Error' });
       }
       if (repair && !repair.skipped) {
         const version = readServiceVersion();
