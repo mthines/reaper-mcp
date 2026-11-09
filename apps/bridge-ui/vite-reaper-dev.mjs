@@ -119,7 +119,6 @@ function watchReaperAssets(resource, log) {
 
 // ---- The plugin -------------------------------------------------------------------------------------------
 
-/** Dev server only (`apply: 'serve'`); Storybook drops it by name, so it never touches REAPER. */
 /**
  * The dev server's port: BRIDGE_DEV_PORT when set, else 8098 or the next free port after it, skipping REAPER's web
  * port. Picked here rather than by Vite's own fallback, which steps from 8098 onto 8099: on macOS a bind to 127.0.0.1
@@ -151,6 +150,7 @@ async function isFree(port) {
   });
 }
 
+/** Dev server only (`apply: 'serve'`); Storybook drops it by name, so it never touches REAPER. */
 export function reaperDev() {
   return {
     name: 'reaper-dev',
