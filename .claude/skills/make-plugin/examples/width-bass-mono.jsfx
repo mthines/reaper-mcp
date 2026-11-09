@@ -48,9 +48,10 @@ slider6:0<-12,12,0.1>Side
   pk = max(pk, max(abs(spl0), abs(spl1)));
 
 @gfx 340 250
+  ui_header(0, 3);   // Output lives in the top right
   ui_begin(1, 1) ? (
-    ui_row(4);
-    ui_knob(1, "Width", 2); ui_knob(2, "Mono below", 3); ui_knob(3, "Output", 1); ui_meter(pk, "Out");
+    ui_row(3);
+    ui_knob(1, "Width", 2); ui_knob(2, "Mono below", 3); ui_meter(pk, "Out");
     pk = 0;
     ui_section("Advanced") ? (
       ui_row(3); ui_choice(4, "Slope"); ui_knob(5, "Mid", 1); ui_knob(6, "Side", 1);

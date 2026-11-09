@@ -18,6 +18,33 @@ const rules = (src: string) => lintJsfx(src).map((f) => f.rule);
 const without = (src: string, line: string) => src.replace(line, '');
 
 describe('lintJsfx', () => {
+  it('counts the sliders a band knob and the threshold lines cover as drawn, and refuses one that is not declared', () => {
+    const base = `desc:Bands
+slider1:200<40,800,1>Low crossover
+slider2:-18<-60,0,0.1>Low threshold
+slider3:-18<-60,0,0.1>High threshold
+slider4:3<1,20,0.1>Low ratio
+slider5:3<1,20,0.1>High ratio
+slider6:0<-12,12,0.1>Low gain
+slider7:0<-12,12,0.1>High gain
+@init
+ui_boot(2);
+@block
+ui_changed();
+@gfx 300 200
+ui_begin(2, 0) ? ( ui_tall(2); ui_row(1); ui_freqgraph("Bands"); ui_fhandle(1, "X"); ui_fthresh(2, 4, 6, 2);
+  ui_row(2); ui_bandknob(2, 2, "Threshold", 1); ui_bandknob(4, 2, "Ratio", 0); ui_bandknob(6, 2, "Gain", 1); ui_end(); );
+`;
+    expect(rules(base)).not.toContain('slider-without-widget');
+    expect(rules(base.replace('ui_bandknob(6, 2,', 'ui_bandknob(6, 4,'))).toContain('widget-unknown-slider');
+    expect(rules(base.replace('ui_fthresh(2, 4, 6, 2);', ''))).not.toContain('slider-without-widget'); // the band knobs still cover them
+  });
+
+  it('warns about a buffer placed inside the toolkit graph data (below 2048)', () => {
+    expect(rules(OK.replace('update(); ui_boot(0);', 'update(); buf = 1200; ui_boot(0);'))).toContain('low-memory-index');
+    expect(rules(OK.replace('update(); ui_boot(0);', 'update(); buf = 2048; ui_boot(0);'))).not.toContain('low-memory-index');
+  });
+
   it('passes the smallest valid plugin without findings', () => {
     expect(lintJsfx(OK)).toEqual([]);
   });
@@ -112,6 +139,29 @@ describe('lintJsfx', () => {
 
   it('warns when the plugin reads the keyboard, which the value box needs', () => {
     expect(rules(OK.replace('ui_end();', 'c = gfx_getchar(); ui_end();'))).toContain('own-key-handling');
+  });
+
+  it('unknown-ui-call: refuses a misspelled toolkit function, which EEL2 would compile to nothing', () => {
+    const f = lintJsfx(OK.replace('ui_knob(1, "Gain", 1);', 'ui_knbo(1, "Gain", 1);'));
+    expect(errorsOf(f).map((x) => x.rule)).toContain('unknown-ui-call');
+    expect(f.find((x) => x.rule === 'unknown-ui-call')?.line).toBe(11);
+    expect(rules(OK.replace('ui_end();', 'function ui_mine(a) ( a; ); ui_mine(1); ui_end();'))).not.toContain('unknown-ui-call');
+  });
+
+  it('ui-arity: refuses a toolkit call with the wrong number of arguments, but not a comma inside a label', () => {
+    expect(rules(OK.replace('ui_knob(1, "Gain", 1);', 'ui_knob(1, "Gain");'))).toContain('ui-arity');
+    expect(rules(OK.replace('ui_knob(1, "Gain", 1);', 'ui_knob(1, "Gain", 1, 2);'))).toContain('ui-arity');
+    expect(rules(OK.replace('ui_knob(1, "Gain", 1);', 'ui_knob(1, "Gain, in dB", 1);'))).toEqual([]);
+    expect(rules(OK.replace('ui_end();', 'ui_end(1);'))).toContain('ui-arity');
+  });
+
+  it('counts a graph as one widget and binds band handles and the transfer curve to their sliders', () => {
+    const sliders = [1, 2, 3, 4].map((i) => `slider${i}:100<20,2000,1>S${i}`).join('\n');
+    const src = `desc:G\n${sliders}\n@init\nui_boot(2);\n@block\nui_changed() ? 0;\n@gfx 300 200\nui_begin(2,0) ? ( ui_row(1); ui_freqgraph("X"); ui_fhandle(1, "a"); ui_fhandle(2, "b"); ui_row(1); ui_transfer(3, 4, 6); ui_end(); );\n`;
+    expect(lintJsfx(src)).toEqual([]);
+    expect(widgetCounts(src)).toEqual({ core: 2, advanced: 0 });
+    expect(rules(src.replace('ui_transfer(3, 4, 6)', 'ui_transfer(3, 9, 6)'))).toContain('widget-unknown-slider');
+    expect(rules(src.replace('ui_fhandle(2, "b");', ''))).toContain('slider-without-widget');
   });
 
   it('only ever reports rules from the closed list (they become a metric attribute)', () => {

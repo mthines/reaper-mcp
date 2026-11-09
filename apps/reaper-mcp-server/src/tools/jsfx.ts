@@ -10,7 +10,7 @@ import { resolveAssetDir } from '../cli.js';
 import { emitLog, getJsfxFindingsCounter } from '../telemetry.js';
 import { logToolResult } from '../tool-log.js';
 import { inlineToolkit, parseSliders, readVersion, stripGenerated, toolkitVersion, TOOLKIT_FILE, MAX_USER_SLIDERS, type SliderSpec } from '../jsfx/inline.js';
-import { errorsOf, lintJsfx, warningsOf, widgetCounts, type LintFinding } from '../jsfx/lint.js';
+import { errorsOf, graphWidgetCount, lintJsfx, warningsOf, widgetCounts, type LintFinding } from '../jsfx/lint.js';
 import { parseAccent, readAccentToken, resolveAccent, type AccentKind } from '../jsfx/accent.js';
 import { encodePreset, resolvePresets, writePresetFile, MAX_PRESETS, MAX_PRESET_NAME, type PresetInput } from '../jsfx/presets.js';
 
@@ -68,6 +68,7 @@ export interface ShapeInput {
   overwrite: boolean;
   sliders?: number;
   widgets?: { core: number; advanced: number };
+  graphs?: number;
   bytes?: number;
   version?: number;
   toolkit?: string;
@@ -84,6 +85,7 @@ export function shapeAttributes(s: ShapeInput): Record<string, string | number |
     'reaper.jsfx.overwrite': s.overwrite,
     ...(s.sliders !== undefined ? { 'reaper.jsfx.sliders': cap(s.sliders, MAX_USER_SLIDERS) } : {}),
     ...(s.widgets ? { 'reaper.jsfx.widgets.core': cap(s.widgets.core, 16), 'reaper.jsfx.widgets.advanced': cap(s.widgets.advanced, 16) } : {}),
+    ...(s.graphs !== undefined ? { 'reaper.jsfx.graphs': cap(s.graphs, 8) } : {}),
     ...(s.bytes !== undefined ? { 'reaper.jsfx.size': sizeBucket(s.bytes) } : {}),
     ...(s.version !== undefined ? { 'reaper.jsfx.version': cap(s.version, MAX_VERSION) } : {}),
     ...(s.toolkit ? { 'reaper.jsfx.toolkit_version': s.toolkit } : {}),
@@ -165,7 +167,7 @@ export function writeJsfx(input: WriteArgs): ToolResult {
   const sliders = parseSliders(args.source).sliders;
   const widgets = widgetCounts(args.source);
   const toolkit = loadToolkit();
-  const shape = { overwrite, sliders: sliders.length, widgets, bytes: Buffer.byteLength(args.source), toolkit: toolkitVersion(toolkit), findings, accent: accent.kind };
+  const shape = { overwrite, sliders: sliders.length, widgets, graphs: graphWidgetCount(args.source), bytes: Buffer.byteLength(args.source), toolkit: toolkitVersion(toolkit), findings, accent: accent.kind };
 
   if (errorsOf(findings).length) {
     record({ ...shape, outcome: 'refused_lint' });

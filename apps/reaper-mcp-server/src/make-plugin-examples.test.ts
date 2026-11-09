@@ -11,8 +11,8 @@ const dir = join(__dirname, '..', '..', '..', '.claude', 'skills', 'make-plugin'
 const files = readdirSync(dir).filter((f) => f.endsWith('.jsfx'));
 
 describe('the /make-plugin examples', () => {
-  it('ships the three v1 examples', () => {
-    expect(files.sort()).toEqual(['mutate-verb.jsfx', 'tape-sat.jsfx', 'width-bass-mono.jsfx']);
+  it('ships the three v1 examples and the multiband compressor', () => {
+    expect(files.sort()).toEqual(['multiband-compressor.jsfx', 'mutate-verb.jsfx', 'tape-sat.jsfx', 'width-bass-mono.jsfx']);
   });
 
   for (const file of files) {
@@ -71,13 +71,61 @@ describe('the toolkit and the shipped examples', () => {
   });
 });
 
+describe('the multiband compressor example', () => {
+  const source = readFileSync(join(dir, 'multiband-compressor.jsfx'), 'utf8');
+
+  it('multiband: shows the graph, its two crossover handles, the reduction bars and the transfer curve, within the widget limits', () => {
+    expect(source).toMatch(/ui_freqgraph\(/);
+    expect(source.match(/ui_fhandle\(/g)).toHaveLength(2);
+    expect(source).toMatch(/ui_grmeter\(3,/);
+    expect(source).toMatch(/ui_fthresh\(3, 6, 9, 3\)/); // a threshold line and a ratio per band
+    expect(source.match(/ui_bandknob\(/g)).toHaveLength(3); // threshold, ratio and gain of the selected band
+    expect(source).toMatch(/ui_transfer\(3, 6,/);
+    expect(source).toMatch(/ui_toggle\(15, "Compare input"\)/); // before / after in Advanced
+    expect(source).toContain('ui_gfeed2(');
+    const { core, advanced } = widgetCounts(source);
+    expect(core).toBe(5);
+    expect(advanced).toBeLessThanOrEqual(MAX_ADVANCED_WIDGETS);
+  });
+
+  it('multiband: feeds the graph from the audio thread and keeps the redraw activity-driven', () => {
+    expect(source).toMatch(/ui_boot\(2\)/);
+    for (const feed of ['ui_gfeed(', 'ui_gr(', 'ui_glevel(']) expect(source).toContain(feed);
+  });
+
+  it('multiband: carries an accent line and 3-5 presets that fit its sliders', () => {
+    expect(source).toMatch(/^\/\/ accent: \S+/m);
+    const presets = JSON.parse(readFileSync(join(dir, 'multiband-compressor.presets.json'), 'utf8'));
+    expect(presets.length).toBeGreaterThanOrEqual(3);
+    expect(resolvePresets(presets, parseSliders(source).sliders).errors).toEqual([]);
+  });
+
+  it('multiband: installs with the other examples when setup runs', async () => {
+    const { mkdtempSync, rmSync, readFileSync: read, existsSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { installExamplePlugins } = await import('./jsfx/examples.js');
+    const out = mkdtempSync(join(tmpdir(), 'mbc-'));
+    try {
+      const result = installExamplePlugins(dir, join(out, 'Effects', 'reaper-mcp-generated', 'examples'), loadToolkit(), join(out, 'presets'));
+      expect(result.installed).toContain('multiband-compressor.jsfx');
+      expect(result.presetErrors).toEqual([]);
+      expect(result.presets['multiband-compressor.jsfx'].length).toBeGreaterThanOrEqual(3);
+      const installed = join(out, 'Effects', 'reaper-mcp-generated', 'examples', 'multiband-compressor.jsfx');
+      expect(existsSync(installed)).toBe(true);
+      expect(read(installed, 'utf8')).toContain('function ui_freqgraph(');
+    } finally {
+      rmSync(out, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('the toolkit itself', () => {
   const toolkit = loadToolkit();
   const top = toolkit.replace(/\/\/[^\n]*/g, '');
 
-  it('is version 1.2.0: same widget API as 1.0, so earlier plugins re-inline without changes', async () => {
+  it('is version 1.3.0: the 1.0 widget API unchanged, so earlier plugins re-inline without changes', async () => {
     const { toolkitVersion } = await import('./jsfx/inline.js');
-    expect(toolkitVersion(toolkit)).toBe('1.2.0');
+    expect(toolkitVersion(toolkit)).toBe('1.3.0');
   });
 
   it('sets the drawer state once, so REAPER re-running @init on Play never closes the Advanced drawer', () => {

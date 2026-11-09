@@ -229,6 +229,33 @@ describe('write_jsfx telemetry', () => {
   });
 });
 
+describe('write_jsfx new widgets', () => {
+  const GRAPH = `desc:Graph Secret
+slider1:200<40,800,1>Cross Secret
+@init
+ui_boot(2);
+@block
+ui_changed() ? 0;
+@gfx 300 200
+ui_begin(1, 0) ? ( ui_row(1); ui_freqgraph("Secret"); ui_fhandle(1, "Cross Secret"); ui_end(); );
+`;
+
+  it('writes a plugin that uses the graph widgets and counts them as one closed number', async () => {
+    const r = await call({ name: 'Graph Secret', source: GRAPH });
+    expect(r.isError).toBeFalsy();
+    expect(attrs()).toMatchObject({ 'reaper.jsfx.outcome': 'written', 'reaper.jsfx.widgets.core': 1, 'reaper.jsfx.graphs': 1 });
+    const everything = JSON.stringify(exporter.getFinishedSpans().map((s) => [s.name, s.attributes, s.events]));
+    for (const secret of ['Secret', 'ui_freqgraph']) expect(everything).not.toContain(secret);
+  });
+
+  it('refuses a misspelled widget before anything is written', async () => {
+    const r = await call({ name: 'Typo', source: GRAPH.replace('ui_freqgraph', 'ui_freqgrap') });
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toContain('unknown-ui-call');
+    expect(attrs()).toMatchObject({ 'reaper.jsfx.outcome': 'refused_lint' });
+  });
+});
+
 describe('write_jsfx accent', () => {
   // the last ui_theme() in the file (the metadata block's) wins over the toolkit's default
   const theme = (slug: string) => [...readFileSync(file(slug), 'utf8').matchAll(/ui_theme\(\$x([0-9a-f]{6})\);/g)].at(-1)?.[1];

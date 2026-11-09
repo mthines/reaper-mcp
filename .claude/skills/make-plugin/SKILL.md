@@ -13,7 +13,7 @@ argument-hint: '[what the plugin should do | update <plugin>: <what to change>]'
 license: MIT
 metadata:
   author: mthines
-  version: '1.2.0'
+  version: '1.3.0'
   workflow_type: applied
   tags: [plugins, jsfx, dsp, ui, reaper, live-verification]
 ---
@@ -78,7 +78,9 @@ In two or three lines, write down and show the user:
 
 Cut before you add. If a control could be a sensible fixed value, make it one. Pick the closest
 example in `examples/` (`mutate-verb.jsfx` random and granular plus reverb, `tape-sat.jsfx`
-nonlinear plus tilt EQ, `width-bass-mono.jsfx` linear stereo plus meter) and read it. Each has its
+nonlinear plus tilt EQ, `width-bass-mono.jsfx` linear stereo plus meter, `multiband-compressor.jsfx` frequency graph with
+crossover handles in Hz, per-band gain reduction and a transfer curve via `ui_freqgraph`,
+`ui_fhandle`, `ui_grmeter`, `ui_transfer`; `ui_keyboard` shows MIDI notes) and read it. Each has its
 suggested presets beside it (`<name>.presets.json`): the shape `write_jsfx` takes.
 
 ### Step 2: Write the source
@@ -88,7 +90,7 @@ example and change what the spec changes. The shape is always:
 
 - header: `desc:Name`, **unnamed** sliders (`slider1:0.5<0,1,0.01>Label`), then `@init`,
   `@slider`, `@block`, `@sample`, `@gfx W H`.
-- `@init` ends with `ui_boot(animated)` (1 when the UI has a meter); allocate buffers from
+- `@init` ends with `ui_boot(animated)` (1 when the UI has a meter, 2 when it has graph feeds: redraws only on activity); allocate buffers from
   `ui_mem`; compute coefficients in `update()`, called from `@init`, `@slider` and
   `@block: ui_changed() ? update();`.
 - `@gfx` draws the core row(s), then `ui_section("Advanced") ? ( ... )` for the rest.
@@ -196,7 +198,7 @@ Then Steps 4-8.
 - `1e9`-style literals make EEL2 reject the whole plugin and run no code. Write `1000000000`.
 - `local()` is only valid inside a function, never at the top of `@sample`/`@block`.
 - Named sliders (`slider1:g=0<...`) do not keep their value in `sliderN`: always unnamed.
-- Memory below `ui_mem` (1024) belongs to the toolkit: allocate from it.
+- Memory below `ui_mem` (2048) belongs to the toolkit: allocate from it.
 - `@init` runs again whenever playback starts (and on a sample-rate change). Anything it assigns
   is reset on Play: keep UI and interaction state out of unguarded `@init` assignments.
 - `rand()` cannot be seeded: use the seeded generator in `examples/mutate-verb.jsfx` when a
