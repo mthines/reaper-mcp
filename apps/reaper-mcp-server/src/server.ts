@@ -63,12 +63,6 @@ const TOOL_ERROR_MESSAGE = 'reaper.tool.error.message';
  * `reaper.tool.error.message`. The span parents the CLIENT
  * bridge spans: tool invocation → bridge command → REAPER response.
  *
- * A failed call follows the rule in `call-outcome.ts`: expected (a refused request,
- * a bridge that is down or outdated, rejected sidecar input, the tool's own
- * validation) is a WARN log with the status unset; a regression in a call below
- * (a crash, an internal error, a timeout) or an exception is an ERROR log with
- * the status ERROR. The tool logs only a failure no call below logged already.
- *
  * Also records `mcp.server.operation.duration` per call.
  */
 export function instrumentToolHandlers(server: McpServer): void {

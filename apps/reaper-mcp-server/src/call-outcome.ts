@@ -1,15 +1,10 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-/**
- * What the bridge and sidecar calls of one tool call reported about their failures.
- *
- * Every failure follows one rule: an expected outcome (a refused request, a bridge that is not running or is
- * from another release, a sidecar that is not installed, is busy or rejected its input) is a WARN log and
- * leaves the span status unset, like an HTTP 4xx; a regression (a crash, an internal error, a timeout) is an
- * ERROR log and sets the span status to ERROR. `sendCommand()` and the sidecar client note each failure here
- * after logging it, so the tool wrapper in `server.ts` can apply the same rule to the tool's own span without
- * re-reading the message the agent got, and logs a failure only when no call below already did.
- */
+// sendCommand() and the sidecar client note each failure here after logging it, so the tool wrapper (server.ts) can
+// set the tool span's status without re-reading the agent's message, and log only a failure nothing below logged.
+// The expected-vs-regression rule itself: DEVELOPMENT.md § OpenTelemetry / Observability.
+
+/** What the bridge and sidecar calls of one tool call reported about their failures. */
 export interface CallOutcome {
   /** A call below already logged a failure. */
   logged: boolean;

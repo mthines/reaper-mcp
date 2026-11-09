@@ -44,11 +44,9 @@ export const QUEUE_WAIT_MS = 5 * 60_000;
 // Failure classification
 // ---------------------------------------------------------------------------
 
-/**
- * A JSON-RPC error response from server.py, with its code. Its `name` stays `Error`: a tool that lets it escape
- * reports `error.type` from the name, and that value is unchanged.
- */
+/** A JSON-RPC error response from server.py, with its code. */
 export class SidecarRpcError extends Error {
+  // No `name` override: a tool that lets this escape reports `error.type` from the name, which stays `Error`.
   constructor(message: string, readonly code: number) {
     super(message);
   }
