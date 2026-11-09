@@ -3,6 +3,7 @@ import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { getTracer, emitLog, exceptionAttributes, getToolDurationHistogram, redactHome } from './telemetry.js';
 import { classifyBridgeError, isSystemError } from './bridge.js';
 import { collectPageLinks, withPageLink } from './page-link.js';
+import { withNotices } from './notices.js';
 import { registerProjectTools } from './tools/project.js';
 import { registerTrackTools } from './tools/tracks.js';
 import { registerFxTools } from './tools/fx.js';
@@ -99,7 +100,8 @@ export function instrumentToolHandlers(server: McpServer): void {
         async (span) => {
           try {
             const collected = await collectPageLinks(() => originalCb(...cbArgs));
-            const result = withPageLink(collected.result, collected.links);
+            // Pending notices (notices.ts: an updated bridge, a newer release) ride on the first result
+            const result = withNotices(withPageLink(collected.result, collected.links));
             const res = result as { isError?: boolean; content?: { text?: string }[] };
             if (res?.isError) {
               // Tool-level failure reported to the client (semconv: error.type=tool_error).

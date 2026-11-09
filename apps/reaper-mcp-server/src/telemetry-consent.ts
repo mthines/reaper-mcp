@@ -223,6 +223,10 @@ const ALLOWED_SPAN_ATTRIBUTES = new Set([
   // (a fixed set: connected, stale, never_started, not_installed, no_reaper — never a path)
   'reaper.bridge.connected',
   'reaper.bridge.state',
+  // Whether this start brought REAPER's files up to its release (bridge-repair.ts): the bridge files
+  // changed, and the start-with-REAPER block was added (booleans, set only when true)
+  'reaper.bridge.files_updated',
+  'reaper.bridge.autostart_added',
   // detect_key / detect_chords: where they read from and how sure they were, never the key or chords
   'reaper.key.source',
   'reaper.key.confidence',

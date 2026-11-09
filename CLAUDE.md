@@ -47,6 +47,8 @@ reaper-mcp/
       claude-assets.ts        # install-skills: copies the skills, agents and knowledge shipped in the npm package into ~/.claude (hash manifest, never overwrites edits)
       server.ts               # McpServer creation, tool registration
       bridge.ts               # File-based IPC: sendCommand(), isBridgeRunning(), etc.
+      bridge-repair.ts        # serve: bring REAPER's files (bridge, JSFX, page, autostart block) up to this release once per release (npm installs)
+      notices.ts              # One-time notices for the user, appended to the first tool result (updated bridge, newer release)
       sidecar.ts              # Python subprocess lifecycle + JSON-RPC client (getSidecarClient())
       setup-sidecar.ts        # setup-sidecar CLI command: component picker (TTY) or flags, Python check, venv, deps, weights, add-ons
       tools/

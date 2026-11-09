@@ -23,6 +23,8 @@ import { firstRunTelemetryNotice, resolveTelemetry, saveTelemetryChoice, TELEMET
 import { endSession, setSessionClient, startSessionPing } from './session.js';
 import { getSidecarClient } from './sidecar.js';
 import { renderDoctor, useColor, type Check, type CheckStatus, type Section } from './doctor-report.js';
+import { repairBridgeInstall, repairNotices, writeBridgeVersion, type BridgeRepair } from './bridge-repair.js';
+import { addNotice } from './notices.js';
 
 const execAsync = promisifyUtil(execCb);
 
@@ -46,6 +48,7 @@ async function setup(): Promise<void> {
     console.log('The bridge is installed by ReaPack: leaving its scripts, JSFX and status page to ReaPack.');
     console.log('Setup only turns on starting with REAPER and the web interface.\n');
     installBridgeAutostart(scriptsDir);
+    writeBridgeVersion(scriptsDir, readServiceVersion());
     const port = await enableWebInterface();
     console.log('\nSetup complete!\n');
     console.log('Restart REAPER (or run the bridge once from the Action List) and add reaper-mcp to Claude Code: reaper-mcp doctor');
@@ -130,6 +133,8 @@ async function setup(): Promise<void> {
 
   // Before the web-interface step: Ctrl+C at its "Quit REAPER to finish" prompt ends setup there
   installBridgeAutostart(scriptsDir);
+  // `serve` brings REAPER's files up to its own release once per release (bridge-repair.ts) from this record
+  writeBridgeVersion(scriptsDir, readServiceVersion());
   const webPort = await enableWebInterface();
   await registerSnapshotActions();
 
@@ -531,6 +536,22 @@ async function doctor(): Promise<void> {
   process.exit(bridgeRunning && knowledgeLinked && mcpRegistered && !sidecarBroken && !extensionsBroken ? 0 : 1);
 }
 
+/** repairBridgeInstall() for this build's files; never fails `serve` (an unwritable folder only skips it). */
+function repairReaperSide(log: (...args: unknown[]) => void): BridgeRepair | undefined {
+  try {
+    return repairBridgeInstall({
+      scriptsDir: getReaperScriptsPath(),
+      effectsDir: getReaperEffectsPath(),
+      wwwDir: getReaperWwwPath(),
+      assetsDir: resolveAssetDir(__dirname, 'reaper'),
+      wwwSrcDir: resolveAssetDir(__dirname, 'bridge-ui'),
+    }, readServiceVersion(), { inClone: findCloneRoot(__dirname) !== null });
+  } catch (err) {
+    log(`Could not update REAPER's reaper-mcp files: ${err instanceof Error ? err.message : String(err)}`);
+    return undefined;
+  }
+}
+
 async function serve(): Promise<void> {
   const log = (...args: unknown[]) => console.error('[reaper-mcp]', ...args);
 
@@ -558,6 +579,9 @@ async function serve(): Promise<void> {
         log(`Cleaned up ${cleaned} stale bridge files`);
       }
 
+      // An npm update replaces this server but never REAPER's files: bring them up to this release, once
+      const repair = repairReaperSide(log);
+
       // Check bridge connectivity in a child span. `reaper.bridge.state` says which setup step
       // is missing when it is not connected (both attributes are in the usage telemetry).
       const bridge = await tracer.startActiveSpan('check bridge connection', { kind: SpanKind.INTERNAL }, async (bridgeSpan) => {
@@ -582,6 +606,14 @@ async function serve(): Promise<void> {
 
       startupSpan.setAttribute('reaper.bridge.connected', bridge.state === 'connected');
       startupSpan.setAttribute('reaper.bridge.state', bridge.state);
+      if (repair && !repair.skipped) {
+        const version = readServiceVersion();
+        if (repair.bridgeChanged) startupSpan.setAttribute('reaper.bridge.files_updated', true);
+        if (repair.autostartAdded) startupSpan.setAttribute('reaper.bridge.autostart_added', true);
+        log(`Updated REAPER's reaper-mcp files from ${repair.from ?? 'an earlier release'} to ${version}`);
+        // The user hears it through the agent, on the first tool result (notices.ts)
+        for (const text of repairNotices(repair, version, bridge.state === 'connected')) addNotice({ text });
+      }
 
       const profile = resolveProfile();
       const server = createServer(profile);

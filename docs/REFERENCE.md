@@ -96,6 +96,13 @@ off in the bridge window under **Settings → Start with REAPER** (persistent Ex
 `-- reaper-mcp: start the bridge with REAPER (begin)` line through the `(end)` line, both marker lines included. `reaper-mcp doctor`
 shows whether the block is there and whether the setting is off (its **Start with REAPER** row).
 
+An npm update replaces the server but not REAPER's files, so from an npm install `reaper-mcp serve` does this
+part of setup itself, once per release: when REAPER's files are from an older release (recorded in
+`Scripts/mcp_bridge_version.txt`, which `setup` writes) it copies the new bridge, JSFX and status page over them
+and writes the block back, then tells you through your agent to restart REAPER if the old bridge is still
+running. It never downgrades a newer install, leaves files ReaPack installed to ReaPack, and does nothing in a
+git clone or for a REAPER that `setup` never ran for (`bridge-repair.ts`).
+
 To start it by hand instead (REAPER already open):
 
 1. **Actions > Show action list > Load ReaScript**
