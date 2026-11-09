@@ -105,7 +105,7 @@ describe('repairBridgeInstall', () => {
     expect(read(paths.scriptsDir, 'mcp_bridge.lua')).toBe('-- bridge v1');
   });
 
-  it('leaves files ReaPack installed to ReaPack and only adds the autostart block', () => {
+  it('leaves a ReaPack-only install that setup never ran for alone: its users opt in to autostart by running setup', () => {
     fixture(null);
     const reapackDir = join(paths.scriptsDir, 'reaper-mcp', 'MCP Bridge');
     mkdirSync(reapackDir, { recursive: true });
@@ -113,7 +113,21 @@ describe('repairBridgeInstall', () => {
 
     const repair = repairBridgeInstall(paths, '0.83.0', { inClone: false });
 
-    expect(repair).toEqual({ from: undefined, bridgeChanged: false, autostartAdded: true });
+    expect(repair.skipped).toBe('not_installed');
+    expect(existsSync(join(paths.scriptsDir, '__startup.lua'))).toBe(false);
+    expect(existsSync(join(paths.scriptsDir, BRIDGE_VERSION_FILE))).toBe(false);
+  });
+
+  it('on an update, gives a ReaPack install setup ran for its autostart block back and leaves its files to ReaPack', () => {
+    fixture(null);
+    const reapackDir = join(paths.scriptsDir, 'reaper-mcp', 'MCP Bridge');
+    mkdirSync(reapackDir, { recursive: true });
+    writeFileSync(join(reapackDir, 'mcp_bridge.lua'), '-- reapack bridge');
+    writeFileSync(join(paths.scriptsDir, BRIDGE_VERSION_FILE), '0.80.0\n');
+
+    const repair = repairBridgeInstall(paths, '0.83.0', { inClone: false });
+
+    expect(repair).toEqual({ from: '0.80.0', bridgeChanged: false, autostartAdded: true });
     expect(existsSync(join(paths.scriptsDir, 'mcp_bridge.lua'))).toBe(false);
     expect(read(reapackDir, 'mcp_bridge.lua')).toBe('-- reapack bridge');
   });

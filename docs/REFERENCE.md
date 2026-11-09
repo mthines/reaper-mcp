@@ -101,7 +101,8 @@ part of setup itself, once per release: when REAPER's files are from an older re
 `Scripts/mcp_bridge_version.txt`, which `setup` writes) it copies the new bridge, JSFX and status page over them
 and writes the block back, then tells you through your agent to restart REAPER if the old bridge is still
 running. It never downgrades a newer install, leaves files ReaPack installed to ReaPack, and does nothing in a
-git clone or for a REAPER that `setup` never ran for (`bridge-repair.ts`).
+git clone or for a REAPER that `setup` never ran for, a ReaPack-only install included: ReaPack users opt in
+to starting the bridge with REAPER by running `setup` (`bridge-repair.ts`).
 
 To start it by hand instead (REAPER already open):
 

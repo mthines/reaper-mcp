@@ -85,16 +85,19 @@ export function installReaperFiles(paths: BridgeInstallPaths): boolean {
  *
  * Does nothing in a git clone (its own `setup` and the status page's Update keep it current), when setup
  * never ran for this REAPER, or when BRIDGE_VERSION_FILE already names this release or a newer one (so a
- * second, older install never downgrades the bridge). Files ReaPack installed are left to ReaPack; only the
- * autostart block is added for them.
+ * second, older install never downgrades the bridge). Files ReaPack installed are left to ReaPack: a
+ * ReaPack-only install gets the autostart block back on an update only when `setup` ran for it (its
+ * release record exists), since ReaPack users opt in to autostart by running `setup`.
  */
 export function repairBridgeInstall(paths: BridgeInstallPaths, version: string, opts: { inClone: boolean }): BridgeRepair {
   const none = { bridgeChanged: false, autostartAdded: false };
   if (opts.inClone) return { skipped: 'clone', ...none };
   const reapack = existsSync(join(paths.scriptsDir, 'reaper-mcp', 'MCP Bridge', 'mcp_bridge.lua'));
   const ours = existsSync(join(paths.scriptsDir, 'mcp_bridge.lua'));
-  if (!reapack && !ours) return { skipped: 'not_installed', ...none };
   const from = readBridgeVersion(paths.scriptsDir);
+  // A ReaPack user opts in to starting the bridge with REAPER by running `setup` (README, NPM_INSTALL),
+  // which records its release: without that record a ReaPack-only install is not ours to touch
+  if (!ours && !(reapack && from)) return { skipped: 'not_installed', ...none };
   if (from && compareVersions(from, version) >= 0) return { skipped: 'current', from, ...none };
 
   const bridgeChanged = reapack ? false : installReaperFiles(paths);
