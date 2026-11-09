@@ -134,6 +134,7 @@ reaper-mcp/
     make-plugin/SKILL.md      # /make-plugin — make the user a plugin (JSFX + shared UI toolkit): spec, write_jsfx, load, measure, iterate; examples/ holds three
     new-extension/SKILL.md    # /new-extension — build an extension for a plugin's internals: probe its state, write tools + tests, prove them live
     mix-memory/SKILL.md       # /mix-memory — recall / consolidate / promote memory
+    changelog-highlight/      # /changelog-highlight — maintainer only (.repo-only: not linked or packaged): a What's new highlight with media
   .claude/agents/             # Subagents, symlinked into ~/.claude/agents by scripts/sync-symlinks.sh (clone) or copied by `reaper-mcp install-skills` (npm)
     plugin-researcher.md      # Web research + scratch-track probing → user::plugins:: record; used by /learn-plugin, /mixer, /mastering
 
@@ -1048,6 +1049,19 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   `mcp_bridge.lua` stops it; restart switches to `set_action_options(3)` and re-runs its own action, and REAPER
   relaunches the installed copy. It restarts itself after a successful update; the page reloads when
   `startedAt` changes (or once when the update is done, if the bridge script didn't change).
+  **What's new** (`?changelog=true`, `src/features/changelog/`): a drawer listing the GitHub releases (one request,
+  `releases?per_page=100`, only once it opens, cached 6h in localStorage), each release's `## What's Changed` lines parsed
+  as conventional commits and grouped New / Fixes / Faster / Docs / Under the hood (`changelog.ts`), betas behind a
+  per-viewer toggle. Its top card offers the update (the same `update` request, or the clone and npm commands when the
+  bridge can't run it). A newer stable release shows an **Update available** pill in the header that opens it; the notice's
+  What's new link, the ⋯ menu, the palette (`help-whats-new`) and the footer version open it too. Opening it closes Settings.
+  **Highlights** (`highlights.ts`, `HighlightCard.tsx`): hand-made entries over a release's notes, one house-style card
+  each (16:10 stage, title, sentence, "Try it"; click to enlarge) with an animation (`.mp4`/animated SVG + poster), graphic
+  (`.svg`) or screenshot (`.webp`). Data: `apps/bridge-ui/changelog/highlights.json` + `media/`, read from `main` on GitHub
+  (so a newer release shows its highlights before the update) or the working tree under the dev server; matched to a
+  release by `pr` or `version`. Written by the repo-only `/changelog-highlight` skill with
+  `apps/bridge-ui/scripts/changelog-capture.mjs` (records/captures `?demo`); `highlights-files.test.ts` checks every entry,
+  media size and SVG safety.
   **Developer mode** (`settings.dev`): `setup` writes `dev=1` for a clone with uncommitted changes, a branch other
   than `main` or unpushed commits (`isDevClone()` in `cli.ts`); the Settings toggle (`cfg_dev`, persistent) overrides
   it. In dev mode the release notice is hidden and, once source files are newer than the last install (a detached `find -newer mcp_update.conf` every 5s, `control.changed`), the header shows **Rebuild & reload** (request `rebuild-<token>`):

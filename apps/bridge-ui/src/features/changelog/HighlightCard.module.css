@@ -1,0 +1,52 @@
+/* The house frame every highlight shares: tint by group, stage 16:10, caption under it */
+.card {
+  --tint: 124, 196, 255;
+  margin: 0; overflow: hidden; border-radius: 12px;
+  border: 1px solid rgba(var(--tint), 0.28);
+  background: linear-gradient(160deg, rgba(var(--tint), 0.10), rgba(var(--tint), 0.02) 55%), var(--panel-2);
+}
+.card:where([data-group='fixes']) { --tint: 74, 222, 128; }
+.card:where([data-group='faster']) { --tint: 245, 184, 75; }
+
+.stage {
+  position: relative; aspect-ratio: 16 / 10; overflow: hidden;
+  display: grid; place-items: center;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(var(--tint), 0.16), transparent 70%), var(--bg);
+  border-bottom: 1px solid rgba(var(--tint), 0.18);
+}
+.media { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card:where([data-kind='graphic']) .media { object-fit: contain; }
+.missing { padding: 16px; font-size: 12px; color: var(--faint); text-align: center; }
+
+.caption { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 12px; }
+.title { font-size: 13.5px; color: var(--text); }
+.blurb { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.tryIt { font-size: 11.5px; color: var(--faint); }
+.tryIt kbd {
+  padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line-2); background: var(--panel);
+  font-family: var(--mono); font-size: 11px; color: var(--text);
+}
+
+/* The whole stage enlarges the media */
+.enlarge { position: absolute; inset: 0; z-index: 1; border: 0; padding: 0; background: none; cursor: zoom-in; }
+.enlarge:focus-visible { outline: 2px solid rgba(var(--tint), 0.8); outline-offset: -2px; }
+
+.overlay {
+  position: fixed; inset: 0; z-index: 40;
+  display: grid; place-items: center; padding: 24px;
+  background: rgb(0 0 0 / 0.72); backdrop-filter: blur(3px);
+  animation: overlay-in 0.16s ease-out;
+}
+.overlayFrame { display: flex; flex-direction: column; gap: 10px; max-width: min(1280px, 100%); max-height: 100%; }
+.overlayFrame img, .overlayFrame video {
+  display: block; max-width: 100%; max-height: calc(100vh - 96px); border-radius: 12px;
+  border: 1px solid var(--line-2); box-shadow: 0 24px 60px rgb(0 0 0 / 0.5); background: var(--bg);
+}
+.overlayCaption { font-size: 13px; color: var(--muted); text-align: center; }
+.overlayClose {
+  position: absolute; top: 14px; right: 14px; display: grid; place-items: center;
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--panel-2); color: var(--text); cursor: pointer;
+}
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .overlay { animation: none; } }

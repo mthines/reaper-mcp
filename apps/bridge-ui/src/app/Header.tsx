@@ -15,6 +15,9 @@ export function Header({
   sessions,
   onShowAgents,
   onOpenSettings,
+  onOpenChangelog,
+  updateVersion,
+  onOpenUpdate,
   onRebuild,
   overview,
   onToggleOverview,
@@ -26,6 +29,11 @@ export function Header({
   sessions: Map<string, Session>;
   onShowAgents: () => void;
   onOpenSettings?: () => void;
+  /** What's new (the changelog drawer) */
+  onOpenChangelog?: () => void;
+  /** The newer stable release, when there is one: the header shows a pill for it */
+  updateVersion?: string;
+  onOpenUpdate?: () => void;
   onRebuild?: () => void;
   overview: boolean;
   onToggleOverview?: () => void;
@@ -82,6 +90,12 @@ export function Header({
             Rebuild &amp; reload
           </button>
         )}
+        {updateVersion && onOpenUpdate && (
+          <button className={styles.update} onClick={onOpenUpdate} title={`reaper-mcp v${updateVersion} is available (you have v${__VERSION__}). See what’s new`}>
+            <span className={styles.updateDot} aria-hidden />
+            Update available
+          </button>
+        )}
         <CommandPaletteButton />
         {onOpenSettings && (
           <button className={styles.iconLink} onClick={onOpenSettings} title="Settings" aria-label="Settings">
@@ -91,7 +105,15 @@ export function Header({
         <a className={styles.iconLink} href={REPO_URL} target="_blank" rel="noreferrer" title="reaper-mcp on GitHub" aria-label="reaper-mcp on GitHub">
           <Icon.GitHub />
         </a>
-        <HeaderMenu overview={overview} onToggleOverview={onToggleOverview} onRebuild={onRebuild} onOpenSettings={onOpenSettings} />
+        <HeaderMenu
+          overview={overview}
+          onToggleOverview={onToggleOverview}
+          onRebuild={onRebuild}
+          onOpenSettings={onOpenSettings}
+          onOpenChangelog={onOpenChangelog}
+          updateVersion={updateVersion}
+          onOpenUpdate={onOpenUpdate}
+        />
         <span className={styles.pill} data-state={state}>
           <span className={styles.pillDot} />
           {label}
@@ -107,12 +129,21 @@ function HeaderMenu({
   onToggleOverview,
   onRebuild,
   onOpenSettings,
+  onOpenChangelog,
+  updateVersion,
+  onOpenUpdate,
 }: {
   overview: boolean;
   onToggleOverview?: () => void;
   onRebuild?: () => void;
   onOpenSettings?: () => void;
+  onOpenChangelog?: () => void;
+  updateVersion?: string;
+  onOpenUpdate?: () => void;
 }) {
+  const update = updateVersion && onOpenUpdate ? onOpenUpdate : undefined;
+  const flag = Boolean(onRebuild || update);
+  const flagWhy = onRebuild ? 'rebuild available' : 'update available';
   const { open, setOpen, ref } = usePopover();
   const pick = (fn: () => void) => () => {
     setOpen(false);
@@ -121,11 +152,11 @@ function HeaderMenu({
   return (
     <div className={styles.headerMenu} ref={ref}>
       <button
-        className={cx(styles.iconLink, onRebuild ? styles.headerMenuFlag : '')}
+        className={cx(styles.iconLink, flag ? styles.headerMenuFlag : '')}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={onRebuild ? 'More (rebuild available)' : 'More'}
-        title={onRebuild ? 'More: your working tree changed, rebuild available' : 'More'}
+        aria-label={flag ? `More (${flagWhy})` : 'More'}
+        title={flag ? `More: ${flagWhy}` : 'More'}
         onClick={() => setOpen(!open)}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
@@ -141,6 +172,11 @@ function HeaderMenu({
               Rebuild &amp; reload
             </button>
           )}
+          {update && (
+            <button role="menuitem" className={styles.menuAccent} onClick={pick(update)}>
+              Update to v{updateVersion}
+            </button>
+          )}
           {onToggleOverview && (
             <button role="menuitemcheckbox" aria-checked={overview} onClick={pick(onToggleOverview)}>
               <span className={styles.menuCheck} aria-hidden>
@@ -152,6 +188,11 @@ function HeaderMenu({
           {onOpenSettings && (
             <button role="menuitem" onClick={pick(onOpenSettings)}>
               Settings
+            </button>
+          )}
+          {onOpenChangelog && (
+            <button role="menuitem" onClick={pick(onOpenChangelog)}>
+              What’s new
             </button>
           )}
           <a role="menuitem" href={REPO_URL} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>

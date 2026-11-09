@@ -1021,3 +1021,39 @@ export function editExamples<K extends EditViewData['kind']>(kind: K) {
     return v?.kind === kind ? [{ ...x, v: v as Extract<EditViewData, { kind: K }> }] : [];
   });
 }
+
+/**
+ * The repo's releases as GitHub lists them, around `current`: one stable release and one beta newer than it,
+ * `current` itself, and three older ones (one with a breaking change). Feeds the What's new drawer's stories and `?demo`.
+ */
+export function exampleReleaseJson(current: string): unknown[] {
+  const [major, minor] = current.split('-')[0].split('.').map((n) => parseInt(n, 10) || 0);
+  const v = (m: number, p = 0) => `${major}.${Math.max(0, minor + m)}.${p}`;
+  const day = (n: number) => new Date(EXAMPLE_NOW - n * 86_400_000).toISOString();
+  const notes = (lines: string[]) => `## What's Changed\n\n${lines.map((l) => `- ${l}`).join('\n')}\n\n## Install\n\nAlready installed? \`git pull && ./scripts/install.sh\` from your clone.\n`;
+  const release = (tag: string, at: number, lines: string[], prerelease = false) => ({
+    tag_name: `v${tag}`,
+    html_url: `https://github.com/mthines/reaper-mcp/releases/tag/v${tag}`,
+    published_at: day(at),
+    prerelease,
+    draft: false,
+    body: notes(lines),
+  });
+  return [
+    release(`${v(2)}-beta.104.1`, 0, ['feat(bridge): what’s new drawer with the update button on top'], true),
+    release(v(1), 1, [
+      'feat: /teach beginner mode that explains each change (#98)',
+      'feat(bridge): update pill in the header (#101)',
+      'fix(bridge): quote the page link’s view as JSON so the page honours it (#100)',
+      'perf(render): one stem pass for several tracks (#102)',
+      'docs: README section for /make-plugin (#99)',
+      'ci: disable Nx Cloud in every job (#97)',
+      'chore: simplify pass (mechanical refactors)',
+      'chore(release): v' + v(1),
+    ]),
+    release(current.split('-')[0], 6, ['feat: /make-plugin writes JSFX plugins with a shared UI (#96)', 'test: cover the page link']),
+    release(v(-1, 2), 12, ['fix(sidecar): load audio with soundfile only (#94)']),
+    release(v(-1), 20, ['feat(snapshots)!: snapshots are scoped to the project (#90)', 'feat: distribute the REAPER side through ReaPack (#92)', 'refactor: split the bridge libs']),
+    release(v(-2), 34, ['feat(audio): edit stretch markers and align doubles to a guide (#78)', 'fix(alignment): no offset suggestion below correlation 0.3']),
+  ];
+}
