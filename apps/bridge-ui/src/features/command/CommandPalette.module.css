@@ -26,6 +26,8 @@
 .foot { display: flex; gap: 14px; padding: 7px 14px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--faint); }
 .trigger { display: inline-flex; align-items: center; height: 28px; padding: 0 4px; border: 0; background: none; cursor: pointer; }
 .trigger:hover .kbd { color: var(--text); border-color: #3c414a; }
+/* No keyboard on a phone: the log's menu holds the same actions */
+@media (max-width: 720px) { .trigger { display: none; } }
 .helpHead { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .helpBody { overflow-y: auto; padding: 0 14px 12px; }
 .helpRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }

@@ -55,6 +55,11 @@
   .rowErrInline, .durTrack { display: none; }
   .rowDur { min-width: 0; }
   .rowSession { display: none; }
+  /* Room for the name and duration: the day is in the timeline, the time stays */
+  .rowDay { display: none; }
+  .rowMain { gap: 8px; padding: 0 10px; }
+  .rowCmd { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .rowTime { font-size: 11px; }
 }
 
 /* The selected row's tint and accent edge already mark it; no browser focus ring on top. Tab focus gets the hover tint. */

@@ -105,9 +105,19 @@ button.agents:hover { color: var(--text); background: var(--panel-2); border-col
 .menuCheck { width: 12px; flex: none; color: var(--accent); }
 .menu > a, .menu > button:not(:has(.menuCheck)) { padding-left: 28px; }
 
-@media (max-height: 640px) {
+@media (max-height: 640px), (max-width: 720px) {
   .headerActions > .iconLink, .headerActions > .btnRebuild, .headerActions > .update { display: none; }
   .headerMenu { display: block; }
+}
+@media (max-width: 720px) {
+  .header { gap: 10px; }
+  .brand { gap: 10px; }
+  .brand h1 { white-space: nowrap; }
+  .headerActions { gap: 6px; }
+}
+/* On a tall page the stats and timeline always show, so there is nothing to toggle */
+@media (min-height: 641px) {
+  .menuOverview { display: none !important; }
 }
 
 @keyframes ping { 70% { box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); } 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); } }

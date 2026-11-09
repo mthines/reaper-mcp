@@ -178,7 +178,7 @@ function HeaderMenu({
             </button>
           )}
           {onToggleOverview && (
-            <button role="menuitemcheckbox" aria-checked={overview} onClick={pick(onToggleOverview)}>
+            <button className={styles.menuOverview} role="menuitemcheckbox" aria-checked={overview} onClick={pick(onToggleOverview)}>
               <span className={styles.menuCheck} aria-hidden>
                 {overview ? '✓' : ''}
               </span>

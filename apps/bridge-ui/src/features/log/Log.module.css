@@ -54,12 +54,18 @@
 @media (max-height: 640px) {
   .log { min-height: 160px; }
 }
+@media (max-width: 720px) {
+  .log { flex: none; height: max(440px, 80dvh); }
+}
+@media (max-width: 720px) and (max-height: 640px) {
+  .log { height: max(300px, 90dvh); }
+}
 .logMenu { display: none; flex: none; min-width: 0; }
 
 /* The menu's trigger (the combo box's button) sized like the search box next to it */
 .logMenu > button { height: 30px; max-width: 220px; padding: 0 10px; font-size: 12.5px; }
 
-@media (max-height: 640px) {
+@media (max-height: 640px), (max-width: 720px) {
   /* The log's toolbar is one row: the grouped menu and the search box */
   .logMenu { display: block; }
   .toolbar > .folds, .toolbar > .actions, .log > .folds { display: none; }

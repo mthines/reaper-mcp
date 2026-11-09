@@ -23,7 +23,9 @@
 .footer a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 
 @media (max-width: 720px) {
-  .shell { padding: 14px 16px 10px; }
+  /* A phone: the page scrolls and the log gets a screenful of its own, instead of the leftovers under the banner */
+  .footer { flex-wrap: wrap; justify-content: flex-start; gap: 4px 12px; }
+  .shell { height: auto; min-height: 100%; padding: 14px 16px 12px; gap: 12px; }
 }
 
 @media (max-height: 640px) {
