@@ -72,6 +72,8 @@ when the user turns on the FX window's **+ > Send all keyboard input to plug-in*
 the plugin; then it closes the value box, the About dialog, then the drawer (and the window
 closes with its close button, as every key now goes to the plugin).
 
+**Header knobs.** A plugin with a Mix and/or an Output slider calls `ui_header(mix_idx, out_idx)` in `@gfx` before `ui_begin` (0 for one it does not have): two small knobs in the top right, Output rightmost, with the usual gestures, the value shown while hovered. Do not draw those sliders as widgets too (they leave the core view and its widget count). The plugin name and the first row get a clear gap below the name, a little more with header knobs.
+
 Every plugin also gets, with no code of its own: its name in small spaced capitals at the top-left
 (hidden in a very narrow window), and a small "reaper-mcp" credit at the bottom right
 (in the drawer bar, or the bottom padding when there is no drawer; hidden in a narrow window).

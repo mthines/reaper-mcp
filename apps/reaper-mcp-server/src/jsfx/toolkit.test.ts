@@ -39,20 +39,44 @@ describe('toolkit 1.3: the plugin name header', () => {
     expect(body('ui_begin')).toContain('ui_namedraw()');
     expect(draw).toContain('ui_caps(#ui_name)');
     expect(draw).toMatch(/x = ui_pad;/);
-    expect(draw).toMatch(/y = 4 \* ui_s;/); // inside the padding: the first row still starts at ui_pad
+    expect(draw).toMatch(/y = 4 \* ui_s;/);
     expect(draw).toMatch(/\+ 1\.6 \* ui_s/); // letter spacing
-    expect(body('ui_begin')).toMatch(/ui_y = ui_pad;/);
+    expect(body('ui_begin')).toMatch(/ui_y = ui_ytop;/);
+    expect(body('ui_begin')).toMatch(/ui_ytop = ui_pad \+ \(\(ui_hm \|\| ui_ho\) \? 20 : 8\) \* ui_s/); // a gap under the name, more with header knobs
   });
 
   it('name header: hides in a very narrow window instead of colliding with the controls', () => {
     expect(body('ui_namedraw')).toMatch(/gfx_w >= 150 \* ui_s/);
-    expect(body('ui_namedraw')).toMatch(/x < gfx_w - ui_pad/);
+    expect(body('ui_namedraw')).toMatch(/x < ui_nlim/);
+    expect(body('ui_begin')).toMatch(/ui_nlim = gfx_w - ui_pad - \(\(ui_hm > 0\) \+ \(ui_ho > 0\)\) \* 66 \* ui_s/); // the name stops before the header knobs
   });
 
   it('name header: the plugin name that write_jsfx inlines is the desc without the developer suffix', () => {
     const out = inlineToolkit('desc:Warm Tape\nslider1:0<0,1,0.01>Mix\n@init\nui_boot(0);\n@gfx 100 100\nui_begin(1,0) ? ( ui_end(); );\n', { toolkit, version: 1 });
     expect(out).toContain('strcpy(#ui_name, "Warm Tape");');
     expect(out).toContain('desc:Warm Tape (reaper-mcp)');
+  });
+});
+
+describe('toolkit 1.3: the header knobs', () => {
+  it('header knobs: Output is the rightmost, Mix to its left, drawn only when the plugin has them and the window is wide enough', () => {
+    const begin = body('ui_begin');
+    expect(begin).toMatch(/\(ui_hm \|\| ui_ho\) && gfx_w >= 240 \* ui_s/);
+    expect(begin.indexOf('ui_hknob(ui_ho')).toBeLessThan(begin.indexOf('ui_hknob(ui_hm'));
+    expect(body('ui_header')).toContain('ui_hm = max(0, floor(m))');
+  });
+
+  it('header knobs: they have the knob gestures (drag, wheel, double-click, reset) and show the value while hovered', () => {
+    const knob = body('ui_hknob');
+    expect(knob).toContain('ui_ctl(idx, fmt, label, cx, cy + 12 * ui_s)');
+    expect(knob).toMatch(/hot \? ui_fmtv\(fmt, slider\(idx\)\) : ui_caps\(label\)/);
+  });
+
+  it('header knobs: every function is defined before the one that calls it (EEL2 fails silently otherwise)', () => {
+    const at = (n: string) => code.indexOf(`function ${n}(`);
+    for (const [fn, dep] of [['ui_hknob', 'ui_ctl'], ['ui_hknob', 'ui_fmtv'], ['ui_hknob', 'ui_ring'], ['ui_begin', 'ui_hknob'], ['ui_begin', 'ui_namedraw']]) {
+      expect(at(dep), `${dep} before ${fn}`).toBeLessThan(at(fn));
+    }
   });
 });
 

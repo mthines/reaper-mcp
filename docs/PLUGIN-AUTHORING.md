@@ -42,6 +42,10 @@ work as usual.
 toolkit block is replaced by the current one. An existing slider is never renumbered, re-ranged
 or removed without `breaking: true`, because projects store automation by slider number.
 
+## Header knobs
+
+Mix and Output sit in the top right of every plugin that has them (`ui_header(mix, out)`), small and always visible, so the core view holds only what is special about the plugin.
+
 ## Graphs
 
 Besides knobs, toggles, choices and the level meter, the toolkit (v1.3) draws graphs a plugin feeds:

@@ -76,9 +76,10 @@ slider8:0<0,1,1>2x
   spl1 = (spl1 * (1 - mix) + yr * mix) * gain;
 
 @gfx 340 250
+  ui_header(3, 4);   // Mix and Output live in the top right
   ui_begin(1, 1) ? (
-    ui_row(4);
-    ui_knob(1, "Drive", 1); ui_knob(2, "Tone", 0); ui_knob(3, "Mix", 2); ui_knob(4, "Output", 1);
+    ui_row(2);
+    ui_knob(1, "Drive", 1); ui_knob(2, "Tone", 0);
     ui_section("Advanced") ? (
       ui_row(4); ui_knob(5, "Bias", 0); ui_knob(6, "Wow", 2); ui_knob(7, "Flutter", 2); ui_toggle(8, "2x");
     );

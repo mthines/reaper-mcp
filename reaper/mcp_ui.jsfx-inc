@@ -46,6 +46,7 @@
 //   @serialize file_var(0, ui_adv_open);   // added for you when the plugin has none
 
 ui_ver = 1.3;
+ui_hm = 0; ui_ho = 0;   // the header knobs' sliders (ui_header), 0 = none
 
 // Design tokens: the bridge status page's palette (apps/bridge-ui/src/styles.css). The accent is
 // the plugin's own: write_jsfx emits ui_theme($xRRGGBB) after this block (from the plugin's name,
@@ -309,7 +310,7 @@ function ui_namedraw() local(x, y, i, c, n) (
     ui_c(ui_cMuted, 0.85);
     i = 0; n = strlen(#ui_txt);
     loop(n,
-      x < gfx_w - ui_pad ? (
+      x < ui_nlim ? (
         c = str_getchar(#ui_txt, i);
         c == 32 ? ( x += 5 * ui_s; ) : (
           sprintf(#ui_tmp, "%c", c);
@@ -324,57 +325,6 @@ function ui_namedraw() local(x, y, i, c, n) (
   );
 );
 
-
-// Returns 1 when the frame needs drawing. Nothing changed = nothing drawn, the old frame stays.
-// The core rows keep one fixed layout; the Advanced drawer slides over them and never resizes them.
-function ui_begin(core_rows, adv_rows) local(h, i, now, e, top) (
-  ui_s = max(gfx_ext_retina, 1);
-  ui_pad = 10 * ui_s; ui_lh = 14 * ui_s;
-  ui_bar = adv_rows > 0 ? 28 * ui_s : 0;
-  ui_down = mouse_cap & 1;
-  ui_press = ui_down && !ui_was_down;
-  ui_rel = !ui_down && ui_was_down;
-  ui_rpress = (mouse_cap & 2) && !ui_was_r;
-  ui_was_down = ui_down; ui_was_r = mouse_cap & 2;
-  ui_keys();
-  ui_modal = ui_ed > 0 || ui_about;   // a value box or the About dialog takes every click
-
-  // the drawer glides open/closed in about 0.15 s
-  now = time_precise();
-  ui_p < 0 ? ui_p = ui_adv_open;
-  ui_p = ui_adv_open ? min(1, ui_p + (now - ui_lt) / 0.15) : max(0, ui_p - (now - ui_lt) / 0.15);
-  ui_lt = now;
-
-  h = gfx_w * 7 + gfx_h * 13 + mouse_x * 3 + mouse_y * 5 + mouse_cap * 11 + ui_adv_open * 17
-      + mouse_wheel * 23 + floor(now * 2) * 19 + ui_p * 29 + ui_ed * 31 + ui_edv * 37 + ui_about * 41
-      + ui_fh * 43 + ui_fh2 * 47 + ui_fh3 * 53 + ui_fh4 * 59 + ui_fsel * 61 + ui_fcmp * 67;
-  i = 1; loop(64, h += slider(i) * (i + 0.37); i += 1;);
-  ui_dirty = ui_animated == 1 || h != ui_hash || (ui_p > 0 && ui_p < 1);
-  ui_hash = h;
-
-  ui_dirty ? (
-    ui_bg();
-    gfx_setfont(1, "Arial", 12 * ui_s);
-    gfx_setfont(2, "Arial", 9.5 * ui_s, 'b');
-    gfx_setfont(3, "Arial", 10.5 * ui_s);
-    gfx_setfont(4, "Arial", 15 * ui_s, 'b');
-    gfx_setfont(5, "Arial", 8.5 * ui_s, 'b');
-    gfx_setfont(1);
-    ui_namedraw();
-    ui_core = 1;
-    ui_blocked = adv_rows > 0 && (ui_adv_open || ui_p > 0);
-    // core: the window minus the drawer's closed bar (or the footer line when there is no drawer)
-    ui_rowh = (gfx_h - ui_pad - (adv_rows > 0 ? ui_bar + 4 * ui_s : ui_pad + (ui_credit ? 6 * ui_s : 0))) / max(1, core_rows);
-    ui_y = ui_pad; ui_mi = 0;
-    // the drawer: rows of a comfortable fixed height, leaving a strip of the core view above it
-    ui_arowh = adv_rows > 0 ? min(100 * ui_s, max(60 * ui_s, (gfx_h - 40 * ui_s - ui_bar - ui_pad) / adv_rows)) : 0;
-    top = max(8 * ui_s, gfx_h - ui_bar - adv_rows * ui_arowh - ui_pad);
-    e = ui_p * ui_p * (3 - 2 * ui_p);
-    ui_sy = gfx_h - ui_bar - (gfx_h - ui_bar - top) * e;
-    ui_e = e;
-  );
-  ui_dirty;
-);
 
 // The footer credit: "reaper-mcp" in the bottom-right corner; a click opens the About dialog.
 // Hidden in a narrow window.
@@ -558,6 +508,93 @@ function ui_ctl(idx, fmt, label, x, y) local(lo, hi, st, t, fine) (
     ui_set(idx, ui_q(idx, slider(idx) + sign(mouse_wheel) * (st > 0 ? st : (hi - lo) / ((mouse_cap & 8) ? 200 : 40))));
   );
   ui_active == idx && ui_rel ? ( slider_automate(2 ^ (idx - 1), 1); ui_active = 0; );
+);
+
+// Mix and Output in the top right of every plugin that has them: call ui_header(mix_idx, out_idx) in @gfx
+// before ui_begin (0 = this plugin has no such slider). Two small knobs with the usual gestures; the
+// label shows the value while you hover or drag. Do not draw those two sliders as widgets as well.
+function ui_header(m, o) ( ui_hm = max(0, floor(m)); ui_ho = max(0, floor(o)); );
+
+// One small header knob whose right edge is xr; returns the x of the next one to its left.
+function ui_hknob(idx, label, fmt, xr) local(r, cx, cy, lo, hi, t, t0, a0, a1, av, aa, th, hot, tw0) (
+  r = 8 * ui_s; cx = xr - r - 2 * ui_s; cy = 15 * ui_s;
+  ui_hit = !(ui_core && ui_blocked) && !ui_modal && mouse_x >= xr - 62 * ui_s && mouse_x < xr && mouse_y >= 4 * ui_s && mouse_y < 26 * ui_s;
+  ui_ctl(idx, fmt, label, cx, cy + 12 * ui_s);
+  lo = ui_min[idx]; hi = ui_max[idx];
+  t = min(1, max(0, (slider(idx) - lo) / (hi - lo)));
+  t0 = (lo < 0 && hi > 0) ? -lo / (hi - lo) : 0;
+  hot = ui_active == idx || ui_hit;
+  th = max(2 * ui_s, r * 0.22);
+  a0 = -2.35; a1 = 2.35; av = a0 + (a1 - a0) * t; aa = a0 + (a1 - a0) * t0;
+  ui_c(hot ? ui_cTrackHot : ui_cTrack, 1); ui_ring(cx, cy, r - th, r, a0, a1);
+  abs(t - t0) > 0.002 ? ( ui_c(ui_active == idx ? ui_cAccentAct : (hot ? ui_cAccentHi : ui_cAccent), 1); ui_ring(cx, cy, r - th, r, min(aa, av), max(aa, av)); );
+  ui_cm(ui_cPanel2, ui_cLine, hot ? 0.9 : 0.4); gfx_circle(cx, cy, r - th - ui_s, 1, 1);
+  ui_c(hot ? ui_cAccent : ui_cText, 1); gfx_circle(cx + sin(av) * (r - th - 3 * ui_s), cy - cos(av) * (r - th - 3 * ui_s), max(1, ui_s), 1, 1);
+  gfx_setfont(2);
+  hot ? ui_fmtv(fmt, slider(idx)) : ui_caps(label);
+  gfx_measurestr(#ui_txt, ui_tw, ui_th);
+  ui_c(ui_active == idx ? ui_cAccent : (hot ? ui_cText : ui_cMuted), 1);
+  gfx_x = cx - r - 5 * ui_s - ui_tw; gfx_y = cy - ui_th / 2; gfx_drawstr(#ui_txt);
+  gfx_setfont(1);
+  xr - 66 * ui_s;
+);
+
+// Returns 1 when the frame needs drawing. Nothing changed = nothing drawn, the old frame stays.
+// The core rows keep one fixed layout; the Advanced drawer slides over them and never resizes them.
+function ui_begin(core_rows, adv_rows) local(h, i, now, e, top) (
+  ui_s = max(gfx_ext_retina, 1);
+  ui_pad = 10 * ui_s; ui_lh = 14 * ui_s;
+  ui_bar = adv_rows > 0 ? 28 * ui_s : 0;
+  ui_down = mouse_cap & 1;
+  ui_press = ui_down && !ui_was_down;
+  ui_rel = !ui_down && ui_was_down;
+  ui_rpress = (mouse_cap & 2) && !ui_was_r;
+  ui_was_down = ui_down; ui_was_r = mouse_cap & 2;
+  ui_keys();
+  ui_modal = ui_ed > 0 || ui_about;   // a value box or the About dialog takes every click
+
+  // the drawer glides open/closed in about 0.15 s
+  now = time_precise();
+  ui_p < 0 ? ui_p = ui_adv_open;
+  ui_p = ui_adv_open ? min(1, ui_p + (now - ui_lt) / 0.15) : max(0, ui_p - (now - ui_lt) / 0.15);
+  ui_lt = now;
+
+  h = gfx_w * 7 + gfx_h * 13 + mouse_x * 3 + mouse_y * 5 + mouse_cap * 11 + ui_adv_open * 17
+      + mouse_wheel * 23 + floor(now * 2) * 19 + ui_p * 29 + ui_ed * 31 + ui_edv * 37 + ui_about * 41
+      + ui_fh * 43 + ui_fh2 * 47 + ui_fh3 * 53 + ui_fh4 * 59 + ui_fsel * 61 + ui_fcmp * 67;
+  i = 1; loop(64, h += slider(i) * (i + 0.37); i += 1;);
+  ui_dirty = ui_animated == 1 || h != ui_hash || (ui_p > 0 && ui_p < 1);
+  ui_hash = h;
+
+  ui_dirty ? (
+    ui_bg();
+    gfx_setfont(1, "Arial", 12 * ui_s);
+    gfx_setfont(2, "Arial", 9.5 * ui_s, 'b');
+    gfx_setfont(3, "Arial", 10.5 * ui_s);
+    gfx_setfont(4, "Arial", 15 * ui_s, 'b');
+    gfx_setfont(5, "Arial", 8.5 * ui_s, 'b');
+    gfx_setfont(1);
+    ui_ytop = ui_pad + ((ui_hm || ui_ho) ? 20 : 8) * ui_s;   // below the name (and the header knobs)
+    ui_nlim = gfx_w - ui_pad - ((ui_hm > 0) + (ui_ho > 0)) * 66 * ui_s;
+    ui_namedraw();
+    ui_core = 1;
+    ui_blocked = adv_rows > 0 && (ui_adv_open || ui_p > 0);
+    (ui_hm || ui_ho) && gfx_w >= 240 * ui_s ? (
+      i = gfx_w - ui_pad;
+      ui_ho ? i = ui_hknob(ui_ho, "Output", 1, i);
+      ui_hm ? i = ui_hknob(ui_hm, "Mix", 2, i);
+    );
+    // core: the window minus the drawer's closed bar (or the footer line when there is no drawer)
+    ui_rowh = (gfx_h - ui_ytop - (adv_rows > 0 ? ui_bar + 4 * ui_s : ui_pad + (ui_credit ? 6 * ui_s : 0))) / max(1, core_rows);
+    ui_y = ui_ytop; ui_mi = 0;
+    // the drawer: rows of a comfortable fixed height, leaving a strip of the core view above it
+    ui_arowh = adv_rows > 0 ? min(100 * ui_s, max(60 * ui_s, (gfx_h - 40 * ui_s - ui_bar - ui_pad) / adv_rows)) : 0;
+    top = max(8 * ui_s, gfx_h - ui_bar - adv_rows * ui_arowh - ui_pad);
+    e = ui_p * ui_p * (3 - 2 * ui_p);
+    ui_sy = gfx_h - ui_bar - (gfx_h - ui_bar - top) * e;
+    ui_e = e;
+  );
+  ui_dirty;
 );
 
 // ---- widgets ------------------------------------------------------------------------------
