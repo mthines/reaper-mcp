@@ -32,6 +32,16 @@ export const OffersTheNewReleaseAndUpdates: Story = {
   },
 };
 
+export const OpensTheChangelogAsAPage: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('link', { name: 'Open what’s new as a page' })).toHaveAttribute('href', '?page=changelog');
+    // A release picked in the drawer is still the one the page opens on
+    await userEvent.click(canvas.getByRole('button', { name: 'Link to v0.80.0' }));
+    await expect(canvas.getByRole('link', { name: 'Open what’s new as a page' })).toHaveAttribute('href', '?page=changelog&release=0.80.0');
+  },
+};
+
 export const GroupsChangesLikeTheReleaseNotes: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

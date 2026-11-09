@@ -559,6 +559,8 @@ its source or a control label. Generated plugins themselves contain no telemetry
 
 Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`, `takes`, `fx_files`, `knowledge`, `recording`, `plugin_authoring`
 
+**Tool profiles** (`profile.ts`): `REAPER_MCP_PROFILE` (`full` default, `minimal`, `mixing`, `music`, `analysis`, or a comma list of profiles, categories and extension names) skips registering the core tools outside the chosen categories (every profile stays under 128 tools; `profile.test.ts` checks), and `list_tool_categories` shows only those. Tools in no core category (extensions, the category tools) are never blocked; `loadExtensions` skips an extension the profile does not name. A new category goes in a profile's list only when it belongs there.
+
 ### MIDI Editing Concepts
 
 - **Positions and durations** are in **beats** (quarter notes) from item start: `1.0` = quarter note, `0.5` = eighth note, `0.25` = sixteenth note
@@ -1124,6 +1126,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   event there and in `TrackEvent` together, never with names, search text, tokens or paths. The destination is the
   server's `DEFAULT_DESTINATION` (read by `build-config.mjs` from `telemetry-consent.ts`), service `reaper-mcp-bridge-ui`.
   On by default, off via Settings → Privacy, GPC/DNT, or `?demo`; fetch/xhr tracing stays off (the page polls the bridge).
+- Hosted build (public demo + changelog on Vercel, `*.vercel.app`): `vercel.json` runs `scripts/snapshot-releases.mjs` (GitHub releases into the gitignored `changelog/releases.snapshot.json`) then `BRIDGE_HOSTED=1 nx build bridge-ui`. `__HOSTED__` makes the page always the demo (`demo-mode.ts`), bakes the releases and `highlights.json` in (no GitHub call from a visitor's browser) and copies `changelog/` beside the page for the media. `/` is the demo, `/changelog` (= `?page=changelog`, `Changelog.PageRoute` from `main.tsx`, no bridge polling) the changelog as a page; `?release=0.79.1` or `#release-0.79.1` opens one release. A new release needs a redeploy to show (deploy hook or push). Without `BRIDGE_HOSTED` the build is exactly the REAPER page.
 - Payload shapes live in `apps/bridge-ui/src/lib/status.ts` (`BridgeStatus`) and `src/lib/timeline.ts` (`BridgeHistory`, `LongHistory`) and
   `publish_status()` / `publish_history()` / `publish_log()` in `mcp_bridge.lua` — change both together.
 

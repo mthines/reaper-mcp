@@ -22,6 +22,7 @@ import { labelSessions } from '../lib/sessions.js';
 import { Log, VIEW_KEY, isSpanOrNull, isView, loadView, type View } from '../features/log/index.js';
 import { useKnowledge, useLoreKitTokens } from '../features/plugins/index.js';
 import { SETTING_NAME, Settings } from '../features/settings/index.js';
+import { InstallBanner } from '../components/index.js';
 import { Changelog, availableUpdate, parseReleases, useHighlights, useReleases } from '../features/changelog/index.js';
 import { exampleReleaseJson } from '../demo/examples.js';
 import { updateOffer, useLatestRelease, type Release } from '../lib/update.js';
@@ -36,7 +37,8 @@ const UPDATE_SKIP_KEY = 'mcp-bridge-update-skipped';
 
 const OVERVIEW_KEY = 'mcp-bridge-overview';
 // ?demo: fixed releases around the running version, so the update pill and What's new have something to show
-const DEMO_RELEASES = DEMO ? parseReleases(exampleReleaseJson(__VERSION__)) : undefined;
+// The hosted demo shows the real releases (a build-time snapshot); a local ?demo shows made-up ones
+const DEMO_RELEASES = __HOSTED__ ? parseReleases(__RELEASES_SNAPSHOT__) : DEMO ? parseReleases(exampleReleaseJson(__VERSION__)) : undefined;
 const DEMO_LATEST: Release | null = DEMO_RELEASES ? (availableUpdate(DEMO_RELEASES, __VERSION__) ?? null) : null;
 
 type ChangelogSource = Extract<TrackEvent, { name: 'changelog_opened' }>['source'];
@@ -159,6 +161,7 @@ export function App() {
 
   return (
     <div className={cx(styles.shell, overview ? styles.overviewOn : '')}>
+      {__HOSTED__ && <InstallBanner />}
       <AppCommands
         rangeKey={rangeKey}
         onRange={chooseRange}
