@@ -5189,13 +5189,13 @@ local function append_log(entry)
 end
 
 local function publish_log()
-  local req = reaper.GetExtState(STATUS_SECTION, "log_want")
+  local req = reaper.GetExtState(STATUS_SECTION, "log_want") or ""
   if req ~= "" and req ~= logs.last_want then
     logs.last_want = req
     -- req echoes the page's request so it can tell this answer from an older one
     reaper.SetExtState(STATUS_SECTION, "log", json_encode({ v = 1, req = req, older = #logs.segments > 0, entries = saved_log }), false)
   end
-  local older = reaper.GetExtState(STATUS_SECTION, "log_older")
+  local older = reaper.GetExtState(STATUS_SECTION, "log_older") or ""
   if older ~= "" and older ~= logs.last_older then
     logs.last_older = older
     local id, before = older:match("^(%d+)%-(%d+)$")
