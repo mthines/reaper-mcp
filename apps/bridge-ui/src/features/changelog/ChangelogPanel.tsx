@@ -85,7 +85,7 @@ export function ChangelogPanel({
       </div>
       <div className={drawerStyles.drawerBody}>
         {/* Never "up to date" before the releases are in: the list says it is loading or couldn't reach GitHub */}
-        {(ready || update?.state === 'running') && (
+        {(ready || (update?.state === 'running' && update.kind !== 'rebuild')) && (
           <UpdateCard current={current} waiting={waiting} canUpdate={canUpdate} update={update} onUpdate={onUpdate} />
         )}
         <div className={styles.toolbar}>

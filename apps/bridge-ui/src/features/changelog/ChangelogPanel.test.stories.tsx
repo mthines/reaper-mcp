@@ -81,6 +81,13 @@ export const ClaimsNothingBeforeTheReleasesLoad: Story = {
   },
 };
 
+export const ClaimsNothingDuringARebuildBeforeTheReleasesLoad: Story = {
+  args: { releases: { status: 'loading' }, update: { kind: 'rebuild', state: 'running', startedAt: 0, log: [] } },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).queryByText('You’re up to date')).not.toBeInTheDocument();
+  },
+};
+
 export const ClaimsNothingWhenGitHubCantBeReached: Story = {
   args: { releases: { status: 'error' } },
   play: async ({ canvasElement }) => {
