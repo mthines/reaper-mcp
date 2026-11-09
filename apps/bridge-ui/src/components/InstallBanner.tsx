@@ -11,6 +11,8 @@ export const INSTALL_GUIDE_URL = `${REPO_URL}#-install-in-3-steps`;
  */
 export function InstallBanner() {
   const [copied, setCopied] = useState(false);
+  // On a phone the steps start folded so the demo itself is what the page opens on
+  const [open, setOpen] = useState(() => !window.matchMedia?.('(max-width: 720px)').matches);
   useEffect(() => {
     if (!copied) return;
     const t = setTimeout(() => setCopied(false), 1800);
@@ -39,25 +41,28 @@ export function InstallBanner() {
           </a>
         </span>
       </div>
-      <ol className={styles.steps} aria-label="Get started">
-        <li>
-          <span className={styles.step}>1</span>
-          <span>Install</span>
-          <code className="mono">{INSTALL_COMMANDS[0]}</code>
-        </li>
-        <li>
-          <span className={styles.step}>2</span>
-          <span>Connect</span>
-          <code className="mono">{INSTALL_COMMANDS[1]}</code>
-        </li>
-        <li>
-          <span className={styles.step}>3</span>
-          <span>In REAPER, run <code className="mono">mcp_bridge.lua</code>, then ask Claude Code to mix</span>
-        </li>
-      </ol>
-      <button className="btn btn-sm" onClick={copy} aria-label="Copy the install commands">
-        {copied ? 'Copied' : 'Copy commands'}
-      </button>
+      <details className={styles.more} open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+        <summary className={styles.summary}>Install in 3 steps</summary>
+        <ol className={styles.steps} aria-label="Get started">
+          <li>
+            <span className={styles.step}>1</span>
+            <span>Install</span>
+            <code className="mono">{INSTALL_COMMANDS[0]}</code>
+          </li>
+          <li>
+            <span className={styles.step}>2</span>
+            <span>Connect</span>
+            <code className="mono">{INSTALL_COMMANDS[1]}</code>
+          </li>
+          <li>
+            <span className={styles.step}>3</span>
+            <span>In REAPER, run <code className="mono">mcp_bridge.lua</code>, then ask Claude Code to mix</span>
+          </li>
+        </ol>
+        <button className="btn btn-sm" onClick={copy} aria-label="Copy the install commands">
+          {copied ? 'Copied' : 'Copy commands'}
+        </button>
+      </details>
     </aside>
   );
 }

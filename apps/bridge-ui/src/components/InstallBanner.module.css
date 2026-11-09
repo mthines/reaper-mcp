@@ -13,3 +13,17 @@
 .steps li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .step { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--text); border: 1px solid var(--line-2); }
 .banner code { max-width: 100%; overflow-x: auto; white-space: nowrap; padding: 2px 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line-2); color: var(--text); }
+.more { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.more > summary { list-style: none; }
+.more > summary::-webkit-details-marker { display: none; }
+.summary { display: none; cursor: pointer; color: var(--text); font-weight: 600; }
+.summary::after { content: '▾'; margin-left: 6px; color: var(--faint); }
+.more:not([open]) > .summary::after { content: '▸'; }
+.more > button { align-self: flex-start; }
+
+@media (max-width: 720px) {
+  .banner { padding: 10px 12px; gap: 8px; font-size: 12px; }
+  .summary { display: block; }
+  .links { margin-left: auto; }
+  .lead { flex-basis: 100%; }
+}
