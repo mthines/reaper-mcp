@@ -448,6 +448,21 @@ jobs:
             dist/index.xml dist/apps/bridge-ui/mcp_bridge* \
             $PRERELEASE_FLAG
 
+      # The public demo and changelog (Vercel) snapshot the GitHub releases when they build, and the release commit
+      # deploys before the release above exists. Redeploy once it does. Needs the repo secret VERCEL_DEPLOY_HOOK (a
+      # Vercel deploy hook for main); without it this is a no-op, and a failed hook never fails the release.
+      - name: Redeploy the public demo and changelog
+        if: ${{ !contains(needs.version.outputs.version, '-beta.') }}
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$VERCEL_DEPLOY_HOOK" ]; then
+            echo "::notice::VERCEL_DEPLOY_HOOK is not set; the public changelog updates on the next deploy"
+            exit 0
+          fi
+          curl -fsS -X POST "$VERCEL_DEPLOY_HOOK" > /dev/null \
+            || echo "::warning::Could not trigger the Vercel deploy hook; the public changelog updates on the next deploy"
+
       - name: Comment on PR (beta releases)
         if: contains(needs.version.outputs.version, '-beta.')
         uses: actions/github-script@v7
