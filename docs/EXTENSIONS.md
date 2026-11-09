@@ -315,7 +315,7 @@ warn when the notes outrun an existing item. The whole input is checked first: a
 write nothing and say which token. `dryRun` shows the notes. A lane the drum map lacks is refused with the lanes it has, never guessed
 (a wrong GM note once played the floor toms on Invasion).
 
-Not built yet: loop-folder scan (BPM and key from filenames) and a vocal chop pipeline (see `docs/PLAN-gap-closing.md`).
+Not built yet: loop-folder scan (BPM and key from filenames) and a vocal chop pipeline.
 
 ## The Helix extension
 
