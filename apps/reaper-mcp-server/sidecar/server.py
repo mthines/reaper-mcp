@@ -189,18 +189,20 @@ def handle_analyze(request_id: Any, params: dict) -> str:
         return _err(request_id, -32000, f"Inference failed: {exc}")
 
 
-def _check_file(request_id: Any, params: dict, key: str) -> str | None:
-    """Return an error response when params[key] is missing, not a file, or not audio soundfile can open."""
+def _check_file(request_id: Any, params: dict, key: str, readable: bool = True) -> str | None:
+    """Return an error response when params[key] is missing, not a file, or (readable) not audio soundfile opens."""
     path = params.get(key)
     if not path:
         return _err(request_id, -32602, f"Missing required param: {key}")
     if not os.path.exists(path):
         return _err(request_id, -32000, f"Audio file not found: {path}")
+    if not readable:
+        return None
     import soundfile as sf  # type: ignore
     try:
         sf.info(path)
     except RuntimeError as exc:
-        # Every handler reads through soundfile (analysis.load_audio), so this file would fail there too, as a
+        # The handler reads through soundfile (analysis.load_audio), so this file would fail there too, as a
         # crash-looking "… failed: Error opening …"; say it is the input (an .m4a, a text file) instead.
         return _err(request_id, -32000, f"Audio file unreadable: {path}: {exc}")
     return None
@@ -463,7 +465,8 @@ def handle_chords(request_id: Any, params: dict) -> str:
     """
     import chords
 
-    error = _check_file(request_id, params, "path")
+    # The chord model loads a whole file itself (librosa, so an .m4a works); soundfile reads only a cut range.
+    error = _check_file(request_id, params, "path", readable=False)
     if error:
         return error
     try:
