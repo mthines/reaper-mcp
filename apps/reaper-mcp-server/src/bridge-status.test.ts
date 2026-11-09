@@ -79,7 +79,7 @@ async function startBridge(setup = '', files: Record<string, string> = {}) {
         local body = f:read("a"); f:close()
         return body
       `);
-      return JSON.parse(body) as { success: boolean; error?: string };
+      return JSON.parse(body) as { success: boolean; error?: string; _page?: string };
     },
     async set(key: string, value: string) {
       lua.global.set('V', value);
@@ -1338,11 +1338,33 @@ describe('persistent history', () => {
     expect((await second.status()).recent[0].n).toBe(4);
   });
 
-  it('drops persisted history past retention and caps the saved log', async () => {
+  // The fake REAPER has no directory listing: track the segment files the bridge writes or removes, and any left by an earlier run
+  const SEGMENT_FS = (existing: string[] = []) => `
+    SEGS = {}
+    for _, n in ipairs({ ${existing.map((n) => `"${n}"`).join(', ')} }) do SEGS[n] = true end
+    local real_open = io.open
+    io.open = function(p, m)
+      local n = p:match("(history_log_[%d_]+%.jsonl)$")
+      if n and m == "w" then SEGS[n] = true end
+      return real_open(p, m)
+    end
+    local real_remove = os.remove
+    os.remove = function(p) local n = p:match("(history_log_[%d_]+%.jsonl)$"); if n then SEGS[n] = nil end return real_remove(p) end
+    api.EnumerateFiles = function(dir, i)
+      local names = {}
+      for n in pairs(SEGS) do names[#names + 1] = n end
+      table.sort(names)
+      return names[i + 1]
+    end
+  `;
+  const entry = (n: number, t: number) => ({ n, t, c: 'list_tracks', ms: 1, ok: true });
+  const jsonl = (entries: unknown[]) => entries.map((l) => JSON.stringify(l)).join('\n') + '\n';
+
+  it('drops persisted history past retention and keeps the newest in memory, the rest in segment files', async () => {
     const now = Date.now();
     const day = 24 * 3600 * 1000;
-    const old = { n: 1, t: now - 8 * day, c: 'list_tracks', ms: 1, ok: true };
-    const lines = [old, ...Array.from({ length: 1200 }, (_, i) => ({ n: i + 2, t: now - 60_000 + i, c: 'list_tracks', ms: 1, ok: true }))];
+    const old = entry(1, now - 8 * day);
+    const lines = [old, ...Array.from({ length: 2600 }, (_, i) => entry(i + 2, now - 60_000 + i))];
     const bucket = (size: number, t: number): Row => [Math.floor(t / size), 5, 0, 0, 10];
     const history = {
       v: 1,
@@ -1352,23 +1374,97 @@ describe('persistent history', () => {
         { size: 600000, b: [bucket(600000, now - 8 * day), bucket(600000, now - 6 * day)] },
       ],
     };
-    const bridge = await startBridge('', {
-      'history_log.jsonl': lines.map((l) => JSON.stringify(l)).join('\n') + '\n',
+    const bridge = await startBridge(SEGMENT_FS(), {
+      'history_log.jsonl': jsonl(lines),
       'history.json': JSON.stringify(history),
     });
     await bridge.set('log_want', '1');
     await bridge.status();
 
-    const log = await json<{ entries: Entry[] }>(bridge, 'log');
-    expect(log.entries).toHaveLength(1000);
-    expect(log.entries[0].n).toBe(1201);
+    const log = await json<{ entries: Entry[]; older: boolean }>(bridge, 'log');
+    expect(log.entries).toHaveLength(2000);
+    expect(log.entries[0].n).toBe(2601);
     expect(log.entries.every((e) => e.t > now - 7 * day)).toBe(true);
-    // The file is compacted to what is kept
-    expect(((await bridge.file('history_log.jsonl')) as string).trim().split('\n')).toHaveLength(1000);
+    // The page is told there is more to load, and the active file holds only what memory does
+    expect(log.older).toBe(true);
+    expect(((await bridge.file('history_log.jsonl')) as string).trim().split('\n')).toHaveLength(2000);
 
     expect(total((await json<History>(bridge, 'history')).b)).toBe(5);
     const long = await json<LongHistory>(bridge, 'history_long');
     expect(long.tiers.map((t) => [t.size, total(t.b)])).toEqual([[60000, 5], [600000, 5]]);
+  });
+
+  it('rotates the oldest entries into a segment file as the log outgrows memory, and serves them on request', async () => {
+    const now = Date.now();
+    const bridge = await startBridge(SEGMENT_FS(), { 'history_log.jsonl': jsonl(Array.from({ length: 1999 }, (_, i) => entry(i + 1, now - 5000 + i))) });
+    await bridge.send('list_tracks', {}, A); // 2000: still all in memory
+    await bridge.set('log_want', '1');
+    await bridge.status();
+    expect((await json<{ older: boolean }>(bridge, 'log')).older).toBe(false);
+
+    await bridge.send('list_tracks', {}, A); // 2001: the oldest 500 move out
+    await bridge.set('log_want', '2');
+    await bridge.status();
+    const log = await json<{ entries: Entry[]; older: boolean }>(bridge, 'log');
+    expect(log.entries).toHaveLength(1501);
+    expect(log.entries[log.entries.length - 1].n).toBe(500 + 1);
+    expect(log.older).toBe(true);
+
+    // The page asks for what lies below the oldest entry it holds
+    await bridge.set('log_older', '77-501');
+    await bridge.status();
+    const page = await json<{ req: string; more: boolean; entries: Entry[] }>(bridge, 'log_page');
+    expect(page.req).toBe('77');
+    expect(page.more).toBe(false);
+    expect(page.entries).toHaveLength(500);
+    expect(page.entries[0].n).toBe(500);
+    expect(page.entries[499].n).toBe(1);
+  });
+
+  it('serves older segments one at a time, newest first, and says when the last one is out', async () => {
+    const now = Date.now();
+    const seg = (first: number, last: number) =>
+      [`history_log_${first}_${last}_${now - 1000}.jsonl`, jsonl(Array.from({ length: last - first + 1 }, (_, i) => entry(first + i, now - 1000 - (last - first - i))))] as const;
+    const [nameA, bodyA] = seg(1, 3);
+    const [nameB, bodyB] = seg(4, 6);
+    const bridge = await startBridge(SEGMENT_FS([nameA, nameB]), {
+      [nameA]: bodyA,
+      [nameB]: bodyB,
+      'history_log.jsonl': jsonl([entry(7, now)]),
+    });
+    await bridge.set('log_want', '1');
+    await bridge.status();
+    expect((await json<{ older: boolean }>(bridge, 'log')).older).toBe(true);
+
+    await bridge.set('log_older', '1-7');
+    await bridge.status();
+    let page = await json<{ req: string; more: boolean; entries: Entry[] }>(bridge, 'log_page');
+    expect(page.entries.map((e) => e.n)).toEqual([6, 5, 4]);
+    expect(page.more).toBe(true);
+
+    await bridge.set('log_older', '2-4');
+    await bridge.status();
+    page = await json<{ req: string; more: boolean; entries: Entry[] }>(bridge, 'log_page');
+    expect(page.req).toBe('2');
+    expect(page.entries.map((e) => e.n)).toEqual([3, 2, 1]);
+    expect(page.more).toBe(false);
+
+    // Nothing below the oldest segment
+    await bridge.set('log_older', '3-1');
+    await bridge.status();
+    expect((await json<{ entries: Entry[]; more: boolean }>(bridge, 'log_page')).entries).toEqual([]);
+  });
+
+  it('removes a segment once its newest entry is older than the week the timeline keeps', async () => {
+    const stale = `history_log_1_3_${Date.now() - 8 * 24 * 3600 * 1000}.jsonl`;
+    const bridge = await startBridge(SEGMENT_FS([stale]), {
+      [stale]: jsonl([entry(1, Date.now() - 9 * 24 * 3600 * 1000)]),
+      'history_log.jsonl': jsonl([entry(4, Date.now())]),
+    });
+    await bridge.set('log_want', '1');
+    await bridge.status();
+    expect((await json<{ older: boolean }>(bridge, 'log')).older).toBe(false);
+    expect(await bridge.eval(`SEGS["${stale}"]`)).toBeNull();
   });
 
   it('keeps numbering after a week without REAPER, when the saved log has expired', async () => {
@@ -1436,5 +1532,46 @@ describe('stuck web-server sockets', () => {
     await bridge.eval('(function() skew = 31 end)()');
     expect((await bridge.status()).web).toBeUndefined();
     expect(await bridge.eval('#lsof_calls')).toBe(0);
+  });
+});
+
+describe('status page link on writes', () => {
+  const INI = { '/reaper/reaper.ini': `[REAPER]\ncsurf_0=HTTP 0 8123 '' 'mcp_bridge.html' 0 ''\ncsurf_cnt=1\n` };
+  const NO_WINDOW = `ext["MCPBridge/cfg_open_on_start"] = "0"; os.execute = function() return true end`;
+
+  it('answers a write with the link to its own entry on the page, at the port REAPER serves it on', async () => {
+    const bridge = await startBridge(NO_WINDOW, INI);
+    await bridge.send('get_project_info');
+    const res = (await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -3 }));
+    const { recent } = await bridge.status();
+    expect(recent[0].c).toBe('set_track_property');
+    expect(res._page).toBe(`http://localhost:8123/mcp_bridge.html?view=%22calls%22&entry=${recent[0].n}`);
+  });
+
+  it('gives no link for a read, a refused write or a write blocked by read-only', async () => {
+    const bridge = await startBridge(NO_WINDOW, INI);
+    const read = (await bridge.send('list_tracks'));
+    const refused = (await bridge.send('set_track_property', { trackIndex: 99, property: 'volume', value: -3 }));
+    await bridge.set('cfg_readonly', '1');
+    const blocked = (await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -3 }));
+    expect(read._page).toBeUndefined();
+    expect(refused.success).toBe(false);
+    expect(refused._page).toBeUndefined();
+    expect(blocked.success).toBe(false);
+    expect(blocked._page).toBeUndefined();
+  });
+
+  it('gives no link for the meter cleanup a measurement ends with', async () => {
+    const bridge = await startBridge(NO_WINDOW, INI);
+    const cleanup = await bridge.send('remove_mcp_meters', { trackIndices: '[0]' });
+    expect(cleanup.success).toBe(true);
+    expect(cleanup._page).toBeUndefined();
+  });
+
+  it('gives no link when REAPER has no web interface', async () => {
+    const bridge = await startBridge(NO_WINDOW, { '/reaper/reaper.ini': '[REAPER]\ncsurf_cnt=0\n' });
+    const res = (await bridge.send('set_track_property', { trackIndex: 0, property: 'volume', value: -3 }));
+    expect(res.success).toBe(true);
+    expect(res._page).toBeUndefined();
   });
 });

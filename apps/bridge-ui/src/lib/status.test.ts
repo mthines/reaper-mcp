@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { parseLogReply, parseLongHistoryReply, liveness, parseExtStateReply, parseHistoryReply, statusRequestUrl, webSocketLevel, settingUrl, type BridgeStatus } from './status.js';
+import { parseLogReply, parseOlderReply, parseLongHistoryReply, liveness, parseExtStateReply, parseHistoryReply, statusRequestUrl, webSocketLevel, settingUrl, type BridgeStatus } from './status.js';
 import { formatDay, formatDuration, formatParams } from './format.js';
 import { bucketize, historyTiers, inSpan, spanOfBars, timelineBars } from './timeline.js';
 import { restoreLog, clearedBefore, commandsPerMinute, deriveSeries, latencyStats, mergeLog } from './log.js';
@@ -45,6 +45,27 @@ describe('statusRequestUrl', () => {
     expect(statusRequestUrl(123)).toBe(
       '/_/SET/EXTSTATE/MCPBridge/ui_seen/123;GET/EXTSTATE/MCPBridge/status;GET/EXTSTATE/MCPBridge/history',
     );
+  });
+});
+
+describe('older log segments', () => {
+  it('asks for the segment below an entry, in the same request that reads the answer', () => {
+    expect(statusRequestUrl(123, ['log_page'], undefined, '123-501')).toBe(
+      '/_/SET/EXTSTATE/MCPBridge/ui_seen/123;SET/EXTSTATE/MCPBridge/log_older/123-501;GET/EXTSTATE/MCPBridge/status;GET/EXTSTATE/MCPBridge/history;GET/EXTSTATE/MCPBridge/log_page',
+    );
+  });
+
+  it('reads a segment with whether another lies below it', () => {
+    const entries = [{ n: 3, t: 3, c: 'x', ms: 1, ok: true }];
+    const body = `EXTSTATE\tMCPBridge\tlog_page\t${JSON.stringify({ v: 1, req: '7', more: true, entries })}\n`;
+    expect(parseOlderReply(body)).toEqual({ req: '7', more: true, entries });
+    expect(parseOlderReply('EXTSTATE\tMCPBridge\tstatus\t{}\n')).toBeNull();
+  });
+
+  it('learns from the saved log whether segments exist', () => {
+    const body = (older: boolean) => `EXTSTATE\tMCPBridge\tlog\t${JSON.stringify({ v: 1, req: '1', older, entries: [] })}\n`;
+    expect(parseLogReply(body(true))?.older).toBe(true);
+    expect(parseLogReply(body(false))?.older).toBe(false);
   });
 });
 

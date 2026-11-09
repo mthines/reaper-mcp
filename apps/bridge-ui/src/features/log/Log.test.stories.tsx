@@ -17,6 +17,8 @@ const meta = {
     selection: null,
     rangeKey: '1h',
     oldestKept: log[log.length - 1]?.t ?? null,
+    older: { more: false, loading: false },
+    onLoadOlder: fn(),
     sessions,
     view: 'calls',
     paused: false,
@@ -60,6 +62,27 @@ export const OpensACallInTheDrawerAndClosesIt: Story = {
     await expect(drawer).toBeInTheDocument();
     await userEvent.click(within(drawer).getByRole('button', { name: 'Close details' }));
     await expect(canvas.queryByRole('complementary', { name: /Details for/ })).toBeNull();
+  },
+};
+
+// The end of the list stands in for the older segments the bridge keeps in files: while the window reaches further
+// back than the page holds, the viewer sees a loading row and the next segment is asked for
+export const LoadsOlderCommandsWhileTheWindowReachesBack: Story = {
+  args: { rangeKey: '1h', older: { more: true, loading: false } },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('Loading older commands…')).toBeInTheDocument();
+    await waitFor(() => expect(args.onLoadOlder).toHaveBeenCalled());
+  },
+};
+
+export const AsksForNothingOnceTheWindowIsCovered: Story = {
+  args: { rangeKey: '5m', older: { more: true, loading: false } },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(callRows(canvas).length).toBeGreaterThan(0));
+    await expect(canvas.queryByText('Loading older commands…')).toBeNull();
+    await expect(args.onLoadOlder).not.toHaveBeenCalled();
   },
 };
 

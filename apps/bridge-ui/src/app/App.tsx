@@ -39,7 +39,7 @@ export function App() {
       window.resizeTo(980, 720);
     }
   }, []);
-  const { status, history, longHistory, reachable, lastChangeAt, log, clearLog, clearedAt } = useBridgeFeed(paused);
+  const { status, history, longHistory, reachable, lastChangeAt, log, older, loadOlder, clearLog, clearedAt } = useBridgeFeed(paused);
   // A span picked on the timeline filters the log views; the timeline's range stays as it is
   const [selection, setSelection] = useUrlState<Span | null>('span', null, { validate: isSpanOrNull });
   const shownLog = useMemo(() => inSpan(log, selection), [log, selection]);
@@ -186,6 +186,8 @@ export function App() {
             rangeKey={selection ? null : rangeKey}
             onRange={chooseRange}
             oldestKept={log[log.length - 1]?.t ?? null}
+            older={older}
+            onLoadOlder={loadOlder}
             onClearSelection={() => setSelection(null)}
             sessions={sessions}
             knowledge={DEMO ? status.knowledge : liveKnowledge}

@@ -7,6 +7,16 @@ export interface SavedLog {
   req: string;
   /** Newest first */
   entries: CommandEntry[];
+  /** The bridge has older entries in segment files, loaded with `log_older` */
+  older?: boolean;
+}
+
+/** The bridge's answer to a `log_older` request: one segment, newest first */
+export interface OlderPage {
+  req: string;
+  entries: CommandEntry[];
+  /** Another, older segment exists */
+  more: boolean;
 }
 
 /**
@@ -48,7 +58,8 @@ export function commandsPerMinute(entries: CommandEntry[], now: number): number 
   return entries.filter((e) => now - e.t <= 60_000).length;
 }
 
-export const LOG_MAX = 1000;
+/** Entries the page holds: the bridge's newest ones plus the older segments loaded while scrolling */
+export const LOG_MAX = 10_000;
 
 /**
  * Merge the bridge's latest window (newest first) into the page's longer log,

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { logs, SeverityNumber } from '@opentelemetry/api-logs';
-import { sendCommand, isBridgeRunning, cleanupStaleFiles, ensureBridgeDir, readBridgeEvents, classifyBridgeError, isSystemError, getBridgeState } from './bridge.js';
+import { sendCommand, isBridgeRunning, cleanupStaleFiles, ensureBridgeDir, readBridgeEvents, classifyBridgeError, isSystemError, getBridgeState, outdatedBridgeMessage } from './bridge.js';
 
 // Mock node:fs/promises
 vi.mock('node:fs/promises', () => ({
@@ -125,6 +125,32 @@ describe('bridge', () => {
       expect(failed).toHaveLength(2);
       expect(failed[0]).toMatchObject({ severityNumber: SeverityNumber.ERROR, attributes: { 'error.type': 'internal_error' } });
       expect(failed[1]).toMatchObject({ severityNumber: SeverityNumber.WARN, attributes: { 'error.type': 'command_failed' } });
+    });
+
+    it('reports a command the running bridge does not know as an outdated bridge, with the step that fixes it', async () => {
+      emit.mockClear();
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      mockedWriteFile.mockResolvedValue(undefined);
+      mockedUnlink.mockResolvedValue(undefined);
+      // What an mcp_bridge.lua from an older release answers for a command it has no handler for
+      mockedReadFile.mockResolvedValueOnce(JSON.stringify({
+        id: 'test-uuid-1234', success: false, error: 'Unknown command type: get_project_settings', timestamp: Date.now(),
+      }));
+
+      const result = await sendCommand('get_project_settings');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/^Bridge outdated: the REAPER bridge does not know the command 'get_project_settings'/);
+      expect(result.error).toMatch(/Restart the bridge/);
+      expect(result.error).toMatch(/reaper-mcp setup/);
+      expect(result.error).toMatch(/\(The bridge said: Unknown command type: get_project_settings\)$/);
+      expect(classifyBridgeError(result.error)).toBe('bridge_outdated');
+      const failed = emit.mock.calls.map(([r]) => r).filter((r) => r.eventName === 'reaper.bridge.command.failed');
+      expect(failed).toHaveLength(1);
+      expect(failed[0]).toMatchObject({
+        severityNumber: SeverityNumber.WARN,
+        attributes: { 'rpc.method': 'get_project_settings', 'error.type': 'bridge_outdated' },
+      });
     });
 
     it('returns timeout error when no response arrives', async () => {
@@ -400,6 +426,12 @@ describe('bridge', () => {
       expect(classifyBridgeError('Bridge not running: REAPER has not answered for 5 min.')).toBe('bridge_not_running');
       expect(isSystemError('bridge_not_running')).toBe(false);
       expect(isSystemError('timeout')).toBe(true);
+    });
+
+    it('does not count a bridge the user has not restarted since an update as a system error', () => {
+      expect(classifyBridgeError(outdatedBridgeMessage('save_project', 'Unknown command type: save_project'))).toBe('bridge_outdated');
+      expect(isSystemError('bridge_outdated')).toBe(false);
+      expect(isSystemError('unknown_command')).toBe(true);
     });
   });
 

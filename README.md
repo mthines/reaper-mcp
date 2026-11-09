@@ -258,8 +258,8 @@ breakdown is in [docs/REFERENCE.md](docs/REFERENCE.md#installation).
 
 ## 🎚️ Meet your engineers
 
-Seven skills, each tuned for a job. Type the slash command, or just describe what you
-want and the right one starts.
+Nine skills, each tuned for a job. Type the slash command, or just describe what you
+want and the right one starts (all but `/teach`, which starts only when you type it).
 
 | | Skill | What it does | Try |
 |---|---|---|---|
@@ -267,6 +267,7 @@ want and the right one starts.
 | 🔥 | **`/critique`** | "Roast my mix." A measured report of what to fix. **Changes nothing.** | `/critique What's holding this mix back?` |
 | ✂️ | **`/editing`** | Edits notes, arrangement and timing, and compares two versions of a part in lanes | `/editing Make the chorus half-time` |
 | 💿 | **`/mastering`** | A mastering chain on the mix bus, aimed at a platform's loudness | `/mastering Master this for Spotify` |
+| 🧑‍🏫 | **`/teach`** | Beginner mode, for anyone new to REAPER: one change at a time, saying what it changes and why, the REAPER concept behind it, how to do it yourself with your own shortcuts, and a link to the before/after on the bridge page. Honest that its mixing advice comes from a model. Starts only when you type `/teach` | `/teach Help me balance my drums` |
 | 🎓 | **`/learn-plugin`** | Researches a plugin you own, tests it live and saves it to LoreKit, asking you only what it can't work out | `/learn-plugin JST Gain Reduction Deluxe` |
 | 🛠️ | **`/make-plugin`** | Makes you a plugin for a need no plugin covers. A simple core view (with live graphs when they help: a frequency graph (`ui_freqgraph`) with draggable Hz band handles, gain-reduction bars, a transfer curve, a MIDI keyboard), the rest in an Advanced drawer, a few presets that show how to use it, proven by measurement. It's just a plugin afterwards, no bridge or server needed | `/make-plugin randomly mutate my samples and add reverb` |
 | 🧩 | **`/new-extension`** | Builds or updates an [extension](#-extensions-teach-it-your-plugin) that edits a plugin's internals (wavetables, mod matrix, patch state) and proves it live on a scratch track | `/new-extension Serum` |
@@ -297,6 +298,37 @@ instead of just giving advice:
 | 🎛️ Electronic | −10 to −6 LUFS | Sidechain pump, mono sub, stereo width |
 | 🎻 Orchestral | −23 to −16 LUFS | Preserved dynamics, hall reverb staging |
 | 🤘 Metal | −11 to −8 LUFS | Scooped guitars, tight drums, four-guitar wall |
+
+---
+
+## 🛠️ Make your own plugin
+
+Nothing on the shelf does what you want? Ask for it. **`/make-plugin`** writes you a real
+REAPER plugin, loads it, listens to it and fixes it until it does what you asked. Afterwards
+it's **just a plugin**: it keeps working with no bridge, no server and no Claude.
+
+> 🎲 *"/make-plugin randomly mutate my samples and add reverb"*
+>
+> 🔥 *"/make-plugin a tape saturator, warm by default, with a drive and a tone"*
+>
+> ↔️ *"/make-plugin keep everything under 120 Hz in mono and widen the rest"*
+
+<p>
+  <img src="docs/assets/make-plugin-core.png" alt="A generated plugin, Mutate Verb: four large knobs in the core view and a collapsed Advanced header." width="49%">
+  <img src="docs/assets/make-plugin-advanced.png" alt="The same plugin with the Advanced drawer open over the core view, showing six more knobs." width="49%">
+</p>
+
+- 🎛️ **A simple core, the rest on demand.** A few big knobs up front; everything else lives in an **Advanced** drawer that overlays the view instead of squeezing it.
+- 🎨 **Its own look.** Every plugin gets its own accent colour, so a growing set is easy to tell apart. Ask for another colour and it keeps it.
+- ⌨️ **Type a value.** Double-click a knob to type an exact number; Cmd/Ctrl-click resets it.
+- 🎚️ **Presets that teach.** It ships a few suggested presets, so you see how the plugin is meant to be used.
+- 📏 **Proven by measurement.** It renders with the plugin on and off and checks the audio changed, because a plugin that fails to compile still loads in REAPER.
+- 🗂️ **Easy to find.** Plugins land in your FX list as `… (reaper-mcp)`, and old versions are kept.
+
+📖 How it works, the toolkit, the examples and the limits: **[docs/PLUGIN-AUTHORING.md](docs/PLUGIN-AUTHORING.md)**
+
+> 🚧 **Coming next:** graphs. Frequency displays with band selection (for an EQ or a multiband
+> compressor), spectrum and gain-reduction meters, and a MIDI keyboard.
 
 ---
 
