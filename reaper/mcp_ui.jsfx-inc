@@ -1085,7 +1085,7 @@ function ui_fband(first_idx, n, fmt) local(k, a, b, y, idx, lo, hi, hot, drag, n
     gfx_rect(a + 2 * ui_s, y, max(1, b - a - 4 * ui_s), max(1, sel ? 2 * ui_s : ui_s));
     (sel || hot || drag) && b - a > 50 * ui_s ? (
       gfx_setfont(2);
-      fmt == 1 ? sprintf(#ui_txt, "%+.1f dB", slider(idx)) : sprintf(#ui_txt, "%.2f", slider(idx));
+      fmt == 1 ? sprintf(#ui_txt, "%+.1f dB", slider(idx)) : ui_fmtv(fmt, slider(idx));
       gfx_measurestr(#ui_txt, ui_tw, ui_th);
       ui_c(drag || sel ? ui_cAccent : ui_cText, 1);
       gfx_x = a + 6 * ui_s; gfx_y = max(ui_gy + 2 * ui_s, y - ui_th - 3 * ui_s); gfx_drawstr(#ui_txt);
