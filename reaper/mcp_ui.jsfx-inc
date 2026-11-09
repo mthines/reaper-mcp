@@ -544,8 +544,9 @@ function ui_pill(x, y, w, h) local(r) (
 // One slim horizontal bar (like the level bar in Vital's header) whose right edge is xr; returns the x of the
 // next one to its left. Drag left or right (Shift = fine), wheel, double-click to type, modifier-click resets.
 // The header band is centred on y = 15 px, the same line the plugin name sits on.
-function ui_hbar(idx, label, fmt, xr) local(bw, bh, bx, cy, lo, hi, st, t, t0, hot, tt, x0, x1) (
+function ui_hbar(idx, label, fmt, xr) local(bw, bh, bx, cy, by, lo, hi, st, t, t0, hot, tt, x0, x1) (
   bw = 58 * ui_s; bh = 6 * ui_s; bx = xr - bw; cy = 15 * ui_s;
+  by = cy - 0.5 * ui_s;   // the caps' ink sits half a pixel above the line box's middle: the bar follows the ink
   lo = ui_min[idx]; hi = ui_max[idx]; st = ui_stp[idx];
   ui_hit = !(ui_core && ui_blocked) && !ui_modal && mouse_x >= xr - 112 * ui_s && mouse_x < xr && mouse_y >= cy - 10 * ui_s && mouse_y < cy + 10 * ui_s;
   ui_hit && ui_press ? (
@@ -566,13 +567,13 @@ function ui_hbar(idx, label, fmt, xr) local(bw, bh, bx, cy, lo, hi, st, t, t0, h
   t = min(1, max(0, (slider(idx) - lo) / (hi - lo)));
   t0 = (lo < 0 && hi > 0) ? -lo / (hi - lo) : 0;
   hot = ui_active == idx || ui_hit;
-  ui_c(hot ? ui_cTrackHot : ui_cTrack, 1); ui_pill(bx, cy - bh / 2, bw, bh);
+  ui_c(hot ? ui_cTrackHot : ui_cTrack, 1); ui_pill(bx, by - bh / 2, bw, bh);
   abs(t - t0) > 0.002 ? (
     x0 = bx + bw * min(t, t0); x1 = bx + bw * max(t, t0);
     ui_c(ui_active == idx ? ui_cAccentAct : (hot ? ui_cAccentHi : ui_cAccent), 1);
-    ui_pill(x0, cy - bh / 2, max(1, x1 - x0), bh);
+    ui_pill(x0, by - bh / 2, max(1, x1 - x0), bh);
   );
-  ui_c(hot ? ui_cText : ui_cMuted, 1); gfx_rect(bx + bw * t - ui_s / 2, cy - bh, max(1, ui_s), bh * 2);
+  ui_c(hot ? ui_cText : ui_cMuted, 1); gfx_rect(bx + bw * t - ui_s / 2, by - bh, max(1, ui_s), bh * 2);
   gfx_setfont(2);
   hot ? ui_fmtv(fmt, slider(idx)) : ui_caps(label);
   gfx_measurestr(#ui_txt, ui_tw, ui_th);
