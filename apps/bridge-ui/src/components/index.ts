@@ -8,6 +8,7 @@ export const Combobox = Object.assign(ComboboxRoot, { Grouped: GroupedCombobox }
 /** The page's icons: `<Icon.Gear />` */
 export const Icon = { GitHub: GitHubIcon, Gear: GearIcon, Close: CloseIcon, Search: SearchIcon, Spark: SparkIcon, Chevron: ChevronIcon, Share: ShareIcon, External: ExternalIcon, Expand: ExpandIcon, Focus: FocusIcon, Whole: WholeIcon };
 
+export { InstallBanner } from './InstallBanner.js';
 export type { ComboboxOption } from './combobox-logic.js';
 export type { GroupedComboboxItem } from './Combobox.js';
 export { Mark } from './Mark.js';

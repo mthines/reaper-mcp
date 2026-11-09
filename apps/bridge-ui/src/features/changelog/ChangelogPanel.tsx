@@ -23,6 +23,9 @@ import { highlightsFor, type Highlight } from './highlights.js';
 import { HighlightCard } from './HighlightCard.js';
 import styles from './ChangelogPanel.module.css';
 
+/** Wider than the other drawers by default: highlight cards and release notes read better with room */
+const CHANGELOG_DRAWER_WIDTH_PX = 560;
+
 /**
  * What's new: the update reaper-mcp has waiting (with the button or the command that installs it) over the
  * repo's releases, newest first, each one's changes grouped the way the release notes list them.
@@ -48,7 +51,7 @@ export function ChangelogPanel({
   onUpdate: () => void;
   onClose: () => void;
 }) {
-  const width = useDrawerWidth();
+  const width = useDrawerWidth(CHANGELOG_DRAWER_WIDTH_PX);
   const [betas, setBetas] = useState(() => load(BETAS_KEY) === '1');
   // `?release=0.78.0`: the release a link points at, scrolled to and highlighted (a version click sets it)
   const [linked, setLinked] = useUrlState<string | null>('release', null, { validate: isStringOrNull });
@@ -91,7 +94,7 @@ export function ChangelogPanel({
 
   return (
     <aside className={cx(drawerStyles.drawer, styles.drawer)} aria-label="What’s new" style={width.style}>
-      <ResizeHandle fraction={width.fraction} onCommit={width.setFraction} />
+      <ResizeHandle fraction={width.fraction} onCommit={width.setFraction} defaultPx={CHANGELOG_DRAWER_WIDTH_PX} />
       <div className={drawerStyles.drawerHead}>
         <div className={drawerStyles.drawerTitle}>
           <Icon.Spark /> What’s new

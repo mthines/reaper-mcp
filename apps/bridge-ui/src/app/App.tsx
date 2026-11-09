@@ -22,6 +22,7 @@ import { labelSessions } from '../lib/sessions.js';
 import { Log, VIEW_KEY, isSpanOrNull, isView, loadView, type View } from '../features/log/index.js';
 import { useKnowledge, useLoreKitTokens } from '../features/plugins/index.js';
 import { SETTING_NAME, Settings } from '../features/settings/index.js';
+import { InstallBanner } from '../components/index.js';
 import { Changelog, availableUpdate, parseReleases, useHighlights, useReleases } from '../features/changelog/index.js';
 import { exampleReleaseJson } from '../demo/examples.js';
 import { updateOffer, useLatestRelease, type Release } from '../lib/update.js';
@@ -160,6 +161,7 @@ export function App() {
 
   return (
     <div className={cx(styles.shell, overview ? styles.overviewOn : '')}>
+      {__HOSTED__ && <InstallBanner />}
       <AppCommands
         rangeKey={rangeKey}
         onRange={chooseRange}
