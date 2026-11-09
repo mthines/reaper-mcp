@@ -17,24 +17,25 @@ export function Notices({
   onSet,
   request,
   release,
+  onSkip,
   onWhatsNew,
 }: {
   status: BridgeStatus;
   settings: BridgeSettings | null;
   onSet: (key: SettingKey, on: boolean) => void;
   request: BridgeRequest;
-  /** A stable release newer than this install, or null */
+  /** A stable release newer than this install that the user hasn't skipped (never in developer mode), or null */
   release: Release | null;
+  /** Skip this version: no more offers until a newer one */
+  onSkip: (version: string) => void;
   /** Opens the What's new drawer */
   onWhatsNew: () => void;
 }) {
   const [swsDismissed, setSwsDismissed] = useState(() => load(SWS_DISMISS_KEY) === '1');
-  const [skipped, setSkipped] = useState(() => load(UPDATE_SKIP_KEY));
   const [updateDoneDismissed, setUpdateDoneDismissed] = useState(false);
   const health = status.health;
   const control = status.control;
   const update = control?.update;
-  const dev = settings?.dev === true;
   const rebuild = update?.kind === 'rebuild';
   const notices: ReactNode[] = [];
 
@@ -75,7 +76,7 @@ export function Notices({
         )}
       </Notice>,
     );
-  } else if (!dev && release && skipped !== release.version) {
+  } else if (release) {
     notices.push(
       <Notice
         key="update"
@@ -97,7 +98,7 @@ export function Notices({
               className="icon-btn"
               aria-label="Skip this version"
               title="Skip this version"
-              onClick={() => { setSkipped(release.version); save(UPDATE_SKIP_KEY, release.version); }}
+              onClick={() => onSkip(release.version)}
             >
               <Icon.Close />
             </button>
@@ -176,4 +177,3 @@ export function Notices({
   return notices.length ? <div className={styles.notices}>{notices}</div> : null;
 }
 
-const UPDATE_SKIP_KEY = 'mcp-bridge-update-skipped';

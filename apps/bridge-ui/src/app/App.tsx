@@ -24,13 +24,15 @@ import { useKnowledge, useLoreKitTokens } from '../features/plugins/index.js';
 import { SETTING_NAME, Settings } from '../features/settings/index.js';
 import { Changelog, availableUpdate, parseReleases, useHighlights, useReleases } from '../features/changelog/index.js';
 import { exampleReleaseJson } from '../demo/examples.js';
-import { compareVersions, useLatestRelease, type Release } from '../lib/update.js';
+import { updateOffer, useLatestRelease, type Release } from '../lib/update.js';
 import type { TrackEvent } from '../lib/analytics.js';
 import { blockedBy, useSnapshots } from '../features/snapshots/index.js';
 import { Stats } from '../features/stats/index.js';
 import { RANGE_STORAGE_KEY, Timeline, isRangeKey, loadRange, type RangeKey } from '../features/timeline/index.js';
 import { cx } from '../lib/cx.js';
 import styles from './App.module.css';
+
+const UPDATE_SKIP_KEY = 'mcp-bridge-update-skipped';
 
 const OVERVIEW_KEY = 'mcp-bridge-overview';
 // ?demo: fixed releases around the running version, so the update pill and What's new have something to show
@@ -94,7 +96,13 @@ export function App() {
   const [changelogOpen, setChangelogOpen] = useUrlState('changelog', false, { validate: isBoolean });
   const liveRelease = useLatestRelease(!DEMO && settings?.dev !== true);
   const release = DEMO ? DEMO_LATEST : liveRelease;
-  const updateAvailable = release && compareVersions(release.version, __VERSION__) > 0 ? release : null;
+  // One offer for the pill, the ⋯ menu, the palette and the notice: never in developer mode, never a version the user skipped
+  const [skipped, setSkipped] = useState(() => load(UPDATE_SKIP_KEY));
+  const skipUpdate = (version: string) => {
+    save(UPDATE_SKIP_KEY, version);
+    setSkipped(version);
+  };
+  const updateAvailable = updateOffer(release, __VERSION__, { dev: settings?.dev === true, skipped });
   const releases = useReleases(changelogOpen, DEMO_RELEASES);
   const highlights = useHighlights(changelogOpen);
   const openChangelog = (source: ChangelogSource) => () => {
@@ -194,7 +202,7 @@ export function App() {
       />
       {status ? (
         <>
-          <Notices status={status} settings={settings} onSet={changeSetting('notice')} request={request} release={updateAvailable} onWhatsNew={openChangelog('notice')} />
+          <Notices status={status} settings={settings} onSet={changeSetting('notice')} request={request} release={updateAvailable} onSkip={skipUpdate} onWhatsNew={openChangelog('notice')} />
           <div className={styles.overview}>
             <Stats status={status} log={log} now={now} series={series} />
             <Timeline
@@ -253,7 +261,7 @@ export function App() {
               releases={releases}
               highlights={highlights}
               current={__VERSION__}
-              canUpdate={status.control?.canUpdate === true}
+              canUpdate={status.control?.canUpdate === true && settings?.dev !== true}
               update={status.control?.update}
               onUpdate={() => request('update')}
               onClose={() => setChangelogOpen(false)}

@@ -9,7 +9,7 @@ const settings = { paused: false, readonly: false, openOnStart: true, dev: false
 const meta = {
   title: 'App/Notices',
   component: Notices,
-  args: { status, settings, onSet: fn(), request: fn(), release: null, onWhatsNew: fn() },
+  args: { status, settings, onSet: fn(), request: fn(), release: null, onSkip: fn(), onWhatsNew: fn() },
 } satisfies Meta<typeof Notices>;
 export default meta;
 type Story = StoryObj<typeof meta>;
