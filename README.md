@@ -351,12 +351,13 @@ Claude build one for the plugin *you* use.
 |---|---|---|
 | 🎹 | **`vital`** | Read a Vital patch and edit its settings, **mod matrix** and **LFO shapes**; build **wavetables** (1-256 frames) from classic shapes or harmonic recipes |
 | 🎸 | **`helix`** | Build and edit Line 6 **Helix presets** with up to 8 snapshots, check them against real models, and load them into Helix Native, **backed up and rolled back** if anything else changed |
+| 🎼 | **`composition`** | Write MIDI from notation: **chord progressions** (`"Cm7, Fm7, Bb7, Eb"`) and step-sequencer **drum patterns** with GM and GGD Invasion maps |
 | 🧩 | **yours** | `/new-extension Serum`: Claude researches the plugin's format, probes it on a scratch track, writes the tools **with tests** and proves they change the sound |
 
 **Switch one on**, then restart Claude Code:
 
 ```bash
-reaper-mcp extension add vital      # or: helix
+reaper-mcp extension add vital      # or: helix, composition
 reaper-mcp extension list           # what's installed, and why one can't load
 ```
 
@@ -542,6 +543,10 @@ Nobody has tested a local model end to end yet, so treat it as an experiment. Wh
   A model that invents parameters or drops JSON fields fails there.
   Pick an instruction-tuned model your client lists with native tool calling, the biggest your machine runs.
 - **Speed:** each turn sends those 51k tokens again, so on a laptop GPU expect slow turns.
+- **A smaller tool set:** set `REAPER_MCP_PROFILE` in your client's server `env` to load only what you need. `mixing` (122 tools),
+  `music` (127), `analysis` (79) or `minimal` (56), all under the 128 tools some clients allow; unset or `full` loads all 189.
+  Combine them with category names or an extension: `mixing,midi` or `music,composition`.
+  `list_tool_categories` then lists only what is loaded.
 
 Tried one? [Tell us how it went](https://github.com/mthines/reaper-mcp/issues/72), and we'll list what works here.
 

@@ -17,6 +17,7 @@ parameters can't: a wavetable, a modulation matrix, a patch graph, a preset file
 |---|---|
 | [`vital`](#the-vital-extension) | Read and edit a Vital synth patch: settings, mod matrix, LFO shapes, wavetables |
 | [`helix`](#the-helix-extension) | Build, edit and validate Line 6 Helix `.hlx` presets; load them into Helix Native with a checked import |
+| [`composition`](#the-composition-extension) | Write MIDI from notation: chord progressions and step-sequencer drum patterns |
 
 ## Contents
 
@@ -24,7 +25,7 @@ parameters can't: a wavetable, a modulation matrix, a patch graph, a preset file
 [Anatomy](#anatomy) · [The API](#the-api-version-1) · [Lua handlers](#lua-handlers) · [Plugin state](#plugin-state-apifxstate) ·
 [Three kinds of extension](#three-kinds-of-extension) · [Designing good tools](#designing-good-tools) · [Writing and testing](#writing-and-testing-one) ·
 [Build one with Claude](#build-one-with-claude) · [Share one](#share-one) · [Trust](#trust) · [Troubleshooting](#troubleshooting) ·
-[Vital](#the-vital-extension) · [Helix](#the-helix-extension) · [Not built yet](#not-built-yet)
+[Vital](#the-vital-extension) · [Helix](#the-helix-extension) · [Composition](#the-composition-extension) · [Not built yet](#not-built-yet)
 
 ## Quick start
 
@@ -298,6 +299,23 @@ folder when running live-REAPER test suites so they don't touch your bridge).
 
 Not yet: wavetables from audio files, spectral/warp components, the sample slot, effect-section helpers, macros.
 Lessons from building it (VST3 length fields, FXID) are in LoreKit under `repo::mthines/reaper-mcp`.
+
+## The Composition extension
+
+`extensions/composition` writes MIDI from notation. It is an extension, not core, because what to write is a musical taste call; the
+core MIDI tools stay objective (quantize, transform, import, key and chord detection). It only writes notes: it never picks a sound.
+
+| Tool | |
+|---|---|
+| `composition_chord_progression` | `"Cm7, Fm7, Bb7, Eb"` (commas, spaces or `\|`) to voiced notes: major, minor, dim, aug, sus, 6, 7, maj7, m7, m7b5, dim7, 9, add9 and more; slash bass (`C/E`), per-chord length (`Am:2`), octave, inversion, bass note |
+| `composition_drum_pattern` | Step-sequencer lanes (`"kick": "x---x---"`, `x` hit, `X` accent, `o` ghost) to notes; `gm` or `invasion` (GetGood Drums, not GM) map, per-lane `pitches`, steps per beat, repeat, swing |
+
+Both write into the item you name, or create one at `positionSeconds` sized to the notes (project tempo; the tempo map is not followed), and
+warn when the notes outrun an existing item. The whole input is checked first: a bad chord, an unknown drum lane or lanes of unequal length
+write nothing and say which token. `dryRun` shows the notes. A lane the drum map lacks is refused with the lanes it has, never guessed
+(a wrong GM note once played the floor toms on Invasion).
+
+Not built yet: loop-folder scan (BPM and key from filenames) and a vocal chop pipeline (see `docs/PLAN-gap-closing.md`).
 
 ## The Helix extension
 

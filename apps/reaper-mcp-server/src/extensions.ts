@@ -194,9 +194,13 @@ async function loadOne(server: McpServer, ext: DiscoveredExtension & { manifest:
  * API version or fails in `register()` is skipped (its tools are removed again) and reported, so one bad
  * extension can never stop `serve`.
  */
-export async function loadExtensions(server: McpServer, root: string = getExtensionsDir()): Promise<ExtensionStatus[]> {
+export async function loadExtensions(server: McpServer, root: string = getExtensionsDir(), include?: (name: string) => boolean): Promise<ExtensionStatus[]> {
   const statuses: ExtensionStatus[] = [];
   for (const ext of await discoverExtensions(root)) {
+    if (include && !include(ext.manifest?.name ?? ext.folder)) {
+      statuses.push({ name: ext.manifest?.name ?? ext.folder, status: 'skipped', reason: 'not in the REAPER_MCP_PROFILE', tools: [] });
+      continue;
+    }
     if (!ext.manifest) {
       statuses.push({ name: ext.folder, status: 'skipped', reason: ext.errors.join('; '), tools: [] });
     } else {

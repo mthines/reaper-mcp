@@ -3,6 +3,7 @@
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
+import { resolveProfile } from './profile.js';
 import { checkExtensions, loadExtensions } from './extensions.js';
 import { extensionCommand } from './extension-cli.js';
 import { ensureBridgeDir, isBridgeRunning, getBridgeState, bridgeDownMessage, cleanupStaleFiles, readBridgeEvents, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
@@ -582,10 +583,19 @@ async function serve(): Promise<void> {
       startupSpan.setAttribute('reaper.bridge.connected', bridge.state === 'connected');
       startupSpan.setAttribute('reaper.bridge.state', bridge.state);
 
-      const server = createServer();
-      for (const ext of await loadExtensions(server)) {
+      const profile = resolveProfile();
+      const server = createServer(profile);
+      const selected = profile.categories;
+      const loadedExtensions = await loadExtensions(server, undefined, selected ? (name) => selected.has(name) : undefined);
+      for (const ext of loadedExtensions) {
         if (ext.status === 'loaded') log(`Extension ${ext.name} ${ext.version ?? ''} loaded (${ext.tools.length} tools)`);
         else log(`Extension ${ext.name} skipped: ${ext.reason}`);
+      }
+      if (selected) {
+        log(`Tool profile "${profile.name}": ${Object.keys((server as unknown as { _registeredTools: Record<string, unknown> })._registeredTools).length} tools`);
+        for (const name of profile.extensions) {
+          if (!loadedExtensions.some((e) => e.name === name && e.status === 'loaded')) log(`REAPER_MCP_PROFILE names "${name}", which is neither a profile, a tool category nor a loaded extension`);
+        }
       }
       const transport = new StdioServerTransport();
 

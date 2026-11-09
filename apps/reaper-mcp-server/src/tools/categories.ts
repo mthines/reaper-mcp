@@ -176,14 +176,26 @@ export function registerExtensionCategory(extension: string, description: string
   return name;
 }
 
+let visibleCategories: Set<string> | null = null;
+
+/** Limit what the category tools list to a profile's categories (null = all). See `profile.ts`. */
+export function setVisibleCategories(names: Set<string> | null): void {
+  visibleCategories = names;
+}
+
+function visible(): Record<string, ToolCategory> {
+  if (!visibleCategories) return TOOL_CATEGORIES;
+  return Object.fromEntries(Object.entries(TOOL_CATEGORIES).filter(([n]) => visibleCategories?.has(n)));
+}
+
 export function registerCategoryTools(server: McpServer): void {
   server.tool(
     'list_tool_categories',
     'List all available tool categories with descriptions and tool names. Use this to discover what tools are available without loading every tool schema. ' +
-      `Categories: ${Object.keys(TOOL_CATEGORIES).join(', ')}.`,
+      `Categories: ${Object.keys(visible()).join(', ')}.`,
     {},
     async () => {
-      const categories = Object.values(TOOL_CATEGORIES).map((cat) => ({
+      const categories = Object.values(visible()).map((cat) => ({
         name: cat.name,
         description: cat.description,
         toolCount: cat.tools.length,
@@ -205,9 +217,9 @@ export function registerCategoryTools(server: McpServer): void {
       category: z.string().describe('Category name (e.g. "tracks", "fx", "midi", "media", "transport", "markers", "envelopes", "analysis", "discovery")'),
     },
     async ({ category }) => {
-      const cat = TOOL_CATEGORIES[category];
+      const cat = visible()[category];
       if (!cat) {
-        const available = Object.keys(TOOL_CATEGORIES).join(', ');
+        const available = Object.keys(visible()).join(', ');
         return {
           content: [{
             type: 'text',
@@ -238,9 +250,9 @@ export function registerCategoryTools(server: McpServer): void {
       category: z.string().describe('Category name (e.g. "tracks", "fx", "midi", "media", "transport", "markers", "envelopes", "analysis", "discovery")'),
     },
     async ({ category }) => {
-      const cat = TOOL_CATEGORIES[category];
+      const cat = visible()[category];
       if (!cat) {
-        const available = Object.keys(TOOL_CATEGORIES).join(', ');
+        const available = Object.keys(visible()).join(', ');
         return {
           content: [{
             type: 'text',
