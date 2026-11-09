@@ -85,6 +85,8 @@ ensure_dir "$CLAUDE_SKILLS_DIR"
 #    Flattened to the skill's own basename, so nested category layouts work too.
 while IFS= read -r -d '' skill_md; do
   skill_dir="$(dirname "$skill_md")"
+  # A maintainer skill (marked .repo-only) works inside this repo only; never link it into ~/.claude
+  [[ -e "$skill_dir/.repo-only" ]] && continue
   link "$CLAUDE_SKILLS_DIR/$(basename "$skill_dir")" "$skill_dir"
 done < <(find "$REPO_ROOT/.claude/skills" -mindepth 1 -maxdepth 5 -type f -name SKILL.md -print0)
 

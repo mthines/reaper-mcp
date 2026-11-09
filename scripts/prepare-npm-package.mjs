@@ -11,7 +11,7 @@
 // Every required file is checked up front and the script names the missing ones, so a layout
 // change fails here with a readable message instead of in the middle of `npm publish`.
 
-import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildNpmReadme } from '../apps/reaper-mcp-server/src/npm-readme.mjs';
@@ -43,6 +43,14 @@ if (missing.length) {
 }
 
 for (const [from, to] of copies) cpSync(from, to, { recursive: true });
+
+// Maintainer skills (a .repo-only marker, e.g. changelog-highlight) work inside the repo only: leave them out
+const skillsDir = join(pkgDir, 'claude', 'skills');
+if (existsSync(skillsDir)) {
+  for (const name of readdirSync(skillsDir)) {
+    if (existsSync(join(skillsDir, name, '.repo-only'))) rmSync(join(skillsDir, name), { recursive: true, force: true });
+  }
+}
 
 const pkgPath = join(pkgDir, 'package.json');
 const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));

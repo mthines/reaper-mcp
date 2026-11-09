@@ -72,6 +72,8 @@ export function installClaudeAssets(packageClaudeDir: string, claudeDir: string,
   if (existsSync(skillsSrc)) {
     for (const f of listFiles(skillsSrc)) {
       const rel = relative(skillsSrc, f);
+      // A maintainer skill (.repo-only) belongs to the repo, never to a user's ~/.claude
+      if (existsSync(join(skillsSrc, rel.split(/[\\/]/)[0], '.repo-only'))) continue;
       plan.push([f, join(claudeDir, 'skills', rel), join(claudeDir, 'skills', rel.split(/[\\/]/)[0])]);
     }
   }
