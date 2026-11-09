@@ -115,7 +115,7 @@ export function groupChanges(changes: Change[]): { id: ChangeGroup; title: strin
   return GROUPS.map((g) => ({ ...g, changes: changes.filter((c) => c.group === g.id) })).filter((g) => g.changes.length > 0);
 }
 
-/** Releases to list: stable ones, plus betas when asked for (only betas newer than the newest stable are useful). */
+/** Releases to list: stable ones, plus every beta when asked for. */
 export function visibleReleases(releases: ChangelogRelease[], betas: boolean): ChangelogRelease[] {
   return betas ? releases : releases.filter((r) => !r.prerelease);
 }
