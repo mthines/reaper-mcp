@@ -12,7 +12,32 @@ import { join } from 'node:path';
 import { metrics as otelMetrics, trace, SpanStatusCode } from '@opentelemetry/api';
 import { metrics, node, tracing } from '@opentelemetry/sdk-node';
 import type { CommandType } from '@reaper-mcp/protocol';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sendCommand, pollBridgeDiagnostics } from './bridge.js';
+import { instrumentToolHandlers } from './server.js';
+
+type ToolCb = (...args: unknown[]) => Promise<unknown>;
+
+/** Register one tool through the instrumentation wrapper on a stub server; return the wrapped callback. */
+function wrapTool(name: string, cb: ToolCb): ToolCb {
+  let registered: ToolCb | undefined;
+  const server = { tool: (...args: unknown[]) => { registered = args[args.length - 1] as ToolCb; } };
+  instrumentToolHandlers(server as unknown as McpServer);
+  server.tool(name, 'desc', {}, cb);
+  return registered as ToolCb;
+}
+
+/** Severity of every log line written to stderr (emitLog mirrors each record there as JSON). */
+function loggedLevels(stderr: { mock: { calls: unknown[][] } }): string[] {
+  return stderr.mock.calls.flatMap((call) => {
+    try {
+      const level = (JSON.parse(String(call[0])) as { level?: string }).level;
+      return level ? [level] : [];
+    } catch {
+      return [];
+    }
+  });
+}
 
 const spans = new tracing.InMemorySpanExporter();
 const metricExporter = new metrics.InMemoryMetricExporter(metrics.AggregationTemporality.CUMULATIVE);
@@ -130,6 +155,41 @@ describe('bridge telemetry', () => {
     expect(span?.attributes).toMatchObject({ 'error.type': 'bridge_not_running', 'reaper.bridge.state': 'never_started' });
     // Not a bug in the bridge: the status stays unset, like a refused request
     expect(span?.status.code).toBe(SpanStatusCode.UNSET);
+  });
+
+  it('keeps a tool refused because the bridge never started a warning: status unset, one WARN log', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 10 * 60_000 });
+    await rm(join(bridgeDir, 'heartbeat.json'));
+    await writeFile(join(root, 'Scripts', 'mcp_bridge.lua'), '-- installed by reaper-mcp setup');
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    stderr.mockClear();
+    const tool = wrapTool('get_project_info', async () => {
+      const res = await sendCommand('get_project_info');
+      return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
+    });
+
+    await tool({}, { requestId: 1 });
+
+    const toolSpan = spans.getFinishedSpans().find((s) => s.name === 'tools/call get_project_info');
+    expect(toolSpan?.attributes['error.type']).toBe('tool_error');
+    expect(toolSpan?.status.code).toBe(SpanStatusCode.UNSET);
+    expect(loggedLevels(stderr)).toEqual(['warn']);
+  });
+
+  it('fails a tool whose bridge command timed out: status ERROR, the bridge\'s ERROR log only', async () => {
+    clearInterval(responder); // REAPER stops answering
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    stderr.mockClear();
+    const tool = wrapTool('list_tracks', async () => {
+      const res = await sendCommand('list_tracks', {}, 50);
+      return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
+    });
+
+    await tool({}, { requestId: 2 });
+
+    const toolSpan = spans.getFinishedSpans().find((s) => s.name === 'tools/call list_tracks');
+    expect(toolSpan?.status.code).toBe(SpanStatusCode.ERROR);
+    expect(loggedLevels(stderr)).toEqual(['error']);
   });
 
   it.each(['_chord_grid', '_item_range', '_midi_pitch_profile'])(

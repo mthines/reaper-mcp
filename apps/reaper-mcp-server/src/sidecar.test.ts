@@ -5,8 +5,10 @@
  * All tests run without a real Python process.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
+import { trace, SpanStatusCode } from '@opentelemetry/api';
+import { tracing } from '@opentelemetry/sdk-node';
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before any import
@@ -30,7 +32,7 @@ vi.mock('./setup-sidecar.js', () => ({
 
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { getSidecarClient, _resetSidecarClient } from './sidecar.js';
+import { getSidecarClient, _resetSidecarClient, classifySidecarError, isSidecarRegression } from './sidecar.js';
 import { copySidecarScript } from './setup-sidecar.js';
 
 const spawnMock = spawn as unknown as ReturnType<typeof vi.fn>;
@@ -347,5 +349,77 @@ describe('shutdown()', () => {
     existsMock.mockReturnValue(false);
     const client = getSidecarClient();
     expect(() => client.shutdown()).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Failure severity: expected outcomes warn, regressions fail the span
+// ---------------------------------------------------------------------------
+
+describe('failed requests in telemetry', () => {
+  const spans = new tracing.InMemorySpanExporter();
+
+  beforeAll(() => {
+    trace.setGlobalTracerProvider(
+      new tracing.BasicTracerProvider({ spanProcessors: [new tracing.SimpleSpanProcessor(spans)] }),
+    );
+  });
+
+  beforeEach(() => {
+    spans.reset();
+  });
+
+  /** Run one analyze() the sidecar answers with this JSON-RPC error; return its span and the log level it wrote. */
+  async function failAnalyze(error: { code: number; message: string }): Promise<{ span: tracing.ReadableSpan; level: string }> {
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    stderr.mockClear();
+    existsMock.mockReturnValue(true);
+    const proc = createMockProcess();
+    spawnMock.mockReturnValue(proc);
+    const analyzePromise = getSidecarClient().analyze('/tmp/clip.wav', 0, 5);
+    await flushMicrotasks();
+    emitResponse(proc, { jsonrpc: '2.0', id: 1, error });
+    await expect(analyzePromise).rejects.toThrow(error.message);
+    const logged = stderr.mock.calls
+      .map((c) => { try { return JSON.parse(String(c[0])) as { level?: string; event?: string }; } catch { return {}; } })
+      .find((line) => line.event === 'reaper.sidecar.request.failed');
+    const [span] = spans.getFinishedSpans();
+    return { span, level: logged?.level ?? '' };
+  }
+
+  it.each([
+    { code: -32000, message: 'Audio too short: 0.30s (minimum 0.5s)' },
+    { code: -32000, message: 'Audio file not found: /tmp/clip.wav' },
+    { code: -32000, message: "Audio file unreadable: /tmp/ref.m4a: Error opening '/tmp/ref.m4a': Format not recognised." },
+    { code: -32602, message: 'bpm must be between 40 and 240' },
+  ])('reports input the sidecar rejected as an expected failure: $message', async (error) => {
+    const { span, level } = await failAnalyze(error);
+
+    expect(span.name).toBe('sidecar/analyze');
+    expect(span.attributes['error.type']).toBe('sidecar_rejected');
+    expect(span.status.code).toBe(SpanStatusCode.UNSET);
+    expect(level).toBe('warn');
+  });
+
+  it('reports an analysis that raised as a regression', async () => {
+    const { span, level } = await failAnalyze({ code: -32000, message: 'Inference failed: CUDA out of memory' });
+
+    expect(span.attributes['error.type']).toBe('sidecar_error');
+    expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(level).toBe('error');
+  });
+
+  it.each([
+    ['Sidecar timeout after 60000ms. Override with REAPER_MCP_SIDECAR_TIMEOUT_MS env var.', 'timeout', true],
+    ['Sidecar busy: waited 300 s behind separate — retry when it finishes', 'busy', false],
+    ['Audio understanding sidecar not installed. Run reaper-mcp setup-sidecar', 'not_installed', false],
+    ['audiobox-aesthetics not installed: No module named \'audiobox_aesthetics\'. Run in a terminal: reaper-mcp setup-sidecar', 'not_installed', false],
+    ['Stem separation is not installed. Run: reaper-mcp setup-sidecar --with-separation', 'not_installed', false],
+    ['Voice arrangement preview failed: FluidSynth native library is not installed or could not be loaded.', 'not_installed', false],
+    ['Failed to initialize predictor: CUDA error', 'sidecar_error', true],
+    ['Sidecar restarted; please retry the operation', 'sidecar_error', true],
+  ] as const)('classifies "%s" as %s (regression: %s)', (message, type, regression) => {
+    expect(classifySidecarError(new Error(message))).toBe(type);
+    expect(isSidecarRegression(classifySidecarError(new Error(message)))).toBe(regression);
   });
 });

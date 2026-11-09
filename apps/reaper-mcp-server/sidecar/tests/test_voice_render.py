@@ -213,7 +213,7 @@ def test_failed_soundfont_load_removes_only_the_new_output_folder(tmp_path):
     sentinel = tmp_path / "keep.txt"
     sentinel.write_text("user data")
     for _ in range(2):
-        with pytest.raises(RuntimeError, match="SoundFont|soundfontPath"):
+        with pytest.raises(ValueError, match="SoundFont|soundfontPath"):
             render(params)
         assert not (tmp_path / "render").exists()
         assert sentinel.read_text() == "user data"

@@ -83,6 +83,21 @@ def test_a_range_is_cut_out_and_its_times_stay_in_file_seconds(wav, fake_model):
     assert result["vocabulary"] == "ismir2017"
 
 
+def test_a_whole_file_soundfile_cannot_open_still_reaches_the_model(tmp_path, monkeypatch):
+    # The model loads the file itself, so a format soundfile does not read (an .m4a) is not refused up front.
+    song = tmp_path / "song.m4a"
+    song.write_bytes(b"not a format soundfile reads")
+    seen = []
+    monkeypatch.setattr(chords, "is_installed", lambda: True)
+    monkeypatch.setattr(chords, "_recognize",
+                        lambda source, vocabulary: seen.append(source) or [{"start_time": 0, "end_time": 2, "chord": "A:min"}])
+
+    result = call("chords", path=str(song))["result"]
+
+    assert seen == [str(song)]
+    assert result["segments"] == [{"start": 0.0, "end": 2.0, "label": "A:min"}]
+
+
 def test_refuses_an_unknown_vocabulary_and_a_missing_file(wav, fake_model):
     assert call("chords", path=wav, vocabulary="jazz")["error"]["code"] == -32602
     assert "not found" in call("chords", path="/nope/missing.wav")["error"]["message"]
