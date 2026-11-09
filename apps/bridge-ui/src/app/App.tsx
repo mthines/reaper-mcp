@@ -256,17 +256,6 @@ export function App() {
               autostartInstalled={status.health?.autostart}
             />
           )}
-          {changelogOpen && (
-            <Changelog
-              releases={releases}
-              highlights={highlights}
-              current={__VERSION__}
-              canUpdate={status.control?.canUpdate === true && settings?.dev !== true}
-              update={status.control?.update}
-              onUpdate={() => request('update')}
-              onClose={() => setChangelogOpen(false)}
-            />
-          )}
           <footer className={styles.footer}>
             <span className="mono" title="Bridge IPC directory">{status.bridgeDir}</span>
             <span className={styles.footerMeta}>
@@ -282,6 +271,18 @@ export function App() {
         </>
       ) : (
         <Offline reachable={reachable} />
+      )}
+      {/* Outside the bridge's branch: the pill (from the cached release) and the palette open it offline too */}
+      {changelogOpen && (
+        <Changelog
+          releases={releases}
+          highlights={highlights}
+          current={__VERSION__}
+          canUpdate={status?.control?.canUpdate === true && settings?.dev !== true}
+          update={status?.control?.update}
+          onUpdate={() => request('update')}
+          onClose={() => setChangelogOpen(false)}
+        />
       )}
     </div>
   );
