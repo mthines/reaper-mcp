@@ -69,7 +69,7 @@ export const ReducedMotionShowsThePosterWhenEnlarged: Story = {
   },
   beforeEach: () => {
     const real = window.matchMedia;
-    window.matchMedia = ((query: string) => ({ matches: query.includes('reduce'), media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: query.includes('reduce'), media: query, addEventListener: fn(), removeEventListener: fn() })) as unknown as typeof window.matchMedia;
     return () => {
       window.matchMedia = real;
     };
