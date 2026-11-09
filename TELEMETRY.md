@@ -63,6 +63,10 @@ It never sends plugin, track, project or agent session names, what you type in t
 
 Turn it off under **Settings → Privacy → Share usage statistics** on the page. It is also off when your browser sends Global Privacy Control or Do Not Track, and in the `?demo` preview. The page keeps its own setting, so `reaper-mcp telemetry off` doesn't switch it off. The code is in [`apps/bridge-ui/src/lib/analytics.ts`](apps/bridge-ui/src/lib/analytics.ts).
 
+## Update check
+
+Separately from telemetry, and whether telemetry is on or off, an npm install asks the npm registry at most once a day which version of `@mthines/reaper-mcp` is the latest, so your agent can tell you when a newer release is out (at most once a day). It is a plain request for the package's public version number and sends nothing about you; the answer is kept in `~/.reaper-mcp/update-check.json`. Turn it off with `REAPER_MCP_UPDATE_CHECK=0` or `NO_UPDATE_NOTIFIER=1`. A git clone never asks.
+
 ## Where it goes
 
 The data goes to an observability backend ([Dash0](https://www.dash0.com)) over OTLP, into a dataset only the developer can read. The ingest token built into the CLI can only write to that dataset, not read from it. The code that decides all of this is in [`apps/reaper-mcp-server/src/telemetry-consent.ts`](apps/reaper-mcp-server/src/telemetry-consent.ts).

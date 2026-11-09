@@ -49,6 +49,7 @@ reaper-mcp/
       bridge.ts               # File-based IPC: sendCommand(), isBridgeRunning(), etc.
       bridge-repair.ts        # serve: bring REAPER's files (bridge, JSFX, page, autostart block) up to this release once per release (npm installs)
       notices.ts              # One-time notices for the user, appended to the first tool result (updated bridge, newer release)
+      update-check.ts         # serve (npm installs): ask npm at most once a day for a newer release, notice at most once a day
       sidecar.ts              # Python subprocess lifecycle + JSON-RPC client (getSidecarClient())
       setup-sidecar.ts        # setup-sidecar CLI command: component picker (TTY) or flags, Python check, venv, deps, weights, add-ons
       tools/

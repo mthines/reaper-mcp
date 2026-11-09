@@ -25,6 +25,7 @@ import { getSidecarClient } from './sidecar.js';
 import { renderDoctor, useColor, type Check, type CheckStatus, type Section } from './doctor-report.js';
 import { repairBridgeInstall, repairNotices, writeBridgeVersion, type BridgeRepair } from './bridge-repair.js';
 import { addNotice } from './notices.js';
+import { checkForUpdate, updateCheckDisabled } from './update-check.js';
 
 const execAsync = promisifyUtil(execCb);
 
@@ -536,6 +537,22 @@ async function doctor(): Promise<void> {
   process.exit(bridgeRunning && knowledgeLinked && mcpRegistered && !sidecarBroken && !extensionsBroken ? 0 : 1);
 }
 
+/**
+ * Ask npm (at most once a day, update-check.ts) whether a newer release is out and queue the notice for the
+ * first tool result. In the background: it never delays the MCP connection. A clone updates through its
+ * status page or `git pull`, so it is not asked.
+ */
+function notifyNewerRelease(log: (...args: unknown[]) => void): void {
+  if (findCloneRoot(__dirname) || updateCheckDisabled()) return;
+  checkForUpdate({ current: readServiceVersion() })
+    .then((update) => {
+      if (!update) return;
+      log(`reaper-mcp ${update.latest} is available (this is ${readServiceVersion()})`);
+      addNotice({ text: update.text, onDelivered: update.markNotified });
+    })
+    .catch(() => undefined);
+}
+
 /** repairBridgeInstall() for this build's files; never fails `serve` (an unwritable folder only skips it). */
 function repairReaperSide(log: (...args: unknown[]) => void): BridgeRepair | undefined {
   try {
@@ -637,6 +654,7 @@ async function serve(): Promise<void> {
         recordClientConnected();
       };
       startSessionPing();
+      notifyNewerRelease(log);
       startupSpan.setStatus({ code: SpanStatusCode.OK });
       log('MCP server connected via stdio');
     } catch (error) {

@@ -331,6 +331,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full dev workflow.
 | ---------------------- | ---------------------------------- | -------------------- |
 | `REAPER_RESOURCE_PATH` | Override REAPER resource directory | Auto-detected per OS |
 | `REAPER_WEB_PORT`      | Port `setup` gives REAPER's web interface (status window) | `8099` |
+| `REAPER_MCP_UPDATE_CHECK` | `0` stops an npm install asking npm (at most once a day) whether a newer release is out; `NO_UPDATE_NOTIFIER=1` does too | on (off in CI and git clones) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint for traces, metrics and logs | unset (no export) |
 | `OTEL_TRACES_EXPORTER` / `OTEL_METRICS_EXPORTER` / `OTEL_LOGS_EXPORTER` | Set to `otlp` to export that signal | `none` |
 | `OTEL_EXPORTER_OTLP_HEADERS` | Headers for the OTLP endpoint, e.g. `Authorization=Bearer <token>` | unset |
