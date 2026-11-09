@@ -75,6 +75,16 @@ export function ChangelogPanel({
     description: 'prerelease beta pull request changelog',
     onSelect: () => chooseBetas(!betas),
   });
+  // The same list as a page of its own, for reading wide or sharing: opens beside the bridge, keeps a linked release
+  const pageHref = `?page=changelog${linked ? `&release=${encodeURIComponent(linked)}` : ''}`;
+  useCommand({
+    contextual: true,
+    id: 'changelog-page',
+    label: 'Open what’s new as a page',
+    group: 'What’s new',
+    description: 'full page changelog share link expand',
+    onSelect: () => window.open(pageHref, '_blank', 'noopener'),
+  });
   const ready = releases.status === 'ready' ? releases.releases : null;
   const shown = ready ? visibleReleases(ready, betas, linked) : [];
   const waiting = ready ? availableUpdate(ready, current) : null;
@@ -86,9 +96,14 @@ export function ChangelogPanel({
         <div className={drawerStyles.drawerTitle}>
           <Icon.Spark /> What’s new
         </div>
-        <button className="icon-btn" onClick={close} aria-label="Close what’s new" title="Close (Esc)">
-          <Icon.Close />
-        </button>
+        <div className={styles.headActions}>
+          <a className="icon-btn" href={pageHref} target="_blank" rel="noreferrer" aria-label="Open what’s new as a page" title="Open as a page">
+            <Icon.Expand />
+          </a>
+          <button className="icon-btn" onClick={close} aria-label="Close what’s new" title="Close (Esc)">
+            <Icon.Close />
+          </button>
+        </div>
       </div>
       <div className={drawerStyles.drawerBody}>
         {/* Never "up to date" before the releases are in: the list says it is loading or couldn't reach GitHub */}

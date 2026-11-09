@@ -74,6 +74,15 @@ export function ExternalIcon() {
   );
 }
 
+/** Open as a page of its own: two arrows pointing apart */
+export function ExpandIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9.5 2.5h4v4M13.5 2.5l-4.5 4.5M6.5 13.5h-4v-4M2.5 13.5 7 9" />
+    </svg>
+  );
+}
+
 /** Zoom to the change: corner brackets around a point */
 export function FocusIcon() {
   return (
