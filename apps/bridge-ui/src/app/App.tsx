@@ -92,7 +92,7 @@ export function App() {
   // `?install`: opened from the bridge window's Install button, so show the install setting straight away
   const request = useBridgeRequest(status);
   const [settingsOpen, setSettingsOpen] = useUrlState('settings', false, { validate: isBoolean });
-  // What's new: the waiting update (shared by the header pill and the notice) and the releases, read once it opens
+  // What's new: the drawer, and the releases it reads once it opens
   const [changelogOpen, setChangelogOpen] = useUrlState('changelog', false, { validate: isBoolean });
   const liveRelease = useLatestRelease(!DEMO && settings?.dev !== true);
   const release = DEMO ? DEMO_LATEST : liveRelease;
