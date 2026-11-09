@@ -109,8 +109,10 @@ uses, numbers with units, no marketing ("blazing", "revolutionary"), no exclamat
 pnpm --dir apps/bridge-ui exec vitest run src/features/changelog   # entry valid, media present, under the size limits, SVG safe
 ```
 
-Then open `http://127.0.0.1:8097/mcp_bridge.html?demo&changelog=true`: the card shows on the release it names (the demo's
-next release is the running version's next minor). Click the stage to see it enlarged. Check it at reduced motion too
+Then open `http://127.0.0.1:8097/mcp_bridge.html?demo&changelog=true`: the card shows on the release it names. The demo's
+releases are fixed (`exampleReleaseJson()` in `apps/bridge-ui/src/demo/examples.ts`), so a new `pr` matches none of them:
+add `(#<pr>)` to a line of the demo's next release (the running version's next minor) in the same change, or check with
+`version` set to that next minor and switch to `pr` before committing. Click the stage to see it enlarged. Check it at reduced motion too
 (macOS: System Settings → Accessibility → Display → Reduce motion): the poster, never a frozen first frame.
 
 Commit the entry and its media with the feature's PR (`docs(changelog): highlight <feature>`). It goes live on the page
