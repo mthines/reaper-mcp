@@ -224,9 +224,10 @@ const ALLOWED_SPAN_ATTRIBUTES = new Set([
   'reaper.bridge.connected',
   'reaper.bridge.state',
   // Whether this start brought REAPER's files up to its release (bridge-repair.ts): the bridge files
-  // changed, and the start-with-REAPER block was added (booleans, set only when true)
+  // changed, the start-with-REAPER block was added, or the update failed (booleans, set only when true)
   'reaper.bridge.files_updated',
   'reaper.bridge.autostart_added',
+  'reaper.bridge.files_update_failed',
   // How far setup got, on the startup span (setup-health.ts): whether REAPER is running when the bridge
   // did not answer, the heartbeat's age as a range (<1m … >7d), whether the bridge starts with REAPER,
   // whether the audio sidecar is installed. Booleans and a fixed set of ranges, never a path or a time.

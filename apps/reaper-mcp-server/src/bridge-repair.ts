@@ -23,8 +23,13 @@ export interface BridgeInstallPaths {
 }
 
 export interface BridgeRepair {
-  /** Why nothing was done, when nothing was */
-  skipped?: 'clone' | 'not_installed' | 'current';
+  /**
+   * Why nothing (more) was done: a clone, setup never ran, already this release, or `failed` — copying or
+   * writing threw (an unwritable Scripts/ folder, say), so the release is not recorded and the next start retries
+   */
+  skipped?: 'clone' | 'not_installed' | 'current' | 'failed';
+  /** With `failed`: the error's code (EACCES, EISDIR, …) or class name, never its message (it holds paths) */
+  error?: string;
   /** The release that installed the files before; undefined for an install from before BRIDGE_VERSION_FILE */
   from?: string;
   /** mcp_bridge.lua or one of its libraries changed: REAPER runs the old bridge until the bridge restarts */
@@ -100,13 +105,18 @@ export function repairBridgeInstall(paths: BridgeInstallPaths, version: string, 
   if (!ours && !(reapack && from)) return { skipped: 'not_installed', ...none };
   if (from && compareVersions(from, version) >= 0) return { skipped: 'current', from, ...none };
 
-  const bridgeChanged = reapack ? false : installReaperFiles(paths);
-  const startupPath = join(paths.scriptsDir, '__startup.lua');
-  const startup = existsSync(startupPath) ? readFileSync(startupPath, 'utf-8') : '';
-  const { text, changed } = ensureBridgeAutostart(startup);
-  if (changed) writeFileSync(startupPath, text, 'utf-8');
-  writeBridgeVersion(paths.scriptsDir, version);
-  return { from, bridgeChanged, autostartAdded: !startup.includes(AUTOSTART_MARKER) };
+  try {
+    const bridgeChanged = reapack ? false : installReaperFiles(paths);
+    const startupPath = join(paths.scriptsDir, '__startup.lua');
+    const startup = existsSync(startupPath) ? readFileSync(startupPath, 'utf-8') : '';
+    const { text, changed } = ensureBridgeAutostart(startup);
+    if (changed) writeFileSync(startupPath, text, 'utf-8');
+    writeBridgeVersion(paths.scriptsDir, version);
+    return { from, bridgeChanged, autostartAdded: !startup.includes(AUTOSTART_MARKER) };
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    return { skipped: 'failed', from, error: code ?? (err instanceof Error ? err.name : 'Error'), ...none };
+  }
 }
 
 /** What to tell the user about a repair, given whether the bridge answered at startup. */

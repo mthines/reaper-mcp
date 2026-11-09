@@ -278,13 +278,14 @@ describe('AnonymizingSpanExporter', () => {
       spanProcessors: [new tracing.SimpleSpanProcessor(new AnonymizingSpanExporter(sink))],
     });
     provider.getTracer('test').startSpan('reaper-mcp startup', {
-      attributes: { 'reaper.bridge.files_updated': true, 'reaper.bridge.autostart_added': true },
+      attributes: { 'reaper.bridge.files_updated': true, 'reaper.bridge.autostart_added': true, 'reaper.bridge.files_update_failed': true },
     }).end();
     await provider.forceFlush();
 
     expect(sink.getFinishedSpans()[0].attributes).toEqual({
       'reaper.bridge.files_updated': true,
       'reaper.bridge.autostart_added': true,
+      'reaper.bridge.files_update_failed': true,
     });
   });
 

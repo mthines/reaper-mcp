@@ -86,6 +86,16 @@ describe('repairBridgeInstall', () => {
     expect(read(paths.scriptsDir, 'mcp_bridge.lua')).toBe('-- bridge v3');
   });
 
+  it('reports a failed update with its error code and records no release, so the next start retries', () => {
+    fixture('-- bridge v1');
+    mkdirSync(join(paths.scriptsDir, '__startup.lua')); // a folder where the startup script should be: reading it throws
+
+    const repair = repairBridgeInstall(paths, '0.83.0', { inClone: false });
+
+    expect(repair).toEqual({ skipped: 'failed', from: undefined, error: 'EISDIR', bridgeChanged: false, autostartAdded: false });
+    expect(readBridgeVersion(paths.scriptsDir)).toBeUndefined();
+  });
+
   it('leaves a REAPER that setup never ran for alone', () => {
     fixture(null);
 

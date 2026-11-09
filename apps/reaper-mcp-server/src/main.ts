@@ -630,6 +630,12 @@ async function serve(): Promise<void> {
       // Why the bridge is down (REAPER closed, or open with the bridge stopped): looked up meanwhile, set below
       const reaperRunning = bridge.state === 'connected' ? Promise.resolve(undefined) : isReaperProcessRunning();
 
+      if (repair?.skipped === 'failed') {
+        // Otherwise a repair that threw looks like one with nothing to do
+        startupSpan.setAttribute('reaper.bridge.files_update_failed', true);
+        log(`Could not update REAPER's reaper-mcp files (${repair.error}); the next start tries again`);
+        emitLog('warn', "Could not update REAPER's reaper-mcp files", { 'error.type': repair.error ?? 'Error' });
+      }
       if (repair && !repair.skipped) {
         const version = readServiceVersion();
         if (repair.bridgeChanged) startupSpan.setAttribute('reaper.bridge.files_updated', true);
