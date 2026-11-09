@@ -6,9 +6,10 @@
 // drops, devtools), and Vite's proxy passes each hang-up on to REAPER. Here REAPER sees one connection for the
 // session and a request is always left to finish.
 //
-//   REAPER_WEB_PORT and REAPER_RESOURCE_PATH override the defaults; BRIDGE_DEV_PORT is read by vite.config.ts (default 8098, and the next free port when taken; a set BRIDGE_DEV_PORT is strict).
+//   REAPER_WEB_PORT and REAPER_RESOURCE_PATH override the defaults; the dev server's port comes from devPort(): BRIDGE_DEV_PORT when set, else 8098 or the next free one, never REAPER's.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, watch } from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 import { here } from './build-config.mjs';
@@ -118,6 +119,37 @@ function watchReaperAssets(resource, log) {
 // ---- The plugin -------------------------------------------------------------------------------------------
 
 /** Dev server only (`apply: 'serve'`); Storybook drops it by name, so it never touches REAPER. */
+/**
+ * The dev server's port: BRIDGE_DEV_PORT when set, else 8098 or the next free port after it, skipping REAPER's web
+ * port. Picked here rather than by Vite's own fallback, which steps from 8098 onto 8099: on macOS a bind to 127.0.0.1
+ * succeeds beside REAPER listening on every interface, and the /_/ proxy would then call the dev server itself.
+ */
+export async function devPort() {
+  if (process.env.BRIDGE_DEV_PORT) return Number(process.env.BRIDGE_DEV_PORT);
+  for (let port = 8098; port < 8098 + 20; port++) {
+    if (port !== REAPER_PORT && (await isFree(port))) return port;
+  }
+  return 8098;
+}
+
+// Free when nothing answers on it and it can be bound: the connect catches a listener on every interface that a
+// 127.0.0.1 bind alone would not notice on macOS
+async function isFree(port) {
+  const answers = await new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port }, () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once('error', () => resolve(false));
+  });
+  if (answers) return false;
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => resolve(false));
+    server.listen(port, '127.0.0.1', () => server.close(() => resolve(true)));
+  });
+}
+
 export function reaperDev() {
   return {
     name: 'reaper-dev',

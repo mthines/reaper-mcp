@@ -892,7 +892,7 @@ REAPER, open `http://localhost:8098/mcp_bridge.html?demo` (every tool and view i
   compiler cannot handle fails the build and tests (`panicThreshold: 'all_errors'` in `build-config.mjs`); known triggers are a conditional (`?:`, `&&`, `?.`)
   inside a `try` block (use `fetchText()` from `src/lib/fetch-text.ts`), a variable incremented inside a callback,
   and `a && "x"` lists inside JSX attributes (build them before `return`).
-- Overrides: `BRIDGE_DEV_PORT` (8098), `REAPER_WEB_PORT` (8099), `REAPER_RESOURCE_PATH`.
+- Overrides: `BRIDGE_DEV_PORT` (default 8098; when it is taken the dev server takes the next free port, never REAPER's, and prints the URL), `REAPER_WEB_PORT` (8099), `REAPER_RESOURCE_PATH`.
 
 ```bash
 # correct: the page talks to the dev server; REAPER sees one connection all session

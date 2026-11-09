@@ -185,7 +185,7 @@ pnpm nx lint reaper-mcp-server      # Lint server only
 Run the bridge dev server while you work on `reaper/` or `apps/bridge-ui/`:
 
 ```bash
-pnpm dev:bridge        # → http://localhost:8098/mcp_bridge.html
+pnpm dev:bridge        # → http://localhost:8098/mcp_bridge.html (the next free port when 8098 is taken; it prints the URL)
 ```
 
 - **Status page:** Vite's dev server, so a saved component hot-reloads in place (anything else reloads the page). Open
