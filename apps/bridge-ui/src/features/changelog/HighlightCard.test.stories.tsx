@@ -51,3 +51,35 @@ export const KeyboardFocusMovesIntoAndBackOutOfTheEnlargedView: Story = {
     await expect(enlarge).toHaveFocus();
   },
 };
+
+/** An animated SVG has no player to pause, so with reduced motion both the card and its enlarged view show the poster */
+export const ReducedMotionShowsThePosterWhenEnlarged: Story = {
+  args: {
+    highlight: {
+      id: 'teach-mode',
+      pr: 98,
+      kind: 'animation',
+      group: 'new',
+      title: 'Learn REAPER while the agent works',
+      blurb: 'Every change comes with what it did and how to do it by hand.',
+      media: '/changelog/media/teach.svg',
+      poster: '/changelog/media/teach.webp',
+      alt: 'One change explained four ways',
+    },
+  },
+  beforeEach: () => {
+    const real = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: query.includes('reduce'), media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    return () => {
+      window.matchMedia = real;
+    };
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(page.getByAltText('One change explained four ways')).toHaveAttribute('src', '/changelog/media/teach.webp');
+    await userEvent.click(page.getByRole('button', { name: 'Enlarge: Learn REAPER while the agent works' }));
+    const dialog = within(page.getByRole('dialog', { name: 'Learn REAPER while the agent works' }));
+    await expect(dialog.getByAltText('One change explained four ways')).toHaveAttribute('src', '/changelog/media/teach.webp');
+    await userEvent.click(dialog.getByRole('button', { name: 'Close' }));
+  },
+};

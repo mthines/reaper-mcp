@@ -87,7 +87,7 @@ function Enlarged({ highlight, still, onClose }: { highlight: Highlight; still: 
         {isVideo(highlight) ? (
           <video src={highlight.media} poster={highlight.poster} aria-label={highlight.alt} autoPlay={!still} controls muted loop playsInline />
         ) : (
-          <img src={highlight.media} alt={highlight.alt} />
+          <img src={still && highlight.poster ? highlight.poster : highlight.media} alt={highlight.alt} />
         )}
         <span className={styles.overlayCaption}>{highlight.title}</span>
       </div>
