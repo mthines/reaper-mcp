@@ -531,6 +531,16 @@ function ui_ctl(idx, fmt, label, x, y) local(lo, hi, st, t, fine) (
 // label shows the value while you hover or drag. Do not draw those two sliders as widgets as well.
 function ui_header(m, o) ( ui_hm = max(0, floor(m)); ui_ho = max(0, floor(o)); );
 
+// A pill exactly h pixels tall: the end caps are circles of diameter h, so they never stick out past the bar.
+function ui_pill(x, y, w, h) local(r) (
+  r = h / 2;
+  w <= h ? gfx_rect(x, y, w, h) : (
+    gfx_rect(x + r, y, w - h, h);
+    gfx_circle(x + r - 0.5, y + r - 0.5, r - 0.5, 1, 1);
+    gfx_circle(x + w - r - 0.5, y + r - 0.5, r - 0.5, 1, 1);
+  );
+);
+
 // One slim horizontal bar (like the level bar in Vital's header) whose right edge is xr; returns the x of the
 // next one to its left. Drag left or right (Shift = fine), wheel, double-click to type, modifier-click resets.
 // The header band is centred on y = 15 px, the same line the plugin name sits on.
@@ -556,11 +566,11 @@ function ui_hbar(idx, label, fmt, xr) local(bw, bh, bx, cy, lo, hi, st, t, t0, h
   t = min(1, max(0, (slider(idx) - lo) / (hi - lo)));
   t0 = (lo < 0 && hi > 0) ? -lo / (hi - lo) : 0;
   hot = ui_active == idx || ui_hit;
-  ui_c(hot ? ui_cTrackHot : ui_cTrack, 1); ui_rrect(bx, cy - bh / 2, bw, bh, bh / 2);
+  ui_c(hot ? ui_cTrackHot : ui_cTrack, 1); ui_pill(bx, cy - bh / 2, bw, bh);
   abs(t - t0) > 0.002 ? (
     x0 = bx + bw * min(t, t0); x1 = bx + bw * max(t, t0);
     ui_c(ui_active == idx ? ui_cAccentAct : (hot ? ui_cAccentHi : ui_cAccent), 1);
-    gfx_rect(x0, cy - bh / 2, max(1, x1 - x0), bh);
+    ui_pill(x0, cy - bh / 2, max(1, x1 - x0), bh);
   );
   ui_c(hot ? ui_cText : ui_cMuted, 1); gfx_rect(bx + bw * t - ui_s / 2, cy - bh, max(1, ui_s), bh * 2);
   gfx_setfont(2);
