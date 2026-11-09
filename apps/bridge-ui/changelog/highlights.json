@@ -32,10 +32,10 @@
       "group": "new",
       "title": "Ask for a plugin and get one",
       "blurb": "Describe the effect you want and /make-plugin writes it as a JSFX plugin with real knobs and an Advanced drawer, loads it on your track and checks it. It keeps working without the agent.",
-      "tryIt": "/make-plugin a shimmer reverb",
+      "tryIt": "/make-plugin a multiband compressor",
       "media": "media/make-plugin.mp4",
       "poster": "media/make-plugin.webp",
-      "alt": "A generated plugin, Mutate Verb, shows four knobs, then its Advanced drawer slides up with six more."
+      "alt": "A generated multiband compressor: dragging each band on the spectrum sets its threshold and gain, the knobs follow, then the Advanced drawer opens on the compression curve."
     },
     {
       "id": "reapack",
