@@ -227,6 +227,9 @@ const ALLOWED_SPAN_ATTRIBUTES = new Set([
   // changed, and the start-with-REAPER block was added (booleans, set only when true)
   'reaper.bridge.files_updated',
   'reaper.bridge.autostart_added',
+  // A failed tool call's missing setup step, a fixed set (toolErrorCause in server.ts):
+  // sidecar_not_installed, bridge_not_running, bridge_outdated
+  'reaper.tool.error.cause',
   // detect_key / detect_chords: where they read from and how sure they were, never the key or chords
   'reaper.key.source',
   'reaper.key.confidence',

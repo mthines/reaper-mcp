@@ -26,6 +26,7 @@ import { renderDoctor, useColor, type Check, type CheckStatus, type Section } fr
 import { repairBridgeInstall, repairNotices, writeBridgeVersion, type BridgeRepair } from './bridge-repair.js';
 import { addNotice } from './notices.js';
 import { checkForUpdate, updateCheckDisabled } from './update-check.js';
+import { offerSidecarSetup } from './sidecar-offer.js';
 
 const execAsync = promisifyUtil(execCb);
 
@@ -54,6 +55,7 @@ async function setup(): Promise<void> {
     console.log('\nSetup complete!\n');
     console.log('Restart REAPER (or run the bridge once from the Action List) and add reaper-mcp to Claude Code: reaper-mcp doctor');
     if (port) console.log(`The bridge opens its status window on start: http://localhost:${port}/${BRIDGE_UI_FILE}`);
+    await offerSidecar();
     return;
   }
   if (filesPlan === 'install-with-warning') {
@@ -148,6 +150,13 @@ async function setup(): Promise<void> {
   if (webPort) {
     console.log(`\nThe bridge opens its status window on start: http://localhost:${webPort}/${BRIDGE_UI_FILE}`);
   }
+  await offerSidecar();
+}
+
+/** setup's last step: audio tools need the Python sidecar, which setup does not install (sidecar-offer.ts). */
+async function offerSidecar(): Promise<void> {
+  const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY) && !process.env['CI'];
+  await offerSidecarSetup({ input: process.stdin, output: process.stdout, interactive }, getSidecarClient().isAvailable(), () => setupSidecar([]));
 }
 
 /** Git state of the clone for isDevClone; a git failure reads as a dev clone (never offer a pull that can't work). */

@@ -34,6 +34,7 @@ For each tool call:
 
 - the tool name and the bridge command it ran (e.g. `set_fx_parameter`)
 - whether it succeeded, and if not, the **kind** of error (`timeout`, `tool_error`, …)
+- if it failed because a setup step is missing, which one: the audio sidecar isn't installed, the bridge isn't running, or REAPER runs an older bridge (one of those words, never the message)
 - how long it took
 - for key and chord detection: whether it read MIDI, rendered audio or a file, which engine it used, how many chords it found and how sure it was of the key (never the key or the chords)
 - for plugin research runs (`/learn-plugin`, or `/mixer` or `/mastering` looking up a plugin they don't know): how the run ended (new record, refined, plugin not installed, failed to load, LoreKit not connected), which skill started it and how many plugins it researched at once, how long it took, the plugin's category (`compressor`, `eq`, …) and style (`transparent`, `vintage`, …) and its format (VST3, AU, CLAP, JS, …, and whether it's an instrument), its number of parameters as a range (`16-63`), how many were tested, how many sources were cited and questions left open, and whether the scratch track was cleaned up. Anything outside these fixed lists is sent as `other`. Never the plugin's name, and never details that point to one plugin in combination, such as its exact parameter count or whether it has a built-in record

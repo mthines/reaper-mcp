@@ -56,6 +56,22 @@ const MAX_STATUS_MESSAGE = 256;
 const TOOL_ERROR_MESSAGE = 'reaper.tool.error.message';
 
 /**
+ * Which missing setup step made a tool call fail, as a closed value usage telemetry keeps
+ * (`reaper.tool.error.cause`, in ALLOWED_SPAN_ATTRIBUTES): the Python sidecar is not installed, the
+ * bridge is not running, or REAPER runs an older bridge. Undefined for every other failure. A missing
+ * sidecar has no span of its own (tools check for it before calling it), so without this it shows only
+ * as a bare `tool_error`.
+ */
+export type ToolErrorCause = 'sidecar_not_installed' | 'bridge_not_running' | 'bridge_outdated';
+
+export function toolErrorCause(text: string): ToolErrorCause | undefined {
+  // Every tool's sidecar check says one of these (SIDECAR_NOT_INSTALLED_MSG, "needs the Python sidecar")
+  if (/sidecar not installed|needs the Python sidecar/i.test(text)) return 'sidecar_not_installed';
+  const type = classifyBridgeError(text.replace(/^Error:\s*/, ''));
+  return type === 'bridge_not_running' || type === 'bridge_outdated' ? type : undefined;
+}
+
+/**
  * Wraps server.tool() so every tool callback runs inside a SERVER span that
  * follows the OTel MCP semantic conventions: `tools/call {tool}` with
  * `mcp.method.name`, `gen_ai.tool.name`, `jsonrpc.request.id`, and `error.type`
@@ -113,6 +129,8 @@ export function instrumentToolHandlers(server: McpServer): void {
               metricAttrs['error.type'] = 'tool_error';
               span.setAttribute('error.type', 'tool_error');
               span.setAttribute(TOOL_ERROR_MESSAGE, message);
+              const cause = toolErrorCause(errorText);
+              if (cause) span.setAttribute('reaper.tool.error.cause', cause);
               if (isSystemError(classifyBridgeError(errorText.replace(/^Error:\s*/, '')))) {
                 span.setStatus({ code: SpanStatusCode.ERROR, message });
               }

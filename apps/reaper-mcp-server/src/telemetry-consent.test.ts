@@ -234,6 +234,42 @@ describe('AnonymizingSpanExporter', () => {
     });
   });
 
+  it('keeps which setup step a failed tool call was missing, never its message', async () => {
+    const sink = new tracing.InMemorySpanExporter();
+    const provider = new tracing.BasicTracerProvider({
+      spanProcessors: [new tracing.SimpleSpanProcessor(new AnonymizingSpanExporter(sink))],
+    });
+    provider.getTracer('test').startSpan('tools/call analyze_audio_file', {
+      attributes: {
+        'error.type': 'tool_error',
+        'reaper.tool.error.cause': 'sidecar_not_installed',
+        'reaper.tool.error.message': 'Audio understanding sidecar not installed. Run in a terminal: reaper-mcp setup-sidecar',
+      },
+    }).end();
+    await provider.forceFlush();
+
+    expect(sink.getFinishedSpans()[0].attributes).toEqual({
+      'error.type': 'tool_error',
+      'reaper.tool.error.cause': 'sidecar_not_installed',
+    });
+  });
+
+  it('keeps whether a start brought REAPER\'s files up to its release', async () => {
+    const sink = new tracing.InMemorySpanExporter();
+    const provider = new tracing.BasicTracerProvider({
+      spanProcessors: [new tracing.SimpleSpanProcessor(new AnonymizingSpanExporter(sink))],
+    });
+    provider.getTracer('test').startSpan('reaper-mcp startup', {
+      attributes: { 'reaper.bridge.files_updated': true, 'reaper.bridge.autostart_added': true },
+    }).end();
+    await provider.forceFlush();
+
+    expect(sink.getFinishedSpans()[0].attributes).toEqual({
+      'reaper.bridge.files_updated': true,
+      'reaper.bridge.autostart_added': true,
+    });
+  });
+
   it('keeps how a plugin research run went, never which plugin it was', async () => {
     const sink = new tracing.InMemorySpanExporter();
     const provider = new tracing.BasicTracerProvider({
