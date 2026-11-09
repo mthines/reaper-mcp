@@ -332,7 +332,9 @@ resource (`service.instance.id`, `deployment.environment.name`). Count them per 
 - `reaper.bridge.command.duration{error.type="bridge_not_running"}` — tool calls made while REAPER was closed or the bridge never started; group the startup span's `reaper.bridge.state` to see which setup step people miss.
 - `reaper.bridge.command.duration{error.type="bridge_outdated"}` — the bridge running in REAPER is from another release than the server (a second copy REAPER starts, or one not restarted after an update). These calls no longer count as bridge system errors; a rise after a release means updates are not reaching the REAPER side (ReaPack sync, `reaper-mcp setup`).
 - p95 of `reaper.bridge.command.duration` > 0.5 s — the defer loop is starved (heavy project, blocking render).
-- `mcp.server.operation.duration{error.type!=""}` / total > 5 % per `gen_ai.tool.name` — a tool regressed.
+- `mcp.server.operation.duration{error.type!=""}` / total > 5 % per `gen_ai.tool.name` — a tool fails more often for
+  people. This counts expected failures too (refused requests, unfinished setups), so check the `tools/call` span status
+  below before calling it a regression.
 - Any `reaper.bridge.handler_error` or `reaper.server.crash` log — a bug, not a user error.
 - `tools/call` spans with status ERROR, per `gen_ai.tool.name` — regressions only; `error.type` set with the status
   unset is a refused request or an unfinished setup, worth watching for friction but not a bug.
