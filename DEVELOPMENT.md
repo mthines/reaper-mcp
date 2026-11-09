@@ -256,11 +256,25 @@ The server ships with [OpenTelemetry](https://opentelemetry.io/) instrumentation
 Names follow the OTel semantic conventions; project-specific names live under `reaper.*` (the `mcp.*`
 namespace belongs to the official MCP conventions). Durations are in seconds.
 
+**Expected failures warn, regressions fail.** Every failed call is either expected or a regression, and its log
+severity and span status say which:
+
+| Kind | Log | Span status | `error.type` |
+|------|-----|-------------|--------------|
+| Expected: the request was refused or the user's setup is incomplete | WARN | unset | bridge `command_failed`, `bridge_not_running`, `bridge_outdated`; sidecar `sidecar_rejected`, `not_installed`, `busy`; a tool's own validation (`tool_error`) |
+| Regression: something in reaper-mcp broke | ERROR | ERROR | bridge `handler_crash`, `internal_error`, `unknown_command`, `timeout`; sidecar `sidecar_error`, `timeout`; a tool that threw (the exception class) |
+
+The tool's `tools/call` span takes its status from the calls it made (`call-outcome.ts`): ERROR only when one of
+them hit a regression (or the tool threw), so `otel.span.status.code = ERROR` counts regressions and `error.type`
+set with the status unset counts expected failures. The anonymous usage telemetry carries no logs, so there the
+span status is the whole signal. A bridge timeout stays a regression: the bridge deletes a command file only after
+its handler answered, so a hung handler and a modal dialog blocking REAPER look the same.
+
 **Traces** — one trace per tool call:
 
 | Span | Kind | Key attributes |
 |------|------|----------------|
-| `tools/call {tool}` | SERVER | `mcp.method.name`, `gen_ai.tool.name`, `gen_ai.operation.name=execute_tool`, `jsonrpc.request.id`, `error.type` (`tool_error` when the result has `isError`), `reaper.tool.error.message` (on any failure: the message the agent got, home directory as `~`, at most 256 characters; a refused request keeps the status unset, so this is where its text is. Never in the anonymous usage telemetry) |
+| `tools/call {tool}` | SERVER | `mcp.method.name`, `gen_ai.tool.name`, `gen_ai.operation.name=execute_tool`, `jsonrpc.request.id`, `error.type` (`tool_error` when the result has `isError`), `reaper.tool.error.message` (on any failure: the message the agent got, home directory as `~`, at most 256 characters; a refused request keeps the status unset, so this is where its text is. Never in the anonymous usage telemetry). Status ERROR only when a bridge or sidecar call of the tool hit a regression, or the tool threw |
 | `reaper.Bridge/{command}` | CLIENT | `rpc.system=reaper_bridge`, `rpc.method`, `peer.service=reaper`, `reaper.bridge.command.id`, `reaper.bridge.handler_ms` / `pickup_ms`, `error.type`. Internal commands a tool runs (`_chord_grid`, `_item_range`, `_midi_pitch_profile`) are traced like any other; the plumbing (`_bridge_diagnostics`, `_session`, `_log_result`) is not, nor counted in the per-command metrics |
 | `sidecar/analyze` | CLIENT | `rpc.system=jsonrpc`, `rpc.method`, `error.type` |
 | `reaper-mcp startup`, `poll bridge diagnostics` | INTERNAL | root spans for headless work |
@@ -283,7 +297,7 @@ Mixing tools add attributes to their `tools/call` span: `reaper.quantize.hits` /
 | `reaper.bridge.command.duration` | s | `rpc.method`, `error.type` (`timeout`, `bridge_not_running`, `bridge_outdated`, `handler_crash`, `unknown_command`, `internal_error`, `command_failed`). `bridge_outdated`: the running mcp_bridge.lua answered "Unknown command type" for a command this server ships (bridge-coverage.test.ts guarantees the same release has a handler), so REAPER runs a copy from another release; the agent is told to restart or update the bridge and the span status stays unset. `unknown_command` remains only for the bridge's own `handler_unknown` event log. `bridge_not_running`: refused without waiting because the heartbeat is missing or older than 60 s, no other command of this server is in flight, REAPER has not answered one of its commands in the last 60 s (the bridge rewrites the heartbeat a tick after a long command), and no other server's command younger than 15 min is waiting in the bridge folder (another session's render); the span carries `reaper.bridge.state` and keeps its status unset, like a refused request |
 | `reaper.bridge.handler.duration` | s | `rpc.method`, `error.type` — time inside the Lua handler |
 | `reaper.bridge.pickup.duration` | s | — time until the defer loop picked the command up |
-| `reaper.sidecar.request.duration` | s | `rpc.method`, `error.type` (`timeout`, `busy` = waited 5 min behind an earlier request, `not_installed`, `sidecar_error`); includes time queued behind earlier requests |
+| `reaper.sidecar.request.duration` | s | `rpc.method`, `error.type` (`timeout`, `busy` = waited 5 min behind an earlier request, `not_installed`, `sidecar_rejected` = server.py refused the input: JSON-RPC invalid params, or audio not found, too short or at mismatched sample rates, `sidecar_error` = any other failure: an analysis that raised, a crash, a restart); includes time queued behind earlier requests. `busy`, `not_installed` and `sidecar_rejected` keep the span status unset |
 | `reaper.audio.separation.speed` | 1 | `reaper.separation.device` (cuda/mps/cpu, `cpu_fallback` when the accelerator raised and the split re-ran on CPU), `reaper.separation.model` — seconds of audio one `separate_stems` call split per second of processing |
 | `reaper.midi.notes_changed` | {note} | `gen_ai.tool.name` — notes one call rewrote: the notes `quantize_midi` moved, every note `transform_midi` was given, the notes `import_midi_file` created (also on the span as `reaper.midi.notes_changed`; `detect_key` spans carry `reaper.key.source` and `reaper.key.confidence`, `detect_chords` spans `reaper.chords.source` and `reaper.chords.count`, `reaper.chords.engine` (model or template)) |
 | `reaper.arrange.items_changed` | {item} | `gen_ai.tool.name`, `reaper.arrange.operation` (copy/insert/remove/section/normalize/reverse/glue) — items one arrangement edit moved, split, trimmed, deleted, copied or processed; also on the tool span with `reaper.arrange.length_s` |
@@ -302,6 +316,8 @@ Mixing tools add attributes to their `tools/call` span: `reaper.quantize.hits` /
 | `reaper.bridge.command.timeout` | ERROR | no response from REAPER |
 | `reaper.bridge.command.not_sent` | WARN | command refused at once: the bridge is not running (`reaper.bridge.state` says why) |
 | `reaper.sidecar.timeout` / `exit` / `spawn_error` / `restart` | ERROR/WARN | Python sidecar lifecycle |
+| `Sidecar {method} failed` | WARN or ERROR | a sidecar request failed: expected (`not_installed`, `busy`, `sidecar_rejected`, WARN) or a regression (`timeout`, `sidecar_error`, ERROR) |
+| `reaper.tool.failed` | WARN or ERROR | a tool returned an error that no bridge or sidecar call below already logged (its own validation, WARN); ERROR when it passed on a bridge system error |
 | `reaper.server.crash` | ERROR | uncaught exception / unhandled rejection (`exception.*` attributes) |
 | `reaper.comp.undone` | ERROR | `comp_lanes` failed after it started writing and undid itself (a bug, not a refusal); `error.type=comp_undone` |
 
@@ -318,6 +334,8 @@ resource (`service.instance.id`, `deployment.environment.name`). Count them per 
 - p95 of `reaper.bridge.command.duration` > 0.5 s — the defer loop is starved (heavy project, blocking render).
 - `mcp.server.operation.duration{error.type!=""}` / total > 5 % per `gen_ai.tool.name` — a tool regressed.
 - Any `reaper.bridge.handler_error` or `reaper.server.crash` log — a bug, not a user error.
+- `tools/call` spans with status ERROR, per `gen_ai.tool.name` — regressions only; `error.type` set with the status
+  unset is a refused request or an unfinished setup, worth watching for friction but not a bug.
 - Any `reaper.comp.undone` log — a comp broke half way; refusals (gaps, overlaps) never log it.
 - p50 of `reaper.audio.separation.speed{reaper.separation.device=~"mps|cuda"}` < 1 — separation on an accelerator fell
   back to CPU speed (a torch/Demucs upgrade broke MPS or CUDA), so long songs start timing out.

@@ -17,6 +17,7 @@ import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { getTracer, emitLog, getSidecarDurationHistogram, redactHome } from './telemetry.js';
 import { copySidecarScript } from './setup-sidecar.js';
 import { SETUP_SIDECAR_HINT } from './sidecar-hint.js';
+import { noteLoggedFailure } from './call-outcome.js';
 
 // ---------------------------------------------------------------------------
 // Paths (must match setup-sidecar.ts constants)
@@ -38,6 +39,49 @@ const _rawTimeout = Number(process.env['REAPER_MCP_SIDECAR_TIMEOUT_MS']);
 const ANALYZE_TIMEOUT_MS = Number.isFinite(_rawTimeout) && _rawTimeout > 0 ? _rawTimeout : 60_000;
 /** Longest a request waits behind earlier ones (a long separation) before it is refused as busy. */
 export const QUEUE_WAIT_MS = 5 * 60_000;
+
+// ---------------------------------------------------------------------------
+// Failure classification
+// ---------------------------------------------------------------------------
+
+/**
+ * A JSON-RPC error response from server.py, with its code. Its `name` stays `Error`: a tool that lets it escape
+ * reports `error.type` from the name, and that value is unchanged.
+ */
+export class SidecarRpcError extends Error {
+  constructor(message: string, readonly code: number) {
+    super(message);
+  }
+}
+
+/** Bounded `error.type` values for sidecar requests (metric + span attribute). */
+export type SidecarErrorType = 'timeout' | 'busy' | 'not_installed' | 'sidecar_rejected' | 'sidecar_error';
+
+/** JSON-RPC "Invalid params": server.py's answer to a missing or out-of-range parameter (its ValueErrors). */
+const INVALID_PARAMS = -32602;
+
+/** What server.py answers (code -32000) when the audio it was given cannot be analysed: bad input, not a fault. */
+const REJECTED_INPUT = /^(Audio file not found|Audio too short|Sample rates differ)\b/;
+
+/** Classify a failed sidecar request by the errors sidecar.ts and server.py raise. */
+export function classifySidecarError(err: unknown): SidecarErrorType {
+  const message = err instanceof Error ? err.message : String(err);
+  if (message.startsWith('Sidecar timeout')) return 'timeout';
+  if (message.startsWith('Sidecar busy')) return 'busy';
+  if (message.startsWith('Audio understanding sidecar not installed')) return 'not_installed';
+  if ((err instanceof SidecarRpcError && err.code === INVALID_PARAMS) || REJECTED_INPUT.test(message)) return 'sidecar_rejected';
+  // "… failed: <exception>", internal, parse and unknown-method errors, a crash or a restart
+  return 'sidecar_error';
+}
+
+/**
+ * A fault in the sidecar (a crash, an inference that raised, a hung request), as opposed to a sidecar the user
+ * has not installed, one busy with an earlier request, or input it rejected: those are expected, logged as a
+ * warning, and keep the span status unset, like the bridge's refused requests.
+ */
+export function isSidecarRegression(type: SidecarErrorType): boolean {
+  return type === 'timeout' || type === 'sidecar_error';
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -393,20 +437,16 @@ class SidecarClientImpl implements SidecarClient {
           return result;
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          const errorType = message.startsWith('Sidecar timeout')
-            ? 'timeout'
-            : message.startsWith('Sidecar busy')
-              ? 'busy'
-              : message.startsWith('Audio understanding sidecar not installed')
-              ? 'not_installed'
-              : 'sidecar_error';
+          const errorType = classifySidecarError(err);
+          const regression = isSidecarRegression(errorType);
           metricAttrs['error.type'] = errorType;
           span.setAttribute('error.type', errorType);
-          span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(message) });
-          emitLog(errorType === 'not_installed' || errorType === 'busy' ? 'warn' : 'error', `Sidecar ${method} failed: ${message}`, {
+          if (regression) span.setStatus({ code: SpanStatusCode.ERROR, message: redactHome(message) });
+          emitLog(regression ? 'error' : 'warn', `Sidecar ${method} failed: ${message}`, {
             'rpc.method': method,
             'error.type': errorType,
           });
+          noteLoggedFailure(regression);
           throw err;
         } finally {
           span.end();
@@ -598,7 +638,7 @@ class SidecarClientImpl implements SidecarClient {
     this.pending.delete(response.id);
 
     if (response.error) {
-      pending.reject(new Error(response.error.message));
+      pending.reject(new SidecarRpcError(response.error.message, response.error.code));
     } else if (response.result) {
       pending.resolve(response.result);
     } else {

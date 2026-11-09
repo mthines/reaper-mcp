@@ -18,6 +18,7 @@ import {
 } from './telemetry.js';
 import { getSessionInfo } from './session.js';
 import { notePageLink } from './page-link.js';
+import { noteLoggedFailure } from './call-outcome.js';
 
 const POLL_INTERVAL_MS = 10;
 
@@ -354,6 +355,7 @@ export async function sendCommand(
               { 'rpc.method': type, 'error.type': 'bridge_not_running', 'reaper.bridge.state': down.state },
               { eventName: 'reaper.bridge.command.not_sent' },
             );
+            noteLoggedFailure(false);
           }
           finish('bridge_not_running');
           return { id: randomUUID(), success: false, error: message, timestamp: Date.now() };
@@ -462,6 +464,7 @@ export async function sendCommand(
                 },
                 { eventName: 'reaper.bridge.command.failed' },
               );
+              noteLoggedFailure(systemError);
             }
 
             const tMetrics = now();
@@ -502,6 +505,7 @@ export async function sendCommand(
           { 'rpc.method': type, 'reaper.bridge.command.id': id, 'error.type': 'timeout', 'reaper.bridge.timeout_ms': timeoutMs },
           { eventName: 'reaper.bridge.command.timeout' },
         );
+        noteLoggedFailure(true);
         finish('timeout');
 
         return {
@@ -519,6 +523,7 @@ export async function sendCommand(
           'error.type': errorType,
           ...exceptionAttributes(err),
         });
+        noteLoggedFailure(true);
         finish(errorType);
         throw err;
       } finally {

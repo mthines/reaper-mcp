@@ -3,6 +3,7 @@ import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { getTracer, emitLog, exceptionAttributes, getToolDurationHistogram, redactHome } from './telemetry.js';
 import { classifyBridgeError, isSystemError } from './bridge.js';
 import { collectPageLinks, withPageLink } from './page-link.js';
+import { trackCallOutcome } from './call-outcome.js';
 import { registerProjectTools } from './tools/project.js';
 import { registerTrackTools } from './tools/tracks.js';
 import { registerFxTools } from './tools/fx.js';
@@ -62,6 +63,12 @@ const TOOL_ERROR_MESSAGE = 'reaper.tool.error.message';
  * `reaper.tool.error.message`. The span parents the CLIENT
  * bridge spans: tool invocation → bridge command → REAPER response.
  *
+ * A failed call follows the rule in `call-outcome.ts`: expected (a refused request,
+ * a bridge that is down or outdated, rejected sidecar input, the tool's own
+ * validation) is a WARN log with the status unset; a regression in a call below
+ * (a crash, an internal error, a timeout) or an exception is an ERROR log with
+ * the status ERROR. The tool logs only a failure no call below logged already.
+ *
  * Also records `mcp.server.operation.duration` per call.
  */
 export function instrumentToolHandlers(server: McpServer): void {
@@ -98,21 +105,31 @@ export function instrumentToolHandlers(server: McpServer): void {
         },
         async (span) => {
           try {
-            const collected = await collectPageLinks(() => originalCb(...cbArgs));
+            const { result: collected, outcome } = await trackCallOutcome(() => collectPageLinks(() => originalCb(...cbArgs)));
             const result = withPageLink(collected.result, collected.links);
             const res = result as { isError?: boolean; content?: { text?: string }[] };
             if (res?.isError) {
               // Tool-level failure reported to the client (semconv: error.type=tool_error).
               // A refused request ("Track 9 not found") leaves the status unset, like an
-              // HTTP 4xx; only system errors mark the span as failed. No log: the
-              // bridge/sidecar call below already logged the cause.
+              // HTTP 4xx; only a regression in a bridge or sidecar call below (or a bridge
+              // system error the tool passed on in its message) marks the span as failed.
               const errorText = res.content?.[0]?.text ?? 'Tool error';
               const message = redactHome(errorText).slice(0, MAX_STATUS_MESSAGE);
+              const regression =
+                outcome.regression || isSystemError(classifyBridgeError(errorText.replace(/^Error:\s*/, '')));
               metricAttrs['error.type'] = 'tool_error';
               span.setAttribute('error.type', 'tool_error');
               span.setAttribute(TOOL_ERROR_MESSAGE, message);
-              if (isSystemError(classifyBridgeError(errorText.replace(/^Error:\s*/, '')))) {
-                span.setStatus({ code: SpanStatusCode.ERROR, message });
+              if (regression) span.setStatus({ code: SpanStatusCode.ERROR, message });
+              // The bridge or sidecar call below logged its own failure; log only one nothing logged
+              // (the tool's own validation, a failure it composed from several answers).
+              if (!outcome.logged) {
+                emitLog(
+                  regression ? 'error' : 'warn',
+                  `Tool ${toolName} failed: ${message}`,
+                  { 'gen_ai.tool.name': toolName, 'error.type': 'tool_error' },
+                  { eventName: 'reaper.tool.failed' },
+                );
               }
             }
             return result;

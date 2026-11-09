@@ -4,8 +4,16 @@ import { trace, SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { tracing } from '@opentelemetry/sdk-node';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { instrumentToolHandlers } from './server.js';
+import { noteLoggedFailure } from './call-outcome.js';
 
 const exporter = new tracing.InMemorySpanExporter();
+
+/** The `reaper.tool.failed` log lines the wrapper wrote to stderr in this test. */
+function toolFailedLogs(): Record<string, unknown>[] {
+  return vi.mocked(console.error).mock.calls
+    .map((call) => { try { return JSON.parse(String(call[0])) as Record<string, unknown>; } catch { return {}; } })
+    .filter((line) => line['event'] === 'reaper.tool.failed');
+}
 
 type ToolCb = (...args: unknown[]) => Promise<unknown>;
 
@@ -27,7 +35,7 @@ describe('instrumentToolHandlers', () => {
 
   beforeEach(() => {
     exporter.reset();
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined).mockClear();
   });
 
   it('emits a SERVER span following the MCP semantic conventions', async () => {
@@ -97,15 +105,59 @@ describe('instrumentToolHandlers', () => {
     expect(span.attributes['error.type']).toBe('tool_error');
     expect(span.status).toMatchObject({ code: SpanStatusCode.ERROR, message: text });
     expect(span.attributes['reaper.tool.error.message']).toBe(text);
+    expect(toolFailedLogs()).toEqual([expect.objectContaining({ level: 'error' })]);
   });
 
-  it('logs nothing of its own for an isError result: the bridge already logged the cause', async () => {
-    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const cb = wrapTool('send_midi_cc', async () => ({ content: [{ type: 'text', text: 'Error: Track 9 not found' }], isError: true }));
+  it('logs nothing of its own for an isError result the bridge already logged', async () => {
+    const cb = wrapTool('send_midi_cc', async () => {
+      noteLoggedFailure(false); // what sendCommand does after logging a refused request
+      return { content: [{ type: 'text', text: 'Error: Track 9 not found' }], isError: true };
+    });
 
     await cb({}, { requestId: 3 });
 
-    expect(stderr.mock.calls.flat().join('\n')).not.toMatch(/returned an error/);
+    expect(toolFailedLogs()).toEqual([]);
+  });
+
+  it('logs a failure nothing below logged once, as a warning', async () => {
+    const cb = wrapTool('detect_chords', async () => ({
+      content: [{ type: 'text', text: 'Give exactly one of trackIndex or path' }],
+      isError: true,
+    }));
+
+    await cb({}, { requestId: 6 });
+
+    expect(toolFailedLogs()).toEqual([
+      expect.objectContaining({ level: 'warn', 'gen_ai.tool.name': 'detect_chords', 'error.type': 'tool_error' }),
+    ]);
+    expect(exporter.getFinishedSpans()[0].status.code).toBe(SpanStatusCode.UNSET);
+  });
+
+  it('marks the span failed when a call below hit a regression, whatever the message says', async () => {
+    const cb = wrapTool('analyze_audio_file', async () => {
+      noteLoggedFailure(true); // what the sidecar client does after logging a raised analysis
+      return { content: [{ type: 'text', text: 'Analysis failed: the sidecar could not read the file' }], isError: true };
+    });
+
+    await cb({}, { requestId: 8 });
+
+    const [span] = exporter.getFinishedSpans();
+    expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(toolFailedLogs()).toEqual([]);
+  });
+
+  it('keeps the status unset when the calls below failed as expected', async () => {
+    const cb = wrapTool('transform_midi', async () => {
+      noteLoggedFailure(false);
+      return {
+        content: [{ type: 'text', text: "Error: Bridge outdated: the REAPER bridge does not know the command 'transform_midi'" }],
+        isError: true,
+      };
+    });
+
+    await cb({}, { requestId: 9 });
+
+    expect(exporter.getFinishedSpans()[0].status.code).toBe(SpanStatusCode.UNSET);
   });
 
   it('records the exception class as error.type and rethrows', async () => {
