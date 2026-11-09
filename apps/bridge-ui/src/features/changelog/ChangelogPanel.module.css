@@ -1,4 +1,4 @@
-.drawer { z-index: 11; width: min(440px, 100vw); }
+.drawer { z-index: 11; }
 
 /* The update card: what's waiting and how to get it */
 .card {
@@ -38,9 +38,8 @@
 
 .releaseHead {
   display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px;
-  cursor: pointer; list-style: none; user-select: none;
+  margin: 0; font: inherit;
 }
-.releaseHead::-webkit-details-marker { display: none; }
 .version { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); }
 .release:where([data-kind='beta']) .version { font-size: 12px; font-weight: 500; color: var(--muted); }
 .date { margin-left: auto; font-size: 11.5px; color: var(--faint); }

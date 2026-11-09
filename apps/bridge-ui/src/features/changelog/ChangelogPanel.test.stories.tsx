@@ -139,3 +139,28 @@ export const ShowsBetasFromThePalette: Story = {
     await userEvent.keyboard('{Escape}');
   },
 };
+
+/** Resizable like the other details drawers, and the width is the one they share */
+export const ResizesLikeTheOtherDrawers: Story = {
+  beforeEach: () => {
+    localStorage.removeItem('mcp_bridge.drawer_width');
+    return () => localStorage.removeItem('mcp_bridge.drawer_width');
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const drawer = canvas.getByRole('complementary', { name: 'What’s new' });
+    const handle = canvas.getByRole('separator', { name: 'Resize sidebar' });
+    const before = drawer.style.width;
+    handle.focus();
+    await userEvent.keyboard('{End}');
+    await expect(drawer.style.width).not.toBe(before);
+    await expect(localStorage.getItem('mcp_bridge.drawer_width')).not.toBeNull();
+  },
+};
+
+/** Every release lists its changes, the oldest too: nothing to expand */
+export const ListsEveryReleasesChangesWithoutAClick: Story = {
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText(/align doubles to a guide/)).toBeVisible();
+  },
+};

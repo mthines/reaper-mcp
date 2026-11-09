@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Icon, Toggle } from '../../components/index.js';
+import { Icon, ResizeHandle, Toggle, useDrawerWidth } from '../../components/index.js';
 import { useCommand } from '../command/index.js';
 import { REPO_URL } from '../../lib/links.js';
 import { load, save } from '../../lib/storage.js';
@@ -21,9 +21,6 @@ import {
 import { highlightsFor, type Highlight } from './highlights.js';
 import { HighlightCard } from './HighlightCard.js';
 import styles from './ChangelogPanel.module.css';
-
-/** Releases opened by default; older ones stay one click away. */
-const OPEN_RELEASES = 3;
 
 /**
  * What's new: the update reaper-mcp has waiting (with the button or the command that installs it) over the
@@ -50,6 +47,7 @@ export function ChangelogPanel({
   onUpdate: () => void;
   onClose: () => void;
 }) {
+  const width = useDrawerWidth();
   const [betas, setBetas] = useState(() => load(BETAS_KEY) === '1');
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => ev.key === 'Escape' && onClose();
@@ -74,7 +72,8 @@ export function ChangelogPanel({
   const waiting = ready ? availableUpdate(ready, current) : null;
 
   return (
-    <aside className={cx(drawerStyles.drawer, styles.drawer)} aria-label="What’s new">
+    <aside className={cx(drawerStyles.drawer, styles.drawer)} aria-label="What’s new" style={width.style}>
+      <ResizeHandle fraction={width.fraction} onCommit={width.setFraction} />
       <div className={drawerStyles.drawerHead}>
         <div className={drawerStyles.drawerTitle}>
           <Icon.Spark /> What’s new
@@ -104,13 +103,12 @@ export function ChangelogPanel({
         {ready && shown.length === 0 && <p className="muted">No releases yet.</p>}
         {shown.length > 0 && (
           <ol className={styles.timeline} aria-label="Releases">
-            {shown.map((r, i) => (
+            {shown.map((r) => (
               <ReleaseItem
                 key={r.version}
                 release={r}
                 highlights={highlightsFor(r, highlights)}
                 current={current}
-                open={i < OPEN_RELEASES || isNewer(r, current)}
               />
             ))}
           </ol>
@@ -187,51 +185,49 @@ function UpdateCard({
   );
 }
 
-function ReleaseItem({ release, highlights, current, open }: { release: ChangelogRelease; highlights: Highlight[]; current: string; open: boolean }) {
+function ReleaseItem({ release, highlights, current }: { release: ChangelogRelease; highlights: Highlight[]; current: string }) {
   const newer = isNewer(release, current);
   const installed = release.version === current;
   const groups = groupChanges(release.changes);
   return (
     <li className={styles.release} data-state={newer ? 'new' : installed ? 'installed' : 'old'} data-kind={release.prerelease ? 'beta' : 'stable'}>
-      <details open={open}>
-        <summary className={styles.releaseHead}>
-          <span className={styles.version}>v{release.version}</span>
-          {newer && <span className={styles.badge} data-badge="new">New</span>}
-          {installed && <span className={styles.badge} data-badge="installed">Installed</span>}
-          {release.prerelease && <span className={styles.badge} data-badge="beta">Beta</span>}
-          <time className={styles.date} dateTime={release.date}>
-            {formatDate(release.date)}
-          </time>
-        </summary>
-        <div className={styles.releaseBody}>
-          {highlights.length > 0 && (
-            <div className={styles.highlights}>
-              {highlights.map((h) => (
-                <HighlightCard key={h.id} highlight={h} />
-              ))}
-            </div>
-          )}
-          {groups.length === 0 && highlights.length === 0 && <p className="muted">No changes listed.</p>}
-          {groups.map((g) =>
-            g.id === 'internal' ? (
-              <details key={g.id} className={styles.group} data-group={g.id}>
-                <summary className={styles.groupTitle}>
-                  {g.title} <span className="count">{g.changes.length}</span>
-                </summary>
-                <ChangeList changes={g.changes} />
-              </details>
-            ) : (
-              <section key={g.id} className={styles.group} data-group={g.id}>
-                <h4 className={styles.groupTitle}>{g.title}</h4>
-                <ChangeList changes={g.changes} />
-              </section>
-            ),
-          )}
-          <a className={styles.notesLink} href={release.url} target="_blank" rel="noreferrer">
-            Release notes
-          </a>
-        </div>
-      </details>
+      <h3 className={styles.releaseHead}>
+        <span className={styles.version}>v{release.version}</span>
+        {newer && <span className={styles.badge} data-badge="new">New</span>}
+        {installed && <span className={styles.badge} data-badge="installed">Installed</span>}
+        {release.prerelease && <span className={styles.badge} data-badge="beta">Beta</span>}
+        <time className={styles.date} dateTime={release.date}>
+          {formatDate(release.date)}
+        </time>
+      </h3>
+      <div className={styles.releaseBody}>
+        {highlights.length > 0 && (
+          <div className={styles.highlights}>
+            {highlights.map((h) => (
+              <HighlightCard key={h.id} highlight={h} />
+            ))}
+          </div>
+        )}
+        {groups.length === 0 && highlights.length === 0 && <p className="muted">No changes listed.</p>}
+        {groups.map((g) =>
+          g.id === 'internal' ? (
+            <details key={g.id} className={styles.group} data-group={g.id}>
+              <summary className={styles.groupTitle}>
+                {g.title} <span className="count">{g.changes.length}</span>
+              </summary>
+              <ChangeList changes={g.changes} />
+            </details>
+          ) : (
+            <section key={g.id} className={styles.group} data-group={g.id}>
+              <h4 className={styles.groupTitle}>{g.title}</h4>
+              <ChangeList changes={g.changes} />
+            </section>
+          ),
+        )}
+        <a className={styles.notesLink} href={release.url} target="_blank" rel="noreferrer">
+          Release notes
+        </a>
+      </div>
     </li>
   );
 }
