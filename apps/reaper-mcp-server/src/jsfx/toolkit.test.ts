@@ -343,3 +343,10 @@ describe('toolkit 1.3: the About dialog documents the controls', () => {
     expect(about).toMatch(/h = .*kb \* 91 \* ui_s/); // and the dialog grows by exactly its height
   });
 });
+
+describe('toolkit 1.3: the key queue', () => {
+  it('keeps room for the note-off of every queued note-on', () => {
+    const put = body('ui_kput');
+    expect(put).toMatch(/f >= \(vel > 0 \? 2 : 1\)/);
+  });
+});

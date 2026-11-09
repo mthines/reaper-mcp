@@ -66,7 +66,7 @@ Key Voice were built with `/make-plugin` to show the widgets.
 Besides knobs, toggles, choices and the level meter, the toolkit (v1.3) draws graphs a plugin feeds:
 `ui_freqgraph` (a log 20 Hz-20 kHz frequency graph with a spectrum trace) with draggable band
 handles `ui_fhandle` bound to Hz sliders, `ui_grmeter` (per-band gain reduction), `ui_transfer` (a
-compressor curve with the live level) and `ui_keyboard` (MIDI notes). A multiband compressor
+compressor curve with the live level) and `ui_keyboard` (MIDI notes, playable by mouse). A multiband compressor
 (`examples/multiband-compressor.jsfx`) shows the crossovers on the spectrum, drag them to pick the
 bands in Hz, every band has its own threshold line (hover a band and drag up or down, Shift-drag for its gain; click a band and the Threshold, Ratio and Gain knobs edit it), and the bars show how much each band is compressed. A Compare input toggle in Advanced draws the input spectrum over the output one (before and after). Every plugin also shows its name,
 small and in spaced capitals, at the top-left. Graph feeds redraw only on activity

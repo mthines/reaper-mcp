@@ -830,9 +830,12 @@ function ui_kkey(note, vel) local(n, q0, q1) (
 // The keys the user plays with the mouse reach @block through a small queue (ui_kq: 16 slots of note and
 // velocity, then a head and a tail). ui_kput is called by the keyboard widget; the plugin calls ui_kpoll() in
 // @block until it returns 0: each 1 means ui_kn is a note and ui_kv its velocity (0 = note off).
-function ui_kput(note, vel) local(t) (
+// A note-on is queued only while two slots are free, so every queued note-on keeps room for its note-off
+// (a full queue drops the newest event; a lost note-off would leave the note stuck when @block resumes).
+function ui_kput(note, vel) local(t, f) (
   t = (ui_kq[33] + 1) % 16;
-  t != ui_kq[32] ? ( ui_kq[ui_kq[33] * 2] = note; ui_kq[ui_kq[33] * 2 + 1] = vel; ui_kq[33] = t; );
+  f = (ui_kq[32] - ui_kq[33] + 15) % 16;   // free slots
+  f >= (vel > 0 ? 2 : 1) ? ( ui_kq[ui_kq[33] * 2] = note; ui_kq[ui_kq[33] * 2 + 1] = vel; ui_kq[33] = t; );
 );
 function ui_kpoll() (
   ui_kq[32] != ui_kq[33] ? (
@@ -1187,7 +1190,8 @@ function ui_transfer(thr_idx, ratio_idx, knee_db) local(k, t, r, bs, bx, by, i, 
 // ---- MIDI keyboard ------------------------------------------------------------------------------
 
 // Piano keys lo..hi (MIDI notes; start and end on white keys: C, D, E, F, G, A, B), the notes fed with
-// ui_kkey lit in the accent. Display only: a JSFX cannot send MIDI from @gfx.
+// ui_kkey lit in the accent. Playable: a click or drag queues notes the plugin reads with ui_kpoll() in @block
+// (a JSFX cannot send MIDI from @gfx, so the plugin sounds them itself).
 function ui_keyboard(lo, hi, label) local(nw, n, pc, wi, ww, kx, ky, kw, kh, bk, x, v, k, hn, hw, vel) (
   ui_cell();
   nw = 0; n = lo;
