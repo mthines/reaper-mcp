@@ -19,6 +19,13 @@ not_collected:
 
 events:
   settings_opened: {}
+  changelog_opened:          # the What's new drawer
+    source: [header, notice, menu, palette, footer]
+    update_available: boolean
+  changelog_betas_toggled:
+    shown: boolean
+  update_clicked:            # asked the bridge to update this install
+    source: [changelog, notice, palette]
   setting_changed:
     setting: [paused, readonly, open_on_start, dev, autostart, error_notifications, usage_stats]
     enabled: boolean

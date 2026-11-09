@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000">
+  <!-- /teach: every change comes with what and why, the REAPER concept, how to do it by hand, and the before/after.
+       The one moving thing: a highlight that steps through the four answers. -->
+  <defs>
+    <linearGradient id="accent" gradientUnits="userSpaceOnUse" x1="560" y1="0" x2="1440" y2="0">
+      <stop offset="0" stop-color="#7cc4ff" />
+      <stop offset="1" stop-color="#c4a5ff" />
+    </linearGradient>
+    <radialGradient id="stage" cx="50%" cy="0%" r="90%">
+      <stop offset="0" stop-color="#7cc4ff" stop-opacity="0.12" />
+      <stop offset="1" stop-color="#7cc4ff" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#0e0f11" />
+  <rect width="1600" height="1000" fill="url(#stage)" />
+
+  <g font-family="-apple-system, Inter, 'Segoe UI', sans-serif">
+    <!-- The change the agent made -->
+    <rect x="140" y="390" width="440" height="220" rx="28" fill="#1b1d21" stroke="url(#accent)" stroke-width="5" />
+    <text x="360" y="478" font-size="44" fill="#e7e9ec" text-anchor="middle">One change</text>
+    <text x="360" y="534" font-size="32" fill="#8a909a" text-anchor="middle" font-family="ui-monospace, 'SF Mono', Menlo, monospace">Vocal: comp −3 dB</text>
+
+    <!-- Wires out to the four answers -->
+    <g fill="none" stroke="#2f333a" stroke-width="3">
+      <path d="M580 500 C700 500 700 230 820 230" />
+      <path d="M580 500 C700 500 700 410 820 410" />
+      <path d="M580 500 C700 500 700 590 820 590" />
+      <path d="M580 500 C700 500 700 770 820 770" />
+    </g>
+
+    <!-- The four answers -->
+    <g font-size="40" fill="#e7e9ec">
+      <rect x="820" y="170" width="620" height="120" rx="28" fill="#1b1d21" stroke="#2f333a" stroke-width="3" />
+      <text x="870" y="244">What it did, and why</text>
+      <rect x="820" y="350" width="620" height="120" rx="28" fill="#1b1d21" stroke="#2f333a" stroke-width="3" />
+      <text x="870" y="424">The REAPER concept</text>
+      <rect x="820" y="530" width="620" height="120" rx="28" fill="#1b1d21" stroke="#2f333a" stroke-width="3" />
+      <text x="870" y="604">How to do it by hand</text>
+      <rect x="820" y="710" width="620" height="120" rx="28" fill="#1b1d21" stroke="#2f333a" stroke-width="3" />
+      <text x="870" y="784">Before → after, and undo</text>
+    </g>
+
+    <!-- Highlight stepping through them, 0.9 s each -->
+    <rect x="820" y="170" width="620" height="120" rx="28" fill="#7cc4ff" fill-opacity="0.08" stroke="url(#accent)" stroke-width="5">
+      <animate attributeName="y" values="170;350;530;710" keyTimes="0;0.25;0.5;0.75" calcMode="discrete" dur="3.6s" repeatCount="indefinite" />
+    </rect>
+  </g>
+</svg>

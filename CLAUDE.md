@@ -134,6 +134,7 @@ reaper-mcp/
     make-plugin/SKILL.md      # /make-plugin — make the user a plugin (JSFX + shared UI toolkit): spec, write_jsfx, load, measure, iterate; examples/ holds four
     new-extension/SKILL.md    # /new-extension — build an extension for a plugin's internals: probe its state, write tools + tests, prove them live
     mix-memory/SKILL.md       # /mix-memory — recall / consolidate / promote memory
+    changelog-highlight/      # /changelog-highlight — maintainer only (.repo-only: not linked or packaged): a What's new highlight with media
   .claude/agents/             # Subagents, symlinked into ~/.claude/agents by scripts/sync-symlinks.sh (clone) or copied by `reaper-mcp install-skills` (npm)
     plugin-researcher.md      # Web research + scratch-track probing → user::plugins:: record; used by /learn-plugin, /mixer, /mastering
 
@@ -893,7 +894,7 @@ REAPER, open `http://localhost:8098/mcp_bridge.html?demo` (every tool and view i
   compiler cannot handle fails the build and tests (`panicThreshold: 'all_errors'` in `build-config.mjs`); known triggers are a conditional (`?:`, `&&`, `?.`)
   inside a `try` block (use `fetchText()` from `src/lib/fetch-text.ts`), a variable incremented inside a callback,
   and `a && "x"` lists inside JSX attributes (build them before `return`).
-- Overrides: `BRIDGE_DEV_PORT` (8098), `REAPER_WEB_PORT` (8099), `REAPER_RESOURCE_PATH`.
+- Overrides: `BRIDGE_DEV_PORT` (default 8098; when it is taken the dev server takes the next free port, never REAPER's, and prints the URL), `REAPER_WEB_PORT` (8099), `REAPER_RESOURCE_PATH`.
 
 ```bash
 # correct: the page talks to the dev server; REAPER sees one connection all session
@@ -935,11 +936,11 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   Calls and Tools views (and their counts) show the range too; older matches end the list with a button that widens
   the range to the next one that includes them.
 - URL state: navigation state lives in the query string via `useUrlState(key, default, { validate })` in
-  `src/lib/url-state.ts` (a History API port of LoreKit web's hook: JSON values, a value equal to the default is dropped,
+  `src/lib/url-state.ts` (a History API port of LoreKit web's hook: JSON values, text bare (`?release=0.78.2`) unless it would read back as a number or flag, a value equal to the default is dropped,
   changes in one tick become one history entry), so Back/Forward step through it and a link or reload reopens it.
   Params: `view`, `range`, `span` (dragged timeline span), `filter` (all/errors), `q` (search; replaces, never pushes, written to the URL 300 ms after typing pauses via
   `debounceMs` while the page updates at once; each view keeps its own search, so switching views never carries one over),
-  `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, and on Plugins `coverage`, `inProject`, `plugin`
+  `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, `changelog` (What's new open) and `release` (the release a version click links to: scrolled to and highlighted), and on Plugins `coverage`, `inProject`, `plugin`
   (open plugin by FX name). Opening, closing or switching a drawer by click (a row, "Previous call") pushes; ↑/↓ between rows replaces. `view` and `range` default
   to the last pick in localStorage, so the bridge's bare `mcp_bridge.html` opens where you left off. Use it for any new
   state a viewer would want to go back to or share (tabs, filters, an open drawer); keep transient UI (hover, drag,
@@ -1056,6 +1057,19 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   `mcp_bridge.lua` stops it; restart switches to `set_action_options(3)` and re-runs its own action, and REAPER
   relaunches the installed copy. It restarts itself after a successful update; the page reloads when
   `startedAt` changes (or once when the update is done, if the bridge script didn't change).
+  **What's new** (`?changelog=true`, `src/features/changelog/`): a drawer listing the GitHub releases (one request,
+  `releases?per_page=100`, only once it opens, cached 6h in localStorage), each release's `## What's Changed` lines parsed
+  as conventional commits and grouped New / Fixes / Faster / Docs / Under the hood (`changelog.ts`), betas behind a
+  per-viewer toggle. Its top card offers the update (the same `update` request, or the clone and npm commands when the
+  bridge can't run it). A newer stable release shows an **Update available** pill in the header that opens it; the notice's
+  What's new link, the ⋯ menu, the palette (`help-whats-new`) and the footer version open it too. Opening it closes Settings.
+  **Highlights** (`highlights.ts`, `HighlightCard.tsx`): hand-made entries over a release's notes, one house-style card
+  each (16:10 stage, title, sentence, "Try it"; click to enlarge) with an animation (`.mp4`/animated SVG + poster), graphic
+  (`.svg`) or screenshot (`.webp`). Data: `apps/bridge-ui/changelog/highlights.json` + `media/`, read from `main` on GitHub
+  (so a newer release shows its highlights before the update) or the working tree under the dev server; matched to a
+  release by `pr` or `version`. Written by the repo-only `/changelog-highlight` skill with
+  `apps/bridge-ui/scripts/changelog-capture.mjs` (records/captures `?demo`); `highlights-files.test.ts` checks every entry,
+  media size and SVG safety.
   **Developer mode** (`settings.dev`): `setup` writes `dev=1` for a clone with uncommitted changes, a branch other
   than `main` or unpushed commits (`isDevClone()` in `cli.ts`); the Settings toggle (`cfg_dev`, persistent) overrides
   it. In dev mode the release notice is hidden and, once source files are newer than the last install (a detached `find -newer mcp_update.conf` every 5s, `control.changed`), the header shows **Rebuild & reload** (request `rebuild-<token>`):

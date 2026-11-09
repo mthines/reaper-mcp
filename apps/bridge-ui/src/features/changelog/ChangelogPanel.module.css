@@ -1,0 +1,106 @@
+.drawer { z-index: 11; }
+
+/* The update card: what's waiting and how to get it */
+.card {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--line-2); background: var(--panel-2);
+  font-size: 12.5px;
+}
+.card:where([data-tone='new']) {
+  border-color: rgba(124, 196, 255, 0.35);
+  background: linear-gradient(135deg, rgba(124, 196, 255, 0.12), rgba(196, 165, 255, 0.08));
+}
+.card:where([data-tone='ok']) { border-color: rgba(74, 222, 128, 0.22); }
+.card:where([data-tone='busy']) { border-color: rgba(245, 184, 75, 0.3); }
+.cardHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cardLog { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commands { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 4px 0 0; }
+.commands dt { color: var(--faint); font-size: 11.5px; }
+.commands dd { margin: 0; font-size: 11.5px; color: var(--text); user-select: all; word-break: break-word; }
+
+.toolbar { padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+
+/* The releases: one dot per release on a rail, newest at the top */
+.timeline { list-style: none; margin: 0; padding: 0 0 0 18px; position: relative; display: flex; flex-direction: column; gap: 14px; }
+.timeline::before {
+  content: ''; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 2px;
+  background: linear-gradient(var(--line-2), var(--line) 85%, transparent);
+}
+.release { position: relative; }
+.release::before {
+  content: ''; position: absolute; left: -18px; top: 5px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--panel); border: 2px solid var(--line-2); box-sizing: border-box;
+}
+.release:where([data-state='new'])::before { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 4px rgba(124, 196, 255, 0.15); }
+.release:where([data-state='installed'])::before { border-color: var(--live); }
+.release:where([data-kind='beta'])::before { width: 8px; height: 8px; left: -16px; top: 7px; }
+
+.releaseHead {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px;
+  margin: 0; font: inherit;
+}
+.version {
+  padding: 0; border: 0; background: none; cursor: pointer;
+  font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text);
+}
+.version:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+/* The release a link points at: a tinted band that flashes once as it scrolls in */
+.release { scroll-margin-top: 12px; border-radius: 10px; }
+.release:where([data-linked]) { background: rgba(124, 196, 255, 0.06); box-shadow: 0 0 0 8px rgba(124, 196, 255, 0.06); animation: linked-flash 1.6s ease-out; }
+@keyframes linked-flash {
+  0%, 25% { background: rgba(124, 196, 255, 0.2); box-shadow: 0 0 0 8px rgba(124, 196, 255, 0.2); }
+}
+@media (prefers-reduced-motion: reduce) { .release:where([data-linked]) { animation: none; } }
+.release:where([data-kind='beta']) .version { font-size: 12px; font-weight: 500; color: var(--muted); }
+.date { margin-left: auto; font-size: 11.5px; color: var(--faint); }
+
+.badge {
+  padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid var(--line-2); color: var(--muted);
+}
+.badge:where([data-badge='new']) { color: var(--accent); border-color: rgba(124, 196, 255, 0.35); background: rgba(124, 196, 255, 0.08); }
+.badge:where([data-badge='installed']) { color: var(--live); border-color: rgba(74, 222, 128, 0.3); }
+.badge:where([data-badge='breaking']) { color: var(--bad); border-color: rgba(248, 113, 113, 0.35); margin-right: 6px; }
+
+.highlights { display: flex; flex-direction: column; gap: 10px; }
+.releaseBody { display: flex; flex-direction: column; gap: 10px; padding: 10px 0 2px; }
+.group { display: flex; flex-direction: column; gap: 4px; }
+.groupTitle {
+  margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  display: flex; align-items: center; gap: 6px;
+}
+.group:where([data-group='new']) .groupTitle { color: var(--accent); }
+.group:where([data-group='fixes']) .groupTitle { color: var(--live); }
+.group:where([data-group='faster']) .groupTitle { color: var(--warn); }
+.group:where([data-group='docs']) .groupTitle { color: var(--h1); }
+.group:where([data-group='internal']) .groupTitle { color: var(--faint); cursor: pointer; }
+
+.changes { margin: 0; padding: 0 0 0 14px; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; line-height: 1.45; color: var(--text); }
+.group:where([data-group='internal']) .changes { color: var(--muted); padding-top: 4px; }
+.scope {
+  margin-right: 6px; padding: 0 6px; border-radius: 5px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line);
+}
+.pr { margin-left: 6px; font-size: 11.5px; color: var(--faint); text-decoration: none; }
+.pr:hover { color: var(--accent); }
+
+.allLink { align-self: flex-start; font-size: 12px; color: var(--accent); }
+/* Release notes: an icon after the version, shown on hover of the version row, on keyboard focus, and always on touch */
+.notesLink {
+  display: inline-grid; place-items: center; align-self: center; width: 20px; height: 20px; margin-left: -4px;
+  border-radius: 5px; color: var(--muted); opacity: 0; transition: opacity 0.12s, color 0.12s, background 0.12s;
+}
+.releaseHead:hover .notesLink, .notesLink:focus-visible { opacity: 1; }
+.notesLink:hover { color: var(--accent); background: var(--panel-2); }
+@media (hover: none) { .notesLink { opacity: 1; } }
+.allLink { margin-top: 4px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .release:where([data-state='new'])::before { animation: pulse 2.4s ease-out infinite; }
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(124, 196, 255, 0.45); }
+  70% { box-shadow: 0 0 0 7px rgba(124, 196, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(124, 196, 255, 0); }
+}

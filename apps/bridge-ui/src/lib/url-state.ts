@@ -26,18 +26,29 @@ export const isString = (v: unknown): v is string => typeof v === 'string';
 export const isStringOrNull = (v: unknown): v is string | null => v === null || typeof v === 'string';
 export const isNumberOrNull = (v: unknown): v is number | null => v === null || typeof v === 'number';
 
-/** JSON-serialise a value to a URL param string. */
+/** A value as a URL param: JSON, except a string goes in bare (`?release=0.78.2`) unless it would read back as
+ * something else (`"true"`, `"12"`), which keeps its quotes. */
 function serialise<T>(value: T): string {
+  if (typeof value === 'string' && !parsesAsJson(value)) return value;
   return JSON.stringify(value);
 }
 
-/** JSON-deserialise a URL param string, returning `fallback` on null or parse error. */
+function parsesAsJson(raw: string): boolean {
+  try {
+    JSON.parse(raw);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A URL param as a value: JSON when it parses, else the bare string; `fallback` when the param is absent. */
 function deserialise<T>(raw: string | null, fallback: T): T {
   if (raw === null) return fallback;
   try {
     return JSON.parse(raw) as T;
   } catch {
-    return fallback;
+    return raw as T;
   }
 }
 

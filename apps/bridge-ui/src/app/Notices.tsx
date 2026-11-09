@@ -1,11 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import { compareVersions, updateLog, useLatestRelease } from '../lib/update.js';
+import { updateLog, type Release } from '../lib/update.js';
+import { track } from '../lib/analytics.js';
 import { type BridgeSettings, type BridgeStatus, type SettingKey, webSocketLevel } from '../lib/status.js';
-import { DEMO } from './demo-mode.js';
 import type { BridgeRequest } from './useBridgeRequest.js';
 import { load, save } from '../lib/storage.js';
 import { Icon, Notice } from '../components/index.js';
-import { useCommand } from '../features/command/index.js';
 import { cx } from '../lib/cx.js';
 import styles from './Notices.module.css';
 
@@ -17,28 +16,28 @@ export function Notices({
   settings,
   onSet,
   request,
+  release,
+  onSkip,
+  onWhatsNew,
 }: {
   status: BridgeStatus;
   settings: BridgeSettings | null;
   onSet: (key: SettingKey, on: boolean) => void;
   request: BridgeRequest;
+  /** A stable release newer than this install that the user hasn't skipped (never in developer mode), or null */
+  release: Release | null;
+  /** Skip this version: no more offers until a newer one */
+  onSkip: (version: string) => void;
+  /** Opens the What's new drawer */
+  onWhatsNew: () => void;
 }) {
   const [swsDismissed, setSwsDismissed] = useState(() => load(SWS_DISMISS_KEY) === '1');
-  const [skipped, setSkipped] = useState(() => load(UPDATE_SKIP_KEY));
   const [updateDoneDismissed, setUpdateDoneDismissed] = useState(false);
   const health = status.health;
   const control = status.control;
   const update = control?.update;
-  const dev = settings?.dev === true;
   const rebuild = update?.kind === 'rebuild';
-  const release = useLatestRelease(!DEMO && !dev);
   const notices: ReactNode[] = [];
-  // The same update the notice below offers (not while one is running, done or failed)
-  const offerUpdate = update?.state !== 'running' && update?.state !== 'failed' && !dev && release && compareVersions(release.version, __VERSION__) > 0 && skipped !== release.version;
-  useCommand(
-    { id: 'bridge-update', label: `Update reaper-mcp to v${release?.version ?? ''}`, group: 'Bridge', onSelect: () => request('update') },
-    Boolean(offerUpdate && control?.canUpdate),
-  );
 
   if (update?.state === 'done' && !updateDoneDismissed) {
     notices.push(
@@ -77,7 +76,7 @@ export function Notices({
         )}
       </Notice>,
     );
-  } else if (!dev && release && compareVersions(release.version, __VERSION__) > 0 && skipped !== release.version) {
+  } else if (release) {
     notices.push(
       <Notice
         key="update"
@@ -85,7 +84,13 @@ export function Notices({
         action={
           <span className={styles.noticeActions}>
             {control?.canUpdate && (
-              <button className="btn btn-sm" onClick={() => request('update')}>
+              <button
+                className="btn btn-sm"
+                onClick={() => {
+                  track({ name: 'update_clicked', source: 'notice' });
+                  request('update');
+                }}
+              >
                 Update
               </button>
             )}
@@ -93,7 +98,7 @@ export function Notices({
               className="icon-btn"
               aria-label="Skip this version"
               title="Skip this version"
-              onClick={() => { setSkipped(release.version); save(UPDATE_SKIP_KEY, release.version); }}
+              onClick={() => onSkip(release.version)}
             >
               <Icon.Close />
             </button>
@@ -101,7 +106,7 @@ export function Notices({
         }
       >
         <b>reaper-mcp v{release.version} is available</b> (you have v{__VERSION__}).{' '}
-        <a href={release.url} target="_blank" rel="noreferrer">What’s new</a>
+        <button className={styles.whatsNew} onClick={onWhatsNew}>What’s new</button>
         {!control?.canUpdate && (
           <>
             {' '}· Update from your reaper-mcp folder: <code>git pull &amp;&amp; ./scripts/install.sh</code>
@@ -172,4 +177,3 @@ export function Notices({
   return notices.length ? <div className={styles.notices}>{notices}</div> : null;
 }
 
-const UPDATE_SKIP_KEY = 'mcp-bridge-update-skipped';

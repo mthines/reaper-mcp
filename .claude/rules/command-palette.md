@@ -19,7 +19,7 @@ Same convention as LoreKit web (its `command-coverage` skill): ⌘K opens a pale
 - `contextual: true` on every command that belongs to one view (set it on all of a view's commands). The palette lists the page's groups first and ranks its commands first in a search, so Snapshots' commands lead on Snapshots.
 - `children: Command[]` makes a drill-in level ("Rename a snapshot…").
 - `hint` shows a key the command doesn't own (Shift+1–9 loads snapshots; that handler stays in `SnapshotsView`).
-- `description` is searched, not drawn. Ids: `go-*`, `calls-*`, `snapshots-*`, `plugins-*`, `bridge-*`, `page-*`, `help-*`.
+- `description` is searched, not drawn. Ids: `go-*`, `calls-*`, `snapshots-*`, `plugins-*`, `changelog-*`, `bridge-*`, `page-*`, `help-*`.
 - The `?` sheet and the palette both read the live registry: a new command shows in both with nothing else to edit.
 
 ## Bindings in use (never reuse)

@@ -17,7 +17,9 @@
 /* Stats and timeline: part of the flex column, opt-in in short windows */
 .overview { display: contents; }
 .footerMeta { flex: none; display: inline-flex; align-items: center; }
-.footer a { color: var(--muted); text-decoration: none; }
+.footer a, .footerLink { color: var(--muted); text-decoration: none; }
+.footerLink { padding: 0; border: 0; background: none; font: inherit; cursor: pointer; }
+.footerLink:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 .footer a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 
 @media (max-width: 720px) {

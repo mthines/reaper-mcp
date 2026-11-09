@@ -65,6 +65,15 @@ export function ShareIcon() {
   );
 }
 
+/** Opens somewhere else (a new tab): a box with an arrow out of its corner */
+export function ExternalIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9.5 2.5h4v4M13.5 2.5 7.5 8.5M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3" />
+    </svg>
+  );
+}
+
 /** Zoom to the change: corner brackets around a point */
 export function FocusIcon() {
   return (
