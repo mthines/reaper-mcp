@@ -23,6 +23,9 @@ import { highlightsFor, type Highlight } from './highlights.js';
 import { HighlightCard } from './HighlightCard.js';
 import styles from './ChangelogPanel.module.css';
 
+/** Wider than the other drawers by default: highlight cards and release notes read better with room */
+const CHANGELOG_DRAWER_WIDTH_PX = 560;
+
 /**
  * What's new: the update reaper-mcp has waiting (with the button or the command that installs it) over the
  * repo's releases, newest first, each one's changes grouped the way the release notes list them.
@@ -48,7 +51,7 @@ export function ChangelogPanel({
   onUpdate: () => void;
   onClose: () => void;
 }) {
-  const width = useDrawerWidth();
+  const width = useDrawerWidth(CHANGELOG_DRAWER_WIDTH_PX);
   const [betas, setBetas] = useState(() => load(BETAS_KEY) === '1');
   // `?release=0.78.0`: the release a link points at, scrolled to and highlighted (a version click sets it)
   const [linked, setLinked] = useUrlState<string | null>('release', null, { validate: isStringOrNull });
@@ -75,20 +78,35 @@ export function ChangelogPanel({
     description: 'prerelease beta pull request changelog',
     onSelect: () => chooseBetas(!betas),
   });
+  // The same list as a page of its own, for reading wide or sharing: opens beside the bridge, keeps a linked release
+  const pageHref = `?page=changelog${linked ? `&release=${encodeURIComponent(linked)}` : ''}`;
+  useCommand({
+    contextual: true,
+    id: 'changelog-page',
+    label: 'Open what’s new as a page',
+    group: 'What’s new',
+    description: 'full page changelog share link expand',
+    onSelect: () => window.open(pageHref, '_blank', 'noopener'),
+  });
   const ready = releases.status === 'ready' ? releases.releases : null;
   const shown = ready ? visibleReleases(ready, betas, linked) : [];
   const waiting = ready ? availableUpdate(ready, current) : null;
 
   return (
     <aside className={cx(drawerStyles.drawer, styles.drawer)} aria-label="What’s new" style={width.style}>
-      <ResizeHandle fraction={width.fraction} onCommit={width.setFraction} />
+      <ResizeHandle fraction={width.fraction} onCommit={width.setFraction} defaultPx={CHANGELOG_DRAWER_WIDTH_PX} />
       <div className={drawerStyles.drawerHead}>
         <div className={drawerStyles.drawerTitle}>
           <Icon.Spark /> What’s new
         </div>
-        <button className="icon-btn" onClick={close} aria-label="Close what’s new" title="Close (Esc)">
-          <Icon.Close />
-        </button>
+        <div className={styles.headActions}>
+          <a className="icon-btn" href={pageHref} target="_blank" rel="noreferrer" aria-label="Open what’s new as a page" title="Open as a page">
+            <Icon.Expand />
+          </a>
+          <button className="icon-btn" onClick={close} aria-label="Close what’s new" title="Close (Esc)">
+            <Icon.Close />
+          </button>
+        </div>
       </div>
       <div className={drawerStyles.drawerBody}>
         {/* Never "up to date" before the releases are in: the list says it is loading or couldn't reach GitHub */}
@@ -196,7 +214,7 @@ function UpdateCard({
   );
 }
 
-function ReleaseItem({
+export function ReleaseItem({
   release,
   highlights,
   current,
@@ -206,7 +224,8 @@ function ReleaseItem({
 }: {
   release: ChangelogRelease;
   highlights: Highlight[];
-  current: string;
+  /** The installed version, or null where nothing is installed (the public changelog page) */
+  current: string | null;
   /** The release `?release=` points at: scrolled into view and highlighted */
   linked: boolean;
   /** Changes when content above it can move it (highlights or releases arriving), so a linked release scrolls again */
@@ -219,8 +238,8 @@ function ReleaseItem({
     const smooth = typeof matchMedia === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
     ref.current?.scrollIntoView?.({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
   }, [linked, layout]);
-  const newer = isNewer(release, current);
-  const installed = release.version === current;
+  const newer = current !== null && isNewer(release, current);
+  const installed = current !== null && release.version === current;
   const groups = groupChanges(release.changes);
   return (
     <li

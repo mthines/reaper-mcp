@@ -1,13 +1,14 @@
 // The shared UI: no bridge knowledge, used across the app and every feature. Import from here, never the files.
 import { Combobox as ComboboxRoot, GroupedCombobox } from './Combobox.js';
-import { ChevronIcon, CloseIcon, ExternalIcon, FocusIcon, GearIcon, GitHubIcon, SearchIcon, ShareIcon, SparkIcon, WholeIcon } from './icons.js';
+import { ChevronIcon, CloseIcon, ExpandIcon, ExternalIcon, FocusIcon, GearIcon, GitHubIcon, SearchIcon, ShareIcon, SparkIcon, WholeIcon } from './icons.js';
 
 /** A listbox picker; `Combobox.Grouped` lists actions and choices in headed groups */
 export const Combobox = Object.assign(ComboboxRoot, { Grouped: GroupedCombobox });
 
 /** The page's icons: `<Icon.Gear />` */
-export const Icon = { GitHub: GitHubIcon, Gear: GearIcon, Close: CloseIcon, Search: SearchIcon, Spark: SparkIcon, Chevron: ChevronIcon, Share: ShareIcon, External: ExternalIcon, Focus: FocusIcon, Whole: WholeIcon };
+export const Icon = { GitHub: GitHubIcon, Gear: GearIcon, Close: CloseIcon, Search: SearchIcon, Spark: SparkIcon, Chevron: ChevronIcon, Share: ShareIcon, External: ExternalIcon, Expand: ExpandIcon, Focus: FocusIcon, Whole: WholeIcon };
 
+export { InstallBanner } from './InstallBanner.js';
 export type { ComboboxOption } from './combobox-logic.js';
 export type { GroupedComboboxItem } from './Combobox.js';
 export { Mark } from './Mark.js';

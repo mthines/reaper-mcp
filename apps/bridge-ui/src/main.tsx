@@ -6,13 +6,17 @@ import './styles/chart.module.css';
 import './styles/drawer.module.css';
 import './styles/list.module.css';
 import { App } from './app/App.js';
+import { Changelog } from './features/changelog/index.js';
 import { CommandProvider } from './features/command/index.js';
 
 const root = createRoot(document.getElementById('root') as HTMLElement);
 
+// `?page=changelog` (and /changelog on the hosted site) is the changelog on a page of its own, with no bridge behind it
+const changelogPage = new URLSearchParams(location.search).get('page') === 'changelog';
+
 root.render(
   <CommandProvider>
-    <App />
+    {changelogPage ? <Changelog.PageRoute /> : <App />}
   </CommandProvider>,
 );
 

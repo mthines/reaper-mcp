@@ -4,8 +4,11 @@ import styles from './ResizeHandle.module.css';
 
 const STORAGE_KEY = 'mcp_bridge.drawer_width';
 
-/** The sidebar width every details drawer shares, kept per viewer as a fraction of the viewport. */
-export function useDrawerWidth(): { fraction: number | null; style: { width: string }; setFraction: (f: number | null) => void } {
+/**
+ * The sidebar width every details drawer shares, kept per viewer as a fraction of the viewport. `defaultPx` is what a
+ * viewer who has not resized gets (a drawer with wide content asks for more than 400); pass the same to its ResizeHandle.
+ */
+export function useDrawerWidth(defaultPx?: number): { fraction: number | null; style: { width: string }; setFraction: (f: number | null) => void } {
   const [fraction, set] = useState<number | null>(() => {
     try {
       return parseDrawerFraction(localStorage.getItem(STORAGE_KEY));
@@ -22,7 +25,7 @@ export function useDrawerWidth(): { fraction: number | null; style: { width: str
       // per-viewer convenience only
     }
   }, []);
-  return { fraction, style: { width: drawerWidthCss(fraction) }, setFraction };
+  return { fraction, style: { width: drawerWidthCss(fraction, defaultPx) }, setFraction };
 }
 
 // A pointer must travel this far before a press becomes a drag (a double-click jitters a pixel or two)
@@ -34,7 +37,7 @@ const RESIZE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End']);
  * ← / → (Shift for bigger steps), Home / End; double-click resets the width. During a gesture it writes the
  * drawer's style.width directly and commits once at the end, so the drawer doesn't re-render per pointer move.
  */
-export function ResizeHandle({ fraction, onCommit }: { fraction: number | null; onCommit: (fraction: number | null) => void }) {
+export function ResizeHandle({ fraction, onCommit, defaultPx }: { fraction: number | null; onCommit: (fraction: number | null) => void; defaultPx?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<{ pointerId: number; startX: number; startWidth: number; moved: boolean } | null>(null);
   const pending = useRef<number | null>(null);
@@ -48,7 +51,7 @@ export function ResizeHandle({ fraction, onCommit }: { fraction: number | null; 
     const el = drawer();
     if (!el) return;
     pending.current = next;
-    el.style.width = drawerWidthCss(next);
+    el.style.width = drawerWidthCss(next, defaultPx);
     setPreview(next);
   };
 
@@ -56,7 +59,7 @@ export function ResizeHandle({ fraction, onCommit }: { fraction: number | null; 
     pending.current = null;
     setPreview(null);
     const el = drawer();
-    if (el) el.style.width = drawerWidthCss(fraction);
+    if (el) el.style.width = drawerWidthCss(fraction, defaultPx);
   };
 
   const commit = () => {
@@ -64,7 +67,7 @@ export function ResizeHandle({ fraction, onCommit }: { fraction: number | null; 
     if (next === null) return;
     const vw = window.innerWidth;
     // A drag that ended where it began, or an arrow at a bound: nothing to store
-    if (Math.round(drawerWidthPx(next, vw)) === Math.round(drawerWidthPx(fraction, vw))) return revert();
+    if (Math.round(drawerWidthPx(next, vw, defaultPx)) === Math.round(drawerWidthPx(fraction, vw, defaultPx))) return revert();
     pending.current = null;
     setPreview(null);
     onCommit(next);
@@ -105,7 +108,7 @@ export function ResizeHandle({ fraction, onCommit }: { fraction: number | null; 
   const onKeyDown = (ev: KeyboardEvent<HTMLDivElement>) => {
     if (ev.altKey || ev.ctrlKey || ev.metaKey) return; // browser back and text shortcuts
     const vw = window.innerWidth;
-    const next = keyboardDrawerWidth(ev.key, ev.shiftKey, drawerWidthPx(pending.current ?? fraction, vw), vw);
+    const next = keyboardDrawerWidth(ev.key, ev.shiftKey, drawerWidthPx(pending.current ?? fraction, vw, defaultPx), vw);
     if (next === null) return;
     ev.preventDefault();
     ev.stopPropagation(); // the list's ↑/↓ and the page shortcuts stay out of it
@@ -114,7 +117,7 @@ export function ResizeHandle({ fraction, onCommit }: { fraction: number | null; 
 
   const vw = typeof window === 'undefined' ? 0 : window.innerWidth;
   const bounds = drawerWidthBounds(vw);
-  const now = Math.round(drawerWidthPx(preview ?? fraction, vw));
+  const now = Math.round(drawerWidthPx(preview ?? fraction, vw, defaultPx));
 
   return (
     <div

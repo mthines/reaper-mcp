@@ -94,9 +94,10 @@ export function highlightsFor(release: ChangelogRelease, highlights: Highlight[]
  */
 export function useHighlights(enabled: boolean): Highlight[] {
   const dev = import.meta.env.DEV;
-  const [highlights, setHighlights] = useState<Highlight[]>(() => (dev ? [] : (readCache()?.highlights ?? [])));
+  const [highlights, setHighlights] = useState<Highlight[]>(() => (__HOSTED__ ? hostedHighlights() : dev ? [] : (readCache()?.highlights ?? [])));
   useEffect(() => {
-    if (!enabled) return;
+    // The hosted build carries its highlights (and their media) with it: nothing to fetch
+    if (!enabled || __HOSTED__) return;
     const cached = dev ? null : readCache();
     if (cached && Date.now() - cached.at < CACHE_TTL_MS) return;
     const indexUrl = dev ? new URL('/changelog/highlights.json', location.origin).href : HIGHLIGHTS_URL;
@@ -117,6 +118,11 @@ export function useHighlights(enabled: boolean): Highlight[] {
     };
   }, [enabled, dev]);
   return highlights;
+}
+
+/** The highlights baked into the hosted build; their media is served beside the page under /changelog/media/. */
+function hostedHighlights(): Highlight[] {
+  return parseHighlights(__HIGHLIGHTS_SNAPSHOT__, new URL('/changelog/highlights.json', location.origin).href);
 }
 
 function readCache(): { at: number; highlights: Highlight[] } | null {
