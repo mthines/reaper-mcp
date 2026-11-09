@@ -44,17 +44,18 @@ Every widget is one block, label above, control, value below, sized the same acr
 | `ui_gshow(on)` / `ui_gfeed2(buf, n)` | before / after: with `ui_gshow(slider)` on, the graph also draws the input as a second, lighter line labelled Input / Output; feed it with `ui_gfeed2` only while shown (a second FFT costs). Put a `ui_toggle` for it in Advanced | a `<0,1,1{Off,On}>` slider |
 | `ui_fhandle(idx, "Label")` | a draggable band edge on the graph, bound to slider `idx` in Hz; drag, wheel, double-click for a value box, modifier-click resets; stays between its neighbours; automates like a knob | a Hz slider, e.g. `<40,800,1>`; call it after `ui_freqgraph`, in left-to-right order |
 | `ui_fthresh(thr_first, ratio_first, gain_first, n)` | a threshold line across each of `n` bands (the handles + 1) on the graph; hover a band and drag up/down to move its threshold, **Shift**-drag its gain, wheel = its ratio, click selects it | `n` threshold sliders from `thr_first` (dB, -60..0), `n` ratio sliders from `ratio_first`, `n` gain sliders from `gain_first`; call it after the handles |
+| `ui_fband(first_idx, n, fmt)` | one level line per band on the graph, for bands with a single amount (an EQ's gain, a split's level): hover a band and drag up or down (the slider's full range across the graph height), **Shift**-drag for fine steps, wheel = a small step, click selects it, double-click types a value, modifier-click resets; `fmt` as for knobs (1 = dB) | `n` sliders from `first_idx`; call it after the handles; pair it with `ui_bandknob` |
 | `ui_bandknob(first_idx, n, "Label", fmt)` | a knob on the selected band's slider (`first_idx + ui_fsel`), labelled with the band (Low / Mid / High, else Band N) | `n` sliders from `first_idx`; counts as one widget |
 | `ui_grmeter(n, "Label")` | `n` (1-8) gain-reduction bars hanging from the top, amber from 6 dB, red from 12; a click selects the band | `ui_gr(k, db)` per band from `@block` (db 0 or more) |
 | `ui_transfer(thr_idx, ratio_idx, knee_db)` | a compressor transfer curve that follows the threshold and ratio sliders (the selected band's, `thr_idx + ui_fsel`, with a graph), with a live level dot | `ui_glevel(db)` from `@block` |
-| `ui_keyboard(lo, hi, "Label")` | piano keys `lo`..`hi` (MIDI notes), lit while held | `ui_kkey(note, vel)` on note on, `ui_kkey(note, 0)` on note off |
+| `ui_keyboard(lo, hi, "Label")` | piano keys `lo`..`hi` (MIDI notes, 21-108 is the full 88), short and full width: put it as the last core row, below the knobs. **Playable**: press a key to play it (higher up the key = softer), drag across keys for a glissando, release to stop | `ui_kkey(note, vel)` on note on, `ui_kkey(note, 0)` on note off, for notes the plugin hears; the notes the user plays arrive in `@block` through `while (ui_kpoll()) ( ... )`: each 1 means `ui_kn` is a note and `ui_kv` its velocity (0 = off) |
 | `ui_tall(span)` | the next `ui_row` is `span` times as tall (a graph needs height); knobs in it keep their size | none |
 
 Use `ui_boot(2)` in a plugin with these feeds: it redraws only when a feed, a control or the window
 changed, so silence costs nothing (`ui_boot(1)` redraws every frame, `ui_boot(0)` only on change).
 Feeds are rounded to a visible step before they count as change. A graph widget counts as one
 widget for the core limit. The selected band is `ui_fsel` (0-based), which the plugin may read.
-Memory map: 0..1023 core, 1024+ graph data (`ui_fg` trace, `ui_ge` band edges, `ui_grm`, `ui_kb`),
+Memory map: 0..1023 core, 1024+ graph data (`ui_fg` trace, `ui_ge` band edges, `ui_grm`, `ui_kb`, `ui_kq` the played-key queue),
 `ui_mem` (2048) is where your buffers start. `examples/multiband-compressor.jsfx` uses them all.
 
 `fmt` for knobs: `0` number (`0.00`), `1` dB, `2` percent of 0..1, `3` Hz or kHz, `4` ms, `5` integer.
@@ -72,7 +73,7 @@ when the user turns on the FX window's **+ > Send all keyboard input to plug-in*
 the plugin; then it closes the value box, the About dialog, then the drawer (and the window
 closes with its close button, as every key now goes to the plugin).
 
-**Header knobs.** A plugin with a Mix and/or an Output slider calls `ui_header(mix_idx, out_idx)` in `@gfx` before `ui_begin` (0 for one it does not have): two small knobs in the top right, Output rightmost, with the usual gestures, the value shown while hovered. Do not draw those sliders as widgets too (they leave the core view and its widget count). The plugin name and the first row get a clear gap below the name, a little more with header knobs.
+**Header bars.** A plugin with a Mix and/or an Output slider calls `ui_header(mix_idx, out_idx)` in `@gfx` before `ui_begin` (0 for one it does not have): two slim horizontal bars in the top right (like Vital's), Output rightmost, dragged left/right with the usual gestures, the value shown while hovered. Do not draw those sliders as widgets too (they leave the core view and its widget count). The header band is one line: the plugin name and the bars are vertically centred on it, with an equal gap above and below, and the first row starts after it (the same with or without Mix / Output).
 
 Every plugin also gets, with no code of its own: its name in small spaced capitals at the top-left
 (hidden in a very narrow window), and a small "reaper-mcp" credit at the bottom right

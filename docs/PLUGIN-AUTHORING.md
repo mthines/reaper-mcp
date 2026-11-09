@@ -42,9 +42,24 @@ work as usual.
 toolkit block is replaced by the current one. An existing slider is never renumbered, re-ranged
 or removed without `breaking: true`, because projects store automation by slider number.
 
-## Header knobs
+## Header bars
 
-Mix and Output sit in the top right of every plugin that has them (`ui_header(mix, out)`), small and always visible, so the core view holds only what is special about the plugin.
+Mix and Output sit in the top right of every plugin that has them (`ui_header(mix, out)`) as slim horizontal bars, vertically centred with the plugin name and always visible, so the core view holds only what is special about the plugin.
+
+## Gallery
+
+What a generated plugin can draw today. Every window has the plugin name top-left and, when the plugin has them,
+Mix and Output as bars top-right; the Advanced drawer sits along the bottom. Screenshots are real REAPER 7 windows.
+
+| | |
+|---|---|
+| **Knobs** (`ui_knob`): Tape Sat, two core knobs and Mix / Output in the header<br><img src="assets/make-plugin/tape-sat.png" width="420" alt="Tape Sat: two large knobs, Mix and Output bars in the header"> | **Frequency graph with draggable bands** (`ui_freqgraph`, `ui_fhandle`, `ui_fthresh`): Multiband Compressor, crossovers in Hz and a threshold line per band, reduction bars below<br><img src="assets/make-plugin/multiband-compressor.png" width="420" alt="Multiband Compressor: log frequency graph with two crossover handles and per-band threshold lines"> |
+| **Per-band levels** (`ui_fband`, `ui_bandknob`): Split Tilt, one level per side of the crossover, drag a band up or down<br><img src="assets/make-plugin/split-tilt.png" width="420" alt="Split Tilt: frequency graph with a crossover handle and a level line per band"> | **Transfer curve and reduction meter** (`ui_transfer`, `ui_grmeter`): Squash<br><img src="assets/make-plugin/squash.png" width="420" alt="Squash: compressor transfer curve with the threshold line and a gain-reduction meter"> |
+| **Playable keyboard** (`ui_keyboard`, read with `ui_kpoll`): Key Voice, 88 keys along the bottom, click or drag to play<br><img src="assets/make-plugin/key-voice.png" width="420" alt="Key Voice: three controls above an 88-key keyboard"> | |
+
+The shots were taken while a broadband test signal played, so the graphs show the live spectrum trace.
+The sources are in `.claude/skills/make-plugin/examples/` (Tape Sat, Multiband Compressor); Split Tilt, Squash and
+Key Voice were built with `/make-plugin` to show the widgets.
 
 ## Graphs
 

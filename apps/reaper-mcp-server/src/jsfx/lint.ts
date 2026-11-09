@@ -41,7 +41,7 @@ export const UI_API: Readonly<Record<string, number>> = {
   ui_value: 1, ui_fmtv: 2, ui_reset: 1, ui_ctl: 5, ui_knob: 3, ui_toggle: 2, ui_choice: 2, ui_meter: 2,
   ui_section: 1, ui_gput: 2, ui_gset: 2, ui_gfeed: 2, ui_gr: 2, ui_glevel: 1, ui_kkey: 2, ui_fxof: 1,
   ui_fof: 1, ui_gyof: 1, ui_freqgraph: 1, ui_fpill: 2, ui_fhandle: 2, ui_grmeter: 2, ui_tcurve: 4,
-  ui_transfer: 3, ui_keyboard: 3, ui_fthresh: 4, ui_header: 2, ui_hknob: 4, ui_gfeed2: 2, ui_gshow: 1, ui_bandknob: 4,
+  ui_transfer: 3, ui_keyboard: 3, ui_fthresh: 4, ui_header: 2, ui_hbar: 4, ui_gfeed2: 2, ui_gshow: 1, ui_bandknob: 4, ui_fband: 3, ui_kput: 2, ui_kpoll: 0,
 };
 
 /** At most this many widgets before the first ui_section: the core view stays small. */
@@ -97,8 +97,9 @@ function sections(code: string): Map<string, { text: string; line: number }> {
 const WIDGET = /\bui_(knob|toggle|choice|fhandle)\s*\(\s*(\d+)/g;
 /** A knob on the selected band's slider: first..first+n-1; the threshold lines use two such ranges (threshold, ratio) of n bands. */
 const BANDKNOB = /\bui_bandknob\s*\(\s*(\d+)\s*,\s*(\d+)/g;
+const FBAND = /\bui_fband\s*\(\s*(\d+)\s*,\s*(\d+)/g;
 const FTHRESH = /\bui_fthresh\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/g;
-/** The header knobs (Mix, Output in the top right): 0 = none, else a slider the plugin must not draw again. */
+/** The header bars (Mix, Output in the top right): 0 = none, else a slider the plugin must not draw again. */
 const HEADER = /\bui_header\s*\(\s*(\d+)\s*,\s*(\d+)/g;
 /** The transfer curve reads two sliders: threshold and ratio. */
 const TRANSFER = /\bui_transfer\s*\(\s*(\d+)\s*,\s*(\d+)/g;
@@ -202,6 +203,7 @@ export function lintJsfx(source: string): LintFinding[] {
     const ranges: [string, number, number][] = [];
     for (const m of gfx.text.matchAll(HEADER)) for (const v of [m[1], m[2]]) if (Number(v) > 0) ranges.push(['ui_header', Number(v), 1]);
     for (const m of gfx.text.matchAll(BANDKNOB)) ranges.push(['ui_bandknob', Number(m[1]), Number(m[2])]);
+    for (const m of gfx.text.matchAll(FBAND)) ranges.push(['ui_fband', Number(m[1]), Number(m[2])]);
     for (const m of gfx.text.matchAll(FTHRESH)) ranges.push(['ui_fthresh', Number(m[1]), Number(m[4])], ['ui_fthresh', Number(m[2]), Number(m[4])], ['ui_fthresh', Number(m[3]), Number(m[4])]);
     for (const [fn, first, count] of ranges) {
       for (let idx = first; idx < first + count; idx++) {

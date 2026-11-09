@@ -40,6 +40,23 @@ ui_begin(2, 0) ? ( ui_tall(2); ui_row(1); ui_freqgraph("Bands"); ui_fhandle(1, "
     expect(rules(base.replace('ui_fthresh(2, 4, 6, 2);', ''))).not.toContain('slider-without-widget'); // the band knobs still cover them
   });
 
+  it('per-band levels: ui_fband covers one slider a band and refuses ones that are not declared', () => {
+    const src = `desc:Split
+slider1:300<40,8000,1>Crossover
+slider2:0<-12,12,0.1>Low level
+slider3:0<-12,12,0.1>High level
+@init
+ui_boot(2);
+@block
+ui_changed();
+@gfx 300 200
+ui_begin(2, 0) ? ( ui_tall(2); ui_row(1); ui_freqgraph("Split"); ui_fhandle(1, "X"); ui_fband(2, 2, 1);
+  ui_row(1); ui_bandknob(2, 2, "Level", 1); ui_end(); );
+`;
+    expect(rules(src)).not.toContain('slider-without-widget');
+    expect(rules(src.replace('ui_fband(2, 2, 1)', 'ui_fband(2, 3, 1)'))).toContain('widget-unknown-slider');
+  });
+
   it('warns about a buffer placed inside the toolkit graph data (below 2048)', () => {
     expect(rules(OK.replace('update(); ui_boot(0);', 'update(); buf = 1200; ui_boot(0);'))).toContain('low-memory-index');
     expect(rules(OK.replace('update(); ui_boot(0);', 'update(); buf = 2048; ui_boot(0);'))).not.toContain('low-memory-index');

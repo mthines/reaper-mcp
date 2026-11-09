@@ -179,7 +179,7 @@ reaper-mcp/
                               # else registered by the bridge on start (register_actions in mcp_snapshots_ui_lib.lua)
     mcp_analyzer.jsfx         # Real-time FFT analyzer (JSFX, writes to gmem[])
     mcp_midi_emitter.jsfx     # Real-time MIDI emitter (JSFX, reads from gmem[] ring buffer)
-    mcp_ui.jsfx-inc           # The @gfx UI toolkit every generated plugin inlines (ring knob, toggle, choice, meter, plugin-name header with Mix/Output knobs, frequency graph with band handles and per-band threshold lines, gain-reduction meter, transfer curve, Advanced drawer over the core, value box on double-click, Cmd/Ctrl/Alt-click reset, About dialog from the credit, per-plugin accent via ui_theme(), cached gradient+grain background); ui_-prefixed, no science literals, UI state set once (@init re-runs on Play)
+    mcp_ui.jsfx-inc           # The @gfx UI toolkit every generated plugin inlines (ring knob, toggle, choice, meter, per-band `ui_fthresh`/`ui_fband` drag, a playable `ui_keyboard` (`ui_kpoll`), plugin-name header with Mix/Output knobs, frequency graph with band handles and per-band threshold lines, gain-reduction meter, transfer curve, Advanced drawer over the core, value box on double-click, Cmd/Ctrl/Alt-click reset, About dialog from the credit, per-plugin accent via ui_theme(), cached gradient+grain background); ui_-prefixed, no science literals, UI state set once (@init re-runs on Play)
     mcp_gain_trace.jsfx       # Live pre/post gain trace (pumping/ducking meter: p5/p1/std as params, gmem MCPGainTrace)
     install.sh                # Manual install helper script
 ```
