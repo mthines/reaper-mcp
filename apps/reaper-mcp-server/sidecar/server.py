@@ -90,7 +90,7 @@ def _get_audio_duration(path: str) -> float:
             info = torchaudio.info(path)
             return info.num_frames / info.sample_rate
         except Exception as exc:
-            raise RuntimeError(f"Cannot read audio file: {path}: {exc}") from exc
+            raise RuntimeError(f"Audio file unreadable: {path}: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -190,12 +190,19 @@ def handle_analyze(request_id: Any, params: dict) -> str:
 
 
 def _check_file(request_id: Any, params: dict, key: str) -> str | None:
-    """Return an error response when params[key] is missing or not a file."""
+    """Return an error response when params[key] is missing, not a file, or not audio soundfile can open."""
     path = params.get(key)
     if not path:
         return _err(request_id, -32602, f"Missing required param: {key}")
     if not os.path.exists(path):
         return _err(request_id, -32000, f"Audio file not found: {path}")
+    import soundfile as sf  # type: ignore
+    try:
+        sf.info(path)
+    except RuntimeError as exc:
+        # Every handler reads through soundfile (analysis.load_audio), so this file would fail there too, as a
+        # crash-looking "… failed: Error opening …"; say it is the input (an .m4a, a text file) instead.
+        return _err(request_id, -32000, f"Audio file unreadable: {path}: {exc}")
     return None
 
 

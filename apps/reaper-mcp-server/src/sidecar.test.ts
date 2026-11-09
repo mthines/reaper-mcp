@@ -390,6 +390,7 @@ describe('failed requests in telemetry', () => {
   it.each([
     { code: -32000, message: 'Audio too short: 0.30s (minimum 0.5s)' },
     { code: -32000, message: 'Audio file not found: /tmp/clip.wav' },
+    { code: -32000, message: "Audio file unreadable: /tmp/ref.m4a: Error opening '/tmp/ref.m4a': Format not recognised." },
     { code: -32602, message: 'bpm must be between 40 and 240' },
   ])('reports input the sidecar rejected as an expected failure: $message', async (error) => {
     const { span, level } = await failAnalyze(error);

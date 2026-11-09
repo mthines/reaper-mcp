@@ -59,7 +59,7 @@ export type SidecarErrorType = 'timeout' | 'busy' | 'not_installed' | 'sidecar_r
 const INVALID_PARAMS = -32602;
 
 /** What server.py answers (code -32000) when the audio it was given cannot be analysed: bad input, not a fault. */
-const REJECTED_INPUT = /^(Audio file not found|Audio too short|Sample rates differ)\b/;
+const REJECTED_INPUT = /^(Audio file not found|Audio file unreadable|Audio too short|Sample rates differ)\b/;
 
 /**
  * A component `setup-sidecar` leaves out unless asked: this client's own check, or server.py's answer for the

@@ -149,6 +149,19 @@ def test_audio_file_not_found():
     assert "not found" in resp["error"]["message"].lower()
 
 
+def test_a_file_that_is_not_audio_is_refused_as_unreadable_input(tmp_path):
+    # The phrase is what sidecar.ts classifies as rejected input (sidecar_rejected), not a sidecar fault.
+    notes = tmp_path / "reference.m4a"
+    notes.write_text("not audio soundfile can open")
+
+    for method in ("analyze_audio", "analyze"):
+        error = parse_response(server.dispatch(json.dumps({
+            "jsonrpc": "2.0", "id": 9, "method": method, "params": {"path": str(notes)},
+        })))["error"]
+        assert error["code"] == -32000
+        assert error["message"].startswith(f"Audio file unreadable: {notes}")
+
+
 # ---------------------------------------------------------------------------
 # Test 4: Audio too short (<0.5s) → JSON-RPC error with duration in message
 # ---------------------------------------------------------------------------
