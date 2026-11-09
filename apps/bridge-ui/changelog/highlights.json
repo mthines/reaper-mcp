@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "highlights": [
+    {
+      "id": "whats-new-drawer",
+      "version": "0.80.0",
+      "kind": "animation",
+      "group": "new",
+      "title": "What’s new, right on the bridge page",
+      "blurb": "A pill tells you when a new release is out. Open it to see every change, grouped like the release notes, and update in one click.",
+      "tryIt": "Update available, or ⌘K → What’s new",
+      "media": "media/whats-new-drawer.mp4",
+      "poster": "media/whats-new-drawer.webp",
+      "alt": "The Update available pill opens the What’s new drawer: the update card on top, then each release’s changes, with betas shown after the toggle."
+    },
+    {
+      "id": "teach-mode",
+      "pr": 98,
+      "kind": "animation",
+      "group": "new",
+      "title": "Learn REAPER while the agent works",
+      "blurb": "Type /teach and every change comes with what it did and why, the REAPER concept behind it, how to do it by hand, and the before and after, with a link to the change on the bridge page.",
+      "tryIt": "/teach, then ask for a change",
+      "media": "media/teach.svg",
+      "poster": "media/teach.webp",
+      "alt": "One change fans out to four answers: what it did and why, the REAPER concept, how to do it by hand, before and after with undo."
+    },
+    {
+      "id": "make-plugin",
+      "pr": 96,
+      "kind": "animation",
+      "group": "new",
+      "title": "Ask for a plugin and get one",
+      "blurb": "Describe the effect you want and /make-plugin writes it as a JSFX plugin with real knobs and an Advanced drawer, loads it on your track and checks it. It keeps working without the agent.",
+      "tryIt": "/make-plugin a shimmer reverb",
+      "media": "media/make-plugin.mp4",
+      "poster": "media/make-plugin.webp",
+      "alt": "A generated plugin, Mutate Verb, shows four knobs, then its Advanced drawer slides up with six more."
+    },
+    {
+      "id": "reapack",
+      "pr": 92,
+      "kind": "animation",
+      "group": "new",
+      "title": "Install the REAPER side with ReaPack",
+      "blurb": "Add the reaper-mcp repository to ReaPack to install the bridge scripts, the meters and the status page. ReaPack then offers updates like any other package.",
+      "tryIt": "Extensions → ReaPack → Import repositories…",
+      "media": "media/reapack.svg",
+      "poster": "media/reapack.webp",
+      "alt": "The reaper-mcp repository in ReaPack flows into REAPER: bridge scripts, meters and the status page."
+    },
+    {
+      "id": "vocal-align",
+      "pr": 78,
+      "kind": "animation",
+      "group": "new",
+      "title": "Doubles that land on the guide vocal",
+      "blurb": "Ask to tighten a double and the agent moves its hits onto the lead with stretch markers, then checks pitch, tone and attacks. A backing vocal 37 ms late on average lined up in one go. Needs the sidecar.",
+      "tryIt": "Ask: align the doubles to the lead vocal",
+      "media": "media/vocal-align.mp4",
+      "alt": "In REAPER, a quiet backing vocal under the lead gets stretch markers at each phrase, then a check reports pitch, tone and attacks unchanged.",
+      "poster": "media/vocal-align.webp"
+    }
+  ]
+}
