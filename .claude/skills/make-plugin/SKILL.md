@@ -53,6 +53,13 @@ made.
   New controls go at the end. `write_jsfx` refuses a changed range or a removed slider unless
   `breaking: true`.
 - **Do not commit** anything unless the user asks.
+- **Verification is an acceptance criterion, not a courtesy.** A plugin is not done until
+  Step 5 has run against the real plugin in REAPER and every check has a number. Lint-clean
+  and "it loads" prove nothing (a compile error only shows as a plugin that does nothing).
+  If the bridge is down, do not skip Step 5 and do not report the plugin as finished: check
+  whether REAPER is running, start it if it is not (a blank scratch project, never the
+  user's), ask the user to start `mcp_bridge.lua` if the bridge still does not answer, and
+  report the plugin as **unverified** (outcome `abandoned`) until the checks have passed.
 
 ## Instructions
 
@@ -147,6 +154,9 @@ goes back to the name's colour.
 
 ### Step 5: Prove it by measurement
 
+This step is mandatory and part of the definition of done: never end a run, or call a plugin
+finished, without it.
+
 JSFX code does not run until audio is processed, so a compile error shows up as a plugin that
 **does nothing**, not as an error. Never conclude "it loaded" from the parameter list alone.
 Measure the track offline (`analyze_track_offline`, `verify_edit`, `measure_masking`,
@@ -202,7 +212,7 @@ Then Steps 4-8.
 
 - [ ] Core view 3-5 widgets, Advanced at most 8, nothing the request did not need
 - [ ] `write_jsfx` accepted it (lint clean) with 3-5 suggested presets
-- [ ] Measured: runs, transparent at zero, safe at defaults, does the one thing, extremes
+- [ ] Measured in REAPER (not assumed): runs, transparent at zero, safe at defaults, does the one thing, extremes. Each with a number in the report. Without this the plugin is not done.
 - [ ] Scratch track deleted by name and confirmed gone; the user's tracks untouched
 - [ ] `report_plugin_build` called; lessons saved (or the report says why not)
 
