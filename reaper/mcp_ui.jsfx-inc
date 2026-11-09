@@ -1074,7 +1074,7 @@ function ui_fband(first_idx, n, fmt) local(k, a, b, y, idx, lo, hi, hot, drag, n
       ui_ly = mouse_y;
       ui_set(idx, ui_q(idx, ui_acc));
     );
-    hot && mouse_wheel != 0 ? ui_set(idx, ui_q(idx, slider(idx) + sign(mouse_wheel) * (mx - mn) / 48));
+    hot && mouse_wheel != 0 ? ui_set(idx, ui_q(idx, slider(idx) + sign(mouse_wheel) * (ui_stp[idx] > 0 ? ui_stp[idx] : (mx - mn) / 48)));   // a stepped slider moves one step, or ui_q would round the nudge away
     ui_active == idx && ui_rel ? ( slider_automate(2 ^ (idx - 1), 1); ui_active = 0; ui_ftd = 0; );
     drag = ui_active == idx;
     (hot || drag) ? ui_gany = 2;
