@@ -80,7 +80,7 @@ Cut before you add. If a control could be a sensible fixed value, make it one. P
 example in `examples/` (`mutate-verb.jsfx` random and granular plus reverb, `tape-sat.jsfx`
 nonlinear plus tilt EQ, `width-bass-mono.jsfx` linear stereo plus meter, `multiband-compressor.jsfx` frequency graph with
 crossover handles in Hz, per-band gain reduction and a transfer curve via `ui_freqgraph`,
-`ui_fhandle`, `ui_fthresh`, `ui_grmeter`, `ui_transfer`; `ui_fband` gives bands one level each; `ui_keyboard` shows and plays MIDI notes) and read it. Each has its
+`ui_fhandle`, `ui_fthresh`, `ui_grmeter`, `ui_transfer`; `ui_fband` gives bands one level each and `ui_keyboard` shows and plays MIDI notes; no shipped example uses those two, see `reference/toolkit.md`) and read it. Each has its
 suggested presets beside it (`<name>.presets.json`): the shape `write_jsfx` takes.
 
 ### Step 2: Write the source
