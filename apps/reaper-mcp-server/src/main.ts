@@ -27,7 +27,7 @@ import { repairBridgeInstall, repairNotices, writeBridgeVersion, type BridgeRepa
 import { addNotice } from './notices.js';
 import { checkForUpdate, updateCheckDisabled } from './update-check.js';
 import { offerSidecarSetup } from './sidecar-offer.js';
-import { autostartInstalled, isReaperProcessRunning, setupHealthAttributes } from './setup-health.js';
+import { autostartEnabled, isReaperProcessRunning, setupHealthAttributes } from './setup-health.js';
 
 const execAsync = promisifyUtil(execCb);
 
@@ -672,7 +672,7 @@ async function serve(): Promise<void> {
       startupSpan.setAttributes(setupHealthAttributes({
         status: bridge,
         reaperRunning: await reaperRunning,
-        autostart: autostartInstalled(getReaperScriptsPath()),
+        autostart: autostartEnabled(getReaperResourcePath(), getReaperScriptsPath()),
         sidecarInstalled: getSidecarClient().isAvailable(),
       }));
       startupSpan.setStatus({ code: SpanStatusCode.OK });

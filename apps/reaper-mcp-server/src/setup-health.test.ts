@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { autostartInstalled, heartbeatAgeBucket, setupHealthAttributes } from './setup-health.js';
+import { autostartEnabled, autostartInstalled, heartbeatAgeBucket, setupHealthAttributes } from './setup-health.js';
 import { AUTOSTART_BLOCK } from './cli.js';
 
 const MIN = 60_000;
@@ -50,5 +50,28 @@ describe('autostartInstalled', () => {
     expect(autostartInstalled(dir)).toBe(false);
     writeFileSync(join(dir, '__startup.lua'), AUTOSTART_BLOCK.join('\n'));
     expect(autostartInstalled(dir)).toBe(true);
+  });
+});
+
+describe('autostartEnabled', () => {
+  let dir: string;
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('is off when the bridge window\'s Start with REAPER setting is off, even with the block in place', () => {
+    dir = mkdtempSync(join(tmpdir(), 'setup-health-'));
+    writeFileSync(join(dir, '__startup.lua'), AUTOSTART_BLOCK.join('\n'));
+    expect(autostartEnabled(dir, dir)).toBe(true); // no saved setting: the block runs the bridge
+
+    writeFileSync(join(dir, 'reaper-extstate.ini'), '[MCPBridge]\ncfg_autostart=0\n');
+    expect(autostartEnabled(dir, dir)).toBe(false);
+
+    writeFileSync(join(dir, 'reaper-extstate.ini'), '[MCPBridge]\ncfg_autostart=1\n');
+    expect(autostartEnabled(dir, dir)).toBe(true);
+  });
+
+  it('is off without the block whatever the setting says', () => {
+    dir = mkdtempSync(join(tmpdir(), 'setup-health-'));
+    writeFileSync(join(dir, 'reaper-extstate.ini'), '[MCPBridge]\ncfg_autostart=1\n');
+    expect(autostartEnabled(dir, dir)).toBe(false);
   });
 });

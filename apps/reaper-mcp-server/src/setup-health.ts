@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { platform } from 'node:os';
-import { AUTOSTART_MARKER } from './cli.js';
+import { AUTOSTART_MARKER, readExtState } from './cli.js';
 import type { BridgeStatus } from './bridge.js';
 
 /**
@@ -48,6 +48,21 @@ export function autostartInstalled(scriptsDir: string): boolean {
     return readFileSync(join(scriptsDir, '__startup.lua'), 'utf-8').includes(AUTOSTART_MARKER);
   } catch {
     return false;
+  }
+}
+
+/**
+ * Whether the bridge starts with REAPER: the block is in Scripts/__startup.lua and the bridge window's
+ * Start with REAPER setting (persistent ExtState MCPBridge/cfg_autostart in reaper-extstate.ini) is not
+ * "0", which makes the block skip the bridge. The same reading as the doctor's row (autostartCheck);
+ * REAPER saves that file itself, so while it runs the file can lag a change made in the window.
+ */
+export function autostartEnabled(resourcePath: string, scriptsDir: string): boolean {
+  if (!autostartInstalled(scriptsDir)) return false;
+  try {
+    return readExtState(readFileSync(join(resourcePath, 'reaper-extstate.ini'), 'utf-8'), 'MCPBridge', 'cfg_autostart') !== '0';
+  } catch {
+    return true; // no saved setting: the block runs the bridge
   }
 }
 
