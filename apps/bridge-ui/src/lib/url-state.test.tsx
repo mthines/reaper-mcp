@@ -50,6 +50,28 @@ describe('state kept in the URL', () => {
     expect(view).toBe('calls');
   });
 
+  it('writes text bare and reads a hand-typed link, while links with quotes keep working', async () => {
+    open('/mcp_bridge.html?range=24h');
+    expect(range).toBe('24h');
+    open('/mcp_bridge.html?q=%22quoted%22');
+    expect(query).toBe('quoted');
+    act(() => setView('0.78.2'));
+    await settle();
+    expect(location.search).toBe('?q=%22quoted%22&view=0.78.2');
+  });
+
+  it('quotes text that would read back as a number or a flag', async () => {
+    open('/mcp_bridge.html');
+    act(() => setView('12'));
+    await settle();
+    expect(location.search).toBe('?view=%2212%22');
+    open(`/mcp_bridge.html${location.search}`);
+    expect(view).toBe('12');
+    act(() => setView('true'));
+    await settle();
+    expect(location.search).toBe('?view=%22true%22');
+  });
+
   it('falls back to the default for a stale or hand-edited link', () => {
     open('/mcp_bridge.html?range=%22forever%22');
     expect(range).toBe('30m');
@@ -62,7 +84,7 @@ describe('state kept in the URL', () => {
     act(() => setRange('1h'));
     await settle();
     expect(range).toBe('1h');
-    expect(location.search).toBe('?demo=&range=%221h%22');
+    expect(location.search).toBe('?demo=&range=1h');
     act(() => setRange('30m'));
     await settle();
     expect(location.search).toBe('?demo=');
@@ -100,14 +122,14 @@ describe('state kept in the URL', () => {
     expect(query).toBe('read');
     expect(location.search).toBe('');
     await act(() => new Promise((resolve) => setTimeout(resolve, 80)));
-    expect(location.search).toBe('?q=%22read%22');
+    expect(location.search).toBe('?q=read');
   });
 
   it('writes a debounced change with the next change that is not, as one history entry', async () => {
     open('/mcp_bridge.html');
     await act(async () => setQuery('lufs'));
     await act(async () => setView('tools'));
-    expect(location.search).toBe('?q=%22lufs%22&view=%22tools%22');
+    expect(location.search).toBe('?q=lufs&view=tools');
     await back();
     expect([view, query]).toEqual(['calls', '']);
   });

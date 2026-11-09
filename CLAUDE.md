@@ -131,9 +131,10 @@ reaper-mcp/
     editing/SKILL.md          # /editing — MIDI, arrangement, comping, A/B variants in fixed lanes
     teach/SKILL.md            # /teach — beginner mode (slash-only): explains each change, links the REAPER concept, how to do it by hand, bridge page link (knowledge/reference/teaching.md)
     learn-plugin/SKILL.md     # /learn-plugin — research + live-probe a plugin via plugin-researcher, ask only the gaps (LoreKit)
-    make-plugin/SKILL.md      # /make-plugin — make the user a plugin (JSFX + shared UI toolkit): spec, write_jsfx, load, measure, iterate; examples/ holds three
+    make-plugin/SKILL.md      # /make-plugin — make the user a plugin (JSFX + shared UI toolkit): spec, write_jsfx, load, measure, iterate; examples/ holds four
     new-extension/SKILL.md    # /new-extension — build an extension for a plugin's internals: probe its state, write tools + tests, prove them live
     mix-memory/SKILL.md       # /mix-memory — recall / consolidate / promote memory
+    changelog-highlight/      # /changelog-highlight — maintainer only (.repo-only: not linked or packaged): a What's new highlight with media
   .claude/agents/             # Subagents, symlinked into ~/.claude/agents by scripts/sync-symlinks.sh (clone) or copied by `reaper-mcp install-skills` (npm)
     plugin-researcher.md      # Web research + scratch-track probing → user::plugins:: record; used by /learn-plugin, /mixer, /mastering
 
@@ -178,7 +179,7 @@ reaper-mcp/
                               # else registered by the bridge on start (register_actions in mcp_snapshots_ui_lib.lua)
     mcp_analyzer.jsfx         # Real-time FFT analyzer (JSFX, writes to gmem[])
     mcp_midi_emitter.jsfx     # Real-time MIDI emitter (JSFX, reads from gmem[] ring buffer)
-    mcp_ui.jsfx-inc           # The @gfx UI toolkit every generated plugin inlines (ring knob, toggle, choice, meter, Advanced drawer over the core, value box on double-click, Cmd/Ctrl/Alt-click reset, About dialog from the credit, per-plugin accent via ui_theme(), cached gradient+grain background); ui_-prefixed, no science literals, UI state set once (@init re-runs on Play)
+    mcp_ui.jsfx-inc           # The @gfx UI toolkit every generated plugin inlines (ring knob, toggle, choice, meter, plugin-name header with Mix/Output knobs, frequency graph with band handles and per-band threshold lines, gain-reduction meter, transfer curve, Advanced drawer over the core, value box on double-click, Cmd/Ctrl/Alt-click reset, About dialog from the credit, per-plugin accent via ui_theme(), cached gradient+grain background); ui_-prefixed, no science literals, UI state set once (@init re-runs on Play)
     mcp_gain_trace.jsfx       # Live pre/post gain trace (pumping/ducking meter: p5/p1/std as params, gmem MCPGainTrace)
     install.sh                # Manual install helper script
 ```
@@ -491,8 +492,10 @@ browser), with its UI drawn by the shared `@gfx` toolkit `reaper/mcp_ui.jsfx-inc
 | `write_jsfx` | `tools/jsfx.ts` | Write a plugin to `Effects/reaper-mcp-generated/<slug>.jsfx`: lints the source (`src/jsfx/lint.ts`), inlines the toolkit (`src/jsfx/inline.ts`, so the file is self-contained), bumps the version, keeps the old file in `~/.config/reaper-mcp/jsfx-history/`. An existing slider is never renumbered or re-ranged without `breaking: true` (saved automation would break). Optional `presets` (≤8, values checked against each slider, one bad value refuses the call) go into REAPER's own preset file `presets/js-reaper-mcp-generated_<slug>_jsfx.ini` (`src/jsfx/presets.ts`), merged so the user's own presets are kept. Optional `accent` (`auto` = from the slug, a name, or `#rrggbb`; kept as `// accent:` in the file, a later write without it keeps it; bad input refuses the call; `src/jsfx/accent.ts`). `desc:` gets ` (reaper-mcp)` appended once (`DEVELOPER_SUFFIX`); slug, file and preset paths are unchanged. TS-only: loading uses `add_fx` |
 | `report_plugin_build` | `tools/plugin-build.ts` | The skill's last call: outcome (shipped / compile_failed / checks_failed / abandoned), rounds, checks passed, the example it started from. Closed values and capped counts only, like `report_plugin_research` |
 
+Toolkit v1.3 adds graph widgets (`ui_freqgraph`, `ui_fhandle`, `ui_grmeter`, `ui_transfer`, `ui_keyboard`, `ui_tall`), a plugin-name header on every plugin and activity-driven redraw (`ui_boot(2)`); the lint refuses unknown `ui_` calls and wrong argument counts (`unknown-ui-call`, `ui-arity`, table `UI_API` kept equal to the toolkit by a test). Per-band controls: `ui_fthresh` (a threshold line per band, drag a hovered band up/down, Shift-drag = gain, wheel = ratio) and `ui_bandknob` (knobs follow the selected band). Header knobs: `ui_header(mix_idx, out_idx)` puts the plugin's own Mix and Output in the top right (small, always visible; the examples use it). Before/after on the graph: `ui_gshow` + `ui_gfeed2` (the input trace). Four shipped examples (`multiband-compressor` is the graph one, with a threshold, ratio and gain per band). Memory map: 0..1023 core, 1024+ graph data, `ui_mem` 2048 for plugin buffers.
+
 Telemetry: both set closed values on the tool's span (`reaper.jsfx.*`, `reaper.plugin_build.*`, all in the allow-list in
-`telemetry-consent.ts`); lint findings count in `reaper.jsfx.lint.findings` by rule id. Never the plugin's name, the request,
+`telemetry-consent.ts`); lint findings count in `reaper.jsfx.lint.findings` by rule id, graph widgets in `reaper.jsfx.graphs` (a count). Never the plugin's name, the request,
 its source or a control label. Generated plugins themselves contain no telemetry.
 
 ### Actions Proxy (3)
@@ -893,7 +896,7 @@ REAPER, open `http://localhost:8098/mcp_bridge.html?demo` (every tool and view i
   compiler cannot handle fails the build and tests (`panicThreshold: 'all_errors'` in `build-config.mjs`); known triggers are a conditional (`?:`, `&&`, `?.`)
   inside a `try` block (use `fetchText()` from `src/lib/fetch-text.ts`), a variable incremented inside a callback,
   and `a && "x"` lists inside JSX attributes (build them before `return`).
-- Overrides: `BRIDGE_DEV_PORT` (8098), `REAPER_WEB_PORT` (8099), `REAPER_RESOURCE_PATH`.
+- Overrides: `BRIDGE_DEV_PORT` (default 8098; when it is taken the dev server takes the next free port, never REAPER's, and prints the URL), `REAPER_WEB_PORT` (8099), `REAPER_RESOURCE_PATH`.
 
 ```bash
 # correct: the page talks to the dev server; REAPER sees one connection all session
@@ -935,11 +938,11 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   Calls and Tools views (and their counts) show the range too; older matches end the list with a button that widens
   the range to the next one that includes them.
 - URL state: navigation state lives in the query string via `useUrlState(key, default, { validate })` in
-  `src/lib/url-state.ts` (a History API port of LoreKit web's hook: JSON values, a value equal to the default is dropped,
+  `src/lib/url-state.ts` (a History API port of LoreKit web's hook: JSON values, text bare (`?release=0.78.2`) unless it would read back as a number or flag, a value equal to the default is dropped,
   changes in one tick become one history entry), so Back/Forward step through it and a link or reload reopens it.
   Params: `view`, `range`, `span` (dragged timeline span), `filter` (all/errors), `q` (search; replaces, never pushes, written to the URL 300 ms after typing pauses via
   `debounceMs` while the page updates at once; each view keeps its own search, so switching views never carries one over),
-  `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, and on Plugins `coverage`, `inProject`, `plugin`
+  `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, `changelog` (What's new open) and `release` (the release a version click links to: scrolled to and highlighted), and on Plugins `coverage`, `inProject`, `plugin`
   (open plugin by FX name). Opening, closing or switching a drawer by click (a row, "Previous call") pushes; ↑/↓ between rows replaces. `view` and `range` default
   to the last pick in localStorage, so the bridge's bare `mcp_bridge.html` opens where you left off. Use it for any new
   state a viewer would want to go back to or share (tabs, filters, an open drawer); keep transient UI (hover, drag,
@@ -1056,6 +1059,19 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   `mcp_bridge.lua` stops it; restart switches to `set_action_options(3)` and re-runs its own action, and REAPER
   relaunches the installed copy. It restarts itself after a successful update; the page reloads when
   `startedAt` changes (or once when the update is done, if the bridge script didn't change).
+  **What's new** (`?changelog=true`, `src/features/changelog/`): a drawer listing the GitHub releases (one request,
+  `releases?per_page=100`, only once it opens, cached 6h in localStorage), each release's `## What's Changed` lines parsed
+  as conventional commits and grouped New / Fixes / Faster / Docs / Under the hood (`changelog.ts`), betas behind a
+  per-viewer toggle. Its top card offers the update (the same `update` request, or the clone and npm commands when the
+  bridge can't run it). A newer stable release shows an **Update available** pill in the header that opens it; the notice's
+  What's new link, the ⋯ menu, the palette (`help-whats-new`) and the footer version open it too. Opening it closes Settings.
+  **Highlights** (`highlights.ts`, `HighlightCard.tsx`): hand-made entries over a release's notes, one house-style card
+  each (16:10 stage, title, sentence, "Try it"; click to enlarge) with an animation (`.mp4`/animated SVG + poster), graphic
+  (`.svg`) or screenshot (`.webp`). Data: `apps/bridge-ui/changelog/highlights.json` + `media/`, read from `main` on GitHub
+  (so a newer release shows its highlights before the update) or the working tree under the dev server; matched to a
+  release by `pr` or `version`. Written by the repo-only `/changelog-highlight` skill with
+  `apps/bridge-ui/scripts/changelog-capture.mjs` (records/captures `?demo`); `highlights-files.test.ts` checks every entry,
+  media size and SVG safety.
   **Developer mode** (`settings.dev`): `setup` writes `dev=1` for a clone with uncommitted changes, a branch other
   than `main` or unpushed commits (`isDevClone()` in `cli.ts`); the Settings toggle (`cfg_dev`, persistent) overrides
   it. In dev mode the release notice is hidden and, once source files are newer than the last install (a detached `find -newer mcp_update.conf` every 5s, `control.changed`), the header shows **Rebuild & reload** (request `rebuild-<token>`):
@@ -1110,6 +1126,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   event there and in `TrackEvent` together, never with names, search text, tokens or paths. The destination is the
   server's `DEFAULT_DESTINATION` (read by `build-config.mjs` from `telemetry-consent.ts`), service `reaper-mcp-bridge-ui`.
   On by default, off via Settings → Privacy, GPC/DNT, or `?demo`; fetch/xhr tracing stays off (the page polls the bridge).
+- Hosted build (public demo + changelog on Vercel, `*.vercel.app`): `vercel.json` runs `scripts/snapshot-releases.mjs` (GitHub releases into the gitignored `changelog/releases.snapshot.json`) then `BRIDGE_HOSTED=1 nx build bridge-ui`. `__HOSTED__` makes the page always the demo (`demo-mode.ts`), bakes the releases and `highlights.json` in (no GitHub call from a visitor's browser) and copies `changelog/` beside the page for the media. `/` is the demo, `/changelog` (= `?page=changelog`, `Changelog.PageRoute` from `main.tsx`, no bridge polling) the changelog as a page; `?release=0.79.1` or `#release-0.79.1` opens one release. A new release needs a redeploy to show (deploy hook or push). Without `BRIDGE_HOSTED` the build is exactly the REAPER page.
 - Payload shapes live in `apps/bridge-ui/src/lib/status.ts` (`BridgeStatus`) and `src/lib/timeline.ts` (`BridgeHistory`, `LongHistory`) and
   `publish_status()` / `publish_history()` / `publish_log()` in `mcp_bridge.lua` — change both together.
 

@@ -35,12 +35,29 @@ work as usual.
 | Your plugins | `<REAPER>/Effects/reaper-mcp-generated/<name>.jsfx` |
 | Their suggested presets | `<REAPER>/presets/js-reaper-mcp-generated_<name>_jsfx.ini` (REAPER's own file; written by `src/jsfx/presets.ts`) |
 | Earlier versions of a plugin | `~/.config/reaper-mcp/jsfx-history/<name>/` (outside `Effects/`, so REAPER never scans them; `REAPER_MCP_CONFIG_DIR` overrides the folder) |
-| The three examples | `Effects/reaper-mcp-generated/examples/`, installed by `reaper-mcp setup` (a copy you edited is never overwritten) |
+| The four examples | `Effects/reaper-mcp-generated/examples/`, installed by `reaper-mcp setup` (a copy you edited is never overwritten) |
 
 `write_jsfx` pastes the toolkit into the plugin's `@init`, so the file never depends on
 `mcp_ui.jsfx-inc` being installed. Editing a plugin means passing the whole file back: the old
 toolkit block is replaced by the current one. An existing slider is never renumbered, re-ranged
 or removed without `breaking: true`, because projects store automation by slider number.
+
+## Header knobs
+
+Mix and Output sit in the top right of every plugin that has them (`ui_header(mix, out)`), small and always visible, so the core view holds only what is special about the plugin.
+
+## Graphs
+
+Besides knobs, toggles, choices and the level meter, the toolkit (v1.3) draws graphs a plugin feeds:
+`ui_freqgraph` (a log 20 Hz-20 kHz frequency graph with a spectrum trace) with draggable band
+handles `ui_fhandle` bound to Hz sliders, `ui_grmeter` (per-band gain reduction), `ui_transfer` (a
+compressor curve with the live level) and `ui_keyboard` (MIDI notes). A multiband compressor
+(`examples/multiband-compressor.jsfx`) shows the crossovers on the spectrum, drag them to pick the
+bands in Hz, every band has its own threshold line (hover a band and drag up or down, Shift-drag for its gain; click a band and the Threshold, Ratio and Gain knobs edit it), and the bars show how much each band is compressed. A Compare input toggle in Advanced draws the input spectrum over the output one (before and after). Every plugin also shows its name,
+small and in spaced capitals, at the top-left. Graph feeds redraw only on activity
+(`ui_boot(2)`). Reference: `.claude/skills/make-plugin/reference/toolkit.md`. The lint refuses a
+`ui_` call the toolkit does not define and a wrong argument count (`unknown-ui-call`, `ui-arity`),
+and `write_jsfx` reports how many graph widgets a plugin uses (`reaper.jsfx.graphs`, a count only).
 
 ## Presets
 

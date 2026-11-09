@@ -26,7 +26,26 @@ export function buildConstants() {
   const dash0 = { endpoint: field('endpoint'), dataset: field('dataset'), token: field('token') ?? '' };
   if (!dash0.endpoint || !dash0.dataset) throw new Error('bridge-ui: could not read DEFAULT_DESTINATION from telemetry-consent.ts');
 
+  // The hosted build (BRIDGE_HOSTED=1, the public demo + changelog on Vercel) has no bridge to talk to: it runs the demo
+  // and shows real releases from a snapshot taken at build time (scripts/snapshot-releases.mjs), so a visitor's browser
+  // never calls GitHub. A hosted build without the snapshot fails here rather than publishing an empty changelog.
+  const hosted = process.env.BRIDGE_HOSTED === '1';
+  const readJson = (name) => JSON.parse(readFileSync(join(here, 'changelog', name), 'utf-8'));
+  let releasesSnapshot = null;
+  let highlightsSnapshot = null;
+  if (hosted) {
+    try {
+      releasesSnapshot = readJson('releases.snapshot.json');
+    } catch {
+      throw new Error('bridge-ui: BRIDGE_HOSTED=1 needs apps/bridge-ui/changelog/releases.snapshot.json (node apps/bridge-ui/scripts/snapshot-releases.mjs)');
+    }
+    highlightsSnapshot = readJson('highlights.json');
+  }
+
   return {
+    __HOSTED__: JSON.stringify(hosted),
+    __RELEASES_SNAPSHOT__: JSON.stringify(releasesSnapshot),
+    __HIGHLIGHTS_SNAPSHOT__: JSON.stringify(highlightsSnapshot),
     __VERSION__: JSON.stringify(version),
     __LOREKIT_TOKEN__: JSON.stringify(lorekitToken),
     __LOREKIT_API__: JSON.stringify(lorekitMcpUrl),

@@ -7,6 +7,21 @@ export const RELEASES_API = 'https://api.github.com/repos/mthines/reaper-mcp/rel
 export const RELEASE_KEY = 'mcp-bridge-latest-release';
 const RELEASE_TTL_MS = 6 * 3600_000; // unauthenticated GitHub API allows 60 requests an hour
 
+/**
+ * The update to offer, or null: a release newer than `current`, unless this is a developer install (it rebuilds from its
+ * working tree instead), the user skipped that version, or an update is running or just failed (the notice shows its
+ * progress or Try again). The header pill, ⋯ menu, palette and notice all read this.
+ */
+export function updateOffer(
+  release: Release | null,
+  current: string,
+  { dev, skipped, update }: { dev: boolean; skipped: string | null; update?: BridgeUpdate },
+): Release | null {
+  if (!release || dev || skipped === release.version) return null;
+  if (update?.state === 'running' || update?.state === 'failed') return null;
+  return compareVersions(release.version, current) > 0 ? release : null;
+}
+
 /** -1, 0 or 1 for two `x.y.z` versions (a leading `v` and any `-pre` suffix are ignored). */
 export function compareVersions(a: string, b: string): number {
   const parts = (v: string) => v.replace(/^v/, '').split('-')[0].split('.').map((n) => parseInt(n, 10) || 0);

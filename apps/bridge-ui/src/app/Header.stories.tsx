@@ -32,3 +32,6 @@ export const Playground: Story = {};
 export const RebuildAvailable: Story = { args: { onRebuild: fn() } };
 
 export const Offline: Story = { args: { status: null, state: 'offline', reachable: false } };
+
+/** A newer release is out: the pill opens What's new, where the Update button is */
+export const UpdateAvailable: Story = { args: { updateVersion: '99.0.0', onOpenUpdate: fn(), onOpenChangelog: fn() } };

@@ -10,6 +10,8 @@ const config: StorybookConfig = {
   stories: ['../src/**/*.stories.tsx'],
   framework: { name: '@storybook/react-vite', options: {} },
   core: { disableTelemetry: true },
+  // The What's new highlights' media, at the path the dev server serves them on
+  staticDirs: [{ from: '../changelog', to: '/changelog' }],
   viteFinal: (vite) => ({
     ...vite,
     plugins: (vite.plugins ?? []).flat(Infinity as 1).filter((p) => !(named(p) && PAGE_ONLY.has(p.name))),

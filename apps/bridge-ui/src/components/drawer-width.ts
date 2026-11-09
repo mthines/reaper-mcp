@@ -19,9 +19,9 @@ export function clampDrawerWidth(widthPx: number, viewportWidth: number): number
   return Math.min(max, Math.max(min, widthPx));
 }
 
-/** The rendered width for a stored fraction (`null` = the default width). */
-export function drawerWidthPx(fraction: number | null, viewportWidth: number): number {
-  return clampDrawerWidth(fraction === null ? DRAWER_DEFAULT_WIDTH_PX : fraction * viewportWidth, viewportWidth);
+/** The rendered width for a stored fraction (`null` = the drawer's default width, 400px unless it asks for more). */
+export function drawerWidthPx(fraction: number | null, viewportWidth: number, defaultPx = DRAWER_DEFAULT_WIDTH_PX): number {
+  return clampDrawerWidth(fraction === null ? defaultPx : fraction * viewportWidth, viewportWidth);
 }
 
 export function drawerFractionFromWidth(widthPx: number, viewportWidth: number): number {
@@ -30,8 +30,8 @@ export function drawerFractionFromWidth(widthPx: number, viewportWidth: number):
 }
 
 /** The CSS width: the same clamp in CSS, so the drawer follows the window without a re-render. */
-export function drawerWidthCss(fraction: number | null): string {
-  const preferred = fraction === null ? `${DRAWER_DEFAULT_WIDTH_PX}px` : `${Math.round(fraction * 10_000) / 100}vw`;
+export function drawerWidthCss(fraction: number | null, defaultPx = DRAWER_DEFAULT_WIDTH_PX): string {
+  const preferred = fraction === null ? `${defaultPx}px` : `${Math.round(fraction * 10_000) / 100}vw`;
   return `clamp(max(${DRAWER_MIN_WIDTH_PX}px, ${DRAWER_MIN_VIEWPORT_FRACTION * 100}vw), ${preferred}, ${DRAWER_MAX_VIEWPORT_FRACTION * 100}vw)`;
 }
 

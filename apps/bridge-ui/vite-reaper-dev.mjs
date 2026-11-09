@@ -6,14 +6,16 @@
 // drops, devtools), and Vite's proxy passes each hang-up on to REAPER. Here REAPER sees one connection for the
 // session and a request is always left to finish.
 //
-//   REAPER_WEB_PORT and REAPER_RESOURCE_PATH override the defaults; BRIDGE_DEV_PORT is read by vite.config.ts.
+//   REAPER_WEB_PORT and REAPER_RESOURCE_PATH override the defaults; the dev server's port comes from devPort(): BRIDGE_DEV_PORT when set, else 8098 or the next free one, never REAPER's.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, watch } from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 import { here } from './build-config.mjs';
 
 const REAPER_PORT = Number(process.env.REAPER_WEB_PORT) || 8099;
+const DEV_PORT = 8098;
 const REAPER_SRC = join(here, '../../reaper');
 
 // ---- REAPER's /_/ API, over one keep-alive connection ------------------------------------------------------
@@ -117,6 +119,37 @@ function watchReaperAssets(resource, log) {
 
 // ---- The plugin -------------------------------------------------------------------------------------------
 
+/**
+ * The dev server's port: BRIDGE_DEV_PORT when set, else 8098 or the next free port after it, skipping REAPER's web
+ * port. Picked here rather than by Vite's own fallback, which steps from 8098 onto 8099: on macOS a bind to 127.0.0.1
+ * succeeds beside REAPER listening on every interface, and the /_/ proxy would then call the dev server itself.
+ */
+export async function devPort() {
+  if (process.env.BRIDGE_DEV_PORT) return Number(process.env.BRIDGE_DEV_PORT);
+  for (let port = DEV_PORT; port < DEV_PORT + 20; port++) {
+    if (port !== REAPER_PORT && (await isFree(port))) return port;
+  }
+  return DEV_PORT;
+}
+
+// Free when nothing answers on it and it can be bound: the connect catches a listener on every interface that a
+// 127.0.0.1 bind alone would not notice on macOS
+async function isFree(port) {
+  const answers = await new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port }, () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once('error', () => resolve(false));
+  });
+  if (answers) return false;
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => resolve(false));
+    server.listen(port, '127.0.0.1', () => server.close(() => resolve(true)));
+  });
+}
+
 /** Dev server only (`apply: 'serve'`); Storybook drops it by name, so it never touches REAPER. */
 export function reaperDev() {
   return {
@@ -137,7 +170,9 @@ export function reaperDev() {
         next();
       });
       server.httpServer?.once('listening', () => {
-        const page = `http://localhost:${server.config.server.port}/mcp_bridge.html`;
+        const address = server.httpServer.address();
+        const port = typeof address === 'object' && address ? address.port : server.config.server.port;
+        const page = `http://localhost:${port}/mcp_bridge.html`;
         server.config.logger.info(
           [
             '',

@@ -137,9 +137,10 @@ slider10:0.4<0,1,0.01>Damping
   spl1 = (dr * (1 - mix) + wr * 3 * mix) * gain;
 
 @gfx 380 250
+  ui_header(3, 4);   // Mix and Output live in the top right
   ui_begin(1, 2) ? (
-    ui_row(4);
-    ui_knob(1, "Mutate", 2); ui_knob(2, "Size", 2); ui_knob(3, "Mix", 2); ui_knob(4, "Output", 1);
+    ui_row(2);
+    ui_knob(1, "Mutate", 2); ui_knob(2, "Size", 2);
     ui_section("Advanced") ? (
       ui_row(3); ui_knob(5, "Seed", 5); ui_knob(6, "Pitch range", 5); ui_knob(7, "Reverse", 2);
       ui_row(3); ui_knob(8, "Bright", 2); ui_knob(9, "Pre-delay", 4); ui_knob(10, "Damping", 2);

@@ -21,6 +21,9 @@ export function AppCommands({
   onToggleOverview,
   onRebuild,
   onRestart,
+  onOpenChangelog,
+  onUpdate,
+  updateVersion,
   notify,
   onNotify,
   usageStats,
@@ -35,6 +38,10 @@ export function AppCommands({
   onToggleOverview?: () => void;
   onRebuild?: () => void;
   onRestart?: () => void;
+  onOpenChangelog: () => void;
+  /** Present when a newer release is out and the bridge can install it */
+  onUpdate?: () => void;
+  updateVersion?: string;
   notify: boolean;
   onNotify: (on: boolean) => void;
   usageStats: UsageStatsState;
@@ -65,6 +72,8 @@ export function AppCommands({
   });
   useCommand({ id: 'settings-open', label: 'Open settings', group: 'Bridge', icon: <Icon.Gear />, onSelect: () => onOpenSettings?.() }, Boolean(onOpenSettings));
   useCommand({ id: 'bridge-rebuild', label: 'Rebuild & reload', group: 'Bridge', description: 'developer mode working tree changed', onSelect: () => onRebuild?.() }, Boolean(onRebuild));
+  useCommand({ id: 'bridge-update', label: `Update reaper-mcp to v${updateVersion ?? ''}`, group: 'Bridge', description: 'upgrade new release', onSelect: () => onUpdate?.() }, Boolean(onUpdate && updateVersion));
+  useCommand({ id: 'help-whats-new', label: 'What’s new', group: 'Help', description: 'changelog releases update version', onSelect: onOpenChangelog });
   useCommand({ id: 'bridge-restart', label: 'Restart bridge', group: 'Bridge', onSelect: () => onRestart?.() }, Boolean(onRestart));
   useCommand({ id: 'page-overview', label: overview ? 'Hide stats & timeline' : 'Show stats & timeline', group: 'Page', onSelect: () => onToggleOverview?.() }, Boolean(onToggleOverview));
   useCommand({ id: 'page-notify', label: notify ? 'Turn off error notifications' : 'Turn on error notifications', group: 'Page', onSelect: () => onNotify(!notify) });

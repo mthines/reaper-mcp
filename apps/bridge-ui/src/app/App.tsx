@@ -22,13 +22,26 @@ import { labelSessions } from '../lib/sessions.js';
 import { Log, VIEW_KEY, isSpanOrNull, isView, loadView, type View } from '../features/log/index.js';
 import { useKnowledge, useLoreKitTokens } from '../features/plugins/index.js';
 import { SETTING_NAME, Settings } from '../features/settings/index.js';
+import { InstallBanner } from '../components/index.js';
+import { Changelog, availableUpdate, parseReleases, useHighlights, useReleases } from '../features/changelog/index.js';
+import { exampleReleaseJson } from '../demo/examples.js';
+import { updateOffer, useLatestRelease, type Release } from '../lib/update.js';
+import type { TrackEvent } from '../lib/analytics.js';
 import { blockedBy, useSnapshots } from '../features/snapshots/index.js';
 import { Stats } from '../features/stats/index.js';
 import { RANGE_STORAGE_KEY, Timeline, isRangeKey, loadRange, type RangeKey } from '../features/timeline/index.js';
 import { cx } from '../lib/cx.js';
 import styles from './App.module.css';
 
+const UPDATE_SKIP_KEY = 'mcp-bridge-update-skipped';
+
 const OVERVIEW_KEY = 'mcp-bridge-overview';
+// ?demo: fixed releases around the running version, so the update pill and What's new have something to show
+// The hosted demo shows the real releases (a build-time snapshot); a local ?demo shows made-up ones
+const DEMO_RELEASES = __HOSTED__ ? parseReleases(__RELEASES_SNAPSHOT__) : DEMO ? parseReleases(exampleReleaseJson(__VERSION__)) : undefined;
+const DEMO_LATEST: Release | null = DEMO_RELEASES ? (availableUpdate(DEMO_RELEASES, __VERSION__) ?? null) : null;
+
+type ChangelogSource = Extract<TrackEvent, { name: 'changelog_opened' }>['source'];
 
 export function App() {
   const [paused, setPaused] = useState(false);
@@ -81,6 +94,24 @@ export function App() {
   // `?install`: opened from the bridge window's Install button, so show the install setting straight away
   const request = useBridgeRequest(status);
   const [settingsOpen, setSettingsOpen] = useUrlState('settings', false, { validate: isBoolean });
+  // What's new: the drawer, and the releases it reads once it opens
+  const [changelogOpen, setChangelogOpen] = useUrlState('changelog', false, { validate: isBoolean });
+  const liveRelease = useLatestRelease(!DEMO && settings?.dev !== true);
+  const release = DEMO ? DEMO_LATEST : liveRelease;
+  // One offer for the pill, the ⋯ menu, the palette and the notice (rules in updateOffer)
+  const [skipped, setSkipped] = useState(() => load(UPDATE_SKIP_KEY));
+  const skipUpdate = (version: string) => {
+    save(UPDATE_SKIP_KEY, version);
+    setSkipped(version);
+  };
+  const updateAvailable = updateOffer(release, __VERSION__, { dev: settings?.dev === true, skipped, update: status?.control?.update });
+  const releases = useReleases(changelogOpen, DEMO_RELEASES);
+  const highlights = useHighlights(changelogOpen);
+  const openChangelog = (source: ChangelogSource) => () => {
+    if (!changelogOpen) track({ name: 'changelog_opened', source, update_available: updateAvailable !== null });
+    setSettingsOpen(false);
+    setChangelogOpen(true);
+  };
   useEffect(() => {
     if (new URLSearchParams(location.search).has('install')) setSettingsOpen(true, 'replace');
   }, [setSettingsOpen]);
@@ -124,17 +155,22 @@ export function App() {
   const openSettings = (toggle: boolean) => () => {
     const next = toggle ? !settingsOpen : true;
     if (next && !settingsOpen) track({ name: 'settings_opened' });
+    if (next) setChangelogOpen(false);
     setSettingsOpen(next);
   };
 
   return (
     <div className={cx(styles.shell, overview ? styles.overviewOn : '')}>
+      {__HOSTED__ && <InstallBanner />}
       <AppCommands
         rangeKey={rangeKey}
         onRange={chooseRange}
         settings={settings}
         onSet={changeSetting('settings')}
         onOpenSettings={settings ? openSettings(true) : undefined}
+        onOpenChangelog={openChangelog('palette')}
+        onUpdate={updateAvailable && status?.control?.canUpdate ? () => { track({ name: 'update_clicked', source: 'palette' }); request('update'); } : undefined}
+        updateVersion={updateAvailable?.version}
         overview={overview}
         onToggleOverview={status ? toggleOverview : undefined}
         onRebuild={
@@ -156,6 +192,9 @@ export function App() {
         sessions={sessions}
         onShowAgents={() => chooseView('sessions')}
         onOpenSettings={settings ? openSettings(true) : undefined}
+        onOpenChangelog={openChangelog('menu')}
+        updateVersion={updateAvailable?.version}
+        onOpenUpdate={openChangelog('header')}
         overview={overview}
         onToggleOverview={status ? toggleOverview : undefined}
         onRebuild={
@@ -166,7 +205,7 @@ export function App() {
       />
       {status ? (
         <>
-          <Notices status={status} settings={settings} onSet={changeSetting('notice')} request={request} />
+          <Notices status={status} settings={settings} onSet={changeSetting('notice')} request={request} release={updateAvailable} onSkip={skipUpdate} onWhatsNew={openChangelog('notice')} />
           <div className={styles.overview}>
             <Stats status={status} log={log} now={now} series={series} />
             <Timeline
@@ -227,7 +266,7 @@ export function App() {
             <span className={styles.footerMeta}>
               Updated {formatAgo(now - lastChangeAt)}
               <span className="dot-sep" />
-              <a href={REPO_URL} target="_blank" rel="noreferrer">reaper-mcp v{__VERSION__}</a>
+              <button className={styles.footerLink} onClick={openChangelog('footer')} title="What’s new">reaper-mcp v{__VERSION__}</button>
               <span className="dot-sep" />
               <a href={`${REPO_URL}/issues`} target="_blank" rel="noreferrer">Report an issue</a>
               <span className="dot-sep" />
@@ -237,6 +276,18 @@ export function App() {
         </>
       ) : (
         <Offline reachable={reachable} />
+      )}
+      {/* Outside the bridge's branch: the pill (from the cached release) and the palette open it offline too */}
+      {changelogOpen && (
+        <Changelog
+          releases={releases}
+          highlights={highlights}
+          current={__VERSION__}
+          canUpdate={status?.control?.canUpdate === true && settings?.dev !== true}
+          update={status?.control?.update}
+          onUpdate={() => request('update')}
+          onClose={() => setChangelogOpen(false)}
+        />
       )}
     </div>
   );

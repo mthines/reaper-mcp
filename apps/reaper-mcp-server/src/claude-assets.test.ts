@@ -35,6 +35,14 @@ describe('installing the mix skills from the npm package', () => {
     expect(r.installed).toHaveLength(4);
   });
 
+  it('leaves out a maintainer-only skill marked .repo-only', () => {
+    put(join(pkg, 'skills', 'changelog-highlight', 'SKILL.md'), 'maintainer only');
+    put(join(pkg, 'skills', 'changelog-highlight', '.repo-only'), '');
+    const r = installClaudeAssets(pkg, claude);
+    expect(existsSync(join(claude, 'skills', 'changelog-highlight'))).toBe(false);
+    expect(r.installed).toHaveLength(4);
+  });
+
   it('is a no-op the second time', () => {
     installClaudeAssets(pkg, claude);
     const r = installClaudeAssets(pkg, claude);
