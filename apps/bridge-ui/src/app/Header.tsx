@@ -174,7 +174,7 @@ function HeaderMenu({
           )}
           {update && (
             <button role="menuitem" className={styles.menuAccent} onClick={pick(update)}>
-              Update to v{updateVersion}
+              What’s new in v{updateVersion}
             </button>
           )}
           {onToggleOverview && (

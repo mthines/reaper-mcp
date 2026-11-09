@@ -57,7 +57,7 @@ export const TheMenuOffersTheUpdateAndWhatsNew: Story = {
     await userEvent.click(canvas.getByRole('menuitem', { name: 'What’s new', hidden: true }));
     await expect(args.onOpenChangelog).toHaveBeenCalled();
     await userEvent.click(canvas.getByRole('button', { name: 'More (update available)', hidden: true }));
-    await userEvent.click(canvas.getByRole('menuitem', { name: 'Update to v99.0.0', hidden: true }));
+    await userEvent.click(canvas.getByRole('menuitem', { name: 'What’s new in v99.0.0', hidden: true }));
     await expect(args.onOpenUpdate).toHaveBeenCalled();
   },
 };
