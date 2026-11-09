@@ -63,12 +63,20 @@ const INVALID_PARAMS = -32602;
 /** What server.py answers (code -32000) when the audio it was given cannot be analysed: bad input, not a fault. */
 const REJECTED_INPUT = /^(Audio file not found|Audio too short|Sample rates differ)\b/;
 
+/**
+ * A component `setup-sidecar` leaves out unless asked: this client's own check, or server.py's answer for the
+ * aesthetics model (server.py), stem separation (separation.py) and the voice preview's FluidSynth (voice_render.py,
+ * which server.py wraps as "Voice arrangement preview failed: …", so the phrase may not start the message).
+ */
+const NOT_INSTALLED =
+  /^Audio understanding sidecar not installed|\b(audiobox-aesthetics not installed|Stem separation is not installed|FluidSynth native library is not installed)\b/;
+
 /** Classify a failed sidecar request by the errors sidecar.ts and server.py raise. */
 export function classifySidecarError(err: unknown): SidecarErrorType {
   const message = err instanceof Error ? err.message : String(err);
   if (message.startsWith('Sidecar timeout')) return 'timeout';
   if (message.startsWith('Sidecar busy')) return 'busy';
-  if (message.startsWith('Audio understanding sidecar not installed')) return 'not_installed';
+  if (NOT_INSTALLED.test(message)) return 'not_installed';
   if ((err instanceof SidecarRpcError && err.code === INVALID_PARAMS) || REJECTED_INPUT.test(message)) return 'sidecar_rejected';
   // "… failed: <exception>", internal, parse and unknown-method errors, a crash or a restart
   return 'sidecar_error';

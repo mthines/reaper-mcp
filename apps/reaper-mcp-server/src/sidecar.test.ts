@@ -410,6 +410,10 @@ describe('failed requests in telemetry', () => {
     ['Sidecar timeout after 60000ms. Override with REAPER_MCP_SIDECAR_TIMEOUT_MS env var.', 'timeout', true],
     ['Sidecar busy: waited 300 s behind separate — retry when it finishes', 'busy', false],
     ['Audio understanding sidecar not installed. Run reaper-mcp setup-sidecar', 'not_installed', false],
+    ['audiobox-aesthetics not installed: No module named \'audiobox_aesthetics\'. Run in a terminal: reaper-mcp setup-sidecar', 'not_installed', false],
+    ['Stem separation is not installed. Run: reaper-mcp setup-sidecar --with-separation', 'not_installed', false],
+    ['Voice arrangement preview failed: FluidSynth native library is not installed or could not be loaded.', 'not_installed', false],
+    ['Failed to initialize predictor: CUDA error', 'sidecar_error', true],
     ['Sidecar restarted; please retry the operation', 'sidecar_error', true],
   ] as const)('classifies "%s" as %s (regression: %s)', (message, type, regression) => {
     expect(classifySidecarError(new Error(message))).toBe(type);
