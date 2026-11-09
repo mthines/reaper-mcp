@@ -27,7 +27,8 @@ import { registerActionTools } from './tools/actions.js';
 import { registerItemTools } from './tools/items.js';
 import { registerArrangeTools } from './tools/arrange.js';
 import { registerFxHousekeepingTools } from './tools/fx-housekeeping.js';
-import { registerCategoryTools } from './tools/categories.js';
+import { registerCategoryTools, setVisibleCategories } from './tools/categories.js';
+import { blockedTools, resolveProfile, type Profile } from './profile.js';
 import { registerAestheticsTools } from './tools/aesthetics.js';
 import { registerOfflineTools } from './tools/offline.js';
 import { registerTransientTools } from './tools/transients.js';
@@ -141,7 +142,17 @@ export function instrumentToolHandlers(server: McpServer): void {
   };
 }
 
-export function createServer(): McpServer {
+/** Skip registering the tools a profile leaves out; everything else (own tools, extensions) goes through. */
+function applyProfile(server: McpServer, profile: Profile): void {
+  setVisibleCategories(profile.categories);
+  const blocked = blockedTools(profile.categories);
+  if (blocked.size === 0) return;
+  const register = server.tool.bind(server);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (server as any).tool = (...args: any[]) => (blocked.has(args[0] as string) ? undefined : (register as any)(...args));
+}
+
+export function createServer(profile: Profile = resolveProfile()): McpServer {
   const server = new McpServer({
     name: 'reaper-mcp',
     version: '0.1.0',
@@ -149,6 +160,7 @@ export function createServer(): McpServer {
 
   // Wrap server.tool() before any tools register
   instrumentToolHandlers(server);
+  applyProfile(server, profile);
 
   registerProjectTools(server);
   registerTrackTools(server);

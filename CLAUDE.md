@@ -559,6 +559,8 @@ its source or a control label. Generated plugins themselves contain no telemetry
 
 Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, `selection`, `markers`, `tempo`, `envelopes`, `analysis`, `discovery`, `snapshots`, `routing`, `plan`, `actions`, `takes`, `fx_files`, `knowledge`, `recording`, `plugin_authoring`
 
+**Tool profiles** (`profile.ts`): `REAPER_MCP_PROFILE` (`full` default, `minimal`, `mixing`, `music`, `analysis`, or a comma list of profiles, categories and extension names) skips registering the core tools outside the chosen categories (every profile stays under 128 tools; `profile.test.ts` checks), and `list_tool_categories` shows only those. Tools in no core category (extensions, the category tools) are never blocked; `loadExtensions` skips an extension the profile does not name. A new category goes in a profile's list only when it belongs there.
+
 ### MIDI Editing Concepts
 
 - **Positions and durations** are in **beats** (quarter notes) from item start: `1.0` = quarter note, `0.5` = eighth note, `0.25` = sixteenth note
