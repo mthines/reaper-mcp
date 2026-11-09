@@ -585,7 +585,7 @@ const BRIDGE_EVENTS: Record<string, { level: LogLevel; body: string }> = {
   bridge_start: { level: 'info', body: 'Lua bridge started in REAPER' },
   bridge_stop: { level: 'warn', body: 'Lua bridge stopped — commands will time out until it is restarted' },
   handler_error: { level: 'error', body: 'Lua bridge handler crashed' },
-  handler_unknown: { level: 'error', body: 'Lua bridge received an unknown command type' },
+  handler_unknown: { level: 'warn', body: 'Lua bridge does not know a command: REAPER is running a bridge from another release' },
 };
 
 // Lua payload keys → semconv / `reaper.*` attribute names. `null` drops the key:
@@ -634,7 +634,8 @@ export async function readBridgeEvents(): Promise<void> {
       if (name) attributes[name] = value;
     }
     if (eventType === 'handler_error') attributes['error.type'] = 'handler_crash';
-    if (eventType === 'handler_unknown') attributes['error.type'] = 'unknown_command';
+    // The same call sendCommand reports as bridge_outdated (see outdatedBridgeMessage): a stale bridge, not a bug
+    if (eventType === 'handler_unknown') attributes['error.type'] = 'bridge_outdated';
     emitLog(known.level, known.body, attributes, {
       eventName: `reaper.bridge.${eventType}`,
       timestampMs: typeof ts === 'number' ? ts : undefined,

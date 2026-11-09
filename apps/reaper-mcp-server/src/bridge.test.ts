@@ -410,6 +410,29 @@ describe('bridge', () => {
         attributes: { 'rpc.method': 'add_fx', 'exception.message': 'boom', 'error.type': 'handler_crash' },
       });
     });
+
+    it('reports a command the running bridge does not know as an outdated bridge at WARN, not as an error', async () => {
+      emit.mockClear();
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      mockedWriteFile.mockResolvedValue(undefined);
+      mockedReadFile.mockResolvedValueOnce(
+        '{"type":"handler_unknown","ts":3000,"commandType":"get_project_settings","commandId":"c-1"}\n',
+      );
+
+      await readBridgeEvents();
+
+      expect(emit).toHaveBeenCalledTimes(1);
+      expect(emit.mock.calls[0][0]).toMatchObject({
+        eventName: 'reaper.bridge.handler_unknown',
+        severityNumber: SeverityNumber.WARN,
+        timestamp: new Date(3000),
+        attributes: {
+          'rpc.method': 'get_project_settings',
+          'reaper.bridge.command.id': 'c-1',
+          'error.type': 'bridge_outdated',
+        },
+      });
+    });
   });
 
   describe('classifyBridgeError', () => {
