@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { here } from './build-config.mjs';
 
 const REAPER_PORT = Number(process.env.REAPER_WEB_PORT) || 8099;
+const DEV_PORT = 8098;
 const REAPER_SRC = join(here, '../../reaper');
 
 // ---- REAPER's /_/ API, over one keep-alive connection ------------------------------------------------------
@@ -126,10 +127,10 @@ function watchReaperAssets(resource, log) {
  */
 export async function devPort() {
   if (process.env.BRIDGE_DEV_PORT) return Number(process.env.BRIDGE_DEV_PORT);
-  for (let port = 8098; port < 8098 + 20; port++) {
+  for (let port = DEV_PORT; port < DEV_PORT + 20; port++) {
     if (port !== REAPER_PORT && (await isFree(port))) return port;
   }
-  return 8098;
+  return DEV_PORT;
 }
 
 // Free when nothing answers on it and it can be bound: the connect catches a listener on every interface that a
