@@ -947,22 +947,22 @@ function ui_fthresh(thr_first, ratio_first, gain_first, n) local(k, a, b, x, y, 
       sh = mouse_cap & 8;   // Shift: this drag moves the band's gain instead of its threshold
       (mouse_cap & 52) ? ui_reset(sh ? gdx : idx) :
       (ui_lci == idx && t - ui_lct < 0.45) ? ui_edopen(idx, 1, "Threshold", (a + b) / 2, ui_gyof(slider(idx))) :
-      ( ui_active = sh ? gdx : idx; ui_ly = mouse_y; ui_acc = slider(ui_active); ui_lci = idx; ui_lct = t; );
+      ( ui_active = sh ? gdx : idx; ui_ftd = 1; ui_ly = mouse_y; ui_acc = slider(ui_active); ui_lci = idx; ui_lct = t; );
       ui_press = 0;
     );
-    ui_active == idx && ui_down ? (
+    ui_ftd && ui_active == idx && ui_down ? (   // only a drag this widget started: a band knob on the same slider drags itself
       ui_acc = min(ui_max[idx], max(ui_min[idx], ui_acc - (mouse_y - ui_ly) * 72 / ui_gh));
       ui_ly = mouse_y;
       ui_set(idx, ui_q(idx, ui_acc));
     );
     hot && mouse_wheel != 0 ? ui_set(rdx, ui_q(rdx, slider(rdx) + sign(mouse_wheel) * 0.5));
-    ui_active == gdx && ui_down ? (
+    ui_ftd && ui_active == gdx && ui_down ? (
       ui_acc = min(ui_max[gdx], max(ui_min[gdx], ui_acc - (mouse_y - ui_ly) * 0.15));
       ui_ly = mouse_y;
       ui_set(gdx, ui_q(gdx, ui_acc));
     );
-    ui_active == idx && ui_rel ? ( slider_automate(2 ^ (idx - 1), 1); ui_active = 0; );
-    ui_active == gdx && ui_rel ? ( slider_automate(2 ^ (gdx - 1), 1); ui_active = 0; );
+    ui_active == idx && ui_rel ? ( slider_automate(2 ^ (idx - 1), 1); ui_active = 0; ui_ftd = 0; );
+    ui_active == gdx && ui_rel ? ( slider_automate(2 ^ (gdx - 1), 1); ui_active = 0; ui_ftd = 0; );
     gdrag = ui_active == gdx; drag = ui_active == idx || gdrag;
     (hot || drag) ? ui_gany = 2;
     sel = k == ui_fsel;

@@ -131,7 +131,7 @@ reaper-mcp/
     editing/SKILL.md          # /editing — MIDI, arrangement, comping, A/B variants in fixed lanes
     teach/SKILL.md            # /teach — beginner mode (slash-only): explains each change, links the REAPER concept, how to do it by hand, bridge page link (knowledge/reference/teaching.md)
     learn-plugin/SKILL.md     # /learn-plugin — research + live-probe a plugin via plugin-researcher, ask only the gaps (LoreKit)
-    make-plugin/SKILL.md      # /make-plugin — make the user a plugin (JSFX + shared UI toolkit): spec, write_jsfx, load, measure, iterate; examples/ holds three
+    make-plugin/SKILL.md      # /make-plugin — make the user a plugin (JSFX + shared UI toolkit): spec, write_jsfx, load, measure, iterate; examples/ holds four
     new-extension/SKILL.md    # /new-extension — build an extension for a plugin's internals: probe its state, write tools + tests, prove them live
     mix-memory/SKILL.md       # /mix-memory — recall / consolidate / promote memory
   .claude/agents/             # Subagents, symlinked into ~/.claude/agents by scripts/sync-symlinks.sh (clone) or copied by `reaper-mcp install-skills` (npm)
@@ -178,7 +178,7 @@ reaper-mcp/
                               # else registered by the bridge on start (register_actions in mcp_snapshots_ui_lib.lua)
     mcp_analyzer.jsfx         # Real-time FFT analyzer (JSFX, writes to gmem[])
     mcp_midi_emitter.jsfx     # Real-time MIDI emitter (JSFX, reads from gmem[] ring buffer)
-    mcp_ui.jsfx-inc           # The @gfx UI toolkit every generated plugin inlines (ring knob, toggle, choice, meter, Advanced drawer over the core, value box on double-click, Cmd/Ctrl/Alt-click reset, About dialog from the credit, per-plugin accent via ui_theme(), cached gradient+grain background); ui_-prefixed, no science literals, UI state set once (@init re-runs on Play)
+    mcp_ui.jsfx-inc           # The @gfx UI toolkit every generated plugin inlines (ring knob, toggle, choice, meter, plugin-name header with Mix/Output knobs, frequency graph with band handles and per-band threshold lines, gain-reduction meter, transfer curve, Advanced drawer over the core, value box on double-click, Cmd/Ctrl/Alt-click reset, About dialog from the credit, per-plugin accent via ui_theme(), cached gradient+grain background); ui_-prefixed, no science literals, UI state set once (@init re-runs on Play)
     mcp_gain_trace.jsfx       # Live pre/post gain trace (pumping/ducking meter: p5/p1/std as params, gmem MCPGainTrace)
     install.sh                # Manual install helper script
 ```

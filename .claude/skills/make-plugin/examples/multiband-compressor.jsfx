@@ -136,9 +136,10 @@ slider15:0<0,1,1{Off,On}>Compare input
   rp >= 2048 ? ( rp = 0; fresh = 1; );
 
 @gfx 440 360
+  ui_header(0, 14);
   ui_begin(3, 3) ? (
     ui_tall(2); ui_row(1);
-    ui_header(0, 14); ui_gshow(slider15); ui_freqgraph("Bands"); ui_fhandle(1, "Low crossover"); ui_fhandle(2, "High crossover"); ui_fthresh(3, 6, 9, 3);
+    ui_gshow(slider15); ui_freqgraph("Bands"); ui_fhandle(1, "Low crossover"); ui_fhandle(2, "High crossover"); ui_fthresh(3, 6, 9, 3);
     ui_row(4);
     ui_grmeter(3, "Reduction"); ui_bandknob(3, 3, "Threshold", 1); ui_bandknob(6, 3, "Ratio", 0); ui_bandknob(9, 3, "Gain", 1);
     ui_section("Advanced") ? (

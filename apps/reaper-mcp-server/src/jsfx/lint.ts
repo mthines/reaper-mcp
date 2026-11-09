@@ -95,12 +95,12 @@ function sections(code: string): Map<string, { text: string; line: number }> {
 
 /** Widgets bound to a slider by its first argument; a band handle counts here (it uses a slider) but not as a widget. */
 const WIDGET = /\bui_(knob|toggle|choice|fhandle)\s*\(\s*(\d+)/g;
-/** The transfer curve reads two sliders: threshold and ratio. */
 /** A knob on the selected band's slider: first..first+n-1; the threshold lines use two such ranges (threshold, ratio) of n bands. */
 const BANDKNOB = /\bui_bandknob\s*\(\s*(\d+)\s*,\s*(\d+)/g;
 const FTHRESH = /\bui_fthresh\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/g;
 /** The header knobs (Mix, Output in the top right): 0 = none, else a slider the plugin must not draw again. */
 const HEADER = /\bui_header\s*\(\s*(\d+)\s*,\s*(\d+)/g;
+/** The transfer curve reads two sliders: threshold and ratio. */
 const TRANSFER = /\bui_transfer\s*\(\s*(\d+)\s*,\s*(\d+)/g;
 /** What counts toward the core and Advanced limits: one per widget the user sees (a graph's handles are part of it). */
 const COUNTED = /\bui_(knob|toggle|choice|meter|freqgraph|grmeter|transfer|keyboard|bandknob)\s*\(/g;

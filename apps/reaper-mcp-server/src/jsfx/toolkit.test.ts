@@ -168,6 +168,13 @@ describe('toolkit 1.3: per-band thresholds', () => {
     expect(draw).toContain('ui_gany = 2'); // vertical resize cursor
   });
 
+  it('only runs a drag it started, so a band knob on the same slider drags at its own rate', () => {
+    const draw = body('ui_fthresh');
+    expect(draw).toMatch(/ui_ftd = 1/); // set when the press is the graph's
+    expect(draw).toMatch(/ui_ftd && ui_active == idx && ui_down/);
+    expect(draw).toMatch(/ui_ftd && ui_active == gdx && ui_down/);
+  });
+
   it('band gain: Shift-drag moves the band\'s gain slider instead, 0.15 dB a pixel, and says so in the label', () => {
     const draw = body('ui_fthresh');
     expect(draw).toContain('ui_active = sh ? gdx : idx');
