@@ -316,7 +316,7 @@ Mixing tools add attributes to their `tools/call` span: `reaper.quantize.hits` /
 | `reaper.bridge.command.timeout` | ERROR | no response from REAPER |
 | `reaper.bridge.command.not_sent` | WARN | command refused at once: the bridge is not running (`reaper.bridge.state` says why) |
 | `reaper.sidecar.timeout` / `exit` / `spawn_error` / `restart` | ERROR/WARN | Python sidecar lifecycle |
-| `Sidecar {method} failed` | WARN or ERROR | a sidecar request failed: expected (`not_installed`, `busy`, `sidecar_rejected`, WARN) or a regression (`timeout`, `sidecar_error`, ERROR) |
+| `reaper.sidecar.request.failed` | WARN or ERROR | a sidecar request failed (`rpc.method`, `error.type`): expected (`not_installed`, `busy`, `sidecar_rejected`, WARN) or a regression (`timeout`, `sidecar_error`, ERROR) |
 | `reaper.tool.failed` | WARN or ERROR | a tool returned an error that no bridge or sidecar call below already logged (its own validation, WARN); ERROR when it passed on a bridge system error |
 | `reaper.server.crash` | ERROR | uncaught exception / unhandled rejection (`exception.*` attributes) |
 | `reaper.comp.undone` | ERROR | `comp_lanes` failed after it started writing and undid itself (a bug, not a refusal); `error.type=comp_undone` |

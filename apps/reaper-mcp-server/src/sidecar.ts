@@ -453,7 +453,7 @@ class SidecarClientImpl implements SidecarClient {
           emitLog(regression ? 'error' : 'warn', `Sidecar ${method} failed: ${message}`, {
             'rpc.method': method,
             'error.type': errorType,
-          });
+          }, { eventName: 'reaper.sidecar.request.failed' });
           noteLoggedFailure(regression);
           throw err;
         } finally {

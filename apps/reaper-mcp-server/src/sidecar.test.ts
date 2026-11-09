@@ -380,9 +380,11 @@ describe('failed requests in telemetry', () => {
     await flushMicrotasks();
     emitResponse(proc, { jsonrpc: '2.0', id: 1, error });
     await expect(analyzePromise).rejects.toThrow(error.message);
-    const logged = stderr.mock.calls.map((c) => String(c[0])).find((line) => line.includes(`Sidecar analyze failed`));
+    const logged = stderr.mock.calls
+      .map((c) => { try { return JSON.parse(String(c[0])) as { level?: string; event?: string }; } catch { return {}; } })
+      .find((line) => line.event === 'reaper.sidecar.request.failed');
     const [span] = spans.getFinishedSpans();
-    return { span, level: (JSON.parse(logged ?? '{}') as { level?: string }).level ?? '' };
+    return { span, level: logged?.level ?? '' };
   }
 
   it.each([
