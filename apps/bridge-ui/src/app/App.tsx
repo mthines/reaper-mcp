@@ -36,7 +36,8 @@ const UPDATE_SKIP_KEY = 'mcp-bridge-update-skipped';
 
 const OVERVIEW_KEY = 'mcp-bridge-overview';
 // ?demo: fixed releases around the running version, so the update pill and What's new have something to show
-const DEMO_RELEASES = DEMO ? parseReleases(exampleReleaseJson(__VERSION__)) : undefined;
+// The hosted demo shows the real releases (a build-time snapshot); a local ?demo shows made-up ones
+const DEMO_RELEASES = __HOSTED__ ? parseReleases(__RELEASES_SNAPSHOT__) : DEMO ? parseReleases(exampleReleaseJson(__VERSION__)) : undefined;
 const DEMO_LATEST: Release | null = DEMO_RELEASES ? (availableUpdate(DEMO_RELEASES, __VERSION__) ?? null) : null;
 
 type ChangelogSource = Extract<TrackEvent, { name: 'changelog_opened' }>['source'];

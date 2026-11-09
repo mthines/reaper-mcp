@@ -5,3 +5,7 @@ declare const __DASH0_TOKEN__: string;
 declare const __DASH0_DATASET__: string;
 declare const __LOREKIT_TOKEN__: string;
 declare const __LOREKIT_API__: string;
+// The hosted build (public demo + changelog): the demo is always on and releases come from a build-time snapshot
+declare const __HOSTED__: boolean;
+declare const __RELEASES_SNAPSHOT__: unknown[] | null;
+declare const __HIGHLIGHTS_SNAPSHOT__: unknown | null;

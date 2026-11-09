@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "node apps/bridge-ui/scripts/snapshot-releases.mjs && BRIDGE_HOSTED=1 pnpm nx build bridge-ui --skip-nx-cache",
+  "outputDirectory": "dist/apps/bridge-ui",
+  "rewrites": [
+    { "source": "/", "destination": "/mcp_bridge.html" },
+    { "source": "/changelog", "destination": "/mcp_bridge.html?page=changelog" }
+  ],
+  "headers": [
+    { "source": "/changelog/media/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
+  ]
+}
