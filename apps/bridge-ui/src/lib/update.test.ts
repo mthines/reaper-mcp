@@ -40,6 +40,12 @@ describe('updateOffer', () => {
     expect(updateOffer(release, '1.2.0', { dev: true, skipped: null })).toBeNull();
   });
 
+  it('offers nothing while an update runs or after one failed, and offers it again once one finished', () => {
+    expect(updateOffer(release, '1.2.0', { ...plain, update: { state: 'running', kind: 'update', startedAt: 0, log: [] } })).toBeNull();
+    expect(updateOffer(release, '1.2.0', { ...plain, update: { state: 'failed', kind: 'update', startedAt: 0, log: [] } })).toBeNull();
+    expect(updateOffer(release, '1.2.0', { ...plain, update: { state: 'done', kind: 'update', startedAt: 0, log: [] } })).toBe(release);
+  });
+
   it('offers nothing for the version the user skipped, and offers the next one', () => {
     expect(updateOffer(release, '1.2.0', { dev: false, skipped: '1.3.0' })).toBeNull();
     expect(updateOffer({ ...release, version: '1.4.0' }, '1.2.0', { dev: false, skipped: '1.3.0' })).not.toBeNull();

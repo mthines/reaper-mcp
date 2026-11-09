@@ -96,13 +96,13 @@ export function App() {
   const [changelogOpen, setChangelogOpen] = useUrlState('changelog', false, { validate: isBoolean });
   const liveRelease = useLatestRelease(!DEMO && settings?.dev !== true);
   const release = DEMO ? DEMO_LATEST : liveRelease;
-  // One offer for the pill, the ⋯ menu, the palette and the notice: never in developer mode, never a version the user skipped
+  // One offer for the pill, the ⋯ menu, the palette and the notice (rules in updateOffer)
   const [skipped, setSkipped] = useState(() => load(UPDATE_SKIP_KEY));
   const skipUpdate = (version: string) => {
     save(UPDATE_SKIP_KEY, version);
     setSkipped(version);
   };
-  const updateAvailable = updateOffer(release, __VERSION__, { dev: settings?.dev === true, skipped });
+  const updateAvailable = updateOffer(release, __VERSION__, { dev: settings?.dev === true, skipped, update: status?.control?.update });
   const releases = useReleases(changelogOpen, DEMO_RELEASES);
   const highlights = useHighlights(changelogOpen);
   const openChangelog = (source: ChangelogSource) => () => {
