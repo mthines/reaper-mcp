@@ -188,7 +188,7 @@ export const LinksToAReleaseFromItsVersion: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'Link to v0.79.0' }));
-    await expect(releaseParam()).toBe('"0.79.0"');
+    await expect(releaseParam()).toBe('0.79.0');
     await expect(canvas.getByRole('button', { name: 'Link to v0.79.0' }).closest('li')).toHaveAttribute('aria-current', 'location');
     await expect(canvas.getByRole('button', { name: 'Link to v0.80.0' }).closest('li')).not.toHaveAttribute('aria-current');
   },
@@ -198,7 +198,7 @@ export const LinksToAReleaseFromItsVersion: Story = {
 export const OpensALinkToABetaAndDropsItOnClose: Story = {
   beforeEach: () => {
     const beta = releases.find((r) => r.prerelease)?.version;
-    history.replaceState(null, '', `${location.pathname}?release=${encodeURIComponent(JSON.stringify(beta))}`);
+    history.replaceState(null, '', `${location.pathname}?release=${beta}`);
     return () => history.replaceState(null, '', location.pathname);
   },
   play: async ({ canvasElement, args }) => {

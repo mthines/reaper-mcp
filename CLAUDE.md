@@ -928,7 +928,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   Calls and Tools views (and their counts) show the range too; older matches end the list with a button that widens
   the range to the next one that includes them.
 - URL state: navigation state lives in the query string via `useUrlState(key, default, { validate })` in
-  `src/lib/url-state.ts` (a History API port of LoreKit web's hook: JSON values, a value equal to the default is dropped,
+  `src/lib/url-state.ts` (a History API port of LoreKit web's hook: JSON values, text bare (`?release=0.78.2`) unless it would read back as a number or flag, a value equal to the default is dropped,
   changes in one tick become one history entry), so Back/Forward step through it and a link or reload reopens it.
   Params: `view`, `range`, `span` (dragged timeline span), `filter` (all/errors), `q` (search; replaces, never pushes, written to the URL 300 ms after typing pauses via
   `debounceMs` while the page updates at once; each view keeps its own search, so switching views never carries one over),
