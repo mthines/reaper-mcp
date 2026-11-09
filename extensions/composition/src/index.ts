@@ -37,7 +37,10 @@ async function writeNotes(
     if (seconds > length + 1e-6) warnings.push(`the notes run ${seconds.toFixed(2)} s at ${tempo} BPM but the item is ${length.toFixed(2)} s long; the end will be cut off. Lengthen it with set_midi_item_properties.`);
   }
   const res = await api.bridge('insert_midi_notes', { trackIndex: a.trackIndex, itemIndex, notes });
-  if (!res.success) return api.error(res.error ?? 'could not insert the notes');
+  if (!res.success) {
+    const orphan = created ? ` An empty MIDI item was created (track ${a.trackIndex}, item ${itemIndex}); undo_project removes it.` : '';
+    return api.error(`${res.error ?? 'could not insert the notes'}.${orphan}`);
+  }
   return api.json({
     written: true,
     trackIndex: a.trackIndex,

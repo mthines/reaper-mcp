@@ -545,7 +545,7 @@ Nobody has tested a local model end to end yet, so treat it as an experiment. Wh
 - **Speed:** each turn sends those 51k tokens again, so on a laptop GPU expect slow turns.
 - **A smaller tool set:** set `REAPER_MCP_PROFILE` in your client's server `env` to load only what you need. `mixing` (122 tools),
   `music` (127), `analysis` (79) or `minimal` (56), all under the 128 tools some clients allow; unset or `full` loads all 189.
-  Combine them with category names or an extension: `mixing,midi` or `music,composition`.
+  Combine them with category names or an extension (`mixing,midi`, `mixing,composition`); a combination can go over 128, so check the count the server logs at start.
   `list_tool_categories` then lists only what is loaded.
 
 Tried one? [Tell us how it went](https://github.com/mthines/reaper-mcp/issues/72), and we'll list what works here.

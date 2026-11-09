@@ -66,6 +66,13 @@ describe('composition_chord_progression', () => {
 });
 
 describe('composition_drum_pattern', () => {
+  it('refuses a lane named like an object property instead of passing it through', async () => {
+    const t = await setup();
+    const r = (await t.call('drum_pattern', { trackIndex: 0, lanes: { constructor: 'x---' } })) as { error: string };
+    expect(r.error).toContain('"constructor"');
+    expect(t.tracks[0]).toEqual([]);
+  });
+
   const lanes = { kick: 'x---x---x---x---', snare: '----x-------x---', hihat: 'x-x-x-x-x-x-x-x-' };
 
   it('writes a one-bar GM pattern in 16th steps', async () => {

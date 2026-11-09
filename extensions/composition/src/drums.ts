@@ -47,13 +47,13 @@ export interface Pattern {
 
 /** Lane keys may be a lane name or a plain note number ("36"). */
 function resolvePitch(lane: string, o: PatternOptions): Result<number> {
-  if (lane in o.pitches) return { ok: true, value: o.pitches[lane] };
+  if (Object.hasOwn(o.pitches, lane)) return { ok: true, value: o.pitches[lane] };
   if (/^\d+$/.test(lane)) {
     const n = Number(lane);
     return n <= 127 ? { ok: true, value: n } : { ok: false, error: `lane "${lane}" is not a note number 0-127` };
   }
   const map = DRUM_MAPS[o.map];
-  if (map && lane in map) return { ok: true, value: map[lane] };
+  if (map && Object.hasOwn(map, lane)) return { ok: true, value: map[lane] };
   const known = map ? Object.keys(map).join(', ') : 'none, pass pitches';
   return { ok: false, error: `lane "${lane}" has no note in the "${o.map}" map (lanes: ${known}); pass it in pitches or use a note number` };
 }
