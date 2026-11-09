@@ -34,6 +34,7 @@ For each tool call:
 
 - the tool name and the bridge command it ran (e.g. `set_fx_parameter`)
 - whether it succeeded, and if not, the **kind** of error (`timeout`, `tool_error`, …)
+- if it failed because a setup step is missing, which one: the audio sidecar isn't installed, the bridge isn't running, or REAPER runs an older bridge (one of those words, never the message)
 - how long it took
 - for key and chord detection: whether it read MIDI, rendered audio or a file, which engine it used, how many chords it found and how sure it was of the key (never the key or the chords)
 - for plugin research runs (`/learn-plugin`, or `/mixer` or `/mastering` looking up a plugin they don't know): how the run ended (new record, refined, plugin not installed, failed to load, LoreKit not connected), which skill started it and how many plugins it researched at once, how long it took, the plugin's category (`compressor`, `eq`, …) and style (`transparent`, `vintage`, …) and its format (VST3, AU, CLAP, JS, …, and whether it's an instrument), its number of parameters as a range (`16-63`), how many were tested, how many sources were cited and questions left open, and whether the scratch track was cleaned up. Anything outside these fixed lists is sent as `other`. Never the plugin's name, and never details that point to one plugin in combination, such as its exact parameter count or whether it has a built-in record
@@ -43,7 +44,7 @@ For each tool call:
 
 Once per server start, whether an MCP client (your agent) connected to it — just that it did, not which client. A server started with no agent attached, by a script or a package scanner, is not counted as someone using reaper-mcp.
 
-Plus periodic health numbers for the REAPER bridge, such as whether it's running and how fast its loop runs, and whether the bridge answered at startup and, if not, which setup step is missing: REAPER not found, bridge not installed, never started, or stopped (one of those words, never a path). The same word is attached to any tool call refused because the bridge wasn't running.
+Plus periodic health numbers for the REAPER bridge, such as whether it's running and how fast its loop runs, and whether the bridge answered at startup and, if not, which setup step is missing: REAPER not found, bridge not installed, never started, or stopped (one of those words, never a path). The same word is attached to any tool call refused because the bridge wasn't running. At startup, also: whether REAPER itself is running when the bridge doesn't answer (to tell a closed REAPER from a stopped bridge), how long ago the bridge last answered as a coarse range (under a minute, an hour, a day, a week, or longer), whether the bridge is set to start with REAPER, whether the audio sidecar is installed, and whether that start updated REAPER's reaper-mcp files or added the start-with-REAPER block (yes or no each).
 
 ## What is never sent
 
@@ -62,6 +63,10 @@ The bridge status page (`mcp_bridge.html`, opened from REAPER) sends its own pse
 It never sends plugin, track, project or agent session names, what you type in the search box, your LoreKit tokens, the page's address (host or LAN IP) or the bridge's polling.
 
 Turn it off under **Settings → Privacy → Share usage statistics** on the page. It is also off when your browser sends Global Privacy Control or Do Not Track, and in the `?demo` preview. The page keeps its own setting, so `reaper-mcp telemetry off` doesn't switch it off. The code is in [`apps/bridge-ui/src/lib/analytics.ts`](apps/bridge-ui/src/lib/analytics.ts).
+
+## Update check
+
+Separately from telemetry, and whether telemetry is on or off, an npm install asks the npm registry at most once a day which version of `@mthines/reaper-mcp` is the latest, so your agent can tell you when a newer release is out (at most once a day). It is a plain request for the package's public version number and sends nothing about you; the answer is kept in `~/.reaper-mcp/update-check.json`. Turn it off with `REAPER_MCP_UPDATE_CHECK=0` or `NO_UPDATE_NOTIFIER=1`. A git clone never asks.
 
 ## Where it goes
 

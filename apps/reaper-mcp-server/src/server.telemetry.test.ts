@@ -108,6 +108,29 @@ describe('instrumentToolHandlers', () => {
     expect(toolFailedLogs()).toEqual([expect.objectContaining({ level: 'error' })]);
   });
 
+  it.each([
+    ['Audio understanding sidecar not installed. Run in a terminal: reaper-mcp setup-sidecar', 'sidecar_not_installed'],
+    ['Audio chord detection needs the Python sidecar. Run in a terminal: reaper-mcp setup-sidecar', 'sidecar_not_installed'],
+    ['Error: Bridge not running: the bridge script is installed but has never run in this REAPER.', 'bridge_not_running'],
+    ['Error: Bridge outdated: the REAPER bridge does not know the command \'get_project_settings\'', 'bridge_outdated'],
+  ])('names the missing setup step a call failed on: %s', async (text, cause) => {
+    const cb = wrapTool('analyze_audio_file', async () => ({ content: [{ type: 'text', text }], isError: true }));
+
+    await cb({}, { requestId: 1 });
+
+    const [span] = exporter.getFinishedSpans();
+    expect(span.attributes['error.type']).toBe('tool_error');
+    expect(span.attributes['reaper.tool.error.cause']).toBe(cause);
+  });
+
+  it('names no setup step for a refused request', async () => {
+    const cb = wrapTool('add_fx', async () => ({ content: [{ type: 'text', text: 'Error: Track 9 not found' }], isError: true }));
+
+    await cb({}, { requestId: 1 });
+
+    expect(exporter.getFinishedSpans()[0].attributes['reaper.tool.error.cause']).toBeUndefined();
+  });
+
   it('logs nothing of its own for an isError result the bridge already logged', async () => {
     const cb = wrapTool('send_midi_cc', async () => {
       noteLoggedFailure(false); // what sendCommand does after logging a refused request
