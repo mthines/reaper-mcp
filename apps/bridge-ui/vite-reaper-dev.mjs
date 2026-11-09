@@ -6,7 +6,7 @@
 // drops, devtools), and Vite's proxy passes each hang-up on to REAPER. Here REAPER sees one connection for the
 // session and a request is always left to finish.
 //
-//   REAPER_WEB_PORT and REAPER_RESOURCE_PATH override the defaults; BRIDGE_DEV_PORT is read by vite.config.ts.
+//   REAPER_WEB_PORT and REAPER_RESOURCE_PATH override the defaults; BRIDGE_DEV_PORT is read by vite.config.ts (default 8098, and the next free port when taken; a set BRIDGE_DEV_PORT is strict).
 import { copyFileSync, existsSync, mkdirSync, readFileSync, watch } from 'node:fs';
 import http from 'node:http';
 import { homedir, platform } from 'node:os';
@@ -137,7 +137,9 @@ export function reaperDev() {
         next();
       });
       server.httpServer?.once('listening', () => {
-        const page = `http://localhost:${server.config.server.port}/mcp_bridge.html`;
+        const address = server.httpServer.address();
+        const port = typeof address === 'object' && address ? address.port : server.config.server.port;
+        const page = `http://localhost:${port}/mcp_bridge.html`;
         server.config.logger.info(
           [
             '',

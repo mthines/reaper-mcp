@@ -11,7 +11,7 @@ export default defineConfig({
   root: here,
   define: buildConstants(),
   plugins: [react({ babel: reactCompilerBabel }), viteSingleFile(), reaperDev()],
-  server: { host: '127.0.0.1', port: Number(process.env.BRIDGE_DEV_PORT) || 8098, strictPort: true },
+  server: { host: '127.0.0.1', port: Number(process.env.BRIDGE_DEV_PORT) || 8098, strictPort: Boolean(process.env.BRIDGE_DEV_PORT) },
   build: {
     outDir: join(here, '../../dist/apps/bridge-ui'),
     emptyOutDir: true,
