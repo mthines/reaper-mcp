@@ -169,11 +169,11 @@ export function SettingsPanel({
 
 /** Install the page as a desktop app (it ships a manifest and service worker). */
 function usageStatsHint(state: UsageStatsState): string {
-  if (state.on) return 'Sends which views and buttons you use, pseudonymously, so this page can get better. Never plugin, track or project names, searches or tokens. Turning it off stops events at once and everything else from the next page load.';
+  if (state.on) return 'I'm one person building this for fun, as a musician, developer and dad. This sends which views and buttons get used, anonymously: I can't tell who you are, and I'm not interested in your music or your life. It just helps me spot what's broken and fix it. Never plugin, track or project names, searches or tokens. Turn it off any time; events stop right away.';
   if (state.reason === 'browser') return 'Off: your browser asks sites not to track you (Global Privacy Control / Do Not Track).';
   if (state.reason === 'demo') return 'Off in the demo.';
   if (state.reason === 'unconfigured') return 'This build has no usage statistics destination.';
-  return 'Off. Turn it on to help improve this page: it sends which views and buttons you use, never names, searches or tokens.';
+  return 'Off. If you'd like to help, turning it on shares which views and buttons get used, anonymously, so I can fix what breaks. Never names, searches or tokens.';
 }
 
 export const SETTING_NAME: Record<SettingKey, Extract<TrackEvent, { name: 'setting_changed' }>['setting']> = {
