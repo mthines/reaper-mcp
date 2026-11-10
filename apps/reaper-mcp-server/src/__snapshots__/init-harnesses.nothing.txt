@@ -1,0 +1,8 @@
+REAPER MCP — Connect your AI harness
+
+  · not found  Claude Code: https://claude.com/claude-code
+  · not found  Codex CLI: npm install -g @openai/codex  (or: brew install codex)
+  · not found  Gemini CLI: npm install -g @google/gemini-cli
+  · not found  Cursor: https://cursor.com
+
+None of the supported harnesses is installed yet. Install one (see above), then run: reaper-mcp init

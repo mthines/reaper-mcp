@@ -1,0 +1,37 @@
+REAPER MCP — Setup
+
+Bridge directory: <home>/REAPER/Scripts/mcp_bridge_data
+
+Installing Lua scripts...
+  ✓ <n> scripts installed
+
+Installing JSFX analyzers...
+  ✓ <n> JSFX files installed
+
+Installing example plugins...
+  ✓ <n> example plugins installed
+
+Installing bridge status UI...
+  ✓ Status page installed
+
+Starting the bridge with REAPER...
+  ✓ Added to Scripts/__startup.lua (REAPER runs it at launch)
+    Turn it off in the bridge window: Settings > Start with REAPER.
+
+Enabling REAPER web interface...
+  ! Skipped: <home>/REAPER/reaper.ini not found (start REAPER once, quit it, then re-run setup)
+
+Registering snapshot actions (quick save, next, previous)...
+  ✓ Added: mcp_snapshot_quick_save.lua, mcp_snapshot_next.lua, mcp_snapshot_prev.lua
+    Bind keys in Actions > Show action list: search "mcp_snapshot".
+
+✓ Setup complete!
+
+Next steps:
+  1. Start REAPER: the bridge starts with it. If REAPER is already open, restart it,
+     or run the bridge once by hand: Actions > Show action list > Load ReaScript,
+     select <home>/REAPER/Scripts/mcp_bridge.lua and click Run.
+  2. Connect your AI harness: reaper-mcp init, then check it with reaper-mcp doctor
+
+Audio analysis needs the Python sidecar, which this setup does not install: analyze_audio_file, analyze_track_offline, detect_key and detect_chords on audio, detect_transients, separate_stems and the mix checks fail without it. It needs Python 3.10+ and downloads PyTorch (CPU) and audio libraries (~0.5-1 GB; up to ~2.5 GB on Linux), then lets you pick the optional models.
+Add it any time: reaper-mcp setup-sidecar

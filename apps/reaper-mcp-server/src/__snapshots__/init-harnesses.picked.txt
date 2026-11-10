@@ -1,0 +1,21 @@
+REAPER MCP — Connect your AI harness
+
+  ✓ found      Claude Code
+  · not found  Codex CLI: npm install -g @openai/codex  (or: brew install codex)
+  · not found  Gemini CLI: npm install -g @google/gemini-cli
+  · not found  Cursor: https://cursor.com
+
+✗ Could not connect Codex CLI: its command was not found (not installed: npm install -g @openai/codex  (or: brew install codex))
+  To connect it yourself: codex mcp add reaper -- <node> <package>/main.js serve
+
+✓ Installed the mix skills and agents in ~/.agents: <n> new, 0 updated, 0 already current.
+✓ Installed the knowledge base the skills read in ~/.claude: <n> new, 0 updated, 0 already current.
+Try /mixer, /critique or /learn-plugin in your harness. (/learn-plugin saves what it learns to LoreKit, see the README.)
+
+If you haven't yet, install the bridge:
+  reaper-mcp setup           # Lua bridge + JSFX → REAPER
+then start (or restart) REAPER: the bridge starts with it.
+
+Want it to remember plugins and your corrections? Connect LoreKit (free): https://lorekit.io. /learn-plugin will walk you through it.
+
+Try: /mixer "Please gain stage my tracks"  ·  /critique "Roast my mix"

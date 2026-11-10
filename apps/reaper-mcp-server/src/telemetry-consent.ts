@@ -16,7 +16,10 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { PassThrough } from 'node:stream';
+import { streamEnded } from './stream-ended.js';
 import type { core, tracing } from '@opentelemetry/sdk-node';
+import { createUi, type Ui } from './terminal-ui.js';
 
 type ReadableSpan = tracing.ReadableSpan;
 type SpanExporter = tracing.SpanExporter;
@@ -44,16 +47,21 @@ export const CONSENT_SERVICE_NAME = 'reaper-mcp-consent';
 
 export const TELEMETRY_DOC_URL = 'https://github.com/mthines/reaper-mcp/blob/main/TELEMETRY.md';
 
-export const TELEMETRY_NOTICE = `Pseudonymous usage telemetry is ON by default.
+/** The first-run notice, drawn with `ui` (plain by default: the words never depend on colour) */
+export function renderTelemetryNotice(ui: Ui = createUi({ level: 0, tty: false })): string {
+  return `${ui.bold('Pseudonymous usage telemetry is ON by default.')}
 reaper-mcp is built by one developer. To see which tools people use, which fail,
 and how fast they are, it sends pseudonymous usage data: tool names, error types,
 timings, and app/OS versions, tagged with a random install id.
 It never sends your projects, track names, parameters, file paths or error text.
 Your answer below is counted once, anonymously (on or off, no install id).
 
-Opt out any time:  reaper-mcp telemetry off
-                   (or set REAPER_MCP_TELEMETRY=0 or DO_NOT_TRACK=1)
-Details: ${TELEMETRY_DOC_URL}`;
+Opt out any time:  ${ui.cmd('reaper-mcp telemetry off')}
+                   ${ui.dim('(or set REAPER_MCP_TELEMETRY=0 or DO_NOT_TRACK=1)')}
+Details: ${ui.link(TELEMETRY_DOC_URL)}`;
+}
+
+export const TELEMETRY_NOTICE = renderTelemetryNotice();
 
 export type TelemetryMode = 'custom' | 'default' | 'off';
 
@@ -164,11 +172,58 @@ export function resolveTelemetry(
   };
 }
 
+/** Answers typed one line at a time. Ctrl+D or a closed stdin reads as an empty line (Enter), so every question needs a safe default. */
+function lineReader(input: NodeJS.ReadableStream) {
+  const ended = streamEnded(input);
+  const rl = createInterface({ input: ended ? new PassThrough() : input, terminal: false });
+  const queue: string[] = [];
+  let waiting: ((line: string) => void) | undefined;
+  let closed = ended;
+  rl.on('line', (line) => {
+    if (waiting) {
+      const resolve = waiting;
+      waiting = undefined;
+      resolve(line);
+    } else queue.push(line);
+  });
+  rl.on('close', () => {
+    closed = true;
+    waiting?.('');
+  });
+  return {
+    next: (): Promise<string> => (queue.length ? Promise.resolve(queue.shift() as string) : closed ? Promise.resolve('') : new Promise((resolve) => (waiting = resolve))),
+    close: () => rl.close(),
+  };
+}
+
+/** The one question before telemetry goes off: what it does for the developer, what is never seen. Enter keeps it on. True = turn it off. */
+async function confirmOptOut(lines: { next(): Promise<string> }, output: NodeJS.WritableStream, ui: Ui): Promise<boolean> {
+  output.write(`\n${ui.bold('Totally your call, no hard feelings 🙏')}
+reaper-mcp is just me: one developer, building it in my spare time. These counts help me a ton,
+they show me what to fix next. I can't see your music, projects, track names or files. Ever.
+
+${ui.bold('Turn telemetry off anyway?')} ${ui.dim('[y/N]')} `);
+  const answer = (await lines.next()).trim().toLowerCase();
+  return answer === 'y' || answer === 'yes';
+}
+
+/** For `reaper-mcp telemetry off` typed at a terminal: the same one question. Without a terminal there is nobody to ask, so off means off. */
+export async function confirmOptOutPrompt(io: ConsentIO): Promise<boolean> {
+  if (!io.interactive) return true;
+  const lines = lineReader(io.input);
+  const off = await confirmOptOut(lines, io.output, io.ui ?? createUi({ level: 0, tty: false }));
+  lines.close();
+  if (!off) io.output.write(`${(io.ui ?? createUi({ level: 0, tty: false })).mark('ok')} Thanks, telemetry stays on 💚\n`);
+  return off;
+}
+
 export interface ConsentIO {
   input: NodeJS.ReadableStream;
   output: NodeJS.WritableStream;
   /** Ask Y/n when true; otherwise only show the notice. */
   interactive: boolean;
+  /** How to draw the notice (colour on a terminal); plain when absent */
+  ui?: Ui;
 }
 
 /**
@@ -186,20 +241,17 @@ export async function firstRunTelemetryNotice(
 ): Promise<ConsentChange | undefined> {
   const config = readTelemetryConfig(dir);
   if (config.telemetryNoticeShown || resolveTelemetry(env, config, destination).mode !== 'default') return undefined;
-  io.output.write(`\n${TELEMETRY_NOTICE}\n\n`);
+  const ui = io.ui ?? createUi({ level: 0, tty: false });
+  io.output.write(`\n${renderTelemetryNotice(ui)}\n\n`);
 
   let keep = true;
   if (io.interactive) {
-    const rl = createInterface({ input: io.input, output: io.output, terminal: false });
-    io.output.write('Keep usage telemetry on? [Y/n] ');
-    // 'line' always fires before 'close'; Ctrl+D or a closed stdin counts as Enter.
-    const answer = await new Promise<string>((resolve) => {
-      rl.once('line', resolve);
-      rl.once('close', () => resolve(''));
-    }).then((a) => a.trim().toLowerCase());
-    rl.close();
-    keep = !(answer === 'n' || answer === 'no');
-    io.output.write(keep ? 'Thanks — telemetry stays on.\n' : 'Telemetry is off. Turn it back on with `reaper-mcp telemetry on`.\n');
+    const lines = lineReader(io.input);
+    io.output.write(`${ui.bold('Keep usage telemetry on?')} ${ui.dim('[Y/n]')} `);
+    const answer = (await lines.next()).trim().toLowerCase();
+    keep = !(answer === 'n' || answer === 'no') || !(await confirmOptOut(lines, io.output, ui));
+    lines.close();
+    io.output.write(keep ? `${ui.mark('ok')} Thanks — telemetry stays on.\n` : `${ui.mark('ok')} Telemetry is off. Turn it back on with \`${ui.cmd('reaper-mcp telemetry on')}\`.\n`);
   }
   writeTelemetryConfig({ telemetry: keep, telemetryNoticeShown: true }, dir);
   return { state: keep ? 'on' : 'off', source: io.interactive ? 'first_run_prompt' : 'first_run_notice' };

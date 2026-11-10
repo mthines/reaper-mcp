@@ -12,6 +12,7 @@
     "storybook": "nx storybook bridge-ui",
     "test": "nx run-many --target=test",
     "test:install": "scripts/test-install.sh",
+    "test:harnesses": "scripts/test-harnesses.sh",
     "test:stress": "pnpm vitest run apps/reaper-mcp-server/src/bridge.stress.test.ts",
     "test:profile": "BRIDGE_PROFILE=1 pnpm vitest run apps/reaper-mcp-server/src/bridge.profile.test.ts",
     "lint": "nx run-many --target=lint",

@@ -10,14 +10,14 @@ Require node
 Set Shell bash
 Set FontSize 18
 Set Width 1280
-Set Height 620
+Set Height 900
 Set Padding 28
 Set Theme "Catppuccin Mocha"
 Set WindowBar Colorful
 Set TypingSpeed 35ms
 
 Hide
-Type `export HOME="$DEMO_HOME" PATH="$DEMO_PATH" REAPER_RESOURCE_PATH="$DEMO_REAPER" NX_NO_CLOUD=true NX_DAEMON=false PS1='\[\e[36m\]\w\[\e[0m\] \[\e[35m\]❯\[\e[0m\] ' && cd "$DEMO_HOME/Music" && [ "$HOME/Music" = "$PWD" ] && clear || exit 1`
+Type `export HOME="$DEMO_HOME" PATH="$DEMO_PATH" REAPER_RESOURCE_PATH="$DEMO_REAPER" REAPER_MCP_TELEMETRY=0 NX_NO_CLOUD=true NX_DAEMON=false PS1='\[\e[36m\]\w\[\e[0m\] \[\e[35m\]❯\[\e[0m\] ' && cd "$DEMO_HOME/Music" && [ "$HOME/Music" = "$PWD" ] && clear || exit 1`
 Enter
 Sleep 1s
 Show
@@ -28,4 +28,4 @@ Sleep 600ms
 Enter
 
 Wait+Screen@5m /Done!/
-Sleep 5s
+Sleep 6s

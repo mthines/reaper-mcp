@@ -7,7 +7,7 @@ reaper-mcp is built by one developer — me, in my spare time. Pseudonymous usag
 Any one of these turns it off:
 
 ```bash
-reaper-mcp telemetry off       # saved in ~/.reaper-mcp/config.json
+reaper-mcp telemetry off       # asks once more at a terminal (Enter keeps it on), then saves in ~/.reaper-mcp/config.json
 REAPER_MCP_TELEMETRY=0         # environment variable
 DO_NOT_TRACK=1                 # the common convention, honored too
 ```

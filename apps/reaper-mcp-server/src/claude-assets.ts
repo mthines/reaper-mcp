@@ -61,7 +61,13 @@ function readManifest(path: string): Manifest {
  * @param packageClaudeDir the package's `claude/` folder (skills/, agents/, knowledge/)
  * @param claudeDir        the user's ~/.claude
  */
-export function installClaudeAssets(packageClaudeDir: string, claudeDir: string, opts: { dryRun?: boolean } = {}): ClaudeAssetsResult {
+export function installClaudeAssets(
+  packageClaudeDir: string,
+  claudeDir: string,
+  /** `include` limits what is copied (the shared ~/.agents gets skills and agents, never the knowledge the skills read from ~/.claude) */
+  opts: { dryRun?: boolean; include?: ('skills' | 'agents' | 'knowledge')[] } = {},
+): ClaudeAssetsResult {
+  const wants = (part: 'skills' | 'agents' | 'knowledge') => !opts.include || opts.include.includes(part);
   const result: ClaudeAssetsResult = { installed: [], updated: [], unchanged: 0, skipped: [] };
   const manifestPath = join(claudeDir, CLAUDE_MANIFEST);
   const manifest = readManifest(manifestPath);
@@ -69,7 +75,7 @@ export function installClaudeAssets(packageClaudeDir: string, claudeDir: string,
   // [source file, destination file, the top-level path whose symlink status decides]
   const plan: [string, string, string][] = [];
   const skillsSrc = join(packageClaudeDir, 'skills');
-  if (existsSync(skillsSrc)) {
+  if (wants('skills') && existsSync(skillsSrc)) {
     for (const f of listFiles(skillsSrc)) {
       const rel = relative(skillsSrc, f);
       // A maintainer skill (.repo-only) belongs to the repo, never to a user's ~/.claude
@@ -78,14 +84,14 @@ export function installClaudeAssets(packageClaudeDir: string, claudeDir: string,
     }
   }
   const agentsSrc = join(packageClaudeDir, 'agents');
-  if (existsSync(agentsSrc)) {
+  if (wants('agents') && existsSync(agentsSrc)) {
     for (const f of listFiles(agentsSrc)) {
       const dest = join(claudeDir, 'agents', relative(agentsSrc, f));
       plan.push([f, dest, dest]);
     }
   }
   const knowledgeSrc = join(packageClaudeDir, 'knowledge');
-  if (existsSync(knowledgeSrc)) {
+  if (wants('knowledge') && existsSync(knowledgeSrc)) {
     for (const f of listFiles(knowledgeSrc)) {
       plan.push([f, join(claudeDir, 'knowledge', relative(knowledgeSrc, f)), join(claudeDir, 'knowledge')]);
     }

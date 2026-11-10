@@ -1,0 +1,79 @@
+REAPER MCP — Setup
+
+Bridge directory: <home>/REAPER/Scripts/mcp_bridge_data
+
+Installing Lua scripts...
+  ✓ <n> scripts installed
+
+Installing JSFX analyzers...
+  ✓ <n> JSFX files installed
+
+Installing example plugins...
+  ✓ <n> example plugins installed
+
+Installing bridge status UI...
+  ✓ Status page installed
+
+Starting the bridge with REAPER...
+  ✓ Added to Scripts/__startup.lua (REAPER runs it at launch)
+    Turn it off in the bridge window: Settings > Start with REAPER.
+
+Enabling REAPER web interface...
+  ✓ Enabled on port 8099 (override with REAPER_WEB_PORT)
+
+Registering snapshot actions (quick save, next, previous)...
+  ✓ Added: mcp_snapshot_quick_save.lua, mcp_snapshot_next.lua, mcp_snapshot_prev.lua
+    Bind keys in Actions > Show action list: search "mcp_snapshot".
+
+✓ Setup complete!
+REAPER MCP — Connect your AI harness
+
+  · not found  Claude Code: https://claude.com/claude-code
+  ✓ found      Codex CLI
+  · not found  Gemini CLI: npm install -g @google/gemini-cli
+  · not found  Cursor: https://cursor.com
+
+✓ Connected: Codex CLI (works from any folder)
+
+✓ Installed the mix skills and agents in ~/.agents: <n> new, 0 updated, 0 already current.
+✓ Installed the knowledge base the skills read in ~/.claude: <n> new, 0 updated, 0 already current.
+Try /mixer, /critique or /learn-plugin in your harness. (/learn-plugin saves what it learns to LoreKit, see the README.)
+
+Want it to remember plugins and your corrections? Connect LoreKit (free): https://lorekit.io. /learn-plugin will walk you through it.
+
+Try: /mixer "Please gain stage my tracks"  ·  /critique "Roast my mix"
+
+
+  REAPER MCP doctor  v0.82.0
+
+  Core
+  ✗ Lua bridge         Not detected
+                       → reaper-mcp setup, then run mcp_bridge.lua in REAPER
+  ✓ Start with REAPER  On · REAPER's startup script runs the bridge at launch
+  ✓ Mix skills         ~/.agents/skills
+  ✓ Knowledge base     ~/.claude/knowledge
+  ✓ MCP config         Connected: Codex CLI
+  · SWS                Checked live: the bridge page shows it, or ask Claude to run list_available_fx
+  · Telemetry          Off
+
+  Python sidecar  optional · lets Claude listen to the audio  not installed · enable with reaper-mcp setup-sidecar
+  · Python ≥ 3.10      Not found
+                       → install Python 3.10+ (python.org) or set PYTHON_BIN
+  · Venv               Not installed
+                       → reaper-mcp setup-sidecar
+  · Dependencies       Not installed
+                       → reaper-mcp setup-sidecar
+  · Model weights      Meta's Audiobox Aesthetics: Claude listens to any track and rates it 0–10 for production quality, complexity and enjoyment
+                       → ~831 MB, downloads on first use · or get it now: reaper-mcp setup-sidecar
+
+  1 problem · fix with: reaper-mcp setup, then run mcp_bridge.lua in REAPER
+
+The bridge shows as not detected until REAPER has started it: that is the one step left.
+
+Audio analysis needs the Python sidecar, which this setup does not install: analyze_audio_file, analyze_track_offline, detect_key and detect_chords on audio, detect_transients, separate_stems and the mix checks fail without it. It needs Python 3.10+ and downloads PyTorch (CPU) and audio libraries (~0.5-1 GB; up to ~2.5 GB on Linux), then lets you pick the optional models.
+Add it any time: reaper-mcp setup-sidecar
+
+One step left: start REAPER (restart it if it is open): the bridge starts with it.
+  Rather not restart? Actions > Show action list > Load ReaScript, select <home>/REAPER/Scripts/mcp_bridge.lua and click Run.
+
+The bridge opens its status window on start: http://localhost:8099/mcp_bridge.html

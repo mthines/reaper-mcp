@@ -185,7 +185,7 @@ That's it. It installs everything, puts the connector into REAPER and sets up Cl
 Nothing else to install. When a new version is out, the bridge window in REAPER shows an
 **Update** button that does the rest. From a terminal it's `./scripts/update.sh`.
 
-<img src="docs/assets/install-demo.gif" alt="A real run of the install command: six green checkmarks, then Done! with the one step left in REAPER." width="100%">
+<img src="docs/assets/install-demo.gif" alt="A real run of the install command: green checkmarks for each step, then Done! with the one step left in REAPER." width="100%">
 
 <sub>A real run, recorded by our install test (<code>scripts/test-install.sh</code>). The very first
 download takes about a minute.</sub>
@@ -581,7 +581,7 @@ computer.
 messages, audio or MIDI. I respect your privacy 🙏
 
 You're in control: setup asks before anything is sent, and `reaper-mcp telemetry off`
-turns it off for good — no hard feelings. Everything that's collected, and where it
+turns it off for good (it asks once more, in case you'd rather keep helping) — no hard feelings. Everything that's collected, and where it
 goes, is in [TELEMETRY.md](TELEMETRY.md).
 
 ---

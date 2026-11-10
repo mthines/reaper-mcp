@@ -1,0 +1,22 @@
+REAPER MCP — Connect your AI harness
+
+  · not found  Claude Code: https://claude.com/claude-code
+  ✓ found      Codex CLI
+  ✓ found      Gemini CLI
+  ✓ found      Cursor
+
+✓ Already connected: Codex CLI (works from any folder)
+✓ Already connected: Gemini CLI (works from any folder)
+✓ Already connected: Cursor (works from any folder)
+
+✓ Installed the mix skills and agents in ~/.agents: 0 new, 0 updated, <n> already current.
+✓ Installed the knowledge base the skills read in ~/.claude: 0 new, 0 updated, <n> already current.
+Try /mixer, /critique or /learn-plugin in your harness. (/learn-plugin saves what it learns to LoreKit, see the README.)
+
+If you haven't yet, install the bridge:
+  reaper-mcp setup           # Lua bridge + JSFX → REAPER
+then start (or restart) REAPER: the bridge starts with it.
+
+Want it to remember plugins and your corrections? Connect LoreKit (free): https://lorekit.io. /learn-plugin will walk you through it.
+
+Try: /mixer "Please gain stage my tracks"  ·  /critique "Roast my mix"
