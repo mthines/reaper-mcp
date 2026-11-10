@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, chmodSync }
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { connectHarness, detectHarnesses, isStale, manualCommand, onPath, parseHarnessFlag, registeredServer, skillsHomes, type HarnessEnv, type Runner } from './harnesses.js';
+import { connectHarness, detectHarnesses, isStale, manualCommand, onPath, parseHarnessFlag, quoteForCmd, registeredServer, skillsHomes, type HarnessEnv, type Runner } from './harnesses.js';
 import { installClaudeAssets } from './claude-assets.js';
 
 describe('harnesses', () => {
@@ -197,5 +197,16 @@ describe('harnesses', () => {
       expect(r.installed.sort()).toEqual([join('agents', 'plugin-researcher.md'), join('skills', 'mixer', 'SKILL.md')]);
       expect(existsSync(join(shared, 'knowledge'))).toBe(false);
     });
+  });
+});
+
+describe('quoteForCmd', () => {
+  it('keeps a path with spaces as one argument for cmd.exe', () => {
+    expect(quoteForCmd('C:\\Program Files\\nodejs\\node.exe')).toBe('"C:\\Program Files\\nodejs\\node.exe"');
+  });
+
+  it('leaves a plain argument alone and escapes an embedded quote', () => {
+    expect(quoteForCmd('serve')).toBe('serve');
+    expect(quoteForCmd('say "hi"')).toBe('"say \\"hi\\""');
   });
 });

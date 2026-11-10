@@ -16,6 +16,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { PassThrough } from 'node:stream';
+import { streamEnded } from './stream-ended.js';
 import type { core, tracing } from '@opentelemetry/sdk-node';
 import { createUi, type Ui } from './terminal-ui.js';
 
@@ -172,10 +174,11 @@ export function resolveTelemetry(
 
 /** Answers typed one line at a time. Ctrl+D or a closed stdin reads as an empty line (Enter), so every question needs a safe default. */
 function lineReader(input: NodeJS.ReadableStream) {
-  const rl = createInterface({ input, terminal: false });
+  const ended = streamEnded(input);
+  const rl = createInterface({ input: ended ? new PassThrough() : input, terminal: false });
   const queue: string[] = [];
   let waiting: ((line: string) => void) | undefined;
-  let closed = false;
+  let closed = ended;
   rl.on('line', (line) => {
     if (waiting) {
       const resolve = waiting;

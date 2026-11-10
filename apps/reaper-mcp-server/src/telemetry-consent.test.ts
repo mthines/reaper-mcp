@@ -361,3 +361,14 @@ describe('confirmOptOutPrompt (reaper-mcp telemetry off)', () => {
     expect(await ask(null)).toEqual({ off: true, printed: '' });
   });
 });
+
+describe('a prompt after the input has ended (Ctrl+D earlier)', () => {
+  it('answers with its default instead of waiting forever', async () => {
+    const input = new PassThrough();
+    input.resume();
+    input.end();
+    await new Promise((resolve) => input.once('end', resolve));
+    const output = new PassThrough();
+    expect(await confirmOptOutPrompt({ input, output, interactive: true })).toBe(false);
+  });
+});

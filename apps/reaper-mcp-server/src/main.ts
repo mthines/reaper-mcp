@@ -26,6 +26,7 @@ import { endSession, setSessionClient, startSessionPing } from './session.js';
 import { getSidecarClient } from './sidecar.js';
 import { renderDoctor, useColor, type Check, type CheckStatus, type Section } from './doctor-report.js';
 import { createUi } from './terminal-ui.js';
+import { streamEnded } from './stream-ended.js';
 import { repairBridgeInstall, repairNotices, writeBridgeVersion, type BridgeRepair } from './bridge-repair.js';
 import { addNotice } from './notices.js';
 import { checkForUpdate, updateCheckDisabled } from './update-check.js';
@@ -176,13 +177,17 @@ async function offerSidecar(): Promise<void> {
 
 /** One yes/no question on the terminal; Enter takes the default, Ctrl+D or a closed stdin too */
 async function askYesNo(question: string, defaultYes = true): Promise<boolean> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: false });
   process.stdout.write(`\n${ui.bold(question)} ${ui.dim(defaultYes ? '[Y/n]' : '[y/N]')} `);
-  const answer = await new Promise<string>((resolve) => {
-    rl.once('line', resolve);
-    rl.once('close', () => resolve(''));
-  }).then((a) => a.trim().toLowerCase());
-  rl.close();
+  let answer = '';
+  // After Ctrl+D the stream is over: a new readline would wait forever, so the default answers
+  if (!streamEnded(process.stdin)) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: false });
+    answer = await new Promise<string>((resolve) => {
+      rl.once('line', resolve);
+      rl.once('close', () => resolve(''));
+    }).then((a) => a.trim().toLowerCase());
+    rl.close();
+  }
   return answer === '' ? defaultYes : answer === 'y' || answer === 'yes';
 }
 

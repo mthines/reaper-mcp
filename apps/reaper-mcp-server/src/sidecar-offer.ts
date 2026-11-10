@@ -1,4 +1,5 @@
 import { createInterface } from 'node:readline';
+import { streamEnded } from './stream-ended.js';
 import { SETUP_SIDECAR_COMMAND } from './sidecar-hint.js';
 
 export interface OfferIO {
@@ -29,14 +30,17 @@ export async function offerSidecarSetup(io: OfferIO, installed: boolean, install
     io.output.write(`Add it any time: ${SETUP_SIDECAR_COMMAND}\n`);
     return 'told';
   }
-  const rl = createInterface({ input: io.input, output: io.output, terminal: false });
   io.output.write('Set it up now? [y/N] ');
-  // 'line' always fires before 'close'; Ctrl+D or a closed stdin counts as Enter (no)
-  const answer = await new Promise<string>((resolve) => {
-    rl.once('line', resolve);
-    rl.once('close', () => resolve(''));
-  }).then((a) => a.trim().toLowerCase());
-  rl.close();
+  // 'line' always fires before 'close'; Ctrl+D or a closed stdin counts as Enter (no), also when it closed before this question
+  let answer = '';
+  if (!streamEnded(io.input)) {
+    const rl = createInterface({ input: io.input, output: io.output, terminal: false });
+    answer = await new Promise<string>((resolve) => {
+      rl.once('line', resolve);
+      rl.once('close', () => resolve(''));
+    }).then((a) => a.trim().toLowerCase());
+    rl.close();
+  }
   if (answer !== 'y' && answer !== 'yes') {
     io.output.write(`Skipped. Add it any time: ${SETUP_SIDECAR_COMMAND}\n`);
     return 'declined';

@@ -157,9 +157,16 @@ export interface ConnectResult {
 
 export type Runner = (bin: string, args: string[]) => void;
 
+/** One argument as cmd.exe reads it: wrapped in quotes when it holds a space or a quote (`C:\Program Files\nodejs\node.exe`) */
+export function quoteForCmd(arg: string): string {
+  return /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg;
+}
+
 const realRunner: Runner = (bin, args) => {
-  // npm installs Codex and Gemini as .cmd shims on Windows, which only a shell can run
-  execFileSync(bin, args, { stdio: 'pipe', shell: platform() === 'win32' });
+  // npm installs Codex and Gemini as .cmd shims on Windows, which only a shell can run; a shell joins the arguments
+  // with spaces, so each one is quoted first
+  if (platform() === 'win32') execFileSync(quoteForCmd(bin), args.map(quoteForCmd), { stdio: 'pipe', shell: true });
+  else execFileSync(bin, args, { stdio: 'pipe' });
 };
 
 /** Writes the `reaper` entry into a harness's JSON config, keeping everything else in the file */
