@@ -581,7 +581,7 @@ computer.
 messages, audio or MIDI. I respect your privacy 🙏
 
 You're in control: setup asks before anything is sent, and `reaper-mcp telemetry off`
-turns it off for good — no hard feelings. Everything that's collected, and where it
+turns it off for good (it asks once more, in case you'd rather keep helping) — no hard feelings. Everything that's collected, and where it
 goes, is in [TELEMETRY.md](TELEMETRY.md).
 
 ---

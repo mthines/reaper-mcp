@@ -3,6 +3,8 @@ import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { getTracer, emitLog, exceptionAttributes, getToolDurationHistogram, redactHome } from './telemetry.js';
 import { classifyBridgeError, isSystemError } from './bridge.js';
 import { collectPageLinks, withPageLink } from './page-link.js';
+import { trackCallOutcome } from './call-outcome.js';
+import { withNotices } from './notices.js';
 import { registerProjectTools } from './tools/project.js';
 import { registerTrackTools } from './tools/tracks.js';
 import { registerFxTools } from './tools/fx.js';
@@ -55,6 +57,22 @@ const MAX_STATUS_MESSAGE = 256;
 const TOOL_ERROR_MESSAGE = 'reaper.tool.error.message';
 
 /**
+ * Which missing setup step made a tool call fail, as a closed value usage telemetry keeps
+ * (`reaper.tool.error.cause`, in ALLOWED_SPAN_ATTRIBUTES): the Python sidecar is not installed, the
+ * bridge is not running, or REAPER runs an older bridge. Undefined for every other failure. A missing
+ * sidecar has no span of its own (tools check for it before calling it), so without this it shows only
+ * as a bare `tool_error`.
+ */
+export type ToolErrorCause = 'sidecar_not_installed' | 'bridge_not_running' | 'bridge_outdated';
+
+export function toolErrorCause(text: string): ToolErrorCause | undefined {
+  // Every tool's sidecar check says one of these (SIDECAR_NOT_INSTALLED_MSG, "needs the Python sidecar")
+  if (/sidecar not installed|needs the Python sidecar/i.test(text)) return 'sidecar_not_installed';
+  const type = classifyBridgeError(text.replace(/^Error:\s*/, ''));
+  return type === 'bridge_not_running' || type === 'bridge_outdated' ? type : undefined;
+}
+
+/**
  * Wraps server.tool() so every tool callback runs inside a SERVER span that
  * follows the OTel MCP semantic conventions: `tools/call {tool}` with
  * `mcp.method.name`, `gen_ai.tool.name`, `jsonrpc.request.id`, and `error.type`
@@ -98,21 +116,34 @@ export function instrumentToolHandlers(server: McpServer): void {
         },
         async (span) => {
           try {
-            const collected = await collectPageLinks(() => originalCb(...cbArgs));
-            const result = withPageLink(collected.result, collected.links);
+            const { result: collected, outcome } = await trackCallOutcome(() => collectPageLinks(() => originalCb(...cbArgs)));
+            // Pending notices (notices.ts: an updated bridge, a newer release) ride on the first result
+            const result = withNotices(withPageLink(collected.result, collected.links));
             const res = result as { isError?: boolean; content?: { text?: string }[] };
             if (res?.isError) {
               // Tool-level failure reported to the client (semconv: error.type=tool_error).
               // A refused request ("Track 9 not found") leaves the status unset, like an
-              // HTTP 4xx; only system errors mark the span as failed. No log: the
-              // bridge/sidecar call below already logged the cause.
+              // HTTP 4xx; only a regression in a bridge or sidecar call below (or a bridge
+              // system error the tool passed on in its message) marks the span as failed.
               const errorText = res.content?.[0]?.text ?? 'Tool error';
               const message = redactHome(errorText).slice(0, MAX_STATUS_MESSAGE);
+              const regression =
+                outcome.regression || isSystemError(classifyBridgeError(errorText.replace(/^Error:\s*/, '')));
               metricAttrs['error.type'] = 'tool_error';
               span.setAttribute('error.type', 'tool_error');
               span.setAttribute(TOOL_ERROR_MESSAGE, message);
-              if (isSystemError(classifyBridgeError(errorText.replace(/^Error:\s*/, '')))) {
-                span.setStatus({ code: SpanStatusCode.ERROR, message });
+              const cause = toolErrorCause(errorText);
+              if (cause) span.setAttribute('reaper.tool.error.cause', cause);
+              if (regression) span.setStatus({ code: SpanStatusCode.ERROR, message });
+              // The bridge or sidecar call below logged its own failure; log only one nothing logged
+              // (the tool's own validation, a failure it composed from several answers).
+              if (!outcome.logged) {
+                emitLog(
+                  regression ? 'error' : 'warn',
+                  `Tool ${toolName} failed: ${message}`,
+                  { 'gen_ai.tool.name': toolName, 'error.type': 'tool_error' },
+                  { eventName: 'reaper.tool.failed' },
+                );
               }
             }
             return result;

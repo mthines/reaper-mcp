@@ -70,6 +70,9 @@ Try: /mixer "Please gain stage my tracks"  ·  /critique "Roast my mix"
 
 The bridge shows as not detected until REAPER has started it: that is the one step left.
 
+Audio analysis needs the Python sidecar, which this setup does not install: analyze_audio_file, analyze_track_offline, detect_key and detect_chords on audio, detect_transients, separate_stems and the mix checks fail without it. It needs Python 3.10+ and downloads PyTorch (CPU) and audio libraries (~0.5-1 GB; up to ~2.5 GB on Linux), then lets you pick the optional models.
+Add it any time: reaper-mcp setup-sidecar
+
 One step left: start REAPER (restart it if it is open): the bridge starts with it.
   Rather not restart? Actions > Show action list > Load ReaScript, select <home>/REAPER/Scripts/mcp_bridge.lua and click Run.
 

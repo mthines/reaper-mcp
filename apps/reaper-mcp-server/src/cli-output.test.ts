@@ -42,7 +42,7 @@ describe.skipIf(!runBuiltSuites)('reaper-mcp setup and telemetry, run as a user 
 
   it('keeps setup to one line per step, and lists every file with --verbose', () => {
     const quiet = machine(sandbox, 'setup-quiet', [], { reaperIni: true }).run('setup');
-    expect(quiet.out.split('\n').length).toBeLessThan(40);
+    expect(quiet.out.split('\n').length).toBeLessThan(50);
     expect(quiet.out).not.toMatch(/Installed: mcp_bridge\.lua/);
 
     const verbose = machine(sandbox, 'setup-verbose', [], { reaperIni: true }).run('setup', '--verbose');

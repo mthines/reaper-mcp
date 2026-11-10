@@ -158,7 +158,8 @@ export interface ConnectResult {
 export type Runner = (bin: string, args: string[]) => void;
 
 const realRunner: Runner = (bin, args) => {
-  execFileSync(bin, args, { stdio: 'pipe' });
+  // npm installs Codex and Gemini as .cmd shims on Windows, which only a shell can run
+  execFileSync(bin, args, { stdio: 'pipe', shell: platform() === 'win32' });
 };
 
 /** Writes the `reaper` entry into a harness's JSON config, keeping everything else in the file */

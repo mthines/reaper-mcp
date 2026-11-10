@@ -251,6 +251,60 @@ describe('AnonymizingSpanExporter', () => {
     });
   });
 
+  it('keeps which setup step a failed tool call was missing, never its message', async () => {
+    const sink = new tracing.InMemorySpanExporter();
+    const provider = new tracing.BasicTracerProvider({
+      spanProcessors: [new tracing.SimpleSpanProcessor(new AnonymizingSpanExporter(sink))],
+    });
+    provider.getTracer('test').startSpan('tools/call analyze_audio_file', {
+      attributes: {
+        'error.type': 'tool_error',
+        'reaper.tool.error.cause': 'sidecar_not_installed',
+        'reaper.tool.error.message': 'Audio understanding sidecar not installed. Run in a terminal: reaper-mcp setup-sidecar',
+      },
+    }).end();
+    await provider.forceFlush();
+
+    expect(sink.getFinishedSpans()[0].attributes).toEqual({
+      'error.type': 'tool_error',
+      'reaper.tool.error.cause': 'sidecar_not_installed',
+    });
+  });
+
+  it('keeps how far setup got at startup: REAPER running, heartbeat age range, autostart, sidecar', async () => {
+    const sink = new tracing.InMemorySpanExporter();
+    const provider = new tracing.BasicTracerProvider({
+      spanProcessors: [new tracing.SimpleSpanProcessor(new AnonymizingSpanExporter(sink))],
+    });
+    const health = {
+      'reaper.bridge.state': 'stale',
+      'reaper.app.running': true,
+      'reaper.bridge.heartbeat_age': '1h-1d',
+      'reaper.bridge.autostart': false,
+      'reaper.sidecar.installed': false,
+    };
+    provider.getTracer('test').startSpan('reaper-mcp startup', { attributes: health }).end();
+    await provider.forceFlush();
+
+    expect(sink.getFinishedSpans()[0].attributes).toEqual(health);
+  });
+
+  it('keeps whether a start brought REAPER\'s files up to its release', async () => {
+    const sink = new tracing.InMemorySpanExporter();
+    const provider = new tracing.BasicTracerProvider({
+      spanProcessors: [new tracing.SimpleSpanProcessor(new AnonymizingSpanExporter(sink))],
+    });
+    provider.getTracer('test').startSpan('reaper-mcp startup', {
+      attributes: { 'reaper.bridge.files_updated': true, 'reaper.bridge.autostart_added': true },
+    }).end();
+    await provider.forceFlush();
+
+    expect(sink.getFinishedSpans()[0].attributes).toEqual({
+      'reaper.bridge.files_updated': true,
+      'reaper.bridge.autostart_added': true,
+    });
+  });
+
   it('keeps how a plugin research run went, never which plugin it was', async () => {
     const sink = new tracing.InMemorySpanExporter();
     const provider = new tracing.BasicTracerProvider({

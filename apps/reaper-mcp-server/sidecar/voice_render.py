@@ -154,13 +154,15 @@ def _synth(lib: Any, font: Path, track: dict[str, Any]) -> Iterator[Any]:
         synth = lib.new_fluid_synth(settings)
         if not synth:
             raise RuntimeError("FluidSynth could not allocate an offline synthesizer")
+        # The SoundFont is the caller's file: one FluidSynth cannot use is bad input (ValueError, answered -32602
+        # and reported as rejected), not a sidecar fault like the allocation failures above.
         font_id = lib.fluid_synth_sfload(synth, os.fsencode(font), 1)
         if font_id < 0:
-            raise RuntimeError("FluidSynth could not load soundfontPath as a SoundFont")
+            raise ValueError("FluidSynth could not load soundfontPath as a SoundFont")
         channel, program = int(track["channel"]), int(track["program"])
         bank = 128 if channel == 9 else 0
         if lib.fluid_synth_program_select(synth, channel, font_id, bank, program) != 0:
-            raise RuntimeError(f"SoundFont has no bank {bank} program {program} for track '{track['name']}'")
+            raise ValueError(f"SoundFont has no bank {bank} program {program} for track '{track['name']}'")
         # No audio or MIDI driver is created. Samples only leave through write_float.
         yield synth
     finally:

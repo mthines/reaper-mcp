@@ -34,3 +34,6 @@ Next steps:
   2. Connect your AI harness: reaper-mcp init, then check it with reaper-mcp doctor
 
 The bridge opens its status window on start: http://localhost:8099/mcp_bridge.html
+
+Audio analysis needs the Python sidecar, which this setup does not install: analyze_audio_file, analyze_track_offline, detect_key and detect_chords on audio, detect_transients, separate_stems and the mix checks fail without it. It needs Python 3.10+ and downloads PyTorch (CPU) and audio libraries (~0.5-1 GB; up to ~2.5 GB on Linux), then lets you pick the optional models.
+Add it any time: reaper-mcp setup-sidecar

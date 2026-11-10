@@ -90,7 +90,7 @@ def _get_audio_duration(path: str) -> float:
             info = torchaudio.info(path)
             return info.num_frames / info.sample_rate
         except Exception as exc:
-            raise RuntimeError(f"Cannot read audio file: {path}: {exc}") from exc
+            raise RuntimeError(f"Audio file unreadable: {path}: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -189,13 +189,22 @@ def handle_analyze(request_id: Any, params: dict) -> str:
         return _err(request_id, -32000, f"Inference failed: {exc}")
 
 
-def _check_file(request_id: Any, params: dict, key: str) -> str | None:
-    """Return an error response when params[key] is missing or not a file."""
+def _check_file(request_id: Any, params: dict, key: str, readable: bool = True) -> str | None:
+    """Return an error response when params[key] is missing, not a file, or (readable) not audio soundfile opens."""
     path = params.get(key)
     if not path:
         return _err(request_id, -32602, f"Missing required param: {key}")
     if not os.path.exists(path):
         return _err(request_id, -32000, f"Audio file not found: {path}")
+    if not readable:
+        return None
+    import soundfile as sf  # type: ignore
+    try:
+        sf.info(path)
+    except RuntimeError as exc:
+        # The handler reads through soundfile (analysis.load_audio), so this file would fail there too, as a
+        # crash-looking "… failed: Error opening …"; say it is the input (an .m4a, a text file) instead.
+        return _err(request_id, -32000, f"Audio file unreadable: {path}: {exc}")
     return None
 
 
@@ -456,7 +465,13 @@ def handle_chords(request_id: Any, params: dict) -> str:
     """
     import chords
 
-    error = _check_file(request_id, params, "path")
+    # The chord model loads a whole file itself (librosa, so an .m4a works); a cut range is read through soundfile
+    # (the same test as chords.recognize). A startTime that is not a number is refused below, after the file check.
+    try:
+        ranged = float(params.get("startTime", 0)) > 0 or params.get("endTime") is not None
+    except (TypeError, ValueError):
+        ranged = True
+    error = _check_file(request_id, params, "path", readable=ranged)
     if error:
         return error
     try:

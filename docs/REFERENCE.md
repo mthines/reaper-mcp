@@ -96,6 +96,13 @@ off in the bridge window under **Settings → Start with REAPER** (persistent Ex
 `-- reaper-mcp: start the bridge with REAPER (begin)` line through the `(end)` line, both marker lines included. `reaper-mcp doctor`
 shows whether the block is there and whether the setting is off (its **Start with REAPER** row).
 
+An npm update replaces the server but not REAPER's files, so from an npm install `reaper-mcp serve` does this
+part of setup itself, once per release: when REAPER's files are from an older release (recorded in
+`Scripts/mcp_bridge_version.txt`, which `setup` writes) it copies the new bridge, JSFX and status page over them
+and writes the block back, then tells you through your agent to restart REAPER if the old bridge is still
+running. It never downgrades a newer install, leaves files ReaPack installed to ReaPack, and does nothing in a
+git clone or for a REAPER that `setup` never ran for (`bridge-repair.ts`).
+
 To start it by hand instead (REAPER already open):
 
 1. **Actions > Show action list > Load ReaScript**
@@ -345,6 +352,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full dev workflow.
 | ---------------------- | ---------------------------------- | -------------------- |
 | `REAPER_RESOURCE_PATH` | Override REAPER resource directory | Auto-detected per OS |
 | `REAPER_WEB_PORT`      | Port `setup` gives REAPER's web interface (status window) | `8099` |
+| `REAPER_MCP_UPDATE_CHECK` | `0` stops an npm install asking npm (at most once a day) whether a newer release is out; `NO_UPDATE_NOTIFIER=1` does too | on (off in CI and git clones) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint for traces, metrics and logs | unset (no export) |
 | `OTEL_TRACES_EXPORTER` / `OTEL_METRICS_EXPORTER` / `OTEL_LOGS_EXPORTER` | Set to `otlp` to export that signal | `none` |
 | `OTEL_EXPORTER_OTLP_HEADERS` | Headers for the OTLP endpoint, e.g. `Authorization=Bearer <token>` | unset |

@@ -49,6 +49,11 @@ reaper-mcp/
       claude-assets.ts        # install-skills: copies the skills, agents and knowledge shipped in the npm package into ~/.claude (hash manifest, never overwrites edits)
       server.ts               # McpServer creation, tool registration
       bridge.ts               # File-based IPC: sendCommand(), isBridgeRunning(), etc.
+      bridge-repair.ts        # serve: bring REAPER's files (bridge, JSFX, page, autostart block) up to this release once per release (npm installs)
+      notices.ts              # One-time notices for the user, appended to the first tool result (updated bridge, newer release)
+      update-check.ts         # serve (npm installs): ask npm at most once a day for a newer release, notice at most once a day
+      sidecar-offer.ts        # End of setup: offer the Python sidecar (audio tools fail without it)
+      setup-health.ts         # Startup span: REAPER running?, heartbeat age range, autostart, sidecar installed (usage telemetry)
       sidecar.ts              # Python subprocess lifecycle + JSON-RPC client (getSidecarClient())
       setup-sidecar.ts        # setup-sidecar CLI command: component picker (TTY) or flags, Python check, venv, deps, weights, add-ons
       tools/
@@ -1207,7 +1212,7 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 | Command | Description |
 |---------|-------------|
 | `serve` (default) | Start MCP server in stdio mode for Claude Code |
-| `setup` | Install Lua bridge + JSFX analyzers into REAPER, then (at a terminal) ask to run `init` and `doctor`: Enter, Enter. `--yes`/`-y` does all three without asking (scripts, agents); without a terminal and without `--yes` it stops after the install. `--verbose` lists every file |
+| `setup` | Install Lua bridge + JSFX analyzers into REAPER, then (at a terminal) ask to run `init` and `doctor`: Enter, Enter. `--yes`/`-y` does all three without asking (scripts, agents); without a terminal and without `--yes` it stops after the install. `--verbose` lists every file. Ends by offering the Python sidecar (`sidecar-offer.ts`: one question in a terminal, default no; one line without a terminal) |
 | `setup-sidecar` | Install the Python sidecar (opt-in, Python 3.10+, venv at `~/.reaper-mcp/sidecar-venv/`). In a terminal it shows a picker: core analysis (required), Audiobox Aesthetics weights (831 MB, default on), stem separation (Demucs, ~110 MB), chord model (lv-chordia, ~135 MB), each with what it enables, why and its size. No prompt without a TTY, in CI, with `--yes`/`-y`/`--non-interactive` or with any component flag: `--all`, `--with-separation`, `--with-chords`, `--without-aesthetics` (defaults: core + aesthetics). `--list [--json]` prints the components and what is installed. An existing install gets only the missing picked parts; the scripts are always refreshed. |
 | `extension` | Manage opt-in extensions: `list`, `add <name\|folder\|git-url>`, `link <folder>`, `remove <name>`, `new <name>` (see `docs/EXTENSIONS.md`) |
 | `install-skills` | Copy the mix skills, agents and knowledge shipped in the npm package into `~/.claude` (never overwrites files the user edited or owns, skips symlinked folders; a clone uses `scripts/sync-symlinks.sh`). `--dry-run` previews. Skills and agents also go into the shared `~/.agents` when a non-Claude harness is installed (never the knowledge, which the skills read from `~/.claude/knowledge`); `--harness claude,codex` picks. `init` runs it for an npm install |
