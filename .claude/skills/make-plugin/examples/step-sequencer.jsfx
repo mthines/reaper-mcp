@@ -1,0 +1,169 @@
+desc:Step Sequencer
+// accent: green
+import mcp_ui.jsfx-inc
+
+// A loop of MIDI notes you draw, four lanes (up to eight, set in Advanced), on the project's beat: put a sampler or drum library after it.
+// Click a lane to add a note of the brush's length (1/4 to 1/32, keys 1-4) in the brush's
+// feel (straight, triplet or dotted: keys q w e), so one lane can mix all three. Each lane sends the note you map to it in
+// Advanced. Beats is the loop length (3 or 5 give odd bars); Gate shortens each note; Timing and Velocity humanize
+// (Timing only ever delays by up to that many ms). It plays while the project plays; other MIDI passes through.
+// Put it BEFORE the instrument in the FX chain: it sends MIDI to whatever comes after it.
+// The playhead follows the sound; if it still runs ahead of what you hear, change Playhead in Advanced (ms; 190 matched REAPER's default look-ahead on the machine this was tuned on).
+// Click the ruler above the grid to make Play start the loop there instead of at beat 1.
+// Editing is like REAPER's MIDI editor: click adds, drag selects, Shift-drag paints a run, Delete removes.
+
+slider1:4<1,8,1>Beats
+slider2:80<10,100,1>Gate
+slider3:0<0,30,0.5>Timing
+slider4:0<0,0.5,0.01>Velocity
+slider5:1<1,16,1>Channel
+slider6:36<0,127,1>-Lane 1
+slider7:38<0,127,1>-Lane 2
+slider8:42<0,127,1>-Lane 3
+slider9:46<0,127,1>-Lane 4
+slider10:39<0,127,1>-Lane 5
+slider11:41<0,127,1>-Lane 6
+slider12:43<0,127,1>-Lane 7
+slider13:49<0,127,1>-Lane 8
+slider14:4<4,8,1>-Lanes
+slider15:190<0,500,1>-Playhead delay
+
+@init
+  // the pattern at ui_mem (see ui_seq), the send queue after it: 64 slots of 5 numbers
+  // (due in samples, status, note, velocity, lane; due 0 = free)
+  qb = ui_mem + 800;
+  ui_sqb = ui_mem;
+  // The marker that the pattern exists lives in the pattern's own memory (header slot 1), not in a variable: when
+  // REAPER re-runs @init on Play the notes you drew must survive, whatever happens to the variables.
+  ui_sqb[1] != 7351 ? (
+    ui_sqclear(ui_mem, 8, 384);
+    i = 0; loop(320, qb[i] = 0; i += 1;);
+    // a starting pattern: four-on-the-floor kick, backbeat snare, eighth hats, a triplet fill
+    ui_sqadd(0, 0, 6, 110); ui_sqadd(0, 96, 6, 110); ui_sqadd(0, 192, 6, 110); ui_sqadd(0, 288, 6, 110);
+    ui_sqadd(1, 96, 6, 105); ui_sqadd(1, 288, 6, 105);
+    i = 0; loop(8, ui_sqadd(2, i * 48, 3, i % 2 ? 70 : 95); i += 1;);
+    ui_sqadd(3, 320, 4, 90); ui_sqadd(3, 352, 4, 90);
+    ui_sqb[1] = 7351;
+  );
+  inited ? 0 : ( t = 1; lastplay = 0; po = 0; inited = 1; );
+  function update() (
+    ui_sqb[0] = floor(slider1 * 96 + 0.5);
+    gate = slider2 * 0.01;
+    jit = slider3 * 0.001 * srate;
+    vjit = slider4;
+    ch = slider5 - 1;
+    nl = max(4, min(8, floor(slider14 + 0.5)));
+  );
+  // a note on (at due) and its off (after len samples), both or neither
+  function sendpair(due, len, st, n, v, lane) local(a, b, q) (
+    a = 0; while (a < 64 && qb[a * 5] != 0) ( a += 1; );
+    b = a + 1; while (b < 64 && qb[b * 5] != 0) ( b += 1; );
+    b < 64 ? (
+      q = qb + a * 5; q[0] = due; q[1] = 144 + st; q[2] = n; q[3] = v; q[4] = lane;
+      q = qb + b * 5; q[0] = due + len; q[1] = 128 + st; q[2] = n; q[3] = 0; q[4] = lane;
+    );
+  );
+  function hit(lane, c, vel, ofs) local(due, v) (
+    due = t + ofs + rand(1) * jit;
+    v = floor(vel * (1 + (rand(2) - 1) * vjit) + 0.5);
+    sendpair(due, max(0.005 * srate, ui_sqlen(c) * spt * gate), ch, slider(6 + lane), min(127, max(1, v)), lane);
+  );
+  // the notes of every lane that start in ticks [a, b) of this pass; shift moves a tick to samples from the block start
+  function run(a, b, shift) local(l, p, i, s, o) (
+    l = 0;
+    loop(nl,
+      p = ui_sqlane(l);
+      p[1] == 0 ? (
+        i = 0;
+        loop(p[0],
+          s = p[2 + i * 3];
+          s >= a && s < b ? (
+            o = max(0, min(samplesblock - 1, floor((s + shift) * spt)));
+            hit(l, p[3 + i * 3], p[4 + i * 3], o);
+          );
+          i += 1;
+        );
+      );
+      l += 1;
+    );
+  );
+  update();
+  ui_help(1, "Loop length in beats. 4 is one bar of 4/4; 3 or 5 give odd-length bars.");
+  ui_help(2, "How long each note is held, as a percent of the length you drew.");
+  ui_help(3, "Humanize: delays each hit by a random time up to this. Never plays early.");
+  ui_help(4, "Humanize: varies each hit's velocity at random by up to this much.");
+  ui_help(5, "The MIDI channel the notes are sent on.");
+  ui_help(14, "How many rows the pattern has, 4 to 8. Hidden rows keep their notes.");
+  ui_help(15, "Moves the playing line to match what you hear. REAPER renders ahead, so the line runs early: raise this until it lands on the beat.");
+  ui_boot(2);
+
+@slider
+  update();
+
+@block
+  ui_changed() ? update();
+  while (midirecv(ofs, m1, m2, m3)) ( midisend(ofs, m1, m2, m3); );
+  spt = 60 * srate / max(1, tempo) / 96;
+  nt = samplesblock / spt;
+  lt = ui_sqb[0];
+  play = (play_state & 1) ? 1 : 0;
+  play ? (
+    tb = beat_position * 96;
+    // pressing Play starts the loop at the flag set on the ruler (header slot 2), else on the project's own beat 1
+    !lastplay ? po = (ui_sqb[2] > 0 && ui_sqb[2] < lt) ? ui_sqb[2] - (tb - floor(tb / lt) * lt) : 0;
+    tb += po;
+    w0 = tb - floor(tb / lt) * lt;
+    w1 = w0 + nt;
+    // the playhead is drawn where the sound is, not where this block starts: one block behind (what is queued to play), plus
+    // the Playhead delay knob for the audio interface's own latency
+    ph = w0 - (samplesblock / srate * 1000 + slider15) * 0.001 * tempo / 60 * 96;
+    ph < 0 ? ph += lt;
+    ui_sqph = ph;
+    w1 > lt ? (
+      run(ceil(w0 - 0.000001), lt, -w0);
+      run(0, ceil(w1 - lt - 0.000001), lt - w0);
+    ) : run(ceil(w0 - 0.000001), ceil(w1 - 0.000001), -w0);
+  ) : ui_sqph = -1;
+  // stopping lets go of whatever is sounding
+  lastplay && !play ? (
+    l = 0; loop(8, midisend(0, 128 + ch, slider(6 + l), 0); ui_kkey(l, 0); l += 1;);
+    s = 0; loop(64, qb[s * 5] = 0; s += 1;);
+  );
+  lastplay = play;
+  // a lane's name clicked in the editor: hear it
+  while (ui_kpoll()) (
+    ui_kv > 0 ? (
+      l = 0; loop(nl, slider(6 + l) == ui_kn ? hit(l, 6, ui_kv, 0); l += 1;);
+    );
+  );
+  // send what falls inside this block
+  s = 0;
+  loop(64,
+    q = qb + s * 5;
+    q[0] != 0 && q[0] < t + samplesblock ? (
+      midisend(max(0, floor(q[0] - t)), q[1], q[2], q[3]);
+      q[4] >= 0 ? ui_kkey(q[4], (q[1] & 240) == 144 ? q[3] : 0);
+      q[0] = 0;
+    );
+    s += 1;
+  );
+  t += samplesblock;
+
+@serialize
+  file_var(0, ui_adv_open);
+  // REAPER's own undo (Cmd+Z) loads saved state back: a drawer restored from then would pop open by itself
+  file_avail(0) >= 0 ? ui_adv_open = 0;
+  file_mem(0, ui_mem, 8 + 8 * 98);
+
+@gfx 520 440
+  ui_begin(4, 2) ? (
+    ui_tall(3); ui_row(1);
+    ui_seq(ui_mem, slider14, 6, "Pattern");
+    ui_row(4);
+    ui_knob(1, "Beats", 5); ui_knob(2, "Gate", 5); ui_knob(3, "Timing", 4); ui_knob(4, "Velocity", 2);
+    ui_section("Advanced") ? (
+      ui_row(3); ui_knob(5, "Channel", 5); ui_knob(14, "Lanes", 5); ui_knob(15, "Playhead", 4);
+      ui_row(1); ui_padmap(6, slider14, 1, "Note each lane sends");
+    );
+    ui_end();
+  );

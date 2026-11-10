@@ -117,10 +117,26 @@ example and change what the spec changes. The shape is always:
   above it makes the keys a short strip right above the Advanced bar): read it in `@block` with `while (ui_kpoll()) ( ui_kv > 0 ?
   <note on ui_kn, ui_kv> : <note off ui_kn> );` next to the MIDI-in loop (a synth turns them into
   voices, a MIDI effect `midisend`s them). Notes from MIDI light the keys with `ui_kkey(note, vel)`.
+- **Drum pads: `ui_pads(36, 4, 4, "Pads")`** for a drum machine, sampler or trigger plugin: a playable grid on
+  `ui_tall(2)`, read like the keyboard (`while (ui_kpoll()) ( ... )`, `ui_kkey(note, vel)` to light a pad
+  from MIDI in). Pad 1 is bottom-left; the typed keys strike pads too, but only when the user has REAPER's
+  "Send all keyboard input to plug-in" on, so never make a pad reachable *only* by key.
+- **A pattern is drawn, not typed: `ui_seq(ui_mem, 4, 6, "Pattern")`** for a step sequencer, arpeggiator or any
+  looping MIDI plugin: a loop of notes in ticks (96 per quarter) on 1-8 lanes, on `ui_tall(3)`. Each note has its own
+  length (1/4 to 1/32) and feel (straight, triplet, dotted), so one lane mixes them. The brush is the 1/4 .. 1/32
+  buttons plus straight / triplet / dotted (keys 1-4 and q / w / e); Shift and Alt never change the feel, so Shift-drag keeps the brush's value, and the grid redraws on the lines of what you are about to place. It follows the MIDI editor (the full mouse and key map is `reference/midi-editor-mouse.md`: read it before adding a gesture to any note editor): drag selects, Alt-drag erases, Delete removes, Shift-drag paints a run of notes at the brush's length. It sends MIDI, so it goes **before** the instrument in the FX chain (after a synth it triggers nothing). Copy
+  `examples/step-sequencer.jsfx` (the pattern buffer, the tick-based `@block` that plays it, `@serialize`).
+  The lane notes go in Advanced as `ui_padmap(first, lanes, 1, "Note each lane sends")` so any library's map works.
+- **Every control you drag or scroll must say so when the mouse is over it.** Hovering shows an up and down arrow
+  (`ui_chev`) beside the value, and the gesture is written on the label line (`ui_padmap` does both: "DRAG OR SCROLL /
+  DOUBLE-CLICK TO TYPE"). A custom widget never relies on the user guessing a gesture: hover shows the arrows or
+  the cursor, and a hint line says what the pointer would do now (and what Alt, Shift and Cmd/Ctrl change).
+  Prefer visible buttons for a small set of choices (the sequencer's length buttons) over a hidden drag.
 - Do not write the toolkit: `write_jsfx` inlines it.
 - Never assign `ui_adv_open` (or any `ui_` state) in plugin code: REAPER re-runs `@init` when
   playback starts, so the Advanced drawer would snap shut on Play (lint `ui-state-reset`).
 - `desc:` is the plain name: do not add `(reaper-mcp)` yourself, `write_jsfx` appends it.
+- A `while (cond)` body is always in parentheses: `while (cond) ( ... );` (a bare statement compiles to nothing; lint `while-no-body`).
 - Never set the accent (`ui_cAccent`, `ui_theme`) or read keys/mouse yourself: the toolkit owns
   gestures (double-click types a value, Cmd/Ctrl/Alt-click resets, Shift-drag is fine).
 

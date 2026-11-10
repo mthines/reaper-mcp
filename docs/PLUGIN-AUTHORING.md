@@ -35,7 +35,7 @@ work as usual.
 | Your plugins | `<REAPER>/Effects/reaper-mcp-generated/<name>.jsfx` |
 | Their suggested presets | `<REAPER>/presets/js-reaper-mcp-generated_<name>_jsfx.ini` (REAPER's own file; written by `src/jsfx/presets.ts`) |
 | Earlier versions of a plugin | `~/.config/reaper-mcp/jsfx-history/<name>/` (outside `Effects/`, so REAPER never scans them; `REAPER_MCP_CONFIG_DIR` overrides the folder) |
-| The four examples | `Effects/reaper-mcp-generated/examples/`, installed by `reaper-mcp setup` (a copy you edited is never overwritten) |
+| The seven examples | `Effects/reaper-mcp-generated/examples/`, installed by `reaper-mcp setup` (a copy you edited is never overwritten) |
 
 `write_jsfx` pastes the toolkit into the plugin's `@init`, so the file never depends on
 `mcp_ui.jsfx-inc` being installed. Editing a plugin means passing the whole file back: the old
@@ -155,6 +155,9 @@ not a developer group.
 | **Mutate Verb** | Mutate, Size, Mix, Output | Seed, Pitch range, Reverse, Bright, Pre-delay, Damping | Subtle glue, Ghost tails, Broken tape, Dark room |
 | **Tape Sat** | Drive, Tone, Mix, Output | Bias, Wow, Flutter, 2x | Warm bus, Crushed drums, Old cassette, Vocal sheen |
 | **Width / Bass Mono** | Width, Mono below, Output, level meter | Slope, Mid, Side | Tight low end, Wide chorus bus, Gentle spread, Mono check |
+| **Pad MIDI** | Timing, Velocity, Length, Channel, eight playable pads | **Note map**: which note each pad sends (`ui_padmap`), so any library's layout works | Plain (36-43), GM kit, Chromatic from C2, Loose human |
+| **Step Sequencer** | Pattern (`ui_seq`: four to eight lanes, per-note length and straight / triplet / dotted, brush buttons and keys 1-4 / q w e), Beats, Gate, Timing, Velocity | Channel, **note map**: which note each lane sends (`ui_padmap`) | Plain, Loose human, Three beats, Chromatic from C2 |
+| **Drum Pads** | Level, Tune, Decay, eight playable pads (`ui_pads`: mouse, `z x c v / a s d f`, or MIDI notes 36-43) | none | Tight, Roomy, Low and long, Bright and short |
 
 ## Proving a plugin works
 

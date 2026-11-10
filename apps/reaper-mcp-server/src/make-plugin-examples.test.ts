@@ -11,8 +11,8 @@ const dir = join(__dirname, '..', '..', '..', '.claude', 'skills', 'make-plugin'
 const files = readdirSync(dir).filter((f) => f.endsWith('.jsfx'));
 
 describe('the /make-plugin examples', () => {
-  it('ships the three v1 examples and the multiband compressor', () => {
-    expect(files.sort()).toEqual(['multiband-compressor.jsfx', 'mutate-verb.jsfx', 'tape-sat.jsfx', 'width-bass-mono.jsfx']);
+  it('ships the three v1 examples, the multiband compressor, the drum pads and the pad MIDI', () => {
+    expect(files.sort()).toEqual(['drum-pads.jsfx', 'multiband-compressor.jsfx', 'mutate-verb.jsfx', 'pad-midi.jsfx', 'step-sequencer.jsfx', 'tape-sat.jsfx', 'width-bass-mono.jsfx']);
   });
 
   for (const file of files) {

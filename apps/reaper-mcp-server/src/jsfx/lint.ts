@@ -16,7 +16,7 @@ export const LINT_RULES = [
   'science-literal', 'local-top-level', 'gmem', 'no-gfx', 'no-ui-begin', 'no-ui-boot', 'no-changed',
   'widget-unknown-slider', 'slider-without-widget', 'core-overflow', 'no-serialize',
   'advanced-overflow', 'sample-loop', 'sample-memset', 'sample-divide-srate', 'file-size', 'low-memory-index', 'two-arg-minmax', 'ui-state-reset', 'accent-assign', 'own-key-handling', 'too-many-options',
-  'unknown-ui-call', 'ui-arity',
+  'unknown-ui-call', 'ui-arity', 'while-no-body',
 ] as const;
 export type LintRule = (typeof LINT_RULES)[number];
 
@@ -42,6 +42,10 @@ export const UI_API: Readonly<Record<string, number>> = {
   ui_section: 1, ui_gput: 2, ui_gset: 2, ui_gfeed: 2, ui_gr: 2, ui_glevel: 1, ui_kkey: 2, ui_fxof: 1,
   ui_fof: 1, ui_gyof: 1, ui_freqgraph: 1, ui_fpill: 2, ui_fhandle: 2, ui_grmeter: 2, ui_tcurve: 4,
   ui_transfer: 3, ui_keyboard: 3, ui_fthresh: 4, ui_header: 2, ui_hbar: 4, ui_pill: 4, ui_gfeed2: 2, ui_gshow: 1, ui_bandknob: 4, ui_fband: 3, ui_kput: 2, ui_kpoll: 0,
+  ui_padon: 2, ui_padoff: 1, ui_padkey: 1, ui_pads: 4, ui_notename: 1, ui_padmap: 4,
+  ui_sqkey: 1, ui_sqlen: 1, ui_sqfeel: 1, ui_sqname: 1, ui_sqlane: 1, ui_sqclear: 3, ui_sqat: 2, ui_sqadd: 4, ui_sqdel: 2,
+  ui_sqfind: 3, ui_sqnear: 2, ui_sqsnap: 2, ui_sqcell: 2, ui_help: 2, ui_tipdraw: 0, ui_sqlsel: 1, ui_squbase: 2, ui_sqpush: 0, ui_sqpush1: 0, ui_squndo: 0, ui_sqredo: 0, ui_sqvorg: 0, ui_sqvel: 1, ui_sqsetlen: 1, ui_sqadj: 5, ui_sqlanes: 1, ui_sqchip: 6, ui_sqcol: 1, ui_seq: 4,
+  ui_sqdesel: 0, ui_sqselall: 0, ui_sqdelsel: 0, ui_sqorg: 0, ui_sqshift: 1, ui_sqmarq: 5, ui_sqcount: 0,
 };
 
 /** At most this many widgets before the first ui_section: the core view stays small. */
@@ -74,6 +78,22 @@ function wrongMinMaxCalls(code: string): { at: number; count: number }[] {
   return out;
 }
 
+/** `while (cond)` not followed by a parenthesised body: EEL2 cannot compile it, and the whole section silently does nothing. Offsets. */
+function whileWithoutBody(code: string): number[] {
+  const out: number[] = [];
+  for (const m of code.matchAll(/\bwhile\s*\(/g)) {
+    let depth = 1;
+    let i = (m.index ?? 0) + m[0].length;
+    for (; i < code.length && depth > 0; i++) {
+      if (code[i] === '(') depth++;
+      else if (code[i] === ')') depth--;
+    }
+    const next = code.slice(i).match(/\S/)?.[0];
+    if (next !== undefined && next !== '(') out.push(m.index ?? 0);
+  }
+  return out;
+}
+
 /** Section name → { text, first line number }. The header is "header". */
 function sections(code: string): Map<string, { text: string; line: number }> {
   const out = new Map<string, { text: string; line: number }>();
@@ -97,6 +117,7 @@ function sections(code: string): Map<string, { text: string; line: number }> {
 const WIDGET = /\bui_(knob|toggle|choice|fhandle)\s*\(\s*(\d+)/g;
 /** A knob on the selected band's slider: first..first+n-1; the threshold lines use two such ranges (threshold, ratio) of n bands. */
 const BANDKNOB = /\bui_bandknob\s*\(\s*(\d+)\s*,\s*(\d+)/g;
+const PADMAP = /\bui_padmap\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/g;
 const FBAND = /\bui_fband\s*\(\s*(\d+)\s*,\s*(\d+)/g;
 const FTHRESH = /\bui_fthresh\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/g;
 /** The header bars (Mix, Output in the top right): 0 = none, else a slider the plugin must not draw again. */
@@ -104,8 +125,8 @@ const HEADER = /\bui_header\s*\(\s*(\d+)\s*,\s*(\d+)/g;
 /** The transfer curve reads two sliders: threshold and ratio. */
 const TRANSFER = /\bui_transfer\s*\(\s*(\d+)\s*,\s*(\d+)/g;
 /** What counts toward the core and Advanced limits: one per widget the user sees (a graph's handles are part of it). */
-const COUNTED = /\bui_(knob|toggle|choice|meter|freqgraph|grmeter|transfer|keyboard|bandknob)\s*\(/g;
-const GRAPHS = /\bui_(freqgraph|grmeter|transfer|keyboard)\s*\(/g;
+const COUNTED = /\bui_(knob|toggle|choice|meter|freqgraph|grmeter|transfer|keyboard|pads|padmap|seq|bandknob)\s*\(/g;
+const GRAPHS = /\bui_(freqgraph|grmeter|transfer|keyboard|pads|seq)\s*\(/g;
 const countWidgets = (t: string) => [...t.matchAll(COUNTED)].length;
 
 /** Calls of `ui_*` functions with their argument count (strings and nested calls skipped): [name, args, offset]. */
@@ -203,6 +224,7 @@ export function lintJsfx(source: string): LintFinding[] {
     const ranges: [string, number, number][] = [];
     for (const m of gfx.text.matchAll(HEADER)) for (const v of [m[1], m[2]]) if (Number(v) > 0) ranges.push(['ui_header', Number(v), 1]);
     for (const m of gfx.text.matchAll(BANDKNOB)) ranges.push(['ui_bandknob', Number(m[1]), Number(m[2])]);
+    for (const m of gfx.text.matchAll(PADMAP)) ranges.push(['ui_padmap', Number(m[1]), Math.min(16, Number(m[2]) * Number(m[3]))]);
     for (const m of gfx.text.matchAll(FBAND)) ranges.push(['ui_fband', Number(m[1]), Number(m[2])]);
     for (const m of gfx.text.matchAll(FTHRESH)) ranges.push(['ui_fthresh', Number(m[1]), Number(m[4])], ['ui_fthresh', Number(m[2]), Number(m[4])], ['ui_fthresh', Number(m[3]), Number(m[4])]);
     for (const [fn, first, count] of ranges) {
@@ -224,7 +246,9 @@ export function lintJsfx(source: string): LintFinding[] {
   if (ser && !/\bfile_var\s*\(\s*0\s*,\s*ui_adv_open\s*\)/.test(ser.text)) add('no-serialize', 'error', 'The @serialize section must start with file_var(0, ui_adv_open); so the Advanced section keeps its state.', ser.line);
 
   // @init re-runs when playback starts: a plugin that sets ui_adv_open would close the drawer on Play
-  for (const m of code.matchAll(/\bui_adv_open\s*=(?!=)/g)) {
+  // (closing it right after @serialize has loaded a saved state is fine: REAPER's own undo loads state back mid-session)
+  const adv = code.replace(/file_avail\s*\(\s*0\s*\)\s*>=\s*0\s*\?\s*ui_adv_open\s*=\s*0/g, (x) => ' '.repeat(x.length));
+  for (const m of adv.matchAll(/\bui_adv_open\s*=(?!=)/g)) {
     add('ui-state-reset', 'warning', 'The plugin assigns ui_adv_open: REAPER re-runs @init (and this code) when playback starts, so the Advanced drawer would snap shut on Play. Leave it to the toolkit; @serialize restores it with file_var(0, ui_adv_open).', lineOf(m.index ?? 0));
   }
 
@@ -245,6 +269,10 @@ export function lintJsfx(source: string): LintFinding[] {
     } else if (c.args !== expected) {
       add('ui-arity', 'error', `${c.name}() takes ${expected} argument${expected === 1 ? '' : 's'}, this call has ${c.args}: EEL2 would drop the whole plugin or read the wrong values.`, lineOf(c.at));
     }
+  }
+
+  for (const at of whileWithoutBody(code)) {
+    add('while-no-body', 'error', 'while (condition) needs its body in parentheses: while (cond) ( statement; ); EEL2 cannot compile a bare statement after it, so the whole section (and the plugin) would silently do nothing.', lineOf(at));
   }
 
   for (const c of wrongMinMaxCalls(code)) {

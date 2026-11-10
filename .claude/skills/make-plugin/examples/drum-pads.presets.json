@@ -1,0 +1,6 @@
+[
+  { "name": "Tight", "values": { "Level": -6, "Tune": 0, "Decay": 0.6 } },
+  { "name": "Roomy", "values": { "Level": -8, "Tune": 0, "Decay": 1.6 } },
+  { "name": "Low and long", "values": { "Level": -6, "Tune": -5, "Decay": 1.4 } },
+  { "name": "Bright and short", "values": { "Level": -7, "Tune": 4, "Decay": 0.5 } }
+]

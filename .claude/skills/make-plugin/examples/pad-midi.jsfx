@@ -1,0 +1,81 @@
+desc:Pad MIDI
+// accent: amber
+import mcp_ui.jsfx-inc
+
+// Eight playable pads that send MIDI notes instead of sound: put a sampler or drum library after it.
+// Hit the pads (mouse, keys z x c v / a s d f, Shift = hard) or play MIDI notes 36-43 into it. Each
+// pad sends the note you map to it in Advanced, so a library with its own layout needs no re-keying.
+// Timing and Velocity humanize every hit (Timing only ever delays, by up to that many ms, so the
+// plugin adds that much latency at most). Other MIDI passes through untouched.
+
+slider1:0<0,30,0.5>Timing
+slider2:0<0,0.5,0.01>Velocity
+slider3:120<20,500,1>Length
+slider4:1<1,16,1>Channel
+slider5:36<0,127,1>-Pad 1
+slider6:37<0,127,1>-Pad 2
+slider7:38<0,127,1>-Pad 3
+slider8:39<0,127,1>-Pad 4
+slider9:40<0,127,1>-Pad 5
+slider10:41<0,127,1>-Pad 6
+slider11:42<0,127,1>-Pad 7
+slider12:43<0,127,1>-Pad 8
+
+@init
+  // the send queue: 64 slots of 4 numbers at ui_mem (due in samples, status, note, velocity; due 0 = free)
+  inited ? 0 : ( i = 0; loop(256, ui_mem[i] = 0; i += 1;); t = 1; inited = 1; );
+  function update() (
+    jit = slider1 * 0.001 * srate;
+    vjit = slider2;
+    len = slider3 * 0.001 * srate;
+    ch = slider4 - 1;
+  );
+  function send(due, st, n, v) local(s, q) (
+    s = 0;
+    while (s < 64 && ui_mem[s * 4] != 0) ( s += 1; );
+    s < 64 ? ( q = ui_mem + s * 4; q[0] = due; q[1] = st; q[2] = n; q[3] = v; );
+  );
+  // pad p (0-7) struck at sample offset ofs: the mapped note on now (plus a little lateness), off after Length
+  function strike(p, vel, ofs) local(due, v) (
+    due = t + ofs + rand(1) * jit;
+    v = floor(vel * (1 + (rand(2) - 1) * vjit) + 0.5);
+    v = min(127, max(1, v));
+    send(due, 144 + ch, slider(5 + p), v);
+    send(due + len, 128 + ch, slider(5 + p), 0);
+  );
+  update();
+  ui_boot(2);
+
+@slider
+  update();
+
+@block
+  ui_changed() ? update();
+  while (midirecv(ofs, m1, m2, m3)) (
+    ((m1 & 240) == 144 || (m1 & 240) == 128) && m2 >= 36 && m2 < 44 ? (
+      (m1 & 240) == 144 && m3 > 0 ? ( strike(m2 - 36, m3, ofs); ui_kkey(m2, m3); ) : ui_kkey(m2, 0);
+    ) : midisend(ofs, m1, m2, m3);
+  );
+  // pads the user struck with the mouse or the keyboard
+  while (ui_kpoll()) ( ui_kv > 0 ? strike(ui_kn - 36, ui_kv, 0); );
+  // send what falls inside this block
+  s = 0;
+  loop(64,
+    q = ui_mem + s * 4;
+    q[0] != 0 && q[0] < t + samplesblock ? (
+      midisend(max(0, floor(q[0] - t)), q[1], q[2], q[3]);
+      q[0] = 0;
+    );
+    s += 1;
+  );
+  t += samplesblock;
+
+@gfx 440 400
+  ui_begin(3, 2) ? (
+    ui_row(4);
+    ui_knob(1, "Timing", 4); ui_knob(2, "Velocity", 2); ui_knob(3, "Length", 4); ui_knob(4, "Channel", 5);
+    ui_tall(2); ui_row(1);
+    ui_pads(36, 4, 2, "Pads");
+    ui_section("Advanced") ? ( ui_tall(2); ui_row(1); ui_padmap(5, 4, 2, "Note each pad sends"); );
+    ui_end();
+  );

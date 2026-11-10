@@ -24,7 +24,10 @@
 //   1200..1327  ui_kb   MIDI keyboard: velocity per note 0..127 (0 = off)
 //   1328..1455  ui_fi   the input trace for the before/after view (same 96 points as ui_fg)
 //   1456..1489  ui_kq   the keys played with the mouse: 16 note/velocity slots, then head and tail (ui_kpoll)
-//   1490..2047  spare for the toolkit
+//   1490..1505  ui_pd   the pads: when a key-struck pad lets go (time_precise), 0 = held or off (ui_pads)
+//   1520..1775  ui_sqsl the sequencer's selected notes (lane * 32 + note), 1 = selected (ui_seq)
+//   1776..2031  ui_sqor where the selected notes started when a drag began (ui_seq)
+//   1506..2047  spare for the toolkit
 //   2048..      ui_mem  the plugin
 // Every global starts with ui_. Sliders must be UNNAMED (slider1:0.5<0,1,0.01>Label): named
 // sliders do not keep their value in sliderN, which the toolkit reads through slider(idx).
@@ -76,8 +79,18 @@ ui_pver = 0; ui_nctl = 0; ui_akind = 0; ui_example = 0;
 ui_min = 0; ui_max = 65; ui_def = 130; ui_stp = 195;
 ui_mtr = 400;          // meter state: 2 slots per meter (level in dB, last time)
 ui_gn = 96;            // frequency graph trace points (log-spaced); at most 128
-ui_fg = 1024; ui_ge = 1152; ui_grm = 1168; ui_kb = 1200; ui_fi = 1328; ui_kq = 1456; ui_gt = ui_fg;   // graph widgets' memory, see the map above
+ui_fg = 1024; ui_ge = 1152; ui_grm = 1168; ui_kb = 1200; ui_fi = 1328; ui_kq = 1456; ui_pd = 1490; ui_gt = ui_fg;   // graph widgets' memory, see the map above
 ui_mem = 2048;         // first free memory index for the plugin's own buffers
+// Drum pads (ui_pads): the bank's first note, size and shape, set by the widget; ui_keys reads them every frame.
+ui_pn = 36; ui_pc = 0; ui_pcols = 4; ui_prows = 4;
+// Computer keys for the pads, bottom row first (pad 1 is bottom-left, like an MPC); needs REAPER's
+// "Send all keyboard input to plug-in" and the FX window focused. Shift = a hard hit.
+strcpy(#ui_pkeys, "zxcvasdfqwer1234");
+strcpy(#ui_pword, "PAD");   // what ui_padmap calls a cell: ui_seq makes it LANE
+// Step sequencer (ui_seq): the plugin's buffer, lane count and loop length, set by the widget; ui_sqon = lanes drawn (0 = none)
+ui_sqon = 0; ui_sqsl = 1520; ui_sqor = 1776;
+ui_tipn = 0; ui_tipf = 0; ui_tipt = 0; ui_tipx = 0; ui_tipy = 0;   // the knob tooltip: hovered slider, its frame flag, since when, where
+ui_sqph = -1;   // the playhead in loop ticks, -1 = stopped: the plugin sets it in @block
 // REAPER re-runs @init when playback starts (and on sample-rate changes): the UI state below
 // is set once, so pressing Play never closes the drawer or drops a drag. Plugin code must not
 // assign ui_adv_open either (only @serialize's file_var restores it).
@@ -90,6 +103,11 @@ ui_ready ? ( ui_hash = -1; ) : (
   ui_glv = -90;        // live level for the transfer curve (-90 = none)
   ui_fsel = 0;         // selected band of the frequency graph (the plugin reads it)
   ui_gi = 0; loop(128, ui_fg[ui_gi] = -120; ui_fi[ui_gi] = -120; ui_gi += 1;); ui_fcmp = 0;   // an empty trace
+  ui_pheld = 0;        // the pad held with the mouse, 1-based, 0 = none
+  ui_sqbl = 2; ui_sqbf = 0;   // the sequencer's brush: length 0..3 (1/4 1/8 1/16 1/32) and feel 0..2 (straight, triplet, dotted)
+  ui_sqb = 0; ui_sqnl = 4;   // the buffer and lane count survive the @init rerun on Play, like the pattern in them
+  ui_sqmode = 0; ui_sqcid = -1; ui_sqct = 0; ui_sqsure = 0;
+  ui_squh = 0; ui_squn = 0; ui_sqrh = 0; ui_sqrn = 0; ui_sqpd = 0;   // undo history: next slot and depth of the undo and redo rings
   ui_ready = 1;
 );
 
@@ -286,12 +304,143 @@ function ui_edkey(c) (
 
 // Keys are read only while a layer is open. Esc (only delivered with "Send all keyboard input
 // to plug-in") closes the top layer: value box, then About, then the drawer.
-function ui_keys() local(c) (
-  (ui_ed || ui_about || ui_adv_open) ? (
+// A MIDI note on (vel 1..127) or off (vel 0), from @block's midirecv loop.
+function ui_kkey(note, vel) local(n, q0, q1) (
+  n = min(127, max(0, floor(note)));
+  q0 = ui_kb[n] > 0; q1 = vel > 0;
+  ui_fh3 += (q1 - q0) * (n + 1);
+  ui_kb[n] = q1 ? min(127, max(1, vel)) : 0;
+);
+
+// The keys the user plays with the mouse reach @block through a small queue (ui_kq: 16 slots of note and
+// velocity, then a head and a tail). ui_kput is called by the keyboard widget; the plugin calls ui_kpoll() in
+// @block until it returns 0: each 1 means ui_kn is a note and ui_kv its velocity (0 = note off).
+// A note-on is queued only while two slots are free, so every queued note-on keeps room for its note-off
+// (a full queue drops the newest event; a lost note-off would leave the note stuck when @block resumes).
+function ui_kput(note, vel) local(t, f) (
+  t = (ui_kq[33] + 1) % 16;
+  f = (ui_kq[32] - ui_kq[33] + 15) % 16;   // free slots
+  f >= (vel > 0 ? 2 : 1) ? ( ui_kq[ui_kq[33] * 2] = note; ui_kq[ui_kq[33] * 2 + 1] = vel; ui_kq[33] = t; );
+);
+function ui_kpoll() (
+  ui_kq[32] != ui_kq[33] ? (
+    ui_kn = ui_kq[ui_kq[32] * 2]; ui_kv = ui_kq[ui_kq[32] * 2 + 1];
+    ui_kq[32] = (ui_kq[32] + 1) % 16;
+    1;
+  ) : 0;
+);
+
+// A pad on (vel 1..127) or off for pad i (0-based, bottom-left first): queued for the plugin's ui_kpoll() like a
+// played key and lit like a note from MIDI. The note is ui_pn + i.
+function ui_padon(i, vel) local(n) (
+  n = ui_pn + i; ui_kput(n, vel); ui_kkey(n, vel); ui_pd[i] = 0;
+);
+function ui_padoff(i) local(n) (
+  n = ui_pn + i; ui_kput(n, 0); ui_kkey(n, 0); ui_pd[i] = 0;
+);
+// The pad a typed character strikes, -1 for none. The keys are a 4 x 4 block (zxcv / asdf / qwer / 1234, bottom
+// row first); a smaller grid uses its bottom-left corner of it.
+function ui_padkey(c) local(k, q, col, row) (
+  k = -1; q = 0;
+  loop(16, str_getchar(#ui_pkeys, q) == c ? k = q; q += 1;);
+  col = k % 4; row = floor(k / 4);
+  (k >= 0 && col < ui_pcols && row < ui_prows) ? row * ui_pcols + col : -1;
+);
+
+// ---- the sequencer's selection (lives next to the keys: ui_sqkey uses it) ----------------------
+// Flags per note (lane * 32 + index) in ui_sqsl; a note's index shifts when another is deleted (the last takes its
+// place), so ui_sqdel moves the flag with it.
+function ui_sqdesel() local(i) ( i = 0; loop(256, ui_sqsl[i] = 0; i += 1;); );
+function ui_sqselall() local(l, i, p) (
+  ui_sqdesel(); l = 0;
+  loop(ui_sqnl, p = ui_sqb + 8 + l * 98; i = 0; loop(p[0], ui_sqsl[l * 32 + i] = 1; i += 1;); l += 1;);
+);
+// Undo history: 100 snapshots of the pattern (everything but the loop length, which a slider owns), kept in the
+// plugin's memory after its own buffers: buf + 1200 and 158400 numbers on (an undo ring, then a redo ring, 792 a slot).
+// ui_sqpush() before every change; ui_sqpush1() once per gesture (ui_seq clears the flag when the mouse lets go).
+function ui_squbase(r, slot) ( ui_sqb + 1200 + (r * 100 + slot) * 792; );
+function ui_sqpush() (
+  memcpy(ui_squbase(0, ui_squh) + 1, ui_sqb + 1, 791);
+  ui_squh = (ui_squh + 1) % 100; ui_squn = min(100, ui_squn + 1); ui_sqrn = 0;
+);
+function ui_sqpush1() ( ui_sqpd ? 0 : ( ui_sqpush(); ui_sqpd = 1; ); );
+function ui_squndo() (
+  ui_squn > 0 ? (
+    memcpy(ui_squbase(1, ui_sqrh) + 1, ui_sqb + 1, 791);
+    ui_sqrh = (ui_sqrh + 1) % 100; ui_sqrn = min(100, ui_sqrn + 1);
+    ui_squh = (ui_squh + 99) % 100; ui_squn -= 1;
+    memcpy(ui_sqb + 1, ui_squbase(0, ui_squh) + 1, 791);
+    ui_sqdesel();
+  );
+);
+function ui_sqredo() (
+  ui_sqrn > 0 ? (
+    memcpy(ui_squbase(0, ui_squh) + 1, ui_sqb + 1, 791);
+    ui_squh = (ui_squh + 1) % 100; ui_squn = min(100, ui_squn + 1);
+    ui_sqrh = (ui_sqrh + 99) % 100; ui_sqrn -= 1;
+    memcpy(ui_sqb + 1, ui_squbase(1, ui_sqrh) + 1, 791);
+    ui_sqdesel();
+  );
+);
+// Removes every selected note (from the end, so a note moved into a hole has already been looked at).
+function ui_sqdelsel() local(l, i, p, k, n) (
+  n = 0; l = 0;
+  loop(ui_sqnl, p = ui_sqb + 8 + l * 98; i = 0; loop(p[0], n += ui_sqsl[l * 32 + i] ? 1 : 0; i += 1;); l += 1;);
+  n > 0 ? ui_sqpush1();
+  l = 0;
+  loop(ui_sqnl,
+    p = ui_sqb + 8 + l * 98; i = p[0] - 1;
+    loop(p[0],
+      i >= 0 && ui_sqsl[l * 32 + i] ? (
+        k = p[0] - 1;
+        p[2 + i * 3] = p[2 + k * 3]; p[3 + i * 3] = p[3 + k * 3]; p[4 + i * 3] = p[4 + k * 3];
+        ui_sqsl[l * 32 + i] = ui_sqsl[l * 32 + k]; ui_sqsl[l * 32 + k] = 0;
+        p[0] = k;
+      );
+      i -= 1;
+    );
+    l += 1;
+  );
+);
+
+// The sequencer's typed keys (REAPER's "Send all keyboard input to plug-in"): 1-4 set the brush length, s / t / d its
+// feel, Delete or Backspace removes the selected notes, Cmd/Ctrl+A selects all.
+function ui_sqkey(c) (
+  (c == 6579564 || c == 8) ? ( ui_sqdelsel(); ui_edv += 1; ) :
+  c == 1 ? ( ui_sqselall(); ui_edv += 1; ) :
+  c == 26 ? ( (mouse_cap & 8) ? ui_sqredo() : ui_squndo(); ui_edv += 1; ) :
+  c == 25 ? ( ui_sqredo(); ui_edv += 1; ) :
+  (c == 122 || c == 90) && (mouse_cap & 36) ? ( (mouse_cap & 8) ? ui_sqredo() : ui_squndo(); ui_edv += 1; ) :
+  c >= 65 && c <= 90 ? c += 32;
+  c >= 49 && c <= 52 ? ( ui_sqbl = c - 49; ui_edv += 1; ) :
+  c == 113 ? ( ui_sqbf = 0; ui_edv += 1; ) :
+  c == 119 ? ( ui_sqbf = 1; ui_edv += 1; ) :
+  c == 101 ? ( ui_sqbf = 2; ui_edv += 1; );
+);
+
+function ui_keys() local(c, i, now, vel) (
+  // a pad struck from the keyboard lets go 0.12 s later (a drum is a one-shot)
+  ui_pc > 0 ? (
+    now = time_precise();
+    i = 0; loop(ui_pc, ui_pd[i] > 0 && now >= ui_pd[i] ? ui_padoff(i); i += 1;);
+  );
+  (ui_ed || ui_about) ? (
     c = gfx_getchar();
     while (c > 0) (
-      c == 27 ? ( ui_ed ? ui_ed = 0 : ui_about ? ui_about = 0 : ui_adv_open = 0; ) : ui_ed ? ui_edkey(c);
+      c == 27 ? ( ui_ed ? ui_ed = 0 : ui_about = 0; ) : ui_ed ? ui_edkey(c);
       ui_edv += 1;
+      c = gfx_getchar();
+    );
+  ) : (ui_adv_open || ui_pc > 0 || ui_sqon > 0) ? (
+    // the drawer being open does not stop the pad keys: you can hear a pad while you map it
+    c = gfx_getchar();
+    while (c > 0) (
+      c == 27 ? ( ui_adv_open = 0; ui_edv += 1; ) : ui_sqon > 0 ? ui_sqkey(c) : ui_pc > 0 ? (
+        vel = (c >= 65 && c <= 90) ? 127 : 100;
+        (c >= 65 && c <= 90) ? c += 32;
+        i = ui_padkey(c);
+        i >= 0 && ui_pheld != i + 1 ? ( ui_padon(i, vel); ui_pd[i] = now + 0.12; );
+      );
       c = gfx_getchar();
     );
   );
@@ -452,10 +601,46 @@ function ui_aboutdraw() local(w, h, x, y, lh, nd, rows, bx, cy, hitx, kb, av) (
   );
 );
 
+// A line of help for a knob, shown as a tooltip after the mouse rests on it for half a second (a few lines, ~44
+// characters wide, so keep it to a sentence or two). Call once, in @init: ui_help(slider_idx, "text"). The text sits in
+// string slot 900 + idx (numbered slots 0..1023 are the plugin's).
+function ui_help(idx, text) ( strcpy(900 + idx, text); );
+function ui_tipdraw() local(n, i, ls, ml, w, h, x, y, lines, at, brk) (
+  ui_tipn > 0 && ui_tipf == ui_tipn && time_precise() - ui_tipt > 0.5 && strlen(900 + ui_tipn) > 0 && !ui_modal && ui_active == 0 ? (
+    gfx_setfont(3);
+    n = strlen(900 + ui_tipn); at = 0; lines = 0; w = 0;
+    // break the text into lines of at most 44 characters, at a space where it can
+    while (at < n && lines < 4) (
+      ml = min(44, n - at); brk = ml;
+      at + ml < n ? ( i = ml; while (i > 20 && str_getchar(900 + ui_tipn, at + i) != 32) ( i -= 1; ); i > 20 ? brk = i; );
+      strcpy_substr(#ui_tmp, 900 + ui_tipn, at, brk);
+      gfx_measurestr(#ui_tmp, ui_tw, ui_th); w = max(w, ui_tw);
+      lines += 1; at += brk; str_getchar(900 + ui_tipn, at) == 32 ? at += 1;
+    );
+    h = lines * (ui_th + 2 * ui_s) + 10 * ui_s; w += 14 * ui_s;
+    x = max(4 * ui_s, min(gfx_w - w - 4 * ui_s, ui_tipx - w / 2)); y = max(4 * ui_s, ui_tipy - h - 6 * ui_s);
+    ui_c(ui_cLine, 1); ui_rrect(x - ui_s, y - ui_s, w + 2 * ui_s, h + 2 * ui_s, 6 * ui_s);
+    ui_c(ui_cPanel2, 1); ui_rrect(x, y, w, h, 6 * ui_s);
+    ui_c(ui_cText, 1);
+    at = 0; ls = 0;
+    while (at < n && ls < lines) (
+      ml = min(44, n - at); brk = ml;
+      at + ml < n ? ( i = ml; while (i > 20 && str_getchar(900 + ui_tipn, at + i) != 32) ( i -= 1; ); i > 20 ? brk = i; );
+      strcpy_substr(#ui_tmp, 900 + ui_tipn, at, brk);
+      gfx_x = x + 7 * ui_s; gfx_y = y + 5 * ui_s + ls * (ui_th + 2 * ui_s); gfx_drawstr(#ui_tmp);
+      ls += 1; at += brk; str_getchar(900 + ui_tipn, at) == 32 ? at += 1;
+    );
+    gfx_setfont(1);
+  );
+  ui_tipf == 0 ? ui_tipn = 0;
+  ui_tipf = 0;
+);
+
 function ui_end() (
   ui_gany != ui_gcur ? ( gfx_setcursor(ui_gany == 2 ? 32645 : (ui_gany ? 32644 : 32512)); ui_gcur = ui_gany; );   // a band handle: resize cursor
   ui_gany = 0;
   ui_bar == 0 ? ui_footer(gfx_h - ui_pad - 6 * ui_s, ui_pad + 6 * ui_s);
+  ui_tipdraw();
   ui_ed ? ui_popover() : ui_about ? ui_aboutdraw();
   mouse_wheel = 0;
 );
@@ -605,7 +790,8 @@ function ui_begin(core_rows, adv_rows) local(h, i, now, e, top) (
 
   h = gfx_w * 7 + gfx_h * 13 + mouse_x * 3 + mouse_y * 5 + mouse_cap * 11 + ui_adv_open * 17
       + mouse_wheel * 23 + floor(now * 2) * 19 + ui_p * 29 + ui_ed * 31 + ui_edv * 37 + ui_about * 41
-      + ui_fh * 43 + ui_fh2 * 47 + ui_fh3 * 53 + ui_fh4 * 59 + ui_fsel * 61 + ui_fcmp * 67;
+      + ui_fh * 43 + ui_fh2 * 47 + ui_fh3 * 53 + ui_fh4 * 59 + ui_fsel * 61 + ui_fcmp * 67
+      + (ui_tipn > 0 ? floor(now * 8) * 83 : 0) + floor(ui_sqph / 6) * 71 + ui_sqbl * 73 + ui_sqbf * 79;
   i = 1; loop(64, h += slider(i) * (i + 0.37); i += 1;);
   ui_dirty = ui_animated == 1 || h != ui_hash || (ui_p > 0 && ui_p < 1);
   ui_hash = h;
@@ -651,6 +837,10 @@ function ui_knob(idx, label, fmt) local(lo, hi, t, t0, r, th, cx, cy, a0, a1, av
   t = min(1, max(0, (slider(idx) - lo) / (hi - lo)));
   t0 = (lo < 0 && hi > 0) ? -lo / (hi - lo) : 0;
   hot = ui_active == idx || ui_hit;
+  ui_hit && ui_active == 0 && !ui_modal && strlen(900 + idx) > 0 ? (
+    ui_tipn != idx ? ( ui_tipn = idx; ui_tipt = time_precise(); );
+    ui_tipf = idx; ui_tipx = ui_rx + ui_rw / 2; ui_tipy = ui_by;
+  );
   r = ui_kr;
   cx = ui_rx + ui_rw / 2; cy = ui_by + ui_bh / 2;
   th = max(3 * ui_s, r * 0.14);
@@ -817,32 +1007,6 @@ function ui_gr(k, db) local(q0, q1) (
 function ui_glevel(db) (
   ui_glv = min(6, max(-90, db));
   ui_fh4 = floor((ui_glv + 90) / 1);
-);
-
-// A MIDI note on (vel 1..127) or off (vel 0), from @block's midirecv loop.
-function ui_kkey(note, vel) local(n, q0, q1) (
-  n = min(127, max(0, floor(note)));
-  q0 = ui_kb[n] > 0; q1 = vel > 0;
-  ui_fh3 += (q1 - q0) * (n + 1);
-  ui_kb[n] = q1 ? min(127, max(1, vel)) : 0;
-);
-
-// The keys the user plays with the mouse reach @block through a small queue (ui_kq: 16 slots of note and
-// velocity, then a head and a tail). ui_kput is called by the keyboard widget; the plugin calls ui_kpoll() in
-// @block until it returns 0: each 1 means ui_kn is a note and ui_kv its velocity (0 = note off).
-// A note-on is queued only while two slots are free, so every queued note-on keeps room for its note-off
-// (a full queue drops the newest event; a lost note-off would leave the note stuck when @block resumes).
-function ui_kput(note, vel) local(t, f) (
-  t = (ui_kq[33] + 1) % 16;
-  f = (ui_kq[32] - ui_kq[33] + 15) % 16;   // free slots
-  f >= (vel > 0 ? 2 : 1) ? ( ui_kq[ui_kq[33] * 2] = note; ui_kq[ui_kq[33] * 2 + 1] = vel; ui_kq[33] = t; );
-);
-function ui_kpoll() (
-  ui_kq[32] != ui_kq[33] ? (
-    ui_kn = ui_kq[ui_kq[32] * 2]; ui_kv = ui_kq[ui_kq[32] * 2 + 1];
-    ui_kq[32] = (ui_kq[32] + 1) % 16;
-    1;
-  ) : 0;
 );
 
 // ---- frequency graph ----------------------------------------------------------------------------
@@ -1244,5 +1408,646 @@ function ui_keyboard(lo, hi, label) local(nw, n, pc, wi, ww, kx, ky, kw, kh, bk,
     ui_active == 64 && !ui_down ? (
       ui_kput(ui_kheld - 1, 0); ui_kkey(ui_kheld - 1, 0); ui_kheld = 0; ui_active = 0;
     );
+  );
+);
+
+// ---- drum pads ----------------------------------------------------------------------------------
+
+// A bank of drum pads: `cols` x `rows` (at most 16 pads), pad 1 bottom-left on MIDI note `first` (36 = GM kick),
+// counting right then up. Playable: a press strikes the pad (lower on the pad = harder), a drag across pads moves
+// the hit, a release lets go; the typed keys strike them too. Pads light, brighter the harder, for the notes
+// fed with ui_kkey (MIDI in) and the ones the user strikes. Read what the user struck in @block with
+// `while (ui_kpoll()) ( ... )`, as for ui_keyboard. Give the row some height (ui_tall(2)).
+function ui_pads(first, cols, rows, label) local(gx, gy, gw, gh, gap, pw, ph, i, col, row, x, y, v, hov, hot, vel) (
+  ui_cell();
+  ui_pcols = min(8, max(1, floor(cols))); ui_prows = min(8, max(1, floor(rows)));
+  while (ui_pcols * ui_prows > 16) ( ui_prows -= 1; );
+  ui_pn = min(127 - ui_pcols * ui_prows + 1, max(0, floor(first)));
+  ui_pc = ui_pcols * ui_prows;
+  gap = 6 * ui_s; gx = ui_rx + 4 * ui_s; gw = ui_rw - 8 * ui_s;
+  gy = ui_ry + 16 * ui_s; gh = ui_rh - 20 * ui_s;
+  pw = (gw - gap * (ui_pcols - 1)) / ui_pcols; ph = (gh - gap * (ui_prows - 1)) / ui_prows;
+  pw > 10 * ui_s && ph > 10 * ui_s ? (
+    gfx_setfont(2); ui_caps(label);
+    ui_c(ui_cMuted, 1); gfx_x = gx; gfx_y = ui_ry + 2 * ui_s; gfx_drawstr(#ui_txt);
+    hot = -1; i = 0;
+    loop(ui_pc,
+      col = i % ui_pcols; row = floor(i / ui_pcols);
+      x = gx + col * (pw + gap); y = gy + gh - (row + 1) * ph - row * gap;
+      hov = mouse_x >= x && mouse_x < x + pw && mouse_y >= y && mouse_y < y + ph;
+      hov ? ( hot = i; vel = floor(35 + 92 * min(1, max(0, (mouse_y - y) / ph))); );
+      v = ui_kb[ui_pn + i];
+      ui_c(ui_cLine, 1); ui_rrect(x - ui_s, y - ui_s, pw + 2 * ui_s, ph + 2 * ui_s, 7 * ui_s);
+      v > 0 ? ui_cm(ui_cPanel2, ui_cAccent, 0.35 + 0.65 * v / 127) : hov ? ui_cm(ui_cPanel2, ui_cText, 0.08) : ui_c(ui_cPanel2, 1);
+      ui_rrect(x, y, pw, ph, 6 * ui_s);
+      // the typed key in the corner (the 4 x 4 block), the note bottom-right
+      gfx_setfont(5);
+      v > 0 ? ui_cm(ui_cBg, ui_cPanel2, 0.2) : ui_c(ui_cMuted, 1);
+      col < 4 && row < 4 ? (
+        strcpy_substr(#ui_pt, #ui_pkeys, row * 4 + col, 1); ui_caps(#ui_pt);
+        gfx_x = x + 6 * ui_s; gfx_y = y + 5 * ui_s; gfx_drawstr(#ui_txt);
+      );
+      sprintf(#ui_txt, "%d", ui_pn + i);
+      gfx_measurestr(#ui_txt, ui_tw, ui_th);
+      gfx_x = x + pw - ui_tw - 6 * ui_s; gfx_y = y + ph - ui_th - 5 * ui_s; gfx_drawstr(#ui_txt);
+      i += 1;
+    );
+    gfx_setfont(1);
+    // strike: press = hit (lower on the pad = harder), drag across pads moves the hit, release lets go
+    hot >= 0 && ui_active == 0 && ui_press && !(ui_core && ui_blocked) && !ui_modal ? (
+      ui_active = 65; ui_pheld = hot + 1; ui_padon(hot, vel); ui_press = 0;
+    );
+    ui_active == 65 && ui_down && hot >= 0 && hot + 1 != ui_pheld ? (
+      ui_padoff(ui_pheld - 1); ui_pheld = hot + 1; ui_padon(hot, vel);
+    );
+    ui_active == 65 && !ui_down ? (
+      ui_pheld > 0 ? ui_padoff(ui_pheld - 1); ui_pheld = 0; ui_active = 0;
+    );
+  );
+);
+
+// ---- pad map ------------------------------------------------------------------------------------
+
+// A note's name in #ui_txt, middle C = C4 (so MIDI 36 is C2, as REAPER shows it).
+function ui_notename(n) local(pc) (
+  pc = floor(n) % 12;
+  strcpy_substr(#ui_nn, "C C#D D#E F F#G G#A A#B ", pc * 2, ((2 ^ pc) & 1354) ? 2 : 1);
+  sprintf(#ui_txt, "%s%d", #ui_nn, floor(n / 12) - 1);
+);
+
+// Which MIDI note each pad sends, drawn in the same grid as ui_pads (`cols` x `rows`, pad 1 bottom-left) so a
+// cell sits where its pad is. One slider per pad, first_idx.. in pad order, each a note 0-127. Every cell shows
+// the note's name large and its number small. Drag a cell up or down (Shift = fine), scroll over it (Shift =
+// an octave), double-click to type a number, Cmd/Ctrl/Alt-click resets it. Put it in Advanced next to a
+// ui_pads core.
+function ui_padmap(first_idx, cols, rows, label) local(gx, gy, gw, gh, gap, pw, ph, i, col, row, x, y, idx, v, hov, now, on, hint) (
+  ui_cell();
+  cols = min(8, max(1, floor(cols))); rows = min(8, max(1, floor(rows)));
+  while (cols * rows > 16) ( rows -= 1; );
+  gap = 6 * ui_s; gx = ui_rx + 4 * ui_s; gw = ui_rw - 8 * ui_s;
+  gy = ui_ry + 16 * ui_s; gh = ui_rh - 20 * ui_s;
+  pw = (gw - gap * (cols - 1)) / cols; ph = (gh - gap * (rows - 1)) / rows;
+  hint = 0;
+  pw > 14 * ui_s && ph > 14 * ui_s ? (
+    gfx_setfont(2); ui_caps(label);
+    ui_c(ui_cMuted, 1); gfx_x = gx; gfx_y = ui_ry + 2 * ui_s; gfx_drawstr(#ui_txt);
+    now = time_precise(); i = 0;
+    loop(cols * rows,
+      col = i % cols; row = floor(i / cols); idx = first_idx + i;
+      x = gx + col * (pw + gap); y = gy + gh - (row + 1) * ph - row * gap;
+      hov = mouse_x >= x && mouse_x < x + pw && mouse_y >= y && mouse_y < y + ph && !(ui_core && ui_blocked) && !ui_modal;
+      hov && ui_press ? (
+        (mouse_cap & 52) ? ui_reset(idx) :
+        (ui_lci == idx && now - ui_lct < 0.45) ? ui_edopen(idx, 5, "Note", x, y) :
+        ( ui_active = idx; ui_ly = mouse_y; ui_acc = slider(idx); ui_lci = idx; ui_lct = now; );
+      );
+      ui_active == idx && ui_down ? (
+        ui_acc = min(127, max(0, ui_acc + (ui_ly - mouse_y) / (9 * ui_s * ((mouse_cap & 8) ? 10 : 1))));
+        ui_ly = mouse_y;
+        ui_set(idx, ui_q(idx, floor(ui_acc + 0.5)));
+      );
+      hov && mouse_wheel != 0 ? ui_set(idx, ui_q(idx, slider(idx) + sign(mouse_wheel) * ((mouse_cap & 8) ? 12 : 1)));
+      ui_active == idx && ui_rel ? ( slider_automate(2 ^ (idx - 1), 1); ui_active = 0; );
+      v = slider(idx); on = ui_active == idx;
+      on || ui_kb[ui_pn + i] > 0 ? ui_c(ui_cAccent, 1) : ui_c(ui_cLine, 1); ui_rrect(x - ui_s, y - ui_s, pw + 2 * ui_s, ph + 2 * ui_s, 7 * ui_s);
+      ui_kb[ui_pn + i] > 0 ? ui_cm(ui_cPanel2, ui_cAccent, 0.35 + 0.65 * ui_kb[ui_pn + i] / 127) : on ? ui_cm(ui_cPanel2, ui_cAccent, 0.2) : hov ? ui_cm(ui_cPanel2, ui_cText, 0.08) : ui_c(ui_cPanel2, 1);
+      ui_rrect(x, y, pw, ph, 6 * ui_s);
+      gfx_setfont(5); ui_c(ui_cMuted, 1);
+      sprintf(#ui_txt, "%s %d", #ui_pword, i + 1); ui_caps(#ui_txt); gfx_x = x + 6 * ui_s; gfx_y = y + 5 * ui_s; gfx_drawstr(#ui_txt);
+      sprintf(#ui_txt, "%d", v); gfx_measurestr(#ui_txt, ui_tw, ui_th);
+      gfx_x = x + pw - ui_tw - 6 * ui_s; gfx_y = y + ph - ui_th - 5 * ui_s; gfx_drawstr(#ui_txt);
+      gfx_setfont(4); ui_notename(v);
+      hov || on ? ui_c(ui_cAccent, 1) : ui_c(ui_cText, 1);
+      gfx_measurestr(#ui_txt, ui_tw, ui_th);
+      gfx_x = x + (pw - ui_tw) / 2; gfx_y = y + (ph - ui_th) / 2; gfx_drawstr(#ui_txt);
+      // hover or drag: arrows above and below the note say it can be dragged up and down
+      hov || on ? (
+        hint = 1;
+        ui_c(ui_cAccent, on ? 1 : 0.85);
+        ui_chev(x + pw / 2, y + (ph - ui_th) / 2 - 7 * ui_s, 1);
+        ui_chev(x + pw / 2, y + (ph + ui_th) / 2 + 7 * ui_s, 0);
+      );
+      i += 1;
+    );
+    // the gestures, on the label line, while the mouse is over a cell
+    hint ? (
+      gfx_setfont(5); ui_c(ui_cMuted, 1);
+      strcpy(#ui_txt, "DRAG OR SCROLL  /  DOUBLE-CLICK TO TYPE");
+      gfx_measurestr(#ui_txt, ui_tw, ui_th);
+      gfx_x = gx + gw - ui_tw; gfx_y = ui_ry + 3 * ui_s; gfx_drawstr(#ui_txt);
+    );
+    gfx_setfont(1);
+  );
+);
+
+// ---- step sequencer -----------------------------------------------------------------------------
+
+// A loop of notes on up to 8 lanes, in ticks (96 per quarter note). A note's length is a code value * 3 + feel:
+// value 0..3 = 1/4 1/8 1/16 1/32, feel 0 straight, 1 triplet, 2 dotted. The plugin owns the buffer `buf` (800
+// numbers at most: ui_mem..ui_mem + 799); per lane: [0] note count, [1] muted, then up to 32 notes of (start tick,
+// code, velocity). buf[0] is the loop length in ticks; lane l starts at buf + 8 + l * 98.
+function ui_sqlen(c) local(v, f) (
+  v = floor(c / 3); f = c - v * 3;
+  floor(96 / (2 ^ v) * (f == 1 ? 2 / 3 : f == 2 ? 1.5 : 1) + 0.5);
+);
+function ui_sqfeel(c) ( c - floor(c / 3) * 3; );
+// the note length's name in #ui_txt: 1/16, 1/8T, 1/8D
+function ui_sqname(c) local(v, f) (
+  v = floor(c / 3); f = c - v * 3;
+  sprintf(#ui_txt, "1/%d", 4 * (2 ^ v));
+  f == 1 ? strcat(#ui_txt, "T") : f == 2 ? strcat(#ui_txt, "D");
+);
+function ui_sqlane(l) ( ui_sqb + 8 + l * 98; );
+// Empties the pattern and sets its shape: call once in @init (guarded, so a rerun on Play keeps the notes).
+function ui_sqclear(buf, lanes, ticks) local(i, p) (
+  ui_sqb = buf; ui_sqnl = max(1, min(8, floor(lanes))); ui_sqb[0] = ticks; ui_sqb[2] = 0;
+  i = 0; loop(ui_sqnl, p = ui_sqlane(i); p[0] = 0; p[1] = 0; i += 1;);
+  ui_sqdesel();
+);
+// the note of lane l that starts at tick s, -1 for none
+function ui_sqat(l, s) local(p, i, r) (
+  p = ui_sqlane(l); r = -1; i = 0;
+  loop(p[0], p[2 + i * 3] == s ? r = i; i += 1;);
+  r;
+);
+// A note at tick s (one already there is replaced); returns its index, -1 when the lane is full (32 notes).
+function ui_sqadd(l, s, c, v) local(p, n, i) (
+  p = ui_sqlane(l); n = p[0]; i = ui_sqat(l, s);
+  i >= 0 ? ( p[3 + i * 3] = c; p[4 + i * 3] = v; i; ) :
+  n < 32 ? ( p[2 + n * 3] = s; p[3 + n * 3] = c; p[4 + n * 3] = v; p[0] = n + 1; ui_sqsl[l * 32 + n] = 0; n; ) : -1;
+);
+// Removes note i (the last one takes its place, so indexes shift).
+function ui_sqdel(l, i) local(p, k) (
+  p = ui_sqlane(l); k = p[0] - 1;
+  i >= 0 && i <= k ? (
+    p[2 + i * 3] = p[2 + k * 3]; p[3 + i * 3] = p[3 + k * 3]; p[4 + i * 3] = p[4 + k * 3];
+    ui_sqsl[l * 32 + i] = ui_sqsl[l * 32 + k]; ui_sqsl[l * 32 + k] = 0;
+    p[0] = k;
+  );
+);
+// the note covering tick t (latest start wins; one shorter than `slack` ticks still counts as that wide), -1 for none
+function ui_sqfind(l, t, slack) local(p, i, s, best) (
+  p = ui_sqlane(l); best = -1; i = 0;
+  loop(p[0],
+    s = p[2 + i * 3];
+    t >= s && t < s + max(slack, ui_sqlen(p[3 + i * 3])) && (best < 0 || s > p[2 + best * 3]) ? best = i;
+    i += 1;
+  );
+  best;
+);
+// the length code of the value with this feel that is closest to `len` ticks
+function ui_sqnear(len, feel) local(best, d, v) (
+  best = feel; d = abs(ui_sqlen(feel) - len); v = 1;
+  loop(3,
+    abs(ui_sqlen(v * 3 + feel) - len) < d ? ( best = v * 3 + feel; d = abs(ui_sqlen(best) - len); );
+    v += 1;
+  );
+  best;
+);
+// the grid cell the pointer is in (its left edge), the place a new note goes
+function ui_sqcell(t, st) ( min(ui_sqb[0] - 1, max(0, floor(t / st) * st)); );
+function ui_sqsnap(t, st) ( min(ui_sqb[0] - 1, max(0, floor(t / st + 0.5) * st)); );
+
+// Remembers where every selected note starts: a drag moves them all from here.
+function ui_sqorg() local(l, i, p) (
+  l = 0; loop(ui_sqnl, p = ui_sqlane(l); i = 0; loop(p[0], ui_sqor[l * 32 + i] = p[2 + i * 3]; i += 1;); l += 1;);
+);
+// Moves the selected notes to their remembered starts + delta ticks, all by the same amount, kept inside the loop;
+// nothing moves when a note would land on one that is not selected.
+function ui_sqshift(delta) local(l, i, p, lo, hi, ok, o) (
+  lo = 99999; hi = -1; l = 0;
+  loop(ui_sqnl, p = ui_sqlane(l); i = 0; loop(p[0], ui_sqsl[l * 32 + i] ? ( lo = min(lo, ui_sqor[l * 32 + i]); hi = max(hi, ui_sqor[l * 32 + i]); ); i += 1;); l += 1;);
+  hi >= 0 ? (
+    delta = max(-lo, min(ui_sqb[0] - 1 - hi, delta));
+    ok = 1; l = 0;
+    loop(ui_sqnl, p = ui_sqlane(l); i = 0;
+      loop(p[0],
+        ui_sqsl[l * 32 + i] ? ( o = ui_sqat(l, ui_sqor[l * 32 + i] + delta); o >= 0 && !ui_sqsl[l * 32 + o] ? ok = 0; );
+        i += 1;
+      );
+      l += 1;
+    );
+    ok ? (
+      l = 0;
+      loop(ui_sqnl, p = ui_sqlane(l); i = 0; loop(p[0], ui_sqsl[l * 32 + i] ? p[2 + i * 3] = ui_sqor[l * 32 + i] + delta; i += 1;); l += 1;);
+    );
+  );
+);
+// How many notes of lane l are selected.
+function ui_sqlsel(l) local(i, n, p) (
+  p = ui_sqlane(l); n = 0; i = 0; loop(p[0], n += ui_sqsl[l * 32 + i] ? 1 : 0; i += 1;); n;
+);
+// Moves every selected note dl lanes (up or down, same start, length and velocity). Nothing moves, and 0 comes
+// back, when one would leave the lanes, land on a note that stays, or overfill a lane (32 notes).
+function ui_sqlanes(dl) local(l, t, i, p, q, ok, s, c, v, o) (
+  ok = dl != 0; l = 0;
+  loop(ui_sqnl,
+    p = ui_sqlane(l); t = l + dl;
+    ui_sqlsel(l) > 0 ? (
+      t < 0 || t >= ui_sqnl ? ok = 0 : (
+        i = 0;
+        loop(p[0],
+          ui_sqsl[l * 32 + i] ? ( o = ui_sqat(t, p[2 + i * 3]); o >= 0 && !ui_sqsl[t * 32 + o] ? ok = 0; );
+          i += 1;
+        );
+        q = ui_sqlane(t); q[0] - ui_sqlsel(t) + ui_sqlsel(l) > 32 ? ok = 0;
+      );
+    );
+    l += 1;
+  );
+  ok ? (
+    l = dl > 0 ? ui_sqnl - 1 : 0;
+    loop(ui_sqnl,
+      p = ui_sqlane(l); i = p[0] - 1;
+      loop(p[0],
+        i >= 0 && ui_sqsl[l * 32 + i] ? (
+          s = p[2 + i * 3]; c = p[3 + i * 3]; v = p[4 + i * 3];
+          ui_sqdel(l, i);
+          o = ui_sqadd(l + dl, s, c, v); o >= 0 ? ui_sqsl[(l + dl) * 32 + o] = 1;
+        );
+        i -= 1;
+      );
+      l += dl > 0 ? -1 : 1;
+    );
+  );
+  ok;
+);
+// Adjustments act on the whole selection. ui_sqvorg remembers the selected notes' velocities as a drag starts, ui_sqvel
+// sets each to that + delta (kept 1..127), ui_sqsetlen gives every selected note the length code c, and ui_sqadj
+// steps the length (or, with vel, the velocity) of a scrolled note, and of the whole selection when that note is in it.
+function ui_sqvorg() local(l, i, p) (
+  l = 0; loop(ui_sqnl, p = ui_sqlane(l); i = 0; loop(p[0], ui_sqor[l * 32 + i] = p[4 + i * 3]; i += 1;); l += 1;);
+);
+function ui_sqvel(delta) local(l, i, p) (
+  l = 0; loop(ui_sqnl, p = ui_sqlane(l); i = 0; loop(p[0], ui_sqsl[l * 32 + i] ? p[4 + i * 3] = min(127, max(1, ui_sqor[l * 32 + i] + delta)); i += 1;); l += 1;);
+);
+function ui_sqsetlen(c) local(l, i, p) (
+  l = 0; loop(ui_sqnl, p = ui_sqlane(l); i = 0; loop(p[0], ui_sqsl[l * 32 + i] ? p[3 + i * 3] = c; i += 1;); l += 1;);
+);
+function ui_sqadj(ln, hi, d, vel, step) local(l, i, p, all) (
+  all = ui_sqsl[ln * 32 + hi];
+  l = 0;
+  loop(ui_sqnl,
+    p = ui_sqlane(l); i = 0;
+    loop(p[0],
+      (all ? ui_sqsl[l * 32 + i] : l == ln && i == hi) ? (
+        vel ? p[4 + i * 3] = min(127, max(1, p[4 + i * 3] - d * step)) :
+              p[3 + i * 3] = min(3, max(0, floor(p[3 + i * 3] / 3) + d)) * 3 + ui_sqfeel(p[3 + i * 3]);
+      );
+      i += 1;
+    );
+    l += 1;
+  );
+);
+// Selects the notes that overlap lanes l0..l1 and ticks t0..t1 (add = keep the ones already selected).
+function ui_sqmarq(l0, l1, t0, t1, add) local(l, i, p, s, inside) (
+  l = 0;
+  loop(ui_sqnl,
+    p = ui_sqlane(l); i = 0;
+    loop(p[0],
+      s = p[2 + i * 3];
+      inside = l >= l0 && l <= l1 && s < t1 && s + ui_sqlen(p[3 + i * 3]) > t0;
+      add ? ( inside ? ui_sqsl[l * 32 + i] = 1; ) : ( ui_sqsl[l * 32 + i] = inside; );
+      i += 1;
+    );
+    l += 1;
+  );
+);
+function ui_sqcount() local(l, i, p, n) (
+  n = 0; l = 0; loop(ui_sqnl, p = ui_sqlane(l); i = 0; loop(p[0], n += ui_sqsl[l * 32 + i] ? 1 : 0; i += 1;); l += 1;);
+  n;
+);
+
+// A small button; returns 1 on the frame it is pressed.
+function ui_sqchip(x, y, w, h, on, label) local(hov) (
+  hov = mouse_x >= x && mouse_x < x + w && mouse_y >= y && mouse_y < y + h && !(ui_core && ui_blocked) && !ui_modal;
+  on ? ui_c(ui_cAccent, 1) : hov ? ui_cm(ui_cPanel2, ui_cText, 0.12) : ui_c(ui_cPanel2, 1);
+  ui_rrect(x, y, w, h, 4 * ui_s);
+  gfx_setfont(5); ui_c(on ? ui_cBg : hov ? ui_cText : ui_cMuted, 1);
+  strcpy(#ui_txt, label); ui_ctext(x, y, w, h);
+  hov && ui_press && ui_active == 0 ? ( ui_press = 0; 1; ) : 0;
+);
+
+// The note colour: straight = the accent, triplet = green, dotted = amber.
+function ui_sqcol(f) ( f == 1 ? ui_cLive : f == 2 ? ui_cWarn : ui_cAccent; );
+
+// The pattern editor. `buf` is the plugin's buffer (see above), `lanes` 1-8, `note_idx` the first of `lanes` sliders
+// holding each lane's MIDI note (shown beside the lane; click it to hear it, Cmd/Ctrl-click to mute the lane).
+// Give it a tall row (ui_tall(3)). Set ui_sqph in @block (the loop tick of the playhead, -1 when stopped) and read the
+// notes there; light a lane from @block with ui_kkey(lane, vel). Put ui_padmap(note_idx, lanes, 1, ...) in Advanced.
+//
+// Like REAPER's MIDI editor: a click on empty space adds a note, a drag makes a selection (a marquee), Shift-drag
+// paints a run of notes, Delete (or Backspace, or the DELETE button) removes the selected notes, Cmd/Ctrl+A selects
+// all, and dragging a selected note moves the whole selection. A BRUSH sets what a click or a painted run adds: a
+// length (the 1/4 .. 1/32 buttons, keys 1-4, or scroll over empty space) and a feel (straight / triplet / dotted
+// buttons, keys q w e). Shift and Alt never change the feel, so a Shift-drag paints in the brush's own value; the
+// grid redraws on the lines of what you are about to place. On a note: Cmd/Ctrl-click adds it to the selection, drag = move, Shift-drag = velocity (up/down), drag its right edge to
+// resize, scroll = length (Cmd/Ctrl-scroll = velocity), right-click or double-click deletes it, and Alt/Option-drag erases every note the pointer crosses. Cmd/Ctrl while placing
+// or moving ignores the grid.
+function ui_seq(buf, lanes, note_idx, label) local(gx, gw, gy, rh, lw, lt, nl, hov, ln, t, hi, p, k, i, l, x, y, w, h, c, v, fe, st, s, d, dx, dy, ns, o, e, f2, now, edge, ex, cx, cw, ch, n, hint, base, rhov, uhov) (
+  ui_cell();
+  ui_sqb = buf; ui_sqnl = max(1, min(8, floor(lanes))); nl = ui_sqnl; ui_sqon = nl;
+  ui_pn = 0; strcpy(#ui_pword, "LANE");   // a ui_padmap beside it lights lane i like note i
+  lt = ui_sqb[0]; now = time_precise();
+  fe = ui_sqbf;
+  lw = 40 * ui_s; gx = ui_rx + 4 * ui_s + lw; gw = ui_rw - 8 * ui_s - lw;
+  gy = ui_ry + 33 * ui_s; rh = (ui_ry + ui_rh - 16 * ui_s - gy) / nl;
+  gw > 60 * ui_s && rh > 12 * ui_s ? (
+    // header: the label and the brush buttons (length, then feel)
+    gfx_setfont(2); ui_caps(label); ui_c(ui_cMuted, 1);
+    gfx_x = ui_rx + 4 * ui_s; gfx_y = ui_ry + 5 * ui_s; gfx_drawstr(#ui_txt);
+    cw = 31 * ui_s; ch = 17 * ui_s; cx = ui_rx + ui_rw - 4 * ui_s - 3 * 29 * ui_s - 4 * cw - 8 * ui_s;
+    ui_rw > 300 * ui_s ? (
+      i = 0; loop(4,
+        ui_sqname(i * 3 + 0); ui_sqchip(cx + i * cw, ui_ry + 2 * ui_s, cw - 2 * ui_s, ch, i == ui_sqbl, #ui_txt) ? ( ui_sqbl = i; );
+        i += 1;
+      );
+      cx += 4 * cw + 8 * ui_s;
+      i = 0; loop(3,
+        ui_sqchip(cx + i * 29 * ui_s, ui_ry + 2 * ui_s, 27 * ui_s, ch, i == fe, i == 0 ? "STR" : i == 1 ? "TRI" : "DOT") ? ( ui_sqbf = i; );
+        i += 1;
+      );
+    );
+
+    // pointer: where it is on the grid, which note it is over
+    hov = mouse_x >= gx && mouse_x < gx + gw && mouse_y >= gy && mouse_y < gy + rh * nl && !(ui_core && ui_blocked) && !ui_modal && (ui_active == 0 || ui_active == 66);
+    ln = hov ? min(nl - 1, floor((mouse_y - gy) / rh)) : -1;
+    t = (mouse_x - gx) / gw * lt;
+    hi = hov ? ui_sqfind(ln, t, 6 * ui_s / gw * lt) : -1;
+    edge = 0;
+    hi >= 0 ? (
+      p = ui_sqlane(ln);
+      ex = gx + (p[2 + hi * 3] + ui_sqlen(p[3 + hi * 3])) / lt * gw;
+      edge = ui_sqlen(p[3 + hi * 3]) / lt * gw > 14 * ui_s && mouse_x >= ex - 5 * ui_s;
+    );
+    hov && edge && ui_active == 0 ? ui_gany = 1;
+
+    // press: a note (toggle its feel, select it, or start a drag), or empty space (a click adds a note, a drag selects,
+    // Shift-drag paints a run)
+    ui_active != 66 ? ui_sqpd = 0;
+    // the ruler above the grid: a click sets where playing starts (header slot 2, in ticks; the same spot again, or beat 1, clears it)
+    rhov = ui_active == 0 && mouse_x >= gx && mouse_x < gx + gw && mouse_y >= gy - 14 * ui_s && mouse_y < gy && !(ui_core && ui_blocked) && !ui_modal;
+    rhov && ui_press ? (
+      ui_press = 0;
+      s = min(lt - 24, max(0, floor(t / 24 + 0.5) * 24));
+      ui_sqpush1(); ui_sqb[2] = (s == ui_sqb[2]) ? 0 : s;
+    );
+    // Alt (Option)-drag erases every note the pointer crosses, like REAPER's MIDI editor
+    hov && ui_press && ui_active == 0 && (mouse_cap & 16) ? (
+      ui_press = 0; ui_active = 66; ui_sqmode = 8; ui_sqln = ln; ui_sqi = 0;
+      hi >= 0 ? ( ui_sqpush1(); ui_sqdel(ln, hi); );
+    );
+    hov && ui_press && ui_active == 0 ? (
+      ui_press = 0;
+      hi < 0 ? (
+        ui_active = 66; ui_sqmode = 6; ui_sqln = ln; ui_sqx0 = mouse_x; ui_sqy0 = mouse_y;
+        ui_sqpt = t; ui_sqfe = fe; ui_sqpsh = mouse_cap & 8; ui_sqpal = mouse_cap & 16; ui_sqpcm = mouse_cap & 4;
+      ) : (
+        p = ui_sqlane(ln); k = p + 3 + hi * 3; cx = ln * 10000 + p[2 + hi * 3];
+        (ui_sqcid == cx && now - ui_sqct < 0.35) ? (
+          ui_sqpush(); ui_sqdel(ln, hi); ui_sqcid = -1;
+        ) : (
+          ui_sqcid = cx; ui_sqct = now;
+          // Cmd/Ctrl toggles this note in the selection; otherwise it becomes the selection unless it is part of it
+          (mouse_cap & 4) ? ui_sqsl[ln * 32 + hi] = !ui_sqsl[ln * 32 + hi] :
+          !ui_sqsl[ln * 32 + hi] ? ( ui_sqdesel(); ui_sqsl[ln * 32 + hi] = 1; );
+          ui_active = 66; ui_sqmode = edge ? 3 : 5; ui_sqln = ln; ui_sqi = hi; ui_sqx0 = mouse_x; ui_sqy0 = mouse_y; ui_sqpcm = mouse_cap & 4; ui_sqpsh = mouse_cap & 8;
+          ui_sqs0 = p[2 + hi * 3]; ui_sqv0 = p[4 + hi * 3];
+        );
+      );
+    );
+    hov && ui_rpress && ui_active == 0 && hi >= 0 ? ( ui_sqpush(); ui_sqdel(ln, hi); );
+
+    // drag
+    ui_active == 66 && ui_down ? (
+      p = ui_sqlane(ui_sqln); i = ui_sqi; k = p + 2 + i * 3;
+      dx = mouse_x - ui_sqx0; dy = mouse_y - ui_sqy0;
+      ui_sqmode == 8 && hov ? (
+        i = ui_sqfind(ln, t, 6 * ui_s / gw * lt); i >= 0 ? ( ui_sqpush1(); ui_sqdel(ln, i); );
+      );
+      ui_sqmode == 6 && (abs(dx) >= 4 * ui_s || abs(dy) >= 4 * ui_s) ? (
+        ui_sqpsh ? (
+          // Shift-drag paints, with the brush's own length and feel
+          ui_sqcode = ui_sqbl * 3 + ui_sqbf; ui_sqst = ui_sqlen(ui_sqcode);
+          ui_sqs0 = ui_sqpcm ? min(lt - 1, max(0, floor(ui_sqpt + 0.5))) : ui_sqcell(ui_sqpt, ui_sqst);
+          ui_sqk = 0; ui_sqpush1(); ui_sqdesel(); ui_sqadd(ui_sqln, ui_sqs0, ui_sqcode, 100); ui_kput(slider(note_idx + ui_sqln), 100);
+          ui_sqmode = 1;
+        ) : (
+          ui_sqmode = 7; ui_sqpcm ? 0 : ui_sqdesel();
+        );
+      );
+      ui_sqmode == 5 ? (
+        ui_sqpsh && abs(dy) >= 4 * ui_s ? (
+          ui_sqmode = 4; ui_sqpush1();
+          ui_sqsl[ui_sqln * 32 + i] ? 0 : ( ui_sqdesel(); ui_sqsl[ui_sqln * 32 + i] = 1; );
+          ui_sqvorg();
+        ) : !ui_sqpsh && (abs(dx) >= 4 * ui_s || abs(dy) >= 4 * ui_s) ? (
+          ui_sqmode = 2; ui_sqs0 = k[0]; ui_sqpush1();
+          ui_sqsl[ui_sqln * 32 + i] ? 0 : ( ui_sqdesel(); ui_sqsl[ui_sqln * 32 + i] = 1; );
+          ui_sqorg();
+        );
+      );
+      ui_sqmode == 4 ? ( ui_sqvel(floor(0 - dy / ui_s * 1.5 + 0.5)); ) :
+      ui_sqmode == 2 ? (
+        // up or down to another lane: every selected note goes along
+        i = max(0, min(nl - 1, floor((mouse_y - gy) / rh))) - ui_sqln;
+        i != 0 ? (
+          s = k[0];
+          ui_sqlanes(i) ? (
+            ui_sqln += i; ui_sqi = ui_sqat(ui_sqln, s);
+            ui_sqorg(); ui_sqs0 = s; ui_sqx0 = mouse_x;
+            p = ui_sqlane(ui_sqln); k = p + 2 + ui_sqi * 3; dx = 0;
+          );
+        );
+        // every selected note moves by the same number of ticks, on the brush's grid (its length and feel), not the note's own
+        ns = ui_sqsnap(ui_sqs0 + dx / gw * lt, (mouse_cap & 4) ? 1 : ui_sqlen(ui_sqbl * 3 + ui_sqbf));
+        ui_sqshift(ns - ui_sqs0);
+      ) :
+      ui_sqmode == 3 ? ( ns = ui_sqnear(t - k[0], ui_sqfeel(k[1])); ns != k[1] ? ( ui_sqpush1(); ui_sqsetlen(ns); ); ) :
+      ui_sqmode == 7 ? (
+        // marquee: select what the rectangle touches
+        ui_sqmarq(max(0, min(nl - 1, floor((min(mouse_y, ui_sqy0) - gy) / rh))), max(0, min(nl - 1, floor((max(mouse_y, ui_sqy0) - gy) / rh))), min(t, ui_sqpt), max(t, ui_sqpt), ui_sqpcm);
+      ) :
+      ui_sqmode == 1 ? (
+        // painting: a note at every step the pointer passes, either way, of the length the drag began with
+        n = floor((t - ui_sqs0) / ui_sqst);
+        loop(96,
+          ui_sqk != n ? (
+            ui_sqk += sign(n - ui_sqk);
+            s = ui_sqs0 + ui_sqk * ui_sqst;
+            s >= 0 && s < lt ? ( ui_sqadd(ui_sqln, s, ui_sqcode, 100) >= 0 ? ui_kput(slider(note_idx + ui_sqln), 100); );
+          );
+        );
+      );
+    );
+    ui_active == 66 && !ui_down ? (
+      ui_sqmode == 6 ? (
+        // a click on empty space adds one note and selects it
+        st = ui_sqlen(ui_sqbl * 3 + ui_sqfe);
+        s = ui_sqpcm ? min(lt - 1, max(0, floor(ui_sqpt + 0.5))) : ui_sqcell(ui_sqpt, st);
+        ui_sqpush(); i = ui_sqadd(ui_sqln, s, ui_sqbl * 3 + ui_sqfe, 100);
+        i >= 0 ? ( ui_sqdesel(); ui_sqsl[ui_sqln * 32 + i] = 1; ui_kput(slider(note_idx + ui_sqln), 100); );
+      ) : ui_sqmode == 5 && !ui_sqpcm ? (
+        // a click on a note, no drag: it is the only one selected
+        ui_sqdesel(); ui_sqsl[ui_sqln * 32 + ui_sqi] = 1;
+      );
+      ui_active = 0; ui_sqmode = 0;
+    );
+    // Esc or a click on nothing in particular leaves the selection alone; the pointer leaving never clears it
+
+    // scroll: a note's length (Cmd/Ctrl: velocity), or the brush length over empty space
+    hov && mouse_wheel != 0 ? (
+      d = mouse_wheel > 0 ? -1 : 1;   // up = longer
+      hi >= 0 ? (
+        ui_sqpush(); ui_sqadj(ln, hi, d, (mouse_cap & 4) ? 1 : 0, (mouse_cap & 8) ? 1 : 8);
+      ) : ( ui_sqbl = min(3, max(0, ui_sqbl + d)); );
+    );
+
+    // rows: the lane's note on the left, a track behind the notes
+    ui_c(ui_cMuted, 0.8); gfx_setfont(5);
+    l = 0; loop(nl,
+      y = gy + l * rh; p = ui_sqlane(l); v = slider(note_idx + l);
+      x = ui_rx + 4 * ui_s;
+      ui_kb[l] > 0 ? ui_cm(ui_cPanel2, ui_cAccent, 0.35 + 0.65 * ui_kb[l] / 127) :
+        (mouse_x >= x && mouse_x < x + lw - 4 * ui_s && mouse_y >= y && mouse_y < y + rh && !(ui_core && ui_blocked) && !ui_modal) ? ui_cm(ui_cPanel2, ui_cText, 0.1) : ui_c(ui_cPanel2, 1);
+      ui_rrect(x, y + ui_s, lw - 4 * ui_s, rh - 2 * ui_s, 4 * ui_s);
+      gfx_setfont(3); ui_notename(v); ui_c(p[1] ? ui_cMuted : ui_cText, p[1] ? 0.5 : 1);
+      gfx_measurestr(#ui_txt, ui_tw, ui_th);
+      gfx_x = x + (lw - 4 * ui_s - ui_tw) / 2; gfx_y = y + (rh - ui_th) / 2 - (rh >= 30 * ui_s ? 5 * ui_s : 0); gfx_drawstr(#ui_txt);
+      rh >= 30 * ui_s ? (
+        gfx_setfont(5); ui_c(ui_cMuted, 1); sprintf(#ui_txt, p[1] ? "MUTED" : "%d", v);
+        gfx_measurestr(#ui_txt, ui_tw, ui_th);
+        gfx_x = x + (lw - 4 * ui_s - ui_tw) / 2; gfx_y = y + rh / 2 + 4 * ui_s; gfx_drawstr(#ui_txt);
+      );
+      // click = hear it, Cmd/Ctrl-click = mute
+      ui_press && ui_active == 0 && !(ui_core && ui_blocked) && !ui_modal && mouse_x >= x && mouse_x < x + lw - 4 * ui_s && mouse_y >= y && mouse_y < y + rh ? (
+        ui_press = 0;
+        (mouse_cap & 4) ? ( ui_sqpush(); p[1] = !p[1]; ) : ui_kput(v, 100);
+      );
+      ui_c(ui_cPanel2, 1); ui_rrect(gx, y + ui_s, gw, rh - 2 * ui_s, 4 * ui_s);
+      l += 1;
+    );
+
+    // the grid: beats, the straight 1/16 lines (faint), and the lines of the note about to be placed
+    gfx_setfont(5);
+    i = 0; loop(ceil(lt / 24),
+      x = gx + i * 24 / lt * gw;
+      ui_c(ui_cLine, (i % 4) == 0 ? 1 : 0.5);
+      gfx_rect(x, gy + ui_s, max(1, ui_s), rh * nl - 2 * ui_s);
+      i += 1;
+    );
+    i = 0; loop(ceil(lt / 96),
+      x = gx + i * 96 / lt * gw;
+      sprintf(#ui_txt, "%d", i + 1); ui_c(ui_cMuted, 0.8);
+      gfx_x = x + 3 * ui_s; gfx_y = gy - 12 * ui_s; gfx_drawstr(#ui_txt);
+      i += 1;
+    );
+    // the start marker: a flag on the ruler and a line down the grid; a faint one under the pointer on the ruler
+    ui_sqb[2] > 0 && ui_sqb[2] < lt ? (
+      x = gx + ui_sqb[2] / lt * gw;
+      ui_c(ui_cAccent, 0.9); gfx_rect(x, gy - 2 * ui_s, max(1, 1.5 * ui_s), rh * nl + 2 * ui_s);
+      gfx_triangle(x, gy - 1 * ui_s, x + 9 * ui_s, gy - 8 * ui_s, x, gy - 14 * ui_s);
+    );
+    rhov ? ( ui_c(ui_cText, 0.35); gfx_rect(gx + floor(t / 24 + 0.5) * 24 / lt * gw, gy - 14 * ui_s, max(1, ui_s), 14 * ui_s); );
+    st = ui_sqlen(ui_sqbl * 3 + fe);
+    ui_c(ui_sqcol(fe), 0.3);
+    i = 0; loop(ceil(lt / st),
+      x = gx + i * st / lt * gw;
+      gfx_rect(x, gy + ui_s, max(1, ui_s), rh * nl - 2 * ui_s);
+      i += 1;
+    );
+
+    // the notes
+    l = 0; loop(nl,
+      y = gy + l * rh; p = ui_sqlane(l); i = 0;
+      loop(p[0],
+        s = p[2 + i * 3]; c = p[3 + i * 3]; v = p[4 + i * 3];
+        x = gx + s / lt * gw; w = max(5 * ui_s, min(ui_sqlen(c), lt - s) / lt * gw - 1.5 * ui_s);
+        h = rh - 8 * ui_s; f2 = ui_sqfeel(c);
+        e = (l == ln && i == hi) || (ui_active == 66 && l == ui_sqln && i == ui_sqi);
+        ui_cm(ui_cPanel2, ui_sqcol(f2), (p[1] ? 0.15 : 0.3) + (p[1] ? 0.25 : 0.7) * v / 127);
+        ui_rrect(x, y + 4 * ui_s, w, h, 3 * ui_s);
+        ui_sqsl[l * 32 + i] ? (
+          ui_c(ui_cText, 0.95);
+          gfx_rect(x, y + 4 * ui_s, w, max(1, 1.5 * ui_s)); gfx_rect(x, y + 4 * ui_s + h - max(1, 1.5 * ui_s), w, max(1, 1.5 * ui_s));
+          gfx_rect(x, y + 4 * ui_s, max(1, 1.5 * ui_s), h); gfx_rect(x + w - max(1, 1.5 * ui_s), y + 4 * ui_s, max(1, 1.5 * ui_s), h);
+        );
+        e ? ( ui_c(ui_cText, 0.9); gfx_rect(x + w - 3 * ui_s, y + 4 * ui_s + 2 * ui_s, 2 * ui_s, h - 4 * ui_s); );
+        w > 30 * ui_s && h > 11 * ui_s ? (
+          ui_sqname(c); ui_c(v >= 70 && !p[1] ? ui_cBg : ui_cText, 1);
+          gfx_x = x + 4 * ui_s; gfx_y = y + 4 * ui_s + (h - 9 * ui_s) / 2; gfx_drawstr(#ui_txt);
+        );
+        i += 1;
+      );
+      l += 1;
+    );
+    // ghost: the note a click here would add
+    hov && ui_active == 0 && hi < 0 ? (
+      s = (mouse_cap & 4) ? min(lt - 1, max(0, floor(t + 0.5))) : ui_sqcell(t, st);
+      ui_sqat(ln, s) < 0 ? (
+        x = gx + s / lt * gw; w = max(5 * ui_s, min(st, lt - s) / lt * gw - 1.5 * ui_s); h = rh - 8 * ui_s;
+        ui_cm(ui_cPanel2, ui_sqcol(fe), 0.35); ui_rrect(x, gy + ln * rh + 4 * ui_s, w, h, 3 * ui_s);
+        w > 30 * ui_s && h > 11 * ui_s ? (
+          ui_sqname(ui_sqbl * 3 + fe); ui_c(ui_cText, 0.9);
+          gfx_x = x + 4 * ui_s; gfx_y = gy + ln * rh + 4 * ui_s + (h - 9 * ui_s) / 2; gfx_drawstr(#ui_txt);
+        );
+      );
+    );
+    // the marquee being dragged
+    ui_active == 66 && ui_sqmode == 7 ? (
+      x = min(gx + ui_sqpt / lt * gw, mouse_x); w = abs(mouse_x - (gx + ui_sqpt / lt * gw));
+      y = min(ui_sqy0, mouse_y); h = abs(mouse_y - ui_sqy0);
+      ui_c(ui_cAccent, 0.15); gfx_rect(x, y, w, h);
+      ui_c(ui_cAccent, 0.9); gfx_rect(x, y, w, ui_s); gfx_rect(x, y + h, w, ui_s); gfx_rect(x, y, ui_s, h); gfx_rect(x + w, y, ui_s, h);
+    );
+    // the playhead
+    ui_sqph >= 0 ? ( ui_c(ui_cText, 0.85); gfx_rect(gx + ui_sqph / lt * gw, gy - 3 * ui_s, max(1, 1.5 * ui_s), rh * nl + 3 * ui_s); );
+
+    // footer: what the pointer would do, or a readout while dragging; Clear (twice) on the right
+    y = ui_ry + ui_rh - 14 * ui_s;
+    ui_sqsure && now - ui_sqsure > 2.5 ? ui_sqsure = 0;
+    ui_sqcount() > 0 ? (
+      sprintf(#ui_tmp, "DELETE %d", ui_sqcount());
+      ui_sqchip(ui_rx + ui_rw - 4 * ui_s - 44 * ui_s - 6 * ui_s - 54 * ui_s, y - 1 * ui_s, 54 * ui_s, 14 * ui_s, 0, #ui_tmp) ? ( ui_sqdelsel(); );
+    );
+    ui_sqchip(ui_rx + ui_rw - 4 * ui_s - 44 * ui_s - 6 * ui_s - 54 * ui_s - 6 * ui_s - 40 * ui_s, y - 1 * ui_s, 40 * ui_s, 14 * ui_s, 0, "REDO") && ui_sqrn > 0 ? ui_sqredo();
+    ui_sqchip(ui_rx + ui_rw - 4 * ui_s - 44 * ui_s - 6 * ui_s - 54 * ui_s - 6 * ui_s - 40 * ui_s - 44 * ui_s, y - 1 * ui_s, 40 * ui_s, 14 * ui_s, 0, "UNDO") && ui_squn > 0 ? ui_squndo();
+    ui_sqchip(ui_rx + ui_rw - 4 * ui_s - 44 * ui_s, y - 1 * ui_s, 44 * ui_s, 14 * ui_s, ui_sqsure > 0, ui_sqsure > 0 ? "SURE?" : "CLEAR") ? (
+      ui_sqsure > 0 ? (
+        ui_sqpush(); l = 0; loop(nl, p = ui_sqlane(l); p[0] = 0; l += 1;); ui_sqsure = 0;
+      ) : ui_sqsure = now;
+    );
+    // over UNDO / REDO: how to reach them from the keyboard
+    ux = ui_rx + ui_rw - 4 * ui_s - 44 * ui_s - 6 * ui_s - 54 * ui_s - 6 * ui_s - 40 * ui_s - 44 * ui_s;
+    uhov = mouse_x >= ux && mouse_x < ux + 84 * ui_s && mouse_y >= y - 1 * ui_s && mouse_y < y + 13 * ui_s && ui_active == 0;
+    gfx_setfont(5); ui_c(ui_cMuted, 1);
+    ui_active == 66 ? (
+      p = ui_sqlane(ui_sqln); k = p + 2 + ui_sqi * 3;
+      ui_sqmode == 4 ? sprintf(#ui_txt, "VELOCITY %d", k[2]) :
+      ui_sqmode == 2 ? sprintf(#ui_txt, "MOVING %d SELECTED", ui_sqcount()) :
+      ui_sqmode == 7 ? strcpy(#ui_txt, "SELECTING   DELETE REMOVES") :
+      ui_sqmode == 8 ? strcpy(#ui_txt, "ERASING NOTES") :
+      ui_sqmode == 6 ? strcpy(#ui_txt, "DRAG TO SELECT") :
+      ui_sqmode == 1 ? ( ui_sqname(ui_sqcode); strcpy(#ui_tmp, #ui_txt); sprintf(#ui_txt, "PAINTING %s NOTES", #ui_tmp); ) :
+      ( ui_sqname(k[1]); strcpy(#ui_tmp, #ui_txt); sprintf(#ui_txt, "LENGTH %s", #ui_tmp); );
+      ui_c(ui_cText, 1);
+    ) : uhov ? (
+      sprintf(#ui_txt, "UNDO %d   REDO %d   KEYS: CMD+Z, CMD+SHIFT+Z (FX WINDOW + MENU: SEND ALL KEYBOARD INPUT)", ui_squn, ui_sqrn);
+      ui_c(ui_cText, 1);
+    ) : rhov ? (
+      strcpy(#ui_txt, ui_sqb[2] > 0 ? "CLICK THE RULER: PLAY STARTS THERE   CLICK THE FLAG: BACK TO BEAT 1" : "CLICK THE RULER: PLAY STARTS THERE INSTEAD OF BEAT 1");
+      ui_c(ui_cText, 1);
+    ) : hov ? (
+      hi >= 0 ? (
+        strcpy(#ui_txt, "DRAG: MOVE (UP/DOWN = OTHER LANE)   SHIFT-DRAG: VELOCITY   EDGE: LENGTH   ALT-DRAG: ERASE   DELETE REMOVES");
+      ) : (
+        ui_sqname(ui_sqbl * 3 + fe); strcpy(#ui_tmp, #ui_txt);
+        sprintf(#ui_txt, "CLICK ADDS %s   DRAG SELECTS   SHIFT-DRAG PAINTS   ALT-DRAG ERASES", #ui_tmp);
+      );
+    ) : strcpy(#ui_txt, "KEYS 1-4 LENGTH   Q W E FEEL   DELETE REMOVES SELECTED");
+    gfx_measurestr(#ui_txt, ui_tw, ui_th);
+    ui_tw > gw + lw - 196 * ui_s ? ui_caps("DRAG SELECT  SHIFT-DRAG PAINT  DELETE");
+    gfx_x = ui_rx + 4 * ui_s; gfx_y = y + (14 * ui_s - ui_th) / 2; gfx_drawstr(#ui_txt);
+    gfx_setfont(1);
   );
 );
