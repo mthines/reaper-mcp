@@ -19,11 +19,11 @@ export const HoveringAFaderOrPanShowsItsValue: Story = {
     const c = within(canvasElement);
     const fader = c.getByRole('img', { name: 'Gtr L −9.0 dB' });
     await userEvent.hover(fader);
-    await expect(c.getByRole('tooltip')).toHaveTextContent('Volume −9.0 dB');
+    await expect(await c.findByRole('tooltip')).toHaveTextContent('Volume −9.0 dB');
     await userEvent.unhover(fader);
     await expect(c.queryByRole('tooltip')).not.toBeInTheDocument();
     const pans = c.getAllByRole('img', { name: /^pan \d+% L$/ });
     await userEvent.hover(pans[0]);
-    await expect(c.getByRole('tooltip')).toHaveTextContent(/^Pan \d+% left$/);
+    await expect(await c.findByRole('tooltip')).toHaveTextContent(/^Pan \d+% left$/);
   },
 };

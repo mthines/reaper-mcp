@@ -35,6 +35,7 @@ jobs:
       is_beta: ${{ steps.detect.outputs.is_beta }}
       pr_number: ${{ steps.detect.outputs.pr_number }}
       base_ref: ${{ steps.detect.outputs.base_ref }}
+      release_commit: ${{ steps.detect.outputs.release_commit }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,6 +58,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORCE_RELEASE: ${{ inputs.force_release }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           IS_BETA="false"
           PR_NUMBER=""
@@ -104,17 +106,27 @@ jobs:
             echo "::notice::Manual trigger — comparing against $BASE_REF"
           fi
 
-          # Skip release commits (prevent loops)
+          # Release commits and release PRs are version bumps only: never release again from them (prevents loops).
+          # A merged release PR (a push to main with a release commit) is tagged and published by the version job.
           COMMIT_MSG=$(git log -1 --pretty=%s)
-          if [[ "$COMMIT_MSG" =~ ^chore\(release\): ]]; then
-            if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
-              echo "::notice::Skipping — this is a release commit"
-              echo "changed=false" >> $GITHUB_OUTPUT
-              echo "is_beta=$IS_BETA" >> $GITHUB_OUTPUT
-              echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-              echo "base_ref=$BASE_REF" >> $GITHUB_OUTPUT
-              exit 0
-            fi
+          RELEASE_COMMIT="false"
+          SKIP="false"
+          if [ "${{ github.event_name }}" = "push" ] && [[ "$COMMIT_MSG" =~ ^chore\(release\): ]]; then
+            RELEASE_COMMIT="true"
+            SKIP="true"
+          elif [ "${{ github.event_name }}" = "pull_request" ] && [[ "$HEAD_REF" == release/* ]]; then
+            SKIP="true"
+          elif [ "${{ github.event_name }}" != "workflow_dispatch" ] && [[ "$COMMIT_MSG" =~ ^chore\(release\): ]]; then
+            SKIP="true"
+          fi
+          if [ "$SKIP" = "true" ]; then
+            echo "::notice::Skipping change detection — this is a release commit or release PR"
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "release_commit=$RELEASE_COMMIT" >> $GITHUB_OUTPUT
+            echo "is_beta=$IS_BETA" >> $GITHUB_OUTPUT
+            echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+            echo "base_ref=$BASE_REF" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
           # Detect changes using Nx
@@ -137,6 +149,7 @@ jobs:
           fi
 
           echo "changed=$CHANGED" >> $GITHUB_OUTPUT
+          echo "release_commit=false" >> $GITHUB_OUTPUT
           echo "is_beta=$IS_BETA" >> $GITHUB_OUTPUT
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
           echo "base_ref=$BASE_REF" >> $GITHUB_OUTPUT
@@ -220,21 +233,27 @@ jobs:
     needs: [detect-changes, test]
     if: |
       always() &&
-      (needs.test.result == 'success') &&
-      needs.detect-changes.outputs.changed == 'true' &&
       !inputs.dry_run &&
       (
-        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-        (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
-        (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || needs.detect-changes.outputs.pr_number != ''))
+        needs.detect-changes.outputs.release_commit == 'true' ||
+        (
+          needs.test.result == 'success' &&
+          needs.detect-changes.outputs.changed == 'true' &&
+          (
+            (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+            (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
+            (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || needs.detect-changes.outputs.pr_number != ''))
+          )
+        )
       )
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      tag: ${{ steps.version.outputs.tag }}
-      created: ${{ steps.tag.outputs.created }}
+      version: ${{ steps.release_tag.outputs.version || steps.version.outputs.version }}
+      tag: ${{ steps.release_tag.outputs.tag || steps.version.outputs.tag }}
+      created: ${{ steps.release_tag.outputs.created || steps.tag.outputs.created }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -247,6 +266,7 @@ jobs:
 
       - name: Calculate version
         id: version
+        if: needs.detect-changes.outputs.release_commit != 'true'
         env:
           IS_BETA: ${{ needs.detect-changes.outputs.is_beta }}
           PR_NUMBER: ${{ needs.detect-changes.outputs.pr_number }}
@@ -294,8 +314,32 @@ jobs:
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
 
+      # A merged release PR: tag that commit and let the release job publish it
+      - name: Tag the merged release
+        id: release_tag
+        if: needs.detect-changes.outputs.release_commit == 'true'
+        run: |
+          VERSION=$(grep '"version"' apps/reaper-mcp-server/package.json | sed 's/.*"version": "\([^"]*\)".*/\1/')
+          TAG="v$VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::warning::Tag $TAG already exists — skipping"
+            echo "created=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+          echo "::notice::Created stable release tag $TAG"
+          echo "created=true" >> $GITHUB_OUTPUT
+
       - name: Create tag
         id: tag
+        if: needs.detect-changes.outputs.release_commit != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           TAG="${{ steps.version.outputs.tag }}"
@@ -323,12 +367,25 @@ jobs:
               fi
             done
 
+            # main only takes pull requests: open the version bump as one and merge it when its checks pass.
+            # Its merge commit is tagged and released by the "Tag the merged release" step of the next run.
+            BRANCH="release/v$VERSION"
+            if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+              echo "::warning::Release PR branch $BRANCH already exists — skipping"
+              echo "created=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            git checkout -b "$BRANCH"
             git add apps/*/package.json libs/*/package.json
             git commit -m "chore(release): v$VERSION"
-            git tag -a "$TAG" -m "Release $TAG"
-            git push origin main
-            git push origin "$TAG"
-            echo "::notice::Created stable release $TAG"
+            git push origin "$BRANCH"
+            PR_URL=$(gh pr create --base main --head "$BRANCH" \
+              --title "chore(release): v$VERSION" \
+              --body "Version bump for v$VERSION, opened by CI. Merges itself once its checks pass; the merge is then tagged and released.")
+            gh pr merge "$PR_URL" --auto --squash
+            echo "::notice::Opened release PR $PR_URL for v$VERSION"
+            echo "created=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
           echo "created=true" >> $GITHUB_OUTPUT
@@ -489,3 +546,38 @@ jobs:
               issue_number: parseInt(prNumber),
               body: body.split('\n').map(line => line.trim()).join('\n')
             });
+
+  # =============================================================================
+  # Step 5: Tell Discord when a run on main fails (tests, sidecar, tag/push or release)
+  # =============================================================================
+  notify-failure:
+    needs: [test, sidecar, version, release]
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TEST: ${{ needs.test.result }}
+          SIDECAR: ${{ needs.sidecar.result }}
+          VERSION: ${{ needs.version.result }}
+          RELEASE: ${{ needs.release.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::DISCORD_WEBHOOK_URL is not set — no notification sent"
+            exit 0
+          fi
+          FAILED=""
+          [ "$TEST" = "failure" ] && FAILED="$FAILED test"
+          [ "$SIDECAR" = "failure" ] && FAILED="$FAILED sidecar"
+          [ "$VERSION" = "failure" ] && FAILED="$FAILED version"
+          [ "$RELEASE" = "failure" ] && FAILED="$FAILED release"
+          MSG=$(printf '❌ **CI failed on main** (%s) — failed:%s\n%s' "${SHA:0:7}" "$FAILED" "$RUN_URL")
+          jq -n --arg content "$MSG" '{content: $content}' \
+            | curl -fsS -X POST -H 'Content-Type: application/json' -d @- "$WEBHOOK"
