@@ -44,6 +44,8 @@ reaper-mcp/
   apps/reaper-mcp-server/     # Main MCP server application (TypeScript, esbuild)
     src/
       main.ts                 # CLI entry point: serve | setup | setup-sidecar | install-skills | init | doctor | status
+      terminal-ui.ts          # The look of every CLI message (init, setup, telemetry, doctor, status, install-skills): `createUi()` gives the palette helpers (bold, dim, cmd, link, ok/warn/fail, mark, heading, gradient) and `banner(subtitle, version)` (gradient REAPER MCP logo + waveform on a terminal ≥ 80 columns, one plain line elsewhere). Colour is only rendering: strip the codes and you get the plain text, which is what a pipe, NO_COLOR and the CI snapshots see. New CLI output reuses it, never hand-written `\x1b[`
+      harnesses.ts            # init: the supported harnesses (Claude Code, Codex CLI, Gemini CLI, Cursor): detect what is installed, register the server through each one's own `mcp add` (Cursor: mcp.json), read/stale-check what is registered, `--harness`/`--all` parsing; skills go to ~/.claude (Claude Code) or the shared ~/.agents (the others)
       claude-assets.ts        # install-skills: copies the skills, agents and knowledge shipped in the npm package into ~/.claude (hash manifest, never overwrites edits)
       server.ts               # McpServer creation, tool registration
       bridge.ts               # File-based IPC: sendCommand(), isBridgeRunning(), etc.
@@ -149,7 +151,7 @@ reaper-mcp/
   scripts/
     reapack-index.mjs         # Generate the ReaPack index.xml (bridge scripts, JSFX, status page) from reaper/; the release job attaches it to the GitHub release (releases/latest/download/index.xml). ReaPack puts JSFX in Effects/reaper-mcp/Meters/ and scripts in Scripts/reaper-mcp/MCP Bridge/, so the bridge resolves JSFX in both folders (Meters/ first) and the autostart block prefers that script path over Scripts/mcp_bridge.lua; `reaper-mcp setup` from an npm install leaves the files to ReaPack once it installed the bridge (from a clone it still copies them and warns that ReaPack's copy wins; see DEVELOPMENT.md)
     prepare-npm-package.mjs   # Assemble the npm package in dist/apps/reaper-mcp-server (the root README with its install section swapped for `apps/reaper-mcp-server/NPM_INSTALL.md` and absolute image/link URLs via `src/npm-readme.mjs`, LICENSE, status page, version); run by the release job
-    sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude (clone install; an npm install copies them with `install-skills`)
+    sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude, and skills + agents also into ~/.agents for Codex/Gemini/Cursor (`--no-agents` skips that; clone install; an npm install copies them with `install-skills`)
     ext-call.mjs              # Call any tool on a fresh `reaper-mcp serve` (so a new extension can be tried without restarting Claude Code): --list [prefix] | <tool> [json]
     plugin-list.mjs           # Rebuild docs/PLUGINS.md's built-in plugin table from LoreKit (logic: apps/bridge-ui/src/features/plugins/plugin-list.mjs)
 
@@ -1205,11 +1207,11 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 | Command | Description |
 |---------|-------------|
 | `serve` (default) | Start MCP server in stdio mode for Claude Code |
-| `setup` | Install Lua bridge + JSFX analyzers into REAPER |
+| `setup` | Install Lua bridge + JSFX analyzers into REAPER, then (at a terminal) ask to run `init` and `doctor`: Enter, Enter. `--yes`/`-y` does all three without asking (scripts, agents); without a terminal and without `--yes` it stops after the install. `--verbose` lists every file |
 | `setup-sidecar` | Install the Python sidecar (opt-in, Python 3.10+, venv at `~/.reaper-mcp/sidecar-venv/`). In a terminal it shows a picker: core analysis (required), Audiobox Aesthetics weights (831 MB, default on), stem separation (Demucs, ~110 MB), chord model (lv-chordia, ~135 MB), each with what it enables, why and its size. No prompt without a TTY, in CI, with `--yes`/`-y`/`--non-interactive` or with any component flag: `--all`, `--with-separation`, `--with-chords`, `--without-aesthetics` (defaults: core + aesthetics). `--list [--json]` prints the components and what is installed. An existing install gets only the missing picked parts; the scripts are always refreshed. |
 | `extension` | Manage opt-in extensions: `list`, `add <name\|folder\|git-url>`, `link <folder>`, `remove <name>`, `new <name>` (see `docs/EXTENSIONS.md`) |
-| `install-skills` | Copy the mix skills, agents and knowledge shipped in the npm package into `~/.claude` (never overwrites files the user edited or owns, skips symlinked folders; a clone uses `scripts/sync-symlinks.sh`). `--dry-run` previews. `init` runs it for an npm install |
-| `init` | Configure Claude Code — write the REAPER tool allow-list to `~/.claude/settings.json` and a `.mcp.json` that runs the clone's built `main.js` (copy-free). From an npm install it instead registers the server at user scope with `claude mcp add --scope user` (replacing an entry whose node or `main.js` no longer exists) and runs `install-skills` |
+| `install-skills` | Copy the mix skills, agents and knowledge shipped in the npm package into `~/.claude` (never overwrites files the user edited or owns, skips symlinked folders; a clone uses `scripts/sync-symlinks.sh`). `--dry-run` previews. Skills and agents also go into the shared `~/.agents` when a non-Claude harness is installed (never the knowledge, which the skills read from `~/.claude/knowledge`); `--harness claude,codex` picks. `init` runs it for an npm install |
+| `init` | Connect the AI harnesses: detects Claude Code, Codex CLI, Gemini CLI and Cursor, registers the server in each one found by absolute path (`claude mcp add --scope user`, `codex mcp add`, `gemini mcp add --scope user`, Cursor's `~/.cursor/mcp.json`; an entry whose node or `main.js` no longer exists is replaced) and prints the install hint for the ones missing. `--harness claude,codex` or `--all` picks by hand. Claude Code also gets the REAPER tool allow-list in `~/.claude/settings.json`, and in a clone a `.mcp.json` (copy-free). From an npm install it then runs `install-skills`. `doctor` shows which harnesses are connected |
 | `doctor` | Verify all components are configured correctly (includes 4 sidecar sub-checks) |
 | `status` | Check if Lua bridge is running in REAPER |
 

@@ -1,0 +1,2 @@
+Telemetry: Off (REAPER_MCP_TELEMETRY=0)
+What is and isn't collected: https://github.com/mthines/reaper-mcp/blob/main/TELEMETRY.md

@@ -35,6 +35,8 @@ rsync -a --exclude node_modules --exclude dist --exclude .nx --exclude tmp --exc
 git config -f "$DEMO_HOME/.gitconfig" url."file://$SANDBOX/origin".insteadOf \
   https://github.com/mthines/reaper-mcp.git
 
+# A pgrep that finds nothing: the REAPER running on this machine must not make the installer wait for it to quit.
+printf '#!/bin/sh\nexit 1\n' > "$SANDBOX/bin/pgrep"; chmod +x "$SANDBOX/bin/pgrep"
 # Only what a fresh machine has: node/npm/npx (+ corepack when Node ships it), git, claude.
 for bin in node npm npx git claude; do ln -s "$(command -v "$bin")" "$SANDBOX/bin/$bin"; done
 corepack_bin="$(dirname "$(command -v node)")/corepack"
@@ -59,7 +61,7 @@ grep -q "reaper:.*Connected" <<<"$mcp_list" ||
   fail "Claude Code does not see a connected reaper server from another folder"
 echo "✓ Claude Code sees REAPER from an unrelated folder"
 doctor="$(cd "$DEMO_HOME/Music/reaper-mcp" && npm run --silent doctor 2>&1 || true)"
-grep -q "MCP config:.*Registered for your user" <<<"$doctor" ||
+grep -qE "MCP config.*Connected: Claude Code" <<<"$doctor" ||
   fail "doctor does not report the user registration:"$'\n'"$doctor"
 echo "✓ doctor reports the server registered"
 echo "✓ Install flow works — docs/assets/install-demo.gif updated"

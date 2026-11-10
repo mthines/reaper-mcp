@@ -130,6 +130,27 @@ npm run doctor        # from the clone; or `reaper-mcp doctor` if it's on your P
 Checks that the bridge is connected, knowledge is installed, and Claude Code has
 the server (user-scope registration or a `.mcp.json` in the current folder).
 
+### Other harnesses (Codex CLI, Gemini CLI, Cursor)
+
+<img src="assets/harnesses-demo.gif" alt="A real run of reaper-mcp init: it finds Claude Code, Codex CLI, Gemini CLI and Cursor, connects each, installs the skills, and a second run says Already connected." width="100%">
+
+`reaper-mcp init` detects the harnesses you have installed and connects each one (and names the ones it did not find, with
+how to install them). Pick by hand with `reaper-mcp init --harness codex,gemini` or `--all`.
+
+| Harness | Registered with | Skills |
+| --- | --- | --- |
+| Claude Code | `claude mcp add --scope user` (a clone also writes `.mcp.json`) | `~/.claude/skills`, knowledge in `~/.claude/knowledge` |
+| Codex CLI | `codex mcp add` (`~/.codex/config.toml`) | `~/.agents/skills` |
+| Gemini CLI | `gemini mcp add --scope user` (`~/.gemini/settings.json`) | `~/.agents/skills` (needs a Gemini CLI version that loads skills) |
+| Cursor | `~/.cursor/mcp.json` | `~/.agents/skills` |
+
+`scripts/sync-symlinks.sh` links the skills and agents into `~/.agents` too (`--no-agents` skips it). The skills still read
+`~/.claude/knowledge`, so that link stays the one knowledge location for every harness. The tool allow-list is written for
+Claude Code only; check the other harnesses' own approval settings. Checked live: Codex CLI 0.155 lists the
+skills and calls the tools through the bridge, and Claude Code and Gemini CLI list the server as connected. A Gemini-driven
+tool call was not run, since its free personal login is no longer offered. Gemini CLI also turns MCP servers off in a folder
+you have not trusted: it asks once per folder, so a first run in a new folder will not see REAPER until you say yes.
+
 ## How the mix skills work
 
 ### Memory — the skills get better over time

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createInterface } from 'node:readline';
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
@@ -12,27 +13,39 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSyn
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
-import { exec as execCb, execFileSync } from 'node:child_process';
+import { exec as execCb } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
 import { installClaudeAssets } from './claude-assets.js';
+import { HARNESSES, connectHarness, detectHarnesses, isStale, parseHarnessFlag, realEnv, registeredServer, skillsHomes, type Harness, type HarnessId } from './harnesses.js';
 import { installExamplePlugins } from './jsfx/examples.js';
 import { loadToolkit, generatedDir, presetsDir } from './tools/jsfx.js';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, hasUserMcpServer, userMcpServerIsStale, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, autostartCheck, setupFilesPlan, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, autostartCheck, setupFilesPlan, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
 import { detectInstalled, setupSidecar } from './setup-sidecar.js';
-import { firstRunTelemetryNotice, resolveTelemetry, saveTelemetryChoice, TELEMETRY_DOC_URL } from './telemetry-consent.js';
+import { confirmOptOutPrompt, firstRunTelemetryNotice, resolveTelemetry, saveTelemetryChoice, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
 import { getSidecarClient } from './sidecar.js';
 import { renderDoctor, useColor, type Check, type CheckStatus, type Section } from './doctor-report.js';
+import { createUi } from './terminal-ui.js';
 
 const execAsync = promisifyUtil(execCb);
+
+/** How everything this CLI prints looks (colour and logo only on a terminal): see terminal-ui.ts */
+const ui = createUi();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 async function setup(): Promise<void> {
-  console.log('REAPER MCP Server — Setup\n');
+  // One line per step; --verbose lists every file
+  const verbose = process.argv.includes('--verbose');
+  const installedLine = (what: string, files: string[]) => {
+    if (verbose) for (const f of files) console.log(ui.item('ok', `Installed: ${f}`));
+    else if (files.length) console.log(ui.item('ok', `${files.length} ${what} installed`));
+  };
+
+  console.log(ui.banner('Setup', readServiceVersion()));
 
   const bridgeDir = await ensureBridgeDir();
-  console.log(`Bridge directory: ${bridgeDir}\n`);
+  console.log(`Bridge directory: ${ui.dim(bridgeDir)}\n`);
 
   const scriptsDir = getReaperScriptsPath();
   mkdirSync(scriptsDir, { recursive: true });
@@ -43,43 +56,43 @@ async function setup(): Promise<void> {
   // well would give an Action List with every script twice and a bridge ReaPack updates never touch.
   const filesPlan = setupFilesPlan(existsSync(join(scriptsDir, 'reaper-mcp', 'MCP Bridge', 'mcp_bridge.lua')), findCloneRoot(__dirname) !== null);
   if (filesPlan === 'leave') {
-    console.log('The bridge is installed by ReaPack: leaving its scripts, JSFX and status page to ReaPack.');
-    console.log('Setup only turns on starting with REAPER and the web interface.\n');
+    console.log(`${ui.mark('info')} The bridge is installed by ReaPack: leaving its scripts, JSFX and status page to ReaPack.`);
+    console.log(`${ui.dim('Setup only turns on starting with REAPER and the web interface.')}\n`);
     installBridgeAutostart(scriptsDir);
     const port = await enableWebInterface();
-    console.log('\nSetup complete!\n');
-    console.log('Restart REAPER (or run the bridge once from the Action List) and add reaper-mcp to Claude Code: reaper-mcp doctor');
-    if (port) console.log(`The bridge opens its status window on start: http://localhost:${port}/${BRIDGE_UI_FILE}`);
+    console.log(`\n${ui.mark('ok')} ${ui.bold('Setup complete!')}`);
+    if (await chainAfterSetup(port, join(scriptsDir, 'reaper-mcp', 'MCP Bridge', 'mcp_bridge.lua'))) return;
+    console.log(`\nRestart REAPER (or run the bridge once from the Action List) and add reaper-mcp to your harness: ${ui.cmd('reaper-mcp doctor')}`);
+    if (port) console.log(`The bridge opens its status window on start: ${ui.link(`http://localhost:${port}/${BRIDGE_UI_FILE}`)}`);
     return;
   }
   if (filesPlan === 'install-with-warning') {
-    console.log('WARNING: ReaPack has installed the bridge too, and REAPER prefers its copy (Scripts/reaper-mcp/MCP Bridge/ and');
+    console.log(`${ui.warn('WARNING:')} ReaPack has installed the bridge too, and REAPER prefers its copy (Scripts/reaper-mcp/MCP Bridge/ and`);
     console.log('Effects/reaper-mcp/Meters/) over the files this checkout installs. Your local changes will not run until you');
     console.log('uninstall the reaper-mcp packages in ReaPack (Manage repositories > reaper-mcp > Uninstall packages),');
     console.log('then run setup again: this run also overwrote the status page ReaPack installed, which uninstalling removes.\n');
   }
 
-  console.log('Installing Lua scripts...');
+  console.log(`${ui.bold('Installing Lua scripts...')}`);
   // Install every Lua asset (bridge, its libraries, the shared snapshot library
   // and the A/B action scripts). REAPER_ASSETS
   // is the single source of truth — a hardcoded subset previously omitted the
   // snapshot library and action scripts, leaving stale copies in REAPER.
+  const luaInstalled: string[] = [];
   for (const asset of REAPER_ASSETS) {
     if (!asset.endsWith('.lua')) continue;
     const src = join(reaperDir, asset);
     const dest = join(scriptsDir, asset);
-    if (installFile(src, dest)) {
-      console.log(`  Installed: ${asset}`);
-    } else {
-      console.log(`  Not found: ${src}`);
-    }
+    if (installFile(src, dest)) luaInstalled.push(asset);
+    else console.log(ui.item('fail', `Not found: ${src}`));
   }
+  installedLine('scripts', luaInstalled);
 
   for (const asset of RETIRED_ASSETS) {
     const dest = join(scriptsDir, asset);
     if (existsSync(dest)) {
       rmSync(dest);
-      console.log(`  Removed: ${asset} (retired)`);
+      console.log(ui.item('info', `Removed: ${asset} (retired)`));
     }
   }
 
@@ -88,44 +101,43 @@ async function setup(): Promise<void> {
   if (cloneRoot) {
     const dev = isDevClone(await cloneState(cloneRoot));
     writeFileSync(join(scriptsDir, 'mcp_update.conf'), updateConfigText(cloneRoot, process.execPath, dev));
-    console.log(`  Installed: mcp_update.conf (${dev ? 'developer clone: Rebuild & reload' : 'one-click updates'} from the status page)`);
+    console.log(ui.item('ok', `Installed: mcp_update.conf (${dev ? 'developer clone: Rebuild & reload' : 'one-click updates'} from the status page)`));
   }
 
   const effectsDir = join(getReaperEffectsPath(), 'reaper-mcp');
   mkdirSync(effectsDir, { recursive: true });
 
-  console.log('\nInstalling JSFX analyzers...');
+  console.log(ui.section('Installing JSFX analyzers...'));
+  const jsfxInstalled: string[] = [];
   for (const asset of REAPER_ASSETS) {
     if (asset.endsWith('.lua')) continue;
     const src = join(reaperDir, asset);
     const dest = join(effectsDir, asset);
-    if (installFile(src, dest)) {
-      console.log(`  Installed: reaper-mcp/${asset}`);
-    } else {
-      console.log(`  Not found: ${src}`);
-    }
+    if (installFile(src, dest)) jsfxInstalled.push(`reaper-mcp/${asset}`);
+    else console.log(ui.item('fail', `Not found: ${src}`));
   }
+  installedLine('JSFX files', jsfxInstalled);
 
   // The /make-plugin examples as ready-to-use plugins (an example you edited is left alone)
-  console.log('\nInstalling example plugins...');
+  console.log(ui.section('Installing example plugins...'));
   const examplesDir = join(resolveAssetDir(__dirname, 'claude'), 'skills', 'make-plugin', 'examples');
   const examples = installExamplePlugins(examplesDir, join(generatedDir(), 'examples'), loadToolkit(), presetsDir());
-  for (const f of examples.installed) console.log(`  Installed: reaper-mcp-generated/examples/${f}`);
-  for (const f of examples.kept) console.log(`  Kept your edited copy: reaper-mcp-generated/examples/${f}`);
-  for (const [f, names] of Object.entries(examples.presets)) if (names.length) console.log(`  Presets for ${f}: ${names.join(', ')}`);
-  for (const e of examples.presetErrors) console.log(`  Skipped presets (invalid): ${e}`);
-  if (!examples.installed.length && !examples.kept.length) console.log(`  Not found: ${examplesDir}`);
+  installedLine('example plugins', examples.installed.map((f) => `reaper-mcp-generated/examples/${f}`));
+  for (const f of examples.kept) console.log(ui.item('info', `Kept your edited copy: reaper-mcp-generated/examples/${f}`));
+  if (verbose) for (const [f, names] of Object.entries(examples.presets)) if (names.length) console.log(ui.item('info', `Presets for ${f}: ${names.join(', ')}`));
+  for (const e of examples.presetErrors) console.log(ui.item('warn', `Skipped presets (invalid): ${e}`));
+  if (!examples.installed.length && !examples.kept.length) console.log(ui.item('fail', `Not found: ${examplesDir}`));
 
   // Bridge status UI (page + PWA manifest, service worker, icons), served by REAPER's web
   // interface from reaper_www_root/. Built by the bridge-ui project into dist/apps/bridge-ui
   // (a sibling of this bundle). Files are all mcp_bridge* so other web remotes are untouched.
   const wwwSrc = resolveAssetDir(__dirname, 'bridge-ui');
-  console.log('\nInstalling bridge status UI...');
+  console.log(ui.section('Installing bridge status UI...'));
   if (existsSync(join(wwwSrc, BRIDGE_UI_FILE))) {
     const count = copyDirSync(wwwSrc, getReaperWwwPath());
-    console.log(`  Installed: reaper_www_root/${BRIDGE_UI_FILE} (+${count - 1} PWA files)`);
+    console.log(ui.item('ok', verbose ? `Installed: reaper_www_root/${BRIDGE_UI_FILE} (+${count - 1} PWA files)` : 'Status page installed'));
   } else {
-    console.log(`  Not found: ${join(wwwSrc, BRIDGE_UI_FILE)} (build bridge-ui first)`);
+    console.log(ui.item('fail', `Not found: ${join(wwwSrc, BRIDGE_UI_FILE)} (build bridge-ui first)`));
   }
 
   // Before the web-interface step: Ctrl+C at its "Quit REAPER to finish" prompt ends setup there
@@ -133,15 +145,55 @@ async function setup(): Promise<void> {
   const webPort = await enableWebInterface();
   await registerSnapshotActions();
 
-  console.log('\nSetup complete!\n');
-  console.log('Next steps:');
-  console.log('  1. Start REAPER: the bridge starts with it. If REAPER is already open, restart it,');
+  console.log(`\n${ui.mark('ok')} ${ui.bold('Setup complete!')}`);
+  if (await chainAfterSetup(webPort, join(scriptsDir, 'mcp_bridge.lua'))) return;
+  console.log('');
+  console.log(ui.heading('Next steps:'));
+  console.log(`  ${ui.bold('1.')} Start REAPER: the bridge starts with it. If REAPER is already open, restart it,`);
   console.log('     or run the bridge once by hand: Actions > Show action list > Load ReaScript,');
-  console.log(`     select ${join(scriptsDir, 'mcp_bridge.lua')} and click Run.`);
-  console.log('  2. Add reaper-mcp to your Claude Code config (see: reaper-mcp doctor)');
+  console.log(`     select ${ui.dim(join(scriptsDir, 'mcp_bridge.lua'))} and click Run.`);
+  console.log(`  ${ui.bold('2.')} Connect your AI harness: ${ui.cmd('reaper-mcp init')}, then check it with ${ui.cmd('reaper-mcp doctor')}`);
   if (webPort) {
-    console.log(`\nThe bridge opens its status window on start: http://localhost:${webPort}/${BRIDGE_UI_FILE}`);
+    console.log(`\nThe bridge opens its status window on start: ${ui.link(`http://localhost:${webPort}/${BRIDGE_UI_FILE}`)}`);
   }
+}
+
+/** One yes/no question on the terminal; Enter takes the default, Ctrl+D or a closed stdin too */
+async function askYesNo(question: string, defaultYes = true): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: false });
+  process.stdout.write(`\n${ui.bold(question)} ${ui.dim(defaultYes ? '[Y/n]' : '[y/N]')} `);
+  const answer = await new Promise<string>((resolve) => {
+    rl.once('line', resolve);
+    rl.once('close', () => resolve(''));
+  }).then((a) => a.trim().toLowerCase());
+  rl.close();
+  return answer === '' ? defaultYes : answer === 'y' || answer === 'yes';
+}
+
+/**
+ * What follows `reaper-mcp setup`: connect the AI harness (`init`), then check it all (`doctor`).
+ * `--yes` (or `-y`) does both without asking, for scripts and agents; at a terminal each is a question where Enter says yes;
+ * anywhere else (a pipe, CI) setup prints the next steps and stops, as before.
+ * Returns false when it did not chain, so the caller prints the plain next steps.
+ */
+async function chainAfterSetup(port: number | null | undefined, bridgeScript: string): Promise<boolean> {
+  const yes = process.argv.includes('--yes') || process.argv.includes('-y');
+  const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  if (!yes && !interactive) return false;
+  if (yes || (await askYesNo('Connect your AI harness now?'))) {
+    await init(true);
+    if (yes || (await askYesNo('Check that everything is in place?'))) {
+      console.log('');
+      await doctor();
+      console.log(ui.dim('The bridge shows as not detected until REAPER has started it: that is the one step left.'));
+    }
+  } else {
+    console.log(`\nWhenever you are ready: ${ui.cmd('reaper-mcp init')}, then ${ui.cmd('reaper-mcp doctor')}`);
+  }
+  console.log(`\n${ui.heading('One step left:')} start REAPER (restart it if it is open): the bridge starts with it.`);
+  console.log(`  ${ui.dim('Rather not restart? Actions > Show action list > Load ReaScript, select')} ${ui.dim(bridgeScript)} ${ui.dim('and click Run.')}`);
+  if (port) console.log(`\nThe bridge opens its status window on start: ${ui.link(`http://localhost:${port}/${BRIDGE_UI_FILE}`)}`);
+  return true;
 }
 
 /** Git state of the clone for isDevClone; a git failure reads as a dev clone (never offer a pull that can't work). */
@@ -169,31 +221,31 @@ async function isReaperRunning(): Promise<boolean> {
 
 /** Turn on REAPER's web browser interface so the bridge can open its status window. Returns the port, or null. */
 async function enableWebInterface(): Promise<number | null> {
-  console.log('\nEnabling REAPER web interface...');
+  console.log(ui.section('Enabling REAPER web interface...'));
   const iniPath = join(getReaperResourcePath(), 'reaper.ini');
   if (!existsSync(iniPath)) {
-    console.log(`  Skipped: ${iniPath} not found (start REAPER once, quit it, then re-run setup)`);
+    console.log(ui.item('warn', `Skipped: ${iniPath} not found (start REAPER once, quit it, then re-run setup)`));
     return null;
   }
   const requested = Number(process.env['REAPER_WEB_PORT']) || DEFAULT_WEB_PORT;
   const result = ensureWebInterface(readFileSync(iniPath, 'utf-8'), requested);
   if (!result.changed) {
-    console.log(`  Already enabled on port ${result.port}`);
+    console.log(ui.item('ok', `Already enabled on port ${result.port}`));
     return result.port;
   }
   if (await isReaperRunning()) {
     if (!process.stdout.isTTY) {
-      console.log('  Skipped: REAPER is running and would overwrite reaper.ini on exit.');
-      console.log('  Quit REAPER and run "reaper-mcp setup" again.');
+      console.log(ui.item('warn', 'Skipped: REAPER is running and would overwrite reaper.ini on exit.'));
+      console.log(`    Quit REAPER and run ${ui.cmd('reaper-mcp setup')} again.`);
       return null;
     }
-    console.log('  REAPER is running and would overwrite reaper.ini on exit.');
-    console.log('  Quit REAPER to finish (Ctrl+C to skip)...');
+    console.log(ui.item('warn', 'REAPER is running and would overwrite reaper.ini on exit.'));
+    console.log('    Quit REAPER to finish (Ctrl+C to skip)...');
     while (await isReaperRunning()) await new Promise((r) => setTimeout(r, 1000));
   }
   // Re-read: REAPER may have rewritten reaper.ini while quitting
   writeFileSync(iniPath, ensureWebInterface(readFileSync(iniPath, 'utf-8'), requested).ini, 'utf-8');
-  console.log(`  Enabled on port ${result.port} (override with REAPER_WEB_PORT)`);
+  console.log(ui.item('ok', `Enabled on port ${result.port} (override with REAPER_WEB_PORT)`));
   return result.port;
 }
 
@@ -203,100 +255,114 @@ async function enableWebInterface(): Promise<number | null> {
  * REAPER never writes that file, so this is safe while REAPER is open.
  */
 function installBridgeAutostart(scriptsDir: string): void {
-  console.log('\nStarting the bridge with REAPER...');
+  console.log(ui.section('Starting the bridge with REAPER...'));
   const path = join(scriptsDir, '__startup.lua');
   const { text, changed } = ensureBridgeAutostart(existsSync(path) ? readFileSync(path, 'utf-8') : '');
   if (changed) writeFileSync(path, text, 'utf-8');
-  console.log(changed ? '  Added to Scripts/__startup.lua (REAPER runs it at launch)' : '  Already in Scripts/__startup.lua');
-  console.log('  Turn it off in the bridge window: Settings > Start with REAPER.');
+  console.log(ui.item('ok', changed ? 'Added to Scripts/__startup.lua (REAPER runs it at launch)' : 'Already in Scripts/__startup.lua'));
+  console.log(ui.dim('    Turn it off in the bridge window: Settings > Start with REAPER.'));
 }
 
 /** List the snapshot scripts in REAPER's Action List (reaper-kb.ini), ready for a shortcut. */
 async function registerSnapshotActions(): Promise<void> {
-  console.log('\nRegistering snapshot actions (quick save, next, previous)...');
+  console.log(ui.section('Registering snapshot actions (quick save, next, previous)...'));
   const kbPath = join(getReaperResourcePath(), 'reaper-kb.ini');
   const kb = existsSync(kbPath) ? readFileSync(kbPath, 'utf-8') : '';
   const { added } = ensureSnapshotActions(kb);
   if (!added.length) {
-    console.log('  Already in the Action List');
+    console.log(ui.item('ok', 'Already in the Action List'));
   } else if (await isReaperRunning()) {
     // REAPER rewrites reaper-kb.ini from memory; the bridge adds them through the API when it starts
-    console.log('  REAPER is running: the bridge adds them when it next starts (re-run mcp_bridge.lua).');
+    console.log(ui.item('info', 'REAPER is running: the bridge adds them when it next starts (re-run mcp_bridge.lua).'));
   } else {
     writeFileSync(kbPath, ensureSnapshotActions(kb).kb, 'utf-8');
-    console.log(`  Added: ${added.join(', ')}`);
+    console.log(ui.item('ok', `Added: ${added.join(', ')}`));
   }
-  console.log('  Bind keys in Actions > Show action list: search "mcp_snapshot".');
+  console.log(`${ui.dim('    Bind keys in Actions > Show action list: search')} ${ui.cmd('"mcp_snapshot"')}${ui.dim('.')}`);
 }
 
-// Configure Claude Code for this clone: pre-approve the REAPER tools globally and
-// drop a .mcp.json that runs this clone's built main.js. Copy-free — the skills
-// and knowledge come from the symlinks created by scripts/sync-symlinks.sh.
-async function init(): Promise<void> {
-  console.log('REAPER MCP — Configure Claude Code\n');
+// Connect the AI harnesses (Claude Code, Codex CLI, Gemini CLI, Cursor) to this REAPER MCP server: the ones that
+// are installed get configured, the ones that are not get an install hint. `--harness codex,gemini` or `--all`
+// picks them by hand. Claude Code also gets the tool allow-list, so the REAPER tools are pre-approved everywhere.
+/** An install hint, with a bare URL drawn as a link */
+function installHint(ui: ReturnType<typeof createUi>, hint: string): string {
+  return /^https?:\/\/\S+$/.test(hint) ? ui.link(hint) : hint;
+}
 
-  // Tool allow-list, written globally so the REAPER tools are pre-approved everywhere.
-  const settingsPath = join(homedir(), '.claude', 'settings.json');
-  mkdirSync(dirname(settingsPath), { recursive: true });
-  const result = ensureClaudeSettings(settingsPath);
-  console.log(`Claude settings (${MCP_TOOL_NAMES.length} REAPER tools allow-listed): ${result} → ${settingsPath}`);
+async function init(chained = false): Promise<void> {
+  let chosen: HarnessId[] | null;
+  try {
+    chosen = parseHarnessFlag(process.argv);
+  } catch (err) {
+    console.error((err as Error).message);
+    process.exit(1);
+  }
+  console.log(ui.banner('Connect your AI harness', readServiceVersion()));
+  const env = realEnv();
+  const found = detectHarnesses(env).map((h) => h.id);
+  const ids = chosen ?? found;
 
-  if (findCloneRoot(__dirname)) {
-    // .mcp.json in the current directory: `node <this script> serve`, so it needs no PATH link.
-    const mcpJsonPath = join(process.cwd(), '.mcp.json');
-    if (createMcpJson(mcpJsonPath, resolve(process.argv[1]))) {
-      console.log(`Created: ${mcpJsonPath}`);
-    } else {
-      console.log(`.mcp.json already exists — leaving it untouched.`);
+  for (const h of HARNESSES) {
+    console.log(found.includes(h.id) ? `  ${ui.mark('ok')} ${ui.dim('found')}      ${ui.bold(h.name)}` : `  ${ui.mark('info')} ${ui.dim('not found')}  ${h.name}: ${ui.dim(installHint(ui, h.installHint))}`);
+  }
+  console.log('');
+  if (ids.length === 0) {
+    console.log(`None of the supported harnesses is installed yet. Install one (see above), then run: ${ui.cmd('reaper-mcp init')}`);
+    return;
+  }
+
+  const mainJs = realpathSync(process.argv[1]);
+  const inClone = findCloneRoot(__dirname) !== null;
+  for (const id of ids) {
+    const h = HARNESSES.find((x) => x.id === id) as Harness;
+    if (id === 'claude') {
+      const settingsPath = join(homedir(), '.claude', 'settings.json');
+      mkdirSync(dirname(settingsPath), { recursive: true });
+      console.log(`${ui.mark('ok')} Claude settings (${MCP_TOOL_NAMES.length} REAPER tools allow-listed): ${ensureClaudeSettings(settingsPath)} → ${ui.dim(settingsPath.replace(homedir(), '~'))}`);
+      if (inClone) {
+        // .mcp.json in the current directory: `node <this script> serve`, so it needs no PATH link.
+        const mcpJsonPath = join(process.cwd(), '.mcp.json');
+        console.log(createMcpJson(mcpJsonPath, resolve(process.argv[1])) ? `${ui.mark('ok')} Created: ${ui.dim(mcpJsonPath)}` : `${ui.mark('ok')} .mcp.json already exists — leaving it untouched.`);
+        continue;
+      }
     }
-  } else {
-    registerUserMcpServer();
+    const r = connectHarness(id, process.execPath, mainJs, env);
+    if (r.status === 'failed') {
+      console.log(`${ui.mark('fail')} Could not connect ${ui.bold(h.name)}: ${r.detail}${found.includes(id) ? '' : ` ${ui.dim(`(not installed: ${installHint(ui, h.installHint)})`)}`}`);
+      console.log(`  ${ui.dim('To connect it yourself:')} ${ui.cmd(r.manual ?? '')}`);
+    } else {
+      const what = { connected: 'Connected', replaced: 'Reconnected (the old entry pointed at files that no longer exist)', already: 'Already connected' }[r.status];
+      console.log(`${ui.mark('ok')} ${what}: ${ui.bold(h.name)}${id === 'claude' && inClone ? '' : ui.dim(' (works from any folder)')}`);
+    }
   }
 
   await askTelemetryOnce();
 
-  if (findCloneRoot(__dirname)) {
+  if (inClone) {
     console.log('\nIf you haven\'t yet, symlink the skills + knowledge and install the bridge:');
-    console.log('  scripts/sync-symlinks.sh   # mix skills + knowledge → ~/.claude');
+    console.log(`  ${ui.cmd('scripts/sync-symlinks.sh')}   ${ui.dim('# mix skills + knowledge → ~/.claude, skills + agents → ~/.agents')}`);
   } else {
     console.log('');
-    installSkills();
-    console.log('\nIf you haven\'t yet, install the bridge:');
+    installSkills(false, ids);
+    if (!chained) console.log('\nIf you haven\'t yet, install the bridge:');
   }
-  console.log('  reaper-mcp setup           # Lua bridge + JSFX → REAPER');
-  console.log('then start (or restart) REAPER: the bridge starts with it.');
-  if (!findCloneRoot(__dirname)) console.log('\nWant it to remember plugins and your corrections? Connect LoreKit (free): https://lorekit.io. /learn-plugin will walk you through it.');
-  console.log('\nTry: /mixer "Please gain stage my tracks"  ·  /critique "Roast my mix"');
+  // After `setup` the bridge is installed already: only a stand-alone `init` points back at it
+  if (!chained) {
+    console.log(`  ${ui.cmd('reaper-mcp setup')}           ${ui.dim('# Lua bridge + JSFX → REAPER')}`);
+    console.log('then start (or restart) REAPER: the bridge starts with it.');
+  }
+  if (!inClone) console.log(`\nWant it to remember plugins and your corrections? Connect LoreKit (free): ${ui.link('https://lorekit.io')}. ${ui.cmd('/learn-plugin')} will walk you through it.`);
+  console.log(`\nTry: ${ui.cmd('/mixer "Please gain stage my tracks"')}  ·  ${ui.cmd('/critique "Roast my mix"')}`);
 }
 
-/** npm install: tell Claude Code about the server once, for every folder (a clone writes .mcp.json instead). */
-function registerUserMcpServer(): void {
-  const claudeJson = join(homedir(), '.claude.json');
-  const registered = hasUserMcpServer(claudeJson);
-  if (registered && !userMcpServerIsStale(claudeJson)) {
-    console.log('Claude Code already knows REAPER (user-scope server "reaper" is registered).');
-    return;
-  }
-  const mainJs = realpathSync(process.argv[1]);
-  try {
-    if (registered) {
-      // Its node or main.js is gone (Node switched, package moved): replace it instead of keeping a dead entry
-      execFileSync('claude', ['mcp', 'remove', '--scope', 'user', 'reaper'], { stdio: 'pipe' });
-      console.log('The registered REAPER server pointed at files that no longer exist; replacing it.');
-    }
-    execFileSync('claude', ['mcp', 'add', '--scope', 'user', 'reaper', '--', process.execPath, mainJs, 'serve'], { stdio: 'pipe' });
-    console.log('Connected Claude Code to REAPER (works from any folder).');
-  } catch (err) {
-    const missing = (err as NodeJS.ErrnoException).code === 'ENOENT';
-    console.log(missing ? 'Claude Code is not installed yet. Get it from https://claude.com/claude-code, then run: reaper-mcp init' : `Could not connect Claude Code to REAPER: ${String((err as Error).message).split('\n')[0]}`);
-    console.log(`To connect it yourself: claude mcp add --scope user reaper -- ${process.execPath} ${mainJs} serve`);
-  }
-}
-
-/** Copy the mix skills, agents and knowledge shipped in the npm package into ~/.claude (a clone symlinks them instead). */
-function installSkills(dryRun = false): void {
+/**
+ * Copy the mix skills, agents and knowledge shipped in the npm package (a clone symlinks them instead):
+ * into ~/.claude for Claude Code (with the knowledge the skills read), and skills + agents into the shared
+ * ~/.agents for Codex CLI, Gemini CLI and Cursor. With no `ids`, for the harnesses that are installed (Claude Code when none is).
+ */
+function installSkills(dryRun = false, ids?: HarnessId[]): void {
   if (findCloneRoot(__dirname)) {
-    console.log('Running from a clone: scripts/sync-symlinks.sh links the skills and knowledge into ~/.claude.');
+    console.log('Running from a clone: scripts/sync-symlinks.sh links the skills and knowledge into ~/.claude and ~/.agents.');
     return;
   }
   const src = join(resolveAssetDir(__dirname, 'claude'));
@@ -305,18 +371,36 @@ function installSkills(dryRun = false): void {
     process.exitCode = 1;
     return;
   }
-  const r = installClaudeAssets(src, join(homedir(), '.claude'), { dryRun });
-  const verb = dryRun ? 'Would install' : 'Installed';
-  console.log(`${verb} the mix skills, agents and knowledge in ~/.claude: ${r.installed.length} new, ${r.updated.length} updated, ${r.unchanged} already current.`);
-  for (const s of r.skipped) {
-    const why = { edited: 'you changed it, left as is', 'not-ours': 'already exists and is yours, left as is', symlink: 'linked elsewhere, left as is', 'broken-symlink': 'a link to a folder that no longer exists (a deleted clone?); remove it and run this again' }[s.reason];
-    console.log(`  Skipped ${s.path}: ${why}`);
+  let targets = ids;
+  if (!targets) {
+    try {
+      targets = parseHarnessFlag(process.argv) ?? detectHarnesses().map((h) => h.id);
+    } catch (err) {
+      console.error((err as Error).message);
+      process.exitCode = 1;
+      return;
+    }
   }
-  if (!dryRun) console.log('Try /mixer, /critique or /learn-plugin in Claude Code. (/learn-plugin saves what it learns to LoreKit, see the README.)');
+  const homes = skillsHomes(targets.length ? targets : ['claude']);
+  const verb = dryRun ? 'Would install' : 'Installed';
+  const jobs: { label: string; dir: string; include?: ('skills' | 'agents' | 'knowledge')[]; what: string }[] = [];
+  if (homes.claude) jobs.push({ label: '~/.claude', dir: join(homedir(), '.claude'), what: 'the mix skills, agents and knowledge' });
+  if (homes.agents) jobs.push({ label: '~/.agents', dir: join(homedir(), '.agents'), include: ['skills', 'agents'], what: 'the mix skills and agents' });
+  // The skills read their knowledge from ~/.claude/knowledge whichever harness runs them
+  if (homes.agents && !homes.claude) jobs.push({ label: '~/.claude', dir: join(homedir(), '.claude'), include: ['knowledge'], what: 'the knowledge base the skills read' });
+  for (const job of jobs) {
+    const r = installClaudeAssets(src, job.dir, { dryRun, include: job.include });
+    console.log(`${ui.mark('ok')} ${verb} ${job.what} in ${job.label}: ${r.installed.length} new, ${r.updated.length} updated, ${r.unchanged} already current.`);
+    for (const s of r.skipped) {
+      const why = { edited: 'you changed it, left as is', 'not-ours': 'already exists and is yours, left as is', symlink: 'linked elsewhere, left as is', 'broken-symlink': 'a link to a folder that no longer exists (a deleted clone?); remove it and run this again' }[s.reason];
+      console.log(ui.dim(`  Skipped ${s.path}: ${why}`));
+    }
+  }
+  if (!dryRun) console.log('Try /mixer, /critique or /learn-plugin in your harness. (/learn-plugin saves what it learns to LoreKit, see the README.)');
 }
 
 function consoleConsentIO() {
-  return { input: process.stdin, output: process.stdout, interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY) };
+  return { input: process.stdin, output: process.stdout, interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY), ui };
 }
 
 const OPT_OUT_COUNTED = 'One anonymous "opted out" count was sent (no install id). Nothing is sent after this.';
@@ -331,31 +415,37 @@ async function askTelemetryOnce(): Promise<boolean> {
 
 function describeTelemetry(): string {
   const { mode, reason } = resolveTelemetry();
-  const label = { default: 'On — pseudonymous usage data to the developer', custom: 'Custom — your own OTEL_* destination', off: 'Off' }[mode];
-  return `${label} (${reason})`;
+  const label = { default: ui.ok('On — pseudonymous usage data to the developer'), custom: ui.cmd('Custom — your own OTEL_* destination'), off: ui.dim('Off') }[mode];
+  return `${label} ${ui.dim(`(${reason})`)}`;
 }
 
 // reaper-mcp telemetry [status|on|off|setup]
 async function telemetryCommand(sub = 'status'): Promise<void> {
-  if (sub === 'on' || sub === 'off') {
-    const change = saveTelemetryChoice(sub === 'on');
-    const counted = change ? await reportConsentChange(change) : false;
-    if (sub === 'on') console.log('Pseudonymous usage telemetry turned on — thank you!');
-    else console.log(counted ? `Telemetry turned off. ${OPT_OUT_COUNTED}` : 'Telemetry turned off. Nothing will be sent.');
-    console.log('Restart Claude Code (or run /mcp) for the running server to pick it up.');
-  } else if (sub === 'setup') {
-    if (!(await askTelemetryOnce())) console.log(`Telemetry: ${describeTelemetry()}`);
-    return;
-  } else if (sub !== 'status') {
-    console.log('Usage: reaper-mcp telemetry [status|on|off]');
+  if (sub !== 'on' && sub !== 'off' && sub !== 'setup' && sub !== 'status') {
+    console.log(`Usage: ${ui.cmd('reaper-mcp telemetry')} [status|on|off]`);
     process.exitCode = 1;
     return;
   }
-  console.log(`Telemetry: ${describeTelemetry()}`);
-  console.log(`What is and isn't collected: ${TELEMETRY_DOC_URL}`);
+  // Only on a terminal: scripts read this command's output, so a pipe gets exactly the lines below
+  if (ui.fancy && sub !== 'setup') console.log(ui.banner('Telemetry', readServiceVersion()));
+  // Turning it off asks once more, at a terminal only (and not when it is already off)
+  if (sub === 'off' && resolveTelemetry().mode === 'default' && !(await confirmOptOutPrompt(consoleConsentIO()))) return;
+  if (sub === 'on' || sub === 'off') {
+    const change = saveTelemetryChoice(sub === 'on');
+    const counted = change ? await reportConsentChange(change) : false;
+    if (sub === 'on') console.log(`${ui.mark('ok')} Pseudonymous usage telemetry turned ${ui.ok('on')} — thank you!`);
+    else console.log(`${ui.mark('ok')} Telemetry turned ${ui.bold('off')}. ${counted ? OPT_OUT_COUNTED : 'Nothing will be sent.'}`);
+    console.log(`${ui.dim('Restart Claude Code (or run')} ${ui.cmd('/mcp')}${ui.dim(') for the running server to pick it up.')}`);
+  } else if (sub === 'setup') {
+    if (!(await askTelemetryOnce())) console.log(`${ui.bold('Telemetry:')} ${describeTelemetry()}`);
+    return;
+  }
+  console.log(`${ui.bold('Telemetry:')} ${describeTelemetry()}`);
+  console.log(`What is and isn't collected: ${ui.link(TELEMETRY_DOC_URL)}`);
 }
 
-async function doctor(): Promise<void> {
+/** Prints the report and returns the exit code (0 = everything it checks is in place) */
+async function doctor(): Promise<number> {
   const core: Check[] = [];
 
   const bridgeRunning = await isBridgeRunning();
@@ -377,9 +467,10 @@ async function doctor(): Promise<void> {
   const globalClaudeDir = join(homedir(), '.claude');
   const localSkills = existsSync(join(process.cwd(), '.claude', 'skills', 'mixer', 'SKILL.md'));
   const globalSkills = existsSync(join(globalClaudeDir, 'skills', 'mixer', 'SKILL.md'));
+  const sharedSkills = existsSync(join(homedir(), '.agents', 'skills', 'mixer', 'SKILL.md'));
   core.push(
-    localSkills || globalSkills
-      ? { label: 'Mix skills', status: 'ok', detail: localSkills ? '.claude/skills' : '~/.claude/skills' }
+    localSkills || globalSkills || sharedSkills
+      ? { label: 'Mix skills', status: 'ok', detail: localSkills ? '.claude/skills' : globalSkills ? '~/.claude/skills' : '~/.agents/skills' }
       : { label: 'Mix skills', status: 'fail', detail: 'Not linked', fix: findCloneRoot(__dirname) ? 'scripts/sync-symlinks.sh (from your clone)' : 'reaper-mcp install-skills' },
   );
 
@@ -393,14 +484,22 @@ async function doctor(): Promise<void> {
       : { label: 'Knowledge base', status: 'fail', detail: 'Not linked', fix: findCloneRoot(__dirname) ? 'scripts/sync-symlinks.sh (from your clone)' : 'reaper-mcp install-skills' },
   );
 
-  const userServer = hasUserMcpServer(join(homedir(), '.claude.json'));
   const mcpJsonExists = existsSync(join(process.cwd(), '.mcp.json'));
-  const mcpRegistered = userServer || mcpJsonExists;
-  core.push(
-    mcpRegistered
-      ? { label: 'MCP config', status: 'ok', detail: userServer ? 'Registered for your user (any folder)' : '.mcp.json in this folder' }
-      : { label: 'MCP config', status: 'fail', detail: 'Not registered', fix: findCloneRoot(__dirname) ? 'scripts/install.sh (from your clone)' : 'reaper-mcp init' },
-  );
+  const harnessEnv = realEnv();
+  const installed = detectHarnesses(harnessEnv);
+  const connected = installed.filter((h) => registeredServer(h.id, harnessEnv));
+  const staleOnes = connected.filter((h) => isStale(registeredServer(h.id, harnessEnv)!));
+  const fixMcp = findCloneRoot(__dirname) ? 'scripts/install.sh (from your clone)' : 'reaper-mcp init';
+  const mcpRegistered = staleOnes.length === 0 && (connected.length > 0 || mcpJsonExists);
+  if (staleOnes.length) {
+    core.push({ label: 'MCP config', status: 'fail', detail: `${staleOnes.map((h) => h.name).join(', ')}: points at files that no longer exist`, fix: fixMcp });
+  } else if (connected.length || mcpJsonExists) {
+    const where = [...connected.map((h) => h.name), ...(mcpJsonExists ? ['.mcp.json in this folder'] : [])].join(', ');
+    const missing = installed.filter((h) => !connected.includes(h));
+    core.push({ label: 'MCP config', status: 'ok', detail: `Connected: ${where}${missing.length ? ` · not yet: ${missing.map((h) => h.name).join(', ')} (reaper-mcp init)` : ''}` });
+  } else {
+    core.push({ label: 'MCP config', status: 'fail', detail: installed.length ? `Not registered in ${installed.map((h) => h.name).join(', ')}` : 'No supported harness found (Claude Code, Codex CLI, Gemini CLI, Cursor)', fix: fixMcp });
+  }
 
   core.push({ label: 'SWS', status: 'info', detail: 'Checked live: the bridge page shows it, or ask Claude to run list_available_fx' });
   const telemetry = resolveTelemetry().mode;
@@ -527,8 +626,9 @@ async function doctor(): Promise<void> {
   if (extensionChecks.length > 0) sections.push({ title: 'Extensions', checks: extensionChecks });
   const extensionsBroken = extensionChecks.some((c) => c.status === 'fail');
 
-  console.log(renderDoctor(sections, { version: readServiceVersion(), color: useColor() }));
-  process.exit(bridgeRunning && knowledgeLinked && mcpRegistered && !sidecarBroken && !extensionsBroken ? 0 : 1);
+  if (ui.fancy) console.log(ui.banner('Doctor', readServiceVersion()));
+  console.log(renderDoctor(sections, { version: readServiceVersion(), color: useColor(), header: !ui.fancy }));
+  return bridgeRunning && knowledgeLinked && mcpRegistered && !sidecarBroken && !extensionsBroken ? 0 : 1;
 }
 
 async function serve(): Promise<void> {
@@ -644,10 +744,13 @@ switch (command) {
     break;
 
   case 'doctor':
-    doctor().catch((err) => {
-      console.error('Doctor failed:', err);
-      process.exit(1);
-    });
+    doctor().then(
+      (code) => process.exit(code),
+      (err) => {
+        console.error('Doctor failed:', err);
+        process.exit(1);
+      },
+    );
     break;
 
   case 'telemetry':
@@ -679,7 +782,7 @@ switch (command) {
     (async () => {
       const status = await getBridgeState();
       const running = status.state === 'connected';
-      console.log(`Bridge status: ${running ? 'CONNECTED' : `NOT DETECTED (${status.state})`}`);
+          console.log(`Bridge status: ${running ? ui.ok('CONNECTED') : ui.fail(`NOT DETECTED (${status.state})`)}`);
       if (!running) console.log(bridgeDownMessage(status));
       process.exit(running ? 0 : 1);
     })();
@@ -702,20 +805,23 @@ Install from npm (below), or clone the repo and run ./scripts/install.sh.
 Usage:
   reaper-mcp                  Start MCP server (stdio mode)
   reaper-mcp serve            Start MCP server (stdio mode)
-  reaper-mcp setup            Install Lua bridge + JSFX analyzers into REAPER
+  reaper-mcp setup            Install Lua bridge + JSFX analyzers into REAPER, then offer init and doctor
+                              (--yes: do all three without asking; --verbose lists every file)
   reaper-mcp setup-sidecar    Install the Python sidecar (opt-in audio analysis); in a terminal it asks which parts.
                               Agents/CI: --yes (core + aesthetics weights), --all, --with-separation (Demucs),
                               --with-chords (chord model), --without-aesthetics, --list [--json] (what is installed)
   reaper-mcp extension        Manage opt-in extensions: list | add <name|folder|git-url> | link <folder> | remove <name> | new <name>
-  reaper-mcp init             Configure Claude Code: tool allow-list + .mcp.json (copy-free); from npm also installs the skills
-  reaper-mcp install-skills   Copy the mix skills, agents and knowledge into ~/.claude (npm install; --dry-run to preview)
+  reaper-mcp init             Connect the harnesses you have installed (Claude Code, Codex CLI, Gemini CLI, Cursor) and suggest the ones you don't;
+                              --harness claude,codex or --all to pick by hand. From npm it also installs the skills
+  reaper-mcp install-skills   Copy the mix skills, agents and knowledge into ~/.claude, and skills + agents into ~/.agents for the
+                              other harnesses (npm install; --harness to pick, --dry-run to preview)
   reaper-mcp doctor           Check that everything is configured correctly
   reaper-mcp status           Check if Lua bridge is running in REAPER
   reaper-mcp telemetry off    Opt out of pseudonymous usage telemetry (also: on, status)
 
 Quick Start (from npm):
   npm install -g @mthines/reaper-mcp
-  reaper-mcp setup && reaper-mcp init     # bridge into REAPER, tools + skills into Claude Code
+  reaper-mcp setup && reaper-mcp init     # bridge into REAPER, tools + skills into your harness(es)
   # then start (or restart) REAPER: the bridge starts with it
 
 Quick Start (from your clone):

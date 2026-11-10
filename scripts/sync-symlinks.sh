@@ -10,6 +10,16 @@
 #   ~/.claude/agents/<name>.md  →  <repo>/.claude/agents/<name>.md   (subagent definition)
 #   ~/.claude/knowledge         →  <repo>/knowledge                  (whole tree)
 #
+# The skills and agents are also linked into ~/.agents (the shared, client-neutral
+# folder other agent CLIs such as Gemini CLI and Codex read), so the same skills
+# work outside Claude Code:
+#
+#   ~/.agents/skills/<name>     →  <repo>/.claude/skills/<name>
+#   ~/.agents/agents/<name>.md  →  <repo>/.claude/agents/<name>.md
+#
+# The skills still read and write ~/.claude/knowledge, so that link stays the one
+# knowledge location for every client. Use --no-agents to skip ~/.agents.
+#
 # Each skill is a directory containing SKILL.md — the layout Claude Code
 # discovers. Skills are found recursively (any dir holding a SKILL.md), so a
 # flat layout (.claude/skills/<name>/SKILL.md) and a nested category layout
@@ -28,14 +38,17 @@
 #   scripts/sync-symlinks.sh            # apply (verbose per-action log)
 #   scripts/sync-symlinks.sh --dry-run  # preview only
 #   scripts/sync-symlinks.sh -n         # short form of --dry-run
+#   scripts/sync-symlinks.sh --no-agents  # only ~/.claude, leave ~/.agents alone
 
 set -euo pipefail
 
 DRY_RUN=0
+SYNC_AGENTS_DIR=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run|-n) DRY_RUN=1; shift ;;
-    *) echo "error: unknown argument: $1" >&2; echo "usage: $0 [--dry-run|-n]" >&2; exit 1 ;;
+    --no-agents) SYNC_AGENTS_DIR=0; shift ;;
+    *) echo "error: unknown argument: $1" >&2; echo "usage: $0 [--dry-run|-n] [--no-agents]" >&2; exit 1 ;;
   esac
 done
 
@@ -43,6 +56,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLAUDE_DIR="$HOME/.claude"
 CLAUDE_SKILLS_DIR="$CLAUDE_DIR/skills"
 CLAUDE_AGENTS_DIR="$CLAUDE_DIR/agents"
+SHARED_DIR="$HOME/.agents"
+SHARED_SKILLS_DIR="$SHARED_DIR/skills"
+SHARED_AGENTS_DIR="$SHARED_DIR/agents"
 
 created=0; repaired=0; skipped_ok=0; skipped_unsafe=0
 log() { printf '%s\n' "$*"; }
@@ -80,6 +96,7 @@ link() {
 }
 
 ensure_dir "$CLAUDE_SKILLS_DIR"
+(( SYNC_AGENTS_DIR )) && ensure_dir "$SHARED_SKILLS_DIR"
 
 # 1. Each skill dir (any dir holding a SKILL.md) → ~/.claude/skills/<name>
 #    Flattened to the skill's own basename, so nested category layouts work too.
@@ -88,13 +105,16 @@ while IFS= read -r -d '' skill_md; do
   # A maintainer skill (marked .repo-only) works inside this repo only; never link it into ~/.claude
   [[ -e "$skill_dir/.repo-only" ]] && continue
   link "$CLAUDE_SKILLS_DIR/$(basename "$skill_dir")" "$skill_dir"
+  (( SYNC_AGENTS_DIR )) && link "$SHARED_SKILLS_DIR/$(basename "$skill_dir")" "$skill_dir"
 done < <(find "$REPO_ROOT/.claude/skills" -mindepth 1 -maxdepth 5 -type f -name SKILL.md -print0)
 
 # 2. Each agent definition → ~/.claude/agents/<name>.md
 if [[ -d "$REPO_ROOT/.claude/agents" ]]; then
   ensure_dir "$CLAUDE_AGENTS_DIR"
+  (( SYNC_AGENTS_DIR )) && ensure_dir "$SHARED_AGENTS_DIR"
   while IFS= read -r -d '' agent_md; do
     link "$CLAUDE_AGENTS_DIR/$(basename "$agent_md")" "$agent_md"
+    (( SYNC_AGENTS_DIR )) && link "$SHARED_AGENTS_DIR/$(basename "$agent_md")" "$agent_md"
   done < <(find "$REPO_ROOT/.claude/agents" -mindepth 1 -maxdepth 1 -type f -name '*.md' -print0)
 fi
 

@@ -8,6 +8,7 @@ import { tracing } from '@opentelemetry/sdk-node';
 import {
   AnonymizingSpanExporter,
   consentReportAllowed,
+  confirmOptOutPrompt,
   firstRunTelemetryNotice,
   readTelemetryConfig,
   resolveTelemetry,
@@ -108,8 +109,8 @@ describe('firstRunTelemetryNotice', () => {
   it.each([
     ['', 'default', 'on'],
     ['y', 'default', 'on'],
-    ['n', 'off', 'off'],
-    ['No', 'off', 'off'],
+    ['n\ny', 'off', 'off'],
+    ['No\nyes', 'off', 'off'],
   ])('answer %j keeps telemetry %s and returns it as the choice to report', async (answer, mode, state) => {
     const dir = tempDir();
     const { choice, printed } = await run(dir, answer);
@@ -121,9 +122,25 @@ describe('firstRunTelemetryNotice', () => {
     expect(resolveTelemetry({}, readTelemetryConfig(dir), WITH_TOKEN).mode).toBe(mode);
   });
 
+  it.each(['n\n', 'n\nn', 'n\nno', 'n\n\n'])('asks once more before turning it off, and %j keeps it on', async (answer) => {
+    const dir = tempDir();
+    const { choice, printed } = await run(dir, answer);
+
+    expect(printed).toMatch(/Totally your call/);
+    expect(printed).toMatch(/I can't see your music, projects, track names or files/);
+    expect(printed).toMatch(/Turn telemetry off anyway\?/);
+    expect(choice).toEqual({ state: 'on', source: 'first_run_prompt' });
+    expect(resolveTelemetry({}, readTelemetryConfig(dir), WITH_TOKEN).mode).toBe('default');
+  });
+
+  it('does not ask twice when someone keeps it on from the start', async () => {
+    const { printed } = await run(tempDir(), 'y');
+    expect(printed).not.toMatch(/Totally your call/);
+  });
+
   it('shows the notice only once', async () => {
     const dir = tempDir();
-    await run(dir, 'n');
+    await run(dir, 'n\ny');
 
     const again = await run(dir, 'y');
 
@@ -260,5 +277,33 @@ describe('AnonymizingSpanExporter', () => {
     await provider.forceFlush();
 
     expect(sink.getFinishedSpans()[0].attributes).toEqual(run);
+  });
+});
+
+describe('confirmOptOutPrompt (reaper-mcp telemetry off)', () => {
+  async function ask(answer: string | null) {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    let printed = '';
+    output.on('data', (chunk: Buffer) => { printed += chunk.toString(); });
+    if (answer !== null) input.end(`${answer}\n`);
+    const off = await confirmOptOutPrompt({ input, output, interactive: answer !== null });
+    return { off, printed };
+  }
+
+  it('turns it off after a yes, with the reasons it was asked', async () => {
+    const { off, printed } = await ask('y');
+    expect(off).toBe(true);
+    expect(printed).toMatch(/just me: one developer/);
+  });
+
+  it.each(['', 'n', 'maybe'])('keeps it on for %j, and says thanks', async (answer) => {
+    const { off, printed } = await ask(answer);
+    expect(off).toBe(false);
+    expect(printed).toMatch(/telemetry stays on/);
+  });
+
+  it('turns it off without asking when nobody is at the keyboard', async () => {
+    expect(await ask(null)).toEqual({ off: true, printed: '' });
   });
 });

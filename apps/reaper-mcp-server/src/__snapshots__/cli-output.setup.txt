@@ -1,0 +1,36 @@
+REAPER MCP — Setup
+
+Bridge directory: <home>/REAPER/Scripts/mcp_bridge_data
+
+Installing Lua scripts...
+  ✓ <n> scripts installed
+
+Installing JSFX analyzers...
+  ✓ <n> JSFX files installed
+
+Installing example plugins...
+  ✓ <n> example plugins installed
+
+Installing bridge status UI...
+  ✓ Status page installed
+
+Starting the bridge with REAPER...
+  ✓ Added to Scripts/__startup.lua (REAPER runs it at launch)
+    Turn it off in the bridge window: Settings > Start with REAPER.
+
+Enabling REAPER web interface...
+  ✓ Enabled on port 8099 (override with REAPER_WEB_PORT)
+
+Registering snapshot actions (quick save, next, previous)...
+  ✓ Added: mcp_snapshot_quick_save.lua, mcp_snapshot_next.lua, mcp_snapshot_prev.lua
+    Bind keys in Actions > Show action list: search "mcp_snapshot".
+
+✓ Setup complete!
+
+Next steps:
+  1. Start REAPER: the bridge starts with it. If REAPER is already open, restart it,
+     or run the bridge once by hand: Actions > Show action list > Load ReaScript,
+     select <home>/REAPER/Scripts/mcp_bridge.lua and click Run.
+  2. Connect your AI harness: reaper-mcp init, then check it with reaper-mcp doctor
+
+The bridge opens its status window on start: http://localhost:8099/mcp_bridge.html

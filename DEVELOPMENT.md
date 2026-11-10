@@ -144,6 +144,29 @@ reports it registered. It rewrites `docs/assets/install-demo.gif`, so re-run it
 whenever the installer's output changes. It does not cover loading the bridge in
 REAPER.
 
+### Harness setup tests (`reaper-mcp init`)
+
+`init` connects whichever of Claude Code, Codex CLI, Gemini CLI and Cursor is installed, and `install-skills` puts the skills
+where each one reads them. Two tests cover it:
+
+- **In CI, and in `pnpm nx test reaper-mcp-server`:** `src/init-harnesses.test.ts` runs the built package the way an npm user
+  does (outside any clone, an empty `HOME`) against stand-in `claude`, `codex` and `gemini` commands that write the config
+  files the real ones do, and snapshots what `init` prints (`src/__snapshots__/init-harnesses.*.txt`; paths and skill counts
+  are normalised, but "0 new" on a second run is not). A change to what the setup says or does fails the test until the
+  snapshot is reviewed and updated: `pnpm nx test reaper-mcp-server -- src/init-harnesses.test.ts -u`. It needs the build
+  (CI builds first) and is skipped without one locally (a failure in CI). `src/cli-output.test.ts` does the same for `setup` and `telemetry` (`src/__snapshots__/cli-output.*.txt`), both through the `src/cli-sandbox.ts` helper (a fresh HOME + REAPER folder + fake harness commands). `harnesses.test.ts` covers the logic with no process involved.
+- **Locally, against the real CLIs:** `pnpm test:harnesses` (`scripts/test-harnesses.sh`, needs `vhs` and the `claude`,
+  `codex` and `gemini` commands) records `scripts/harnesses-demo.tape` into `docs/assets/harnesses-demo.gif`, then asks each
+  harness's own `mcp list` what it sees and checks the skills and `doctor`. Re-run it when `init`'s output changes, so the GIF
+  stays true. Not in CI: it needs three installed, logged-in CLIs.
+
+Its terminal output (colour, the logo banner) comes from `src/terminal-ui.ts`; the GIF is recorded with `COLORTERM=truecolor`, and a
+taller window than the output needs would scroll the lines the tape waits for out of sight.
+
+Two things found while writing it: `claude mcp list` changes the terminal's keyboard mode, so it must be the last command in
+the recording, and Gemini CLI disables MCP servers in a folder you have not trusted (`GEMINI_CLI_TRUST_WORKSPACE=true` for a
+headless check).
+
 ### Stress / performance tests (requires REAPER)
 
 The bridge stress tests exercise the full round-trip through the live Lua bridge — file write, Lua defer loop pickup, ReaScript execution, response write, and client poll. They measure latency, throughput, concurrency, and degradation under sustained load.

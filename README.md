@@ -185,7 +185,7 @@ That's it. It installs everything, puts the connector into REAPER and sets up Cl
 Nothing else to install. When a new version is out, the bridge window in REAPER shows an
 **Update** button that does the rest. From a terminal it's `./scripts/update.sh`.
 
-<img src="docs/assets/install-demo.gif" alt="A real run of the install command: six green checkmarks, then Done! with the one step left in REAPER." width="100%">
+<img src="docs/assets/install-demo.gif" alt="A real run of the install command: green checkmarks for each step, then Done! with the one step left in REAPER." width="100%">
 
 <sub>A real run, recorded by our install test (<code>scripts/test-install.sh</code>). The very first
 download takes about a minute.</sub>
