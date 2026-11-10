@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { EXAMPLE_NOW, MEASUREMENT_EXAMPLES } from '../../demo/examples.js';
 import type { CommandEntry } from '../../lib/commands.js';
 import { Measurement } from './index.js';
@@ -104,7 +104,7 @@ export const ShowsThePreviousAndNewLoudnessOnHover: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.hover(canvas.getByRole('img', { name: /^Integrated/ }));
-    await expect(canvas.getByRole('tooltip').textContent).toMatch(/Integrated −[\d.]+ → −[\d.]+ LUFS [▲▼] [\d.]+ LU/);
+    await expect((await canvas.findByRole('tooltip')).textContent).toMatch(/Integrated −[\d.]+ → −[\d.]+ LUFS [▲▼] [\d.]+ LU/);
   },
 };
 
@@ -116,9 +116,9 @@ export const ShowsABandsShareOnHover: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.hover(canvas.getByText('Bass'));
-    await expect(canvas.getByRole('tooltip').textContent).toMatch(/Bass · 60–250 Hz\s*−6\.0 dB of the energy/);
+    await expect((await canvas.findByRole('tooltip')).textContent).toMatch(/Bass · 60–250 Hz\s*−6\.0 dB of the energy/);
     await userEvent.unhover(canvas.getByText('Bass'));
-    await expect(canvas.queryByRole('tooltip')).toBeNull();
+    await waitFor(() => expect(canvas.queryByRole('tooltip')).toBeNull());
   },
 };
 
@@ -138,7 +138,7 @@ export const ShowsATracksPeakAndTheOneBeforeOnHover: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.hover(canvas.getByText('Kick'));
-    const tip = canvas.getByRole('tooltip').textContent ?? '';
+    const tip = (await canvas.findByRole('tooltip')).textContent ?? '';
     await expect(tip).toMatch(/Peak −?[\d.]+ dBFS · RMS −[\d.]+ dBFS/);
     await expect(tip).toMatch(/Previous call: peak/);
   },
