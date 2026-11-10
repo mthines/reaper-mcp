@@ -44,7 +44,7 @@ Want it to remember plugins and your corrections? Connect LoreKit (free): https:
 Try: /mixer "Please gain stage my tracks"  ·  /critique "Roast my mix"
 
 
-  REAPER MCP doctor  v0.82.0
+  REAPER MCP doctor  v<version>
 
   Core
   ✗ Lua bridge         Not detected

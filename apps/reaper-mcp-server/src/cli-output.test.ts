@@ -97,7 +97,8 @@ describe.skipIf(!runBuiltSuites)('reaper-mcp setup --yes, for scripts and agents
     const m = machine(sandbox, 'yes', ['codex'], { reaperIni: true });
     const r = m.run('setup', '--yes');
     expect(r.code).toBe(0);
-    await expect(r.out).toMatchFileSnapshot('./__snapshots__/cli-output.setup-yes.txt');
+    // The release bump changes the version: keep it out of the snapshot
+    await expect(r.out.replace(/ v\d+\.\d+\.\d+/g, ' v<version>')).toMatchFileSnapshot('./__snapshots__/cli-output.setup-yes.txt');
     expect(existsSync(join(m.reaper, 'Scripts', 'mcp_bridge.lua'))).toBe(true);
     expect(existsSync(join(m.home, '.agents', 'skills', 'mixer', 'SKILL.md'))).toBe(true);
     expect(readFileSync(join(m.home, '.codex', 'config.toml'), 'utf-8')).toContain('mcp_servers.reaper');
