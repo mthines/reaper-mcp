@@ -123,9 +123,9 @@ describe('the toolkit itself', () => {
   const toolkit = loadToolkit();
   const top = toolkit.replace(/\/\/[^\n]*/g, '');
 
-  it('is version 1.3.0: the 1.0 widget API unchanged, so earlier plugins re-inline without changes', async () => {
+  it('is version 1.4.0: the 1.0 widget API unchanged, so earlier plugins re-inline without changes', async () => {
     const { toolkitVersion } = await import('./jsfx/inline.js');
-    expect(toolkitVersion(toolkit)).toBe('1.3.0');
+    expect(toolkitVersion(toolkit)).toBe('1.4.0');
   });
 
   it('sets the drawer state once, so REAPER re-running @init on Play never closes the Advanced drawer', () => {

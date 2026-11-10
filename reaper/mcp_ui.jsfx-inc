@@ -1,4 +1,4 @@
-// mcp_ui.jsfx-inc: the reaper-mcp @gfx toolkit, v1.3.0
+// mcp_ui.jsfx-inc: the reaper-mcp @gfx toolkit, v1.4.0
 //
 // Canonical source. `write_jsfx` pastes the body below (everything after this header) into the
 // plugin's own @init section, so a generated plugin is ONE file with no dependency on this one,
@@ -27,7 +27,7 @@
 //   1490..1505  ui_pd   the pads: when a key-struck pad lets go (time_precise), 0 = held or off (ui_pads)
 //   1520..1775  ui_sqsl the sequencer's selected notes (lane * 32 + note), 1 = selected (ui_seq)
 //   1776..2031  ui_sqor where the selected notes started when a drag began (ui_seq)
-//   1506..2047  spare for the toolkit
+//   1506..1519 and 2032..2047  spare for the toolkit
 //   2048..      ui_mem  the plugin
 // Every global starts with ui_. Sliders must be UNNAMED (slider1:0.5<0,1,0.01>Label): named
 // sliders do not keep their value in sliderN, which the toolkit reads through slider(idx).
@@ -72,7 +72,7 @@ ui_grain = 0.3;        // grain strength: the tile is bg-level noise of +/-0.06,
 ui_img_bg = 120; ui_img_tile = 121;
 
 // Filled in by write_jsfx's metadata block (shown in the About dialog): never the user's request.
-strcpy(#ui_name, "Plugin"); strcpy(#ui_date, ""); strcpy(#ui_tkv, "1.3.0");
+strcpy(#ui_name, "Plugin"); strcpy(#ui_date, ""); strcpy(#ui_tkv, "1.4.0");
 ui_pver = 0; ui_nctl = 0; ui_akind = 0; ui_example = 0;
 
 // Per-slider metadata (index 1..64), filled by write_jsfx from the slider lines.
@@ -403,7 +403,7 @@ function ui_sqdelsel() local(l, i, p, k, n) (
   );
 );
 
-// The sequencer's typed keys (REAPER's "Send all keyboard input to plug-in"): 1-4 set the brush length, s / t / d its
+// The sequencer's typed keys (REAPER's "Send all keyboard input to plug-in"): 1-4 set the brush length, q / w / e its
 // feel, Delete or Backspace removes the selected notes, Cmd/Ctrl+A selects all.
 function ui_sqkey(c) (
   (c == 6579564 || c == 8) ? ( ui_sqdelsel(); ui_edv += 1; ) :
@@ -1744,7 +1744,7 @@ function ui_sqcol(f) ( f == 1 ? ui_cLive : f == 2 ? ui_cWarn : ui_cAccent; );
 // grid redraws on the lines of what you are about to place. On a note: Cmd/Ctrl-click adds it to the selection, drag = move, Shift-drag = velocity (up/down), drag its right edge to
 // resize, scroll = length (Cmd/Ctrl-scroll = velocity), right-click or double-click deletes it, and Alt/Option-drag erases every note the pointer crosses. Cmd/Ctrl while placing
 // or moving ignores the grid.
-function ui_seq(buf, lanes, note_idx, label) local(gx, gw, gy, rh, lw, lt, nl, hov, ln, t, hi, p, k, i, l, x, y, w, h, c, v, fe, st, s, d, dx, dy, ns, o, e, f2, now, edge, ex, cx, cw, ch, n, hint, base, rhov, uhov) (
+function ui_seq(buf, lanes, note_idx, label) local(ux, gx, gw, gy, rh, lw, lt, nl, hov, ln, t, hi, p, k, i, l, x, y, w, h, c, v, fe, st, s, d, dx, dy, ns, o, e, f2, now, edge, ex, cx, cw, ch, n, hint, base, rhov, uhov) (
   ui_cell();
   ui_sqb = buf; ui_sqnl = max(1, min(8, floor(lanes))); nl = ui_sqnl; ui_sqon = nl;
   ui_pn = 0; strcpy(#ui_pword, "LANE");   // a ui_padmap beside it lights lane i like note i

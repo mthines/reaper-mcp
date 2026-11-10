@@ -78,8 +78,9 @@ function wrongMinMaxCalls(code: string): { at: number; count: number }[] {
   return out;
 }
 
-/** `while (cond)` not followed by a parenthesised body: EEL2 cannot compile it, and the whole section silently does nothing. Offsets. */
-function whileWithoutBody(code: string): number[] {
+/** `while (cond)` followed by a bare statement instead of a parenthesised body (seen live: the section silently did nothing). The one-argument form `while (stmt; cond);` is fine. Offsets. */
+function whileWithoutBody(source: string): number[] {
+  const code = source.replace(/"[^"\n]*"/g, (s) => ' '.repeat(s.length));   // a `while (` inside a string is not code
   const out: number[] = [];
   for (const m of code.matchAll(/\bwhile\s*\(/g)) {
     let depth = 1;
@@ -89,7 +90,7 @@ function whileWithoutBody(code: string): number[] {
       else if (code[i] === ')') depth--;
     }
     const next = code.slice(i).match(/\S/)?.[0];
-    if (next !== undefined && next !== '(') out.push(m.index ?? 0);
+    if (next !== undefined && next !== '(' && next !== ';' && next !== ')') out.push(m.index ?? 0);
   }
   return out;
 }
@@ -272,7 +273,7 @@ export function lintJsfx(source: string): LintFinding[] {
   }
 
   for (const at of whileWithoutBody(code)) {
-    add('while-no-body', 'error', 'while (condition) needs its body in parentheses: while (cond) ( statement; ); EEL2 cannot compile a bare statement after it, so the whole section (and the plugin) would silently do nothing.', lineOf(at));
+    add('while-no-body', 'error', 'while (condition) needs its body in parentheses: while (cond) ( statement; ); with a bare statement after it the section silently did nothing when tried in REAPER.', lineOf(at));
   }
 
   for (const c of wrongMinMaxCalls(code)) {

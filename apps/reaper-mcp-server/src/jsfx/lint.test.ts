@@ -153,6 +153,11 @@ ui_begin(2, 0) ? ( ui_tall(2); ui_row(1); ui_freqgraph("Split"); ui_fhandle(1, "
     expect(rules(OK.replace('ui_end();', 'ui_adv_open == 1 ? 0; ui_end();'))).not.toContain('ui-state-reset');
   });
 
+  it('does not flag the one-argument while (stmt; cond); or a while ( inside a string', () => {
+    expect(rules(OK.replace('update(); ui_boot(0);', 'update(); while (i += 1; i < 4); ui_boot(0);'))).not.toContain('while-no-body');
+    expect(rules(OK.replace('update(); ui_boot(0);', 'update(); sprintf(#s, "while (x) y"); ui_boot(0);'))).not.toContain('while-no-body');
+  });
+
   it('allows closing the drawer right after @serialize loaded a state (REAPER\'s undo loads state back mid-session)', () => {
     const guarded = OK.replace('update(); ui_boot(0);', 'update(); file_avail(0) >= 0 ? ui_adv_open = 0; ui_boot(0);');
     expect(rules(guarded)).not.toContain('ui-state-reset');

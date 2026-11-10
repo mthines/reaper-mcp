@@ -30,18 +30,21 @@ slider12:43<0,127,1>-Pad 8
     len = slider3 * 0.001 * srate;
     ch = slider4 - 1;
   );
-  function send(due, st, n, v) local(s, q) (
-    s = 0;
-    while (s < 64 && ui_mem[s * 4] != 0) ( s += 1; );
-    s < 64 ? ( q = ui_mem + s * 4; q[0] = due; q[1] = st; q[2] = n; q[3] = v; );
+  // a note on (at due) and its off (len samples later): both queued or neither, so a full queue never leaves a note held
+  function sendpair(due, st, n, v) local(a, b, q) (
+    a = 0; while (a < 64 && ui_mem[a * 4] != 0) ( a += 1; );
+    b = a + 1; while (b < 64 && ui_mem[b * 4] != 0) ( b += 1; );
+    b < 64 ? (
+      q = ui_mem + a * 4; q[0] = due; q[1] = 144 + st; q[2] = n; q[3] = v;
+      q = ui_mem + b * 4; q[0] = due + len; q[1] = 128 + st; q[2] = n; q[3] = 0;
+    );
   );
   // pad p (0-7) struck at sample offset ofs: the mapped note on now (plus a little lateness), off after Length
   function strike(p, vel, ofs) local(due, v) (
     due = t + ofs + rand(1) * jit;
     v = floor(vel * (1 + (rand(2) - 1) * vjit) + 0.5);
     v = min(127, max(1, v));
-    send(due, 144 + ch, slider(5 + p), v);
-    send(due + len, 128 + ch, slider(5 + p), 0);
+    sendpair(due, ch, slider(5 + p), v);
   );
   update();
   ui_boot(2);

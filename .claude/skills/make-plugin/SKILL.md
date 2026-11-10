@@ -13,7 +13,7 @@ argument-hint: '[what the plugin should do | update <plugin>: <what to change>]'
 license: MIT
 metadata:
   author: mthines
-  version: '1.3.0'
+  version: '1.4.0'
   workflow_type: applied
   tags: [plugins, jsfx, dsp, ui, reaper, live-verification]
 ---

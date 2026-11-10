@@ -370,10 +370,14 @@ describe('toolkit 1.3: the memory map', () => {
       { name: 'ui_grm', size: 8 },
       { name: 'ui_kb', size: 128 },
       { name: 'ui_fi', size: number('ui_gn') }, // the input trace of the before/after view
+      { name: 'ui_kq', size: 34 }, // the keys played with the mouse
+      { name: 'ui_pd', size: 16 },
+      { name: 'ui_sqsl', size: 256 }, // the sequencer's selection flags
+      { name: 'ui_sqor', size: 256 }, // where its selected notes started a drag
     ].map((r) => ({ ...r, start: number(r.name) }));
     for (const r of regions) expect(r.start, r.name).toBeGreaterThanOrEqual(1024);
     for (let i = 1; i < regions.length; i++) expect(regions[i].start).toBeGreaterThanOrEqual(regions[i - 1].start + regions[i - 1].size);
-    expect(number('ui_mem')).toBeGreaterThanOrEqual(regions[regions.length - 1].start + 128);
+    expect(number('ui_mem')).toBeGreaterThanOrEqual(regions[regions.length - 1].start + 256);
     expect(number('ui_mem')).toBeGreaterThanOrEqual(number('ui_fi') + 128);
   });
 
