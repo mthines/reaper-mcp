@@ -180,6 +180,10 @@ pnpm lint                           # Lint everything
 pnpm nx lint reaper-mcp-server      # Lint server only
 ```
 
+### Pre-push hook
+
+`pnpm install` sets up a husky `pre-push` hook (`.husky/pre-push`) that runs `nx affected --target=lint,test,build` against `origin/main`, the same targets CI runs, on only what your push touches. Skip it once with `git push --no-verify`.
+
 ## Developing the bridge and its status page
 
 Run the bridge dev server while you work on `reaper/` or `apps/bridge-ui/`:
