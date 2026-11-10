@@ -68,7 +68,7 @@ export function machine(sandbox: string, name: string, installed: FakeHarness[] 
   cpSync(builtPackage, pkg, { recursive: true });
   symlinkSync(serverDeps, join(pkg, 'node_modules'));
   // The status page the real package ships (a page and a PWA manifest are enough for setup to install it)
-  mkdirSync(join(pkg, 'bridge-ui'));
+  mkdirSync(join(pkg, 'bridge-ui'), { recursive: true }); // the real build already ships this folder in CI
   writeFileSync(join(pkg, 'bridge-ui', 'mcp_bridge.html'), '<!doctype html>\n');
   writeFileSync(join(pkg, 'bridge-ui', 'mcp_bridge.webmanifest'), '{}\n');
   if (opts.cursor) mkdirSync(join(home, '.cursor'));
