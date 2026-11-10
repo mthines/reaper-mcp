@@ -35,7 +35,7 @@ work as usual.
 | Your plugins | `<REAPER>/Effects/reaper-mcp-generated/<name>.jsfx` |
 | Their suggested presets | `<REAPER>/presets/js-reaper-mcp-generated_<name>_jsfx.ini` (REAPER's own file; written by `src/jsfx/presets.ts`) |
 | Earlier versions of a plugin | `~/.config/reaper-mcp/jsfx-history/<name>/` (outside `Effects/`, so REAPER never scans them; `REAPER_MCP_CONFIG_DIR` overrides the folder) |
-| The four examples | `Effects/reaper-mcp-generated/examples/`, installed by `reaper-mcp setup` (a copy you edited is never overwritten) |
+| The seven examples | `Effects/reaper-mcp-generated/examples/`, installed by `reaper-mcp setup` (a copy you edited is never overwritten) |
 
 `write_jsfx` pastes the toolkit into the plugin's `@init`, so the file never depends on
 `mcp_ui.jsfx-inc` being installed. Editing a plugin means passing the whole file back: the old
@@ -55,7 +55,7 @@ Mix and Output as bars top-right; the Advanced drawer sits along the bottom. Scr
 |---|---|
 | **Knobs** (`ui_knob`): Tape Sat, two core knobs and Mix / Output in the header<br><img src="assets/make-plugin/tape-sat.png" width="420" alt="Tape Sat: two large knobs, Mix and Output bars in the header"> | **Frequency graph with draggable bands** (`ui_freqgraph`, `ui_fhandle`, `ui_fthresh`): Multiband Compressor, crossovers in Hz and a threshold line per band, reduction bars below<br><img src="assets/make-plugin/multiband-compressor.png" width="420" alt="Multiband Compressor: log frequency graph with two crossover handles and per-band threshold lines"> |
 | **Per-band levels** (`ui_fband`, `ui_bandknob`): Split Tilt, one level per side of the crossover, drag a band up or down<br><img src="assets/make-plugin/split-tilt.png" width="420" alt="Split Tilt: frequency graph with a crossover handle and a level line per band"> | **Transfer curve and reduction meter** (`ui_transfer`, `ui_grmeter`): Squash<br><img src="assets/make-plugin/squash.png" width="420" alt="Squash: compressor transfer curve with the threshold line and a gain-reduction meter"> |
-| **Playable keyboard** (`ui_keyboard`, read with `ui_kpoll`): Key Voice, 88 keys along the bottom, click or drag to play<br><img src="assets/make-plugin/key-voice.png" width="420" alt="Key Voice: three controls above an 88-key keyboard"> | |
+| **Playable keyboard** (`ui_keyboard`, read with `ui_kpoll`): Key Voice, 88 keys along the bottom, click or drag to play<br><img src="assets/make-plugin/key-voice.png" width="420" alt="Key Voice: three controls above an 88-key keyboard"> | **Pattern editor** (`ui_seq`): Step Sequencer, drag to select, Shift-drag to paint, notes carry their own length and feel<br><img src="assets/make-plugin/step-sequencer.png" width="420" alt="Step Sequencer: six lanes of notes on a beat grid, length and feel buttons above, four humanize knobs below"> |
 
 The shots were taken while a broadband test signal played, so the graphs show the live spectrum trace.
 The sources are in `.claude/skills/make-plugin/examples/` (Tape Sat, Multiband Compressor); Split Tilt, Squash and
@@ -155,6 +155,9 @@ not a developer group.
 | **Mutate Verb** | Mutate, Size, Mix, Output | Seed, Pitch range, Reverse, Bright, Pre-delay, Damping | Subtle glue, Ghost tails, Broken tape, Dark room |
 | **Tape Sat** | Drive, Tone, Mix, Output | Bias, Wow, Flutter, 2x | Warm bus, Crushed drums, Old cassette, Vocal sheen |
 | **Width / Bass Mono** | Width, Mono below, Output, level meter | Slope, Mid, Side | Tight low end, Wide chorus bus, Gentle spread, Mono check |
+| **Pad MIDI** | Timing, Velocity, Length, Channel, eight playable pads | **Note map**: which note each pad sends (`ui_padmap`), so any library's layout works | Plain (36-43), GM kit, Chromatic from C2, Loose human |
+| **Step Sequencer** | Pattern (`ui_seq`: four to eight lanes, per-note length and straight / triplet / dotted, brush buttons and keys 1-4 / q w e), Beats, Gate, Timing, Velocity | Channel, **note map**: which note each lane sends (`ui_padmap`) | Plain, Loose human, Three beats, Chromatic from C2 |
+| **Drum Pads** | Level, Tune, Decay, eight playable pads (`ui_pads`: mouse, `z x c v / a s d f`, or MIDI notes 36-43) | none | Tight, Roomy, Low and long, Bright and short |
 
 ## Proving a plugin works
 

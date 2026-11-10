@@ -1,0 +1,89 @@
+desc:Drum Pads
+// accent: red
+import mcp_ui.jsfx-inc
+
+// An eight-pad drum synth that needs no samples: click or drag the pads, press z x c v / a s d f on
+// the keyboard (Shift = hard), or play MIDI notes 36-43. Each pad is a small synthesized voice
+// (kicks, snare, clap, hats, tom, rim). Core view: Level, Tune, Decay and the pads.
+// Shows ui_pads, played by ui_kpoll() and lit by ui_kkey().
+
+slider1:-6<-24,6,0.1>Level
+slider2:0<-12,12,1>Tune
+slider3:1<0.4,2,0.01>Decay
+
+@init
+  // voice i: state at ui_mem + i * 8 (phase, amp, pitch env, last noise, velocity);
+  // sound i: ui_mem + 64 + i * 8 (start Hz, end Hz, pitch decay s, amp decay s, noise mix, noise high-pass,
+  // then the two per-sample decay coefficients update() fills in)
+  function sound(i, f0, f1, pd, ad, nz, hp) local(p) (
+    p = ui_mem + 64 + i * 8;
+    p[0] = f0; p[1] = f1; p[2] = pd; p[3] = ad; p[4] = nz; p[5] = hp;
+  );
+  sound(0, 160, 48, 0.04, 0.35, 0.02, 0);   // kick
+  sound(1, 110, 38, 0.06, 0.6, 0, 0);       // deep kick
+  sound(2, 220, 160, 0.03, 0.18, 0.75, 0);  // snare
+  sound(3, 0, 0, 0.01, 0.22, 1, 1);         // clap
+  sound(4, 0, 0, 0.01, 0.05, 1, 1);         // closed hat
+  sound(5, 0, 0, 0.01, 0.35, 1, 1);         // open hat
+  sound(6, 200, 110, 0.05, 0.3, 0.05, 0);   // tom
+  sound(7, 1700, 1500, 0.01, 0.06, 0.1, 0); // rim
+  function hit(i, vel) local(v) (
+    i >= 0 && i < 8 ? (
+      v = ui_mem + i * 8;
+      v[1] = 1; v[2] = 1; v[4] = vel / 127;
+    );
+  );
+  function update() local(i, p) (
+    level = 10 ^ (slider1 / 20);
+    tune = 2 ^ (slider2 / 12);
+    step = 2 * $pi / srate;
+    i = 0;
+    loop(8,
+      p = ui_mem + 64 + i * 8;
+      p[6] = exp(-1 / (p[2] * srate));
+      p[7] = exp(-1 / (p[3] * slider3 * srate));
+      i += 1;
+    );
+  );
+  function voice(i) local(v, p, f, n) (
+    v = ui_mem + i * 8; p = ui_mem + 64 + i * 8;
+    v[1] > 0.0005 ? (
+      f = (p[1] + (p[0] - p[1]) * v[2]) * tune;
+      v[0] += f * step; v[0] > 2 * $pi ? v[0] -= 2 * $pi;
+      v[2] *= p[6];
+      n = rand(2) - 1;
+      p[5] > 0.5 ? ( f = n - v[3]; v[3] = n; n = f * 0.5; );
+      out += (sin(v[0]) * (1 - p[4]) + n * p[4]) * v[1] * v[4];
+      v[1] *= p[7];
+    );
+  );
+  update();
+  ui_boot(2);
+
+@slider
+  update();
+
+@block
+  ui_changed() ? update();
+  // MIDI in: notes 36-43 hit the pads and light them
+  while (midirecv(ofs, m1, m2, m3)) (
+    (m1 & 240) == 144 && m3 > 0 ? ( hit(m2 - 36, m3); ui_kkey(m2, m3); ) :
+    ((m1 & 240) == 128 || ((m1 & 240) == 144 && m3 == 0)) ? ui_kkey(m2, 0);
+  );
+  // pads the user struck with the mouse or the keyboard
+  while (ui_kpoll()) ( ui_kv > 0 ? hit(ui_kn - 36, ui_kv); );
+
+@sample
+  out = 0;
+  voice(0); voice(1); voice(2); voice(3); voice(4); voice(5); voice(6); voice(7);
+  out *= level;
+  spl0 = out; spl1 = out;
+
+@gfx 420 340
+  ui_begin(3, 0) ? (
+    ui_row(3);
+    ui_knob(1, "Level", 1); ui_knob(2, "Tune", 5); ui_knob(3, "Decay", 0);
+    ui_tall(2); ui_row(1);
+    ui_pads(36, 4, 2, "Pads");
+    ui_end();
+  );

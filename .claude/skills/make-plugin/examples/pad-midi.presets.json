@@ -1,0 +1,6 @@
+[
+  { "name": "Plain (36-43)", "values": { "Timing": 0, "Velocity": 0, "Length": 120, "Pad 1": 36, "Pad 2": 37, "Pad 3": 38, "Pad 4": 39, "Pad 5": 40, "Pad 6": 41, "Pad 7": 42, "Pad 8": 43 } },
+  { "name": "GM kit", "values": { "Pad 1": 36, "Pad 2": 35, "Pad 3": 38, "Pad 4": 39, "Pad 5": 42, "Pad 6": 46, "Pad 7": 45, "Pad 8": 37 } },
+  { "name": "Chromatic from C2", "values": { "Pad 1": 48, "Pad 2": 49, "Pad 3": 50, "Pad 4": 51, "Pad 5": 52, "Pad 6": 53, "Pad 7": 54, "Pad 8": 55 } },
+  { "name": "Loose human", "values": { "Timing": 12, "Velocity": 0.15, "Length": 120 } }
+]

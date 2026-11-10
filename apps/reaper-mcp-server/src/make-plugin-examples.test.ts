@@ -11,8 +11,8 @@ const dir = join(__dirname, '..', '..', '..', '.claude', 'skills', 'make-plugin'
 const files = readdirSync(dir).filter((f) => f.endsWith('.jsfx'));
 
 describe('the /make-plugin examples', () => {
-  it('ships the three v1 examples and the multiband compressor', () => {
-    expect(files.sort()).toEqual(['multiband-compressor.jsfx', 'mutate-verb.jsfx', 'tape-sat.jsfx', 'width-bass-mono.jsfx']);
+  it('ships the three v1 examples, the multiband compressor, the drum pads and the pad MIDI', () => {
+    expect(files.sort()).toEqual(['drum-pads.jsfx', 'multiband-compressor.jsfx', 'mutate-verb.jsfx', 'pad-midi.jsfx', 'step-sequencer.jsfx', 'tape-sat.jsfx', 'width-bass-mono.jsfx']);
   });
 
   for (const file of files) {
@@ -123,9 +123,9 @@ describe('the toolkit itself', () => {
   const toolkit = loadToolkit();
   const top = toolkit.replace(/\/\/[^\n]*/g, '');
 
-  it('is version 1.3.0: the 1.0 widget API unchanged, so earlier plugins re-inline without changes', async () => {
+  it('is version 1.4.0: the 1.0 widget API unchanged, so earlier plugins re-inline without changes', async () => {
     const { toolkitVersion } = await import('./jsfx/inline.js');
-    expect(toolkitVersion(toolkit)).toBe('1.3.0');
+    expect(toolkitVersion(toolkit)).toBe('1.4.0');
   });
 
   it('sets the drawer state once, so REAPER re-running @init on Play never closes the Advanced drawer', () => {

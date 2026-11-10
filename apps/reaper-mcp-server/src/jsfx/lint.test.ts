@@ -72,6 +72,13 @@ ui_begin(2, 0) ? ( ui_tall(2); ui_row(1); ui_freqgraph("Split"); ui_fhandle(1, "
     expect(f.find((x) => x.rule === 'science-literal')?.line).toBe(9);
   });
 
+  it('refuses a while loop whose body is not in parentheses, which REAPER cannot compile', () => {
+    const bare = OK.replace('spl0 *= gain;', 'while (gain < 0) gain += 1; spl0 *= gain;');
+    expect(errorsOf(lintJsfx(bare)).map((x) => x.rule)).toContain('while-no-body');
+    const ok = OK.replace('spl0 *= gain;', 'while (gain < 0) ( gain += 1; ); spl0 *= gain;');
+    expect(errorsOf(lintJsfx(ok)).map((x) => x.rule)).not.toContain('while-no-body');
+  });
+
   it('refuses max/min with three arguments, which REAPER cannot compile', () => {
     const f = lintJsfx(OK.replace('spl0 *= gain;', 'spl0 *= max(gain, abs(spl0), 0.5);'));
     expect(errorsOf(f).map((x) => x.rule)).toContain('two-arg-minmax');
@@ -144,6 +151,16 @@ ui_begin(2, 0) ? ( ui_tall(2); ui_row(1); ui_freqgraph("Split"); ui_fhandle(1, "
     expect(errorsOf(f)).toEqual([]);
     expect(warningsOf(f).map((x) => x.rule)).toEqual(['ui-state-reset']);
     expect(rules(OK.replace('ui_end();', 'ui_adv_open == 1 ? 0; ui_end();'))).not.toContain('ui-state-reset');
+  });
+
+  it('does not flag the one-argument while (stmt; cond); or a while ( inside a string', () => {
+    expect(rules(OK.replace('update(); ui_boot(0);', 'update(); while (i += 1; i < 4); ui_boot(0);'))).not.toContain('while-no-body');
+    expect(rules(OK.replace('update(); ui_boot(0);', 'update(); sprintf(#s, "while (x) y"); ui_boot(0);'))).not.toContain('while-no-body');
+  });
+
+  it('allows closing the drawer right after @serialize loaded a state (REAPER\'s undo loads state back mid-session)', () => {
+    const guarded = OK.replace('update(); ui_boot(0);', 'update(); file_avail(0) >= 0 ? ui_adv_open = 0; ui_boot(0);');
+    expect(rules(guarded)).not.toContain('ui-state-reset');
   });
 
   it('warns when the plugin sets its own accent, which write_jsfx owns', () => {

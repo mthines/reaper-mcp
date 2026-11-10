@@ -154,7 +154,7 @@ describe('the accent', () => {
     const v110 = readFileSync(join(__dirname, '__fixtures__', 'accent-probe-v1.1.0.jsfx'), 'utf8');
     const out = inlineToolkit(v110, { toolkit: loadToolkit(), version: readVersion(v110) + 1, slug: 'accent-probe', date: '2026-11-08' });
     expect(out.match(/\/\/ ---- mcp_ui /g)).toHaveLength(1);
-    expect(out).toContain('// toolkit: mcp_ui 1.3.0');
+    expect(out).toContain('// toolkit: mcp_ui 1.4.0');
     expect(out).toMatch(/ui_theme\(\$x[0-9a-f]{6}\);/);
     expect(out).toContain('strcpy(#ui_name, "Accent Probe"); strcpy(#ui_date, "2026-11-08");');
     expect(out.split('\n')[0]).toBe('desc:Accent Probe (reaper-mcp)');

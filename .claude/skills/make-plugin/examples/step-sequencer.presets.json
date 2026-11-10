@@ -1,0 +1,47 @@
+[
+  {
+    "name": "Plain",
+    "values": {
+      "Beats": 4,
+      "Gate": 80,
+      "Timing": 0,
+      "Velocity": 0,
+      "Lane 1": 36,
+      "Lane 2": 38,
+      "Lane 3": 42,
+      "Lane 4": 46,
+      "Lane 5": 39,
+      "Lane 6": 41,
+      "Lane 7": 43,
+      "Lane 8": 49,
+      "Lanes": 4
+    }
+  },
+  {
+    "name": "Loose human",
+    "values": {
+      "Timing": 12,
+      "Velocity": 0.15,
+      "Gate": 70
+    }
+  },
+  {
+    "name": "Three beats",
+    "values": {
+      "Beats": 3,
+      "Gate": 80,
+      "Timing": 0,
+      "Velocity": 0
+    }
+  },
+  {
+    "name": "Chromatic from C2",
+    "values": {
+      "Lane 1": 36,
+      "Lane 2": 37,
+      "Lane 3": 38,
+      "Lane 4": 39,
+      "Gate": 100
+    }
+  }
+]
