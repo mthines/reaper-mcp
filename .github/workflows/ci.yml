@@ -370,18 +370,19 @@ jobs:
             # main only takes pull requests: open the version bump as one and merge it when its checks pass.
             # Its merge commit is tagged and released by the "Tag the merged release" step of the next run.
             BRANCH="release/v$VERSION"
-            if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-              echo "::warning::Release PR branch $BRANCH already exists — skipping"
-              echo "created=false" >> $GITHUB_OUTPUT
-              exit 0
+            # Re-runnable: a branch or PR left by a failed run is reused, never duplicated
+            if ! git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+              git checkout -b "$BRANCH"
+              git add apps/*/package.json libs/*/package.json
+              git commit -m "chore(release): v$VERSION"
+              git push origin "$BRANCH"
             fi
-            git checkout -b "$BRANCH"
-            git add apps/*/package.json libs/*/package.json
-            git commit -m "chore(release): v$VERSION"
-            git push origin "$BRANCH"
-            PR_URL=$(gh pr create --base main --head "$BRANCH" \
-              --title "chore(release): v$VERSION" \
-              --body "Version bump for v$VERSION, opened by CI. Merges itself once its checks pass; the merge is then tagged and released.")
+            PR_URL=$(gh pr list --head "$BRANCH" --state open --json url --jq '.[0].url')
+            if [ -z "$PR_URL" ]; then
+              PR_URL=$(gh pr create --base main --head "$BRANCH" \
+                --title "chore(release): v$VERSION" \
+                --body "Version bump for v$VERSION, opened by CI. Merges itself once its checks pass; the merge is then tagged and released.")
+            fi
             gh pr merge "$PR_URL" --auto --squash
             echo "::notice::Opened release PR $PR_URL for v$VERSION"
             echo "created=false" >> $GITHUB_OUTPUT
