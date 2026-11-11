@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { InstallBanner, Toggle } from '../../components/index.js';
+import { Toggle } from '../../components/index.js';
 import { REPO_URL } from '../../lib/links.js';
 import { load, save } from '../../lib/storage.js';
 import { isStringOrNull, useUrlState } from '../../lib/url-state.js';
@@ -15,6 +15,7 @@ const SNAPSHOT: ChangelogRelease[] | undefined = __HOSTED__ ? parseReleases(__RE
 /**
  * The changelog as a page of its own (`?page=changelog`, `/changelog` on the hosted site): every release, newest
  * first, in a column made to be linked to. `?release=0.79.1` and `#release-0.79.1` open and highlight one release.
+ * No demo banner here, even on the hosted site: the page stays a clean read, with "Try the live demo" as its way in.
  */
 export function ChangelogPage({
   releases,
@@ -42,7 +43,6 @@ export function ChangelogPage({
 
   return (
     <main className={styles.page}>
-      {__HOSTED__ && <InstallBanner />}
       <header className={styles.head}>
         <div>
           <h1 className={styles.title}>What’s new in reaper-mcp</h1>
