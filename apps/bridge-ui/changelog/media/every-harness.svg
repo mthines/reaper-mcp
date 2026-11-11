@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000">
+  <!-- reaper-mcp init: REAPER connected to every AI harness it finds; the flow along the four wires is the one moving thing -->
+  <defs>
+    <linearGradient id="accent" gradientUnits="userSpaceOnUse" x1="560" y1="0" x2="1480" y2="0">
+      <stop offset="0" stop-color="#7cc4ff" />
+      <stop offset="1" stop-color="#c4a5ff" />
+    </linearGradient>
+    <radialGradient id="stage" cx="50%" cy="0%" r="90%">
+      <stop offset="0" stop-color="#7cc4ff" stop-opacity="0.12" />
+      <stop offset="1" stop-color="#7cc4ff" stop-opacity="0" />
+    </radialGradient>
+    <filter id="glow" x="-20%" y="-50%" width="140%" height="200%">
+      <feGaussianBlur stdDeviation="14" />
+    </filter>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#0e0f11" />
+  <rect width="1600" height="1000" fill="url(#stage)" />
+
+  <!-- The wires: a soft glow under each, then the signal flowing along it (1.2 s loop) -->
+  <g fill="none" stroke="url(#accent)" stroke-linecap="round">
+    <g stroke-width="18" opacity="0.3" filter="url(#glow)">
+      <path d="M560 500 H700 C850 500 850 230 992 230" />
+      <path d="M560 500 H700 C850 500 850 410 992 410" />
+      <path d="M560 500 H700 C850 500 850 590 992 590" />
+      <path d="M560 500 H700 C850 500 850 770 992 770" />
+    </g>
+    <g stroke-width="8" stroke-dasharray="26 22">
+      <path d="M560 500 H700 C850 500 850 230 992 230" />
+      <path d="M560 500 H700 C850 500 850 410 992 410" />
+      <path d="M560 500 H700 C850 500 850 590 992 590" />
+      <path d="M560 500 H700 C850 500 850 770 992 770" />
+      <animate attributeName="stroke-dashoffset" from="96" to="0" dur="1.2s" repeatCount="indefinite" />
+    </g>
+  </g>
+
+  <g font-family="-apple-system, Inter, 'Segoe UI', sans-serif">
+    <!-- REAPER and the one command that connects it -->
+    <rect x="160" y="400" width="400" height="200" rx="28" fill="#1b1d21" stroke="url(#accent)" stroke-width="5" />
+    <text x="360" y="490" font-size="44" fill="#e7e9ec" text-anchor="middle">REAPER</text>
+    <text x="360" y="546" font-size="32" fill="#8a909a" text-anchor="middle" font-family="ui-monospace, 'SF Mono', Menlo, monospace">reaper-mcp init</text>
+
+    <!-- Every harness it found, each connected -->
+    <g fill="#1b1d21" stroke="#2f333a" stroke-width="3">
+      <rect x="1000" y="155" width="480" height="150" rx="28" />
+      <rect x="1000" y="335" width="480" height="150" rx="28" />
+      <rect x="1000" y="515" width="480" height="150" rx="28" />
+      <rect x="1000" y="695" width="480" height="150" rx="28" />
+    </g>
+    <g font-size="44" fill="#e7e9ec">
+      <text x="1050" y="245">Claude Code</text>
+      <text x="1050" y="425">Codex CLI</text>
+      <text x="1050" y="605">Gemini CLI</text>
+      <text x="1050" y="785">Cursor</text>
+    </g>
+    <g fill="#4ade80">
+      <circle cx="1418" cy="230" r="26" />
+      <circle cx="1418" cy="410" r="26" />
+      <circle cx="1418" cy="590" r="26" />
+      <circle cx="1418" cy="770" r="26" />
+    </g>
+    <g fill="none" stroke="#0e0f11" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M1406 231 l8 8 l16 -17" />
+      <path d="M1406 411 l8 8 l16 -17" />
+      <path d="M1406 591 l8 8 l16 -17" />
+      <path d="M1406 771 l8 8 l16 -17" />
+    </g>
+
+    <!-- Caption chip: what init reports -->
+    <rect x="160" y="660" width="400" height="72" rx="36" fill="none" stroke="#2f333a" stroke-width="3" />
+    <text x="360" y="708" font-size="32" fill="#7cc4ff" text-anchor="middle">4 found, 4 connected</text>
+  </g>
+</svg>

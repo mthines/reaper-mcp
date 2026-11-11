@@ -2,6 +2,29 @@
   "version": 1,
   "highlights": [
     {
+      "id": "every-harness",
+      "pr": 118,
+      "kind": "animation",
+      "group": "new",
+      "title": "Works with Codex, Gemini CLI and Cursor too",
+      "blurb": "reaper-mcp init finds Claude Code, Codex CLI, Gemini CLI and Cursor on your computer and connects REAPER to each one. Setup now ends by offering it and a check that everything is in place: press Enter twice.",
+      "tryIt": "reaper-mcp init",
+      "media": "media/every-harness.svg",
+      "poster": "media/every-harness.webp",
+      "alt": "REAPER, connected by reaper-mcp init, sends a signal to Claude Code, Codex CLI, Gemini CLI and Cursor, each marked connected: 4 found, 4 connected."
+    },
+    {
+      "id": "step-sequencer",
+      "pr": 117,
+      "kind": "screenshot",
+      "group": "new",
+      "title": "Drum pads and a step sequencer from /make-plugin",
+      "blurb": "/make-plugin can now build eight playable drum pads or a step sequencer with 4 to 8 lanes. Draw notes like in REAPER’s MIDI editor, give each its own length and feel, and undo inside the plugin.",
+      "tryIt": "/make-plugin a step sequencer for my drums",
+      "media": "media/step-sequencer.webp",
+      "alt": "The Step Sequencer plugin in REAPER: six drum lanes from C2 to F2, a 16th-note pattern with one note selected, length and feel buttons, and Beats, Gate, Timing and Velocity knobs."
+    },
+    {
       "id": "whats-new-drawer",
       "pr": 102,
       "kind": "animation",
