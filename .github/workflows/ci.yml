@@ -76,9 +76,7 @@ jobs:
           elif [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_REF="origin/${{ github.base_ref }}"
             PR_NUMBER="${{ github.event.pull_request.number }}"
-            if [ "${{ github.event.pull_request.draft }}" = "false" ]; then
-              IS_BETA="true"
-            fi
+            # No beta from a PR event: a beta is cut only by a `/beta` comment (beta-comment.yml dispatches this workflow).
             echo "::notice::PR #$PR_NUMBER — comparing against $BASE_REF"
 
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -241,7 +239,6 @@ jobs:
           needs.detect-changes.outputs.changed == 'true' &&
           (
             (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-            (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
             (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || needs.detect-changes.outputs.pr_number != ''))
           )
         )
