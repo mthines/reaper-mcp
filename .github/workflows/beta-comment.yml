@@ -1,0 +1,47 @@
+name: Beta on comment
+
+# A beta release is cut only when someone with write access comments `/beta` on an open PR.
+# It dispatches CI on the PR's branch; CI detects the open PR and publishes <version>-beta.<pr>.<n>.
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+  issues: write
+
+jobs:
+  dispatch:
+    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/beta') && github.event.comment.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch CI for the PR branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+        run: |
+          react() { gh api "repos/$REPO/issues/comments/$COMMENT_ID/reactions" -f content="$1" >/dev/null || true; }
+          say() { gh pr comment "$PR" --repo "$REPO" --body "$1"; }
+
+          PERM=$(gh api "repos/$REPO/collaborators/$COMMENTER/permission" --jq .permission 2>/dev/null || echo none)
+          if [ "$PERM" != "admin" ] && [ "$PERM" != "write" ] && [ "$PERM" != "maintain" ]; then
+            echo "::notice::$COMMENTER has no write access; ignoring /beta"
+            exit 0
+          fi
+
+          INFO=$(gh pr view "$PR" --repo "$REPO" --json state,headRefName,isCrossRepository)
+          if [ "$(echo "$INFO" | jq -r .state)" != "OPEN" ]; then
+            react confused; say "\`/beta\`: this PR is not open."; exit 0
+          fi
+          if [ "$(echo "$INFO" | jq -r .isCrossRepository)" = "true" ]; then
+            react confused; say "\`/beta\`: betas are not cut for PRs from forks."; exit 0
+          fi
+
+          BRANCH=$(echo "$INFO" | jq -r .headRefName)
+          gh workflow run ci.yml --repo "$REPO" --ref "$BRANCH"
+          react rocket
