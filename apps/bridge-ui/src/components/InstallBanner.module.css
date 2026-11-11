@@ -9,21 +9,38 @@
 .pill { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: #08121c; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .lead { flex: 1 1 280px; min-width: 0; }
 .links { display: inline-flex; gap: 6px; }
-.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-width: 100%; }
-.steps li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
-.step { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--text); border: 1px solid var(--line-2); }
-.banner code { max-width: 100%; overflow-x: auto; white-space: nowrap; padding: 2px 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line-2); color: var(--text); }
-.more { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+
+.more { width: 100%; }
 .more > summary { list-style: none; }
 .more > summary::-webkit-details-marker { display: none; }
 .summary { display: none; cursor: pointer; color: var(--text); font-weight: 600; }
 .summary::after { content: '▾'; margin-left: 6px; color: var(--faint); }
 .more:not([open]) > .summary::after { content: '▸'; }
-.more > button { align-self: flex-start; }
+
+/* The steps on the left, Copy commands on the right edge under Install guide / GitHub, level with the last step */
+.body { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; }
+/* One grid for the three steps, so the numbers, the labels and the two commands each line up in a column */
+.steps {
+  flex: 1 1 auto; min-width: 0; list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: 18px max-content minmax(0, 1fr); gap: 6px 10px;
+}
+/* Each row lines up by its text: the number sits beside a step's first line even when the step wraps */
+.steps li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; }
+.step { width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--text); border: 1px solid var(--line-2); }
+.text { grid-column: 2 / -1; line-height: 1.6; }
+.banner code { padding: 1px 6px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line-2); color: var(--text); white-space: nowrap; }
+/* A command never wraps: it scrolls inside its own box when the banner is narrower than it */
+.banner .cmd { justify-self: start; max-width: 100%; overflow-x: auto; padding: 3px 8px; line-height: 18px; }
+.copy { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
 
 @media (max-width: 720px) {
   .banner { padding: 10px 12px; gap: 8px; font-size: 12px; }
+  .more[open] > .summary { margin-bottom: 8px; }
   .summary { display: block; }
   .links { margin-left: auto; }
   .lead { flex-basis: 100%; }
+  /* A phone: each command goes under its label, indented with the step's text, instead of wrapping to the edge */
+  .steps { grid-template-columns: 18px minmax(0, 1fr); gap: 8px; }
+  .steps li { row-gap: 4px; }
+  .label, .banner .cmd, .text { grid-column: 2; }
 }
