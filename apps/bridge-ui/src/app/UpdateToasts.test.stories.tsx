@@ -18,12 +18,12 @@ const current: BridgeStatus = { ...status, control: { ...control, update: { kind
 const idleDone: BridgeStatus = done;
 
 /** Steps a status feed forward on a click, so a play function can watch the toasts follow an update */
-const Feed = ({ steps, request, onReload }: { steps: BridgeStatus[]; request: () => void; onReload: () => void }) => {
+const Feed = ({ steps, onReload }: { steps: BridgeStatus[]; onReload: () => void }) => {
   const [i, setI] = useState(0);
   return (
     <>
       <button onClick={() => setI((n) => Math.min(n + 1, steps.length - 1))}>Next</button>
-      <UpdateToasts status={steps[i]} request={request} onReload={onReload} />
+      <UpdateToasts status={steps[i]} onReload={onReload} />
     </>
   );
 };
@@ -33,7 +33,7 @@ const meta = {
   component: Feed,
   tags: ['test'],
   parameters: { chromatic: { disableSnapshot: true } },
-  args: { steps: [status], request: fn(), onReload: fn() },
+  args: { steps: [status], onReload: fn() },
   beforeEach: () => {
     resetUpdateReady();
     toast.dismiss(); // toasts live on document.body, so one story's would leak into the next

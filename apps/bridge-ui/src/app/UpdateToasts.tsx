@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Toaster, toast } from 'sonner';
 import type { CSSProperties } from 'react';
-import type { BridgeAction } from '../lib/update.js';
 import { markUpdateReady, updateLog } from '../lib/update.js';
 import type { BridgeStatus } from '../lib/status.js';
 import { track } from '../lib/analytics.js';
@@ -36,11 +35,9 @@ const THEME = {
  */
 export function UpdateToasts({
   status,
-  request,
   onReload = () => location.reload(),
 }: {
   status: BridgeStatus | null;
-  request: (action: BridgeAction) => void;
   onReload?: () => void;
 }) {
   const update = status?.control?.update;
@@ -93,7 +90,7 @@ export function UpdateToasts({
         },
       });
     }
-  }, [state, step, runStartedAt, request, onReload, source]);
+  }, [state, step, runStartedAt, onReload, source]);
 
   return <Toaster position="bottom-right" theme="dark" style={THEME} closeButton />;
 }

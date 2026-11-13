@@ -13,7 +13,7 @@ const withUpdate = (state: 'running' | 'failed' | 'done', log: string[]): Bridge
 const meta = {
   title: 'App/UpdateToasts',
   component: UpdateToasts,
-  args: { status, request: fn(), onReload: fn() },
+  args: { status, onReload: fn() },
 } satisfies Meta<typeof UpdateToasts>;
 export default meta;
 type Story = StoryObj<typeof meta>;

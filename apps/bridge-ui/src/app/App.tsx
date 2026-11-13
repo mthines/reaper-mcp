@@ -205,7 +205,7 @@ export function App() {
             : undefined
         }
       />
-      <UpdateToasts status={status} request={request} />
+      <UpdateToasts status={status} />
       {status ? (
         <>
           <Notices status={status} settings={settings} onSet={changeSetting('notice')} request={request} release={updateAvailable} onSkip={skipUpdate} onWhatsNew={openChangelog('notice')} />
