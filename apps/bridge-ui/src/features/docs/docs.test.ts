@@ -71,6 +71,13 @@ describe('llms.txt', () => {
     const out = renderLlmsFull([g('critique', 'try', 1), g('install', 'start', 1)]);
     expect(out.indexOf('# install')).toBeLessThan(out.indexOf('# critique'));
   });
+
+  it('makes a guide\'s relative links absolute, since the file sits at the site root', () => {
+    const out = renderLlmsFull([{ ...g('install', 'start', 1), body: 'See [the fixes](faq.md#something) and ![mixer](media/mixer.webp), or [Discord](https://discord.gg/x).' }], 'https://example.test');
+    expect(out).toContain('[the fixes](https://example.test/docs/faq.md#something)');
+    expect(out).toContain('![mixer](https://example.test/docs/media/mixer.webp)');
+    expect(out).toContain('[Discord](https://discord.gg/x)');
+  });
 });
 
 // The real guides in docs/guides: the checks that keep the site from shipping a broken page

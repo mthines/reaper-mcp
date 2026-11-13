@@ -7,16 +7,26 @@ Each guide is one `.md` file with frontmatter:
 ```yaml
 ---
 title: Install and connect
-nav: Install            # optional, a shorter name for the sidebar when the title is long
+nav: Install
 summary: One sentence, used in the nav tooltip, on the index page and in llms.txt.
-section: start        # start | safe | try | know
-order: 3              # position inside the section, unique
-youtube: dQw4w9WgXcQ  # optional, the 11-character video id (not a URL); without it the page says "Video coming soon"
-poster: media/x.webp  # optional, the still shown before the video plays
-duration: 3 min       # optional
-image: media/x.png    # optional, a picture for the guide's card when it has no video
+section: start
+order: 3
+youtube: dQw4w9WgXcQ
+poster: media/x.webp
+duration: 3 min
+image: media/x.png
 ---
 ```
+
+A value runs to the end of its line, so never put a `# comment` after one. What each field is:
+
+- `nav` (optional): a shorter name for the sidebar when the title is long.
+- `section`: `start`, `safe`, `try` or `know`.
+- `order`: the position inside the section, unique.
+- `youtube` (optional): the 11-character video id, not a URL. Without it the page says "Video coming soon".
+- `poster` (optional): the still shown before the video plays.
+- `duration` (optional): for example `3 min`.
+- `image` (optional): a picture for the guide's card when it has no video.
 
 Writing them:
 

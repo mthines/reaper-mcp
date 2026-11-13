@@ -80,7 +80,7 @@ const hostedDocs = (): Plugin => ({
     cpSync(guidesDir, join(out, 'docs'), { recursive: true, filter: (src) => !['README.md', 'CLAUDE.md'].includes(basename(src)) });
     writeFileSync(join(out, 'docs/index.json'), guidesIndex(guides));
     writeFileSync(join(out, 'llms.txt'), renderLlmsTxt(guides, llmsOrigin()));
-    writeFileSync(join(out, 'llms-full.txt'), renderLlmsFull(guides));
+    writeFileSync(join(out, 'llms-full.txt'), renderLlmsFull(guides, llmsOrigin()));
   },
 });
 

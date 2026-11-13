@@ -7,7 +7,7 @@
       "kind": "animation",
       "group": "new",
       "title": "Docs for musicians, in plain words",
-      "blurb": "Guides for getting started, staying safe and trying things, at reaper-mcp.vercel.app/docs. Search them from the ⌘K palette here, and press any heading to copy a link to that section.",
+      "blurb": "Guides for getting started, staying safe and trying things, at reaper-mcp.vercel.app/docs. Search them from the ⌘K palette here, and press any heading to get a link to that section.",
       "tryIt": "⌘K → Docs, or the Docs link in the footer",
       "media": "media/docs-site.mp4",
       "poster": "media/docs-site.webp",

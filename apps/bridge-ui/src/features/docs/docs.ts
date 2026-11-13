@@ -154,9 +154,20 @@ export function renderLlmsTxt(guides: GuideMeta[], origin = ''): string {
   return lines.join('\n');
 }
 
+/**
+ * A guide's relative links (`install.md#x`, `media/x.png`) only work beside the guide; on one page at the site root they
+ * would 404, so they become absolute links to the `/docs/` files.
+ */
+function absoluteLinks(body: string, origin: string): string {
+  return body.replace(/(!?\[[^\]]*\]\()(?:\.\/)?((?:media\/)?[a-z0-9][a-z0-9./-]*?(?:\.md|\.[a-z0-9]+)?(?:#[\w-]+)?)\)/gi, (whole, open: string, target: string) => {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(target)) return whole;
+    return `${open}${origin}/docs/${target}\u0029`;
+  });
+}
+
 /** `llms-full.txt`: every guide in reading order, one after another. */
-export function renderLlmsFull(guides: Guide[]): string {
+export function renderLlmsFull(guides: Guide[], origin = ''): string {
   const parts = [`# reaper-mcp docs`, '', `> ${BLURB}`, ''];
-  for (const g of sortGuides(guides)) parts.push('---', '', `# ${g.title}`, '', `${g.summary}`, '', g.body.trim(), '');
+  for (const g of sortGuides(guides)) parts.push('---', '', `# ${g.title}`, '', `${g.summary}`, '', absoluteLinks(g.body.trim(), origin), '');
   return parts.join('\n');
 }
