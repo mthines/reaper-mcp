@@ -1,5 +1,5 @@
 import type { BridgeStatus, Liveness } from '../lib/status.js';
-import { REPO_URL } from '../lib/links.js';
+import { REPO_URL, guideUrl, hereUrl } from '../lib/links.js';
 import { usePopover } from '../lib/usePopover.js';
 import { hasToolCalls, isConnected, sessionHue, sessionName, type Session } from '../lib/sessions.js';
 import { Icon, Mark } from '../components/index.js';
@@ -51,7 +51,7 @@ export function Header({
               <>
                 {/* Long paths lose their start, so the file name stays readable */}
                 <span className={styles.subProject} title={status.project || undefined}>
-                  <bdi dir="ltr">{status.project || 'Unsaved project'}</bdi>
+                  <bdi dir="ltr">{status.project ? status.project.split(/[\\/]/).pop() : 'Unsaved project'}</bdi>
                 </span>
                 <span className="dot-sep" />
                 <span className={styles.subVersion}>REAPER {status.reaperVersion.split('/')[0]}</span>
@@ -195,6 +195,9 @@ function HeaderMenu({
               What’s new
             </button>
           )}
+          <a role="menuitem" href={guideUrl(undefined, hereUrl())} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>
+            Docs
+          </a>
           <a role="menuitem" href={REPO_URL} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>
             reaper-mcp on GitHub
           </a>

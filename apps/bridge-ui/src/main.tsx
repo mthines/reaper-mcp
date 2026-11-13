@@ -7,16 +7,20 @@ import './styles/drawer.module.css';
 import './styles/list.module.css';
 import { App } from './app/App.js';
 import { Changelog } from './features/changelog/index.js';
+import { Docs } from './features/docs/index.js';
 import { CommandProvider } from './features/command/index.js';
 
 const root = createRoot(document.getElementById('root') as HTMLElement);
 
 // `?page=changelog` (and /changelog on the hosted site) is the changelog on a page of its own, with no bridge behind it
-const changelogPage = new URLSearchParams(location.search).get('page') === 'changelog';
+const changelogPage = new URLSearchParams(location.search).get('page') === 'changelog' || location.pathname === '/changelog';
+
+// `?page=docs` (and /docs on the hosted site) is the guides, also with no bridge behind it
+const docsPage = new URLSearchParams(location.search).get('page') === 'docs' || /^\/docs(\/|$)/.test(location.pathname);
 
 root.render(
   <CommandProvider>
-    {changelogPage ? <Changelog.PageRoute /> : <App />}
+    {docsPage ? <Docs.PageRoute /> : changelogPage ? <Changelog.PageRoute /> : <App />}
   </CommandProvider>,
 );
 

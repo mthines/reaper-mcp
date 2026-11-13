@@ -1,0 +1,3 @@
+.box { margin: 16px 0; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(94, 234, 212, 0.3); background: rgba(94, 234, 212, 0.06); }
+.label { display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--h2); font-weight: 600; margin-bottom: 4px; }
+.text { margin: 0; line-height: 1.55; color: var(--text); white-space: pre-line; }

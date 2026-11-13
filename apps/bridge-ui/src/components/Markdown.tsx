@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
 import { cx } from '../lib/cx.js';
+import { headingId } from '../lib/heading-id.js';
 import styles from './Markdown.module.css';
 
 /**
@@ -10,8 +11,27 @@ import styles from './Markdown.module.css';
  * source is rendered as text (React escapes it); raw HTML in a record shows up literally. Links keep
  * an href only for http(s) and mailto URLs and always open in a new tab without a referrer.
  */
-export function Markdown({ source, className }: { source: string; className?: string }) {
-  return <div className={className ? cx(styles.md, className) : styles.md}>{blocks(source.replace(/\r\n?/g, '\n'))}</div>;
+export function Markdown({ source, className, doc }: { source: string; className?: string; doc?: MarkdownDoc }) {
+  return <div className={className ? cx(styles.md, className) : styles.md}>{blocks(source.replace(/\r\n?/g, '\n'), doc)}</div>;
+}
+
+/**
+ * Guide pages (docs): headings keep their level and get an id for anchors, `![alt](path)` renders an image when
+ * the path is relative (resolved against `baseUrl`, never a URL or an escape), `> say:` / `> your-call:` blockquotes go
+ * to `callout`, and `::: details Title` … `:::` is a collapsed section.
+ */
+export interface MarkdownDoc {
+  baseUrl: string;
+  callout: (kind: 'say' | 'your-call', text: string) => ReactNode;
+  /** How a fenced code block is drawn (the guides add a header and a Copy button); `lang` is the fence's info word */
+  code?: (text: string, lang: string) => ReactNode;
+}
+
+/** A relative media path inside the guide folder, or undefined (a URL, an absolute path or a `..` step is refused). */
+export function relativeMedia(path: string, baseUrl: string): string | undefined {
+  const p = path.trim();
+  if (!p || /^[a-z][a-z0-9+.-]*:/i.test(p) || p.startsWith('/') || p.startsWith('\\') || p.split('/').includes('..')) return undefined;
+  return `${baseUrl.replace(/\/?$/, '/')}${p.replace(/^\.\//, '')}`;
 }
 
 const SAFE_URL = /^(https?:\/\/|mailto:)/i;
@@ -25,7 +45,7 @@ const LIST_ITEM = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
 const TABLE_SEPARATOR = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
 const RULE = /^\s*([-*_])(\s*\1){2,}\s*$/;
 
-function blocks(source: string): ReactNode[] {
+function blocks(source: string, doc?: MarkdownDoc): ReactNode[] {
   const lines = source.split('\n');
   const out: ReactNode[] = [];
   let i = 0;
@@ -44,20 +64,51 @@ function blocks(source: string): ReactNode[] {
       i++;
       while (i < lines.length && !lines[i].trim().startsWith(fence[1])) body.push(lines[i++]);
       i++; // closing fence (or end of input)
+      const text = body.join('\n');
+      if (doc?.code) {
+        out.push(<div key={key()}>{doc.code(text, line.trim().replace(/^(`{3,}|~{3,})\s*/, '').split(/\s/)[0])}</div>);
+        continue;
+      }
       out.push(
         <pre key={key()}>
-          <code>{body.join('\n')}</code>
+          <code>{text}</code>
         </pre>,
+      );
+      continue;
+    }
+
+    const details = doc ? line.match(/^:::\s*details\s+(.+?)\s*$/i) : null;
+    if (details) {
+      const body: string[] = [];
+      i++;
+      while (i < lines.length && lines[i].trim() !== ':::') body.push(lines[i++]);
+      i++; // closing :::
+      out.push(
+        <details key={key()}>
+          <summary>{inline(details[1], doc)}</summary>
+          {blocks(body.join('\n'), doc)}
+        </details>,
       );
       continue;
     }
 
     const heading = line.match(/^\s*(#{1,6})\s+(.*?)\s*#*\s*$/);
     if (heading) {
-      // Records start at #; inside a drawer the biggest heading is a small one
-      const level = Math.min(heading[1].length + 2, 6);
-      const Tag = `h${level}` as 'h3' | 'h4' | 'h5' | 'h6';
-      out.push(<Tag key={key()}>{inline(heading[2])}</Tag>);
+      // Records start at #; inside a drawer the biggest heading is a small one. A guide keeps the level it wrote.
+      const level = doc ? heading[1].length : Math.min(heading[1].length + 2, 6);
+      const Tag = `h${level}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+      out.push(
+        <Tag key={key()} id={doc ? headingId(heading[2]) : undefined}>
+          {doc ? (
+            // A guide's headings link to themselves: press one for a URL straight to that section
+            <a className={styles.anchor} href={`#${headingId(heading[2])}`}>
+              {inline(heading[2], doc)}
+            </a>
+          ) : (
+            inline(heading[2], doc)
+          )}
+        </Tag>,
+      );
       i++;
       continue;
     }
@@ -79,7 +130,7 @@ function blocks(source: string): ReactNode[] {
             <thead>
               <tr>
                 {head.map((c, j) => (
-                  <th key={j}>{inline(c)}</th>
+                  <th key={j}>{inline(c, doc)}</th>
                 ))}
               </tr>
             </thead>
@@ -87,7 +138,7 @@ function blocks(source: string): ReactNode[] {
               {rows.map((r, j) => (
                 <tr key={j}>
                   {head.map((_, k) => (
-                    <td key={k}>{inline(r[k] ?? '')}</td>
+                    <td key={k}>{inline(r[k] ?? '', doc)}</td>
                   ))}
                 </tr>
               ))}
@@ -101,7 +152,13 @@ function blocks(source: string): ReactNode[] {
     if (/^\s*>/.test(line)) {
       const quoted: string[] = [];
       while (i < lines.length && /^\s*>/.test(lines[i])) quoted.push(lines[i++].replace(/^\s*>\s?/, ''));
-      out.push(<blockquote key={key()}>{blocks(quoted.join('\n'))}</blockquote>);
+      const callout = doc ? quoted[0].match(/^(say|your-call):\s*(.*)$/i) : null;
+      if (doc && callout) {
+        const text = [callout[2], ...quoted.slice(1)].join('\n').trim();
+        out.push(<Fragment key={key()}>{doc.callout(callout[1].toLowerCase() as 'say' | 'your-call', text)}</Fragment>);
+        continue;
+      }
+      out.push(<blockquote key={key()}>{blocks(quoted.join('\n'), doc)}</blockquote>);
       continue;
     }
 
@@ -117,7 +174,7 @@ function blocks(source: string): ReactNode[] {
           i++;
         } else break;
       }
-      out.push(list(items, key()));
+      out.push(list(items, key(), doc));
       continue;
     }
 
@@ -137,7 +194,7 @@ function blocks(source: string): ReactNode[] {
         {para.map((l, j) => (
           <Fragment key={j}>
             {j > 0 && (/\s{2,}$/.test(para[j - 1]) ? <br /> : ' ')}
-            {inline(l.trim())}
+            {inline(l.trim(), doc)}
           </Fragment>
         ))}
       </p>,
@@ -157,7 +214,7 @@ function cells(row: string): string[] {
 }
 
 /** Two levels: items indented past the first item nest under the item before them. */
-function list(items: Array<{ indent: number; ordered: boolean; text: string }>, key: number): ReactNode {
+function list(items: Array<{ indent: number; ordered: boolean; text: string }>, key: number, doc?: MarkdownDoc): ReactNode {
   const base = items[0].indent;
   const top: Array<{ text: string; children: string[]; ordered: boolean }> = [];
   for (const item of items) {
@@ -169,11 +226,11 @@ function list(items: Array<{ indent: number; ordered: boolean; text: string }>, 
     <List key={key}>
       {top.map((t, j) => (
         <li key={j}>
-          {inline(t.text)}
+          {inline(t.text, doc)}
           {t.children.length > 0 && (
             <ul>
               {t.children.map((c, k) => (
-                <li key={k}>{inline(c)}</li>
+                <li key={k}>{inline(c, doc)}</li>
               ))}
             </ul>
           )}
@@ -184,31 +241,46 @@ function list(items: Array<{ indent: number; ordered: boolean; text: string }>, 
 }
 
 // Earliest match wins; code spans first so their content is never formatted
-const INLINE = [
-  { re: /`([^`]+)`/, render: (m: RegExpMatchArray, k: number) => <code key={k}>{m[1]}</code> },
+type InlineRule = { re: RegExp; render: (m: RegExpMatchArray, k: number, doc?: MarkdownDoc) => ReactNode };
+
+const IMAGE: InlineRule = {
+  re: /!\[([^\]]*)\]\(([^()\s]+)\)/,
+  render: (m, k, doc) => {
+    const src = doc ? relativeMedia(m[2], doc.baseUrl) : undefined;
+    return src ? <img key={k} src={src} alt={m[1]} loading="lazy" /> : <Fragment key={k}>{m[1]}</Fragment>;
+  },
+};
+
+const INLINE: InlineRule[] = [
+  { re: /`([^`]+)`/, render: (m, k) => <code key={k}>{m[1]}</code> },
   {
     re: /\[([^\]]+)\]\(([^()\s]+)\)/,
-    render: (m: RegExpMatchArray, k: number) => {
+    render: (m, k, doc) => {
+      // A guide links to its sibling pages with a relative path, kept in the same tab
+      // (`install.md`, the form GitHub resolves, or `install`; either may end in #heading)
+      const sibling = doc ? /^([a-z0-9][a-z0-9-]*)(?:\.md)?(#[\w-]+)?$/i.exec(m[2]) : null;
+      if (sibling) return <a key={k} href={`/docs/${sibling[1]}${sibling[2] ?? ''}`}>{inline(m[1], doc)}</a>;
       const href = safeHref(m[2]);
       return href ? (
         <a key={k} href={href} target="_blank" rel="noopener noreferrer">
-          {inline(m[1])}
+          {inline(m[1], doc)}
         </a>
       ) : (
-        <Fragment key={k}>{inline(m[1])}</Fragment>
+        <Fragment key={k}>{inline(m[1], doc)}</Fragment>
       );
     },
   },
-  { re: /\*\*(.+?)\*\*|__(.+?)__/, render: (m: RegExpMatchArray, k: number) => <strong key={k}>{inline(m[1] ?? m[2])}</strong> },
-  { re: /(?<![*\w])\*(?!\s)(.+?)(?<!\s)\*(?!\*)|(?<![_\w])_(?!\s)(.+?)(?<!\s)_(?![_\w])/, render: (m: RegExpMatchArray, k: number) => <em key={k}>{inline(m[1] ?? m[2])}</em> },
+  { re: /\*\*(.+?)\*\*|__(.+?)__/, render: (m, k, doc) => <strong key={k}>{inline(m[1] ?? m[2], doc)}</strong> },
+  { re: /(?<![*\w])\*(?!\s)(.+?)(?<!\s)\*(?!\*)|(?<![_\w])_(?!\s)(.+?)(?<!\s)_(?![_\w])/, render: (m, k, doc) => <em key={k}>{inline(m[1] ?? m[2], doc)}</em> },
 ];
 
-export function inline(text: string): ReactNode[] {
+export function inline(text: string, doc?: MarkdownDoc): ReactNode[] {
   const out: ReactNode[] = [];
   let rest = text;
+  const rules = doc ? [IMAGE, ...INLINE] : INLINE;
   while (rest) {
-    let best: { m: RegExpMatchArray; render: (m: RegExpMatchArray, k: number) => ReactNode } | null = null;
-    for (const rule of INLINE) {
+    let best: { m: RegExpMatchArray; render: InlineRule['render'] } | null = null;
+    for (const rule of rules) {
       const m = rest.match(rule.re);
       if (m && m.index !== undefined && (!best || m.index < (best.m.index ?? 0))) best = { m, render: rule.render };
     }
@@ -217,7 +289,7 @@ export function inline(text: string): ReactNode[] {
       break;
     }
     if (best.m.index > 0) out.push(rest.slice(0, best.m.index));
-    out.push(best.render(best.m, out.length));
+    out.push(best.render(best.m, out.length, doc));
     rest = rest.slice(best.m.index + best.m[0].length);
   }
   return out;
