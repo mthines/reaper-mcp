@@ -1,0 +1,13 @@
+.frame { position: relative; aspect-ratio: 16 / 9; width: 100%; overflow: hidden; border-radius: 12px; border: 1px solid var(--line-2); background: radial-gradient(120% 90% at 50% 0%, rgba(124, 196, 255, 0.14), transparent 70%), var(--panel); }
+.player { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.play { position: absolute; inset: 0; width: 100%; border: 0; padding: 0; background: none; color: var(--text); cursor: pointer; display: grid; place-items: center; }
+.play:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.playMark { position: relative; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: rgba(14, 15, 17, 0.72); border: 1px solid var(--line-2); font-size: 22px; padding-left: 4px; transition: transform 0.15s ease-out; }
+.play:hover .playMark { transform: scale(1.06); }
+.meta { position: absolute; inset-inline: 12px; bottom: 10px; font-size: 12px; color: var(--muted); text-align: left; text-shadow: 0 1px 6px var(--bg); }
+.soonStrip { display: flex; align-items: center; gap: 16px; padding: 10px; border: 1px dashed var(--line-2); border-radius: 12px; background: var(--panel); }
+.soonThumb { flex: none; width: 128px; aspect-ratio: 16 / 9; border-radius: 8px; object-fit: cover; background: radial-gradient(120% 90% at 50% 0%, rgba(124, 196, 255, 0.14), transparent 70%), var(--panel-2); opacity: 0.8; }
+.soon { margin: 0; display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.soon strong { color: var(--text); font-size: 15px; }
+@media (prefers-reduced-motion: reduce) { .playMark { transition: none; } }

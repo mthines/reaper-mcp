@@ -4,10 +4,54 @@
   "buildCommand": "node apps/bridge-ui/scripts/snapshot-releases.mjs && BRIDGE_HOSTED=1 pnpm nx build bridge-ui --skip-nx-cache",
   "outputDirectory": "dist/apps/bridge-ui",
   "rewrites": [
-    { "source": "/", "destination": "/mcp_bridge.html" },
-    { "source": "/changelog", "destination": "/mcp_bridge.html?page=changelog" }
+    {
+      "source": "/",
+      "destination": "/mcp_bridge.html"
+    },
+    {
+      "source": "/changelog",
+      "destination": "/mcp_bridge.html?page=changelog"
+    },
+    {
+      "source": "/docs",
+      "destination": "/mcp_bridge.html?page=docs"
+    },
+    {
+      "source": "/docs/:slug([a-z0-9-]+)",
+      "destination": "/mcp_bridge.html?page=docs"
+    }
   ],
   "headers": [
-    { "source": "/changelog/media/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
+    {
+      "source": "/changelog/media/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/docs/media/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    },
+    {
+      "source": "/(llms.txt|llms-full.txt|docs/index.json|docs/(.*).md)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ]
+    }
   ]
 }

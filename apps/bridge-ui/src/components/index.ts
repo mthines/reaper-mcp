@@ -13,6 +13,7 @@ export type { ComboboxOption } from './combobox-logic.js';
 export type { GroupedComboboxItem } from './Combobox.js';
 export { Mark } from './Mark.js';
 export { Markdown } from './Markdown.js';
+export type { MarkdownDoc } from './Markdown.js';
 export { Notice } from './Notice.js';
 export { ResizeHandle, useDrawerWidth } from './ResizeHandle.js';
 export { Toggle } from './Toggle.js';

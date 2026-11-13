@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Markdown, safeHref } from './Markdown.js';
+import { Markdown, safeHref, type MarkdownDoc } from './Markdown.js';
 
 // The rendered record, inside its wrapper
 const html = (md: string) => renderToStaticMarkup(<Markdown source={md} />).replace(/^<div[^>]*>|<\/div>$/g, '');
@@ -37,5 +37,53 @@ describe('Markdown', () => {
 
   it('does not format inside code spans', () => {
     expect(html('`**not bold**` and **bold**')).toContain('<code>**not bold**</code> and <strong>bold</strong>');
+  });
+});
+
+describe('Markdown as a guide', () => {
+  const doc: MarkdownDoc = {
+    baseUrl: '/docs/media',
+    callout: (kind, text) => <aside data-kind={kind}>{text}</aside>,
+  };
+  const guide = (md: string) => renderToStaticMarkup(<Markdown source={md} doc={doc} />).replace(/^<div[^>]*>|<\/div>$/g, '');
+
+  it('hands a fenced block, and its language, to the guide to draw', () => {
+    const withCode: MarkdownDoc = { ...doc, code: (text, lang) => <pre data-lang={lang}>{text}</pre> };
+    const out = renderToStaticMarkup(<Markdown source={'```bash\nnpm i -g x\nx setup\n```'} doc={withCode} />);
+    expect(out).toContain('<pre data-lang="bash">npm i -g x\nx setup</pre>');
+  });
+
+  it('keeps heading levels and gives each an anchor', () => {
+    expect(guide('## What happens next')).toBe('<h2 id="what-happens-next">What happens next</h2>');
+  });
+
+  it('shows images from the guide folder only', () => {
+    expect(guide('![The mixer](mixer.webp)')).toContain('<img src="/docs/media/mixer.webp" alt="The mixer" loading="lazy"/>');
+    for (const bad of ['https://evil.test/x.png', '//evil.test/x.png', '/etc/x.png', '../x.png', 'javascript:alert(1)', 'data:image/svg+xml,x']) {
+      const out = guide(`![alt text](${bad})`);
+      expect(out).not.toContain('<img');
+      expect(out).toContain('alt text');
+    }
+  });
+
+  it('turns say: and your-call: quotes into callouts and leaves other quotes alone', () => {
+    expect(guide('> say: Gain stage my tracks')).toBe('<aside data-kind="say">Gain stage my tracks</aside>');
+    expect(guide('> your-call: You pick the target.\n> Always.')).toBe('<aside data-kind="your-call">You pick the target.\nAlways.</aside>');
+    expect(guide('> just a quote')).toBe('<blockquote><p>just a quote</p></blockquote>');
+  });
+
+  it('collapses a ::: details block and renders its content', () => {
+    expect(guide('::: details Transcript\n\nHello **there**.\n\n:::')).toBe('<details><summary>Transcript</summary><p>Hello <strong>there</strong>.</p></details>');
+  });
+
+  it('links to sibling guides in the same tab and to other sites in a new one', () => {
+    expect(guide('[Install](install.md)')).toContain('<a href="/docs/install">Install</a>');
+    expect(guide('[Safety](undo-and-safety.md#your-call)')).toContain('<a href="/docs/undo-and-safety#your-call">Safety</a>');
+    expect(guide('[Repo](https://github.com/mthines/reaper-mcp)')).toContain('target="_blank"');
+  });
+
+  it('leaves the record renderer alone: no images, no callouts', () => {
+    expect(html('![alt](x.png)\n\n> say: hi')).not.toContain('<img');
+    expect(html('> say: hi')).toContain('<blockquote>');
   });
 });

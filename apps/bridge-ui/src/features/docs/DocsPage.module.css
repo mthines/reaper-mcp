@@ -1,0 +1,156 @@
+.page { max-width: 1200px; margin: 0 auto; padding-block: 16px 80px; padding-inline: 20px; }
+.page a:focus-visible, .page button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.skip { position: absolute; left: -9999px; top: 8px; z-index: 5; padding: 8px 12px; border-radius: 8px; background: var(--accent); color: #0b1620; font-weight: 600; }
+.skip:focus { left: 12px; }
+
+/* Header: the name, then the way out. Quiet, so the page's own content is the loudest thing */
+.head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.brand { font-size: 16px; font-weight: 600; color: var(--text); text-decoration: none; }
+.brandSub { color: var(--muted); font-weight: 400; }
+.headLinks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.headLink { font-size: 14px; color: var(--muted); text-decoration: none; }
+.headLink:hover { color: var(--text); text-decoration: underline; }
+
+.hint { margin: 0; color: var(--muted); font-size: 14px; }
+
+/* Buttons that are links */
+.primary, .secondary { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 20px; border-radius: 10px; font-size: 15px; font-weight: 600; text-decoration: none; }
+.primary { background: var(--accent); color: #0b1620; border: 1px solid var(--accent); }
+.primary:hover { background: #a3d6ff; }
+.secondary { background: transparent; color: var(--text); border: 1px solid var(--line-2); font-weight: 500; }
+.secondary:hover { border-color: var(--accent); }
+.head .secondary { min-height: 36px; padding: 0 14px; font-size: 14px; }
+
+.body { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 8px 48px; padding-top: 28px; align-items: start; }
+.navToggle { display: none; }
+.nav { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 26px; max-height: calc(100vh - 32px); overflow-y: auto; font-size: 14px; padding-right: 4px; }
+.navSection { margin: 0 0 8px; font-size: 13px; line-height: 1.3; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text); font-weight: 700; }
+.navTitle { margin: 0 0 6px 14px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.navList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.nav .navList { border-left: 1px solid var(--line-2); }
+.navList a { display: block; padding: 6px 8px 6px 14px; border-radius: 6px; color: var(--muted); text-decoration: none; line-height: 1.35; }
+.navList a:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+.navList a[aria-current='page'] { color: var(--text); }
+/* One accent line that slides to the open guide (placed by the effect in DocsPage); transform only, so it stays on the compositor */
+.rail { position: absolute; left: 0; top: 0; width: 2px; height: 1px; background: var(--accent); opacity: 0; transform-origin: top; transform: translateY(var(--rail-y, 0px)) scaleY(var(--rail-h, 1)); pointer-events: none; }
+.nav:where([data-rail='set'], [data-rail='on']) .rail { opacity: 1; }
+.nav:where([data-rail='on']) .rail { transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms; }
+@media (prefers-reduced-motion: reduce) { .nav:where([data-rail='on']) .rail { transition: opacity 150ms; } }
+
+/* Keep the column from collapsing while a guide loads, so the scrollbar and the sticky nav stay put */
+.main { min-width: 0; min-height: 80vh; outline: none; }
+
+/* ---- Front page ------------------------------------------------------------------------------------------- */
+.landing { display: flex; flex-direction: column; gap: 56px; }
+.hero { position: relative; padding: 36px 0 8px; }
+.hero::before { content: ''; position: absolute; inset: -40px -80px auto -80px; height: 320px; z-index: -1; pointer-events: none; background: radial-gradient(60% 100% at 30% 0%, rgba(124, 196, 255, 0.13), transparent 70%); }
+.heroTitle { margin: 0 0 14px; font-size: 44px; line-height: 1.08; letter-spacing: -0.02em; max-width: 16ch; }
+.heroLead { margin: 0 0 20px; font-size: 19px; line-height: 1.55; color: var(--muted); max-width: 56ch; }
+.promises { list-style: none; margin: 0 0 24px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.promises li { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.03); font-size: 14px; color: var(--text); }
+.promises li::before { content: '✓'; margin-right: 6px; color: var(--live); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+
+.sectionHead { margin-bottom: 16px; }
+.sectionHead h2 { margin: 0 0 4px; font-size: 24px; line-height: 1.2; letter-spacing: -0.01em; }
+.sectionHead p { margin: 0; font-size: 15px; color: var(--muted); max-width: 60ch; }
+
+.cardText { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cardText strong { font-size: 16px; color: var(--text); }
+.cardText span { font-size: 14px; line-height: 1.5; color: var(--muted); }
+
+/* Get going: a numbered path, in order */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.steps a { display: flex; align-items: flex-start; gap: 14px; height: 100%; padding: 16px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--panel); text-decoration: none; }
+.steps a:hover { border-color: var(--accent); background: var(--panel-2); }
+.stepNo { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: rgba(124, 196, 255, 0.14); color: var(--accent); font-weight: 700; font-size: 15px; }
+
+/* Things to try: picture cards */
+.picture { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.picture a { display: flex; flex-direction: column; gap: 12px; height: 100%; padding: 10px 10px 16px; border-radius: 14px; border: 1px solid var(--line-2); background: var(--panel); text-decoration: none; transition: transform 0.15s ease-out, border-color 0.15s; }
+.picture a:hover { border-color: var(--accent); transform: translateY(-2px); }
+.picture .cardText { padding-inline: 6px; }
+.thumb { --tint: 124, 196, 255; position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 9px; background: radial-gradient(120% 100% at 20% 0%, rgba(var(--tint), 0.28), transparent 70%), var(--bg); border: 1px solid rgba(var(--tint), 0.22); }
+.thumb[data-tone='1'] { --tint: 196, 165, 255; }
+.thumb[data-tone='2'] { --tint: 94, 234, 212; }
+.thumb[data-tone='3'] { --tint: 249, 168, 212; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.9; }
+.badge { position: absolute; right: 8px; bottom: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(14, 15, 17, 0.82); color: var(--text); font-size: 12px; font-weight: 600; }
+
+/* Feel safe: reassurance */
+.reassure { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.reassure a { display: flex; flex-direction: column; gap: 6px; height: 100%; padding: 16px; border-radius: 12px; border: 1px solid rgba(94, 234, 212, 0.25); background: rgba(94, 234, 212, 0.04); text-decoration: none; }
+.reassure a:hover { border-color: var(--h2); }
+.reassure strong { font-size: 16px; color: var(--text); }
+.reassure span { font-size: 14px; line-height: 1.5; color: var(--muted); }
+
+/* Look things up: a plain list, deliberately the quietest */
+.lookup { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.lookup li { border-bottom: 1px solid var(--line); }
+.lookup a { display: grid; grid-template-columns: 230px minmax(0, 1fr); align-items: baseline; gap: 4px 20px; padding: 12px 4px; text-decoration: none; }
+.lookup a:hover strong { color: var(--accent); }
+.lookup strong { font-size: 15px; color: var(--text); }
+.lookup span { font-size: 14px; color: var(--muted); }
+
+/* ---- A guide ---------------------------------------------------------------------------------------------- */
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+.crumbs a { color: var(--muted); }
+.crumbs a:hover { color: var(--text); }
+.crumbTime { margin-left: 6px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line-2); font-size: 12px; }
+.title { margin: 0 0 10px; font-size: 36px; line-height: 1.12; letter-spacing: -0.015em; }
+.lead { margin: 0 0 24px; font-size: 18px; line-height: 1.55; color: var(--muted); max-width: 60ch; }
+.article { display: flex; flex-direction: column; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 8px 40px; align-items: start; margin-top: 24px; }
+.toc { position: sticky; top: 16px; font-size: 13px; }
+/* The first line of the guide and "On this page" start on one line: no top margin on the text, and the title centred on its first line */
+.prose > :first-child { margin-top: 0; }
+.prose > h2:first-child { padding-top: 0; border-top: 0; }
+.toc .navTitle { margin-top: 0; padding-top: 7px; }
+
+.prose { font-size: 16px; line-height: 1.7; max-width: 66ch; }
+.prose h2 { margin: 44px 0 10px; padding-top: 28px; border-top: 1px solid var(--line); font-size: 24px; line-height: 1.25; font-weight: 600; color: var(--text); scroll-margin-top: 16px; letter-spacing: -0.01em; }
+.prose h3 { margin: 28px 0 4px; font-size: 17px; line-height: 1.4; font-weight: 600; color: var(--text); }
+.prose h3 + p { margin-top: 4px; color: var(--muted); }
+.prose h3 + p code { color: var(--text); }
+.prose p, .prose ul, .prose ol { margin: 12px 0; }
+.prose li { margin: 6px 0; }
+.prose code { font-size: 14px; }
+.prose pre { font-size: 14px; }
+.prose em { color: var(--text); font-style: italic; }
+.prose img { display: block; max-width: 100%; height: auto; margin: 20px 0; border-radius: 12px; border: 1px solid var(--line-2); }
+.prose details { margin: 18px 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.prose summary { cursor: pointer; color: var(--text); font-weight: 600; }
+.prose details[open] summary { margin-bottom: 10px; }
+.prose table { font-size: 14px; }
+
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); }
+.pager a { display: flex; flex-direction: column; gap: 2px; max-width: 48%; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--line-2); color: var(--text); text-decoration: none; font-size: 15px; }
+.pager a:hover { border-color: var(--accent); }
+.pager a[data-side='next'] { margin-left: auto; text-align: right; }
+.pagerLabel { font-size: 12px; color: var(--muted); }
+
+@media (max-width: 960px) {
+  .cols { grid-template-columns: minmax(0, 1fr); }
+  .toc { display: none; }
+  .steps { grid-template-columns: minmax(0, 1fr); }
+  .reassure { grid-template-columns: minmax(0, 1fr); }
+}
+/* Phones and narrow windows: the nav folds under a button (and goes away on the front page, which is its own index) */
+@media (max-width: 720px) {
+  .body { grid-template-columns: minmax(0, 1fr); padding-top: 16px; }
+  .navToggle { display: inline-flex; justify-self: start; min-height: 44px; }
+  .body[data-landing='true'] .navToggle, .body[data-landing='true'] .nav { display: none; }
+  .nav { position: relative; max-height: none; display: none; padding: 10px 0 4px; }
+  .nav[data-open='true'] { display: flex; }
+  .heroTitle { font-size: 32px; }
+  .heroLead { font-size: 17px; }
+  .title { font-size: 28px; }
+  .lead { font-size: 17px; }
+  .landing { gap: 44px; }
+  .lookup a { grid-template-columns: minmax(0, 1fr); }
+  .pager { flex-direction: column; }
+  .pager a { max-width: none; }
+  .primary, .secondary { width: 100%; }
+  .head .secondary { width: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .picture a { transition: none; } .picture a:hover { transform: none; } }
