@@ -11,4 +11,4 @@ adversarial:
   enabled: true
   max_probes: 24
   time_budget_minutes: 10
-  allowed_origins: [http://localhost:8098]
+  allowed_origins: [http://localhost:8098, https://reaper-mcp.vercel.app]
