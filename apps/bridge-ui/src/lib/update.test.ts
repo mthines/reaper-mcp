@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareVersions, controlUrl, updateLog, updateOffer } from './update.js';
+import { compareVersions, controlUrl, installableNpmVersion, updateLog, updateOffer } from './update.js';
 
 describe('compareVersions', () => {
   it('orders numerically, not as strings', () => {
@@ -46,8 +46,24 @@ describe('updateOffer', () => {
     expect(updateOffer(release, '1.2.0', { ...plain, update: { state: 'done', kind: 'update', startedAt: 0, log: [] } })).toBe(release);
   });
 
+  it('offers nothing once an update is installed and the page waits for its reload', () => {
+    expect(updateOffer(release, '1.2.0', { ...plain, ready: true })).toBeNull();
+  });
+
   it('offers nothing for the version the user skipped, and offers the next one', () => {
     expect(updateOffer(release, '1.2.0', { dev: false, skipped: '1.3.0' })).toBeNull();
     expect(updateOffer({ ...release, version: '1.4.0' }, '1.2.0', { dev: false, skipped: '1.3.0' })).not.toBeNull();
+  });
+});
+
+describe('installableNpmVersion', () => {
+  it('names npm\'s latest when its version list holds it', () => {
+    expect(installableNpmVersion({ 'dist-tags': { latest: '0.83.0' }, versions: { '0.82.0': {}, '0.83.0': {} } })).toBe('0.83.0');
+  });
+
+  it('names nothing for a latest that npm lists no version for, or a pre-release tag', () => {
+    expect(installableNpmVersion({ 'dist-tags': { latest: '0.83.2' }, versions: { '0.83.0': {} } })).toBeUndefined();
+    expect(installableNpmVersion({ 'dist-tags': { latest: '0.84.0-beta.1' }, versions: { '0.84.0-beta.1': {} } })).toBeUndefined();
+    expect(installableNpmVersion(null)).toBeUndefined();
   });
 });

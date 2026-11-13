@@ -13,13 +13,14 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSyn
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, platform } from 'node:os';
-import { exec as execCb } from 'node:child_process';
+import { exec as execCb, spawn } from 'node:child_process';
 import { promisify as promisifyUtil } from 'node:util';
+import { runUpdate, realUpdateDeps } from './update.js';
 import { installClaudeAssets } from './claude-assets.js';
 import { HARNESSES, connectHarness, detectHarnesses, isStale, parseHarnessFlag, realEnv, registeredServer, skillsHomes, type Harness, type HarnessId } from './harnesses.js';
 import { installExamplePlugins } from './jsfx/examples.js';
 import { loadToolkit, generatedDir, presetsDir } from './tools/jsfx.js';
-import { resolveAssetDir, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, autostartCheck, setupFilesPlan, findCloneRoot, isDevClone, updateConfigText, type CloneState } from './cli.js';
+import { resolveAssetDir, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, autostartCheck, setupFilesPlan, findCloneRoot, isDevClone, updateConfigText, npmUpdateConfigText, type CloneState } from './cli.js';
 import { detectInstalled, setupSidecar } from './setup-sidecar.js';
 import { confirmOptOutPrompt, firstRunTelemetryNotice, resolveTelemetry, saveTelemetryChoice, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
@@ -110,6 +111,10 @@ async function setup(): Promise<void> {
     const dev = isDevClone(await cloneState(cloneRoot));
     writeFileSync(join(scriptsDir, 'mcp_update.conf'), updateConfigText(cloneRoot, process.execPath, dev));
     console.log(ui.item('ok', `Installed: mcp_update.conf (${dev ? 'developer clone: Rebuild & reload' : 'one-click updates'} from the status page)`));
+  } else {
+    // An npm install: the Update button runs `reaper-mcp update` through this node and this CLI
+    // Silent: nothing for the user to act on, and the setup output is part of the first-run experience
+    writeFileSync(join(scriptsDir, 'mcp_update.conf'), npmUpdateConfigText(process.execPath, join(__dirname, 'main.js')));
   }
 
   const effectsDir = join(getReaperEffectsPath(), 'reaper-mcp');
@@ -790,6 +795,19 @@ async function serve(): Promise<void> {
   });
 }
 
+/** `reaper-mcp update`: an npm install updates itself (update.ts); a clone runs its scripts/update.sh. */
+async function updateCommand(force: boolean, bridge: boolean): Promise<number> {
+  const cloneRoot = findCloneRoot(__dirname);
+  if (cloneRoot) {
+    return new Promise((resolveCode) => {
+      const child = spawn('bash', ['./scripts/update.sh'], { cwd: cloneRoot, stdio: 'inherit' });
+      child.on('error', () => resolveCode(1));
+      child.on('close', (code) => resolveCode(code ?? 1));
+    });
+  }
+  return runUpdate(realUpdateDeps(readServiceVersion(), join(__dirname, 'main.js'), force, bridge));
+}
+
 // --- CLI entry point ---
 
 const command = process.argv[2];
@@ -811,6 +829,16 @@ switch (command) {
       console.error('Setup failed:', err);
       process.exit(1);
     });
+    break;
+
+  case 'update':
+    updateCommand(process.argv.includes('--force'), process.argv.includes('--bridge')).then(
+      (code) => process.exit(code),
+      (err: unknown) => {
+        console.error('Update failed:', err);
+        process.exit(1);
+      },
+    );
     break;
 
   case 'doctor':
@@ -885,6 +913,7 @@ Usage:
                               --harness claude,codex or --all to pick by hand. From npm it also installs the skills
   reaper-mcp install-skills   Copy the mix skills, agents and knowledge into ~/.claude, and skills + agents into ~/.agents for the
                               other harnesses (npm install; --harness to pick, --dry-run to preview)
+  reaper-mcp update           Update to the latest release (npm install: downloads it and installs it into REAPER; --force reinstalls)
   reaper-mcp doctor           Check that everything is configured correctly
   reaper-mcp status           Check if Lua bridge is running in REAPER
   reaper-mcp telemetry off    Opt out of pseudonymous usage telemetry (also: on, status)

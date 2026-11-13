@@ -4763,6 +4763,11 @@ local function update_config()
   if not text then return nil end
   local conf = {}
   for key, value in text:gmatch("([%w_]+)=([^\r\n]*)") do conf[key] = value end
+  -- An npm install (mode=npm) updates through `node <cli> update`; a clone through its scripts/update.sh
+  if conf.mode == "npm" then
+    if not conf.cli or conf.cli == "" or not file_exists(conf.cli) then return nil end
+    return conf
+  end
   if not conf.repo or conf.repo == "" or not file_exists(conf.repo .. "/scripts/update.sh") then return nil end
   return conf
 end
@@ -4787,7 +4792,14 @@ local function start_update(kind)
   -- REAPER started from the Dock has a bare PATH: put the node that ran setup (and its pnpm/corepack) first
   local node_dir = conf.node and conf.node:match("^(.*)/[^/]+$")
   local path = (node_dir and (shell_quote(node_dir) .. ":") or "") .. "/opt/homebrew/bin:/usr/local/bin:$PATH"
-  os.execute("( cd " .. shell_quote(conf.repo) .. " && PATH=" .. path .. " ./scripts/update.sh" .. (kind == "rebuild" and " --rebuild" or "") .. " < /dev/null > " .. shell_quote(UPDATE_LOG)
+  local job
+  if conf.mode == "npm" then
+    if kind == "rebuild" then return end
+    job = "PATH=" .. path .. " " .. shell_quote(conf.node or "node") .. " " .. shell_quote(conf.cli) .. " update --bridge"
+  else
+    job = "cd " .. shell_quote(conf.repo) .. " && PATH=" .. path .. " ./scripts/update.sh" .. (kind == "rebuild" and " --rebuild" or "")
+  end
+  os.execute("( " .. job .. " < /dev/null > " .. shell_quote(UPDATE_LOG)
     .. " 2>&1; echo $? > " .. shell_quote(UPDATE_EXIT) .. " ) >/dev/null 2>&1 &")
   update = { kind = kind, state = "running", startedAt = now_ms(), log = {} }
   log_event("bridge_update_start", { kind = kind })
@@ -4827,7 +4839,8 @@ local function check_control(now)
   local code = read_file(UPDATE_EXIT)
   if not code then return end
   code = tonumber(code:match("%d+"))
-  update.state = code == 0 and "done" or "failed"
+  -- exit 3 from `reaper-mcp update --bridge`: nothing newer to install, nothing changed
+  update.state = code == 0 and "done" or code == 3 and "current" or "failed"
   if update.state == "done" then os.remove(SOURCE_CHANGES) end -- re-checked against the new install
   log_event("bridge_update_end", { exitCode = code })
   status_dirty = true
@@ -4839,13 +4852,14 @@ local function check_control(now)
 end
 
 -- What the status page may offer: published in the status feed together with the token
-local can_update, conf_dev, last_can_update_check = false, false, -10
+local can_update, conf_dev, update_source, last_can_update_check = false, false, "clone", -10
 local function refresh_update_config()
   local now = reaper.time_precise()
   if now - last_can_update_check < 10 then return end
   last_can_update_check = now
   local conf = not is_windows and update_config() or nil
   can_update, conf_dev = conf ~= nil, conf ~= nil and conf.dev == "1"
+  update_source = conf ~= nil and conf.mode == "npm" and "npm" or "clone"
 end
 
 -- Developer mode: the page's toggle (cfg_dev "1"/"0") once chosen, else what setup detected (dev=1 in mcp_update.conf)
@@ -4862,7 +4876,7 @@ end
 local SOURCE_CHECK_INTERVAL = 5
 local source_changed, last_source_check = false, -SOURCE_CHECK_INTERVAL
 local function check_source_changes(now)
-  if is_windows or now - last_source_check < SOURCE_CHECK_INTERVAL or not dev_mode() or not can_update then return end
+  if is_windows or now - last_source_check < SOURCE_CHECK_INTERVAL or not dev_mode() or not can_update or update_source == "npm" then return end
   if update and update.state == "running" then return end
   last_source_check = now
   local changed = (read_file(SOURCE_CHANGES) or ""):match("%S") ~= nil
@@ -4885,6 +4899,8 @@ local function control_status()
     token = control_token,
     canRestart = can_restart,
     canUpdate = can_update,
+    -- Where releases come from: "npm" (an npm install updates itself) or "clone" (git pull)
+    updateSource = update_source,
     -- Developer mode: source changed since the last install, so Rebuild & reload has something to do
     changed = source_changed,
     update = update,

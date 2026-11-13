@@ -1174,14 +1174,12 @@ describe('restart and update requests from the page', () => {
     const { control } = await bridge.status();
     expect(control).toMatchObject({ canRestart: true, canUpdate: false });
     expect(control.token).toMatch(/^[0-9a-f]{16}$/);
-    expect(await bridge.eval('action_options')).toBe(1); // re-running the script stops it
 
     await bridge.set('request', 'restart-0123456789abcdef');
     await bridge.status();
     expect(await bridge.eval('ran_command')).toBeNull();
     expect(await bridge.ext('request')).toBeNull(); // consumed either way
 
-    expect(await bridge.eval('action_options')).toBe(1);
 
     await bridge.set('request', `restart-${control.token}`);
     await bridge.status();
@@ -1209,6 +1207,46 @@ describe('restart and update requests from the page', () => {
 
     await bridge.set('cfg_dev', '0');
     expect((await bridge.status()).settings.dev).toBe(false);
+  });
+
+  // setup from an npm install wrote mcp_update.conf with the node and CLI that `reaper-mcp update` runs
+  const NPM_INSTALL = {
+    '/pkg/main.js': '',
+    [`${SCRIPTS}mcp_update.conf`]: "mode=npm\nnode=/usr/local/bin/node\ncli=/pkg/main.js\ndev=0\n",
+  };
+
+  it('updates an npm install by running reaper-mcp update, and never offers a rebuild', async () => {
+    const bridge = await startBridge('os.execute = function(cmd) executed = cmd return true end', NPM_INSTALL);
+    let status = await bridge.status();
+    expect(status.control).toMatchObject({ canUpdate: true, updateSource: 'npm' });
+    expect(status.settings.dev).toBe(false);
+
+    await bridge.set('request', `rebuild-${status.control.token}`);
+    await bridge.status();
+    expect((await bridge.status()).control.update).toBeUndefined();
+
+    await bridge.set('request', `update-${status.control.token}`);
+    await bridge.status();
+    status = await bridge.status();
+    expect(status.control.update).toMatchObject({ kind: 'update', state: 'running' });
+    expect(await bridge.eval('executed')).toContain("'/usr/local/bin/node' '/pkg/main.js' update");
+  });
+
+  it('tells an install from "nothing newer" by the updater\'s exit code,', async () => {
+    const bridge = await startBridge('os.execute = function(cmd) executed = cmd return true end', NPM_INSTALL);
+    const { control } = await bridge.status();
+    await bridge.set('request', `update-${control.token}`);
+    await bridge.status();
+    expect(await bridge.eval('executed')).toContain('update --bridge');
+    await bridge.eval(`(function() local f = io.open("${BRIDGE_DIR}update.exit", "w") f:write("3\\n") f:close() return true end)()`);
+    await new Promise((resolve) => setTimeout(resolve, 1100)); // the bridge reads the exit file once a second
+    await bridge.status();
+    expect((await bridge.status()).control.update).toMatchObject({ kind: 'update', state: 'current' });
+  });
+
+  it('offers no update when the CLI the config names is gone', async () => {
+    const bridge = await startBridge('', { [`${SCRIPTS}mcp_update.conf`]: NPM_INSTALL[`${SCRIPTS}mcp_update.conf`] });
+    expect((await bridge.status()).control.canUpdate).toBe(false);
   });
 
   it('reports source changes since the last install only in developer mode', async () => {

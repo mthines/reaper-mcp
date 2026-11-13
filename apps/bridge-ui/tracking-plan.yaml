@@ -26,6 +26,11 @@ events:
     shown: boolean
   update_clicked:            # asked the bridge to update this install
     source: [changelog, notice, palette]
+  update_finished:           # an update this page watched start ended
+    result: [ready, current, failed]
+    source: [npm, clone]
+  update_reload_clicked:     # pressed Reload on the "up to date" toast
+    source: [npm, clone]
   setting_changed:
     setting: [paused, readonly, open_on_start, dev, autostart, error_notifications, usage_stats]
     enabled: boolean

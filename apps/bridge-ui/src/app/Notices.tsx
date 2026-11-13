@@ -33,13 +33,16 @@ export function Notices({
 }) {
   const [swsDismissed, setSwsDismissed] = useState(() => load(SWS_DISMISS_KEY) === '1');
   const [updateDoneDismissed, setUpdateDoneDismissed] = useState(false);
+  // Between the click and the bridge's first "running" status: a second click would send a second request
+  const [updateRequested, setUpdateRequested] = useState(false);
   const health = status.health;
   const control = status.control;
   const update = control?.update;
   const rebuild = update?.kind === 'rebuild';
   const notices: ReactNode[] = [];
 
-  if (update?.state === 'done' && !updateDoneDismissed) {
+  // A release update reports through toasts (UpdateToasts); only a developer's rebuild is a notice
+  if (update?.state === 'done' && rebuild && !updateDoneDismissed) {
     notices.push(
       <Notice
         key="update"
@@ -50,16 +53,14 @@ export function Notices({
           </button>
         }
       >
-        <b>{rebuild ? 'Rebuilt from your working tree' : `reaper-mcp is up to date (v${__VERSION__})`}.</b> Restart Claude Code, or run{' '}
-        <code>/mcp</code> there, to use the new tools.
+        <b>Rebuilt from your working tree.</b> Restart Claude Code, or run <code>/mcp</code> there, to use the new tools.
       </Notice>,
     );
-  } else if (update?.state === 'running') {
+  } else if (update?.state === 'running' && rebuild) {
     const log = updateLog(update);
     notices.push(
       <Notice key="update" tone="info">
-        <b>{rebuild ? 'Rebuilding from your working tree…' : 'Updating reaper-mcp…'}</b>{' '}
-        {rebuild ? 'The bridge restarts and this page reloads when it’s done.' : 'This takes a minute or two; the bridge restarts when it’s done.'}
+        <b>Rebuilding from your working tree…</b> The bridge restarts and this page reloads when it’s done.
         {log.length > 0 && <span className={cx(styles.noticeLog, 'mono')}>{log[log.length - 1]}</span>}
       </Notice>,
     );
@@ -86,12 +87,16 @@ export function Notices({
             {control?.canUpdate && (
               <button
                 className="btn btn-sm"
+                disabled={updateRequested}
                 onClick={() => {
                   track({ name: 'update_clicked', source: 'notice' });
                   request('update');
+                  setUpdateRequested(true);
+                  // The bridge answers within a second; if it never does, let the person try again
+                  setTimeout(() => setUpdateRequested(false), 8000);
                 }}
               >
-                Update
+                {updateRequested ? 'Starting…' : 'Update'}
               </button>
             )}
             <button
@@ -109,7 +114,8 @@ export function Notices({
         <button className={styles.whatsNew} onClick={onWhatsNew}>What’s new</button>
         {!control?.canUpdate && (
           <>
-            {' '}· Update from your reaper-mcp folder: <code>git pull &amp;&amp; ./scripts/install.sh</code>
+            {' '}· Update in a terminal: <code>npm install -g @mthines/reaper-mcp@latest &amp;&amp; reaper-mcp setup</code> (from a clone:{' '}
+            <code>git pull &amp;&amp; ./scripts/install.sh</code>). After that, the Update button here does it for you.
           </>
         )}
       </Notice>,

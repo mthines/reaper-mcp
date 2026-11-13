@@ -25,7 +25,8 @@ import { SETTING_NAME, Settings } from '../features/settings/index.js';
 import { InstallBanner } from '../components/index.js';
 import { Changelog, availableUpdate, parseReleases, useHighlights, useReleases } from '../features/changelog/index.js';
 import { exampleReleaseJson } from '../demo/examples.js';
-import { updateOffer, useLatestRelease, type Release } from '../lib/update.js';
+import { updateOffer, useLatestRelease, useUpdateReady, type Release } from '../lib/update.js';
+import { UpdateToasts } from './UpdateToasts.js';
 import type { TrackEvent } from '../lib/analytics.js';
 import { blockedBy, useSnapshots } from '../features/snapshots/index.js';
 import { Stats } from '../features/stats/index.js';
@@ -96,7 +97,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useUrlState('settings', false, { validate: isBoolean });
   // What's new: the drawer, and the releases it reads once it opens
   const [changelogOpen, setChangelogOpen] = useUrlState('changelog', false, { validate: isBoolean });
-  const liveRelease = useLatestRelease(!DEMO && settings?.dev !== true);
+  const liveRelease = useLatestRelease(!DEMO && settings?.dev !== true, status?.control?.updateSource ?? 'clone');
   const release = DEMO ? DEMO_LATEST : liveRelease;
   // One offer for the pill, the ⋯ menu, the palette and the notice (rules in updateOffer)
   const [skipped, setSkipped] = useState(() => load(UPDATE_SKIP_KEY));
@@ -104,7 +105,8 @@ export function App() {
     save(UPDATE_SKIP_KEY, version);
     setSkipped(version);
   };
-  const updateAvailable = updateOffer(release, __VERSION__, { dev: settings?.dev === true, skipped, update: status?.control?.update });
+  const updateReady = useUpdateReady();
+  const updateAvailable = updateOffer(release, __VERSION__, { dev: settings?.dev === true, skipped, update: status?.control?.update, ready: updateReady });
   const releases = useReleases(changelogOpen, DEMO_RELEASES);
   const highlights = useHighlights(changelogOpen);
   const openChangelog = (source: ChangelogSource) => () => {
@@ -203,6 +205,7 @@ export function App() {
             : undefined
         }
       />
+      <UpdateToasts status={status} />
       {status ? (
         <>
           <Notices status={status} settings={settings} onSet={changeSetting('notice')} request={request} release={updateAvailable} onSkip={skipUpdate} onWhatsNew={openChangelog('notice')} />
@@ -286,6 +289,7 @@ export function App() {
           canUpdate={status?.control?.canUpdate === true && settings?.dev !== true}
           update={status?.control?.update}
           onUpdate={() => request('update')}
+          installableUpTo={updateReady ? __VERSION__ : status?.control?.updateSource === 'npm' ? (release?.version ?? __VERSION__) : undefined}
           onClose={() => setChangelogOpen(false)}
         />
       )}

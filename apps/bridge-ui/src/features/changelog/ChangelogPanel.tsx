@@ -5,7 +5,7 @@ import { REPO_URL } from '../../lib/links.js';
 import { load, save } from '../../lib/storage.js';
 import { isStringOrNull, useUrlState } from '../../lib/url-state.js';
 import { track } from '../../lib/analytics.js';
-import { updateLog } from '../../lib/update.js';
+import { compareVersions, updateLog } from '../../lib/update.js';
 import type { BridgeUpdate } from '../../lib/status.js';
 import { cx } from '../../lib/cx.js';
 import drawerStyles from '../../styles/drawer.module.css';
@@ -37,6 +37,7 @@ export function ChangelogPanel({
   canUpdate,
   update,
   onUpdate,
+  installableUpTo,
   onClose,
 }: {
   releases: ReleasesState;
@@ -49,6 +50,8 @@ export function ChangelogPanel({
   /** An update the bridge is running or just ran */
   update?: BridgeUpdate;
   onUpdate: () => void;
+  /** An npm install can only get what npm has published: the newest version it can install; the card offers nothing newer */
+  installableUpTo?: string;
   onClose: () => void;
 }) {
   const width = useDrawerWidth(CHANGELOG_DRAWER_WIDTH_PX);
@@ -90,7 +93,8 @@ export function ChangelogPanel({
   });
   const ready = releases.status === 'ready' ? releases.releases : null;
   const shown = ready ? visibleReleases(ready, betas, linked) : [];
-  const waiting = ready ? availableUpdate(ready, current) : null;
+  const newest = ready ? availableUpdate(ready, current) : null;
+  const waiting = newest && (installableUpTo === undefined || compareVersions(newest.version, installableUpTo) <= 0) ? newest : null;
 
   return (
     <aside className={cx(drawerStyles.drawer, styles.drawer)} aria-label="What’s new" style={width.style}>
@@ -168,7 +172,7 @@ function UpdateCard({
     return (
       <section className={styles.card} data-tone="busy" aria-label="Update">
         <b>Updating reaper-mcp…</b>
-        <span className="muted">The bridge restarts and this page reloads when it’s done.</span>
+        <span className="muted">When it’s installed you can reload this page to use it.</span>
         {log.length > 0 && <span className={cx(styles.cardLog, 'mono')}>{log[log.length - 1]}</span>}
       </section>
     );
