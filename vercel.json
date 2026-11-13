@@ -41,7 +41,7 @@
       ]
     },
     {
-      "source": "/(llms.txt|llms-full.txt|docs/index.json|docs/(.*).md)",
+      "source": "/(llms\\.txt|llms-full\\.txt|docs/index\\.json|docs/(?:.*)\\.md)",
       "headers": [
         {
           "key": "Cache-Control",

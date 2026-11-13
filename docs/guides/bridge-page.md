@@ -23,7 +23,7 @@ When the connector is running, a small window opens next to REAPER. Think of it 
 
 ## Try it without REAPER
 
-The [live demo](/) is the same window with pretend data, so you can click around before installing anything.
+The [live demo](https://reaper-mcp.vercel.app/) is the same window with pretend data, so you can click around before installing anything.
 
 ## Shortcuts
 

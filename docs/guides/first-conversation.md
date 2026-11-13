@@ -24,7 +24,7 @@ That's a read-only question. Nothing changes in your project, so it's a good fir
 
 ![The status window with the log of calls and a card open on the right](media/bridge-drawer.png)
 
-Prefer to look around without REAPER running? The [live demo](/) is the same window with pretend data.
+Prefer to look around without REAPER running? The [live demo](https://reaper-mcp.vercel.app/) is the same window with pretend data.
 
 ## Then try a change
 
