@@ -289,7 +289,7 @@ export function App() {
           canUpdate={status?.control?.canUpdate === true && settings?.dev !== true}
           update={status?.control?.update}
           onUpdate={() => request('update')}
-          installableUpTo={status?.control?.updateSource === 'npm' ? (release?.version ?? __VERSION__) : undefined}
+          installableUpTo={updateReady ? __VERSION__ : status?.control?.updateSource === 'npm' ? (release?.version ?? __VERSION__) : undefined}
           onClose={() => setChangelogOpen(false)}
         />
       )}

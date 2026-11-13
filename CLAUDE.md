@@ -1056,7 +1056,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   `Scripts/__startup.lua` holds the startup block (the Settings toggle explains how to add it when not), and `outdated` when the
   installed `mcp_bridge.lua` differs from the running copy (setup ran; restart the script). Tested in wasmoon by
   `bridge-status.test.ts`.
-- One-click update and restart (`status.control`): the page checks GitHub's latest release (cached 6h in
+- One-click update and restart (`status.control`): the page checks GitHub's latest release, or npm's for an npm install (cached 6h in
   localStorage, `src/lib/update.ts`) and offers **Update**; the outdated notice offers **Restart bridge**. The page writes
   `/_/SET/EXTSTATE/MCPBridge/request/<update|restart>-<token>`; the token is random per bridge run and only readable
   from the status feed (REAPER's web server sends no CORS headers), so other sites can fire the request but never with
