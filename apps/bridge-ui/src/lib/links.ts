@@ -11,8 +11,8 @@ export const GUIDES_URL = `${REPO_URL}/tree/main/docs/guides`;
  */
 export const DISCORD_URL = 'https://discord.gg/Eg8tznuXp4';
 
-/** Where the guides are served: the hosted site (the REAPER page and the packaged page have no copy), the dev server's own under `pnpm dev:bridge` */
-export const DOCS_SITE = import.meta.env.DEV ? '' : 'https://reaper-mcp.vercel.app';
+/** Where the guides are served: the hosted site (the REAPER page and the packaged page have no copy), the dev server's own under `pnpm dev:bridge`, and the hosted page's own (so a preview deployment reads its own guides) */
+export const DOCS_SITE = import.meta.env.DEV || __HOSTED__ ? '' : 'https://reaper-mcp.vercel.app';
 
 /**
  * A guide on the hosted site. `bridge` is where this bridge page lives (REAPER's own web address), handed over so the
