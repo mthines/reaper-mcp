@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { compareVersions } from './version.js';
 import { NPM_PACKAGE, fetchLatestVersion } from './update-check.js';
+import { quoteForCmd } from './harnesses.js';
 
 /**
  * `reaper-mcp update`: bring an npm install up to the latest release without a terminal session of the user's own.
@@ -71,7 +72,10 @@ export function realUpdateDeps(current: string, cli: string, force = false, brid
     latest: () => fetchLatestVersion(fetch, 10_000),
     run: (command, args) =>
       new Promise((resolve) => {
-        const child = spawn(command, args, {
+        // npm is a .cmd shim on Windows, which Node refuses to spawn without a shell; a shell joins the arguments, so quote each
+        const win = process.platform === 'win32';
+        const child = spawn(win ? quoteForCmd(command) : command, win ? args.map(quoteForCmd) : args, {
+          shell: win,
           stdio: ['ignore', 'inherit', 'inherit'],
           // The node that runs this first on PATH: npm's own shebang and the child reaper-mcp find it
           env: { ...process.env, PATH: `${nodeDir}${process.platform === 'win32' ? ';' : ':'}${process.env['PATH'] ?? ''}` },
