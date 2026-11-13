@@ -8,6 +8,8 @@ import { Notices } from './Notices.js';
 import { Offline } from './Offline.js';
 import { DEMO } from './demo-mode.js';
 import { useBridgeFeed } from './useBridgeFeed.js';
+import { CloseNotice } from './CloseNotice.js';
+import { useCloseWithReaper } from './useCloseWithReaper.js';
 import { useBridgeRequest } from './useBridgeRequest.js';
 import { useErrorNotifications } from './useErrorNotifications.js';
 import { useHistory } from './useHistory.js';
@@ -54,6 +56,8 @@ export function App() {
     }
   }, []);
   const { status, history, longHistory, reachable, lastChangeAt, log, older, loadOlder, clearLog, clearedAt } = useBridgeFeed(paused);
+  // Closes the bridge's own window once REAPER quits (not a tab, the installed app or ?demo)
+  const closing = useCloseWithReaper(reachable, !DEMO && new URLSearchParams(location.search).get('app') === 'window');
   // A span picked on the timeline filters the log views; the timeline's range stays as it is
   const [selection, setSelection] = useUrlState<Span | null>('span', null, { validate: isSpanOrNull });
   const shownLog = useMemo(() => inSpan(log, selection), [log, selection]);
@@ -206,6 +210,7 @@ export function App() {
         }
       />
       <UpdateToasts status={status} />
+      {closing.secondsLeft !== null && <CloseNotice secondsLeft={closing.secondsLeft} onCancel={closing.cancel} />}
       {status ? (
         <>
           <Notices status={status} settings={settings} onSet={changeSetting('notice')} request={request} release={updateAvailable} onSkip={skipUpdate} onWhatsNew={openChangelog('notice')} />
