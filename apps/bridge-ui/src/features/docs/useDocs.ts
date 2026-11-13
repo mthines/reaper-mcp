@@ -4,7 +4,7 @@ import { parseGuide, sortGuides, SECTIONS, type Guide, type GuideMeta } from './
 export type IndexState = { status: 'loading' } | { status: 'error' } | { status: 'ready'; guides: GuideMeta[] };
 export type GuideState = { status: 'loading' } | { status: 'missing' } | { status: 'error' } | { status: 'ready'; guide: Guide };
 
-/** `docs/index.json` as the hosted build writes it: every guide's frontmatter. Bad rows are dropped, never trusted. */
+/** `docs/pages.json` as the hosted build writes it: every guide's frontmatter. Bad rows are dropped, never trusted. */
 export function parseIndex(json: unknown): GuideMeta[] {
   if (!Array.isArray(json)) return [];
   const out: GuideMeta[] = [];
@@ -34,7 +34,7 @@ export function useGuideIndex(): IndexState {
   const [state, setState] = useState<IndexState>({ status: 'loading' });
   useEffect(() => {
     let cancelled = false;
-    fetch(`${DOCS_BASE}/index.json`)
+    fetch(`${DOCS_BASE}/pages.json`)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((json: unknown) => !cancelled && setState({ status: 'ready', guides: parseIndex(json) }))
       .catch(() => !cancelled && setState({ status: 'error' }));
@@ -97,7 +97,7 @@ export function useRemoteGuideIndex(enabled: boolean, site: string): IndexState 
   useEffect(() => {
     if (!enabled || asked.current) return;
     asked.current = true;
-    fetch(`${site}${DOCS_BASE}/index.json`)
+    fetch(`${site}${DOCS_BASE}/pages.json`)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((json: unknown) => setState({ status: 'ready', guides: parseIndex(json) }))
       .catch(() => setState({ status: 'error' }));

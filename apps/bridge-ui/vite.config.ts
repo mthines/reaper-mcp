@@ -22,7 +22,7 @@ const hostedChangelogMedia = (): Plugin => ({
   },
 });
 
-// The guides (docs/guides/*.md) are served beside the page: /docs/<slug>.md, /docs/index.json, /llms.txt, /llms-full.txt.
+// The guides (docs/guides/*.md) are served beside the page: /docs/<slug>.md, /docs/pages.json, /llms.txt, /llms-full.txt.
 // Hosted build: copied into the output. Dev server: served from the working tree, so a saved guide shows on reload.
 const guidesDir = join(here, '../../docs/guides');
 const MEDIA_TYPES: Record<string, string> = { '.md': 'text/markdown; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.json': 'application/json', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.gif': 'image/gif', '.mp4': 'video/mp4' };
@@ -57,7 +57,7 @@ const hostedDocs = (): Plugin => ({
           req.url = '/mcp_bridge.html';
           return next();
         }
-        if (path === '/docs/index.json') return send(MEDIA_TYPES['.json'], guidesIndex(readGuides()));
+        if (path === '/docs/pages.json') return send(MEDIA_TYPES['.json'], guidesIndex(readGuides()));
         if (path === '/llms.txt') return send(MEDIA_TYPES['.txt'], renderLlmsTxt(readGuides()));
         if (path === '/llms-full.txt') return send(MEDIA_TYPES['.txt'], renderLlmsFull(readGuides()));
         const file = /^\/docs\/(.+)$/.exec(decodeURIComponent(path))?.[1];
@@ -78,7 +78,8 @@ const hostedDocs = (): Plugin => ({
     const out = join(here, '../../dist/apps/bridge-ui');
     const guides = readGuides(); // a guide with bad frontmatter fails the hosted build here, never the live site
     cpSync(guidesDir, join(out, 'docs'), { recursive: true, filter: (src) => !['README.md', 'CLAUDE.md'].includes(basename(src)) });
-    writeFileSync(join(out, 'docs/index.json'), guidesIndex(guides));
+    // Never `docs/index.*`: Vercel serves a folder's index file for /docs before it applies the rewrite to the page
+    writeFileSync(join(out, 'docs/pages.json'), guidesIndex(guides));
     writeFileSync(join(out, 'llms.txt'), renderLlmsTxt(guides, llmsOrigin()));
     writeFileSync(join(out, 'llms-full.txt'), renderLlmsFull(guides, llmsOrigin()));
   },
