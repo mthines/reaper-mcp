@@ -1,5 +1,7 @@
 # Testing with REAPER
 
+> Testing the update mechanism (`reaper-mcp update`, the page's Update button) is covered in [UPDATING.md](UPDATING.md#testing).
+
 This guide walks through setting up the REAPER MCP Server end-to-end: building the project, installing the bridge into REAPER, connecting an MCP client, and exercising every tool against a live REAPER session.
 
 ## Prerequisites
