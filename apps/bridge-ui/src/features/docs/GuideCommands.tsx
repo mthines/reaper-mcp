@@ -9,7 +9,7 @@ export function guideCommands(guides: GuideMeta[], open: (slug: string) => void)
 }
 
 /**
- * "Guides…" in the palette: one entry that opens a list of the guides (a search finds them from the top level too).
+ * "Docs…" in the palette: one entry that opens a list of the docs (a search finds them from the top level too).
  * While the list isn't there yet (or can't be had) the entry itself opens `fallback`.
  */
 export function GuideCommands({

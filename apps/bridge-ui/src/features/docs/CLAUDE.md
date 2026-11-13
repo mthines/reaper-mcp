@@ -10,7 +10,7 @@ The REAPER page never bundles the guides: the hosted build copies them next to t
 - **`useDocs.ts`** fetches the index and a guide, reads the slug from the path, and holds the bridge link (`?bridge=`, only
   an `http://localhost` / `127.0.0.1` `…/mcp_bridge.html` address, remembered in localStorage). Never ping REAPER's web port
   from the hosted page: stray connections leak its sockets. The way back to the bridge exists only for someone who came from it.
-- **Palette**: `GuideCommands` registers "Guides…" (each guide a child, found by a search from the top level). The bridge page
+- **Palette**: `GuideCommands` registers "Docs…" (each guide a child, found by a search from the top level). The bridge page
   asks the hosted site for the list the first time the palette opens (`useRemoteGuideIndex`), never at load.
 - **Markdown** renders with `MarkdownDoc` (`components/Markdown.tsx`): `> say:` → `PromptBox`, `> your-call:` → `YourCall`,
   fenced code → `CodeBlock`, relative images only. Add a new block type there and here together.

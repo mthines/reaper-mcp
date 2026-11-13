@@ -90,7 +90,10 @@ export function DocsPage({
   // A link with an anchor (a guide's own `install.md#somethings-off`, or a shared URL) scrolls to its heading once the text is there
   const ready = guide.status === 'ready';
   useEffect(() => {
-    if (ready && window.location.hash) document.getElementById(decodeURIComponent(window.location.hash.slice(1)))?.scrollIntoView();
+    if (!ready || !window.location.hash) return;
+    // A hand-edited link like `#%E0%A4` can't be decoded; it just doesn't scroll
+    const id = safeDecode(window.location.hash.slice(1));
+    if (id) document.getElementById(id)?.scrollIntoView();
   }, [ready, slug]);
   useEffect(() => {
     if (!moved.current) {
@@ -171,6 +174,14 @@ export function DocsPage({
       </footer>
     </div>
   );
+}
+
+function safeDecode(text: string): string | undefined {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return undefined;
+  }
 }
 
 /** The tinted thumbnail of a guide's card: its poster when it has one, else a plain gradient, with the video length on it */

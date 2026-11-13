@@ -92,7 +92,11 @@ describe('the guides in docs/guides', () => {
 
   it('only links to guides and images that exist', () => {
     for (const x of guides) {
-      for (const m of x.body.matchAll(/(?<!!)\[[^\]]+\]\(([a-z0-9-]+)\.md(#[\w-]+)?\)/g)) expect(slugs.has(m[1]), `${x.slug} links to missing guide ${m[1]}`).toBe(true);
+      for (const m of x.body.matchAll(/(?<!!)\[[^\]]+\]\(([a-z0-9-]+)\.md(#[\w-]+)?\)/g)) {
+        expect(slugs.has(m[1]), `${x.slug} links to missing guide ${m[1]}`).toBe(true);
+        // An anchor must be one of that page's headings, or the link lands at the top and nobody notices
+        if (m[2]) expect(pageHeadings(guides.find((g) => g.slug === m[1])?.body ?? '').map((h) => h.id), `${x.slug} links to a missing heading ${m[1]}${m[2]}`).toContain(m[2].slice(1));
+      }
       for (const m of x.body.matchAll(/!\[[^\]]*\]\((media\/[^)\s]+)\)/g)) expect(existsSync(join(dir, m[1])), `${x.slug} uses missing image ${m[1]}`).toBe(true);
       if (x.poster) expect(existsSync(join(dir, x.poster)), `${x.slug} has a missing poster`).toBe(true);
     }

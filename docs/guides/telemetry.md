@@ -53,6 +53,7 @@ If you set up your own telemetry destination, data goes only there and nothing r
 
 - **The AI app is separate.** What the assistant *sees* (track names, settings) goes to whichever AI provider you chose, like any chat with it. reaper-mcp trains nothing and brings no AI of its own.
 - **There's a separate once-a-day update check**, a plain request for the latest version number. It sends nothing about you and has its own off switch (`REAPER_MCP_UPDATE_CHECK=0`).
+- **Opening the docs from the bridge page** asks this docs site for its list of pages, the first time you open the ⌘K palette. It is a plain request for a file and sends nothing about you or your session.
 
 ## Why leave it on
 
