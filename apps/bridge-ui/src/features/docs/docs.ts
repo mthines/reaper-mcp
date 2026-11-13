@@ -2,7 +2,7 @@ import { headingId } from '../../lib/heading-id.js';
 
 /**
  * The guides: Markdown files in `docs/guides/` with a small frontmatter block. Pure functions only (no React, no
- * browser), because the hosted build's vite plugin reads the same files to write `docs/index.json` and `llms.txt`.
+ * browser), because the hosted build's vite plugin reads the same files to write `docs/pages.json` and `llms.txt`.
  */
 
 /** The nav groups, in the order they are listed. The key is what a guide's `section:` says. */

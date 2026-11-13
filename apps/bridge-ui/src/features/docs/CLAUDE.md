@@ -2,7 +2,7 @@
 
 Guides for musicians new to AI, as a page on the hosted build (`BRIDGE_HOSTED=1`, Vercel). The source is Markdown in
 [`docs/guides/`](../../../../../docs/guides/README.md) (frontmatter and writing rules are there); this folder draws it.
-The REAPER page never bundles the guides: the hosted build copies them next to the page and writes `docs/index.json`,
+The REAPER page never bundles the guides: the hosted build copies them next to the page and writes `docs/pages.json`,
 `/llms.txt` and `/llms-full.txt` (`hostedDocs()` in `vite.config.ts`, rendering in `docs.ts`).
 
 - **`docs.ts`** is pure: frontmatter parsing, section order (`SECTIONS`), previous/next, headings, the `llms.txt` text. A bad
