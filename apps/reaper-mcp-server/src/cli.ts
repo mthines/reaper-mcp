@@ -589,6 +589,14 @@ export function updateConfigText(repo: string, node: string, dev = false): strin
   return `repo=${repo}\nnode=${node}\ndev=${dev ? 1 : 0}\n`;
 }
 
+/**
+ * mcp_update.conf for an npm install (no clone): `mode=npm`, the node binary and the CLI entry the bridge runs as
+ * `node <cli> update` from the status page's Update button (see update.ts). A clone keeps the `repo=` form above.
+ */
+export function npmUpdateConfigText(node: string, cli: string): string {
+  return `mode=npm\nnode=${node}\ncli=${cli}\ndev=0\n`;
+}
+
 export interface CloneState {
   /** Tracked files with uncommitted changes */
   dirty: boolean;

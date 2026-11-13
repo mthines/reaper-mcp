@@ -56,8 +56,10 @@ export interface BridgeControl {
   token: string;
   /** REAPER 7.03+ (set_action_options): the bridge can restart itself */
   canRestart: boolean;
-  /** setup wrote mcp_update.conf for a git clone (not on Windows) */
+  /** setup wrote mcp_update.conf for a git clone or an npm install (not on Windows) */
   canUpdate: boolean;
+  /** Where releases come from: an npm install updates itself, a clone pulls; absent on bridges before 0.84 (clone) */
+  updateSource?: 'npm' | 'clone';
   /** Developer mode: the clone has source files newer than the last install */
   changed?: boolean;
   update?: BridgeUpdate;

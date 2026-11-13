@@ -34,3 +34,6 @@ export const UpdateAvailable: Story = { args: { release: newer, status: { ...sta
 
 /** A newer release on an install the bridge can't update (npm, or no update config): the command instead */
 export const UpdateAvailableByHand: Story = { args: { release: newer, status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: false } } } };
+
+/** An npm install: the Update button runs `reaper-mcp update` for them */
+export const UpdateAvailableFromNpm: Story = { args: { release: newer, status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: true, updateSource: 'npm' } } } };

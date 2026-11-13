@@ -1211,6 +1211,34 @@ describe('restart and update requests from the page', () => {
     expect((await bridge.status()).settings.dev).toBe(false);
   });
 
+  // setup from an npm install wrote mcp_update.conf with the node and CLI that `reaper-mcp update` runs
+  const NPM_INSTALL = {
+    '/pkg/main.js': '',
+    [`${SCRIPTS}mcp_update.conf`]: "mode=npm\nnode=/usr/local/bin/node\ncli=/pkg/main.js\ndev=0\n",
+  };
+
+  it('updates an npm install by running reaper-mcp update, and never offers a rebuild', async () => {
+    const bridge = await startBridge('os.execute = function(cmd) executed = cmd return true end', NPM_INSTALL);
+    let status = await bridge.status();
+    expect(status.control).toMatchObject({ canUpdate: true, updateSource: 'npm' });
+    expect(status.settings.dev).toBe(false);
+
+    await bridge.set('request', `rebuild-${status.control.token}`);
+    await bridge.status();
+    expect((await bridge.status()).control.update).toBeUndefined();
+
+    await bridge.set('request', `update-${status.control.token}`);
+    await bridge.status();
+    status = await bridge.status();
+    expect(status.control.update).toMatchObject({ kind: 'update', state: 'running' });
+    expect(await bridge.eval('executed')).toContain("'/usr/local/bin/node' '/pkg/main.js' update");
+  });
+
+  it('offers no update when the CLI the config names is gone', async () => {
+    const bridge = await startBridge('', { [`${SCRIPTS}mcp_update.conf`]: NPM_INSTALL[`${SCRIPTS}mcp_update.conf`] });
+    expect((await bridge.status()).control.canUpdate).toBe(false);
+  });
+
   it('reports source changes since the last install only in developer mode', async () => {
     const exec = 'os.execute = function(cmd) executed = cmd return true end';
     const clean = await startBridge(exec, DEV_CLONE);

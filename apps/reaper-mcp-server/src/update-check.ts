@@ -12,7 +12,10 @@ import { compareVersions } from './version.js';
  */
 
 export const NPM_PACKAGE = '@mthines/reaper-mcp';
-const LATEST_URL = 'https://registry.npmjs.org/@mthines%2Freaper-mcp/latest';
+// The abbreviated package document: the same dist-tags and version list `npm install` resolves against. The registry's
+// `/latest` shortcut can name a release that was published but never became installable (seen live: it said 0.83.2 while
+// `npm install` found only 0.83.0 and failed with ETARGET), so it is not trusted.
+const PACKAGE_URL = 'https://registry.npmjs.org/@mthines%2Freaper-mcp';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface UpdateCheckState {
@@ -34,13 +37,18 @@ export function updateCheckDisabled(env: NodeJS.ProcessEnv = process.env): boole
   return ['0', 'false', 'off', 'no'].includes(setting) || Boolean(env['NO_UPDATE_NOTIFIER']) || Boolean(env['CI']);
 }
 
-/** The version npm's `latest` tag points at; undefined when npm can't be reached in time. */
+/** The version npm's `latest` tag points at and can install; undefined when npm can't be reached in time or names a version it doesn't list. */
 export async function fetchLatestVersion(fetchImpl: typeof fetch = fetch, timeoutMs = 3000): Promise<string | undefined> {
   try {
-    const res = await fetchImpl(LATEST_URL, { signal: AbortSignal.timeout(timeoutMs), headers: { accept: 'application/json' } });
+    const res = await fetchImpl(PACKAGE_URL, {
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { accept: 'application/vnd.npm.install-v1+json' },
+    });
     if (!res.ok) return undefined;
-    const body = (await res.json()) as { version?: unknown };
-    return typeof body.version === 'string' && /^\d+\.\d+\.\d+/.test(body.version) ? body.version : undefined;
+    const body = (await res.json()) as { 'dist-tags'?: { latest?: unknown }; versions?: Record<string, unknown> };
+    const latest = body['dist-tags']?.latest;
+    // Only a version `npm install` can fetch counts: it must be in the version list too
+    return typeof latest === 'string' && /^\d+\.\d+\.\d+/.test(latest) && body.versions && latest in body.versions ? latest : undefined;
   } catch {
     return undefined;
   }

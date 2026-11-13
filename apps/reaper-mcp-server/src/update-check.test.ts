@@ -56,8 +56,14 @@ describe('checkForUpdate', () => {
 
 describe('fetchLatestVersion', () => {
   it('reads the version of npm\'s latest tag', async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ name: '@mthines/reaper-mcp', version: '0.83.0' })));
+    const doc = { 'dist-tags': { latest: '0.83.0', beta: '0.83.1-beta.1' }, versions: { '0.82.0': {}, '0.83.0': {} } };
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(doc)));
     expect(await fetchLatestVersion(fetchImpl as unknown as typeof fetch)).toBe('0.83.0');
+  });
+
+  it('names no version npm lists no tarball for (a published-but-never-installable latest)', async () => {
+    const doc = { 'dist-tags': { latest: '0.83.2' }, versions: { '0.83.0': {} } };
+    expect(await fetchLatestVersion((async () => new Response(JSON.stringify(doc))) as unknown as typeof fetch)).toBeUndefined();
   });
 
   it('gives up quietly on an error response or a network failure', async () => {
