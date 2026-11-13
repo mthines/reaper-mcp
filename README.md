@@ -675,6 +675,7 @@ No. It reads meter values and settings from your running session, not your audio
 - 🧩 **[docs/EXTENSIONS.md](docs/EXTENSIONS.md)**: write, test and share an extension (the API, Lua handlers, Vital and Helix)
 - 🧑‍💻 **[DEVELOPMENT.md](DEVELOPMENT.md)**: build, test, run from source, MCP Inspector
 - 🧪 **[docs/TESTING.md](docs/TESTING.md)**: end-to-end testing guide
+- 🔄 **[docs/UPDATING.md](docs/UPDATING.md)**: how updating works, and how to test it
 
 ```
 Claude Code ⇄ MCP server (TypeScript) ⇄ file IPC ⇄ Lua bridge in REAPER ⇄ ReaScript API + JSFX meters
