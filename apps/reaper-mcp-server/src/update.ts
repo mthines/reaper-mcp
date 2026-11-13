@@ -39,7 +39,7 @@ export async function runUpdate(deps: UpdateDeps): Promise<number> {
   log('==> Checking for a new version');
   const latest = await deps.latest();
   if (!latest) {
-    log('✗ Could not reach npm to look for a new version. Check your internet connection and try again.');
+    log('✗ Could not find a version npm can install. Either npm is unreachable (check your internet connection), or the newest release is not published there yet. Try again later.');
     return 1;
   }
   if (!deps.force && compareVersions(latest, current) <= 0) {
