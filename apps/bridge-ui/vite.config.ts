@@ -31,7 +31,7 @@ function readGuides(): Guide[] {
   if (!existsSync(guidesDir)) return [];
   return sortGuides(
     readdirSync(guidesDir)
-      .filter((f) => f.endsWith('.md') && f !== 'README.md')
+      .filter((f) => f.endsWith('.md') && f !== 'README.md' && f !== 'CLAUDE.md')
       .map((f) => parseGuide(basename(f, '.md'), readFileSync(join(guidesDir, f), 'utf-8'))),
   );
 }
@@ -77,7 +77,7 @@ const hostedDocs = (): Plugin => ({
     if (process.env.BRIDGE_HOSTED !== '1') return;
     const out = join(here, '../../dist/apps/bridge-ui');
     const guides = readGuides(); // a guide with bad frontmatter fails the hosted build here, never the live site
-    cpSync(guidesDir, join(out, 'docs'), { recursive: true, filter: (src) => basename(src) !== 'README.md' });
+    cpSync(guidesDir, join(out, 'docs'), { recursive: true, filter: (src) => !['README.md', 'CLAUDE.md'].includes(basename(src)) });
     writeFileSync(join(out, 'docs/index.json'), guidesIndex(guides));
     writeFileSync(join(out, 'llms.txt'), renderLlmsTxt(guides, llmsOrigin()));
     writeFileSync(join(out, 'llms-full.txt'), renderLlmsFull(guides));

@@ -77,7 +77,7 @@ describe('llms.txt', () => {
 describe('the guides in docs/guides', () => {
   const dir = join(__dirname, '../../../../../docs/guides');
   const guides = readdirSync(dir)
-    .filter((f) => f.endsWith('.md') && f !== 'README.md')
+    .filter((f) => f.endsWith('.md') && f !== 'README.md' && f !== 'CLAUDE.md')
     .map((f) => parseGuide(f.replace(/\.md$/, ''), readFileSync(join(dir, f), 'utf-8')));
   const slugs = new Set(guides.map((x) => x.slug));
 
