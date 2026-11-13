@@ -58,16 +58,22 @@ export function UpdateToasts({
         id: TOAST_ID,
         description: step || 'Downloading the new version. You can keep working.',
         duration: Infinity,
+        action: undefined, // an update with the same id keeps the old toast's action unless it is cleared
       });
+    } else if (state === 'current') {
+      if (!watched.current) return;
+      watched.current = false;
+      track({ name: 'update_finished', result: 'current', source });
+      toast.info('Already up to date', { id: TOAST_ID, description: 'There is no newer version to install yet.', duration: 8000, action: undefined });
     } else if (state === 'failed') {
       if (!watched.current) return;
       watched.current = false;
       track({ name: 'update_finished', result: 'failed', source });
       toast.error('The update didn’t finish', {
         id: TOAST_ID,
-        description: step || 'Nothing was changed. Try again in a minute.',
+        description: step || 'Nothing was changed. Use Try again in the notice above.',
         duration: Infinity,
-        action: { label: 'Try again', onClick: () => request('update') },
+        action: undefined,
       });
     } else if (watched.current && (state === 'done' || state === undefined)) {
       // done, or the bridge restarted into the new version and no longer remembers the update
@@ -89,5 +95,5 @@ export function UpdateToasts({
     }
   }, [state, step, runStartedAt, request, onReload, source]);
 
-  return <Toaster position="bottom-right" theme="dark" style={THEME} />;
+  return <Toaster position="bottom-right" theme="dark" style={THEME} closeButton />;
 }

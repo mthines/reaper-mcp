@@ -99,8 +99,7 @@ export function useLatestRelease(enabled: boolean, source: ReleaseSource = 'clon
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((body: { tag_name?: string; html_url?: string; 'dist-tags'?: { latest?: string }; versions?: Record<string, unknown> } | null) => {
-        const tagged = body?.['dist-tags']?.latest;
-        const version = source === 'npm' ? (tagged && body?.versions && tagged in body.versions ? tagged : undefined) : body?.tag_name?.replace(/^v/, '');
+        const version = source === 'npm' ? installableNpmVersion(body) : body?.tag_name?.replace(/^v/, '');
         if (cancelled || !version || !/^\d+\.\d+\.\d+$/.test(version)) return;
         const url = source === 'npm' ? `https://github.com/mthines/reaper-mcp/releases/tag/v${version}` : body?.html_url;
         if (!url) return;
@@ -120,6 +119,12 @@ export function useLatestRelease(enabled: boolean, source: ReleaseSource = 'clon
     };
   }, [enabled, key, source]);
   return release;
+}
+
+/** npm's `latest`, only when the version list holds it too: the registry's own shortcuts have named releases `npm install` could not find. */
+export function installableNpmVersion(doc: { 'dist-tags'?: { latest?: string }; versions?: Record<string, unknown> } | null | undefined): string | undefined {
+  const latest = doc?.['dist-tags']?.latest;
+  return latest && /^\d+\.\d+\.\d+$/.test(latest) && doc?.versions && latest in doc.versions ? latest : undefined;
 }
 
 function cacheKey(source: ReleaseSource): string {

@@ -28,9 +28,11 @@ export interface UpdateDeps {
   log: (line: string) => void;
   /** Update even when npm names nothing newer */
   force?: boolean;
+  /** Run by the bridge: "nothing newer" exits 3, so the page can tell it from an install */
+  bridge?: boolean;
 }
 
-/** Exit code: 0 updated or already current, 1 the update did not finish. */
+/** Exit code: 0 updated (or already current), 1 the download failed or npm was unreachable, 2 it downloaded but setup failed, 3 already current under `bridge`. */
 export async function runUpdate(deps: UpdateDeps): Promise<number> {
   const { current, log } = deps;
   log('==> Checking for a new version');
@@ -41,7 +43,7 @@ export async function runUpdate(deps: UpdateDeps): Promise<number> {
   }
   if (!deps.force && compareVersions(latest, current) <= 0) {
     log(`✓ Already on the latest version (v${current})`);
-    return 0;
+    return deps.bridge ? 3 : 0;
   }
   log(`    v${current} → v${latest}`);
   log('==> Downloading the new version');
@@ -54,14 +56,14 @@ export async function runUpdate(deps: UpdateDeps): Promise<number> {
   if ((await deps.run(deps.node, [deps.cli, 'setup', '--yes'])) !== 0) {
     log('✗ The new version downloaded, but installing it into REAPER failed. Run this in a terminal to see why:');
     log('    reaper-mcp setup');
-    return 1;
+    return 2;
   }
   log(`✓ Updated to v${latest}`);
   return 0;
 }
 
 /** The real dependencies: npm beside this node, output passed through line by line. */
-export function realUpdateDeps(current: string, cli: string, force = false): UpdateDeps {
+export function realUpdateDeps(current: string, cli: string, force = false, bridge = false): UpdateDeps {
   const nodeDir = dirname(process.execPath);
   const npmBeside = join(nodeDir, process.platform === 'win32' ? 'npm.cmd' : 'npm');
   return {
@@ -82,5 +84,6 @@ export function realUpdateDeps(current: string, cli: string, force = false): Upd
     cli,
     log: (line) => console.log(line),
     force,
+    bridge,
   };
 }

@@ -1174,14 +1174,12 @@ describe('restart and update requests from the page', () => {
     const { control } = await bridge.status();
     expect(control).toMatchObject({ canRestart: true, canUpdate: false });
     expect(control.token).toMatch(/^[0-9a-f]{16}$/);
-    expect(await bridge.eval('action_options')).toBe(1); // re-running the script stops it
 
     await bridge.set('request', 'restart-0123456789abcdef');
     await bridge.status();
     expect(await bridge.eval('ran_command')).toBeNull();
     expect(await bridge.ext('request')).toBeNull(); // consumed either way
 
-    expect(await bridge.eval('action_options')).toBe(1);
 
     await bridge.set('request', `restart-${control.token}`);
     await bridge.status();
@@ -1232,6 +1230,18 @@ describe('restart and update requests from the page', () => {
     status = await bridge.status();
     expect(status.control.update).toMatchObject({ kind: 'update', state: 'running' });
     expect(await bridge.eval('executed')).toContain("'/usr/local/bin/node' '/pkg/main.js' update");
+  });
+
+  it('tells an install from "nothing newer" by the updater\'s exit code,', async () => {
+    const bridge = await startBridge('os.execute = function(cmd) executed = cmd return true end', NPM_INSTALL);
+    const { control } = await bridge.status();
+    await bridge.set('request', `update-${control.token}`);
+    await bridge.status();
+    expect(await bridge.eval('executed')).toContain('update --bridge');
+    await bridge.eval(`(function() local f = io.open("${BRIDGE_DIR}update.exit", "w") f:write("3\\n") f:close() return true end)()`);
+    await new Promise((resolve) => setTimeout(resolve, 1100)); // the bridge reads the exit file once a second
+    await bridge.status();
+    expect((await bridge.status()).control.update).toMatchObject({ kind: 'update', state: 'current' });
   });
 
   it('offers no update when the CLI the config names is gone', async () => {

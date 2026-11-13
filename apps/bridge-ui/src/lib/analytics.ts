@@ -18,7 +18,7 @@ export type TrackEvent =
   | { name: 'changelog_opened'; source: 'header' | 'notice' | 'menu' | 'palette' | 'footer'; update_available: boolean }
   | { name: 'changelog_betas_toggled'; shown: boolean }
   | { name: 'update_clicked'; source: 'changelog' | 'notice' | 'palette' }
-  | { name: 'update_finished'; result: 'ready' | 'failed'; source: 'npm' | 'clone' }
+  | { name: 'update_finished'; result: 'ready' | 'current' | 'failed'; source: 'npm' | 'clone' }
   | { name: 'update_reload_clicked'; source: 'npm' | 'clone' }
   | { name: 'setting_changed'; setting: 'paused' | 'readonly' | 'open_on_start' | 'dev' | 'autostart' | 'error_notifications' | 'usage_stats'; enabled: boolean; source: 'settings' | 'notice' }
   | { name: 'app_install_clicked'; state: string }

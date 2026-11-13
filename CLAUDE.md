@@ -1061,10 +1061,10 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   `/_/SET/EXTSTATE/MCPBridge/request/<update|restart>-<token>`; the token is random per bridge run and only readable
   from the status feed (REAPER's web server sends no CORS headers), so other sites can fire the request but never with
   a valid token. Update runs `<clone>/scripts/update.sh` (`git pull --ff-only` + `install.sh`; refuses on local changes)
-  detached, with the clone and node path from `Scripts/mcp_update.conf` (written by `setup` when it runs from a git
-  clone; never on Windows). The bridge starts with `set_action_options(1)` (REAPER 7.03+), so re-running
+  detached, with the clone path, or for an npm install `mode=npm` with the node and CLI paths, from `Scripts/mcp_update.conf` (written by `setup`;
+  never on Windows). The bridge starts with `set_action_options(1)` (REAPER 7.03+), so re-running
   `mcp_bridge.lua` stops it; restart switches to `set_action_options(3)` and re-runs its own action, and REAPER
-  relaunches the installed copy. It restarts itself after a successful update; the page reloads when
+  relaunches the installed copy. It restarts itself after a successful update; a developer rebuild reloads the page when
   `startedAt` changes (or once when the update is done, if the bridge script didn't change).
   **What's new** (`?changelog=true`, `src/features/changelog/`): a drawer listing the GitHub releases (one request,
   `releases?per_page=100`, only once it opens, cached 6h in localStorage), each release's `## What's Changed` lines parsed
@@ -1217,7 +1217,7 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 | `extension` | Manage opt-in extensions: `list`, `add <name\|folder\|git-url>`, `link <folder>`, `remove <name>`, `new <name>` (see `docs/EXTENSIONS.md`) |
 | `install-skills` | Copy the mix skills, agents and knowledge shipped in the npm package into `~/.claude` (never overwrites files the user edited or owns, skips symlinked folders; a clone uses `scripts/sync-symlinks.sh`). `--dry-run` previews. Skills and agents also go into the shared `~/.agents` when a non-Claude harness is installed (never the knowledge, which the skills read from `~/.claude/knowledge`); `--harness claude,codex` picks. `init` runs it for an npm install |
 | `init` | Connect the AI harnesses: detects Claude Code, Codex CLI, Gemini CLI and Cursor, registers the server in each one found by absolute path (`claude mcp add --scope user`, `codex mcp add`, `gemini mcp add --scope user`, Cursor's `~/.cursor/mcp.json`; an entry whose node or `main.js` no longer exists is replaced) and prints the install hint for the ones missing. `--harness claude,codex` or `--all` picks by hand. Claude Code also gets the REAPER tool allow-list in `~/.claude/settings.json`, and in a clone a `.mcp.json` (copy-free). From an npm install it then runs `install-skills`. `doctor` shows which harnesses are connected |
-| `update` | Update to the latest release. An npm install runs `npm install -g @mthines/reaper-mcp@<latest>`, then `setup --yes` in a fresh process (`update.ts`; nothing when npm names nothing newer, `--force` reinstalls); a clone runs `scripts/update.sh`. `setup` writes `mcp_update.conf` (`mode=npm`, node, cli) so the bridge page's **Update** button runs it detached; the page then shows a toast (Sonner, `app/UpdateToasts.tsx`): downloading, then ready with a **Reload** button, never an automatic reload. For an npm install the page's "update available" check asks npm (`control.updateSource`), not GitHub, so it only offers what can be installed |
+| `update` | Update to the latest release (`--bridge`, which the bridge page uses, exits 3 when nothing newer exists; 1 = download failed, 2 = setup failed). An npm install runs `npm install -g @mthines/reaper-mcp@<latest>`, then `setup --yes` in a fresh process (`update.ts`; nothing when npm names nothing newer, `--force` reinstalls); a clone runs `scripts/update.sh`. `setup` writes `mcp_update.conf` (`mode=npm`, node, cli) so the bridge page's **Update** button runs it detached; the page then shows a toast (Sonner, `app/UpdateToasts.tsx`): downloading, then ready with a **Reload** button, never an automatic reload. For an npm install the page's "update available" check asks npm (`control.updateSource`), not GitHub, so it only offers what can be installed |
 | `doctor` | Verify all components are configured correctly (includes 4 sidecar sub-checks) |
 | `status` | Check if Lua bridge is running in REAPER |
 

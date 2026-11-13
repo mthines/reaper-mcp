@@ -35,6 +35,11 @@ describe('reaper-mcp update', () => {
     expect(t.text()).toContain('Already on the latest version');
   });
 
+  it('exits 3 for nothing newer when the bridge runs it, so the page can tell it from an install', async () => {
+    const t = setup({ latest: async () => '0.83.0', bridge: true });
+    expect(await runUpdate(t.deps)).toBe(3);
+  });
+
   it('reinstalls the same version with force', async () => {
     const t = setup({ latest: async () => '0.83.0', force: true });
     expect(await runUpdate(t.deps)).toBe(0);
@@ -57,7 +62,7 @@ describe('reaper-mcp update', () => {
 
   it('reports a failed install into REAPER after a good download', async () => {
     const t = setup({ exit: { '/pkg/main.js': 1 } });
-    expect(await runUpdate(t.deps)).toBe(1);
+    expect(await runUpdate(t.deps)).toBe(2);
     expect(t.text()).toContain('reaper-mcp setup');
   });
 });

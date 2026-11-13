@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { toast } from 'sonner';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { exampleFeed } from '../demo/feed.js';
 import type { BridgeStatus } from '../lib/status.js';
@@ -13,6 +14,7 @@ const failed: BridgeStatus = { ...status, control: { ...control, update: { kind:
 const done: BridgeStatus = { ...status, control: { ...control, update: { kind: 'update', state: 'done', startedAt: 1, log: [] } } };
 // The bridge restarted into the new version: a new run that no longer remembers the update
 const restarted: BridgeStatus = { ...status, startedAt: status.startedAt + 60_000, control };
+const current: BridgeStatus = { ...status, control: { ...control, update: { kind: 'update', state: 'current', startedAt: 1, log: [] } } };
 const idleDone: BridgeStatus = done;
 
 /** Steps a status feed forward on a click, so a play function can watch the toasts follow an update */
@@ -32,7 +34,10 @@ const meta = {
   tags: ['test'],
   parameters: { chromatic: { disableSnapshot: true } },
   args: { steps: [status], request: fn(), onReload: fn() },
-  beforeEach: () => resetUpdateReady(),
+  beforeEach: () => {
+    resetUpdateReady();
+    toast.dismiss(); // toasts live on document.body, so one story's would leak into the next
+  },
 } satisfies Meta<typeof Feed>;
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -62,14 +67,15 @@ export const OffersReloadWhenTheBridgeKeepsTheDoneState: Story = {
   },
 };
 
-export const ReportsAFailedUpdateAndTriesAgain: Story = {
+export const ReportsAFailedUpdateOnceWithTheReason: Story = {
   args: { steps: [running, failed] },
-  play: async ({ canvasElement, args }) => {
+  play: async ({ canvasElement }) => {
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.click(within(canvasElement).getByRole('button', { name: 'Next' }));
     await expect(await screen.findByText('The update didn’t finish')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    await expect(args.request).toHaveBeenCalled();
+    await expect(screen.getByText('✗ The download did not finish.')).toBeInTheDocument();
+    // Try again lives in the failure notice, so the toast does not offer a second one
+    await expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   },
 };
 
@@ -80,5 +86,18 @@ export const StaysQuietForAnUpdateItNeverSawRun: Story = {
     const screen = within(canvasElement.ownerDocument.body);
     await new Promise((resolve) => setTimeout(resolve, 100));
     await expect(screen.queryByRole('button', { name: 'Reload' })).not.toBeInTheDocument();
+  },
+};
+
+/** The updater found nothing newer: say so, and never offer Reload for an install that did not happen */
+export const SaysAlreadyUpToDateWithoutOfferingReload: Story = {
+  args: { steps: [running, current] },
+  play: async ({ canvasElement }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Next' }));
+    await expect(await screen.findByText('Already up to date')).toBeInTheDocument();
+    // judge this toast alone: an earlier story's toast may still be animating out on document.body
+    const toastEl = (await screen.findByText('Already up to date')).closest('li') as HTMLElement;
+    await expect(within(toastEl).queryByRole('button', { name: 'Reload' })).not.toBeInTheDocument();
   },
 };

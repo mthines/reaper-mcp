@@ -4795,7 +4795,7 @@ local function start_update(kind)
   local job
   if conf.mode == "npm" then
     if kind == "rebuild" then return end
-    job = "PATH=" .. path .. " " .. shell_quote(conf.node or "node") .. " " .. shell_quote(conf.cli) .. " update"
+    job = "PATH=" .. path .. " " .. shell_quote(conf.node or "node") .. " " .. shell_quote(conf.cli) .. " update --bridge"
   else
     job = "cd " .. shell_quote(conf.repo) .. " && PATH=" .. path .. " ./scripts/update.sh" .. (kind == "rebuild" and " --rebuild" or "")
   end
@@ -4839,7 +4839,8 @@ local function check_control(now)
   local code = read_file(UPDATE_EXIT)
   if not code then return end
   code = tonumber(code:match("%d+"))
-  update.state = code == 0 and "done" or "failed"
+  -- exit 3 from `reaper-mcp update --bridge`: nothing newer to install, nothing changed
+  update.state = code == 0 and "done" or code == 3 and "current" or "failed"
   if update.state == "done" then os.remove(SOURCE_CHANGES) end -- re-checked against the new install
   log_event("bridge_update_end", { exitCode = code })
   status_dirty = true

@@ -45,7 +45,8 @@ export function webSocketLevel(web: BridgeWebSockets | undefined): 'ok' | 'filli
 export interface BridgeUpdate {
   /** update: pull the latest version; rebuild: build the working tree as it is (developer mode) */
   kind?: 'update' | 'rebuild';
-  state: 'running' | 'failed' | 'done';
+  /** current: the updater found nothing newer to install (nothing changed) */
+  state: 'running' | 'failed' | 'done' | 'current';
   startedAt: number;
   /** Last lines of the update log; an empty Lua table can arrive as `{}` */
   log: string[] | Record<string, never>;

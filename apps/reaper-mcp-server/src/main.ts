@@ -796,7 +796,7 @@ async function serve(): Promise<void> {
 }
 
 /** `reaper-mcp update`: an npm install updates itself (update.ts); a clone runs its scripts/update.sh. */
-async function updateCommand(force: boolean): Promise<number> {
+async function updateCommand(force: boolean, bridge: boolean): Promise<number> {
   const cloneRoot = findCloneRoot(__dirname);
   if (cloneRoot) {
     return new Promise((resolveCode) => {
@@ -805,7 +805,7 @@ async function updateCommand(force: boolean): Promise<number> {
       child.on('close', (code) => resolveCode(code ?? 1));
     });
   }
-  return runUpdate(realUpdateDeps(readServiceVersion(), join(__dirname, 'main.js'), force));
+  return runUpdate(realUpdateDeps(readServiceVersion(), join(__dirname, 'main.js'), force, bridge));
 }
 
 // --- CLI entry point ---
@@ -832,7 +832,7 @@ switch (command) {
     break;
 
   case 'update':
-    updateCommand(process.argv.includes('--force')).then(
+    updateCommand(process.argv.includes('--force'), process.argv.includes('--bridge')).then(
       (code) => process.exit(code),
       (err: unknown) => {
         console.error('Update failed:', err);

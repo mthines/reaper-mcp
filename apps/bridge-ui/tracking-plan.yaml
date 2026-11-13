@@ -27,7 +27,7 @@ events:
   update_clicked:            # asked the bridge to update this install
     source: [changelog, notice, palette]
   update_finished:           # an update this page watched start ended
-    result: [ready, failed]
+    result: [ready, current, failed]
     source: [npm, clone]
   update_reload_clicked:     # pressed Reload on the "up to date" toast
     source: [npm, clone]
