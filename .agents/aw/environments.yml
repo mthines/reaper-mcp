@@ -19,3 +19,11 @@ environments:
       ready_timeout_seconds: 120
     auth:
       strategy: none
+  # The hosted site (BRIDGE_HOSTED=1 build on Vercel): the live demo at /, /changelog, and the docs at /docs.
+  # Always the demo, never a REAPER, so there is nothing to start and no login.
+  production:
+    url: https://reaper-mcp.vercel.app
+    stack:
+      driver: none
+    auth:
+      strategy: none
