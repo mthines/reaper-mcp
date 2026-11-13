@@ -7,6 +7,7 @@ import type { Sample } from '../lib/log.js';
 import { HISTORY_MAX } from '../lib/log.js';
 import { useHistory } from './useHistory.js';
 import { useSettings } from './useSettings.js';
+import { CLOSE_AFTER_MS, useCloseWithReaper } from './useCloseWithReaper.js';
 
 // React's act() needs this flag outside a test renderer
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -107,5 +108,80 @@ describe('useHistory', () => {
   it('samples nothing while the bridge is unreachable', () => {
     render(null, 1000);
     expect(samples).toEqual([]);
+  });
+});
+
+describe('useCloseWithReaper', () => {
+  function Probe({ reachable, enabled = true }: { reachable: boolean; enabled?: boolean }) {
+    const { secondsLeft, cancel } = useCloseWithReaper(reachable, enabled);
+    return (
+      <>
+        <span data-testid="left">{secondsLeft ?? 'none'}</span>
+        <button onClick={cancel}>Keep open</button>
+      </>
+    );
+  }
+  const render = (reachable: boolean, enabled = true) => act(() => root.render(<Probe reachable={reachable} enabled={enabled} />));
+  const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+  const left = () => document.querySelector('[data-testid=left]')?.textContent;
+  let close: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    close = vi.fn();
+    vi.stubGlobal('close', close);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('counts down and closes the window once REAPER has stayed unreachable', () => {
+    render(false);
+    wait(500);
+    expect(left()).toBe('5');
+    wait(2000);
+    expect(left()).toBe('3');
+    wait(CLOSE_AFTER_MS);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays open when REAPER comes back before the countdown ends', () => {
+    render(false);
+    wait(CLOSE_AFTER_MS - 1000);
+    render(true);
+    wait(CLOSE_AFTER_MS);
+    expect(close).not.toHaveBeenCalled();
+    expect(left()).toBe('none');
+  });
+
+  it('stays open after pressing Keep open', () => {
+    render(false);
+    wait(1000);
+    act(() => document.querySelector('button')?.click());
+    wait(CLOSE_AFTER_MS * 2);
+    expect(close).not.toHaveBeenCalled();
+    expect(left()).toBe('none');
+  });
+
+  it('stays open after pressing Enter', () => {
+    render(false);
+    wait(1000);
+    act(() => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })));
+    wait(CLOSE_AFTER_MS * 2);
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it('counts down again the next time REAPER quits after a cancel', () => {
+    render(false);
+    act(() => document.querySelector('button')?.click());
+    render(true);
+    render(false);
+    wait(CLOSE_AFTER_MS + 500);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays open outside the bridge window (a tab, the installed app, demo)', () => {
+    render(false, false);
+    wait(CLOSE_AFTER_MS * 2);
+    expect(close).not.toHaveBeenCalled();
+    expect(left()).toBe('none');
   });
 });
