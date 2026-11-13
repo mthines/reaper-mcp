@@ -276,7 +276,7 @@ export function App() {
               <span className="dot-sep" />
               <button className={styles.footerLink} onClick={openChangelog('footer')} title="What’s new">reaper-mcp v{__VERSION__}</button>
               <span className="dot-sep" />
-              <a href={guideUrl(undefined, hereUrl())} target="_blank" rel="noreferrer">Guides</a>
+              <a href={guideUrl(undefined, hereUrl())} target="_blank" rel="noreferrer">Docs</a>
               <span className="dot-sep" />
               <a href={`${REPO_URL}/issues`} target="_blank" rel="noreferrer">Report an issue</a>
               <span className="dot-sep" />

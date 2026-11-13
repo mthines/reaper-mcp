@@ -16,7 +16,7 @@ type Story = StoryObj<typeof meta>;
 export const ListsGuidesBySectionAndLinksToTheDemo: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const nav = within(canvas.getByRole('navigation', { name: 'Guides' }));
+    const nav = within(canvas.getByRole('navigation', { name: 'Docs' }));
     for (const title of ['Getting started', 'Things to try', 'Reference']) await expect(nav.getByText(title)).toBeInTheDocument();
     await expect(nav.queryByText('Safety and privacy')).not.toBeInTheDocument(); // no guide in it yet
     await expect(canvas.getByRole('link', { name: 'Try the live demo' })).toHaveAttribute('href', '/demo-here');
@@ -29,7 +29,7 @@ export const OffersOneWayInAndTheStepsInOrder: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { level: 1 })).toHaveTextContent('A music assistant inside REAPER');
     await userEvent.click(canvas.getByRole('link', { name: 'Start here' }));
-    await expect(args.onNavigate).toHaveBeenCalledWith('what-this-is');
+    await expect(args.onNavigate).toHaveBeenCalledWith('what-this-is', undefined);
     const steps = within(canvas.getByRole('region', { name: 'Getting started' })).getAllByRole('listitem');
     await expect(steps[0]).toHaveTextContent('Install and connect'); // order 1 in the example data
   },
@@ -37,9 +37,9 @@ export const OffersOneWayInAndTheStepsInOrder: Story = {
 
 export const OpensAGuideFromTheNavWithoutLeavingThePage: Story = {
   play: async ({ canvasElement, args }) => {
-    const nav = within(within(canvasElement).getByRole('navigation', { name: 'Guides' }));
+    const nav = within(within(canvasElement).getByRole('navigation', { name: 'Docs' }));
     await userEvent.click(nav.getByRole('link', { name: 'Install and connect' }));
-    await expect(args.onNavigate).toHaveBeenCalledWith('install');
+    await expect(args.onNavigate).toHaveBeenCalledWith('install', undefined);
   },
 };
 
@@ -88,7 +88,7 @@ export const SaysWhenAGuideDoesNotExist: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { name: /isn’t here/ })).toBeInTheDocument();
-    await expect(canvas.getByRole('link', { name: 'Back to all guides' })).toHaveAttribute('href', '/docs');
+    await expect(canvas.getByRole('link', { name: 'Back to all docs' })).toHaveAttribute('href', '/docs');
   },
 };
 

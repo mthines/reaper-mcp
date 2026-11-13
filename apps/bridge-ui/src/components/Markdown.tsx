@@ -99,7 +99,14 @@ function blocks(source: string, doc?: MarkdownDoc): ReactNode[] {
       const Tag = `h${level}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
       out.push(
         <Tag key={key()} id={doc ? headingId(heading[2]) : undefined}>
-          {inline(heading[2], doc)}
+          {doc ? (
+            // A guide's headings link to themselves: press one for a URL straight to that section
+            <a className={styles.anchor} href={`#${headingId(heading[2])}`}>
+              {inline(heading[2], doc)}
+            </a>
+          ) : (
+            inline(heading[2], doc)
+          )}
         </Tag>,
       );
       i++;

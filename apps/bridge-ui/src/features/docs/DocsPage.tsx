@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Markdown, type MarkdownDoc } from '../../components/index.js';
 import { CommandPaletteButton, useCommand } from '../command/index.js';
 import { GuideCommands } from './GuideCommands.js';
-import { REPO_URL } from '../../lib/links.js';
+import { DISCORD_URL, REPO_URL } from '../../lib/links.js';
 import { groupGuides, neighbours, pageHeadings, SECTIONS, type Guide, type GuideMeta } from './docs.js';
 import { DOCS_BASE, useBridgeLink, useDocsPath, useGuide, useGuideIndex, type GuideState, type IndexState } from './useDocs.js';
 import { CodeBlock } from './CodeBlock.js';
@@ -34,14 +34,14 @@ export function DocsPage({
   index: IndexState;
   slug: string | undefined;
   guide: GuideState;
-  onNavigate: (slug: string | undefined) => void;
+  onNavigate: (slug: string | undefined, hash?: string) => void;
   demoHref: string;
   /** Where the bridge page this viewer came from lives; offers the way back */
   bridgeUrl?: string;
 }) {
   const [navOpen, setNavOpen] = useState(false);
   useCommand({ id: 'go-bridge', label: 'Back to the bridge', group: 'Go to', contextual: true, description: 'status window reaper return', onSelect: () => { if (bridgeUrl) window.location.href = bridgeUrl; } }, Boolean(bridgeUrl));
-  useCommand({ id: 'go-all-guides', label: 'All guides', group: 'Go to', contextual: true, description: 'docs home start', onSelect: () => onNavigate(undefined) }, slug !== undefined);
+  useCommand({ id: 'go-all-guides', label: 'All docs', group: 'Go to', contextual: true, description: 'docs home start', onSelect: () => onNavigate(undefined) }, slug !== undefined);
   const mainRef = useRef<HTMLElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const moved = useRef(false);
@@ -60,7 +60,7 @@ export function DocsPage({
     };
   }, []);
   useEffect(() => {
-    document.title = title ? `${title} · reaper-mcp guides` : 'reaper-mcp guides';
+    document.title = title ? `${title} · reaper-mcp docs` : 'reaper-mcp docs';
   }, [title]);
   // The accent line beside the nav slides to the open guide: its place is measured from the link and handed to CSS as variables
   useEffect(() => {
@@ -87,6 +87,11 @@ export function DocsPage({
       window.removeEventListener('resize', place);
     };
   }, [slug, index.status, navOpen]);
+  // A link with an anchor (a guide's own `install.md#somethings-off`, or a shared URL) scrolls to its heading once the text is there
+  const ready = guide.status === 'ready';
+  useEffect(() => {
+    if (ready && window.location.hash) document.getElementById(decodeURIComponent(window.location.hash.slice(1)))?.scrollIntoView();
+  }, [ready, slug]);
   useEffect(() => {
     if (!moved.current) {
       moved.current = true;
@@ -101,20 +106,20 @@ export function DocsPage({
     const a = (e.target as HTMLElement).closest('a');
     const href = a?.getAttribute('href');
     if (!a || !href || a.target === '_blank') return;
-    const m = /^\/docs(?:\/([a-z0-9-]+))?\/?$/.exec(href);
+    const m = /^\/docs(?:\/([a-z0-9-]+))?\/?(#[\w-]+)?$/.exec(href);
     if (!m) return;
     e.preventDefault();
     setNavOpen(false);
-    onNavigate(m[1]);
+    onNavigate(m[1], m[2]);
   };
 
   return (
     <div className={styles.page} onClick={intercept}>
       <GuideCommands guides={index.status === 'ready' ? index.guides : undefined} onOpen={onNavigate} fallback={() => onNavigate(undefined)} contextual />
-      <a className={styles.skip} href="#guide-main">Skip to the guide</a>
+      <a className={styles.skip} href="#guide-main">Skip to the page</a>
       <header className={styles.head}>
         <a className={styles.brand} href="/docs">
-          reaper-mcp <span className={styles.brandSub}>guides</span>
+          reaper-mcp <span className={styles.brandSub}>docs</span>
         </a>
         <nav className={styles.headLinks} aria-label="Site">
           <a className={styles.headLink} href="/changelog">What’s new</a>
@@ -129,12 +134,12 @@ export function DocsPage({
       </header>
       <div className={styles.body} data-landing={slug === undefined}>
         <button className={`btn ${styles.navToggle}`} aria-expanded={navOpen} onClick={() => setNavOpen(!navOpen)}>
-          {navOpen ? 'Hide guides' : current ? `Guides: ${current.title}` : 'All guides'}
+          {navOpen ? 'Hide docs' : current ? `Docs: ${current.title}` : 'All docs'}
         </button>
-        <nav className={styles.nav} data-open={navOpen} aria-label="Guides" ref={navRef}>
+        <nav className={styles.nav} data-open={navOpen} aria-label="Docs" ref={navRef}>
           <span className={styles.rail} aria-hidden="true" />
           {index.status === 'loading' && <p className={styles.hint}>Loading…</p>}
-          {index.status === 'error' && <p className={styles.hint}>Couldn’t load the guides.</p>}
+          {index.status === 'error' && <p className={styles.hint}>Couldn’t load the docs.</p>}
           {groupGuides(guides).map((section) => (
             <section key={section.key}>
               <p className={styles.navSection}>{section.title}</p>
@@ -152,12 +157,18 @@ export function DocsPage({
         </nav>
         <main className={styles.main} id="guide-main" ref={mainRef} tabIndex={-1}>
           {slug !== undefined && index.status === 'loading' && <p className={styles.hint}>Loading…</p>}
-          {index.status === 'error' && slug !== undefined && <p className={styles.hint}>Couldn’t load this guide. <a href={`${REPO_URL}/tree/main/docs/guides`} target="_blank" rel="noreferrer">Read the guides on GitHub</a>.</p>}
+          {index.status === 'error' && slug !== undefined && <p className={styles.hint}>Couldn’t load this page. <a href={`${REPO_URL}/tree/main/docs/guides`} target="_blank" rel="noreferrer">Read the docs on GitHub</a>.</p>}
           {slug === undefined && <Landing index={index} />}
           {unknown && <NotFound />}
           {current && <Article meta={current} guide={guide} guides={guides} />}
         </main>
       </div>
+      <footer className={styles.siteFoot}>
+        <span>Stuck, or something here is wrong?</span>
+        <a href={DISCORD_URL} target="_blank" rel="noreferrer">Ask on Discord</a>
+        <a href={`${REPO_URL}/issues`} target="_blank" rel="noreferrer">Report an issue</a>
+        <a href={REPO_URL} target="_blank" rel="noreferrer">GitHub</a>
+      </footer>
     </div>
   );
 }
@@ -288,9 +299,9 @@ function Landing({ index }: { index: IndexState }) {
 function NotFound() {
   return (
     <article>
-      <h1 className={styles.title}>That guide isn’t here</h1>
+      <h1 className={styles.title}>That page isn’t here</h1>
       <p className={styles.lead}>It may have moved, or the link has a typo.</p>
-      <p><a className={styles.primary} href="/docs">Back to all guides</a></p>
+      <p><a className={styles.primary} href="/docs">Back to all docs</a></p>
     </article>
   );
 }
@@ -303,7 +314,7 @@ function Article({ meta, guide, guides }: { meta: GuideMeta; guide: GuideState; 
   return (
     <article className={styles.article}>
       <nav className={styles.crumbs} aria-label="Breadcrumb">
-        <a href="/docs">Guides</a>
+        <a href="/docs">Docs</a>
         <span aria-hidden="true">/</span>
         <span>{SECTIONS.find((s) => s.key === meta.section)?.title}</span>
         {meta.duration && <span className={styles.crumbTime}>{hasVideo ? '▶ ' : ''}{meta.duration}</span>}
@@ -321,7 +332,7 @@ function Article({ meta, guide, guides }: { meta: GuideMeta; guide: GuideState; 
       {guide.status === 'loading' && <p className={styles.hint}>Loading…</p>}
       {(guide.status === 'error' || guide.status === 'missing') && (
         <p className={styles.hint}>
-          Couldn’t load this guide. You can read it on{' '}
+          Couldn’t load this page. You can read it on{' '}
           <a href={`${REPO_URL}/blob/main/docs/guides/${meta.slug}.md`} target="_blank" rel="noreferrer">GitHub</a>.
         </p>
       )}
@@ -329,16 +340,7 @@ function Article({ meta, guide, guides }: { meta: GuideMeta; guide: GuideState; 
         <div className={styles.cols}>
           <Markdown className={styles.prose} source={ready.body} doc={GUIDE_MARKDOWN} />
           {headings.length > 1 && (
-            <nav className={styles.toc} aria-label="On this page">
-              <h2 className={styles.navTitle}>On this page</h2>
-              <ul className={styles.navList}>
-                {headings.map((h) => (
-                  <li key={h.id}>
-                    <a href={`#${h.id}`}>{h.text}</a>
-                  </li>
-                ))}
-              </ul>
-            </nav>
+            <Toc headings={headings} />
           )}
         </div>
       )}
@@ -359,6 +361,63 @@ function Article({ meta, guide, guides }: { meta: GuideMeta; guide: GuideState; 
         )}
       </footer>
     </article>
+  );
+}
+
+/** "On this page": the nav's look, with the accent line following the section being read */
+function Toc({ headings }: { headings: Array<{ id: string; text: string }> }) {
+  const ref = useRef<HTMLElement>(null);
+  const [active, setActive] = useState(headings[0]?.id);
+  // The section being read: the last heading that has reached the top part of the window; at the very bottom, the last one
+  useEffect(() => {
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      let current = headings[0]?.id;
+      for (const h of headings) {
+        const el = document.getElementById(h.id);
+        if (el && el.getBoundingClientRect().top <= 120) current = h.id;
+      }
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) current = headings[headings.length - 1]?.id;
+      setActive(current);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(read);
+    };
+    read();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [headings]);
+  // Place the line on the active link; the first placement jumps, later ones slide
+  useEffect(() => {
+    const nav = ref.current;
+    const a = nav?.querySelector<HTMLElement>('a[aria-current="location"]');
+    if (!nav || !a) return;
+    nav.style.setProperty('--rail-y', `${a.offsetTop}px`);
+    nav.style.setProperty('--rail-h', `${a.offsetHeight}`);
+    const first = !nav.dataset.rail;
+    nav.dataset.rail = 'set';
+    if (!first) nav.dataset.rail = 'on';
+  }, [active]);
+  return (
+    <nav className={styles.toc} aria-label="On this page" ref={ref}>
+      <span className={styles.rail} aria-hidden="true" />
+      <h2 className={styles.navTitle}>On this page</h2>
+      <ul className={styles.navList}>
+        {headings.map((h) => (
+          <li key={h.id}>
+            <a href={`#${h.id}`} aria-current={h.id === active ? 'location' : undefined}>
+              {h.text}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }
 

@@ -10,7 +10,7 @@ duration: 6 min
 
 Every session starts with the same chores: drag in 40 files, rename them, color them, send the drums to the drum bus, bring the faders to something sane. You do it the same way every time, which is exactly why it's worth handing off.
 
-This guide shows the whole flow, then how to teach it *your* way of doing it so you only explain once.
+This page shows the whole flow, then how to teach it *your* way of doing it so you only explain once.
 
 ## You'll need
 

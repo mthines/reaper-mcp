@@ -23,9 +23,9 @@ You chat in plain English in Claude Code, by keyboard (or dictation, if you like
 [![macOS · Windows · Linux](https://img.shields.io/badge/macOS_·_Windows_·_Linux-1a1240?style=for-the-badge)](#-install-in-3-steps)
 [![MIT](https://img.shields.io/badge/license-MIT-ff7a45?style=for-the-badge)](LICENSE)
 
-[**Install in 3 steps**](#-install-in-3-steps) · [See it work](#-just-type-what-you-hear) · [What you get](#-why-producers-use-it) · [Watch it work](#-see-what-your-agent-is-doing) · [Extensions](#-extensions-teach-it-your-plugin) · [Clients & models](#-clients-and-models) · [Guides](https://reaper-mcp.vercel.app/docs) · [FAQ](#-faq)
+[**Install in 3 steps**](#-install-in-3-steps) · [See it work](#-just-type-what-you-hear) · [What you get](#-why-producers-use-it) · [Watch it work](#-see-what-your-agent-is-doing) · [Extensions](#-extensions-teach-it-your-plugin) · [Clients & models](#-clients-and-models) · [Docs](https://reaper-mcp.vercel.app/docs) · [FAQ](#-faq)
 
-<sub>New to AI? The <a href="https://reaper-mcp.vercel.app/docs">guides</a> explain it in plain words, with videos on the way. Try the <a href="https://reaper-mcp.vercel.app/">live demo</a> of the status page.</sub>
+<sub>New to AI? The <a href="https://reaper-mcp.vercel.app/docs">docs</a> explain it in plain words, with videos on the way. Try the <a href="https://reaper-mcp.vercel.app/">live demo</a> of the status page.</sub>
 
 </div>
 

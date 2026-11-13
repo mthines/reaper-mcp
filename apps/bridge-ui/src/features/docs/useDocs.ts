@@ -69,7 +69,7 @@ export function useGuide(slug: string | undefined): GuideState {
 }
 
 /** The slug in `/docs/<slug>`, and a way to move without a reload. */
-export function useDocsPath(): { slug: string | undefined; go: (slug: string | undefined) => void } {
+export function useDocsPath(): { slug: string | undefined; go: (slug: string | undefined, hash?: string) => void } {
   const read = () => /^\/docs\/([^/.]+)\/?$/.exec(location.pathname)?.[1];
   const [slug, setSlug] = useState(read);
   useEffect(() => {
@@ -77,10 +77,12 @@ export function useDocsPath(): { slug: string | undefined; go: (slug: string | u
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
-  const go = (next: string | undefined) => {
-    history.pushState(null, '', next ? `${DOCS_BASE}/${next}` : DOCS_BASE);
+  const go = (next: string | undefined, hash?: string) => {
+    history.pushState(null, '', `${next ? `${DOCS_BASE}/${next}` : DOCS_BASE}${hash ?? ''}`);
     setSlug(next);
-    window.scrollTo({ top: 0 });
+    // With an anchor the page scrolls to it once the guide has loaded (DocsPage); without one, to the top
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView();
+    else window.scrollTo({ top: 0 });
   };
   return { slug, go };
 }

@@ -102,9 +102,6 @@ export function Header({
             <Icon.Gear />
           </button>
         )}
-        <a className={cx(styles.iconLink, styles.textLink)} href={guideUrl(undefined, hereUrl())} target="_blank" rel="noreferrer" title="Guides: how to use reaper-mcp, in plain words">
-          Guides
-        </a>
         <a className={styles.iconLink} href={REPO_URL} target="_blank" rel="noreferrer" title="reaper-mcp on GitHub" aria-label="reaper-mcp on GitHub">
           <Icon.GitHub />
         </a>
@@ -199,7 +196,7 @@ function HeaderMenu({
             </button>
           )}
           <a role="menuitem" href={guideUrl(undefined, hereUrl())} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>
-            Guides
+            Docs
           </a>
           <a role="menuitem" href={REPO_URL} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>
             reaper-mcp on GitHub

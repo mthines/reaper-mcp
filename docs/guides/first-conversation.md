@@ -36,6 +36,6 @@ Gain staging means setting every track to a sensible starting level, so your plu
 
 ## If something's off
 
-- **"I can't see REAPER."** Check the status window shows a green light, then see [Something's off](install.md#something-s-off).
+- **"I can't see REAPER."** Check the status window shows a green light, then see [Something's off](install.md#somethings-off).
 - **It's slow to answer.** Each question to REAPER takes a fraction of a second; the AI app's thinking time is the slow part.
 - **You want it to stop.** The status window has a **Pause** button. See [Undo, snapshots and the pause button](undo-and-safety.md).

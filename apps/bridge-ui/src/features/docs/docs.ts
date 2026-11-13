@@ -156,7 +156,7 @@ export function renderLlmsTxt(guides: GuideMeta[], origin = ''): string {
 
 /** `llms-full.txt`: every guide in reading order, one after another. */
 export function renderLlmsFull(guides: Guide[]): string {
-  const parts = [`# reaper-mcp guides`, '', `> ${BLURB}`, ''];
+  const parts = [`# reaper-mcp docs`, '', `> ${BLURB}`, ''];
   for (const g of sortGuides(guides)) parts.push('---', '', `# ${g.title}`, '', `${g.summary}`, '', g.body.trim(), '');
   return parts.join('\n');
 }

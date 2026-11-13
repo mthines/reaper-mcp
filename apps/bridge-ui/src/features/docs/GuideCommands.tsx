@@ -25,7 +25,7 @@ export function GuideCommands({
 }) {
   useCommand({
     id: 'help-guides',
-    label: guides?.length ? 'Guides…' : 'Open the guides',
+    label: guides?.length ? 'Docs…' : 'Open the docs',
     group: 'Help',
     contextual,
     description: 'docs how to install videos tutorial help learn guides search',

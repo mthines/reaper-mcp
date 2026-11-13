@@ -31,4 +31,4 @@ Press **Cmd/Ctrl+K** for the command palette, and **?** for the shortcut list.
 
 ## If it's not showing
 
-Run `reaper-mcp doctor`, or see [Install](install.md#something-s-off).
+Run `reaper-mcp doctor`, or see [Install](install.md#somethings-off).

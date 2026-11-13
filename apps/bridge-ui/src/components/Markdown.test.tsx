@@ -53,8 +53,11 @@ describe('Markdown as a guide', () => {
     expect(out).toContain('<pre data-lang="bash">npm i -g x\nx setup</pre>');
   });
 
-  it('keeps heading levels and gives each an anchor', () => {
-    expect(guide('## What happens next')).toBe('<h2 id="what-happens-next">What happens next</h2>');
+  it('keeps heading levels and makes each a link to its own section', () => {
+    const out = guide('## What happens next');
+    expect(out).toContain('<h2 id="what-happens-next">');
+    expect(out).toContain('href="#what-happens-next"');
+    expect(out).toContain('What happens next</a>');
   });
 
   it('shows images from the guide folder only', () => {
