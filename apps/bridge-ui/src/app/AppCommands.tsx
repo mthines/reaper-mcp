@@ -4,7 +4,7 @@ import { RANGES, type RangeKey } from '../features/timeline/index.js';
 import type { UsageStatsState } from '../lib/analytics.js';
 import type { BridgeSettings, SettingKey } from '../lib/status.js';
 import { GuideCommands, useRemoteGuideIndex } from '../features/docs/index.js';
-import { DISCORD_URL, DOCS_SITE, GUIDES_URL, REPO_URL, guideUrl } from '../lib/links.js';
+import { DISCORD_URL, DOCS_SITE, GUIDES_URL, REPO_URL, guideUrl, hereUrl } from '../lib/links.js';
 
 const open = (url: string) => () => void window.open(url, '_blank', 'noreferrer');
 
@@ -82,7 +82,7 @@ export function AppCommands({
   useCommand({ id: 'help-shortcuts', label: 'Keyboard shortcuts', group: 'Help', shortcut: ['?'], onSelect: () => palette?.setHelpOpen(true) });
   // The guides live on the hosted site; their list is asked for the first time the palette opens, and each opens there with the way back to this page
   const guides = useRemoteGuideIndex(Boolean(palette?.open), DOCS_SITE);
-  const here = `${window.location.origin}${window.location.pathname}`;
+  const here = hereUrl();
   const onOpenGuide = (slug: string) => void window.open(guideUrl(slug, here), '_blank', 'noreferrer');
   const guideList = guides.status === 'ready' ? guides.guides : undefined;
   useCommand({ id: 'help-github', label: 'Open reaper-mcp on GitHub', group: 'Help', icon: <Icon.GitHub />, onSelect: open(REPO_URL) });

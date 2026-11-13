@@ -36,6 +36,7 @@
   border: 1px solid transparent;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
+.textLink { width: auto; padding: 0 10px; font-size: 13px; text-decoration: none; }
 .iconLink:hover { color: var(--text); background: var(--panel-2); border-color: var(--line-2); }
 button.iconLink { background: none; padding: 0; }
 .agents {

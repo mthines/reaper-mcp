@@ -22,3 +22,6 @@ export function guideUrl(slug?: string, bridge?: string): string {
   const base = `${DOCS_SITE}/docs${slug ? `/${slug}` : ''}`;
   return bridge ? `${base}?bridge=${encodeURIComponent(bridge)}` : base;
 }
+
+/** This bridge page's own address, handed to the guides so they can link back */
+export const hereUrl = () => `${window.location.origin}${window.location.pathname}`;

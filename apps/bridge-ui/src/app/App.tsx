@@ -14,7 +14,7 @@ import { useBridgeRequest } from './useBridgeRequest.js';
 import { useErrorNotifications } from './useErrorNotifications.js';
 import { useHistory } from './useHistory.js';
 import { useSettings } from './useSettings.js';
-import { DISCORD_URL, REPO_URL } from '../lib/links.js';
+import { DISCORD_URL, REPO_URL, guideUrl, hereUrl } from '../lib/links.js';
 import { load, save } from '../lib/storage.js';
 import { useNow } from '../lib/useNow.js';
 import { deriveSeries } from '../lib/log.js';
@@ -275,6 +275,8 @@ export function App() {
               Updated {formatAgo(now - lastChangeAt)}
               <span className="dot-sep" />
               <button className={styles.footerLink} onClick={openChangelog('footer')} title="What’s new">reaper-mcp v{__VERSION__}</button>
+              <span className="dot-sep" />
+              <a href={guideUrl(undefined, hereUrl())} target="_blank" rel="noreferrer">Guides</a>
               <span className="dot-sep" />
               <a href={`${REPO_URL}/issues`} target="_blank" rel="noreferrer">Report an issue</a>
               <span className="dot-sep" />
