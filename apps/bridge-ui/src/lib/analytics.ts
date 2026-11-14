@@ -19,6 +19,7 @@ export const SERVICE_NAME = 'reaper-mcp-bridge-ui';
 export type TrackEvent =
   | { name: 'settings_opened' }
   | { name: 'changelog_opened'; source: 'header' | 'notice' | 'menu' | 'palette' | 'footer'; update_available: boolean }
+  | { name: 'changelog_closed'; via: 'close' | 'settings' | 'page_left' | 'other'; seconds: number }
   | { name: 'changelog_betas_toggled'; shown: boolean }
   | { name: 'update_clicked'; source: 'changelog' | 'notice' | 'palette' }
   | { name: 'update_finished'; result: 'ready' | 'current' | 'failed'; source: 'npm' | 'clone' }
