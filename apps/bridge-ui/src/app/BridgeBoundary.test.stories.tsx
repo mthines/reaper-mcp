@@ -35,6 +35,32 @@ function Page() {
   );
 }
 
+/** A view whose text React adds and removes as its own node, as the bridge view's status lines do. */
+function Status({ live }: { live: boolean }) {
+  return (
+    <p data-testid="status">
+      {live ? 'Bridge is live' : null}
+      <b>REAPER</b>
+    </p>
+  );
+}
+
+/** A page whose bridge state the viewer flips; a translator may have rewritten its text in between. */
+function TranslatedPage() {
+  const [live, setLive] = useState(true);
+  return (
+    <div>
+      <header>Header</header>
+      <button type="button" onClick={() => setLive((l) => !l)}>
+        Bridge changes state
+      </button>
+      <BridgeBoundary resetKey={live ? 'live' : 'offline'}>
+        <Status live={live} />
+      </BridgeBoundary>
+    </div>
+  );
+}
+
 const meta = {
   title: 'App/BridgeBoundary/Tests',
   component: Page,
@@ -63,6 +89,35 @@ export const AnErrorInTheBridgeViewLeavesThePageUpAndRecoversOnTheNextStateChang
 
     await userEvent.click(canvas.getByRole('button', { name: 'Bridge changes state' }));
     await expect(canvas.getByText('Bridge view')).toBeInTheDocument();
+    await expect(canvas.queryByRole('status')).not.toBeInTheDocument();
+  },
+};
+
+export const AFailedDomUpdateOnATranslatedPageLeavesThePageUpAndRecovers: Story = {
+  render: () => <TranslatedPage />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // A translator swaps React's text node for its own element, as Chrome's page translation does
+    const status = canvas.getByTestId('status');
+    const text = status.firstChild as Text;
+    const font = document.createElement('font');
+    font.textContent = 'El puente está activo';
+    status.replaceChild(font, text);
+
+    // The bridge goes offline: React removes the text node it owns, which is no longer there (NotFoundError)
+    const consoleError = console.error;
+    console.error = () => undefined;
+    try {
+      await userEvent.click(canvas.getByRole('button', { name: 'Bridge changes state' }));
+    } finally {
+      console.error = consoleError;
+    }
+    await expect(canvas.getByRole('status')).toHaveTextContent('Part of this page broke');
+    await expect(canvas.getByText('Header')).toBeInTheDocument();
+
+    // The bridge's next change draws the view again from fresh nodes
+    await userEvent.click(canvas.getByRole('button', { name: 'Bridge changes state' }));
+    await expect(canvas.getByTestId('status')).toHaveTextContent('Bridge is liveREAPER');
     await expect(canvas.queryByRole('status')).not.toBeInTheDocument();
   },
 };
