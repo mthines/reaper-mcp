@@ -94,13 +94,10 @@ export function eventAttributes(event: TrackEvent): Record<string, string | numb
 /** The page's own file name: the only path segment ever sent as it is. */
 const PAGE_FILE = 'mcp_bridge.html';
 
-/**
- * The page's URL reduced to one of a few fixed paths, so neither host, port, query nor a folder ever leaves the browser.
- * Served (REAPER's web interface, the dev server): `/mcp_bridge.html`, or `/` at the root; any other path is `/other`.
- * Opened as a file: `/local-file/mcp_bridge.html` when the file keeps the page's name, else `/local-file`. A file path
- * is the viewer's own folders (`C:/Users/<name>/Downloads/…`, a temp copy), so only "it was a file" is worth knowing.
- */
+/** The page's URL as one of five fixed paths (`/mcp_bridge.html`, `/`, `/other`, `/local-file[/mcp_bridge.html]`). */
 export function bridgePagePath(href: string | undefined): string {
+  // A file path is the viewer's own folders (`C:/Users/<name>/…`), and a served path can be too, so no host, port,
+  // query or folder ever leaves the browser: only the page's own name and whether it was opened as a file.
   let url: URL;
   try {
     url = new URL(href ?? '/', 'http://localhost');

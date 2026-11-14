@@ -80,16 +80,11 @@ function siteVcs() {
   return vcs;
 }
 
-/**
- * The page's `<meta name="referrer">`, as a Vite `transformIndexHtml` tag.
- *
- * The Web SDK copies `document.referrer` into every page view as it is, with no scrubber of its own, and the referrer is
- * the page that linked here: on REAPER's page that is this page again, host (a LAN IP), port and query (search text, the
- * open entry) included. So the page sets what browsers put there. The page REAPER serves sends none at all; the hosted
- * site sends only its origin, so GitHub still sees where a visitor came from but no path and no `?bridge=` address.
- * A policy covers only what this page sends: a visit from another page carries whatever that page's policy allows.
- */
+/** The page's `<meta name="referrer">`, as a Vite `transformIndexHtml` tag. */
 export function referrerMetaTag(hosted) {
+  // The Web SDK sends `document.referrer` unscrubbed, and on REAPER's page that is this page's own host (a LAN IP),
+  // port and query (search text). REAPER's page sends none; the hosted site only its origin. A policy covers only what
+  // this page sends: a visit from another page carries whatever that page allows.
   return { tag: 'meta', attrs: { name: 'referrer', content: hosted ? 'strict-origin' : 'no-referrer' }, injectTo: 'head-prepend' };
 }
 
