@@ -16,7 +16,7 @@ type State = { failed: boolean; failedAt: string };
  * is replaced by a notice and drawn again on the bridge's next change, with fresh DOM nodes.
  */
 export class BridgeBoundary extends Component<Props, State> {
-  state: State = { failed: false, failedAt: '' };
+  override state: State = { failed: false, failedAt: '' };
 
   static getDerivedStateFromError(): Partial<State> {
     return { failed: true };
@@ -27,11 +27,11 @@ export class BridgeBoundary extends Component<Props, State> {
     return props.resetKey !== state.failedAt ? { failed: false, failedAt: props.resetKey } : null;
   }
 
-  componentDidCatch(error: unknown): void {
+  override componentDidCatch(error: unknown): void {
     trackPageError(error, 'boundary');
   }
 
-  render(): ReactNode {
+  override render(): ReactNode {
     if (!this.state.failed) return this.props.children;
     return (
       <Notice
