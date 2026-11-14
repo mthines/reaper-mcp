@@ -254,6 +254,39 @@ describe('the hosted site', () => {
       expect(sdk.sendEvent).toHaveBeenCalledWith('site.click', { attributes: { 'site.label': 'Copy', 'site.path': 'guide', 'site.element': 'button' } });
     });
 
+    it('sends each scroll milestone once per page, and starts again for a guide opened without a reload', async () => {
+      const win = { addEventListener: vi.fn(), scrollY: 0, innerHeight: 100 };
+      const loc = { pathname: '/docs/install', search: '' };
+      vi.stubGlobal('window', win);
+      vi.stubGlobal('location', loc);
+      // A browser runs the frame later, so scroll events in between are folded into one measurement
+      const frames: Array<() => void> = [];
+      vi.stubGlobal('requestAnimationFrame', (fn: () => void) => frames.push(fn));
+      const a = await import('./analytics.js');
+      a.startSiteAnalytics('docs');
+      const listener = win.addEventListener.mock.calls.find(([type]) => type === 'scroll')?.[1] as () => void;
+      const onScroll = () => {
+        listener();
+        listener();
+        frames.splice(0).forEach((fn) => fn());
+      };
+      const depths = () => sdk.sendEvent.mock.calls.filter(([name]) => name === 'site.scroll_depth').map(([, opts]) => opts.attributes['site.depth']);
+
+      win.scrollY = 400; // the bottom of the window at 50% of a 1000px page
+      onScroll();
+      expect(depths()).toEqual([25, 50]);
+      onScroll();
+      expect(depths()).toEqual([25, 50]);
+      win.scrollY = 900;
+      onScroll();
+      expect(depths()).toEqual([25, 50, 75, 100]);
+
+      loc.pathname = '/docs/first-session';
+      win.scrollY = 150;
+      onScroll();
+      expect(depths()).toEqual([25, 50, 75, 100, 25]);
+    });
+
     it('sends nothing off the hosted build or when the browser asks not to be tracked', async () => {
       vi.stubGlobal('navigator', { globalPrivacyControl: true });
       const a = await import('./analytics.js');
