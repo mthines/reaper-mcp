@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Icon, type GalleryItem } from '../../components/index.js';
 import styles from './Gallery.module.css';
 
@@ -12,8 +12,15 @@ export function Gallery({ title, items }: { title: string; items: GalleryItem[] 
     if (!el) return;
     const start = el.scrollLeft <= 2;
     const end = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
-    if (start !== edge.start || end !== edge.end) setEdge({ start, end });
+    setEdge((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
   };
+  useEffect(() => {
+    const el = track.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => measure());
+    observer.observe(el);
+    return () => observer.disconnect();
+  });
   const step = (dir: 1 | -1) => {
     const el = track.current;
     if (!el) return;
