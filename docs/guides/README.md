@@ -34,6 +34,7 @@ Writing them:
 - Recipes in `section: try` end their steps with a `> your-call:` line and give a prompt to copy as `> say: …`.
 - Link to another guide as `[text](other-guide.md)`. Put images in `media/` and use `![alt](media/file.webp)`.
 - A collapsed block is `::: details Title` … `:::`. Put each video's transcript in one.
+- A carousel of cards is `::: gallery Title` … `:::` around a list: one `- ![alt](media/file.webp) **Name**: what it does` per card, the picture optional (a card without one shows its name). GitHub shows it as a plain list.
 - Add the guide's facts to the code or docs they came from first. If a page and the code disagree, the code wins.
 
 `apps/bridge-ui/src/features/docs/docs.test.ts` checks every guide (frontmatter, links, images, the recipe template). `pnpm dev:bridge` serves them at `http://localhost:8098/docs`.

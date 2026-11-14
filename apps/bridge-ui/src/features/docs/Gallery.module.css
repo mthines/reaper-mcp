@@ -1,0 +1,21 @@
+/* Prefixed with .gallery so the guide prose styles (h3, ul, li, p, img) never win */
+.gallery { margin: 22px 0; }
+.gallery .head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.gallery .title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); }
+.gallery .count { padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line-2); font-size: 12px; color: var(--muted); }
+.gallery .buttons { margin-left: auto; display: flex; gap: 6px; }
+.gallery .button { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; color: var(--text); cursor: pointer; }
+.gallery .button:hover:not(:disabled) { border-color: var(--accent); }
+.gallery .button:disabled { opacity: 0.35; cursor: default; }
+.gallery .back { transform: rotate(180deg); }
+
+.gallery .track { list-style: none; margin: 0; padding: 2px 2px 12px; display: grid; grid-auto-flow: column; grid-auto-columns: min(78%, 280px); gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.gallery .track:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
+.gallery .card { scroll-snap-align: start; display: flex; flex-direction: column; min-width: 0; padding: 10px; border-radius: 12px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.03); }
+.gallery .picture, .gallery .placeholder { width: 100%; aspect-ratio: 16 / 11; border-radius: 8px; }
+.gallery .picture { object-fit: cover; object-position: top; background: #0b0d10; margin: 0; }
+.gallery .placeholder { display: flex; align-items: center; justify-content: center; padding: 12px; text-align: center; font-size: 18px; font-weight: 700; color: var(--muted); background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0 8px, transparent 8px 16px); border: 1px dashed var(--line-2); }
+.gallery .name { margin: 10px 0 4px; font-size: 15px; font-weight: 600; color: var(--text); }
+.gallery .text { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { .track { scroll-behavior: auto; } }

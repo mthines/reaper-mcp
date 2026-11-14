@@ -14,7 +14,8 @@ The REAPER page never bundles the guides: the hosted build copies them next to t
 - **Palette**: `GuideCommands` registers "Docs…" (each guide a child, found by a search from the top level). The bridge page
   asks the hosted site for the list the first time the palette opens (`useRemoteGuideIndex`), never at load.
 - **Markdown** renders with `MarkdownDoc` (`components/Markdown.tsx`): `> say:` → `PromptBox`, `> your-call:` → `YourCall`,
-  fenced code → `CodeBlock`, relative images only. Add a new block type there and here together.
+  fenced code → `CodeBlock`, `::: gallery Title` (a list of `- ![alt](media/x) **Name**: text` items) → `Gallery`,
+  a scroll-snap carousel (a plain bullet list on GitHub). Relative images only. Add a new block type there and here together.
 - **The video** is a click-to-load facade: nothing reaches Google until a viewer presses play (`youtube-nocookie.com`).
 - **Usage analytics and session replay** run here on the hosted build (`startSiteAnalytics()` in `src/lib/analytics.ts`,
   started from `main.tsx`; service `reaper-mcp-site`): page views, errors, fetch timings, rage clicks, a replay with every

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Markdown, type MarkdownDoc } from '../../components/index.js';
+import { Gallery } from './Gallery.js';
 import { CommandPaletteButton, useCommand } from '../command/index.js';
 import { GuideCommands } from './GuideCommands.js';
 import { DISCORD_URL, REPO_URL } from '../../lib/links.js';
@@ -17,6 +18,7 @@ const GUIDE_MARKDOWN: MarkdownDoc = {
   baseUrl: DOCS_BASE,
   code: (text, lang) => <CodeBlock text={text} lang={lang} />,
   callout: (kind, text) => (kind === 'say' ? <PromptBox text={text} /> : <YourCall text={text} />),
+  gallery: (title, items) => <Gallery title={title} items={items} />,
 };
 
 /**
