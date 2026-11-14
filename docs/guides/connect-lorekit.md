@@ -20,13 +20,13 @@ In LoreKit, open **Settings → API keys** and click **Generate new token**.
 
 - Name it something you'll recognise, like `reaper-mcp`.
 - Pick **read + write**. The key starts with `lk_rw_`.
-- Copy it now. LoreKit only shows it once.
+- Copy it now. LoreKit only shows it once (miss it and you just make another).
 
 Treat it like a password. Never paste it into the chat with the assistant.
 
 ## 3. Add it to Claude Code
 
-In a terminal (not inside Claude Code), paste this with your key in place of `lk_rw_YOUR_KEY`:
+In a terminal (not inside Claude Code), paste this with your key in place of `lk_rw_YOUR_KEY`. It's one long line; paste it whole:
 
 ```bash
 claude mcp add --transport http --scope user lorekit https://pqokxlhvnosogizsjztg.supabase.co/functions/v1/mcp --header "Authorization: Bearer lk_rw_YOUR_KEY"
@@ -61,7 +61,7 @@ In Claude Code, type `/mcp`. You should see both `reaper` and `lorekit` as conne
 
 > say: /mix-memory status
 
-The first time it uses memory, Claude Code asks permission. Choose **Yes, and don't ask again**. A fresh account has nothing of yours yet, so you'll see the built-in plugin knowledge and an empty layer of your own. That's right.
+The first time it uses memory, Claude Code asks permission. Choose **Yes, and don't ask again**. A fresh account has nothing of yours yet, so you'll see the built-in plugin knowledge and an empty layer of your own. That's expected: it hasn't learned anything about you yet.
 
 ## 5. Teach it something
 

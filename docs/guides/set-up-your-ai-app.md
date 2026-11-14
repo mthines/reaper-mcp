@@ -6,7 +6,7 @@ section: start
 order: 3
 ---
 
-reaper-mcp is a connector. The thinking happens in an AI app you chat with. This page gets that app ready, from nothing. If you already use Claude Code, skip to [Install](install.md).
+reaper-mcp is only the connector. The thinking happens in an AI app you chat with, and this page gets that app ready from nothing. Already use Claude Code? Skip to [Install](install.md).
 
 ## Which app?
 
@@ -43,7 +43,7 @@ Then close the terminal and open a new one, so it can find the `claude` command.
 
 Type `claude` and press Enter. The first time, it opens your browser to sign in. Afterwards you're in a chat, right there in the terminal.
 
-Claude Code works on the folder you started it in. For music, start it in your song's folder (or any folder): it doesn't need your project file, it talks to REAPER directly.
+It doesn't matter which folder you start it in. It talks to REAPER directly, not to your project file, so your song folder is as good a place as any.
 
 ## The four things you'll use
 
@@ -56,4 +56,4 @@ To leave, type `/exit` or press Ctrl+C twice. To pick up where you left off late
 
 ## Next
 
-[Install reaper-mcp](install.md)
+That's the AI side done. Now [install reaper-mcp](install.md) so it can reach REAPER.
