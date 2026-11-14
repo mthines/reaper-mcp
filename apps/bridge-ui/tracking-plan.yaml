@@ -152,3 +152,9 @@ site:
       shown: boolean
     release_linked:            # a release's version link pressed
       version: string          # a public release version, e.g. 0.86.2
+
+# What would turn red on the hosted site (regression signals, to set up in Dash0, service reaper-mcp-site):
+# - fetch spans for docs/pages.json or docs/<slug>.md failing: the guides don't load
+# - browser errors by message after a deploy (service.version, deployment.environment.name production)
+# - rage clicks per page.url.path rising: a control that looks pressable and isn't
+# - LCP / INP p75 per site.page regressing after a deploy
