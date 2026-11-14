@@ -100,14 +100,17 @@ events:
   snapshot_edited:           # the bridge answered a rename / description edit from the Snapshots view
     outcome: [ok, refused, lost]
     renamed: boolean         # the name changed (else only the description)
-  page_error:                # uncaught error or rejection in the page; severity ERROR
-    type: string             # TypeError, RangeError, …, or non_error; never the message or stack
+  page_error:                # uncaught error or rejection in the page, or one its error boundary caught; severity ERROR
+    type: string             # TypeError, RangeError, NotFoundError, …, or non_error; never the message or stack
+    source: [uncaught, rejection, boundary]
+    translated: boolean      # a browser translator had rewritten the page (<html> translated-ltr/rtl, or lang not en)
+    operation: string        # browser DOM errors only: the DOM call that failed, e.g. Node.removeChild (letters only)
 
 # What would turn red (regression signals, to set up in Dash0):
 # - bridge_ui.plugin_publish_completed with outcome != published, by outcome
 # - bridge_ui.knowledge_load_failed rate, by layer (LoreKit or token trouble)
 # - bridge_ui.bridge_state_changed to offline/stale, per session
-# - bridge_ui.page_error by bridge_ui.type after a release (service.version)
+# - bridge_ui.page_error by bridge_ui.type after a release (service.version); NotFoundError by operation and translated
 
 # ── The hosted site ──────────────────────────────────────────────────────────────────────────────────────────────
 # The public guides (/docs) and changelog (/changelog) on the hosted build (BRIDGE_HOSTED=1, Vercel). A public
