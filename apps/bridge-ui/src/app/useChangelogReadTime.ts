@@ -28,12 +28,12 @@ export function readTimer(now: () => number, visible: boolean): ReadTimer {
 }
 
 /**
- * How long the What's new drawer stays open, sent as one `changelog_closed` when it closes (or the page goes away
- * with it open). Every way of closing it ends with `open` turning false, so this watches `open` rather than each
- * close path; call the returned function just before closing to say how (it defaults to `other`).
+ * Sends one `changelog_closed` with how long the What's new drawer stayed open, when it closes or the page goes away.
+ * @returns A function to call just before closing, naming how it closed; a close nobody named is `other`.
  */
 export function useChangelogReadTime(open: boolean): (via: ChangelogCloseVia) => void {
   const via = useRef<ChangelogCloseVia>('other');
+  // Every way of closing the drawer ends with `open` turning false, so watch that rather than each close path
   useEffect(() => {
     if (!open) return;
     via.current = 'other';
