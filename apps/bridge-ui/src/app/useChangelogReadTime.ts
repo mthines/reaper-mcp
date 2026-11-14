@@ -4,6 +4,23 @@ import { track, type TrackEvent } from '../lib/analytics.js';
 /** What closed the What's new drawer: its close button or Esc, opening Settings, leaving the page, or anything else (back/forward). */
 export type ChangelogCloseVia = Extract<TrackEvent, { name: 'changelog_closed' }>['via'];
 
+/** A read's length as one of a few ranges: unlike `seconds`, few enough values for a dashboard to group by. */
+export type ReadTimeBucket = Extract<TrackEvent, { name: 'changelog_closed' }>['read_time'];
+
+/** Shortest first; each range holds the seconds below the next one's start. */
+const READ_TIME_BUCKETS: ReadonlyArray<[upTo: number, bucket: ReadTimeBucket]> = [
+  [5, '<5s'],
+  [15, '5-15s'],
+  [30, '15-30s'],
+  [60, '30-60s'],
+  [180, '1-3m'],
+];
+
+/** The range a read of `seconds` (already rounded) falls in. */
+export function readTimeBucket(seconds: number): ReadTimeBucket {
+  return READ_TIME_BUCKETS.find(([upTo]) => seconds < upTo)?.[1] ?? '3m+';
+}
+
 export interface ReadTimer {
   pause(): void;
   resume(): void;
@@ -43,7 +60,8 @@ export function useChangelogReadTime(open: boolean): (via: ChangelogCloseVia) =>
     const send = (how: ChangelogCloseVia) => {
       if (sent) return;
       sent = true;
-      track({ name: 'changelog_closed', via: how, seconds: Math.round(timer.elapsedMs() / 1000) });
+      const seconds = Math.round(timer.elapsedMs() / 1000);
+      track({ name: 'changelog_closed', via: how, seconds, read_time: readTimeBucket(seconds) });
     };
     const onVisibility = () => (visible() ? timer.resume() : timer.pause());
     const onPageHide = () => send('page_left');

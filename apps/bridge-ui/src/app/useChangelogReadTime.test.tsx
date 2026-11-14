@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const analytics = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock('../lib/analytics.js', () => analytics);
 
-import { readTimer, useChangelogReadTime, type ChangelogCloseVia } from './useChangelogReadTime.js';
+import { readTimeBucket, readTimer, useChangelogReadTime, type ChangelogCloseVia } from './useChangelogReadTime.js';
 
 // React's act() needs this flag outside a test renderer
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -33,6 +33,16 @@ describe('readTimer', () => {
     timer.resume();
     t = 13_000;
     expect(timer.elapsedMs()).toBe(3000);
+  });
+});
+
+describe('readTimeBucket', () => {
+  it('puts each read in the range that starts at or below it', () => {
+    const cases: Array<[number, string]> = [
+      [0, '<5s'], [4, '<5s'], [5, '5-15s'], [14, '5-15s'], [15, '15-30s'], [29, '15-30s'],
+      [30, '30-60s'], [59, '30-60s'], [60, '1-3m'], [179, '1-3m'], [180, '3m+'], [3600, '3m+'],
+    ];
+    for (const [seconds, bucket] of cases) expect(readTimeBucket(seconds), `${seconds} s`).toBe(bucket);
   });
 });
 
@@ -80,7 +90,7 @@ describe('useChangelogReadTime', () => {
     closedVia('close');
     render(false);
     expect(analytics.track).toHaveBeenCalledTimes(1);
-    expect(analytics.track).toHaveBeenCalledWith({ name: 'changelog_closed', via: 'close', seconds: 12 });
+    expect(analytics.track).toHaveBeenCalledWith({ name: 'changelog_closed', via: 'close', seconds: 12, read_time: '5-15s' });
   });
 
   it('leaves out the time the page was hidden', () => {
@@ -92,7 +102,7 @@ describe('useChangelogReadTime', () => {
     now = 308_000;
     closedVia('settings');
     render(false);
-    expect(analytics.track).toHaveBeenCalledWith({ name: 'changelog_closed', via: 'settings', seconds: 13 });
+    expect(analytics.track).toHaveBeenCalledWith({ name: 'changelog_closed', via: 'settings', seconds: 13, read_time: '5-15s' });
   });
 
   it('calls a close nobody named `other` (back/forward), and each opening starts again', () => {
@@ -104,7 +114,7 @@ describe('useChangelogReadTime', () => {
     render(true);
     now = 17_000;
     render(false);
-    expect(analytics.track).toHaveBeenLastCalledWith({ name: 'changelog_closed', via: 'other', seconds: 7 });
+    expect(analytics.track).toHaveBeenLastCalledWith({ name: 'changelog_closed', via: 'other', seconds: 7, read_time: '5-15s' });
   });
 
   it('sends page_left when the page goes away with the drawer open, and not again on unmount', () => {
@@ -115,7 +125,7 @@ describe('useChangelogReadTime', () => {
     });
     render(false);
     expect(analytics.track).toHaveBeenCalledTimes(1);
-    expect(analytics.track).toHaveBeenCalledWith({ name: 'changelog_closed', via: 'page_left', seconds: 21 });
+    expect(analytics.track).toHaveBeenCalledWith({ name: 'changelog_closed', via: 'page_left', seconds: 21, read_time: '15-30s' });
   });
 
   it('starts a new read after a bfcache restore with the drawer open', () => {
@@ -131,6 +141,6 @@ describe('useChangelogReadTime', () => {
     closedVia('close');
     render(false);
     expect(analytics.track).toHaveBeenCalledTimes(2);
-    expect(analytics.track).toHaveBeenLastCalledWith({ name: 'changelog_closed', via: 'close', seconds: 6 });
+    expect(analytics.track).toHaveBeenLastCalledWith({ name: 'changelog_closed', via: 'close', seconds: 6, read_time: '5-15s' });
   });
 });

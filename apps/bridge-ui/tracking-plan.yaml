@@ -25,6 +25,7 @@ events:
   changelog_closed:          # the What's new drawer closed, or the page went away with it open
     via: [close, settings, page_left, other]   # close button or Esc / opening Settings / page closed or reloaded / back-forward
     seconds: number          # how long it was open while the page was visible, rounded; a background tab doesn't count
+    read_time: [<5s, 5-15s, 15-30s, 30-60s, 1-3m, 3m+]   # seconds as a bounded range, so a dashboard can group by it
   changelog_betas_toggled:
     shown: boolean
   update_clicked:            # asked the bridge to update this install
