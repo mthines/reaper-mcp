@@ -142,7 +142,10 @@
 /* Phones and narrow windows: the nav folds under a button (and goes away on the front page, which is its own index) */
 @media (max-width: 720px) {
   .body { grid-template-columns: minmax(0, 1fr); padding-top: 16px; }
-  .navToggle { display: inline-flex; justify-self: start; min-height: 44px; }
+  /* .btn's fixed 30px height and stretch alignment pinned the label to the top of the 44px tap target */
+  .navToggle { display: inline-flex; align-items: center; gap: 10px; justify-self: start; height: auto; min-height: 44px; padding: 0 14px; border-radius: 10px; font-size: 14px; }
+  .navToggle::after { content: ''; width: 7px; height: 7px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: translateY(-2px) rotate(45deg); }
+  .navToggle[aria-expanded='true']::after { transform: translateY(2px) rotate(-135deg); }
   .body[data-landing='true'] .navToggle, .body[data-landing='true'] .nav { display: none; }
   .nav { position: relative; max-height: none; display: none; padding: 10px 0 4px; }
   .nav[data-open='true'] { display: flex; }
