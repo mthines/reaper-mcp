@@ -91,14 +91,31 @@ export function eventAttributes(event: TrackEvent): Record<string, string | numb
   return attrs;
 }
 
-/** The page's URL without host, port or query: a LAN address or `?install` says nothing useful. */
-export function scrubUrl<T extends Record<string, string | undefined>>(attrs: T): T {
-  let path = '/';
+/** The page's own file name: the only path segment ever sent as it is. */
+const PAGE_FILE = 'mcp_bridge.html';
+
+/**
+ * The page's URL reduced to one of a few fixed paths, so neither host, port, query nor a folder ever leaves the browser.
+ * Served (REAPER's web interface, the dev server): `/mcp_bridge.html`, or `/` at the root; any other path is `/other`.
+ * Opened as a file: `/local-file/mcp_bridge.html` when the file keeps the page's name, else `/local-file`. A file path
+ * is the viewer's own folders (`C:/Users/<name>/Downloads/…`, a temp copy), so only "it was a file" is worth knowing.
+ */
+export function bridgePagePath(href: string | undefined): string {
+  let url: URL;
   try {
-    path = new URL(attrs['url.full'] ?? '/', 'http://localhost').pathname;
+    url = new URL(href ?? '/', 'http://localhost');
   } catch {
-    // keep '/'
+    return '/other';
   }
+  const fileName = url.pathname.split('/').pop() ?? '';
+  if (url.protocol === 'file:') return fileName === PAGE_FILE ? `/local-file/${PAGE_FILE}` : '/local-file';
+  if (url.pathname === '/') return '/';
+  return fileName === PAGE_FILE ? `/${PAGE_FILE}` : '/other';
+}
+
+/** The SDK's URL attributes (`page.url.*`) as {@link bridgePagePath}: everything else the SDK would add is dropped. */
+export function scrubUrl<T extends Record<string, string | undefined>>(attrs: T): T {
+  const path = bridgePagePath(attrs['url.full']);
   return { 'url.full': path, 'url.path': path } as unknown as T;
 }
 

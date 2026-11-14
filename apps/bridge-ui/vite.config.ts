@@ -23,6 +23,16 @@ const hostedChangelogMedia = (): Plugin => ({
   },
 });
 
+// The Web SDK copies `document.referrer` into every page view as it is, with no scrubber of its own, and the referrer is
+// the page that linked here: on REAPER's page that is this page again, host (a LAN IP), port and query (search text, the
+// open entry) included. So the page sets what browsers put there. The page REAPER serves sends none at all; the hosted
+// site sends only its origin, so GitHub still sees where a visitor came from but no path and no `?bridge=` address.
+const referrerPolicy = (hosted: boolean) => (hosted ? 'strict-origin' : 'no-referrer');
+const referrerMeta = (): Plugin => ({
+  name: 'referrer-policy',
+  transformIndexHtml: () => [{ tag: 'meta', attrs: { name: 'referrer', content: referrerPolicy(process.env.BRIDGE_HOSTED === '1') }, injectTo: 'head-prepend' }],
+});
+
 // The guides (docs/guides/*.md) are served beside the page: /docs/<slug>.md, /docs/pages.json, /llms.txt, /llms-full.txt.
 // Hosted build: copied into the output. Dev server: served from the working tree, so a saved guide shows on reload.
 const guidesDir = join(here, '../../docs/guides');
@@ -105,7 +115,7 @@ const hostedShare = (): Plugin => ({
 export default defineConfig(async ({ command }) => ({
   root: here,
   define: buildConstants(),
-  plugins: [react({ babel: reactCompilerBabel }), viteSingleFile(), reaperDev(), hostedChangelogMedia(), hostedDocs(), hostedShare()],
+  plugins: [react({ babel: reactCompilerBabel }), viteSingleFile(), reaperDev(), hostedChangelogMedia(), hostedDocs(), hostedShare(), referrerMeta()],
   server: { host: '127.0.0.1', port: command === 'serve' ? await devPort() : 8098, strictPort: true },
   build: {
     outDir: join(here, '../../dist/apps/bridge-ui'),

@@ -60,7 +60,7 @@ Nothing is collected while telemetry is off, apart from the single event at the 
 
 The bridge status page (`mcp_bridge.html`, opened from REAPER) sends its own pseudonymous usage statistics so I can see which parts of it people use: which views you open (Calls, Tools, Sessions, Plugins), which buttons and settings you use (Teach, Contribute, Publish, filters, the timeline range…), whether the bridge goes offline while the page is open, page load speed, and the kind of error when the page's own code fails (e.g. `TypeError`, never the message). Each event carries a random id kept in that browser, the reaper-mcp version, and whether the page runs as the bridge window, an installed app or a browser tab. The full list is in [`apps/bridge-ui/tracking-plan.yaml`](apps/bridge-ui/tracking-plan.yaml).
 
-It never sends plugin, track, project or agent session names, what you type in the search box, your LoreKit tokens, the page's address (host or LAN IP) or the bridge's polling.
+It never sends plugin, track, project or agent session names, what you type in the search box, your LoreKit tokens, the page's address (host or LAN IP, or the folder you opened the file from: a page opened as a file reports only that it was a file), the page you came from, or the bridge's polling.
 
 Turn it off under **Settings → Privacy → Share usage statistics** on the page. It is also off when your browser sends Global Privacy Control or Do Not Track, and in the `?demo` preview. The page keeps its own setting, so `reaper-mcp telemetry off` doesn't switch it off. The code is in [`apps/bridge-ui/src/lib/analytics.ts`](apps/bridge-ui/src/lib/analytics.ts).
 
