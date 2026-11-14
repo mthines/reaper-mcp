@@ -22,6 +22,11 @@ const docsPage = new URLSearchParams(location.search).get('page') === 'docs' || 
 // The hosted site's guides and changelog report page views, web events and a session replay (a no-op elsewhere)
 if (docsPage || changelogPage) startSiteAnalytics(docsPage ? 'docs' : 'changelog');
 
+// mcp_bridge.html opts out of browser translation: a translator rewrites the text nodes React swaps as the bridge goes
+// offline and back, and React's next update then fails (NotFoundError). The guides and changelog are mostly static
+// prose worth reading in your own language, so they opt back in.
+if (docsPage || changelogPage) document.documentElement.removeAttribute('translate');
+
 root.render(
   <CommandProvider>
     {docsPage ? <Docs.PageRoute /> : changelogPage ? <Changelog.PageRoute /> : <App />}
