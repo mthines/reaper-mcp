@@ -11,9 +11,9 @@ Four things, and you probably have one of them already.
 | | What it is | Why you need it |
 |---|---|---|
 | **REAPER** | Your DAW, version 6 or newer (7 recommended). | It's the thing being controlled. [reaper.fm](https://www.reaper.fm/) |
-| **An AI app** | The chat window you type to. Claude Code is the one reaper-mcp is built and tested around. Codex CLI, Gemini CLI and Cursor connect with the same command. | This is where the "assistant" part lives. reaper-mcp brings no AI of its own. |
+| **An AI app** | The chat you type to. Claude Code is the one reaper-mcp is built and tested around. Codex CLI, Gemini CLI and Cursor connect too. New to it? [Set it up](set-up-your-ai-app.md). | This is where the "assistant" part lives. reaper-mcp brings no AI of its own. |
 | **Node.js 20+** | A small program that runs quietly in the background. | It runs the connector between the AI app and REAPER. [nodejs.org](https://nodejs.org/) |
-| **LoreKit** *(recommended)* | A free memory for the assistant. | It's how the assistant remembers what it learned about your plugins and the way you like to work. [lorekit.io](https://lorekit.io) |
+| **LoreKit** *(recommended)* | A free memory for the assistant. You can add it after the rest works. | It's how the assistant remembers what it learned about your plugins and the way you like to work. [How to connect it](connect-lorekit.md) |
 
 SWS Extensions are optional. They give REAPER a few extra powers, and plenty of people never need them.
 
@@ -23,8 +23,12 @@ reaper-mcp is free and open source, and so is LoreKit. You need REAPER (it has a
 
 ## Do I need to know how to code?
 
-No. You paste three commands once, and after that you type in normal sentences. If you can use a terminal to paste a command, you're ready. If you've never opened one, the [install guide](install.md) walks through it.
+No. You paste a few commands once, and after that you type in normal sentences. If you've never opened a terminal, [Set up your AI app](set-up-your-ai-app.md) starts from there.
 
-## Next
+## The whole path
 
-[Install](install.md)
+1. [Set up your AI app](set-up-your-ai-app.md) (skip it if you use Claude Code already)
+2. [Install reaper-mcp](install.md)
+3. [Your first conversation](first-conversation.md)
+4. [Connect LoreKit](connect-lorekit.md), so it remembers
+5. [Teach it your plugins](teach-it-a-plugin.md)

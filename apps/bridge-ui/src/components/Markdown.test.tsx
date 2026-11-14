@@ -79,6 +79,22 @@ describe('Markdown as a guide', () => {
     expect(guide('::: details Transcript\n\nHello **there**.\n\n:::')).toBe('<details><summary>Transcript</summary><p>Hello <strong>there</strong>.</p></details>');
   });
 
+  it('hands a ::: gallery block to the page, with pictures from the guide folder only', () => {
+    const seen: Array<{ title: string; names: string[]; srcs: Array<string | undefined> }> = [];
+    const withGallery: MarkdownDoc = {
+      ...doc,
+      gallery: (title, items) => {
+        seen.push({ title, names: items.map((x) => x.name), srcs: items.map((x) => x.image?.src) });
+        return <section>{title}</section>;
+      },
+    };
+    const md = '::: gallery Built in\n\n- ![Tape](tape.webp) **Tape Sat**: warm\n- **Drum Pads**: eight pads\n  you can play\n- ![x](https://evil.test/x.png) **Bad**: no\n\n:::\n\nAfter.';
+    const out = renderToStaticMarkup(<Markdown source={md} doc={withGallery} />);
+    expect(seen).toEqual([{ title: 'Built in', names: ['Tape Sat', 'Drum Pads', 'Bad'], srcs: ['/docs/media/tape.webp', undefined, undefined] }]);
+    expect(out).toContain('<section>Built in</section><p>After.</p>');
+    expect(guide(md)).toContain('<li><strong>Drum Pads</strong> eight pads you can play</li>');
+  });
+
   it('links to sibling guides in the same tab and to other sites in a new one', () => {
     expect(guide('[Install](install.md)')).toContain('<a href="/docs/install">Install</a>');
     expect(guide('[Safety](undo-and-safety.md#your-call)')).toContain('<a href="/docs/undo-and-safety#your-call">Safety</a>');

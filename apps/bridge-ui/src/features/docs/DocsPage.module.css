@@ -147,7 +147,7 @@
   .navToggle::after { content: ''; width: 7px; height: 7px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: translateY(-2px) rotate(45deg); }
   .navToggle[aria-expanded='true']::after { transform: translateY(2px) rotate(-135deg); }
   .body[data-landing='true'] .navToggle, .body[data-landing='true'] .nav { display: none; }
-  .nav { position: relative; max-height: none; display: none; padding: 10px 0 4px; }
+  .nav { position: relative; max-height: none; display: none; padding: 10px 0 24px; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
   .nav[data-open='true'] { display: flex; }
   .heroTitle { font-size: 32px; }
   .heroLead { font-size: 17px; }

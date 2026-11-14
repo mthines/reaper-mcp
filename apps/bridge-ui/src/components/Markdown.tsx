@@ -18,13 +18,46 @@ export function Markdown({ source, className, doc }: { source: string; className
 /**
  * Guide pages (docs): headings keep their level and get an id for anchors, `![alt](path)` renders an image when
  * the path is relative (resolved against `baseUrl`, never a URL or an escape), `> say:` / `> your-call:` blockquotes go
- * to `callout`, and `::: details Title` … `:::` is a collapsed section.
+ * to `callout`, `::: details Title` … `:::` is a collapsed section, and `::: gallery Title` … `:::` hands its list
+ * items (`- ![alt](media/x.webp) **Name**: text`, the image optional) to `gallery`.
  */
 export interface MarkdownDoc {
   baseUrl: string;
   callout: (kind: 'say' | 'your-call', text: string) => ReactNode;
   /** How a fenced code block is drawn (the guides add a header and a Copy button); `lang` is the fence's info word */
   code?: (text: string, lang: string) => ReactNode;
+  /** How a `::: gallery` block is drawn; without it the items render as a plain list */
+  gallery?: (title: string, items: GalleryItem[]) => ReactNode;
+}
+
+/** One card of a `::: gallery` block: its bold name, an optional picture from the guide folder, and the rest of the line */
+export interface GalleryItem {
+  name: string;
+  image?: { src: string; alt: string };
+  text: ReactNode;
+}
+
+const GALLERY_ITEM = /^\s*[-*+]\s+(?:!\[([^\]]*)\]\(([^()\s]+)\)\s*)?\*\*(.+?)\*\*\s*[:.\u2014-]?\s*(.*)$/;
+
+function galleryItems(body: string[], doc: MarkdownDoc): GalleryItem[] {
+  const items: GalleryItem[] = [];
+  let pending: { name: string; image?: GalleryItem['image']; text: string } | null = null;
+  const flush = () => {
+    if (pending) items.push({ name: pending.name, image: pending.image, text: inline(pending.text, doc) });
+    pending = null;
+  };
+  for (const line of body) {
+    const m = line.match(GALLERY_ITEM);
+    if (m) {
+      flush();
+      const src = m[2] ? relativeMedia(m[2], doc.baseUrl) : undefined;
+      pending = { name: m[3], image: src ? { src, alt: m[1] } : undefined, text: m[4] };
+    } else if (pending && line.trim()) {
+      pending.text += ` ${line.trim()}`;
+    }
+  }
+  flush();
+  return items;
 }
 
 /** A relative media path inside the guide folder, or undefined (a URL, an absolute path or a `..` step is refused). */
@@ -89,6 +122,27 @@ function blocks(source: string, doc?: MarkdownDoc): ReactNode[] {
           {blocks(body.join('\n'), doc)}
         </details>,
       );
+      continue;
+    }
+
+    const gallery = doc ? line.match(/^:::\s*gallery\s+(.+?)\s*$/i) : null;
+    if (doc && gallery) {
+      const body: string[] = [];
+      i++;
+      while (i < lines.length && lines[i].trim() !== ':::') body.push(lines[i++]);
+      i++; // closing :::
+      const items = galleryItems(body, doc);
+      if (doc.gallery) out.push(<Fragment key={key()}>{doc.gallery(gallery[1], items)}</Fragment>);
+      else
+        out.push(
+          <ul key={key()}>
+            {items.map((item) => (
+              <li key={item.name}>
+                <strong>{item.name}</strong> {item.text}
+              </li>
+            ))}
+          </ul>,
+        );
       continue;
     }
 

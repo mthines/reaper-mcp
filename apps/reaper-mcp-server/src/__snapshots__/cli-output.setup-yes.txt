@@ -39,7 +39,7 @@ REAPER MCP — Connect your AI harness
 ✓ Installed the knowledge base the skills read in ~/.claude: <n> new, 0 updated, 0 already current.
 Try /mixer, /critique or /learn-plugin in your harness. (/learn-plugin saves what it learns to LoreKit, see the README.)
 
-Want it to remember plugins and your corrections? Connect LoreKit (free): https://lorekit.io. /learn-plugin will walk you through it.
+Want it to remember plugins and your corrections? Connect LoreKit (free, about five minutes): https://reaper-mcp.vercel.app/docs/connect-lorekit
 
 Try: /mixer "Please gain stage my tracks"  ·  /critique "Roast my mix"
 
