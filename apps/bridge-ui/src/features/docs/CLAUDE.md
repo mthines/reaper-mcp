@@ -17,7 +17,7 @@ The REAPER page never bundles the guides: the hosted build copies them next to t
 - **The video** is a click-to-load facade: nothing reaches Google until a viewer presses play (`youtube-nocookie.com`).
 - **Usage analytics and session replay** run here on the hosted build (`startSiteAnalytics()` in `src/lib/analytics.ts`,
   started from `main.tsx`; service `reaper-mcp-site`): page views, errors, fetch timings, rage clicks, a replay with every
-  input masked, and the `site.*` events in `tracking-plan.yaml` (`trackSite()`: copy, video, scroll depth, links followed).
+  input masked, and the `site.*` events in `tracking-plan.yaml` (`trackSite()`: copy, video, scroll depth, links followed, and every plain click through the one listener in `analytics.ts`: give a new control a name and keep it inside a `data-testid` container, add no tracker call; `data-capture="off"` opts out).
   Add an event there and in `SiteEvent` together. The query (`?bridge=`) is scrubbed from URLs; the demo at `/` stays silent.
 - Follow `.claude/rules/command-palette.md` for palette commands. Stories and play-function tests: `DocsPage.stories.tsx`,
   `DocsPage.test.stories.tsx`; `docs.test.ts` checks every real guide.

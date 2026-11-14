@@ -48,8 +48,8 @@ export function ChangelogPage({
   };
 
   return (
-    <main className={styles.page}>
-      <header className={styles.head}>
+    <main className={styles.page} data-testid="changelog">
+      <header className={styles.head} data-testid="changelog-header">
         <div>
           <h1 className={styles.title}>What’s new in reaper-mcp</h1>
           <p className="muted">Every release, newest first. Link to one with its version.</p>
@@ -87,7 +87,7 @@ export function ChangelogPage({
           ))}
         </ol>
       )}
-      <footer className={styles.foot}>
+      <footer className={styles.foot} data-testid="changelog-footer">
         <a href={`${REPO_URL}/releases`} target="_blank" rel="noreferrer">
           All releases on GitHub
         </a>

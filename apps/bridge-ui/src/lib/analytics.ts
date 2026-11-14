@@ -204,6 +204,7 @@ export type SiteCta = 'demo' | 'install' | 'changelog' | 'github' | 'releases' |
 export type SiteEvent =
   | { name: 'scroll_depth'; depth: ScrollMilestone }
   | { name: 'cta_clicked'; cta: SiteCta }
+  | { name: 'click'; label: string; path: string; element: string }
   | { name: 'code_copied'; lang: string }
   | { name: 'prompt_copied' }
   | { name: 'video_played' }
@@ -309,6 +310,7 @@ export function startSiteAnalytics(page: SitePage): UsageStatsState {
   void loadRecorder().then((recorder) => recorder && startSessionRecording(recorder));
   watchScrollDepth();
   watchCtaClicks();
+  watchClicks();
   return state;
 }
 
@@ -366,5 +368,50 @@ function watchCtaClicks(): void {
     const href = (e.target as Element | null)?.closest?.('a')?.getAttribute('href');
     const cta = href ? siteCtaOf(href) : null;
     if (cta) trackSite({ name: 'cta_clicked', cta });
+  }, { capture: true });
+}
+
+/** What the click listener needs from a DOM element; `Element` fits it, and a test can fake it. */
+export interface ClickNode {
+  closest(selector: string): ClickNode | null;
+  getAttribute(name: string): string | null;
+  readonly parentElement: ClickNode | null;
+  readonly tagName: string;
+  readonly textContent: string | null;
+}
+
+/** Plain interactions: a button, link, menu item, tab or option. A clickable `<div>` is not one; give it a role. */
+const INTERACTIVE = 'a[href], button, input[type="submit"], input[type="button"], [role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"]';
+const CLICK_LABEL_MAX = 40;
+const CLICK_PATH_MAX = 4;
+/** Set `data-capture="off"` on an element, or an ancestor, to keep its clicks out of the stream. */
+const CLICK_OPT_OUT = '[data-capture="off"]';
+
+/**
+ * What one click on the hosted pages looks like in the stream, or null when it says nothing: not an interactive
+ * element, opted out, no visible name, or outside every `data-testid` container (an event nobody can place is noise).
+ * `label` is the control's `aria-label` or its text, whitespace folded, cut to {@link CLICK_LABEL_MAX}; `path` is the
+ * containers' test ids from the outside in (`site-header > docs-nav`). Never a field value, never a URL.
+ */
+export function clickCapture(target: ClickNode | null | undefined): { label: string; path: string; element: string } | null {
+  const el = target?.closest?.(INTERACTIVE);
+  if (!el || el.closest?.(CLICK_OPT_OUT)) return null;
+  const raw = el.getAttribute('aria-label') ?? (el.tagName === 'INPUT' ? el.getAttribute('value') : el.textContent) ?? '';
+  const label = raw.replace(/\s+/g, ' ').trim().slice(0, CLICK_LABEL_MAX);
+  const ids: string[] = [];
+  for (let n: ClickNode | null = el; n; n = n.parentElement) {
+    const id = n.getAttribute('data-testid');
+    if (id) ids.unshift(id);
+  }
+  const path = ids.slice(-CLICK_PATH_MAX).join(' > ');
+  if (!label || !path) return null;
+  return { label, path, element: el.getAttribute('role') ?? el.tagName.toLowerCase() };
+}
+
+/** The one global listener for plain clicks (capture phase, so a handler that stops propagation cannot hide one). */
+function watchClicks(): void {
+  document.addEventListener('click', (e) => {
+    const captured = clickCapture(e.target as unknown as ClickNode | null);
+    if (captured) trackSite({ name: 'click', ...captured });
   }, { capture: true });
 }
