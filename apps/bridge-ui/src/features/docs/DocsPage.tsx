@@ -6,6 +6,7 @@ import { DISCORD_URL, REPO_URL } from '../../lib/links.js';
 import { groupGuides, neighbours, pageHeadings, SECTIONS, type Guide, type GuideMeta } from './docs.js';
 import { DOCS_BASE, useBridgeLink, useDocsPath, useGuide, useGuideIndex, type GuideState, type IndexState } from './useDocs.js';
 import { CodeBlock } from './CodeBlock.js';
+import { Logo } from './Logo.js';
 import { PromptBox } from './PromptBox.js';
 import { VideoEmbed } from './VideoEmbed.js';
 import { YourCall } from './YourCall.js';
@@ -122,7 +123,7 @@ export function DocsPage({
       <a className={styles.skip} href="#guide-main">Skip to the page</a>
       <header className={styles.head} data-testid="site-header">
         <a className={styles.brand} href="/docs">
-          reaper-mcp <span className={styles.brandSub}>docs</span>
+          <Logo size={26} /> <span className={styles.brandSub}>docs</span>
         </a>
         <nav className={styles.headLinks} aria-label="Site">
           <a className={styles.headLink} href="/changelog">What’s new</a>
@@ -219,6 +220,7 @@ function Landing({ index }: { index: IndexState }) {
   return (
     <div className={styles.landing}>
       <section className={styles.hero} data-testid="hero">
+        <div className={styles.heroLogo}><Logo size={56} /></div>
         <h1 className={styles.heroTitle}>A music assistant inside REAPER</h1>
         <p className={styles.heroLead}>
           Tell it what you need in plain words. It names and routes your tracks, measures the mix and builds the plugin you described. You make every call, and everything can be undone.
