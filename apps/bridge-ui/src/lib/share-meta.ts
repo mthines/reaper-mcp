@@ -8,19 +8,19 @@ export type SharePage = 'bridge' | 'docs' | 'changelog';
 
 export const SHARE: Record<SharePage, { title: string; description: string; image: string; path: string }> = {
   bridge: {
-    title: 'reaper-mcp: watch your AI mix, step by step',
+    title: 'reaper-mcp: your own AI assistant for REAPER',
     description: 'Try the live demo: every change an AI assistant makes in a REAPER session, with before and after, so you can trust it and undo it.',
     image: 'share/og-bridge.png',
     path: '/',
   },
   docs: {
-    title: 'reaper-mcp docs: skip the tedious parts of mixing',
+    title: 'reaper-mcp documentation',
     description: 'An AI assistant inside REAPER that names, routes and gain-stages your tracks while you make music. Plain guides for musicians; you make every call.',
     image: 'share/og-docs.png',
     path: '/docs',
   },
   changelog: {
-    title: 'What’s new in reaper-mcp: new features, shown',
+    title: 'reaper-mcp changelog',
     description: 'Short clips and pictures of every change, so you can see what a release does for your sessions before you update.',
     image: 'share/og-changelog.png',
     path: '/changelog',
