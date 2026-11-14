@@ -95,10 +95,13 @@ export interface ServerFlags {
 export function createServerFlags(options: ServerFlagsOptions = {}): ServerFlags {
   const registry = options.registry ?? FLAG_REGISTRY;
   const installId = options.installId ?? (() => readInstallId());
-  const context = () => ({
-    targetingKey: installId(),
-    flagOverrides: readFlagOverrides(options.dir, options.env, registry),
-  });
+  const context = (): { targetingKey?: string; flagOverrides: FlagOverrides } => {
+    const targetingKey = installId();
+    return {
+      ...(targetingKey && { targetingKey }),
+      flagOverrides: readFlagOverrides(options.dir, options.env, registry),
+    };
+  };
   const client = () => createFlagClient(registry, options.domain);
 
   return {
