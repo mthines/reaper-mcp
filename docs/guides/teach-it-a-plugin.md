@@ -26,9 +26,9 @@ Or a few at once: `/learn-plugin Soothe2, Decapitator, Kotelnikov`. They're rese
 ## What happens
 
 1. **It reads up** on the web: what the plugin is for, what each control does, how people set it.
-2. **It tries it out.** It adds a scratch track called `[MCP] plugin-research …`, loads the plugin there and moves the controls, so it knows what they really do in REAPER. Then it deletes the track. Your own tracks aren't touched.
+2. **It tries it out.** It adds a scratch track called `[MCP] plugin-research …`, loads the plugin there and moves the controls, so it knows what they really do in REAPER. Then it deletes the track, and tells you if it couldn't. Your own tracks aren't touched.
 3. **It asks what it couldn't work out**, usually a question or two: how much you like the plugin (0 to 100, so it knows when to reach for it) and how you tend to use it. Its best guess is marked **(keep)**, so you can just accept.
-4. **It saves what it learned** to your memory and shows a short "How it works" summary.
+4. **It saves what it learned** as a record in LoreKit and shows a short "How it works" summary.
 
 A plugin takes a few minutes, most of it reading.
 
@@ -44,10 +44,11 @@ To see what it knows, say `/mix-memory status`. What it saves never includes son
 
 ## Share it with everyone
 
-Proud of a record? Once you've [added a read-only key](connect-lorekit.md#optional-see-your-records-in-the-status-window), the status window's **Plugins** tab shows a **Contribute** button. It opens a pull request on GitHub (a free account does it), and once it's approved, every reaper-mcp user gets your plugin built in.
+Proud of a record? Once you've [added a read-only key](connect-lorekit.md#optional-see-your-records-in-the-status-window), the status window's **Plugins** tab shows a **Contribute** button. It opens a page on GitHub with your record filled in. With a free GitHub account you press the green button to send it, and once the maintainer approves it, every reaper-mcp user gets that plugin built in.
 
 ## If something's off
 
 - **"I can't save that."** LoreKit isn't connected. [Connect it](connect-lorekit.md) and run it again.
 - **It can't find the plugin.** Use the name exactly as REAPER's FX browser shows it.
+- **A `[MCP] plugin-research …` track is left behind.** It couldn't remove it. Delete it yourself; nothing else depends on it.
 - **REAPER stutters for a moment.** That's a heavy plugin loading on the scratch track. It passes.

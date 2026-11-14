@@ -38,13 +38,13 @@ Start REAPER, or restart it if it was open. A small status window appears and sh
 
 ## Check it's connected
 
-Open a terminal in any folder (your song folder is a good choice), type `claude`, then `/mcp`. You should see `reaper` listed as connected. Already had Claude Code open? Quit and start it again, so it picks up the new connection.
+If Claude Code was already open, quit it first. Then open a terminal in any folder (your song folder is fine), type `claude`, then `/mcp`. You should see `reaper` listed as connected. In another app, look for `reaper` in its list of connected tools.
 
-Then say hello:
+Then check it can reach REAPER:
 
-> say: What's in my REAPER session?
+> say: Are you connected to REAPER? What's the project tempo?
 
-If it lists your tracks, you're done. Next: [your first conversation](first-conversation.md), then [connect LoreKit](connect-lorekit.md) so it remembers.
+If it answers with your tempo, you're done. Next: [your first conversation](first-conversation.md), then [connect LoreKit](connect-lorekit.md) so it remembers.
 
 ## Prefer ReaPack?
 

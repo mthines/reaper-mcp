@@ -6,12 +6,14 @@ section: know
 order: 2
 ---
 
-An assistant that forgets everything between sessions is a lot of re-explaining. That's what [LoreKit](https://lorekit.io) fixes: a free, simple memory the assistant reads from and writes to. Not connected yet? [Five minutes, here's how](connect-lorekit.md).
+Without a memory, you'd explain your plugins and habits again every session. [LoreKit](https://lorekit.io) is a free memory the assistant reads before it works and adds to when it learns something. Not connected yet? [It takes five minutes](connect-lorekit.md).
 
 ## What it remembers
 
 - **Plugins.** How a plugin behaves and the settings that tend to work, from [`/learn-plugin`](teach-it-a-plugin.md) or from the first time it meets one.
-- **Lessons.** Things that went wrong, or that you corrected. "This singer's sibilance peaks around 7 kHz." "I never want the master limiter above -1 dB." When a lesson keeps coming up, it offers to turn it into a permanent rule, so it stops making that mistake.
+- **Lessons.** Things that went wrong, or that you corrected: "I never want the master limiter above -1 dB", "on this kind of vocal, de-ess before the compressor". A lesson that stops coming up fades after about three months. One that keeps coming up, it offers to turn into a permanent rule, so it stops making that mistake.
+
+Each thing it saves is a short note, called a record: one per plugin, one per lesson.
 
 ## Two layers
 

@@ -12,7 +12,7 @@ reaper-mcp is only the connector. The thinking happens in an AI app you chat wit
 
 **Claude Code.** It's the one reaper-mcp is built and tested around, and the `/mixer`, `/critique` and `/learn-plugin` commands are written for it. Codex CLI, Gemini CLI and Cursor connect too, but they get less testing.
 
-You need a Claude plan that includes Claude Code (Pro or above), or an Anthropic Console account that pays per use. Check what yours includes before you start.
+You need a Claude plan that includes Claude Code (Pro or above), or an Anthropic API account that bills you by usage. Check what yours includes before you start.
 
 ## Open a terminal
 
@@ -48,7 +48,7 @@ It doesn't matter which folder you start it in. It talks to REAPER directly, not
 ## The four things you'll use
 
 1. **Plain sentences.** Type what you want, press Enter. "Which track is clipping?" works.
-2. **Slash commands.** A line starting with `/` runs a skill: `/mixer`, `/critique`, `/learn-plugin`. Type `/` to see the list.
+2. **Slash commands.** A line starting with `/` starts one of reaper-mcp's ready-made jobs: `/mixer`, `/critique`, `/learn-plugin`. Type `/` to see the list.
 3. **Permission questions.** Before it uses a new tool, Claude Code asks. reaper-mcp pre-approves its own REAPER tools, so you'll mostly see this for other things, like memory. Choose **Yes, and don't ask again** for tools you trust.
 4. **`/mcp`.** Lists the connections Claude Code has. After you install, `reaper` should be there, and `lorekit` once you add memory.
 

@@ -6,7 +6,7 @@ section: start
 order: 6
 ---
 
-Out of the box, the assistant starts every conversation from scratch. [LoreKit](https://lorekit.io) is a free memory it reads before it works and writes to when it learns something. It's optional, but [`/learn-plugin`](teach-it-a-plugin.md) needs it, and it's what makes "like last time" work. [More on what it stores](it-remembers.md).
+Out of the box, the assistant starts every conversation from scratch. [LoreKit](https://lorekit.io) is a free memory it reads before it works and writes to when it learns something. It's optional, but [`/learn-plugin`](teach-it-a-plugin.md) needs it, and it's how your corrections and favourite plugins carry over to the next song. [More on what it stores](it-remembers.md).
 
 About five minutes.
 
@@ -16,7 +16,7 @@ Go to [lorekit.io](https://lorekit.io) and sign in (GitHub, email, or a magic li
 
 ## 2. Create a key
 
-In LoreKit, open **Settings → API keys** and click **Generate new token**.
+In LoreKit, open **Settings → API keys** and click **Generate new token** (LoreKit says token, this page says key: same thing).
 
 - Name it something you'll recognise, like `reaper-mcp`.
 - Pick **read + write**. The key starts with `lk_rw_`.
@@ -26,15 +26,15 @@ Treat it like a password. Never paste it into the chat with the assistant.
 
 ## 3. Add it to Claude Code
 
-In a terminal (not inside Claude Code), paste this with your key in place of `lk_rw_YOUR_KEY`. It's one long line; paste it whole:
+If Claude Code is running, leave it with `/exit` first. Then, in the terminal, paste this with your key in place of `lk_rw_YOUR_KEY`. It's one long line; paste it whole:
 
 ```bash
 claude mcp add --transport http --scope user lorekit https://pqokxlhvnosogizsjztg.supabase.co/functions/v1/mcp --header "Authorization: Bearer lk_rw_YOUR_KEY"
 ```
 
-`--scope user` matters. It makes the memory work in every folder you open Claude Code in. LoreKit's own setup page shows a per-folder file (`.mcp.json`), which only works in that one folder. For music you want it everywhere.
+`--scope user` matters: it makes the memory work whichever folder you start Claude Code in. LoreKit's own setup page shows a version that only works in one folder, so use this one.
 
-Then quit Claude Code if it was open, and start it again.
+Then start Claude Code again with `claude`.
 
 ::: details Using Cursor, Codex CLI or Gemini CLI instead
 
@@ -61,7 +61,7 @@ In Claude Code, type `/mcp`. You should see both `reaper` and `lorekit` as conne
 
 > say: /mix-memory status
 
-The first time it uses memory, Claude Code asks permission. Choose **Yes, and don't ask again**. A fresh account has nothing of yours yet, so you'll see the built-in plugin knowledge and an empty layer of your own. That's expected: it hasn't learned anything about you yet.
+The first time it uses memory, Claude Code asks permission. Choose **Yes, and don't ask again**. A fresh account has nothing of yours yet, so you'll only see the built-in plugin knowledge.
 
 ## 5. Teach it something
 
