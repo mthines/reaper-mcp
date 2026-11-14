@@ -185,10 +185,7 @@ export function trackView(view: string): void {
   }
 }
 
-/**
- * Report an error the page didn't handle. React 19 hands an error its error boundary caught to the boundary
- * only, never to `window`'s error event, so the boundary reports it here too.
- */
+/** Report an error the page didn't handle; the boundary calls it too, since React 19 never passes a caught error to `window`. */
 export function trackPageError(error: unknown, source: PageErrorEvent['source']): void {
   if (!enabled) return;
   track(pageErrorEvent(error, source, typeof document === 'undefined' ? null : document.documentElement));
@@ -207,14 +204,11 @@ export function errorType(error: unknown): string {
   return error instanceof Error && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : 'non_error';
 }
 
-/**
- * The DOM call a browser DOM error came from, read from the fixed start of its message and nothing else:
- * Chromium's `Failed to execute 'removeChild' on 'Node': …` and Firefox's `Node.removeChild: …` both give
- * `Node.removeChild`. Only letters are kept, so no part of the message that could name a track, a path or a
- * host is sent. Any other error, or a message in another shape (Safari's), gives nothing.
- */
+/** The DOM call a browser DOM error came from (`Node.removeChild`), read from a Chromium or Firefox message's fixed start. */
 export function domOperation(error: unknown): string | undefined {
   if (typeof DOMException === 'undefined' || !(error instanceof DOMException)) return undefined;
+  // Letters only: the rest of the message can name a track, a path or a host, and is never sent
+  // (Safari's messages name no call, so they give nothing)
   const chromium = /^Failed to execute '([A-Za-z]{1,40})' on '([A-Za-z]{1,40})'/.exec(error.message);
   if (chromium) return `${chromium[2]}.${chromium[1]}`;
   const firefox = /^([A-Za-z]{1,40})\.([A-Za-z]{1,40}): /.exec(error.message);

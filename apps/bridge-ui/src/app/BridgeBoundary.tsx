@@ -9,12 +9,7 @@ type Props = {
 };
 type State = { failed: boolean; failedAt: string };
 
-/**
- * Keeps an error in the bridge view or the offline screen from blanking the whole page. Without a boundary React 19
- * unmounts the page on an error during render or commit, e.g. the `NotFoundError` a browser translator causes when it
- * has rewritten the text nodes React swaps out as the bridge goes offline. The header and menus stay; the broken part
- * is replaced by a notice and drawn again on the bridge's next change, with fresh DOM nodes.
- */
+/** Keeps a render or commit error in the bridge view or offline screen from blanking the page, and redraws that part on the bridge's next change. */
 export class BridgeBoundary extends Component<Props, State> {
   override state: State = { failed: false, failedAt: '' };
 
