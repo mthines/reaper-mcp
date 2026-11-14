@@ -132,7 +132,7 @@ site:
     - rage clicks             # @dash0/frustration-signals, linked to the replay
     - session replay          # browser.session_recording; every input masked (maskAllInputs), sampled at SITE_REPLAY_SAMPLING
   scrubbed:
-    - url query               # ?bridge= carries the viewer's local bridge address
+    - url query               # ?bridge= carries the viewer's local bridge address; URL attributes only: the replay still records the page address and the back-to-bridge link
 
   events:
     scroll_depth:              # once per milestone per page path; the bottom of the window passed this share of the page
