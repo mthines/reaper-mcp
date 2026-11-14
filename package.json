@@ -15,6 +15,7 @@
     "test:harnesses": "scripts/test-harnesses.sh",
     "test:stress": "pnpm vitest run apps/reaper-mcp-server/src/bridge.stress.test.ts",
     "test:profile": "BRIDGE_PROFILE=1 pnpm vitest run apps/reaper-mcp-server/src/bridge.profile.test.ts",
+    "eval:install-docs": "node evals/install-docs/run.mjs",
     "lint": "nx run-many --target=lint",
     "setup": "node dist/apps/reaper-mcp-server/main.js setup",
     "serve": "node dist/apps/reaper-mcp-server/main.js serve",

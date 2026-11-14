@@ -160,6 +160,8 @@ reaper-mcp/
     ext-call.mjs              # Call any tool on a fresh `reaper-mcp serve` (so a new extension can be tried without restarting Claude Code): --list [prefix] | <tool> [json]
     plugin-list.mjs           # Rebuild docs/PLUGINS.md's built-in plugin table from LoreKit (logic: apps/bridge-ui/src/features/plugins/plugin-list.mjs)
 
+  evals/install-docs/         # Eval: an agent pointed at the install guide in a sandbox HOME, graded on what got installed (run.mjs, grade.mjs, scenarios.json; `pnpm eval:install-docs`)
+
   reaper/                     # Files installed INTO REAPER (copied by setup command)
     mcp_tracks_lib.lua        # Pure track-structure + routing logic (wasmoon-tested), loaded by the bridge
     mcp_bridge.lua            # Persistent Lua bridge (defer loop, JSON IPC, 131 handlers)

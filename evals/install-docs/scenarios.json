@@ -1,0 +1,32 @@
+[
+  {
+    "id": "install-guide",
+    "about": "The user pastes the install guide's link: the most direct way in.",
+    "prompt": "Set up reaper-mcp on this computer for me. Follow this guide: {page:install}"
+  },
+  {
+    "id": "docs-home",
+    "about": "The user only knows where the docs live; the agent has to find the right pages itself.",
+    "prompt": "I want my AI assistant to control REAPER with reaper-mcp. The docs are here: {docs}\nGet it installed and connected."
+  },
+  {
+    "id": "what-you-need",
+    "about": "The user starts at the first page of the getting-started path.",
+    "prompt": "Help me get started with reaper-mcp, I'm new to this: {page:what-you-need}"
+  },
+  {
+    "id": "reaper-never-opened",
+    "about": "REAPER is installed but has never been started, so there is no reaper.ini yet. The agent cannot fix that; the guide should get it to say so.",
+    "prompt": "Install reaper-mcp following {page:install}",
+    "reaperIni": false,
+    "required": ["cli_installed", "claude_registered", "handoff_reaper"]
+  },
+  {
+    "id": "github-readme",
+    "about": "The user points at the GitHub repo, whose README installs from a clone (scripts/install.sh) rather than npm. Opt-in: always reads the live GitHub README and the clone pulls main, not this working tree.",
+    "optIn": true,
+    "prompt": "Install https://github.com/mthines/reaper-mcp so I can use it from Claude Code with REAPER.",
+    "skip": ["cli_installed", "documented_commands", "no_clone"],
+    "required": ["bridge_installed", "claude_registered", "skills_installed", "handoff_reaper"]
+  }
+]
