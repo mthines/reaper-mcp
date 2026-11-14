@@ -11,6 +11,7 @@ import { DEMO } from './demo-mode.js';
 import { useBridgeFeed } from './useBridgeFeed.js';
 import { CloseNotice } from './CloseNotice.js';
 import { useCloseWithReaper } from './useCloseWithReaper.js';
+import { useChangelogReadTime } from './useChangelogReadTime.js';
 import { useBridgeRequest } from './useBridgeRequest.js';
 import { useErrorNotifications } from './useErrorNotifications.js';
 import { useHistory } from './useHistory.js';
@@ -112,6 +113,7 @@ export function App() {
   };
   const updateReady = useUpdateReady();
   const updateAvailable = updateOffer(release, __VERSION__, { dev: settings?.dev === true, skipped, update: status?.control?.update, ready: updateReady });
+  const changelogClosedVia = useChangelogReadTime(changelogOpen);
   const releases = useReleases(changelogOpen, DEMO_RELEASES);
   const highlights = useHighlights(changelogOpen);
   const openChangelog = (source: ChangelogSource) => () => {
@@ -162,7 +164,10 @@ export function App() {
   const openSettings = (toggle: boolean) => () => {
     const next = toggle ? !settingsOpen : true;
     if (next && !settingsOpen) track({ name: 'settings_opened' });
-    if (next) setChangelogOpen(false);
+    if (next) {
+      if (changelogOpen) changelogClosedVia('settings');
+      setChangelogOpen(false);
+    }
     setSettingsOpen(next);
   };
 
@@ -300,7 +305,10 @@ export function App() {
           update={status?.control?.update}
           onUpdate={() => request('update')}
           installableUpTo={updateReady ? __VERSION__ : status?.control?.updateSource === 'npm' ? (release?.version ?? __VERSION__) : undefined}
-          onClose={() => setChangelogOpen(false)}
+          onClose={() => {
+            changelogClosedVia('close');
+            setChangelogOpen(false);
+          }}
         />
       )}
     </div>
