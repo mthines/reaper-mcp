@@ -372,7 +372,7 @@ async function init(chained = false): Promise<void> {
     console.log(`  ${ui.cmd('reaper-mcp setup')}           ${ui.dim('# Lua bridge + JSFX → REAPER')}`);
     console.log('then start (or restart) REAPER: the bridge starts with it.');
   }
-  if (!inClone) console.log(`\nWant it to remember plugins and your corrections? Connect LoreKit (free): ${ui.link('https://lorekit.io')}. ${ui.cmd('/learn-plugin')} will walk you through it.`);
+  if (!inClone) console.log(`\nWant it to remember plugins and your corrections? Connect LoreKit (free, about five minutes): ${ui.link('https://reaper-mcp.vercel.app/docs/connect-lorekit')}`);
   console.log(`\nTry: ${ui.cmd('/mixer "Please gain stage my tracks"')}  ·  ${ui.cmd('/critique "Roast my mix"')}`);
 }
 

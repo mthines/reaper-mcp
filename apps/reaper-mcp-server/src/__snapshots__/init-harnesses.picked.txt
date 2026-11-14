@@ -16,6 +16,6 @@ If you haven't yet, install the bridge:
   reaper-mcp setup           # Lua bridge + JSFX → REAPER
 then start (or restart) REAPER: the bridge starts with it.
 
-Want it to remember plugins and your corrections? Connect LoreKit (free): https://lorekit.io. /learn-plugin will walk you through it.
+Want it to remember plugins and your corrections? Connect LoreKit (free, about five minutes): https://reaper-mcp.vercel.app/docs/connect-lorekit
 
 Try: /mixer "Please gain stage my tracks"  ·  /critique "Roast my mix"

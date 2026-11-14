@@ -3,7 +3,7 @@ title: Install and connect
 nav: Install and connect
 summary: Three commands, then start REAPER. About five minutes, most of it downloading.
 section: start
-order: 3
+order: 4
 poster: media/every-harness.webp
 duration: 3 min
 ---
@@ -12,7 +12,7 @@ You'll paste three commands into a terminal, then start REAPER. That's it. No cl
 
 ## Before you start
 
-Have [REAPER, an AI app and Node.js](what-you-need.md) installed. If you only just installed Node.js, open a fresh terminal window afterwards.
+Have [REAPER, an AI app and Node.js](what-you-need.md) installed, and install the AI app *first*: `init` can only connect apps it finds. Never used a terminal or Claude Code? [Start here](set-up-your-ai-app.md). If you only just installed Node.js, open a fresh terminal window afterwards.
 
 ## The three commands
 
@@ -36,9 +36,15 @@ reaper-mcp init
 
 Start REAPER, or restart it if it was open. A small status window appears and shows a green light when the connector is running. If you'd rather not restart, run `mcp_bridge.lua` from REAPER's action list (**Actions → Show action list → Load ReaScript…**).
 
-Then open your AI app in any folder and say hello:
+## Check it's connected
+
+Open a terminal in any folder (your song folder is a good choice), type `claude`, then `/mcp`. You should see `reaper` listed as connected. Already had Claude Code open? Quit and start it again, so it picks up the new connection.
+
+Then say hello:
 
 > say: What's in my REAPER session?
+
+If it lists your tracks, you're done. Next: [your first conversation](first-conversation.md), then [connect LoreKit](connect-lorekit.md) so it remembers.
 
 ## Prefer ReaPack?
 
@@ -65,7 +71,8 @@ Run `reaper-mcp update`, or press **Update** in the status window inside REAPER.
 Run `reaper-mcp doctor`. It checks each piece and says how to fix what's wrong.
 
 - **The status window isn't showing a green light.** The connector isn't running. Run `mcp_bridge.lua` again from REAPER's action list.
-- **Your AI app can't see REAPER.** Install the AI app first, then run `reaper-mcp init` again.
+- **Your AI app can't see REAPER.** Install the AI app first, then run `reaper-mcp init` again, and restart the app. In Claude Code, `/mcp` should list `reaper`.
+- **`reaper-mcp: command not found`.** Close the terminal and open a new one. Still missing? Node.js isn't installed, or `npm install` failed; run it again and read the last lines it prints.
 - **Missing skills** (the `/mixer` and `/critique` commands). Run `reaper-mcp install-skills`. It never overwrites files you edited.
 - **Loudness, masking and stem tools don't work.** They need a small add-on: `reaper-mcp setup-sidecar` (needs Python 3.10 or newer).
 

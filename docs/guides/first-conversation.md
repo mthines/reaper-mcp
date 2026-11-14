@@ -3,7 +3,7 @@ title: Your first conversation
 nav: Your first conversation
 summary: Ask what's in your session, watch the status window, and see how every move shows up as a card.
 section: start
-order: 4
+order: 5
 poster: media/bridge-drawer.png
 duration: 4 min
 ---
@@ -39,3 +39,7 @@ Gain staging means setting every track to a sensible starting level, so your plu
 - **"I can't see REAPER."** Check the status window shows a green light, then see [Something's off](install.md#somethings-off).
 - **It's slow to answer.** Each question to REAPER takes a fraction of a second; the AI app's thinking time is the slow part.
 - **You want it to stop.** The status window has a **Pause** button. See [Undo, snapshots and the pause button](undo-and-safety.md).
+
+## Next
+
+It forgets everything when the conversation ends, unless you give it a memory. [Connect LoreKit](connect-lorekit.md), then [teach it your plugins](teach-it-a-plugin.md).

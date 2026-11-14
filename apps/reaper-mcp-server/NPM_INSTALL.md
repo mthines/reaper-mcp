@@ -7,9 +7,9 @@
 | | | |
 |---|---|---|
 | 🎚️ **REAPER** | your DAW (v6+, v7 recommended) | [reaper.fm](https://www.reaper.fm/) |
-| 🤖 **Claude Code** | the AI you talk to | [claude.com/claude-code](https://claude.com/claude-code) |
+| 🤖 **Claude Code** | the AI you talk to (never used it? [set it up](https://reaper-mcp.vercel.app/docs/set-up-your-ai-app)) | [claude.com/claude-code](https://claude.com/claude-code) |
 | 🟢 **Node.js 20+** | runs the connector behind the scenes | [nodejs.org](https://nodejs.org/) |
-| 🧠 **LoreKit** *(recommended)* | the memory, so it learns | [lorekit.io](https://lorekit.io) |
+| 🧠 **LoreKit** *(recommended)* | the memory, so it learns (add it after; [how](https://reaper-mcp.vercel.app/docs/connect-lorekit)) | [lorekit.io](https://lorekit.io) |
 | ➕ **SWS Extensions** *(optional)* | extra REAPER powers | [sws-extension.org](https://www.sws-extension.org/) |
 
 ### 2 · Paste these commands
@@ -52,6 +52,23 @@ and click **Run**. Running it again stops the bridge.
 ```
 /mixer Please gain stage my tracks
 ```
+
+### Then: give it a memory *(optional, about five minutes)*
+
+Out of the box it starts every conversation from scratch. Connect [LoreKit](https://lorekit.io) and it keeps
+what it learns about your plugins and your corrections, in every project:
+
+1. Sign in at [lorekit.io](https://lorekit.io), then **Settings → API keys → Generate new token** (read + write, starts with `lk_rw_`).
+2. Paste this in a terminal with your key, then restart Claude Code:
+
+```bash
+claude mcp add --transport http --scope user lorekit https://pqokxlhvnosogizsjztg.supabase.co/functions/v1/mcp --header "Authorization: Bearer lk_rw_YOUR_KEY"
+```
+
+3. Type `/mcp` in Claude Code: `reaper` and `lorekit` should both be connected. Then teach it a plugin: `/learn-plugin Soothe2`.
+
+`--scope user` makes it work in every folder (LoreKit's own page shows a per-folder file). Step by step, with fixes:
+**[Connect LoreKit](https://reaper-mcp.vercel.app/docs/connect-lorekit)** · **[Teach it your plugins](https://reaper-mcp.vercel.app/docs/teach-it-a-plugin)**
 
 <details>
 <summary><b>Something not working?</b></summary>

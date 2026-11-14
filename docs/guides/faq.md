@@ -40,6 +40,10 @@ Any plugin REAPER can load. It knows some already, and [learns](teach-it-a-plugi
 
 Claude Code is the one it's built and tested around. Codex CLI, Gemini CLI and Cursor connect with `reaper-mcp init`.
 
+### Do I need LoreKit?
+
+No. Without it, everything works but it starts fresh each conversation, and `/learn-plugin` can't save. [Connect it](connect-lorekit.md) when you want it to remember.
+
 ### What does it collect?
 
 See [what gets collected](telemetry.md). Short version: counts of which tools ran, never your projects, names or audio, and you can turn it off.
@@ -57,6 +61,10 @@ Run `reaper-mcp init` again after installing the AI app. Then `reaper-mcp doctor
 ### `/mixer` and `/critique` aren't found.
 
 Run `reaper-mcp install-skills`.
+
+### The assistant says memory isn't connected.
+
+In Claude Code, type `/mcp`. If `lorekit` isn't there, follow [Connect LoreKit](connect-lorekit.md). If it works in one folder but not another, it was added for that folder only: add it again with `--scope user`.
 
 ### Loudness, masking or stem tools fail.
 
