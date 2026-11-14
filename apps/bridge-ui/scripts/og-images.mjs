@@ -68,9 +68,9 @@ const bridgeArt = `<div style="display:flex;gap:14px;margin-bottom:18px">
 ${row('measure_masking', '6.9 s', 90)}${row('set_fx_parameter', '0.9 ms', 14)}${row('insert_midi_notes', '4.2 ms', 22)}${row('run_plan', '20 ms', 40)}`;
 
 const pages = {
-  docs: { kind: 'docs', label: 'DOCS', title: 'A music assistant <em>inside REAPER</em>', lines: 'Plain guides. You make every call.', url: 'reaper-mcp.vercel.app/docs', art: docsArt },
-  changelog: { kind: 'changelog', label: 'WHAT&rsquo;S NEW', title: 'Every release, <em>shown</em>', lines: 'The changes, not just a list of them.', url: 'reaper-mcp.vercel.app/changelog', art: changelogArt },
-  bridge: { kind: 'bridge', label: 'LIVE DEMO', title: 'See what it <em>did</em>, step by step', lines: 'Every move in your session, with before and after.', url: 'reaper-mcp.vercel.app', art: bridgeArt },
+  docs: { kind: 'docs', label: 'DOCS', title: 'Skip the tedious parts of <em>mixing</em>', lines: 'An AI assistant inside REAPER. You make every call.', url: 'reaper-mcp.vercel.app/docs', art: docsArt },
+  changelog: { kind: 'changelog', label: 'WHAT&rsquo;S NEW', title: 'New features, <em>shown</em> not listed', lines: 'Short clips of every change, so you see what it does.', url: 'reaper-mcp.vercel.app/changelog', art: changelogArt },
+  bridge: { kind: 'bridge', label: 'LIVE DEMO', title: 'Watch your AI <em>mix</em>, step by step', lines: 'Every change in REAPER, with before and after. Try the demo.', url: 'reaper-mcp.vercel.app', art: bridgeArt },
 };
 
 const browser = await chromium.launch();
