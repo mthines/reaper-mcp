@@ -145,6 +145,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.27.1(zod@4.3.6)
+      '@openfeature/server-sdk':
+        specifier: ^1.23.0
+        version: 1.23.0(@openfeature/core@1.12.0)
       '@opentelemetry/api':
         specifier: ^1.9.0
         version: 1.9.0
@@ -180,6 +183,8 @@ importers:
   extensions/vital: {}
 
   libs/extension-api: {}
+
+  libs/feature-flags: {}
 
   libs/protocol: {}
 

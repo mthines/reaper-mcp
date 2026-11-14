@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -28,14 +29,13 @@ describe('gen-feature-flags', () => {
   });
 
   it('fails when the registry is invalid', async () => {
-    // A throwaway registry beside the real schema, so the relative import still resolves
-    const dir = mkdtempSync(path.join(repoRoot, 'libs/feature-flags/src/.bad-registry-'));
+    // A throwaway registry outside the source tree (a lint run scanning src/ must never see it)
+    const dir = mkdtempSync(path.join(tmpdir(), 'bad-registry-'));
     try {
-      copyFileSync(path.join(repoRoot, 'libs/feature-flags/src/schema.ts'), path.join(dir, 'schema.ts'));
-      mkdirSync(dir, { recursive: true });
+      const schema = path.join(repoRoot, 'libs/feature-flags/src/schema.ts');
       writeFileSync(
         path.join(dir, 'registry.ts'),
-        `import { parseRegistry } from './schema';\nexport const FLAG_REGISTRY = parseRegistry([{ key: 'Bad', description: 'x', type: 'boolean', variants: { a: true }, defaultVariant: 'a', owner: 'o' }]);\n`,
+        `import { parseRegistry } from ${JSON.stringify(schema)};\nexport const FLAG_REGISTRY = parseRegistry([{ key: 'Bad', description: 'x', type: 'boolean', variants: { a: true }, defaultVariant: 'a', owner: 'o' }]);\n`,
       );
       const mod = await import(/* @vite-ignore */ generator);
       await expect(mod.loadRegistry(path.join(dir, 'registry.ts'))).rejects.toThrow(/kebab-case/);
