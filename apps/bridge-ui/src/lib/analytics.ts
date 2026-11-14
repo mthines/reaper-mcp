@@ -52,7 +52,18 @@ export type TrackEvent =
   | { name: 'snapshot_deleted'; outcome: 'ok' | 'refused' | 'lost' }
   | { name: 'snapshots_cleared'; outcome: 'ok' | 'refused' | 'lost' }
   | { name: 'snapshot_edited'; outcome: 'ok' | 'refused' | 'lost'; renamed: boolean }
-  | { name: 'page_error'; type: string };
+  | PageErrorEvent;
+
+/** An error the page's own code didn't handle: thrown, a rejected promise, or caught by the page's error boundary. */
+export type PageErrorEvent = {
+  name: 'page_error';
+  type: string;
+  source: 'uncaught' | 'rejection' | 'boundary';
+  /** The browser had translated the page: a translator rewriting React's text nodes breaks its DOM updates. */
+  translated: boolean;
+  /** For a browser DOM error only, the DOM call that failed, e.g. `Node.removeChild`. */
+  operation?: string;
+};
 
 /** Why usage statistics are on or off, in words the Settings toggle can show. */
 export type UsageStatsState = { on: true } | { on: false; reason: 'user' | 'browser' | 'demo' | 'unconfigured' };
@@ -133,8 +144,8 @@ export function startAnalytics(demo: boolean, view?: string): UsageStatsState {
   identify(installId());
   addSignalAttribute('bridge_ui.display_mode', displayMode());
   // The kind of error only, never its message or stack (TELEMETRY.md)
-  window.addEventListener('error', (ev) => track({ name: 'page_error', type: errorType(ev.error) }));
-  window.addEventListener('unhandledrejection', (ev) => track({ name: 'page_error', type: errorType(ev.reason) }));
+  window.addEventListener('error', (ev) => trackPageError(ev.error, 'uncaught'));
+  window.addEventListener('unhandledrejection', (ev) => trackPageError(ev.reason, 'rejection'));
   if (view) trackView(view);
   return state;
 }
@@ -174,9 +185,53 @@ export function trackView(view: string): void {
   }
 }
 
+/**
+ * Report an error the page didn't handle. React 19 hands an error its error boundary caught to the boundary
+ * only, never to `window`'s error event, so the boundary reports it here too.
+ */
+export function trackPageError(error: unknown, source: PageErrorEvent['source']): void {
+  if (!enabled) return;
+  track(pageErrorEvent(error, source, typeof document === 'undefined' ? null : document.documentElement));
+}
+
+/** The `page_error` event for an error: its kind, where it was caught, the failing DOM call, and whether the page was translated. */
+export function pageErrorEvent(error: unknown, source: PageErrorEvent['source'], root: PageRoot | null): PageErrorEvent {
+  const event: PageErrorEvent = { name: 'page_error', type: errorType(error), source, translated: isTranslated(root) };
+  const operation = domOperation(error);
+  if (operation) event.operation = operation;
+  return event;
+}
+
 /** `TypeError`, `RangeError`, … for errors; a fixed label for anything thrown that isn't one. */
 export function errorType(error: unknown): string {
   return error instanceof Error && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : 'non_error';
+}
+
+/**
+ * The DOM call a browser DOM error came from, read from the fixed start of its message and nothing else:
+ * Chromium's `Failed to execute 'removeChild' on 'Node': …` and Firefox's `Node.removeChild: …` both give
+ * `Node.removeChild`. Only letters are kept, so no part of the message that could name a track, a path or a
+ * host is sent. Any other error, or a message in another shape (Safari's), gives nothing.
+ */
+export function domOperation(error: unknown): string | undefined {
+  if (typeof DOMException === 'undefined' || !(error instanceof DOMException)) return undefined;
+  const chromium = /^Failed to execute '([A-Za-z]{1,40})' on '([A-Za-z]{1,40})'/.exec(error.message);
+  if (chromium) return `${chromium[2]}.${chromium[1]}`;
+  const firefox = /^([A-Za-z]{1,40})\.([A-Za-z]{1,40}): /.exec(error.message);
+  return firefox ? `${firefox[1]}.${firefox[2]}` : undefined;
+}
+
+/** What `isTranslated` reads from the page's `<html>` element. */
+export type PageRoot = { className: string; lang: string };
+
+/**
+ * Whether a browser translator rewrote the page: Chrome and Edge mark `<html>` with `translated-ltr` or
+ * `translated-rtl`, and translators set its `lang` to the language they translated into (the page ships `en`).
+ */
+export function isTranslated(root: PageRoot | null): boolean {
+  if (!root) return false;
+  if (/(^|\s)translated-(ltr|rtl)(\s|$)/.test(root.className)) return true;
+  return root.lang !== '' && !/^en(-|$)/i.test(root.lang);
 }
 
 /** Where the page runs: the bridge's app window, an installed app, or a browser tab. */

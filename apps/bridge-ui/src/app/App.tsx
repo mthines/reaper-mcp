@@ -6,6 +6,7 @@ import { AppCommands } from './AppCommands.js';
 import { Header } from './Header.js';
 import { Notices } from './Notices.js';
 import { Offline } from './Offline.js';
+import { BridgeBoundary } from './BridgeBoundary.js';
 import { DEMO } from './demo-mode.js';
 import { useBridgeFeed } from './useBridgeFeed.js';
 import { CloseNotice } from './CloseNotice.js';
@@ -211,6 +212,7 @@ export function App() {
       />
       <UpdateToasts status={status} />
       {closing.secondsLeft !== null && <CloseNotice secondsLeft={closing.secondsLeft} onCancel={closing.cancel} />}
+      <BridgeBoundary resetKey={`${state}-${reachable}`}>
       {status ? (
         <>
           <Notices status={status} settings={settings} onSet={changeSetting('notice')} request={request} release={updateAvailable} onSkip={skipUpdate} onWhatsNew={openChangelog('notice')} />
@@ -287,6 +289,7 @@ export function App() {
       ) : (
         <Offline reachable={reachable} />
       )}
+      </BridgeBoundary>
       {/* Outside the bridge's branch: the pill (from the cached release) and the palette open it offline too */}
       {changelogOpen && (
         <Changelog
