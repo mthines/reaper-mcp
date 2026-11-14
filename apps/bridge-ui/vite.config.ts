@@ -7,6 +7,7 @@ import react from '@vitejs/plugin-react';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import { buildConstants, here, reactCompilerBabel } from './build-config.mjs';
 import { devPort, reaperDev } from './vite-reaper-dev.mjs';
+import { withShareMeta, type SharePage } from './src/lib/share-meta.js';
 import { parseGuide, renderLlmsFull, renderLlmsTxt, sortGuides, type Guide } from './src/features/docs/docs.js';
 
 // The hosted build serves the changelog's media (and the highlights index) beside the page: /changelog/media/…
@@ -85,10 +86,26 @@ const hostedDocs = (): Plugin => ({
   },
 });
 
+// Social crawlers read HTML and never run the page, so each kind of page the hosted site serves gets its own copy of the HTML with
+// its own share tags (title, line, 1200x630 picture): the bridge demo at /, mcp_bridge_docs.html for /docs, mcp_bridge_changelog.html for /changelog
+const hostedShare = (): Plugin => ({
+  name: 'hosted-share',
+  apply: 'build',
+  closeBundle() {
+    if (process.env.BRIDGE_HOSTED !== '1') return;
+    const out = join(here, '../../dist/apps/bridge-ui');
+    const origin = llmsOrigin() || 'https://reaper-mcp.vercel.app';
+    const html = readFileSync(join(out, 'mcp_bridge.html'), 'utf8');
+    const files: Record<SharePage, string> = { bridge: 'mcp_bridge.html', docs: 'mcp_bridge_docs.html', changelog: 'mcp_bridge_changelog.html' };
+    for (const [kind, file] of Object.entries(files) as Array<[SharePage, string]>) writeFileSync(join(out, file), withShareMeta(html, kind, origin));
+    cpSync(join(here, 'share'), join(out, 'share'), { recursive: true });
+  },
+});
+
 export default defineConfig(async ({ command }) => ({
   root: here,
   define: buildConstants(),
-  plugins: [react({ babel: reactCompilerBabel }), viteSingleFile(), reaperDev(), hostedChangelogMedia(), hostedDocs()],
+  plugins: [react({ babel: reactCompilerBabel }), viteSingleFile(), reaperDev(), hostedChangelogMedia(), hostedDocs(), hostedShare()],
   server: { host: '127.0.0.1', port: command === 'serve' ? await devPort() : 8098, strictPort: true },
   build: {
     outDir: join(here, '../../dist/apps/bridge-ui'),

@@ -5,7 +5,7 @@
 
 /* Header: the name, then the way out. Quiet, so the page's own content is the loudest thing */
 .head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
-.brand { font-size: 16px; font-weight: 600; color: var(--text); text-decoration: none; }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; color: var(--text); text-decoration: none; }
 .brandSub { color: var(--muted); font-weight: 400; }
 .headLinks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
 .headLink { font-size: 14px; color: var(--muted); text-decoration: none; }
@@ -45,6 +45,7 @@
 .landing { display: flex; flex-direction: column; gap: 56px; }
 .hero { position: relative; padding: 36px 0 8px; }
 .hero::before { content: ''; position: absolute; inset: -40px -80px auto -80px; height: 320px; z-index: -1; pointer-events: none; background: radial-gradient(60% 100% at 30% 0%, rgba(124, 196, 255, 0.13), transparent 70%); }
+.heroLogo { margin: 0 0 22px; }
 .heroTitle { margin: 0 0 14px; font-size: 44px; line-height: 1.08; letter-spacing: -0.02em; max-width: 16ch; }
 .heroLead { margin: 0 0 20px; font-size: 19px; line-height: 1.55; color: var(--muted); max-width: 56ch; }
 .promises { list-style: none; margin: 0 0 24px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }

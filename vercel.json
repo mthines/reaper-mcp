@@ -10,15 +10,15 @@
     },
     {
       "source": "/changelog",
-      "destination": "/mcp_bridge.html?page=changelog"
+      "destination": "/mcp_bridge_changelog.html?page=changelog"
     },
     {
       "source": "/docs",
-      "destination": "/mcp_bridge.html?page=docs"
+      "destination": "/mcp_bridge_docs.html?page=docs"
     },
     {
       "source": "/docs/:slug([a-z0-9-]+)",
-      "destination": "/mcp_bridge.html?page=docs"
+      "destination": "/mcp_bridge_docs.html?page=docs"
     }
   ],
   "headers": [
@@ -28,6 +28,15 @@
         {
           "key": "Cache-Control",
           "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/share/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
         }
       ]
     },
