@@ -9,6 +9,7 @@ import { App } from './app/App.js';
 import { Changelog } from './features/changelog/index.js';
 import { Docs } from './features/docs/index.js';
 import { CommandProvider } from './features/command/index.js';
+import { startSiteAnalytics } from './lib/analytics.js';
 
 const root = createRoot(document.getElementById('root') as HTMLElement);
 
@@ -17,6 +18,9 @@ const changelogPage = new URLSearchParams(location.search).get('page') === 'chan
 
 // `?page=docs` (and /docs on the hosted site) is the guides, also with no bridge behind it
 const docsPage = new URLSearchParams(location.search).get('page') === 'docs' || /^\/docs(\/|$)/.test(location.pathname);
+
+// The hosted site's guides and changelog report page views, web events and a session replay (a no-op elsewhere)
+if (docsPage || changelogPage) startSiteAnalytics(docsPage ? 'docs' : 'changelog');
 
 root.render(
   <CommandProvider>

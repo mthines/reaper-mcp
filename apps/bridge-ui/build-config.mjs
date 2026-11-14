@@ -44,6 +44,8 @@ export function buildConstants() {
 
   return {
     __HOSTED__: JSON.stringify(hosted),
+    __SITE_ENV__: JSON.stringify(siteEnvironment()),
+    __SITE_VCS__: JSON.stringify(siteVcs()),
     __RELEASES_SNAPSHOT__: JSON.stringify(releasesSnapshot),
     __HIGHLIGHTS_SNAPSHOT__: JSON.stringify(highlightsSnapshot),
     __VERSION__: JSON.stringify(version),
@@ -53,6 +55,29 @@ export function buildConstants() {
     __DASH0_DATASET__: JSON.stringify(dash0.dataset),
     __DASH0_TOKEN__: JSON.stringify(dash0.token),
   };
+}
+
+/**
+ * The hosted site's `deployment.environment.name`: Vercel's own (production / preview / development) on a Vercel
+ * build, `local` anywhere else, so a preview deploy or a local hosted build never reads as production.
+ */
+function siteEnvironment() {
+  const env = process.env.VERCEL_ENV;
+  return env === 'production' || env === 'preview' || env === 'development' ? env : 'local';
+}
+
+/** The git context of a Vercel build (its system env), as the Web SDK's `vcs` option; empty off Vercel. */
+function siteVcs() {
+  const { VERCEL_GIT_PROVIDER: provider, VERCEL_GIT_REPO_OWNER: owner, VERCEL_GIT_REPO_SLUG: slug, VERCEL_GIT_COMMIT_REF: ref, VERCEL_GIT_COMMIT_SHA: sha, VERCEL_GIT_PULL_REQUEST_ID: pr } = process.env;
+  const vcs = {};
+  if (provider) vcs.providerName = provider;
+  if (owner) vcs.ownerName = owner;
+  if (slug) vcs.repositoryName = slug;
+  if (owner && slug && provider === 'github') vcs.repositoryUrlFull = `https://github.com/${owner}/${slug}`;
+  if (ref) vcs.refHeadName = ref;
+  if (sha) vcs.refHeadRevision = sha;
+  if (pr) vcs.changeId = pr;
+  return vcs;
 }
 
 /**

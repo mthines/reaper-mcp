@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Toggle } from '../../components/index.js';
+import { trackSite } from '../../lib/analytics.js';
 import { REPO_URL } from '../../lib/links.js';
 import { load, save } from '../../lib/storage.js';
 import { isStringOrNull, useUrlState } from '../../lib/url-state.js';
@@ -39,6 +40,11 @@ export function ChangelogPage({
   const chooseBetas = (on: boolean) => {
     save(BETAS_KEY, on ? '1' : '0');
     setBetas(on);
+    trackSite({ name: 'changelog_betas_toggled', shown: on });
+  };
+  const linkRelease = (version: string) => {
+    setLinked(version);
+    trackSite({ name: 'release_linked', version });
   };
 
   return (
@@ -76,7 +82,7 @@ export function ChangelogPage({
               current={null}
               linked={r.version === linked}
               layout={`${shown.length}:${highlights.length}`}
-              onLink={() => setLinked(r.version)}
+              onLink={() => linkRelease(r.version)}
             />
           ))}
         </ol>

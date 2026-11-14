@@ -1,4 +1,4 @@
-import { addSignalAttribute, identify, init, sendEvent, startView } from '@dash0/sdk-web';
+import { addSignalAttribute, identify, init, sendEvent, startSessionRecording, startView, type SessionRecorder } from '@dash0/sdk-web';
 import type { Liveness } from './status.js';
 import type { Coverage } from '../features/plugins/index.js';
 
@@ -6,6 +6,9 @@ import type { Coverage } from '../features/plugins/index.js';
 // page can be improved. The only module that talks to the Dash0 Web SDK. Same destination and the
 // same promises as the server's telemetry (TELEMETRY.md): no plugin, track or project names, no
 // search text, tokens, paths or host names. The events are listed in tracking-plan.yaml.
+//
+// The hosted site's public pages (/docs, /changelog) are measured separately, as their own service
+// with page views, errors, web events and session replay: see "The hosted site" below.
 
 
 export const USAGE_STATS_KEY = 'mcp_bridge.usage_stats';
@@ -180,4 +183,188 @@ export function errorType(error: unknown): string {
 function displayMode(): string {
   if (new URLSearchParams(location.search).has('app')) return 'bridge_window';
   return window.matchMedia?.('(display-mode: standalone)').matches ? 'installed_app' : 'browser_tab';
+}
+
+// ── The hosted site ─────────────────────────────────────────────────────────────────────────────────────────────
+// The public guides (/docs) and changelog (/changelog) on the hosted build. Unlike the bridge page they run on a
+// public address with no bridge, tokens or LAN host behind them, so they get the full Web SDK: page views (each
+// guide is a virtual page view), errors, fetch timings, web vitals, rage clicks and a session replay, plus the
+// events below. A visitor is a random id kept in that browser. Off when the browser sends GPC or Do Not Track.
+
+export const SITE_SERVICE_NAME = 'reaper-mcp-site';
+const SITE_VISITOR_ID_KEY = 'reaper_site.visitor_id';
+
+/** Which hosted page is open. */
+export type SitePage = 'docs' | 'changelog';
+
+/** Where a tracked link goes; anything else is not a call to action and is not sent. */
+export type SiteCta = 'demo' | 'install' | 'changelog' | 'github' | 'releases' | 'issues' | 'discord' | 'bridge';
+
+/** Every event the hosted pages send; the name goes out as `site.<name>`, the rest as `site.*` attributes. */
+export type SiteEvent =
+  | { name: 'scroll_depth'; depth: ScrollMilestone }
+  | { name: 'cta_clicked'; cta: SiteCta }
+  | { name: 'code_copied'; lang: string }
+  | { name: 'prompt_copied' }
+  | { name: 'video_played' }
+  | { name: 'changelog_betas_toggled'; shown: boolean }
+  | { name: 'release_linked'; version: string };
+
+export type ScrollMilestone = 25 | 50 | 75 | 100;
+const MILESTONES: ScrollMilestone[] = [25, 50, 75, 100];
+
+/** Sessions with a replay, in percent. Every measured session today; lower it here if replay volume grows. */
+export const SITE_REPLAY_SAMPLING = 100;
+
+/** On for the hosted build's own pages unless the browser asks not to be tracked or there's no destination. */
+export function siteAnalyticsState(opts: { hosted: boolean; configured: boolean; nav: PrivacyNavigator }): UsageStatsState {
+  if (!opts.hosted) return { on: false, reason: 'unconfigured' };
+  if (!opts.configured) return { on: false, reason: 'unconfigured' };
+  if (opts.nav.globalPrivacyControl === true || opts.nav.doNotTrack === '1') return { on: false, reason: 'browser' };
+  return { on: true };
+}
+
+/** Event attributes under the `site.` namespace; the event's own name is left out. */
+export function siteEventAttributes(event: SiteEvent): Record<string, string | number | boolean> {
+  const attrs: Record<string, string | number | boolean> = {};
+  for (const [k, v] of Object.entries(event)) if (k !== 'name') attrs[`site.${k}`] = v as string | number | boolean;
+  return attrs;
+}
+
+/**
+ * The hosted page's URL without its query: `?bridge=` carries the viewer's local bridge address, which has no
+ * place in telemetry. Path, host and fragment (a guide heading, `#release-0.79.1`) are public and kept.
+ */
+export function scrubSiteUrl<T extends Record<string, string | undefined>>(attrs: T): T {
+  try {
+    const u = new URL(attrs['url.full'] ?? '/', 'https://localhost');
+    u.search = '';
+    return { ...attrs, 'url.full': u.href, 'url.query': undefined };
+  } catch {
+    return { ...attrs, 'url.full': attrs['url.path'] ?? '/', 'url.query': undefined };
+  }
+}
+
+/** The deepest milestone a reader has reached, or null above the first. A page that fits the window never scrolls. */
+export function scrollMilestone(scrollY: number, viewport: number, height: number): ScrollMilestone | null {
+  const scrollable = height - viewport;
+  if (scrollable <= 0) return null;
+  const percent = ((scrollY + viewport) / height) * 100;
+  let reached: ScrollMilestone | null = null;
+  for (const m of MILESTONES) if (percent >= m - 0.5) reached = m;
+  return reached;
+}
+
+/** What a link on the hosted pages leads to, from its address; null for a link that isn't a call to action. */
+export function siteCtaOf(href: string): SiteCta | null {
+  let u: URL;
+  try {
+    // Resolved against a page below the root, so an in-page `#heading` or a relative link never reads as `/` (the demo)
+    u = new URL(href, 'https://site.invalid/_/page');
+  } catch {
+    return null;
+  }
+  if (u.hostname === 'discord.gg' || u.hostname.endsWith('discord.com')) return 'discord';
+  if (u.hostname === 'github.com') {
+    if (/\/issues(\/|$)/.test(u.pathname)) return 'issues';
+    if (/\/releases(\/|$)/.test(u.pathname)) return 'releases';
+    return 'github';
+  }
+  if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return /\/mcp_bridge\.html$/.test(u.pathname) ? 'bridge' : null;
+  if (u.hostname !== 'site.invalid') return null;
+  if (u.pathname === '/' || u.searchParams.has('demo')) return 'demo';
+  if (u.pathname === '/docs/install') return 'install';
+  if (u.pathname === '/changelog') return 'changelog';
+  return null;
+}
+
+let siteStarted = false;
+let siteEnabled = false;
+
+/** Start the Web SDK, session replay included, on a hosted page. A no-op off the hosted build or when tracking is off. */
+export function startSiteAnalytics(page: SitePage): UsageStatsState {
+  const nav = typeof navigator === 'undefined' ? {} : (navigator as PrivacyNavigator);
+  const state = siteAnalyticsState({ hosted: __HOSTED__, configured: Boolean(__DASH0_TOKEN__), nav });
+  if (!state.on || siteStarted) return state;
+  siteStarted = true;
+  siteEnabled = true;
+  init({
+    serviceName: SITE_SERVICE_NAME,
+    serviceNamespace: 'reaper-mcp',
+    serviceVersion: __VERSION__,
+    environment: __SITE_ENV__,
+    endpoint: { url: __DASH0_ENDPOINT__, authToken: __DASH0_TOKEN__, dataset: __DASH0_DATASET__ },
+    // Not xhr: the pages make none. Fetch covers the guides and the index loading from beside the page.
+    enabledInstrumentations: ['@dash0/navigation', '@dash0/web-vitals', '@dash0/error', '@dash0/fetch', '@dash0/session-recording', '@dash0/frustration-signals'],
+    urlAttributeScrubber: scrubSiteUrl,
+    // Vite doesn't expose Vercel's git env to the browser, so the build hands it over (build-config.mjs)
+    disableVcsDetection: true,
+    vcs: __SITE_VCS__,
+    // Typed text (the palette's search box) never leaves the browser; the pages' own text is public
+    sessionRecording: { samplingRate: SITE_REPLAY_SAMPLING, maskAllInputs: true },
+  });
+  // Before anything else is sent, so no event goes out without a user.id
+  identify(siteVisitorId());
+  addSignalAttribute('site.page', page);
+  void loadRecorder().then((recorder) => recorder && startSessionRecording(recorder));
+  watchScrollDepth();
+  watchCtaClicks();
+  return state;
+}
+
+/** Send a hosted-page event; a no-op unless {@link startSiteAnalytics} turned the SDK on. */
+export function trackSite(event: SiteEvent): void {
+  if (!siteEnabled) return;
+  try {
+    sendEvent(`site.${event.name}`, { attributes: siteEventAttributes(event) });
+  } catch {
+    // usage statistics never break the page
+  }
+}
+
+function siteVisitorId(): string {
+  const existing = read(SITE_VISITOR_ID_KEY);
+  if (existing) return existing;
+  const id = crypto.randomUUID();
+  write(SITE_VISITOR_ID_KEY, id);
+  return id;
+}
+
+/**
+ * rrweb (~76 KB) is only bundled into the hosted build: `__HOSTED__` is a build-time constant, so in the page
+ * REAPER serves this branch, and the import with it, is removed.
+ */
+function loadRecorder(): Promise<SessionRecorder | undefined> {
+  if (__HOSTED__) return import('@dash0/sdk-web/session-recording').then((m) => m.recorder).catch(() => undefined);
+  return Promise.resolve(undefined);
+}
+
+/** One `scroll_depth` per milestone per page path; a guide opened without a reload starts again from zero. */
+function watchScrollDepth(): void {
+  let path = location.pathname;
+  let deepest = 0;
+  let frame = 0;
+  const measure = () => {
+    frame = 0;
+    if (location.pathname !== path) {
+      path = location.pathname;
+      deepest = 0;
+    }
+    const reached = scrollMilestone(window.scrollY, window.innerHeight, document.documentElement.scrollHeight);
+    if (!reached || reached <= deepest) return;
+    for (const m of MILESTONES) if (m > deepest && m <= reached) trackSite({ name: 'scroll_depth', depth: m });
+    deepest = reached;
+  };
+  window.addEventListener('scroll', () => {
+    if (!frame) frame = requestAnimationFrame(measure);
+  }, { passive: true });
+}
+
+/** Links to the demo, install guide, changelog, GitHub, Discord or back to the bridge, wherever they are on the page. */
+function watchCtaClicks(): void {
+  document.addEventListener('click', (e) => {
+    const href = (e.target as Element | null)?.closest?.('a')?.getAttribute('href');
+    const cta = href ? siteCtaOf(href) : null;
+    if (cta) trackSite({ name: 'cta_clicked', cta });
+  }, { capture: true });
 }

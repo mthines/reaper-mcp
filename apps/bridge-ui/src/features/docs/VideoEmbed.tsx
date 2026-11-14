@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { trackSite } from '../../lib/analytics.js';
 import { embedUrl } from './docs.js';
 import styles from './VideoEmbed.module.css';
 
@@ -8,6 +9,10 @@ import styles from './VideoEmbed.module.css';
  */
 export function VideoEmbed({ youtube, poster, title, duration }: { youtube?: string; poster?: string; title: string; duration?: string }) {
   const [playing, setPlaying] = useState(false);
+  const play = () => {
+    setPlaying(true);
+    trackSite({ name: 'video_played' });
+  };
   if (!youtube) {
     return (
       <div className={styles.soonStrip}>
@@ -31,7 +36,7 @@ export function VideoEmbed({ youtube, poster, title, duration }: { youtube?: str
           referrerPolicy="strict-origin-when-cross-origin"
         />
       ) : (
-        <button className={styles.play} onClick={() => setPlaying(true)} aria-label={`Play video: ${title}`}>
+        <button className={styles.play} onClick={play} aria-label={`Play video: ${title}`}>
           {poster && <img className={styles.poster} src={poster} alt="" loading="lazy" />}
           <span className={styles.playMark} aria-hidden="true">▶</span>
           <span className={styles.meta}>{duration ? `${duration} · ` : ''}Plays from YouTube when you press it</span>
