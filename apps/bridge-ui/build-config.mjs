@@ -81,6 +81,19 @@ function siteVcs() {
 }
 
 /**
+ * The page's `<meta name="referrer">`, as a Vite `transformIndexHtml` tag.
+ *
+ * The Web SDK copies `document.referrer` into every page view as it is, with no scrubber of its own, and the referrer is
+ * the page that linked here: on REAPER's page that is this page again, host (a LAN IP), port and query (search text, the
+ * open entry) included. So the page sets what browsers put there. The page REAPER serves sends none at all; the hosted
+ * site sends only its origin, so GitHub still sees where a visitor came from but no path and no `?bridge=` address.
+ * A policy covers only what this page sends: a visit from another page carries whatever that page's policy allows.
+ */
+export function referrerMetaTag(hosted) {
+  return { tag: 'meta', attrs: { name: 'referrer', content: hosted ? 'strict-origin' : 'no-referrer' }, injectTo: 'head-prepend' };
+}
+
+/**
  * Babel options for @vitejs/plugin-react that turn on the React Compiler: the page, its tests and Storybook alike.
  * `all_errors` fails the build and tests on a component the compiler would otherwise skip without a word.
  */

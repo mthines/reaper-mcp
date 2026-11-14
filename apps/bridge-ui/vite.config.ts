@@ -5,7 +5,7 @@ import { basename, extname, join, normalize } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { viteSingleFile } from 'vite-plugin-singlefile';
-import { buildConstants, here, reactCompilerBabel } from './build-config.mjs';
+import { buildConstants, here, reactCompilerBabel, referrerMetaTag } from './build-config.mjs';
 import { devPort, reaperDev } from './vite-reaper-dev.mjs';
 import { withShareMeta, type SharePage } from './src/lib/share-meta.js';
 import { parseGuide, renderLlmsFull, renderLlmsTxt, sortGuides, type Guide } from './src/features/docs/docs.js';
@@ -23,14 +23,10 @@ const hostedChangelogMedia = (): Plugin => ({
   },
 });
 
-// The Web SDK copies `document.referrer` into every page view as it is, with no scrubber of its own, and the referrer is
-// the page that linked here: on REAPER's page that is this page again, host (a LAN IP), port and query (search text, the
-// open entry) included. So the page sets what browsers put there. The page REAPER serves sends none at all; the hosted
-// site sends only its origin, so GitHub still sees where a visitor came from but no path and no `?bridge=` address.
-const referrerPolicy = (hosted: boolean) => (hosted ? 'strict-origin' : 'no-referrer');
+// The page's referrer policy, so page views never carry this page's own address (referrerMetaTag in build-config.mjs)
 const referrerMeta = (): Plugin => ({
   name: 'referrer-policy',
-  transformIndexHtml: () => [{ tag: 'meta', attrs: { name: 'referrer', content: referrerPolicy(process.env.BRIDGE_HOSTED === '1') }, injectTo: 'head-prepend' }],
+  transformIndexHtml: () => [referrerMetaTag(process.env.BRIDGE_HOSTED === '1')],
 });
 
 // The guides (docs/guides/*.md) are served beside the page: /docs/<slug>.md, /docs/pages.json, /llms.txt, /llms-full.txt.
