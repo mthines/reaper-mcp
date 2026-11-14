@@ -16,9 +16,14 @@ describe('share tags', () => {
     expect(titles.size).toBe(3);
   });
 
-  it('points og:url at the page itself', () => {
-    expect(withShareMeta(page, 'docs', 'https://example.test')).toContain('property="og:url" content="https://example.test/docs"');
+  it('names the home page as canonical but leaves guides and releases to their own link', () => {
     expect(withShareMeta(page, 'bridge', 'https://example.test')).toContain('property="og:url" content="https://example.test/"');
+    expect(withShareMeta(page, 'docs', 'https://example.test')).not.toContain('og:url');
+    expect(withShareMeta(page, 'changelog', 'https://example.test')).not.toContain('og:url');
+  });
+
+  it('refuses a page it cannot put the tags into', () => {
+    expect(() => withShareMeta('<head></head>', 'docs', 'https://example.test')).toThrow(/no <title>/);
   });
 
   it('keeps a quote in the text from breaking out of the attribute', () => {

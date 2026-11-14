@@ -39,7 +39,8 @@ export function withShareMeta(html: string, kind: SharePage, origin: string): st
     ['property', 'og:site_name', 'reaper-mcp'],
     ['property', 'og:title', s.title],
     ['property', 'og:description', s.description],
-    ['property', 'og:url', `${origin}${s.path}`],
+    // og:url only for the home page: /docs/<guide> and ?release= are served from one copy, and a canonical /docs would redirect their shares to the index
+    ...(kind === 'bridge' ? [['property', 'og:url', `${origin}${s.path}`]] : []),
     ['property', 'og:image', image],
     ['property', 'og:image:width', '1200'],
     ['property', 'og:image:height', '630'],
@@ -51,5 +52,6 @@ export function withShareMeta(html: string, kind: SharePage, origin: string): st
   ]
     .map(([attr, key, value]) => `<meta ${attr}="${key}" content="${escapeAttr(value)}">`)
     .join('\n');
+  if (!/<title>[^<]*<\/title>/.test(html)) throw new Error(`share tags: no <title> in the page to put them after (${kind})`);
   return html.replace(/<title>[^<]*<\/title>/, `<title>${escapeAttr(s.title)}</title>\n${tags}`);
 }
