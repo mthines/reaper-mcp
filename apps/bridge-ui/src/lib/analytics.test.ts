@@ -185,6 +185,8 @@ describe('the hosted site', () => {
     expect(siteCtaOf('https://github.com/mthines/reaper-mcp/releases')).toBe('releases');
     expect(siteCtaOf('https://discord.gg/abc')).toBe('discord');
     expect(siteCtaOf('http://localhost:8099/mcp_bridge.html')).toBe('bridge');
+    expect(siteCtaOf('http://[::1]:8099/mcp_bridge.html')).toBe('bridge');
+    expect(siteCtaOf('http://reaper.localhost:8099/mcp_bridge.html')).toBe('bridge');
     expect(siteCtaOf('/docs/what-this-is')).toBeNull();
     expect(siteCtaOf('#heading')).toBeNull();
     expect(siteCtaOf('https://www.youtube-nocookie.com/embed/x')).toBeNull();

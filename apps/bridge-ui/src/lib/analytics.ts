@@ -271,7 +271,10 @@ export function siteCtaOf(href: string): SiteCta | null {
     if (/\/releases(\/|$)/.test(u.pathname)) return 'releases';
     return 'github';
   }
-  if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return /\/mcp_bridge\.html$/.test(u.pathname) ? 'bridge' : null;
+  // The same loopback hosts the guides accept for the bridge link (parseBridgeUrl in features/docs/useDocs.ts)
+  if (u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]' || u.hostname.endsWith('.localhost')) {
+    return /\/mcp_bridge\.html$/.test(u.pathname) ? 'bridge' : null;
+  }
   if (u.hostname !== 'site.invalid') return null;
   if (u.pathname === '/' || u.searchParams.has('demo')) return 'demo';
   if (u.pathname === '/docs/install') return 'install';
