@@ -213,82 +213,82 @@ export function App() {
       <UpdateToasts status={status} />
       {closing.secondsLeft !== null && <CloseNotice secondsLeft={closing.secondsLeft} onCancel={closing.cancel} />}
       <BridgeBoundary resetKey={`${state}-${reachable}`}>
-      {status ? (
-        <>
-          <Notices status={status} settings={settings} onSet={changeSetting('notice')} request={request} release={updateAvailable} onSkip={skipUpdate} onWhatsNew={openChangelog('notice')} />
-          <div className={styles.overview}>
-            <Stats status={status} log={log} now={now} series={series} />
-            <Timeline
-              history={history}
-              longHistory={longHistory}
-              now={now}
-              rangeKey={rangeKey}
-              onRange={chooseRange}
+        {status ? (
+          <>
+            <Notices status={status} settings={settings} onSet={changeSetting('notice')} request={request} release={updateAvailable} onSkip={skipUpdate} onWhatsNew={openChangelog('notice')} />
+            <div className={styles.overview}>
+              <Stats status={status} log={log} now={now} series={series} />
+              <Timeline
+                history={history}
+                longHistory={longHistory}
+                now={now}
+                rangeKey={rangeKey}
+                onRange={chooseRange}
+                selection={selection}
+                onSelect={setSelection}
+                clearedAt={clearedAt}
+              />
+            </div>
+            <Log
+              log={shownLog}
               selection={selection}
-              onSelect={setSelection}
-              clearedAt={clearedAt}
+              rangeKey={selection ? null : rangeKey}
+              onRange={chooseRange}
+              oldestKept={log[log.length - 1]?.t ?? null}
+              older={older}
+              onLoadOlder={loadOlder}
+              onClearSelection={() => setSelection(null)}
+              sessions={sessions}
+              knowledge={DEMO ? status.knowledge : liveKnowledge}
+              snapshots={snapshotsServed ? { ...snapshots, blocked: blockedBy(settings) } : undefined}
+              onOpenSettings={settings ? openSettings(false) : undefined}
+              view={view}
+              onView={chooseView}
+              paused={paused}
+              onTogglePause={() => {
+                track({ name: 'log_paused', paused: !paused });
+                setPaused(!paused);
+              }}
+              onClear={clearLog}
+              now={now}
             />
-          </div>
-          <Log
-            log={shownLog}
-            selection={selection}
-            rangeKey={selection ? null : rangeKey}
-            onRange={chooseRange}
-            oldestKept={log[log.length - 1]?.t ?? null}
-            older={older}
-            onLoadOlder={loadOlder}
-            onClearSelection={() => setSelection(null)}
-            sessions={sessions}
-            knowledge={DEMO ? status.knowledge : liveKnowledge}
-            snapshots={snapshotsServed ? { ...snapshots, blocked: blockedBy(settings) } : undefined}
-            onOpenSettings={settings ? openSettings(false) : undefined}
-            view={view}
-            onView={chooseView}
-            paused={paused}
-            onTogglePause={() => {
-              track({ name: 'log_paused', paused: !paused });
-              setPaused(!paused);
-            }}
-            onClear={clearLog}
-            now={now}
-          />
-          {settingsOpen && settings && (
-            <Settings
-              settings={settings}
-              onSet={changeSetting('settings')}
-              notify={notify}
-              onNotify={setNotify}
-              usageStats={usageStats}
-              onUsageStats={chooseUsageStats}
-              loreToken={loreToken}
-              onLoreToken={chooseLoreToken}
-              publishToken={publishToken}
-              tokensShared={tokens.shared}
-              onPublishToken={choosePublishToken}
-              onClose={() => setSettingsOpen(false)}
-              canUpdate={status.control?.canUpdate === true}
-              onRestart={status.control?.canRestart ? () => request('restart') : undefined}
-              autostartInstalled={status.health?.autostart}
-            />
-          )}
-          <footer className={styles.footer}>
-            <span className="mono" title="Bridge IPC directory">{status.bridgeDir}</span>
-            <span className={styles.footerMeta}>
-              Updated {formatAgo(now - lastChangeAt)}
-              <span className="dot-sep" />
-              <button className={styles.footerLink} onClick={openChangelog('footer')} title="What’s new">reaper-mcp v{__VERSION__}</button>
-              <span className="dot-sep" />
-              <a href={guideUrl(undefined, hereUrl())} target="_blank" rel="noreferrer">Docs</a>
-              <span className="dot-sep" />
-              <a href={`${REPO_URL}/issues`} target="_blank" rel="noreferrer">Report an issue</a>
-              <span className="dot-sep" />
-              <a href={DISCORD_URL} target="_blank" rel="noreferrer">Discord</a>
-            </span>
-          </footer>
-        </>
-      ) : (
-        <Offline reachable={reachable} />
-      )}
+            {settingsOpen && settings && (
+              <Settings
+                settings={settings}
+                onSet={changeSetting('settings')}
+                notify={notify}
+                onNotify={setNotify}
+                usageStats={usageStats}
+                onUsageStats={chooseUsageStats}
+                loreToken={loreToken}
+                onLoreToken={chooseLoreToken}
+                publishToken={publishToken}
+                tokensShared={tokens.shared}
+                onPublishToken={choosePublishToken}
+                onClose={() => setSettingsOpen(false)}
+                canUpdate={status.control?.canUpdate === true}
+                onRestart={status.control?.canRestart ? () => request('restart') : undefined}
+                autostartInstalled={status.health?.autostart}
+              />
+            )}
+            <footer className={styles.footer}>
+              <span className="mono" title="Bridge IPC directory">{status.bridgeDir}</span>
+              <span className={styles.footerMeta}>
+                Updated {formatAgo(now - lastChangeAt)}
+                <span className="dot-sep" />
+                <button className={styles.footerLink} onClick={openChangelog('footer')} title="What’s new">reaper-mcp v{__VERSION__}</button>
+                <span className="dot-sep" />
+                <a href={guideUrl(undefined, hereUrl())} target="_blank" rel="noreferrer">Docs</a>
+                <span className="dot-sep" />
+                <a href={`${REPO_URL}/issues`} target="_blank" rel="noreferrer">Report an issue</a>
+                <span className="dot-sep" />
+                <a href={DISCORD_URL} target="_blank" rel="noreferrer">Discord</a>
+              </span>
+            </footer>
+          </>
+        ) : (
+          <Offline reachable={reachable} />
+        )}
       </BridgeBoundary>
       {/* Outside the bridge's branch: the pill (from the cached release) and the palette open it offline too */}
       {changelogOpen && (

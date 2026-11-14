@@ -112,7 +112,7 @@ reaper-mcp/
 
   apps/bridge-ui/             # Bridge status page (React → one self-contained mcp_bridge.html)
     src/main.tsx              # Entry: renders app/App.tsx, registers the service worker
-    src/app/                  # The page shell: App, Header, Notices, Offline + the hooks that poll the bridge
+    src/app/                  # The page shell: App, Header, Notices, Offline, BridgeBoundary (keeps a render error in the bridge view or offline screen from blanking the page; reports it as page_error) + the hooks that poll the bridge
     src/components/           # Shared UI with no bridge knowledge: Combobox (+ .Grouped), Toggle, Notice, Mark, ResizeHandle, Markdown, Icon.*
     src/features/<feature>/   # One folder per area: log, stats, timeline, settings, measurements, edit-views, plugins, snapshots
                               # Each folder's index.ts exports a composite, namespaced component (Log.Rows, Log.Details,

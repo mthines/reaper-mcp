@@ -5,7 +5,7 @@ vi.mock('@dash0/sdk-web', () => sdk);
 const rrweb = vi.hoisted(() => ({ recorder: vi.fn() }));
 vi.mock('@dash0/sdk-web/session-recording', () => rrweb);
 
-import { clickCapture, type ClickNode, errorType, eventAttributes, scrollMilestone, scrubSiteUrl, scrubUrl, siteAnalyticsState, siteCtaOf, siteEventAttributes, usageStatsState } from './analytics.js';
+import { clickCapture, type ClickNode, domOperation, errorType, eventAttributes, isTranslated, pageErrorEvent, scrollMilestone, scrubSiteUrl, scrubUrl, siteAnalyticsState, siteCtaOf, siteEventAttributes, usageStatsState } from './analytics.js';
 
 /** A fake element: its own attributes, its parent, and `closest` as the browser answers it for the selectors the listener uses. */
 function el(tag: string, text: string, attrs: Record<string, string> = {}, parent: ClickNode | null = null): ClickNode {
@@ -79,6 +79,41 @@ describe('event shape', () => {
     expect(errorType(Object.assign(new Error('x'), { name: 'has spaces and <html>' }))).toBe('non_error');
   });
 
+  it('names the DOM call a browser DOM error came from, in Chromium and Firefox, and nothing else from the message', () => {
+    const chromium = new DOMException("Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.", 'NotFoundError');
+    expect(domOperation(chromium)).toBe('Node.removeChild');
+    expect(domOperation(new DOMException('Node.insertBefore: Child to insert before is not a child of this node', 'NotFoundError'))).toBe('Node.insertBefore');
+    // Safari's message names no call; a TypeError in the same shape is not a DOM error; a quote that isn't a name is dropped
+    expect(domOperation(new DOMException('The object can not be found here.', 'NotFoundError'))).toBeUndefined();
+    expect(domOperation(new TypeError("Failed to execute 'fetch' on 'Window': http://192.168.1.20:8099/x"))).toBeUndefined();
+    expect(domOperation(new DOMException("Failed to execute 'My Track.wav' on 'Node'", 'NotFoundError'))).toBeUndefined();
+  });
+
+  it('tells a page a browser translated from the English page it ships as', () => {
+    expect(isTranslated({ className: 'translated-ltr', lang: 'vi' })).toBe(true);
+    expect(isTranslated({ className: 'translated-rtl', lang: 'en' })).toBe(true);
+    expect(isTranslated({ className: '', lang: 'es' })).toBe(true);
+    expect(isTranslated({ className: '', lang: 'en' })).toBe(false);
+    expect(isTranslated({ className: '', lang: 'en-GB' })).toBe(false);
+    expect(isTranslated({ className: 'not-translated-ltr', lang: '' })).toBe(false);
+    expect(isTranslated(null)).toBe(false);
+  });
+
+  it('describes a page error by its kind, where it was caught, the failing DOM call and translation, and nothing more', () => {
+    const removeChild = new DOMException("Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.", 'NotFoundError');
+    expect(eventAttributes(pageErrorEvent(removeChild, 'boundary', { className: 'translated-ltr', lang: 'vi' }))).toEqual({
+      'bridge_ui.type': 'NotFoundError',
+      'bridge_ui.source': 'boundary',
+      'bridge_ui.translated': true,
+      'bridge_ui.operation': 'Node.removeChild',
+    });
+    expect(eventAttributes(pageErrorEvent(new TypeError('secret track name'), 'uncaught', { className: '', lang: 'en' }))).toEqual({
+      'bridge_ui.type': 'TypeError',
+      'bridge_ui.source': 'uncaught',
+      'bridge_ui.translated': false,
+    });
+  });
+
   it('drops host, port and query from the page URL', () => {
     expect(scrubUrl({ 'url.full': 'http://192.168.1.20:8099/mcp_bridge.html?install', 'url.domain': '192.168.1.20', 'url.query': 'install' })).toEqual({
       'url.full': '/mcp_bridge.html',
@@ -118,6 +153,26 @@ describe('sending', () => {
     expect(sdk.sendEvent).toHaveBeenCalledWith('bridge_ui.log_filtered', { attributes: { 'bridge_ui.filter': 'errors' }, severity: undefined });
     a.trackView('plugins');
     expect(sdk.startView).toHaveBeenCalledWith('/plugins');
+  });
+
+  it('sends uncaught errors, rejections and errors the boundary caught as page errors, only while on', async () => {
+    vi.stubGlobal('document', { documentElement: { className: 'translated-ltr', lang: 'vi' } });
+    const a = await import('./analytics.js');
+    a.trackPageError(new DOMException("Failed to execute 'removeChild' on 'Node': gone", 'NotFoundError'), 'boundary');
+    expect(sdk.sendEvent).not.toHaveBeenCalled(); // not started yet
+    a.startAnalytics(false);
+    const listeners = Object.fromEntries((window.addEventListener as ReturnType<typeof vi.fn>).mock.calls.map(([type, fn]) => [type, fn]));
+    listeners.error({ error: new TypeError('secret track name') });
+    listeners.unhandledrejection({ reason: 'a thrown string' });
+    a.trackPageError(new DOMException("Failed to execute 'removeChild' on 'Node': gone", 'NotFoundError'), 'boundary');
+    expect(sdk.sendEvent.mock.calls).toEqual([
+      ['bridge_ui.page_error', { attributes: { 'bridge_ui.type': 'TypeError', 'bridge_ui.source': 'uncaught', 'bridge_ui.translated': true }, severity: 'ERROR' }],
+      ['bridge_ui.page_error', { attributes: { 'bridge_ui.type': 'non_error', 'bridge_ui.source': 'rejection', 'bridge_ui.translated': true }, severity: 'ERROR' }],
+      [
+        'bridge_ui.page_error',
+        { attributes: { 'bridge_ui.type': 'NotFoundError', 'bridge_ui.source': 'boundary', 'bridge_ui.translated': true, 'bridge_ui.operation': 'Node.removeChild' }, severity: 'ERROR' },
+      ],
+    ]);
   });
 
   it('marks a failed publish as an error', async () => {
