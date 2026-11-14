@@ -20,9 +20,10 @@ export interface FlagResolveContext {
   /**
    * A stable per-install (server) or per-browser (page) id. An active experiment evaluated without one
    * resolves to the default variant: bucketing on a constant would put everyone on the same arm, which
-   * is not a split.
+   * is not a split. Pass a function to read it only when an enabled experiment needs it, so a registry
+   * without a live experiment never creates an id.
    */
-  targetingKey?: string;
+  targetingKey?: string | (() => string | undefined);
   overrides?: FlagOverrides;
 }
 
@@ -31,9 +32,12 @@ export function resolveFlag(def: FlagDefinition, context: FlagResolveContext = {
   if (forced !== undefined && Object.hasOwn(def.variants, forced)) {
     return { variant: forced, value: def.variants[forced], reason: 'override' };
   }
-  if (def.experiment?.enabled && context.targetingKey) {
-    const variant = assignExperimentVariant(def.key, def.experiment, context.targetingKey);
-    return { variant, value: def.variants[variant], reason: 'split' };
+  if (def.experiment?.enabled) {
+    const key = typeof context.targetingKey === 'function' ? context.targetingKey() : context.targetingKey;
+    if (key) {
+      const variant = assignExperimentVariant(def.key, def.experiment, key);
+      return { variant, value: def.variants[variant], reason: 'split' };
+    }
   }
   return { variant: def.defaultVariant, value: def.variants[def.defaultVariant], reason: 'static' };
 }

@@ -20,7 +20,8 @@ export interface FlagStore {
   /** Force a variant, or null to drop the override */
   setOverride(key: string, variant: string | null): void;
   resetAll(): void;
-  rows(): FlagRow[];
+  /** The flags with how they resolve under `overrides` (pass the useSyncExternalStore snapshot) */
+  rows(overrides: FlagOverrides): FlagRow[];
   subscribe(listener: () => void): () => void;
   /** Report that a flag was read, once per flag per store */
   exposed(def: FlagDefinition, variant: string, reason: FlagRow['reason']): void;
@@ -60,7 +61,7 @@ export function createFlagStore(
       commit(next);
     },
     resetAll: () => commit({}),
-    rows: () => flagRows(registry, { targetingKey: targetingKey(), overrides }),
+    rows: (current) => flagRows(registry, { targetingKey, overrides: current }),
     subscribe(listener) {
       listeners.add(listener);
       return () => void listeners.delete(listener);

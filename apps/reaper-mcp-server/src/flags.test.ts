@@ -114,6 +114,15 @@ describe('createServerFlags', () => {
     expect(flags.context().targetingKey).toBe('install-42');
   });
 
+  it('never reads the install id for a flag without a running experiment', async () => {
+    let reads = 0;
+    const statics = registry.filter((def) => !def.experiment?.enabled);
+    const flags = createServerFlags({ registry: statics, dir, env: {}, installId: () => `install-${++reads}`, domain: 'static-test' });
+    expect(flags.rows().every((row) => row.reason === 'static' || row.reason === 'override')).toBe(true);
+    await flags.details(statics[0].key);
+    expect(reads).toBe(0);
+  });
+
   it('spreads different installs across both arms', async () => {
     const arms = new Set<string | undefined>();
     for (let i = 0; i < 60; i++) {

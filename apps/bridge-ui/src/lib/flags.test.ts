@@ -74,7 +74,7 @@ describe('flag store', () => {
 
     store.setOverride('static-panel', 'b');
     expect(store.overrides()).not.toBe(before);
-    expect(store.rows().find((r) => r.key === 'static-panel')).toMatchObject({ variant: 'b', reason: 'override' });
+    expect(store.rows(store.overrides()).find((r) => r.key === 'static-panel')).toMatchObject({ variant: 'b', reason: 'override' });
     expect(JSON.parse(storage.data[FLAG_OVERRIDES_KEY])).toEqual({ 'static-panel': 'b' });
 
     store.setOverride('static-panel', null);
@@ -87,8 +87,18 @@ describe('flag store', () => {
 
   it('keeps a browser on the same arm across page loads', () => {
     const storage = memoryStorage();
-    const arm = () => createFlagStore(storage, registry, () => undefined).rows()[0].variant;
+    const arm = () => {
+      const store = createFlagStore(storage, registry, () => undefined);
+      return store.rows(store.overrides())[0].variant;
+    };
     expect(arm()).toBe(arm());
+  });
+
+  it('creates no browser id while no flag has a running experiment', () => {
+    const storage = memoryStorage();
+    const store = createFlagStore(storage, [registry[1]], () => undefined);
+    expect(store.rows(store.overrides())[0]).toMatchObject({ key: 'static-panel', reason: 'static' });
+    expect(storage.data[INSTALL_ID_KEY]).toBeUndefined();
   });
 
   it('reports a flag\'s exposure once per page load', () => {

@@ -8,6 +8,7 @@ import {
   type FlagDefinition,
   type FlagOverrides,
   type FlagReason,
+  type FlagResolveContext,
   type JsonValue,
 } from '@reaper-mcp/feature-flags';
 import { INSTALL_ID_KEY } from './storage-keys.js';
@@ -71,7 +72,7 @@ export interface FlagRow {
   split?: string;
 }
 
-export function flagRows(registry: readonly FlagDefinition[], context: { targetingKey?: string; overrides: FlagOverrides }): FlagRow[] {
+export function flagRows(registry: readonly FlagDefinition[], context: { targetingKey?: FlagResolveContext['targetingKey']; overrides: FlagOverrides }): FlagRow[] {
   return registry.map((def) => {
     const resolved = resolveFlag(def, context);
     return {
@@ -87,6 +88,6 @@ export function flagRows(registry: readonly FlagDefinition[], context: { targeti
 }
 
 /** Resolve one definition to its value, variant and reason for this browser. */
-export function evaluateFor(def: FlagDefinition, context: { targetingKey?: string; overrides: FlagOverrides }): { value: JsonValue; variant: string; reason: FlagReason } {
+export function evaluateFor(def: FlagDefinition, context: { targetingKey?: FlagResolveContext['targetingKey']; overrides: FlagOverrides }): { value: JsonValue; variant: string; reason: FlagReason } {
   return resolveFlag(def, context);
 }

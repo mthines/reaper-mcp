@@ -13,13 +13,13 @@ export function useFlag<K extends FlagKey>(key: K, store: FlagStore = flagStore)
   const def = getFlagDefinition(key);
   if (!def) throw new Error(`unknown feature flag "${key}": run node scripts/gen-feature-flags.mjs`);
   const overrides = useSyncExternalStore(store.subscribe, store.overrides);
-  const resolved = resolveFlag(def, { targetingKey: store.targetingKey(), overrides });
+  const resolved = resolveFlag(def, { targetingKey: store.targetingKey, overrides });
   useEffect(() => store.exposed(def, resolved.variant, resolved.reason), [store, def, resolved.variant, resolved.reason]);
   return resolved.value as FlagValue<K>;
 }
 
 /** The flags as the Developer section lists them, live with the overrides. */
 export function useFlagRows(store: FlagStore = flagStore) {
-  useSyncExternalStore(store.subscribe, store.overrides);
-  return { rows: store.rows(), setOverride: store.setOverride, resetAll: store.resetAll, hasOverrides: Object.keys(store.overrides()).length > 0 };
+  const overrides = useSyncExternalStore(store.subscribe, store.overrides);
+  return { rows: store.rows(overrides), setOverride: store.setOverride, resetAll: store.resetAll, hasOverrides: Object.keys(overrides).length > 0 };
 }

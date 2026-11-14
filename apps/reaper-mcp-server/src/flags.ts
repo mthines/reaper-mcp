@@ -85,7 +85,8 @@ export interface FlagRow {
 
 export interface ServerFlags {
   /** The evaluation context for this install: the targeting key and the owner's overrides. */
-  context(): { targetingKey?: string; flagOverrides: FlagOverrides };
+  /** The evaluation context. `withTargetingKey` reads (and may create) the install id; only an enabled experiment needs it. */
+  context(withTargetingKey?: boolean): { targetingKey?: string; flagOverrides: FlagOverrides };
   /** Evaluate through OpenFeature, so the active span (a tool call) is stamped with the result. */
   details(key: string): Promise<{ variant?: string; reason?: string; value: unknown }>;
   /** Every flag with how it resolves right now, without touching spans. */
@@ -95,8 +96,8 @@ export interface ServerFlags {
 export function createServerFlags(options: ServerFlagsOptions = {}): ServerFlags {
   const registry = options.registry ?? FLAG_REGISTRY;
   const installId = options.installId ?? (() => readInstallId());
-  const context = (): { targetingKey?: string; flagOverrides: FlagOverrides } => {
-    const targetingKey = installId();
+  const context = (withTargetingKey = true): { targetingKey?: string; flagOverrides: FlagOverrides } => {
+    const targetingKey = withTargetingKey ? installId() : undefined;
     return {
       ...(targetingKey && { targetingKey }),
       flagOverrides: readFlagOverrides(options.dir, options.env, registry),
@@ -109,12 +110,12 @@ export function createServerFlags(options: ServerFlagsOptions = {}): ServerFlags
     async details(key) {
       const def = registry.find((f) => f.key === key);
       if (!def) throw new Error(`unknown flag "${key}"`);
-      return evaluateDefinition(client(), def, context());
+      return evaluateDefinition(client(), def, context(def.experiment?.enabled === true));
     },
     rows() {
-      const { targetingKey, flagOverrides } = context();
+      const { flagOverrides } = context(false);
       return registry.map((def) => {
-        const resolved = resolveFlag(def, { targetingKey, overrides: flagOverrides });
+        const resolved = resolveFlag(def, { targetingKey: installId, overrides: flagOverrides });
         return {
           key: def.key,
           variant: resolved.variant,
