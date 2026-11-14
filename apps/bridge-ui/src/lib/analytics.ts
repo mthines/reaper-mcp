@@ -301,8 +301,9 @@ export function startSiteAnalytics(page: SitePage): UsageStatsState {
     // Vite doesn't expose Vercel's git env to the browser, so the build hands it over (build-config.mjs)
     disableVcsDetection: true,
     vcs: __SITE_VCS__,
-    // Typed text (the palette's search box) never leaves the browser; the pages' own text is public
-    sessionRecording: { samplingRate: SITE_REPLAY_SAMPLING, maskAllInputs: true },
+    // Typed text (the palette's search box) never leaves the browser; the pages' own text is public. The palette's
+    // list is masked too: its no-match line repeats the query as text, which maskAllInputs doesn't cover
+    sessionRecording: { samplingRate: SITE_REPLAY_SAMPLING, maskAllInputs: true, maskTextSelector: '[role="listbox"]' },
     // init() sends the first page view before it returns, copying the signal attributes then: set them here,
     // not with identify()/addSignalAttribute() afterwards, or that view goes out without a user.id and site.page
     additionalSignalAttributes: { 'user.id': siteVisitorId(), 'site.page': page },

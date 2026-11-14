@@ -130,7 +130,7 @@ site:
     - fetch spans             # docs/pages.json and docs/<slug>.md
     - browser errors          # message and stack: the page's code is public
     - rage clicks             # @dash0/frustration-signals, linked to the replay
-    - session replay          # browser.session_recording; every input masked (maskAllInputs), sampled at SITE_REPLAY_SAMPLING
+    - session replay          # browser.session_recording; every input masked (maskAllInputs) and the palette's list, which echoes the query (maskTextSelector), sampled at SITE_REPLAY_SAMPLING
   scrubbed:
     - url query               # ?bridge= carries the viewer's local bridge address; URL attributes only: the replay still records the page address and the back-to-bridge link
 

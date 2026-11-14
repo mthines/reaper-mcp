@@ -227,7 +227,7 @@ describe('the hosted site', () => {
         environment: 'preview',
         vcs: { refHeadName: 'main' },
         endpoint: { url: 'https://ingress.test', authToken: 'auth_test', dataset: 'reaper-mcp' },
-        sessionRecording: { maskAllInputs: true },
+        sessionRecording: { maskAllInputs: true, maskTextSelector: '[role="listbox"]' },
         // handed to init, so the first page view carries them too
         additionalSignalAttributes: { 'user.id': store.get('reaper_site.visitor_id'), 'site.page': 'docs' },
       });
