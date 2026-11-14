@@ -46,6 +46,6 @@ Changed your mind about a plugin? Run `/learn-plugin` on it again, or just tell 
 
 ## Share it with everyone
 
-Proud of a record? With the [read-only key](connect-lorekit.md#optional-see-your-records-in-the-status-window) added, the status window's **Plugins** tab shows a **Contribute** button. It becomes a pull request on GitHub, and once the maintainer approves it, every reaper-mcp user gets it built in.
+Proud of a record? With the [read-only key](connect-lorekit.md#optional-see-your-records-in-the-status-window) added, the status window's **Plugins** tab shows a **Contribute** button once you have records of your own. It opens a pull request on GitHub (you'll need a free GitHub account), and once the maintainer approves it, every reaper-mcp user gets it built in.
 
 > your-call: What it learns is saved under your account and never includes song or client names. See or tidy it any time with `/mix-memory`.

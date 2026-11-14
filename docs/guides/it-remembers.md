@@ -11,7 +11,7 @@ An assistant that forgets everything between sessions is a lot of re-explaining.
 ## What it remembers
 
 - **Plugins.** How a plugin behaves and the settings that tend to work, from [`/learn-plugin`](teach-it-a-plugin.md) or from the first time it meets one.
-- **Lessons.** Things that went wrong, or that you corrected. "This singer's sibilance peaks around 7 kHz." "I never want the master limiter above -1 dB." A lesson that keeps coming up becomes a permanent rule, so it stops making that mistake.
+- **Lessons.** Things that went wrong, or that you corrected. "This singer's sibilance peaks around 7 kHz." "I never want the master limiter above -1 dB." When a lesson keeps coming up, it offers to turn it into a permanent rule, so it stops making that mistake.
 
 ## Two layers
 

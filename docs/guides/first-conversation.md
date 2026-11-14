@@ -42,4 +42,4 @@ Gain staging means setting every track to a sensible starting level, so your plu
 
 ## Next
 
-It forgets everything when the conversation ends, unless you give it a memory. [Connect LoreKit](connect-lorekit.md), then [teach it your plugins](teach-it-a-plugin.md).
+It forgets what you told it when the conversation ends, unless you give it a memory. [Connect LoreKit](connect-lorekit.md), then [teach it your plugins](teach-it-a-plugin.md).
