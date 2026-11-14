@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
-import { delimiter, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Test helper (not a test): runs the BUILT package the way an npm user does, outside any clone, in an empty HOME with a
@@ -77,7 +77,9 @@ export function machine(sandbox: string, name: string, installed: FakeHarness[] 
     writeFileSync(join(bin, h), FAKE_HARNESS);
     chmodSync(join(bin, h), 0o755);
   }
-  const env = { HOME: home, REAPER_RESOURCE_PATH: reaper, REAPER_MCP_TELEMETRY: '0', PATH: [bin, dirname(process.execPath)].join(delimiter) };
+  // node alone, never its folder: a global npm install puts other CLIs there (a real `claude` would count as installed)
+  symlinkSync(process.execPath, join(bin, 'node'));
+  const env = { HOME: home, REAPER_RESOURCE_PATH: reaper, REAPER_MCP_TELEMETRY: '0', PATH: bin };
   const run = (...args: string[]) => {
     const r = spawnSync(process.execPath, [join(pkg, 'main.js'), ...args], { cwd: join(home, 'Music'), env, encoding: 'utf-8', timeout: 90_000 });
     return { code: r.status, out: normalise(r.stdout, { home, pkg, root }), err: normalise(r.stderr, { home, pkg, root }) };
