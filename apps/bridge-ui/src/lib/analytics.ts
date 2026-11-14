@@ -392,7 +392,7 @@ const CLICK_OPT_OUT = '[data-capture="off"]';
  * What one click on the hosted pages looks like in the stream, or null when it says nothing: not an interactive
  * element, opted out, no visible name, or outside every `data-testid` container (an event nobody can place is noise).
  * `label` is the control's `aria-label` or its text, whitespace folded, cut to {@link CLICK_LABEL_MAX}; `path` is the
- * containers' test ids from the outside in (`site-header > docs-nav`). Never a field value, never a URL.
+ * containers' test ids from the outside in (`guide > pager`). Never a field value, never a URL.
  */
 export function clickCapture(target: ClickNode | null | undefined): { label: string; path: string; element: string } | null {
   const el = target?.closest?.(INTERACTIVE);

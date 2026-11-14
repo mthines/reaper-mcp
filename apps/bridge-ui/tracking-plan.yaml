@@ -141,7 +141,7 @@ site:
       cta: [demo, install, changelog, github, releases, issues, discord, bridge]
     click:                     # autocapture: one capture-phase listener for plain clicks (button, link, menu item, tab, option)
       label: string            # aria-label or visible text, whitespace folded, cut to 40 characters; never a field value
-      path: string             # the data-testid containers from the outside in, at most 4 (site-header > docs-nav)
+      path: string             # the data-testid containers from the outside in, at most 4 (guide > pager)
       element: string          # role, else tag (a, button)
       # not sent: no name, no data-testid container, or inside data-capture="off". New controls need markup, never a tracker call
     code_copied:               # a guide's code block Copy button
