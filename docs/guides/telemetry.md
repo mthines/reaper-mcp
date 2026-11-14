@@ -49,6 +49,12 @@ For `/make-plugin` and `/learn-plugin`, only fixed categories and rough counts: 
 
 If you set up your own telemetry destination, data goes only there and nothing reaches me.
 
+## This website
+
+These guides and the changelog measure how they're read, so the guides can get better: which pages are opened, how far down people scroll, what's copied, which videos are played, which links and buttons are pressed, how fast pages load, and the site's own errors. They also record a session replay, a reconstruction of what the page showed and where the pointer went, so a confusing step can be seen rather than guessed. Anything typed into the search box is masked before it leaves your browser. Each visit carries a random id kept in that browser.
+
+It's off when your browser sends Do Not Track or Global Privacy Control, and the live demo sends nothing. If you came here from the bridge page, the replay includes its address, which only points at your own computer.
+
 ## Two honest caveats
 
 - **The AI app is separate.** What the assistant *sees* (track names, settings) goes to whichever AI provider you chose, like any chat with it. reaper-mcp trains nothing and brings no AI of its own.
