@@ -84,7 +84,6 @@ export interface FlagRow {
 }
 
 export interface ServerFlags {
-  /** The evaluation context for this install: the targeting key and the owner's overrides. */
   /** The evaluation context. `withTargetingKey` reads (and may create) the install id; only an enabled experiment needs it. */
   context(withTargetingKey?: boolean): { targetingKey?: string; flagOverrides: FlagOverrides };
   /** Evaluate through OpenFeature, so the active span (a tool call) is stamped with the result. */
