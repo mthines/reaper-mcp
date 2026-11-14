@@ -303,10 +303,10 @@ export function startSiteAnalytics(page: SitePage): UsageStatsState {
     vcs: __SITE_VCS__,
     // Typed text (the palette's search box) never leaves the browser; the pages' own text is public
     sessionRecording: { samplingRate: SITE_REPLAY_SAMPLING, maskAllInputs: true },
+    // init() sends the first page view before it returns, copying the signal attributes then: set them here,
+    // not with identify()/addSignalAttribute() afterwards, or that view goes out without a user.id and site.page
+    additionalSignalAttributes: { 'user.id': siteVisitorId(), 'site.page': page },
   });
-  // Before anything else is sent, so no event goes out without a user.id
-  identify(siteVisitorId());
-  addSignalAttribute('site.page', page);
   void loadRecorder().then((recorder) => recorder && startSessionRecording(recorder));
   watchScrollDepth();
   watchCtaClicks();

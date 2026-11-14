@@ -228,10 +228,10 @@ describe('the hosted site', () => {
         vcs: { refHeadName: 'main' },
         endpoint: { url: 'https://ingress.test', authToken: 'auth_test', dataset: 'reaper-mcp' },
         sessionRecording: { maskAllInputs: true },
+        // handed to init, so the first page view carries them too
+        additionalSignalAttributes: { 'user.id': store.get('reaper_site.visitor_id'), 'site.page': 'docs' },
       });
       expect(opts.enabledInstrumentations).toEqual(expect.arrayContaining(['@dash0/navigation', '@dash0/error', '@dash0/session-recording']));
-      expect(sdk.identify).toHaveBeenCalledWith(store.get('reaper_site.visitor_id'));
-      expect(sdk.addSignalAttribute).toHaveBeenCalledWith('site.page', 'docs');
       await vi.waitFor(() => expect(sdk.startSessionRecording).toHaveBeenCalledWith(rrweb.recorder));
 
       a.trackSite({ name: 'prompt_copied' });
