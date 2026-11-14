@@ -121,7 +121,7 @@ export function DocsPage({
     <div className={styles.page} onClick={intercept}>
       <GuideCommands guides={index.status === 'ready' ? index.guides : undefined} onOpen={onNavigate} fallback={() => onNavigate(undefined)} contextual />
       <a className={styles.skip} href="#guide-main">Skip to the page</a>
-      <header className={styles.head}>
+      <header className={styles.head} data-testid="site-header">
         <a className={styles.brand} href="/docs">
           <Logo size={26} /> <span className={styles.brandSub}>docs</span>
         </a>
@@ -140,7 +140,7 @@ export function DocsPage({
         <button className={`btn ${styles.navToggle}`} aria-expanded={navOpen} onClick={() => setNavOpen(!navOpen)}>
           {navOpen ? 'Hide docs' : current ? `Docs: ${current.title}` : 'All docs'}
         </button>
-        <nav className={styles.nav} data-open={navOpen} aria-label="Docs" ref={navRef}>
+        <nav className={styles.nav} data-testid="docs-nav" data-open={navOpen} aria-label="Docs" ref={navRef}>
           <span className={styles.rail} aria-hidden="true" />
           {index.status === 'loading' && <p className={styles.hint}>Loading…</p>}
           {index.status === 'error' && <p className={styles.hint}>Couldn’t load the docs.</p>}
@@ -159,7 +159,7 @@ export function DocsPage({
             </section>
           ))}
         </nav>
-        <main className={styles.main} id="guide-main" ref={mainRef} tabIndex={-1}>
+        <main className={styles.main} data-testid="guide" id="guide-main" ref={mainRef} tabIndex={-1}>
           {slug !== undefined && index.status === 'loading' && <p className={styles.hint}>Loading…</p>}
           {index.status === 'error' && slug !== undefined && <p className={styles.hint}>Couldn’t load this page. <a href={`${REPO_URL}/tree/main/docs/guides`} target="_blank" rel="noreferrer">Read the docs on GitHub</a>.</p>}
           {slug === undefined && <Landing index={index} />}
@@ -167,7 +167,7 @@ export function DocsPage({
           {current && <Article meta={current} guide={guide} guides={guides} />}
         </main>
       </div>
-      <footer className={styles.siteFoot}>
+      <footer className={styles.siteFoot} data-testid="site-footer">
         <span>Stuck, or something here is wrong?</span>
         <a href={DISCORD_URL} target="_blank" rel="noreferrer">Ask on Discord</a>
         <a href={`${REPO_URL}/issues`} target="_blank" rel="noreferrer">Report an issue</a>
@@ -219,7 +219,7 @@ function Landing({ index }: { index: IndexState }) {
   const know = of('know');
   return (
     <div className={styles.landing}>
-      <section className={styles.hero}>
+      <section className={styles.hero} data-testid="hero">
         <div className={styles.heroLogo}><Logo size={56} /></div>
         <h1 className={styles.heroTitle}>A music assistant inside REAPER</h1>
         <p className={styles.heroLead}>
@@ -237,7 +237,7 @@ function Landing({ index }: { index: IndexState }) {
       </section>
 
       {path && (
-        <section aria-labelledby="sec-start">
+        <section aria-labelledby="sec-start" data-testid="start">
           <SectionHead id="sec-start" title={path.title} blurb={path.blurb} />
           <ol className={styles.steps}>
             {path.guides.map((g, i) => (
@@ -256,7 +256,7 @@ function Landing({ index }: { index: IndexState }) {
       )}
 
       {things && (
-        <section aria-labelledby="sec-try">
+        <section aria-labelledby="sec-try" data-testid="try">
           <SectionHead id="sec-try" title={things.title} blurb={things.blurb} />
           <ul className={styles.picture}>
             {things.guides.map((g, i) => (
@@ -275,7 +275,7 @@ function Landing({ index }: { index: IndexState }) {
       )}
 
       {safe && (
-        <section aria-labelledby="sec-safe">
+        <section aria-labelledby="sec-safe" data-testid="safe">
           <SectionHead id="sec-safe" title={safe.title} blurb={safe.blurb} />
           <ul className={styles.reassure}>
             {safe.guides.map((g) => (
@@ -291,7 +291,7 @@ function Landing({ index }: { index: IndexState }) {
       )}
 
       {know && (
-        <section aria-labelledby="sec-know">
+        <section aria-labelledby="sec-know" data-testid="know">
           <SectionHead id="sec-know" title={know.title} blurb={know.blurb} />
           <ul className={styles.lookup}>
             {know.guides.map((g) => (
@@ -326,7 +326,7 @@ function Article({ meta, guide, guides }: { meta: GuideMeta; guide: GuideState; 
   const headings = ready ? pageHeadings(ready.body) : [];
   return (
     <article className={styles.article}>
-      <nav className={styles.crumbs} aria-label="Breadcrumb">
+      <nav className={styles.crumbs} data-testid="breadcrumb" aria-label="Breadcrumb">
         <a href="/docs">Docs</a>
         <span aria-hidden="true">/</span>
         <span>{SECTIONS.find((s) => s.key === meta.section)?.title}</span>
@@ -357,7 +357,7 @@ function Article({ meta, guide, guides }: { meta: GuideMeta; guide: GuideState; 
           )}
         </div>
       )}
-      <footer className={styles.pager}>
+      <footer className={styles.pager} data-testid="pager">
         {previous ? (
           <a href={`${DOCS_BASE}/${previous.slug}`} rel="prev">
             <span className={styles.pagerLabel}>Previous</span>
@@ -418,7 +418,7 @@ function Toc({ headings }: { headings: Array<{ id: string; text: string }> }) {
     if (!first) nav.dataset.rail = 'on';
   }, [active]);
   return (
-    <nav className={styles.toc} aria-label="On this page" ref={ref}>
+    <nav className={styles.toc} data-testid="toc" aria-label="On this page" ref={ref}>
       <span className={styles.rail} aria-hidden="true" />
       <h2 className={styles.navTitle}>On this page</h2>
       <ul className={styles.navList}>

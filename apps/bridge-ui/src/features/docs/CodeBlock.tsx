@@ -1,4 +1,5 @@
 import { Icon } from '../../components/index.js';
+import { trackSite } from '../../lib/analytics.js';
 import { useCopy } from '../../lib/useCopy.js';
 import styles from './CodeBlock.module.css';
 
@@ -9,11 +10,15 @@ export function CodeBlock({ text, lang }: { text: string; lang: string }) {
   const [copied, copy] = useCopy();
   const done = copied === 'code';
   const label = LABELS[lang.toLowerCase()] ?? lang;
+  const copyCode = () => {
+    void copy(text, 'code');
+    trackSite({ name: 'code_copied', lang: lang.toLowerCase() || 'text' });
+  };
   return (
     <figure className={styles.block}>
       <figcaption className={styles.bar}>
         <span className={styles.label}>{label}</span>
-        <button className={styles.copy} onClick={() => void copy(text, 'code')} aria-label={label ? `Copy the ${label.toLowerCase()} commands` : 'Copy the code'} data-copied={done}>
+        <button className={styles.copy} onClick={copyCode} data-capture="off" aria-label={label ? `Copy the ${label.toLowerCase()} commands` : 'Copy the code'} data-copied={done}>
           {done ? <Icon.Check /> : <Icon.Copy />} <span aria-live="polite">{done ? 'Copied' : 'Copy'}</span>
         </button>
       </figcaption>

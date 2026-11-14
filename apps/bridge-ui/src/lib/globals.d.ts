@@ -9,3 +9,6 @@ declare const __LOREKIT_API__: string;
 declare const __HOSTED__: boolean;
 declare const __RELEASES_SNAPSHOT__: unknown[] | null;
 declare const __HIGHLIGHTS_SNAPSHOT__: unknown | null;
+// The hosted site's deployment environment and git context, for its telemetry (Vercel's env at build time)
+declare const __SITE_ENV__: string;
+declare const __SITE_VCS__: { providerName?: string; ownerName?: string; repositoryName?: string; repositoryUrlFull?: string; refHeadName?: string; refHeadRevision?: string; changeId?: string };

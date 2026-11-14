@@ -108,3 +108,54 @@ events:
 # - bridge_ui.knowledge_load_failed rate, by layer (LoreKit or token trouble)
 # - bridge_ui.bridge_state_changed to offline/stale, per session
 # - bridge_ui.page_error by bridge_ui.type after a release (service.version)
+
+# ── The hosted site ──────────────────────────────────────────────────────────────────────────────────────────────
+# The public guides (/docs) and changelog (/changelog) on the hosted build (BRIDGE_HOSTED=1, Vercel). A public
+# address with no bridge, tokens or LAN host behind it, so the full Web SDK runs there, session replay included.
+# src/lib/analytics.ts (SiteEvent) must match this section. The demo at / sends nothing.
+#
+# Naming: site.<object>_<action>; attributes are site.<snake_case>. The page path rides on every signal as
+# page.url.path (SDK), so events carry no guide slug of their own.
+
+site:
+  service: reaper-mcp-site            # service.namespace reaper-mcp, same dataset as the bridge page
+  identity: random visitor id per browser (localStorage reaper_site.visitor_id), sent as user.id
+  consent: on for every visitor; off when the browser sends Global Privacy Control or Do Not Track
+  signal_attributes:
+    site.page: [docs, changelog]
+    deployment.environment.name: [production, preview, development, local]   # from VERCEL_ENV at build time
+  automatic:
+    - browser.page_view       # the page load, and a virtual page view for each guide opened without a reload
+    - web vitals              # LCP, CLS, INP
+    - fetch spans             # docs/pages.json and docs/<slug>.md
+    - browser errors          # message and stack: the page's code is public
+    - rage clicks             # @dash0/frustration-signals, linked to the replay
+    - session replay          # browser.session_recording; every input masked (maskAllInputs) and the palette's list, which echoes the query (maskTextSelector), sampled at SITE_REPLAY_SAMPLING
+  scrubbed:
+    - url query               # ?bridge= carries the viewer's local bridge address; URL attributes only: the replay still records the page address and the back-to-bridge link
+
+  events:
+    scroll_depth:              # once per milestone per page path; the bottom of the window passed this share of the page
+      depth: [25, 50, 75, 100]
+    cta_clicked:               # a link followed (siteCtaOf); other links are not sent
+      cta: [demo, install, changelog, github, releases, issues, discord, bridge]
+    click:                     # autocapture: one capture-phase listener for plain clicks (button, link, menu item, tab, option)
+      label: string            # aria-label or visible text, whitespace folded, cut to 40 characters; never a field value
+      path: string             # the data-testid containers from the outside in, at most 4 (guide > pager)
+      element: string          # role, else tag (a, button)
+      # not sent: no name, no data-testid container, or inside data-capture="off". New controls need markup, never a tracker call
+      # the copy, play and release-link controls are data-capture="off": their own event below is the one per press
+    code_copied:               # a guide's code block Copy button
+      lang: string             # the fence's language (bash, json, …), text when untagged
+    prompt_copied: {}          # a guide's "Say this" Copy button
+    video_played: {}           # a guide's video facade pressed (the player loads from YouTube only then)
+    changelog_betas_toggled:
+      shown: boolean
+    release_linked:            # a release's version link pressed
+      version: string          # a public release version, e.g. 0.86.2
+
+# What would turn red on the hosted site (regression signals, to set up in Dash0, service reaper-mcp-site):
+# - fetch spans for docs/pages.json or docs/<slug>.md failing: the guides don't load
+# - browser errors by message after a deploy (service.version, deployment.environment.name production)
+# - rage clicks per page.url.path rising: a control that looks pressable and isn't
+# - LCP / INP p75 per site.page regressing after a deploy

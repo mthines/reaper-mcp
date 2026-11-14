@@ -120,6 +120,15 @@ export function parseBridgeUrl(value: string | null | undefined): string | undef
   }
 }
 
+/** The page's address without `?bridge=` (other query keys and the hash kept), or undefined when it has none. */
+export function withoutBridgeQuery(loc: { pathname: string; search: string; hash: string }): string | undefined {
+  const params = new URLSearchParams(loc.search);
+  if (!params.has('bridge')) return undefined;
+  params.delete('bridge');
+  const query = params.toString();
+  return `${loc.pathname}${query ? `?${query}` : ''}${loc.hash}`;
+}
+
 /**
  * Where the bridge page this viewer came from lives, from `?bridge=` (written by the bridge's "Guides" entries) and
  * remembered in this browser, so the way back stays through every guide. Undefined for someone who didn't come from one.
@@ -137,5 +146,10 @@ export function useBridgeLink(): string | undefined {
       return fromQuery;
     }
   });
+  // Page views send the referrer, which the analytics URL scrubber doesn't cover: once read, the address leaves the bar
+  useEffect(() => {
+    const clean = withoutBridgeQuery(window.location);
+    if (clean) history.replaceState(history.state, '', clean);
+  }, []);
   return url;
 }
