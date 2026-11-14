@@ -7,7 +7,6 @@
 import type {
   EvaluationContext,
   JsonValue as OfJsonValue,
-  Logger,
   Provider,
   ResolutionDetails,
 } from '@openfeature/server-sdk';
@@ -31,15 +30,15 @@ export class FlagProvider implements Provider {
 
   constructor(private readonly registry: readonly FlagDefinition[] = FLAG_REGISTRY) {}
 
-  async resolveBooleanEvaluation(key: string, fallback: boolean, context: EvaluationContext, _logger: Logger) {
+  async resolveBooleanEvaluation(key: string, fallback: boolean, context: EvaluationContext) {
     return this.resolveFor(key, fallback, context, 'boolean');
   }
 
-  async resolveStringEvaluation(key: string, fallback: string, context: EvaluationContext, _logger: Logger) {
+  async resolveStringEvaluation(key: string, fallback: string, context: EvaluationContext) {
     return this.resolveFor(key, fallback, context, 'string');
   }
 
-  async resolveNumberEvaluation(key: string, fallback: number, context: EvaluationContext, _logger: Logger) {
+  async resolveNumberEvaluation(key: string, fallback: number, context: EvaluationContext) {
     return this.resolveFor(key, fallback, context, 'number');
   }
 
@@ -47,7 +46,6 @@ export class FlagProvider implements Provider {
     key: string,
     fallback: T,
     context: EvaluationContext,
-    _logger: Logger,
   ) {
     return this.resolveFor(key, fallback, context, 'object');
   }

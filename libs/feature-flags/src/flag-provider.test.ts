@@ -39,7 +39,6 @@ const registry = parseRegistry([
   },
 ]);
 
-const silent = { debug() {}, info() {}, warn() {}, error() {} };
 const provider = new FlagProvider(registry);
 
 describe('FlagProvider resolution order', () => {
@@ -47,7 +46,7 @@ describe('FlagProvider resolution order', () => {
     const result = await provider.resolveBooleanEvaluation('ramp-flag', false, {
       targetingKey: 'install-1',
       flagOverrides: { 'ramp-flag': 'on' },
-    }, silent);
+    });
     expect(result).toMatchObject({ value: true, variant: 'on', reason: 'OVERRIDE' });
   });
 
@@ -55,25 +54,25 @@ describe('FlagProvider resolution order', () => {
     const result = await provider.resolveBooleanEvaluation('ramp-flag', false, {
       targetingKey: 'install-1',
       flagOverrides: { 'ramp-flag': 'nope' },
-    }, silent);
+    });
     expect(result.reason).toBe('SPLIT');
   });
 
   it('uses the split for an enabled experiment and the static default otherwise', async () => {
-    const split = await provider.resolveBooleanEvaluation('ramp-flag', false, { targetingKey: 'install-1' }, silent);
-    const fixed = await provider.resolveStringEvaluation('copy-flag', '', { targetingKey: 'install-1' }, silent);
+    const split = await provider.resolveBooleanEvaluation('ramp-flag', false, { targetingKey: 'install-1' });
+    const fixed = await provider.resolveStringEvaluation('copy-flag', '', { targetingKey: 'install-1' });
     expect(split.reason).toBe('SPLIT');
     expect(fixed).toMatchObject({ value: 'Hi', variant: 'short', reason: 'STATIC' });
   });
 
   it('resolves number and object flags', async () => {
-    expect((await provider.resolveNumberEvaluation('limit-flag', 0, {}, silent)).value).toBe(1);
-    expect((await provider.resolveObjectEvaluation('shape-flag', {}, {}, silent)).value).toEqual({ n: 1 });
+    expect((await provider.resolveNumberEvaluation('limit-flag', 0, {})).value).toBe(1);
+    expect((await provider.resolveObjectEvaluation('shape-flag', {}, {})).value).toEqual({ n: 1 });
   });
 
   it('reports an unknown flag and a type mismatch as errors carrying the caller default', async () => {
-    const unknown = await provider.resolveBooleanEvaluation('gone', true, {}, silent);
-    const mismatch = await provider.resolveBooleanEvaluation('copy-flag', true, {}, silent);
+    const unknown = await provider.resolveBooleanEvaluation('gone', true, {});
+    const mismatch = await provider.resolveBooleanEvaluation('copy-flag', true, {});
     expect(unknown).toMatchObject({ value: true, reason: 'ERROR', errorCode: 'FLAG_NOT_FOUND' });
     expect(mismatch).toMatchObject({ value: true, reason: 'ERROR', errorCode: 'TYPE_MISMATCH' });
   });
