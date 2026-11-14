@@ -9,7 +9,7 @@
 .gallery .button:disabled { opacity: 0.35; cursor: default; }
 .gallery .back { transform: rotate(180deg); }
 
-.gallery .track { list-style: none; margin: 0; padding: 2px 2px 12px; display: grid; grid-auto-flow: column; grid-auto-columns: min(78%, 280px); gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.gallery .track { list-style: none; margin: 0; padding: 2px 2px 12px; display: grid; grid-auto-flow: column; grid-auto-columns: min(78%, 280px); gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: thin; scroll-behavior: smooth; }
 .gallery .track:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
 .gallery .card { scroll-snap-align: start; display: flex; flex-direction: column; min-width: 0; padding: 10px; border-radius: 12px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.03); }
 .gallery .picture, .gallery .placeholder { width: 100%; aspect-ratio: 16 / 11; border-radius: 8px; }
@@ -18,4 +18,4 @@
 .gallery .name { margin: 10px 0 4px; font-size: 15px; font-weight: 600; color: var(--text); }
 .gallery .text { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
 
-@media (prefers-reduced-motion: reduce) { .track { scroll-behavior: auto; } }
+@media (prefers-reduced-motion: reduce) { .gallery .track { scroll-behavior: auto; } }

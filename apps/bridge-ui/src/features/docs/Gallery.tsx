@@ -19,7 +19,7 @@ export function Gallery({ title, items }: { title: string; items: GalleryItem[] 
     if (!el) return;
     const card = el.querySelector('li');
     const width = card ? card.getBoundingClientRect().width + 14 : el.clientWidth * 0.8;
-    el.scrollBy({ left: dir * width, behavior: 'smooth' });
+    el.scrollBy({ left: dir * width });
   };
 
   return (
