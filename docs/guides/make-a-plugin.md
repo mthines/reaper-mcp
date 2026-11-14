@@ -19,6 +19,7 @@ A normal REAPER plugin (written in JSFX, REAPER's own plugin language) with knob
 Setup already put seven of these in REAPER, each with a few presets. They're the fastest way to see what a made plugin looks like. Open the FX browser, search for one by name (they end in "(reaper-mcp)"), and add it to a track.
 
 ::: gallery Already in your FX list
+
 - ![Tape Sat: Drive, Tone, Mix and Output knobs on an orange panel](media/tape-sat.webp) **Tape Sat**: warm tape saturation with a tone tilt. Try the "Warm bus" or "Old cassette" preset.
 - ![A multiband compressor: drag each band on the spectrum to set threshold and gain](media/multiband-compressor.png) **Multiband Compressor**: three bands you drag on a live spectrum, each with its own threshold, ratio and gain.
 - **Width / Bass Mono**: widens the stereo picture but keeps everything below the crossover in mono, so the low end stays tight.
@@ -26,6 +27,7 @@ Setup already put seven of these in REAPER, each with a few presets. They're the
 - **Drum Pads**: eight drum sounds you play with the mouse, the keyboard or a MIDI controller. No samples needed.
 - **Pad MIDI**: eight pads that send MIDI notes. Put a sampler or drum plugin after it.
 - ![A step sequencer plugin: drum lanes, a 16th-note pattern, length and feel buttons](media/step-sequencer.webp) **Step Sequencer**: draw a drum loop on a grid and it plays in time with your project. Also needs a sampler after it.
+
 :::
 
 They're also good starting points. Ask for "one like Tape Sat, but only on the highs" and the assistant starts from that plugin instead of a blank page.
