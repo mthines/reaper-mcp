@@ -80,6 +80,14 @@ function siteVcs() {
   return vcs;
 }
 
+/** The page's `<meta name="referrer">`, as a Vite `transformIndexHtml` tag. */
+export function referrerMetaTag(hosted) {
+  // The Web SDK sends `document.referrer` unscrubbed, and on REAPER's page that is this page's own host (a LAN IP),
+  // port and query (search text). REAPER's page sends none; the hosted site only its origin. A policy covers only what
+  // this page sends: a visit from another page carries whatever that page allows.
+  return { tag: 'meta', attrs: { name: 'referrer', content: hosted ? 'strict-origin' : 'no-referrer' }, injectTo: 'head-prepend' };
+}
+
 /**
  * Babel options for @vitejs/plugin-react that turn on the React Compiler: the page, its tests and Storybook alike.
  * `all_errors` fails the build and tests on a component the compiler would otherwise skip without a word.

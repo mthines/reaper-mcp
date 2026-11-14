@@ -5,7 +5,7 @@ vi.mock('@dash0/sdk-web', () => sdk);
 const rrweb = vi.hoisted(() => ({ recorder: vi.fn() }));
 vi.mock('@dash0/sdk-web/session-recording', () => rrweb);
 
-import { clickCapture, type ClickNode, errorType, eventAttributes, scrollMilestone, scrubSiteUrl, scrubUrl, siteAnalyticsState, siteCtaOf, siteEventAttributes, usageStatsState } from './analytics.js';
+import { bridgePagePath, clickCapture, type ClickNode, errorType, eventAttributes, scrollMilestone, scrubSiteUrl, scrubUrl, siteAnalyticsState, siteCtaOf, siteEventAttributes, usageStatsState } from './analytics.js';
 
 /** A fake element: its own attributes, its parent, and `closest` as the browser answers it for the selectors the listener uses. */
 function el(tag: string, text: string, attrs: Record<string, string> = {}, parent: ClickNode | null = null): ClickNode {
@@ -84,6 +84,22 @@ describe('event shape', () => {
       'url.full': '/mcp_bridge.html',
       'url.path': '/mcp_bridge.html',
     });
+  });
+
+  it('never sends the folders of a page opened as a file, only that it was a file', () => {
+    const scrub = (href: string) => scrubUrl({ 'url.full': href, 'url.path': new URL(href).pathname, 'url.scheme': 'file' });
+    expect(scrub('file:///C:/Users/John/AppData/Local/Temp/yMYIuweJf.html')).toEqual({ 'url.full': '/local-file', 'url.path': '/local-file' });
+    expect(scrub('file:///E:/Downloads/mcp_bridge.html')).toEqual({ 'url.full': '/local-file/mcp_bridge.html', 'url.path': '/local-file/mcp_bridge.html' });
+    expect(scrub('file:///Users/john/Desktop/My%20Song%20notes.html')['url.path']).toBe('/local-file');
+    expect(JSON.stringify(scrub('file:///C:/Users/John/Downloads/mcp_bridge.html'))).not.toMatch(/John|Users|Downloads/);
+  });
+
+  it('keeps only the page name of a served page, whatever folder serves it', () => {
+    expect(bridgePagePath('http://localhost:8098/mcp_bridge.html?demo')).toBe('/mcp_bridge.html');
+    expect(bridgePagePath('http://localhost:8000/home/john/reaper/mcp_bridge.html')).toBe('/mcp_bridge.html');
+    expect(bridgePagePath('http://localhost:8099/')).toBe('/');
+    expect(bridgePagePath('http://localhost:8099/john-backup.html')).toBe('/other');
+    expect(bridgePagePath(undefined)).toBe('/');
   });
 });
 

@@ -92,14 +92,28 @@ export function eventAttributes(event: TrackEvent): Record<string, string | numb
   return attrs;
 }
 
-/** The page's URL without host, port or query: a LAN address or `?install` says nothing useful. */
-export function scrubUrl<T extends Record<string, string | undefined>>(attrs: T): T {
-  let path = '/';
+/** The page's own file name: the only path segment ever sent as it is. */
+const PAGE_FILE = 'mcp_bridge.html';
+
+/** The page's URL as one of five fixed paths (`/mcp_bridge.html`, `/`, `/other`, `/local-file[/mcp_bridge.html]`). */
+export function bridgePagePath(href: string | undefined): string {
+  // A file path is the viewer's own folders (`C:/Users/<name>/…`), and a served path can be too, so no host, port,
+  // query or folder ever leaves the browser: only the page's own name and whether it was opened as a file.
+  let url: URL;
   try {
-    path = new URL(attrs['url.full'] ?? '/', 'http://localhost').pathname;
+    url = new URL(href ?? '/', 'http://localhost');
   } catch {
-    // keep '/'
+    return '/other';
   }
+  const fileName = url.pathname.split('/').pop() ?? '';
+  if (url.protocol === 'file:') return fileName === PAGE_FILE ? `/local-file/${PAGE_FILE}` : '/local-file';
+  if (url.pathname === '/') return '/';
+  return fileName === PAGE_FILE ? `/${PAGE_FILE}` : '/other';
+}
+
+/** The SDK's URL attributes (`page.url.*`) as {@link bridgePagePath}: everything else the SDK would add is dropped. */
+export function scrubUrl<T extends Record<string, string | undefined>>(attrs: T): T {
+  const path = bridgePagePath(attrs['url.full']);
   return { 'url.full': path, 'url.path': path } as unknown as T;
 }
 

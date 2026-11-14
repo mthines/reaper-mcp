@@ -10,6 +10,9 @@ service: reaper-mcp-bridge-ui
 identity: random install id per browser (localStorage mcp_bridge.install_id), sent as user.id
 signal_attributes:
   bridge_ui.display_mode: [bridge_window, installed_app, browser_tab]
+  page.url.path: [/mcp_bridge.html, /, /other, /local-file/mcp_bridge.html, /local-file]   # bridgePagePath(): never host, port, query or folder
+  # page.url.full is the same value. The page's referrer policy is no-referrer, so navigating between the page's own views
+  # sends no referrer; a page view reached from a page with a looser policy (a build before this one) still carries what that page sent
 automatic:
   - browser.page_view       # startView('/<view>'): the view on load, then each switch of Calls/Tools/Sessions/Plugins/Snapshots
   - web vitals              # @dash0/web-vitals (LCP, CLS, INP)
@@ -137,6 +140,8 @@ site:
     - session replay          # browser.session_recording; every input masked (maskAllInputs) and the palette's list, which echoes the query (maskTextSelector), sampled at SITE_REPLAY_SAMPLING
   scrubbed:
     - url query               # ?bridge= carries the viewer's local bridge address; URL attributes only: the replay still records the page address and the back-to-bridge link
+    - referrer path and query # referrer policy strict-origin: a link between the site's own pages carries only its origin; a visit
+                              # from elsewhere carries what the linking page sends (GitHub's origin, or an older bridge build's address)
 
   events:
     scroll_depth:              # once per milestone per page path; the bottom of the window passed this share of the page
