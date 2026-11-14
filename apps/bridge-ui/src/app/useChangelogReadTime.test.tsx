@@ -117,4 +117,20 @@ describe('useChangelogReadTime', () => {
     expect(analytics.track).toHaveBeenCalledTimes(1);
     expect(analytics.track).toHaveBeenCalledWith({ name: 'changelog_closed', via: 'page_left', seconds: 21 });
   });
+
+  it('starts a new read after a bfcache restore with the drawer open', () => {
+    render(true);
+    now = 4000;
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    act(() => {
+      window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }));
+    });
+    now = 10_000;
+    closedVia('close');
+    render(false);
+    expect(analytics.track).toHaveBeenCalledTimes(2);
+    expect(analytics.track).toHaveBeenLastCalledWith({ name: 'changelog_closed', via: 'close', seconds: 6 });
+  });
 });
