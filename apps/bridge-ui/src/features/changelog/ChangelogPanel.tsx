@@ -256,7 +256,7 @@ export function ReleaseItem({
       aria-current={linked ? 'location' : undefined}
     >
       <h3 className={styles.releaseHead}>
-        <button className={styles.version} onClick={onLink} title="Link to this release" aria-label={`Link to v${release.version}`}>
+        <button className={styles.version} onClick={onLink} data-capture="off" title="Link to this release" aria-label={`Link to v${release.version}`}>
           v{release.version}
         </button>
         <a className={styles.notesLink} href={release.url} target="_blank" rel="noreferrer" aria-label={`Release notes for v${release.version}`} title="Release notes on GitHub">

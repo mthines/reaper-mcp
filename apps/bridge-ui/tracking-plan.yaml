@@ -144,6 +144,7 @@ site:
       path: string             # the data-testid containers from the outside in, at most 4 (guide > pager)
       element: string          # role, else tag (a, button)
       # not sent: no name, no data-testid container, or inside data-capture="off". New controls need markup, never a tracker call
+      # the copy, play and release-link controls are data-capture="off": their own event below is the one per press
     code_copied:               # a guide's code block Copy button
       lang: string             # the fence's language (bash, json, …), text when untagged
     prompt_copied: {}          # a guide's "Say this" Copy button

@@ -15,7 +15,7 @@ export function PromptBox({ text }: { text: string }) {
     <figure className={styles.box}>
       <figcaption className={styles.label}>Say this</figcaption>
       <p className={styles.text}>{text}</p>
-      <button className="btn btn-sm" onClick={copyPrompt} aria-label="Copy the prompt">
+      <button className="btn btn-sm" onClick={copyPrompt} data-capture="off" aria-label="Copy the prompt">
         {done ? <Icon.Check /> : <Icon.Copy />} {done ? 'Copied' : 'Copy'}
       </button>
     </figure>

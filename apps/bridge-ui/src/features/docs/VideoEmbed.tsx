@@ -36,7 +36,7 @@ export function VideoEmbed({ youtube, poster, title, duration }: { youtube?: str
           referrerPolicy="strict-origin-when-cross-origin"
         />
       ) : (
-        <button className={styles.play} onClick={play} aria-label={`Play video: ${title}`}>
+        <button className={styles.play} onClick={play} data-capture="off" aria-label={`Play video: ${title}`}>
           {poster && <img className={styles.poster} src={poster} alt="" loading="lazy" />}
           <span className={styles.playMark} aria-hidden="true">▶</span>
           <span className={styles.meta}>{duration ? `${duration} · ` : ''}Plays from YouTube when you press it</span>

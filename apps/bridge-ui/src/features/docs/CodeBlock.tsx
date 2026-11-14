@@ -18,7 +18,7 @@ export function CodeBlock({ text, lang }: { text: string; lang: string }) {
     <figure className={styles.block}>
       <figcaption className={styles.bar}>
         <span className={styles.label}>{label}</span>
-        <button className={styles.copy} onClick={copyCode} aria-label={label ? `Copy the ${label.toLowerCase()} commands` : 'Copy the code'} data-copied={done}>
+        <button className={styles.copy} onClick={copyCode} data-capture="off" aria-label={label ? `Copy the ${label.toLowerCase()} commands` : 'Copy the code'} data-copied={done}>
           {done ? <Icon.Check /> : <Icon.Copy />} <span aria-live="polite">{done ? 'Copied' : 'Copy'}</span>
         </button>
       </figcaption>
