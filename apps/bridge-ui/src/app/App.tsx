@@ -15,6 +15,7 @@ import { useBridgeRequest } from './useBridgeRequest.js';
 import { useErrorNotifications } from './useErrorNotifications.js';
 import { useHistory } from './useHistory.js';
 import { useSettings } from './useSettings.js';
+import { useFlagRows } from './useFlag.js';
 import { DISCORD_URL, REPO_URL, guideUrl, hereUrl } from '../lib/links.js';
 import { load, save } from '../lib/storage.js';
 import { useNow } from '../lib/useNow.js';
@@ -86,6 +87,7 @@ export function App() {
     save(VIEW_KEY, v);
   };
   const [settings, setSetting] = useSettings(status);
+  const flagState = useFlagRows();
   const changeSetting = (source: 'settings' | 'notice') => (key: SettingKey, on: boolean) => {
     track({ name: 'setting_changed', setting: SETTING_NAME[key], enabled: on, source });
     setSetting(key, on);
@@ -194,6 +196,7 @@ export function App() {
         onNotify={setNotify}
         usageStats={usageStats}
         onUsageStats={chooseUsageStats}
+        onResetFlags={settings?.dev && flagState.hasOverrides ? flagState.resetAll : undefined}
       />
       <Header
         status={status}
@@ -272,6 +275,7 @@ export function App() {
               canUpdate={status.control?.canUpdate === true}
               onRestart={status.control?.canRestart ? () => request('restart') : undefined}
               autostartInstalled={status.health?.autostart}
+              flags={{ rows: flagState.rows, onSet: flagState.setOverride, onResetAll: flagState.resetAll }}
             />
           )}
           <footer className={styles.footer}>

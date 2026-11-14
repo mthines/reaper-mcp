@@ -1,4 +1,5 @@
 import { addSignalAttribute, identify, init, sendEvent, startSessionRecording, startView, type SessionRecorder } from '@dash0/sdk-web';
+import { INSTALL_ID_KEY } from './storage-keys.js';
 import type { Liveness } from './status.js';
 import type { Coverage } from '../features/plugins/index.js';
 
@@ -12,7 +13,6 @@ import type { Coverage } from '../features/plugins/index.js';
 
 
 export const USAGE_STATS_KEY = 'mcp_bridge.usage_stats';
-const INSTALL_ID_KEY = 'mcp_bridge.install_id';
 export const SERVICE_NAME = 'reaper-mcp-bridge-ui';
 
 /** Every event the page sends; the name goes out as `bridge_ui.<name>`, the rest as `bridge_ui.*` attributes. */
@@ -26,6 +26,7 @@ export type TrackEvent =
   | { name: 'update_reload_clicked'; source: 'npm' | 'clone' }
   | { name: 'setting_changed'; setting: 'paused' | 'readonly' | 'open_on_start' | 'dev' | 'autostart' | 'error_notifications' | 'usage_stats'; enabled: boolean; source: 'settings' | 'notice' }
   | { name: 'app_install_clicked'; state: string }
+  | { name: 'feature_flag_exposed'; flag: string; variant: string; reason: 'static' | 'split' | 'override' }
   | { name: 'bridge_restart_clicked'; source: 'settings' }
   | { name: 'lorekit_token_changed'; kind: 'read' | 'publish'; connected: boolean }
   | { name: 'timeline_range_changed'; range: string }

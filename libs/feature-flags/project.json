@@ -1,0 +1,24 @@
+{
+  "name": "feature-flags",
+  "sourceRoot": "libs/feature-flags/src",
+  "projectType": "library",
+  "tags": ["type:lib"],
+  "targets": {
+    "generate": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "{workspaceRoot}/scripts/gen-feature-flags.mjs"],
+      "outputs": [
+        "{projectRoot}/src/generated/flags.generated.ts",
+        "{projectRoot}/generated/flags.manifest.json"
+      ],
+      "options": { "command": "node scripts/gen-feature-flags.mjs", "cwd": "{workspaceRoot}" }
+    },
+    "check:generate": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "{workspaceRoot}/scripts/gen-feature-flags.mjs"],
+      "options": { "command": "node scripts/gen-feature-flags.mjs --check", "cwd": "{workspaceRoot}" }
+    }
+  }
+}
