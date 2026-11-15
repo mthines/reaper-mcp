@@ -66,7 +66,7 @@ A few things worth knowing:
 
 - **Actions work on what's selected.** It selects the tracks or items first, then runs the action.
 - **Your own actions have a stable name.** Their numbers change from session to session, so it remembers the named ID instead.
-- **Anything that opens a dialog is refused**, because a dialog would freeze REAPER until someone clicked it. Quit, close project, open project and tab switching are always refused. It's one undo step, like everything else. See [undo and safety](undo-and-safety.md).
+- **Anything that opens a dialog is refused** unless you've said it's fine, because a dialog freezes REAPER until someone clicks it. Quit, close project, open project and tab switching are always refused. It's one undo step, like everything else. See [undo and safety](undo-and-safety.md).
 - **Some places have no way in.** The inline MIDI editor and the Media Explorer can't be driven by actions.
 
 > your-call: If you'd normally reach for a menu, ask for it in words first. The assistant finds the action; you decide whether the result stays.
