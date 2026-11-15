@@ -8,7 +8,7 @@ poster: media/bridge-status.png
 duration: 3 min
 ---
 
-Hey, I'm Mads, and I build reaper-mcp. I'm a programmer at [Dash0](https://www.dash0.com), I play in a band called [Kaiju](https://open.spotify.com/artist/2R3yJQTWO9bfSzWldmhR6x) in my spare time, and I'm a father of three. So this gets built in the gaps. I made it to take the trivial parts of recording off my plate (naming, routing, levels, all the chores), so I have more time for writing, playing and having fun. It's the tool I wanted for my own sessions.
+Hey, I'm Mads, and I build reaper-mcp. I'm a programmer at [Dash0](https://www.dash0.com), I play in a band called [Kaiju](https://open.spotify.com/artist/2R3yJQTWO9bfSzWldmhR6x) in my spare time, and I'm a father of three. So this gets built in the gaps. I made it to take the trivial parts of recording off my plate (naming, routing, levels), so I have more time for writing, playing and having fun. It's the tool I wanted for my own sessions.
 
 The usage numbers are how I find out which tools people use, which ones break, and where setup trips people up. I can't fix what I can't see. It's on by default, setup asks before sending anything, and you can always switch it off in ten seconds. But please don't, if you're OK with it. More on why [below](#why-please-leave-it-on).
 
@@ -60,15 +60,15 @@ It's off when your browser sends Do Not Track or Global Privacy Control, and the
 ## Two honest caveats
 
 - **The AI app is separate.** What the assistant *sees* (track names, settings) goes to whichever AI provider you chose, like any chat with it. reaper-mcp trains nothing and brings no AI of its own.
-- **There's a separate once-a-day update check**, a plain request for the latest version number. It sends nothing about you and has its own off switch (`REAPER_MCP_UPDATE_CHECK=0`).
-- **Opening the docs from the bridge page** asks this docs site for its list of pages, the first time you open the ⌘K palette. It is a plain request for a file and sends nothing about you or your session.
+- **There's a separate once-a-day update check**, a plain request for the latest version number. It sends nothing about you, and has its own off switch (`REAPER_MCP_UPDATE_CHECK=0`).
+- **Opening the docs from the bridge page** asks this site for its list of pages, once, when you open the ⌘K palette. It sends nothing about you or your session.
 
 ## Why please leave it on
 
 It's one person building this in the gaps of a normal life, so I can't sit next to anyone while they try it. The numbers are my eyes.
 
 - **A failing tool call shows up.** When a tool times out or breaks on someone's setup, I see the tool and the kind of failure. That's usually enough to find the bug and fix it, often before anyone has to write to me.
-- **I learn what to build.** The tools people reach for decide what gets polished. The ones nobody touches get questioned.
+- **I learn what to build.** The tools people reach for get polished first.
 - **Setup gets better.** Usage numbers showed people getting stuck between "installed" and "first working conversation". That turned into the setup that now ends by offering `init` and a health check, press Enter twice. I couldn't have found that by guessing.
 
 None of it needs your music, your track names or what you typed, and it never gets them.
