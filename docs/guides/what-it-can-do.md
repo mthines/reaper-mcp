@@ -25,26 +25,26 @@ The full list, one line per tool, is in the [tool reference](https://github.com/
 Every call the assistant makes shows up in the [status window](bridge-page.md) with a drawing of what changed. Here are some of them, as the demo shows them.
 
 ::: gallery What each kind of call draws
-- ![A plan of](media/tools/run_plan.webp) **A plan of edits**: several steps, one undo. A dry run writes nothing.
-- ![A plugin chain](media/tools/setup_fx_chain.webp) **Plugin chains**: each slot marked added, moved or changed.
-- ![A signal-flow diagram](media/tools/get_track_routing.webp) **Routing**: sends, receives and outputs as wires, thicker for louder.
-- ![Plugin input pins](media/tools/get_fx_pins.webp) **Sidechain pins**: which track channels feed which plugin inputs.
-- ![A piano roll](media/tools/insert_midi_notes.webp) **MIDI notes**: a piano roll, new notes in blue.
-- ![Audio hits pulled](media/tools/quantize_audio.webp) **Audio quantize**: hits before and after.
-- ![Items on a](media/tools/split_media_item.webp) **Item edits**: a lane per track, the items before dashed.
-- ![A copied section](media/tools/copy_section.webp) **Arrangement**: what was copied, and where it went.
-- ![Markers and regions](media/tools/list_markers.webp) **Markers and regions**: the song's shape on one timeline.
-- ![The tempo map](media/tools/get_tempo_map.webp) **Tempo**: every tempo and time signature change.
-- ![An automation curve](media/tools/insert_envelope_points.webp) **Automation curves**: before and after.
-- ![Automation items as](media/tools/insert_automation_item.webp) **Automation items**: blocks tinted by shared pool.
-- ![Peak and RMS](media/tools/read_track_meters.webp) **Levels**: peak and RMS, with a warning near clipping.
-- ![A 1/3-octave spectrum](media/tools/read_track_spectrum.webp) **Spectrum**: the balance, band by band.
-- ![A loudness readout](media/tools/read_track_lufs.webp) **Loudness**: LUFS against your target.
-- ![Short-term loudness over](media/tools/analyze_loudness_curve.webp) **Loudness curve**: where the song runs over target.
-- ![A heat map](media/tools/measure_masking.webp) **Masking**: where two tracks fight.
-- ![Loudness, range, true](media/tools/analyze_track_offline.webp) **Offline analysis**: the whole song, no playback.
-- ![Take lanes and](media/tools/comp_lanes.webp) **Comping**: which part came from which take.
-- ![A render result](media/tools/render_project.webp) **Renders**: loudness and peak per file.
+- ![](media/tools/run_plan.webp) **A plan of edits**: several steps, one undo. A dry run writes nothing.
+- ![](media/tools/setup_fx_chain.webp) **Plugin chains**: each slot marked added, moved or changed.
+- ![](media/tools/get_track_routing.webp) **Routing**: sends, receives and outputs as wires, thicker for louder.
+- ![](media/tools/get_fx_pins.webp) **Sidechain pins**: which track channels feed which plugin inputs.
+- ![](media/tools/insert_midi_notes.webp) **MIDI notes**: a piano roll, new notes in blue.
+- ![](media/tools/quantize_audio.webp) **Audio quantize**: hits before and after.
+- ![](media/tools/split_media_item.webp) **Item edits**: a lane per track, the items before dashed.
+- ![](media/tools/copy_section.webp) **Arrangement**: what was copied, and where it went.
+- ![](media/tools/list_markers.webp) **Markers and regions**: the song's shape on one timeline.
+- ![](media/tools/get_tempo_map.webp) **Tempo**: every tempo and time signature change.
+- ![](media/tools/insert_envelope_points.webp) **Automation curves**: before and after.
+- ![](media/tools/insert_automation_item.webp) **Automation items**: blocks tinted by shared pool.
+- ![](media/tools/read_track_meters.webp) **Levels**: peak and RMS, with a warning near clipping.
+- ![](media/tools/read_track_spectrum.webp) **Spectrum**: the balance, band by band.
+- ![](media/tools/read_track_lufs.webp) **Loudness**: LUFS against your target.
+- ![](media/tools/analyze_loudness_curve.webp) **Loudness curve**: where the song runs over target.
+- ![](media/tools/measure_masking.webp) **Masking**: where two tracks fight.
+- ![](media/tools/analyze_track_offline.webp) **Offline analysis**: the whole song, no playback.
+- ![](media/tools/comp_lanes.webp) **Comping**: which part came from which take.
+- ![](media/tools/render_project.webp) **Renders**: loudness and peak per file.
 :::
 
 ## It can run almost any REAPER action

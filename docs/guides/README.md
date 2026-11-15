@@ -22,7 +22,7 @@ keywords: tools features capabilities
 A value runs to the end of its line, so never put a `# comment` after one. What each field is:
 
 - `nav` (optional): a shorter name for the sidebar when the title is long.
-- `section`: `start`, `safe`, `safe`, `mix`, `create`, `yours` or `know`.
+- `section`: `start`, `safe`, `mix`, `create`, `yours` or `know`.
 - `order`: the position inside the section, unique.
 - `youtube` (optional): the 11-character video id, not a URL. Without it the page says "Video coming soon".
 - `poster` (optional): the still shown before the video plays.
