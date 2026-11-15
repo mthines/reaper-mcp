@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { Settings } from './index.js';
-import { EXAMPLE_FLAG_ROWS } from '../../demo/flag-examples.js';
 
 const meta = {
   title: 'Features/Settings/SettingsPanel',
@@ -38,10 +37,10 @@ export const StartWithReaperNotSetUp: Story = { args: { autostartInstalled: fals
 
 export const ConnectedToLoreKit: Story = { args: { loreToken: 'lk_ro_example', publishToken: 'lk_rw_example' } };
 
-/** Developer mode lists the feature flags: how each resolves here and a way to force a variant */
-export const DeveloperModeWithFlags: Story = {
+/** Developer mode offers the Developer drawer (feature flags) */
+export const DeveloperModeWithDeveloperTools: Story = {
   args: {
     settings: { paused: false, readonly: false, openOnStart: true, dev: true, autostart: true },
-    flags: { rows: EXAMPLE_FLAG_ROWS, onSet: fn(), onResetAll: fn() },
+    onOpenDeveloper: fn(),
   },
 };

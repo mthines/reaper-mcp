@@ -16,7 +16,18 @@
 --                                 Replaces the token (an empty hex removes it). The control token is
 --                                 the bridge's per-run token, only readable from the status feed.
 --
--- The file is JSON {"readToken":…}, created with mode 600 where chmod exists. A file that holds anything
+-- The same folder holds flags.json, the feature-flag overrides every surface shares (the CLI's
+-- `reaper-mcp flags set`, the MCP server's evaluation, and the page's Developer drawer):
+--
+--   flag_overrides = {"v":1,"overrides":{"<flag>":"<variant>"},"req":…,"ok":…,"error":…,"writable":…}
+--                                 Published on start, after every request and whenever the file changed on
+--                                 disk (the CLI wrote it), checked about every two seconds. No secret in it.
+--   flags_req = <id>-<control token>-<hex JSON of the whole overrides map>
+--                                 Replaces flags.json. The map is validated here (kebab-case flag keys,
+--                                 short plain-text variants, at most 100); the server drops anything that
+--                                 names no real flag or variant when it reads the file.
+--
+-- The token file is JSON {"readToken":…}, created with mode 600 where chmod exists. A file that holds anything
 -- else (an earlier version also kept a publishToken) is rewritten without it when the bridge starts.
 -- Loaded by mcp_bridge.lua (keeps the bridge under Lua's 200-locals limit).
 -- =============================================================================
@@ -28,6 +39,10 @@ local loaded = false
 local state = { read = nil }
 local TOKEN_MAX = 512
 local FILE = "lorekit.json"
+local FLAGS_FILE = "flags.json"
+local FLAGS_MAX = 100
+local FLAGS_CHECK_TICKS = 60 -- about every two seconds at the ~30 ms defer loop
+local flags = { overrides = {}, text = nil, ticks = 0 }
 
 -- The folder of the shared config: $XDG_CONFIG_HOME/reaper-mcp, else ~/.config/reaper-mcp (macOS and Linux),
 -- %APPDATA%/reaper-mcp on Windows. getenv is injected so it can be tested.
@@ -109,6 +124,87 @@ local function handle(req)
   publish(id, ok and true or false, err)
 end
 
+-- ---------------------------------------------------------------------------
+-- Feature-flag overrides (flags.json)
+-- ---------------------------------------------------------------------------
+
+local function valid_flag_key(k)
+  return type(k) == "string" and #k <= 64 and k:match("^[a-z][a-z0-9%-]*$") ~= nil
+end
+
+local function valid_flag_variant(v)
+  return type(v) == "string" and #v >= 1 and #v <= 64 and not v:find("%c")
+end
+
+-- A sanitized copy of a decoded map, or nil when it is not a map of flag keys to variants
+local function clean_flags(t)
+  if type(t) ~= "table" then return nil end
+  local out, n = {}, 0
+  for k, v in pairs(t) do
+    if not valid_flag_key(k) or not valid_flag_variant(v) then return nil end
+    n = n + 1
+    if n > FLAGS_MAX then return nil end
+    out[k] = v
+  end
+  return out
+end
+
+local function has_keys(t)
+  for _ in pairs(t) do return true end
+  return false
+end
+
+local function publish_flags(req, ok, err)
+  ctx.api.SetExtState(ctx.section, "flag_overrides", ctx.encode({
+    v = 1,
+    -- an empty Lua table would encode as a list: leave it out and the page reads "no overrides"
+    overrides = has_keys(flags.overrides) and flags.overrides or nil,
+    req = req, ok = ok, error = err,
+    writable = ctx.dir ~= nil,
+  }), false)
+end
+
+-- Reads flags.json; true when it changed since the last read. A missing or unreadable file means no overrides.
+local function load_flags()
+  local text = ctx.dir and ctx.read_file(ctx.dir .. FLAGS_FILE) or ""
+  if text == flags.text then return false end
+  flags.text = text
+  local overrides = {}
+  if text ~= "" then
+    local ok, data = pcall(ctx.decode, text)
+    overrides = ok and clean_flags(data) or {}
+  end
+  flags.overrides = overrides
+  return true
+end
+
+local function save_flags()
+  if not ctx.dir then return nil, "No home folder to keep the flag overrides in" end
+  ctx.api.RecursiveCreateDirectory(ctx.dir, 0)
+  local f = io.open(ctx.dir .. FLAGS_FILE, "w")
+  if not f then return nil, "Can't write " .. ctx.dir .. FLAGS_FILE end
+  local text = has_keys(flags.overrides) and ctx.encode(flags.overrides) or "{}"
+  f:write(text .. "\n")
+  f:close()
+  flags.text = text .. "\n"
+  return true
+end
+
+local function handle_flags(req)
+  local id, token, json_hex = req:match("^([%w_]+)%-(%w+)%-(%x*)$")
+  if not id or token ~= ctx.token() then return end
+  local json = unhex(json_hex)
+  local ok, data = false, nil
+  if json and json ~= "" then ok, data = pcall(ctx.decode, json) end
+  local next_overrides = ok and clean_flags(data) or nil
+  if not next_overrides then return publish_flags(id, false, "Malformed flag overrides") end
+  local before = flags.overrides
+  flags.overrides = next_overrides
+  local saved, err = save_flags()
+  if not saved then flags.overrides = before end
+  publish_flags(id, saved and true or false, err)
+end
+
 -- Called every defer tick
 function M.poll()
   if not loaded then
@@ -116,6 +212,18 @@ function M.poll()
     -- An older file also kept the write token: take it out
     if load() then save() end
     publish(nil, true)
+    load_flags()
+    publish_flags(nil, true)
+  end
+  flags.ticks = flags.ticks + 1
+  if flags.ticks >= FLAGS_CHECK_TICKS then
+    flags.ticks = 0
+    if load_flags() then publish_flags(nil, true) end
+  end
+  local freq = ctx.api.GetExtState(ctx.section, "flags_req")
+  if freq ~= "" then
+    ctx.api.DeleteExtState(ctx.section, "flags_req", false)
+    handle_flags(freq)
   end
   local req = ctx.api.GetExtState(ctx.section, "tokens_req")
   if req ~= "" then

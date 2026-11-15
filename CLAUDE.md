@@ -116,11 +116,11 @@ reaper-mcp/
     src/main.tsx              # Entry: renders app/App.tsx, registers the service worker; mcp_bridge.html is translate="no" (a translator breaks React's DOM swaps), lifted here for the docs and changelog pages
     src/app/                  # The page shell: App, Header, Notices, Offline, BridgeBoundary (keeps a render error in the bridge view or offline screen from blanking the page; reports it as page_error) + the hooks that poll the bridge
     src/components/           # Shared UI with no bridge knowledge: Combobox (+ .Grouped), Toggle, Notice, Mark, ResizeHandle, Markdown, Icon.*
-    src/features/<feature>/   # One folder per area: log, stats, timeline, settings, measurements, edit-views, plugins, snapshots
+    src/features/<feature>/   # One folder per area: log, stats, timeline, settings, developer, measurements, edit-views, plugins, snapshots
                               # Each folder's index.ts exports a composite, namespaced component (Log.Rows, Log.Details,
                               # Measurement.Loudness, EditView.Section, Snapshots.SaveForm, Plugins.Details, Settings.LoreKit,
                               # Stats.Sparkline) plus its public functions; code outside a folder imports only its index
-    src/lib/                  # Pure logic + small hooks (flags.ts / flag-store.ts: feature flags, with `app/useFlag.ts`; the Developer settings section lists them in developer mode): status (feed parsing), commands, log, timeline, sessions, search, format, url-state, analytics
+    src/lib/                  # Pure logic + small hooks (flags.ts / flag-store.ts: feature flags, with `app/useFlag.ts`; the Developer drawer (`?developer=true`, developer mode) lists them and shares forced variants with the server through the bridge): status (feed parsing), commands, log, timeline, sessions, search, format, url-state, analytics
     src/demo/                 # ?demo's fake bridge and the fixed examples the stories draw (examples.ts, feed.ts);
                               # demo-calls.ts: one demo call per logged command (DEMO_CALLS, typed by LoggedCommand)
     src/styles.css            # Root stylesheet: CSS variables (tokens), base element styles and global utility classes only
@@ -181,7 +181,7 @@ reaper-mcp/
     mcp_extensions_lib.lua    # extension_call: runs a Lua command from an installed extension's handlers.lua (internal)
     mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
     mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
-    mcp_prefs_lib.lua         # the read-only LoreKit token shared through ~/.config/reaper-mcp/lorekit.json (never the lk_rw_ one) (ExtState lorekit_tokens / tokens_req; prefs-lib.test.ts)
+    mcp_prefs_lib.lua         # the read-only LoreKit token shared through ~/.config/reaper-mcp/lorekit.json (never the lk_rw_ one) (ExtState lorekit_tokens / tokens_req) and the feature-flag overrides in flags.json (flag_overrides / flags_req; the page's Developer drawer, the CLI and the server share them); prefs-lib.test.ts
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
     mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
     mcp_snapshot_quick_save.lua # Action: quick save, named by the date and time
@@ -954,7 +954,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   changes in one tick become one history entry), so Back/Forward step through it and a link or reload reopens it.
   Params: `view`, `range`, `span` (dragged timeline span), `filter` (all/errors), `q` (search; replaces, never pushes, written to the URL 300 ms after typing pauses via
   `debounceMs` while the page updates at once; each view keeps its own search, so switching views never carries one over),
-  `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, `changelog` (What's new open) and `release` (the release a version click links to: scrolled to and highlighted), and on Plugins `coverage`, `inProject`, `plugin`
+  `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, `developer` (Developer drawer open), `changelog` (What's new open) and `release` (the release a version click links to: scrolled to and highlighted), and on Plugins `coverage`, `inProject`, `plugin`
   (open plugin by FX name). Opening, closing or switching a drawer by click (a row, "Previous call") pushes; ↑/↓ between rows replaces. `view` and `range` default
   to the last pick in localStorage, so the bridge's bare `mcp_bridge.html` opens where you left off. Use it for any new
   state a viewer would want to go back to or share (tabs, filters, an open drawer); keep transient UI (hover, drag,

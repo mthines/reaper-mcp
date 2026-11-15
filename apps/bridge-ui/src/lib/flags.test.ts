@@ -109,3 +109,50 @@ describe('flag store', () => {
     expect(seen).toEqual(['static-panel:a:static']);
   });
 });
+
+describe('flag store shared with the bridge', () => {
+  it('adopts the bridge’s overrides over its own, and tells the page', () => {
+    const store = createFlagStore(memoryStorage({ [FLAG_OVERRIDES_KEY]: '{"static-panel":"b"}' }), registry, () => undefined);
+    let notified = 0;
+    store.subscribe(() => notified++);
+    store.adopt({ 'new-panel': 'on' });
+    expect(store.overrides()).toEqual({ 'new-panel': 'on' });
+    expect(notified).toBe(1);
+  });
+
+  it('does not notify when the bridge’s overrides are what it already has', () => {
+    const store = createFlagStore(memoryStorage(), registry, () => undefined);
+    store.adopt({ 'new-panel': 'on' });
+    let notified = 0;
+    store.subscribe(() => notified++);
+    store.adopt({ 'new-panel': 'on' });
+    expect(notified).toBe(0);
+  });
+
+  it('drops a flag or variant this build does not have', () => {
+    const store = createFlagStore(memoryStorage(), registry, () => undefined);
+    store.adopt({ 'new-panel': 'on', 'removed-flag': 'on', 'static-panel': 'zzz' });
+    expect(store.overrides()).toEqual({ 'new-panel': 'on' });
+  });
+
+  it('sends a change the viewer makes, the whole map, and nothing it adopted', () => {
+    const store = createFlagStore(memoryStorage(), registry, () => undefined);
+    const sent: unknown[] = [];
+    store.setSink((o) => sent.push(o));
+    store.adopt({ 'static-panel': 'b' });
+    expect(sent).toEqual([]);
+    store.setOverride('new-panel', 'on');
+    store.setOverride('static-panel', null);
+    store.resetAll();
+    expect(sent).toEqual([{ 'static-panel': 'b', 'new-panel': 'on' }, { 'new-panel': 'on' }, {}]);
+  });
+
+  it('keeps changes to this browser once the sink is gone', () => {
+    const store = createFlagStore(memoryStorage(), registry, () => undefined);
+    const sent: unknown[] = [];
+    store.setSink((o) => sent.push(o));
+    store.setSink(null);
+    store.setOverride('new-panel', 'on');
+    expect(sent).toEqual([]);
+  });
+});

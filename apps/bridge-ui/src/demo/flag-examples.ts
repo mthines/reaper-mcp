@@ -1,4 +1,4 @@
-// Fixed feature-flag rows the Developer settings stories draw: resolved by default, by a running split, and forced.
+// Fixed feature-flag rows the Developer drawer stories draw: resolved by default, by a running split, and forced.
 import type { FlagRow } from '../lib/flags.js';
 
 export const EXAMPLE_FLAG_ROWS: FlagRow[] = [
