@@ -65,4 +65,29 @@ describe('reaper-mcp update', () => {
     expect(await runUpdate(t.deps)).toBe(2);
     expect(t.text()).toContain('reaper-mcp setup');
   });
+
+  it('fails and says why when GitHub has a release npm cannot offer, instead of reporting nothing newer', async () => {
+    const t = setup({ latest: async () => '0.83.0', released: async () => '0.91.1', bridge: true });
+    expect(await runUpdate(t.deps)).toBe(1);
+    expect(t.ran).toEqual([]);
+    expect(t.text()).toContain('v0.91.1 is released');
+    expect(t.text()).toContain('Aikido');
+  });
+
+  it('stays quiet about GitHub when it cannot be reached', async () => {
+    const t = setup({ latest: async () => '0.83.0', released: async () => undefined, bridge: true });
+    expect(await runUpdate(t.deps)).toBe(3);
+  });
+
+  it('fails when npm reports success but the old version is still installed', async () => {
+    const t = setup({ installed: () => '0.83.0' });
+    expect(await runUpdate(t.deps)).toBe(1);
+    expect(t.ran).toEqual(['npm install -g @mthines/reaper-mcp@0.84.0']);
+    expect(t.text()).toContain('v0.83.0 is still the installed version');
+  });
+
+  it('goes on to setup when the installed version is the new one', async () => {
+    const t = setup({ installed: () => '0.84.0' });
+    expect(await runUpdate(t.deps)).toBe(0);
+  });
 });

@@ -4901,6 +4901,8 @@ local function control_status()
     canUpdate = can_update,
     -- Where releases come from: "npm" (an npm install updates itself) or "clone" (git pull)
     updateSource = update_source,
+    -- This running copy is ReaPack's (Scripts/reaper-mcp/MCP Bridge/): ReaPack, not npm or git, updates the REAPER side
+    reapack = script_path ~= nil and (script_path:gsub("\\", "/")):find("/Scripts/reaper-mcp/MCP Bridge/", 1, true) ~= nil,
     -- Developer mode: source changed since the last install, so Rebuild & reload has something to do
     changed = source_changed,
     update = update,

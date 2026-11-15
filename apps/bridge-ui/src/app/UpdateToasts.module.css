@@ -12,3 +12,8 @@
   .swap { animation-name: swap-fade; }
   @keyframes swap-fade { from { opacity: 0; } to { opacity: 1; } }
 }
+
+/* A failed update reads as an error at a glance: a red title, the reason under it, then the way out */
+.failed [data-title] { color: var(--bad); font-weight: 600; }
+.failure { display: flex; flex-direction: column; gap: 6px; }
+.failure a { color: inherit; text-decoration: underline; }

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Toaster, toast } from 'sonner';
 import type { CSSProperties } from 'react';
-import { markUpdateReady, updateLog } from '../lib/update.js';
+import { CLONE_INSTALL_DOC, failureReason, markUpdateReady, updateLog } from '../lib/update.js';
 import type { BridgeStatus } from '../lib/status.js';
 import { track } from '../lib/analytics.js';
 import styles from './UpdateToasts.module.css';
@@ -55,7 +55,8 @@ export function UpdateToasts({
   const watched = useRef(false);
   const source = status?.control?.updateSource ?? 'clone';
   const state = update?.kind === 'rebuild' ? undefined : update?.state;
-  const step = stepText(updateLog(update).at(-1));
+  const log = updateLog(update);
+  const step = stepText(log.at(-1));
 
   useEffect(() => {
     if (runStartedAt === undefined) return;
@@ -76,9 +77,21 @@ export function UpdateToasts({
       if (!watched.current) return;
       watched.current = false;
       track({ name: 'update_finished', result: 'failed', source });
-      toast.error(<Swap text="The update didn’t finish" />, {
+      const reason = failureReason(log) ?? 'Nothing was changed. Use Try again in the notice above.';
+      toast.error(<Swap text="Update failed" />, {
         id: TOAST_ID,
-        description: <Swap text={step || 'Nothing was changed. Use Try again in the notice above.'} />,
+        className: styles.failed,
+        description: (
+          <span className={styles.failure}>
+            <Swap text={reason} />
+            {source === 'npm' && (
+              <span>
+                Installing from a clone avoids npm.{' '}
+                <a href={CLONE_INSTALL_DOC} target="_blank" rel="noreferrer">See how</a>
+              </span>
+            )}
+          </span>
+        ),
         duration: Infinity,
         action: undefined,
       });
@@ -100,7 +113,7 @@ export function UpdateToasts({
         },
       });
     }
-  }, [state, step, runStartedAt, onReload, source]);
+  }, [state, step, log, runStartedAt, onReload, source]);
 
   return <Toaster position="bottom-right" theme="dark" style={THEME} closeButton />;
 }

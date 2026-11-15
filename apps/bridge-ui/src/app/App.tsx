@@ -302,6 +302,7 @@ export function App() {
           highlights={highlights}
           current={__VERSION__}
           canUpdate={status?.control?.canUpdate === true && settings?.dev !== true}
+          reapack={status?.control?.reapack === true}
           update={status?.control?.update}
           onUpdate={() => request('update')}
           installableUpTo={updateReady ? __VERSION__ : status?.control?.updateSource === 'npm' ? (release?.version ?? __VERSION__) : undefined}

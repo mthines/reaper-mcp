@@ -37,3 +37,6 @@ export const UpdateAvailableByHand: Story = { args: { release: newer, status: { 
 
 /** An npm install: the Update button runs `reaper-mcp update` for them */
 export const UpdateAvailableFromNpm: Story = { args: { release: newer, status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: true, updateSource: 'npm' } } } };
+
+/** Installed through ReaPack: the notice names ReaPack's menu and the npm command for the server */
+export const UpdateAvailableFromReaPack: Story = { args: { release: newer, status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: false, reapack: true } } } };

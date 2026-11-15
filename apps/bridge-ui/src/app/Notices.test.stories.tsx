@@ -35,3 +35,26 @@ export const AFastDoubleClickOnUpdateSendsOneRequest: Story = {
     await expect(canvas.getByRole('button', { name: 'Starting…' })).toBeDisabled();
   },
 };
+
+/** ReaPack owns the REAPER side: the notice names ReaPack's menu, not commands that would leave the bridge stale */
+export const GuidesAReaPackInstallThroughReaPack: Story = {
+  args: { status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: false, reapack: true } } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Extensions → ReaPack → Synchronize packages')).toBeInTheDocument();
+    await expect(canvas.getByText('npm install -g @mthines/reaper-mcp@latest')).toBeInTheDocument();
+    await expect(canvas.queryByText(/git pull/)).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Update' })).not.toBeInTheDocument();
+  },
+};
+
+/** With an Update button (npm setup ran first) it still updates the server; ReaPack handles the rest */
+export const KeepsTheUpdateButtonForAReaPackInstallThatCanUpdate: Story = {
+  args: { status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: true, updateSource: 'npm', reapack: true } } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Update' })).toBeInTheDocument();
+    await expect(canvas.getByText('Extensions → ReaPack → Synchronize packages')).toBeInTheDocument();
+    await expect(canvas.queryByText('npm install -g @mthines/reaper-mcp@latest')).not.toBeInTheDocument();
+  },
+};
