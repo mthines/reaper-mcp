@@ -7,11 +7,16 @@ import { headingId } from '../../lib/heading-id.js';
 
 /** The nav groups, in the order they are listed. The key is what a guide's `section:` says. */
 export const SECTIONS = [
-  { key: 'start', title: 'Getting started', blurb: 'From nothing to your first conversation with it, in order.' },
+  { key: 'start', title: 'Getting started', blurb: 'What it is, what it can do, and your first conversation, in order.' },
   { key: 'safe', title: 'Safety and privacy', blurb: 'Undo, privacy and what it can’t do. Read these before you trust it with a session.' },
-  { key: 'try', title: 'Things to try', blurb: 'Pick one. Each has a short video, the steps written down, and a line to copy.' },
+  { key: 'mix', title: 'Mix it', blurb: 'Measure, balance and finish, with numbers next to every change.', recipe: true },
+  { key: 'create', title: 'Create and edit', blurb: 'Sketch songs, edit audio and MIDI, automate, light a show, build plugins.', recipe: true },
+  { key: 'yours', title: 'Make it yours', blurb: 'Give it a memory, teach it your plugins, or have it explain as it goes.', recipe: true },
   { key: 'know', title: 'Reference', blurb: 'For when you need a word explained or something stops working.' },
 ] as const;
+
+/** The sections whose guides are recipes: a prompt to copy and a line on what stays the user's call. */
+export const isRecipe = (key: SectionKey): boolean => SECTIONS.some((s) => s.key === key && 'recipe' in s);
 
 export type SectionKey = (typeof SECTIONS)[number]['key'];
 
@@ -143,7 +148,7 @@ export function embedUrl(youtube: string): string {
 }
 
 const BLURB =
-  'reaper-mcp lets an AI assistant (Claude Code, Codex CLI, Gemini CLI or Cursor) work inside a live REAPER session: it measures, mixes, edits and builds plugins while you stay in charge. It is an assistant, not a composer. These guides are written for musicians who are new to AI.';
+  'reaper-mcp lets an AI assistant (Claude Code, Codex CLI, Gemini CLI or Cursor) work inside a live REAPER session: it measures, mixes, edits, sketches songs and builds plugins while you stay in charge. It does the legwork; the taste stays yours. These guides are written for musicians who are new to AI.';
 
 /** `llms.txt`: what this is, then every guide with its one-line summary and a link to the raw Markdown. */
 export function renderLlmsTxt(guides: GuideMeta[], origin = ''): string {

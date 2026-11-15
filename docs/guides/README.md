@@ -22,7 +22,7 @@ keywords: tools features capabilities
 A value runs to the end of its line, so never put a `# comment` after one. What each field is:
 
 - `nav` (optional): a shorter name for the sidebar when the title is long.
-- `section`: `start`, `safe`, `try` or `know`.
+- `section`: `start`, `safe`, `mix`, `create`, `yours` or `know`.
 - `order`: the position inside the section, unique.
 - `youtube` (optional): the 11-character video id, not a URL. Without it the page says "Video coming soon".
 - `poster` (optional): the still shown before the video plays.
@@ -32,8 +32,8 @@ A value runs to the end of its line, so never put a `# comment` after one. What 
 
 Writing them:
 
-- A casual, plain voice for musicians new to AI. The assistant helps; it doesn't compose or replace anyone's ears.
-- Recipes in `section: try` end their steps with a `> your-call:` line and give a prompt to copy as `> say: …`.
+- A casual, plain voice for musicians new to AI. The assistant does the legwork, and the choices stay with the musician.
+- Recipes (`section: mix`, `create` or `yours`) end their steps with a `> your-call:` line and give a prompt to copy as `> say: …`.
 - Link to another guide as `[text](other-guide.md)`. Put images in `media/` and use `![alt](media/file.webp)`.
 - A collapsed block is `::: details Title` … `:::`. Put each video's transcript in one.
 - A carousel of cards is `::: gallery Title` … `:::` around a list: one `- ![alt](media/file.webp) **Name**: what it does` per card, the picture optional (a card without one shows its name). GitHub shows it as a plain list. On the site each carousel has a full screen button.

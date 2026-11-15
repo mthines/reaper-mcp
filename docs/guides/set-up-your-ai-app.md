@@ -3,7 +3,7 @@ title: Set up your AI app
 nav: Set up your AI app
 summary: Never used Claude Code or a terminal? Pick an AI app, install it, sign in, and learn the four things you'll actually use.
 section: start
-order: 3
+order: 4
 ---
 
 reaper-mcp is only the connector. The thinking happens in an AI app you chat with, and this page gets that app ready from nothing. Already use Claude Code? Skip to [Install](install.md).

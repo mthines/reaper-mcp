@@ -3,7 +3,7 @@ title: Your first conversation
 nav: Your first conversation
 summary: Ask what's in your session, watch the status window, and see how every move shows up as a card.
 section: start
-order: 5
+order: 6
 poster: media/bridge-drawer.png
 duration: 4 min
 ---

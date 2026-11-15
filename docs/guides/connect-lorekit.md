@@ -2,8 +2,9 @@
 title: Connect LoreKit so it remembers
 nav: Connect LoreKit
 summary: A free account, one key, one command. Then it keeps what it learns about your plugins and your taste.
-section: start
-order: 6
+section: yours
+order: 1
+poster: media/teach.webp
 ---
 
 Out of the box, the assistant starts every conversation from scratch. [LoreKit](https://lorekit.io) is a free memory it reads before it works and writes to when it learns something. It's optional, but [`/learn-plugin`](teach-it-a-plugin.md) needs it, and it's how your corrections and favourite plugins carry over to the next song. [More on what it stores](it-remembers.md).
@@ -68,6 +69,8 @@ The first time it uses memory, Claude Code asks permission. Choose **Yes, and do
 > say: /learn-plugin (the name of a plugin you use a lot)
 
 Pick one that isn't on the [built-in list](https://github.com/mthines/reaper-mcp/blob/main/docs/PLUGINS.md) yet; it already knows those. [What happens next](teach-it-a-plugin.md).
+
+> your-call: Only what you ask it to remember is saved, and you can see or clear it any time. [How it remembers](it-remembers.md).
 
 ## Optional: see your records in the status window
 

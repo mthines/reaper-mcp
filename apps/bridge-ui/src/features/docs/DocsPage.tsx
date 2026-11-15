@@ -4,7 +4,7 @@ import { Gallery } from './Gallery.js';
 import { CommandPaletteButton, useCommand } from '../command/index.js';
 import { GuideCommands } from './GuideCommands.js';
 import { DISCORD_URL, REPO_URL } from '../../lib/links.js';
-import { groupGuides, neighbours, pageHeadings, SECTIONS, type Guide, type GuideMeta } from './docs.js';
+import { groupGuides, isRecipe, neighbours, pageHeadings, SECTIONS, type Guide, type GuideMeta } from './docs.js';
 import { DOCS_BASE, useBridgeLink, useDocsPath, useGuide, useGuideIndex, type GuideState, type IndexState } from './useDocs.js';
 import { CodeBlock } from './CodeBlock.js';
 import { Logo } from './Logo.js';
@@ -216,7 +216,8 @@ function Landing({ index }: { index: IndexState }) {
   const sections = index.status === 'ready' ? groupGuides(index.guides) : [];
   const of = (key: string) => sections.find((s) => s.key === key);
   const path = of('start');
-  const things = of('try');
+  const recipes = sections.filter((s) => isRecipe(s.key));
+  const things = recipes.length > 0 ? { title: 'Things to try', blurb: 'Pick one. Each has a short video, the steps written down, and a line to copy.', guides: recipes.flatMap((s) => s.guides) } : undefined;
   const safe = of('safe');
   const know = of('know');
   return (
@@ -225,12 +226,12 @@ function Landing({ index }: { index: IndexState }) {
         <div className={styles.heroLogo}><Logo size={56} /></div>
         <h1 className={styles.heroTitle}>A music assistant inside REAPER</h1>
         <p className={styles.heroLead}>
-          Tell it what you need in plain words. It names and routes your tracks, measures the mix and builds the plugin you described. You make every call, and everything can be undone.
+          Tell it what you need in plain words. It mixes and measures, edits audio and MIDI, sketches a song from a hum and builds the plugin you described, right in your open session. You make every call, and everything can be undone.
         </p>
         <ul className={styles.promises}>
-          <li>Measures before it touches anything</li>
-          <li>Every change is one undo</li>
-          <li>Your ears decide</li>
+          <li>Measures before and after every change</li>
+          <li>Reaches all of REAPER, even your own scripts</li>
+          <li>Every change is one undo, and your ears decide</li>
         </ul>
         <div className={styles.actions}>
           <a className={styles.primary} href={`${DOCS_BASE}/what-this-is`}>Start here</a>

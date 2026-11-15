@@ -2,8 +2,8 @@
 title: Teach it a plugin you own
 nav: Teach it your plugins
 summary: Have it research a plugin, test it live in REAPER, and remember how it behaves for next time.
-section: try
-order: 8
+section: yours
+order: 2
 image: media/spectrum.png
 ---
 

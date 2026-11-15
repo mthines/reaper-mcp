@@ -22,6 +22,15 @@ describe('share tags', () => {
     expect(withShareMeta(page, 'changelog', 'https://example.test')).not.toContain('og:url');
   });
 
+  it('points the icon and manifest at the site root so a guide at /docs/<slug> still finds them', () => {
+    const built = page.replace('</head>', '<link rel="icon" href="./mcp_bridge_icon_192.png"><link rel="manifest" href="./mcp_bridge.webmanifest"></head>');
+    for (const kind of Object.keys(SHARE) as SharePage[]) {
+      const out = withShareMeta(built, kind, 'https://example.test');
+      expect(out).toContain('href="/mcp_bridge_icon_192.png"');
+      expect(out).toContain('href="/mcp_bridge.webmanifest"');
+    }
+  });
+
   it('refuses a page it cannot put the tags into', () => {
     expect(() => withShareMeta('<head></head>', 'docs', 'https://example.test')).toThrow(/no <title>/);
   });

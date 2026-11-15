@@ -3,7 +3,7 @@ title: Install and connect
 nav: Install and connect
 summary: Three commands, then start REAPER. About five minutes, most of it downloading.
 section: start
-order: 4
+order: 5
 poster: media/every-harness.webp
 duration: 3 min
 ---

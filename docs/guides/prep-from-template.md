@@ -2,7 +2,7 @@
 title: Prep a session from your template
 nav: Prep a session
 summary: Point it at a folder of tracks and your template, and it imports, names, routes and sets starting levels the way you like them.
-section: try
+section: mix
 order: 1
 poster: media/mixer.png
 duration: 6 min

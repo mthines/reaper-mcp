@@ -53,5 +53,7 @@ export function withShareMeta(html: string, kind: SharePage, origin: string): st
     .map(([attr, key, value]) => `<meta ${attr}="${key}" content="${escapeAttr(value)}">`)
     .join('\n');
   if (!/<title>[^<]*<\/title>/.test(html)) throw new Error(`share tags: no <title> in the page to put them after (${kind})`);
-  return html.replace(/<title>[^<]*<\/title>/, `<title>${escapeAttr(s.title)}</title>\n${tags}`);
+  // The build links the icon and manifest as ./mcp_bridge_* (REAPER serves the page from a folder); a guide at /docs/<slug> would look for them under /docs/
+  const rooted = html.replace(/(href=")\.\/(mcp_bridge)/g, '$1/$2');
+  return rooted.replace(/<title>[^<]*<\/title>/, `<title>${escapeAttr(s.title)}</title>\n${tags}`);
 }

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { searchEntries } from '../command/search.js';
 import { guideCommands } from './GuideCommands.js';
-import { groupGuides, neighbours, pageHeadings, parseGuide, renderLlmsFull, renderLlmsTxt, sortGuides, type Guide } from './docs.js';
+import { groupGuides, isRecipe, neighbours, pageHeadings, parseGuide, renderLlmsFull, renderLlmsTxt, sortGuides, type Guide } from './docs.js';
 
 const file = (extra = '', body = '## Hello\n\nText.') =>
   `---\ntitle: Install\nsummary: Get it running.\nsection: start\norder: 3\n${extra}---\n\n${body}\n`;
@@ -29,13 +29,13 @@ describe('parseGuide', () => {
 const g = (slug: string, section: Guide['section'], order: number): Guide => ({ slug, title: slug, summary: `About ${slug}.`, section, order, body: 'x' });
 
 describe('reading order', () => {
-  const guides = [g('c', 'try', 1), g('b', 'start', 2), g('a', 'start', 1), g('d', 'know', 1)];
+  const guides = [g('c', 'mix', 1), g('b', 'start', 2), g('a', 'start', 1), g('d', 'know', 1)];
 
   it('lists sections in their fixed order and guides by order within them', () => {
     expect(sortGuides(guides).map((x) => x.slug)).toEqual(['a', 'b', 'c', 'd']);
     expect(groupGuides(guides).map((s) => [s.title, s.guides.map((x) => x.slug)])).toEqual([
       ['Getting started', ['a', 'b']],
-      ['Things to try', ['c']],
+      ['Mix it', ['c']],
       ['Reference', ['d']],
     ]);
   });
@@ -59,18 +59,18 @@ describe('pageHeadings', () => {
 });
 
 describe('llms.txt', () => {
-  const guides = [g('install', 'start', 1), g('critique', 'try', 1)];
+  const guides = [g('install', 'start', 1), g('critique', 'mix', 1)];
 
   it('lists every guide under its section with a link to the raw Markdown', () => {
     const out = renderLlmsTxt(guides, 'https://example.test');
     expect(out).toContain('## Getting started');
     expect(out).toContain('- [install](https://example.test/docs/install.md): About install.');
     expect(out).toContain('- [critique](https://example.test/docs/critique.md): About critique.');
-    expect(out.indexOf('Getting started')).toBeLessThan(out.indexOf('Things to try'));
+    expect(out.indexOf('Getting started')).toBeLessThan(out.indexOf('Mix it'));
   });
 
   it('puts every guide in the full file, in reading order', () => {
-    const out = renderLlmsFull([g('critique', 'try', 1), g('install', 'start', 1)]);
+    const out = renderLlmsFull([g('critique', 'mix', 1), g('install', 'start', 1)]);
     expect(out.indexOf('# install')).toBeLessThan(out.indexOf('# critique'));
   });
 
@@ -112,7 +112,7 @@ describe('the guides in docs/guides', () => {
   });
 
   it('gives every recipe a prompt to copy and a line on what stays the user\'s call', () => {
-    for (const x of guides.filter((g) => g.section === 'try')) {
+    for (const x of guides.filter((g) => isRecipe(g.section))) {
       expect(x.body, `${x.slug} needs "> say:"`).toMatch(/^> say: .+/m);
       expect(x.body, `${x.slug} needs "> your-call:"`).toMatch(/^> your-call: .+/m);
     }

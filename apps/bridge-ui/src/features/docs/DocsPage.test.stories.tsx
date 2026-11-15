@@ -17,7 +17,7 @@ export const ListsGuidesBySectionAndLinksToTheDemo: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const nav = within(canvas.getByRole('navigation', { name: 'Docs' }));
-    for (const title of ['Getting started', 'Things to try', 'Reference']) await expect(nav.getByText(title)).toBeInTheDocument();
+    for (const title of ['Getting started', 'Mix it', 'Reference']) await expect(nav.getByText(title)).toBeInTheDocument();
     await expect(nav.queryByText('Safety and privacy')).not.toBeInTheDocument(); // no guide in it yet
     await expect(canvas.getByRole('link', { name: 'Try the live demo' })).toHaveAttribute('href', '/demo-here');
   },
