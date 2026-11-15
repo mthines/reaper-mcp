@@ -1621,7 +1621,7 @@ function handlers.snapshot_restore(params)
           else
             warnings[#warnings + 1] = "Track " .. track_state.index .. " '" .. tostring(track_state.name)
               .. "': REAPER refused the saved track state (SetTrackStateChunk failed), the track is unchanged"
-              .. (state.stretchMarkers and "; its stretch markers are restored separately" or
+              .. (state.stretchMarkers and params.restoreStretchMarkers ~= false and "; its stretch markers are restored separately" or
                   "; tracks with Melodyne (ARA) take FX can do this: save with stretchMarkers for their item edits")
           end
         else

@@ -48,3 +48,20 @@ The align call plans from the items' source files. What the user hears is the re
 - **Before aligning, save the markers:** `snapshot_save { name: "before-align", trackIndices: [<guide track>, <double track>], stretchMarkers: true }`. It keeps the stretch markers of every audio item on those tracks, apart from the track chunk, and `snapshot_restore` puts them back on the same items (found by GUID, else by track, position and length). The reply says how many items it restored, left alone or could not find. Scope it with `trackIndices` in a big project.
 - Without `stretchMarkers` a snapshot holds no items, so it cannot undo an alignment. `undo_project` does, one undo point per `align_audio_to_guide` call, as long as nothing was written after it.
 - A `fullChunk` snapshot of the tracks was refused (`SetTrackStateChunk failed`) on tracks whose items carry Melodyne (ARA) take FX; the cause is not confirmed. The restore warns, leaves that track unchanged and still restores the saved stretch markers. For such tracks pass `fullChunk: false` when only the markers matter.
+
+## Stretching a vocal: what the checks mean
+
+Measured on a real lead and backings with REAPER's stretch (42 edits, two listening rounds):
+
+- **Pitch-kept stretches** from 0.92x to 1.25x sound clean: pitch drift within a few cents, tone under 1.5 dB.
+- **Below 0.9x** a pitch-kept slow-down gets audible stretch artifacts (0.80x clearly, 0.85x and 0.88x slightly, 0.90x clean). They pass pitch, tone and transients; `verify_edit` adds a **dropout** check there (deepest loudness dip under the original, warn from 12 dB). The line is provisional (one phrase), and the rate gate does most of the work: treat anything below 0.9x as "listen first", and use it as a dub rather than a lead.
+- **A plain speed change** (preserve pitch cleared, so the pitch follows the speed) is reported as `info`, not a warning, when the speed alone predicts a pitch move of at least 55 cents (rates outside about 0.97x-1.03x): pitch moves by `1200*log2(rate)` cents and the tone moves with it. Up to about 1.5 semitones was accepted by ear. Nearer 1.0 the move is too small to tell from an error, so a drift of 20 cents or more there still warns, and so does any pitch move the speed does not explain.
+- A pitch shift with the timing unchanged (`timeScale` 1) gets no pitch check; shifting and stretching in one edit does.
+- A pass is evidence, not proof. Ratings near the audible edge are noisy (the same audio was heard as artifacted once and clean twice).
+
+## REAPER gotchas for building test edits
+
+- `playRate` does not change an item's length: set length = source length / rate.
+- A copied item has preserve pitch on; run action 40796 (clear take preserve pitch) for a varispeed, 40795 sets it.
+- Item pitch: actions 40204 / 40205 (one semitone up / down) act on the selected items.
+- **Put each copy straight at its final position** (`copy_media_items` with `position`). Batch-moving items on one track re-sorts their indexes mid-edit and edits land on the wrong items.

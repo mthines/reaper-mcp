@@ -562,8 +562,8 @@ Nobody has tested a local model end to end yet, so treat it as an experiment. Wh
   A model that invents parameters or drops JSON fields fails there.
   Pick an instruction-tuned model your client lists with native tool calling, the biggest your machine runs.
 - **Speed:** each turn sends those 51k tokens again, so on a laptop GPU expect slow turns.
-- **A smaller tool set:** set `REAPER_MCP_PROFILE` in your client's server `env` to load only what you need. `mixing` (122 tools),
-  `music` (114), `analysis` (79) or `minimal` (56), all under the 128 tools some clients allow; unset or `full` loads all 190.
+- **A smaller tool set:** set `REAPER_MCP_PROFILE` in your client's server `env` to load only what you need. `mixing` (123 tools),
+  `music` (113), `analysis` (80) or `minimal` (57), all under the 128 tools some clients allow; unset or `full` loads all 190.
   Combine them with category names or an extension (`mixing,midi`, `mixing,composition`); a combination can go over 128, so check the count the server logs at start.
   `list_tool_categories` then lists only what is loaded.
 
