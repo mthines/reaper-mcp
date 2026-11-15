@@ -1,6 +1,8 @@
 import { useEffect, useEffectEvent, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Icon, type GalleryItem } from '../../components/index.js';
 import { cx } from '../../lib/cx.js';
+import { headingId } from '../../lib/heading-id.js';
+import { isString, useUrlState } from '../../lib/url-state.js';
 import styles from './Gallery.module.css';
 
 /** How long the overlay's exit runs, in ms (matches the transitions in Gallery.module.css) */
@@ -12,7 +14,17 @@ const CLOSE_MS = 280;
  */
 export function Gallery({ title, items }: { title: string; items: GalleryItem[] }) {
   const track = useRef<HTMLUListElement>(null);
-  const [overlay, setOverlay] = useState<{ start: number; closing: boolean } | null>(null);
+  // The full screen view lives in the address (`?gallery=<title>&card=<name>`), so a link reopens it on the same card
+  const id = headingId(title);
+  const [shown, setShown] = useUrlState('gallery', '', { validate: isString });
+  const [card, setCard] = useUrlState('card', '', { validate: isString });
+  const [closing, setClosing] = useState(false);
+  const open = shown === id && items.length > 0;
+  const openAt = (i: number) => {
+    setClosing(false);
+    setShown(id);
+    setCard(headingId(items[i].name));
+  };
   const [edge, setEdge] = useState<{ start: boolean; end: boolean }>({ start: true, end: items.length <= 1 });
 
   const measure = () => {
@@ -53,7 +65,7 @@ export function Gallery({ title, items }: { title: string; items: GalleryItem[] 
         <h3 className={styles.title}>{title}</h3>
         <span className={styles.count}>{items.length}</span>
         <div className={styles.buttons}>
-          <button type="button" className={styles.button} onClick={() => setOverlay({ start: firstVisible(), closing: false })} aria-label="Full screen" aria-haspopup="dialog">
+          <button type="button" className={styles.button} onClick={() => openAt(firstVisible())} aria-label="Full screen" aria-haspopup="dialog">
             <Icon.Expand />
           </button>
           <button type="button" className={styles.button} onClick={() => step(-1)} disabled={edge.start} aria-label="Previous">
@@ -68,7 +80,7 @@ export function Gallery({ title, items }: { title: string; items: GalleryItem[] 
         {items.map((item, i) => (
           <li key={item.name} className={styles.card} aria-roledescription="slide" aria-label={`${i + 1} of ${items.length}: ${item.name}`}>
             {item.image ? (
-              <button type="button" className={styles.zoom} onClick={() => setOverlay({ start: i, closing: false })} aria-label={`${item.name}, full screen`} aria-haspopup="dialog">
+              <button type="button" className={styles.zoom} onClick={() => openAt(i)} aria-label={`${item.name}, full screen`} aria-haspopup="dialog">
                 <img className={styles.picture} src={item.image.src} alt={item.image.alt} loading="lazy" onLoad={measure} />
               </button>
             ) : (
@@ -81,14 +93,20 @@ export function Gallery({ title, items }: { title: string; items: GalleryItem[] 
           </li>
         ))}
       </ul>
-      {overlay && (
+      {open && (
         <Overlay
           title={title}
           items={items}
-          start={overlay.start}
-          closing={overlay.closing}
-          onClose={() => setOverlay((o) => (o ? { ...o, closing: true } : o))}
-          onClosed={() => setOverlay(null)}
+          start={Math.max(0, items.findIndex((item) => headingId(item.name) === card))}
+          closing={closing}
+          onClose={() => setClosing(true)}
+          onClosed={() => {
+            // One history entry for both, so Back reopens it
+            setShown('');
+            setCard('');
+            setClosing(false);
+          }}
+          onCard={(i) => setCard(headingId(items[i].name), 'replace')}
         />
       )}
     </section>
@@ -96,10 +114,12 @@ export function Gallery({ title, items }: { title: string; items: GalleryItem[] 
 }
 
 /** The full screen view: a modal dialog (focus kept inside, Esc closes), the page blurred behind it, one big card centred */
-function Overlay({ title, items, start, closing, onClose, onClosed }: { title: string; items: GalleryItem[]; start: number; closing: boolean; onClose: () => void; onClosed: () => void }) {
+function Overlay({ title, items, start, closing, onClose, onClosed, onCard }: { title: string; items: GalleryItem[]; start: number; closing: boolean; onClose: () => void; onClosed: () => void; onCard: (index: number) => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const track = useRef<HTMLUListElement>(null);
-  const [active, setActive] = useState(start);
+  // Where it opened; the address follows the card you move to, and must not move the view back
+  const [first] = useState(start);
+  const [active, setActive] = useState(first);
 
   // Open as a modal, keep the page from scrolling behind it, and land on the card that was asked for
   useEffect(() => {
@@ -108,12 +128,12 @@ function Overlay({ title, items, start, closing, onClose, onClosed }: { title: s
     d.showModal();
     const was = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    track.current?.children[start]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'instant' });
+    track.current?.children[first]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'instant' });
     return () => {
       document.body.style.overflow = was;
       if (d.open) d.close();
     };
-  }, [start]);
+  }, [first]);
 
   // The exit plays for CLOSE_MS (not at all with reduced motion), then the overlay is removed
   const finish = useEffectEvent(onClosed);
@@ -143,7 +163,10 @@ function Overlay({ title, items, start, closing, onClose, onClosed }: { title: s
         best = i;
       }
     });
-    setActive(best);
+    if (best !== active) {
+      setActive(best);
+      onCard(best);
+    }
   };
   const onKeyDown = (e: ReactKeyboardEvent) => {
     if (e.key === 'Escape') onClose();
