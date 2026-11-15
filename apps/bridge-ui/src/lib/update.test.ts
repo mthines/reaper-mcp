@@ -82,6 +82,8 @@ describe('failureReason', () => {
   it('gives the reason the updater printed, not its last hint line', () => {
     expect(failureReason(['==> Checking', '✗ v0.91.1 is released, but npm cannot offer it.', '    To check: npm install'])).toBe('v0.91.1 is released, but npm cannot offer it.');
     expect(failureReason(['==> Checking', 'something broke'])).toBe('something broke');
+    // setup's own ✗ lines come first; the updater's verdict is last
+    expect(failureReason(['✗ Could not connect Gemini CLI', '✗ The new version downloaded, but installing it into REAPER failed.', '    reaper-mcp setup'])).toBe('The new version downloaded, but installing it into REAPER failed.');
     expect(failureReason([])).toBeUndefined();
   });
 });

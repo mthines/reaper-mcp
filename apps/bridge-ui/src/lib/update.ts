@@ -77,9 +77,9 @@ export function updateLog(update: BridgeUpdate | undefined): string[] {
 /** Where the clone install is shown, for when npm can't deliver the update */
 export const CLONE_INSTALL_DOC = 'https://reaper-mcp.vercel.app/docs/install#when-the-update-cant-finish';
 
-/** Why an update failed, for a person: the first ✗ line the updater printed (its reason), else the last line. */
+/** Why an update failed, for a person: the last ✗ line (the updater's own verdict comes after any ✗ lines setup printed on the way), else the last line. */
 export function failureReason(log: string[]): string | undefined {
-  const line = log.find((l) => l.trimStart().startsWith('✗')) ?? log.at(-1);
+  const line = log.filter((l) => l.trimStart().startsWith('✗')).at(-1) ?? log.at(-1);
   return line?.replace(/^\s*✗\s*/, '').trim() || undefined;
 }
 

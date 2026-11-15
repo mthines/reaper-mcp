@@ -90,4 +90,12 @@ describe('reaper-mcp update', () => {
     const t = setup({ installed: () => '0.84.0' });
     expect(await runUpdate(t.deps)).toBe(0);
   });
+
+  it('installs what npm offers and says so when GitHub has an even newer release npm hides', async () => {
+    const t = setup({ latest: async () => '0.90.0', released: async () => '0.91.1', bridge: true });
+    expect(await runUpdate(t.deps)).toBe(0);
+    expect(t.ran).toEqual(['npm install -g @mthines/reaper-mcp@0.90.0', 'node /pkg/main.js setup --yes']);
+    expect(t.text()).toContain('Updated to v0.90.0');
+    expect(t.text()).toContain('v0.91.1 is released too');
+  });
 });

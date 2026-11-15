@@ -45,7 +45,9 @@ export async function runUpdate(deps: UpdateDeps): Promise<number> {
   const released = await deps.released?.();
   // npm only lists what this computer's route to it lets through. A security tool or proxy that hides new versions
   // looks exactly like "nothing newer", so the release GitHub names is the check on npm's list.
-  if (released && compareVersions(released, current) > 0 && (!latest || compareVersions(released, latest) > 0)) {
+  // Only when npm has nothing to install: if it offers something newer than this install, install that first and report the gap after
+  const npmHasNewer = latest !== undefined && compareVersions(latest, current) > 0;
+  if (released && compareVersions(released, current) > 0 && !npmHasNewer) {
     log(`✗ v${released} is released, but npm only offers ${latest ? `v${latest}` : 'nothing'} from this computer, so it cannot be installed.`);
     log('    The release may still be reaching npm (try again in a few minutes), or a security tool or proxy between this computer and npm is hiding new versions (Aikido Device Protection does).');
     log(`    To check: npm install -g ${NPM_PACKAGE}@${released}`);
@@ -79,6 +81,9 @@ export async function runUpdate(deps: UpdateDeps): Promise<number> {
     return 2;
   }
   log(`✓ Updated to v${latest}`);
+  if (released && compareVersions(released, latest) > 0) {
+    log(`    v${released} is released too, but npm does not offer it from this computer yet (it may still be reaching npm, or a security tool is hiding it). Run the update again later.`);
+  }
   return 0;
 }
 

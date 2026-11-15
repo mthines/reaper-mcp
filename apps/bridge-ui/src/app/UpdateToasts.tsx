@@ -57,6 +57,8 @@ export function UpdateToasts({
   const state = update?.kind === 'rebuild' ? undefined : update?.state;
   const log = updateLog(update);
   const step = stepText(log.at(-1));
+  // A string, so the effect below re-runs when the reason changes, not on every poll's fresh log array
+  const failure = state === 'failed' ? (failureReason(log) ?? 'Nothing was changed. Use Try again in the notice above.') : undefined;
 
   useEffect(() => {
     if (runStartedAt === undefined) return;
@@ -77,13 +79,12 @@ export function UpdateToasts({
       if (!watched.current) return;
       watched.current = false;
       track({ name: 'update_finished', result: 'failed', source });
-      const reason = failureReason(log) ?? 'Nothing was changed. Use Try again in the notice above.';
       toast.error(<Swap text="Update failed" />, {
         id: TOAST_ID,
         className: styles.failed,
         description: (
           <span className={styles.failure}>
-            <Swap text={reason} />
+            <Swap text={failure ?? ''} />
             {source === 'npm' && (
               <span>
                 Installing from a clone avoids npm.{' '}
@@ -113,7 +114,7 @@ export function UpdateToasts({
         },
       });
     }
-  }, [state, step, log, runStartedAt, onReload, source]);
+  }, [state, step, failure, runStartedAt, onReload, source]);
 
   return <Toaster position="bottom-right" theme="dark" style={THEME} closeButton />;
 }
