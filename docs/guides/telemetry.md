@@ -8,9 +8,11 @@ poster: media/bridge-status.png
 duration: 3 min
 ---
 
-reaper-mcp is built by one person in their spare time. The usage numbers are how I find out which tools people use, which ones break, and where setup trips people up. It's on by default, setup asks before sending anything, and you can switch it off in ten seconds.
+Hey, I'm Mads, and I build reaper-mcp. I'm a programmer at [Dash0](https://www.dash0.com), I play in a band called [Kaiju](https://open.spotify.com/artist/2R3yJQTWO9bfSzWldmhR6x) in my spare time, and I'm a father of three. So this gets built in the gaps, and it's the tool I wanted for my own sessions.
 
-I'm not after your music. Your audio never leaves your computer through reaper-mcp.
+The usage numbers are how I find out which tools people use, which ones break, and where setup trips people up. I can't fix what I can't see. It's on by default, setup asks before sending anything, and you can switch it off in ten seconds.
+
+I'm a musician too, so I'm not after your music. Your audio never leaves your computer through reaper-mcp.
 
 ## Turn it off
 
