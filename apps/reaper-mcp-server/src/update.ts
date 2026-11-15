@@ -47,8 +47,8 @@ export async function runUpdate(deps: UpdateDeps): Promise<number> {
   // looks exactly like "nothing newer", so the release GitHub names is the check on npm's list.
   // Only when npm has nothing to install: if it offers something newer than this install, install that first and report the gap after
   const npmHasNewer = latest !== undefined && compareVersions(latest, current) > 0;
-  if (released && compareVersions(released, current) > 0 && !npmHasNewer && !deps.force) {
-    log(`✗ v${released} is released, but npm only offers ${latest ? `v${latest}` : 'nothing'} from this computer, so it cannot be installed.`);
+  if (latest !== undefined && released && compareVersions(released, current) > 0 && !npmHasNewer && !deps.force) {
+    log(`✗ v${released} is released, but npm only offers v${latest} from this computer, so it cannot be installed.`);
     log('    The release may still be reaching npm (try again in a few minutes), or a security tool or proxy between this computer and npm is hiding new versions (Aikido Device Protection does).');
     log(`    To check: npm install -g ${NPM_PACKAGE}@${released}`);
     return 1;

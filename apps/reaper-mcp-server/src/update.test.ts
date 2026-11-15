@@ -53,6 +53,14 @@ describe('reaper-mcp update', () => {
     expect(t.text()).toContain('internet connection');
   });
 
+  it('blames the connection, not a security tool, when npm is unreachable and GitHub is ahead', async () => {
+    const t = setup({ latest: async () => undefined, released: async () => '0.91.1' });
+    expect(await runUpdate(t.deps)).toBe(1);
+    expect(t.ran).toEqual([]);
+    expect(t.text()).toContain('internet connection');
+    expect(t.text()).not.toContain('security tool');
+  });
+
   it('stops and names the command to run by hand when the download fails', async () => {
     const t = setup({ exit: { install: 1 } });
     expect(await runUpdate(t.deps)).toBe(1);
