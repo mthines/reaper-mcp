@@ -8,7 +8,7 @@ poster: media/bridge-status.png
 duration: 3 min
 ---
 
-Hey, I'm Mads, and I build reaper-mcp. I'm a programmer at [Dash0](https://www.dash0.com), I play in a band called [Kaiju](https://open.spotify.com/artist/2R3yJQTWO9bfSzWldmhR6x) in my spare time, and I'm a father of three. So this gets built in the gaps, and it's the tool I wanted for my own sessions.
+Hey, I'm Mads, and I build reaper-mcp. I'm a programmer at [Dash0](https://www.dash0.com), I play in a band called [Kaiju](https://open.spotify.com/artist/2R3yJQTWO9bfSzWldmhR6x) in my spare time, and I'm a father of three. So this gets built in the gaps. I made it to take the trivial parts of recording off my plate (naming, routing, levels, all the chores), so I have more time for writing, playing and having fun. It's the tool I wanted for my own sessions.
 
 The usage numbers are how I find out which tools people use, which ones break, and where setup trips people up. I can't fix what I can't see. It's on by default, setup asks before sending anything, and you can always switch it off in ten seconds. But please don't, if you're OK with it. More on why [below](#why-please-leave-it-on).
 
