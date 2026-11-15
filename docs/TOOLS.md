@@ -152,7 +152,7 @@ Workflow: [knowledge/workflows/transient-lighting.md](../knowledge/workflows/tra
 | `import_midi_file` | Import a .mid file as MIDI items, one call, no dialog |
 | `transcribe_voice_sketch` | Humming/beatboxing → quantized melody, tentative percussion, tempo/key, and a generated band arrangement. Optional MIDI, sampled mix, and separate instrument stems |
 | `detect_key` | The key of a MIDI track, a track's audio (read before track FX, rendered when that can't be read), one media item or an audio file, with confidence and the chroma |
-| `detect_chords` | The chords per bar or beat of a MIDI track, a rendered track, one media item or an audio file: progression, roman numerals, bass notes for a bass line. Audio uses the chord model when installed (`reaper-mcp setup-sidecar --with-chords`: sevenths and inversions from a full mix), else chroma templates |
+| `detect_chords` | The chords per bar or beat of a MIDI track, a track's audio (read before track FX, rendered when that can't be read), one media item or an audio file: progression, roman numerals, bass notes for a bass line. Audio uses the chord model when installed (`reaper-mcp setup-sidecar --with-chords`: sevenths and inversions from a full mix), else chroma templates |
 
 #### Voice recording to an arrangement
 

@@ -105,6 +105,13 @@ describe('detect_transients', () => {
     expect(data).toMatchObject({ path: '/songs/master.mp3', startTime: 10, endTime: 13, total: 4, tempo: { bpm: 120 } });
   });
 
+  it('asks for the track\'s own audio instead of a render window', async () => {
+    sidecar();
+    await tool('detect_transients')({ trackIndex: 7, startTime: 0, endTime: 3 });
+    const asked = sendCommandMock.mock.calls.find(([type]) => type === 'render_track_to_wav');
+    expect(asked?.[1]).toMatchObject({ trackIndex: 7, dry: true });
+  });
+
   it('keeps only the strong hits of the chosen bands', async () => {
     sidecar();
     const data = json(await tool('detect_transients')({ path: '/a.wav', minStrength: 0.6, bands: ['low'] }));
