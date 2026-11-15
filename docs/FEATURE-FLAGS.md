@@ -79,7 +79,7 @@ REAPER_MCP_FLAGS='{"new-eq-panel":"on"}' reaper-mcp serve   # one run only
 
 An override that names an unknown flag or variant (a stale file after a rename) is ignored, never an error. The server reads the file on every evaluation, so a change applies without a restart.
 
-On the bridge page, turn on developer mode (Settings), then use **Developer: feature flags** to see each flag's resolved variant and reason and to force or reset one. With a bridge connected the override is written to `~/.config/reaper-mcp/flags.json`, the same file `reaper-mcp flags set` writes, so it applies to the page, the MCP server and the CLI alike (the page picks up a CLI change within a few seconds). Without a bridge (the `?demo` page) it lives in this browser only. The palette has **Reset feature flag overrides**.
+On the bridge page, turn on developer mode (Settings), then **Open developer tools** (or `?developer=true`, or the palette) to open the Developer drawer, where you see each flag's resolved variant and reason and to force or reset one. With a bridge connected the override is written to `~/.config/reaper-mcp/flags.json`, the same file `reaper-mcp flags set` writes, so it applies to the page, the MCP server and the CLI alike (the page picks up a CLI change within a few seconds). Without a bridge (the `?demo` page) it lives in this browser only. The palette has **Reset feature flag overrides**.
 
 Forcing a flag on is unsupported. A flag hides something unfinished, so it may break; that is the trade you accept by forcing it. `reaper-mcp flags set` says so, `flags list` shows what each flag does, and `reaper-mcp doctor` warns while any override is active, so a forgotten one is the first thing to rule out. Undo with `reaper-mcp flags reset`.
 
