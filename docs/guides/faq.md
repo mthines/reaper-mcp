@@ -20,6 +20,10 @@ No. You type to it, like any chat. Use your OS dictation if you'd rather speak.
 
 No. It handles the tedious, measurable parts. Taste and the final call stay with you, and it explains itself so you can push back. See [honest expectations](honest-expectations.md).
 
+### Can it do things the tools don't cover?
+
+Usually, yes. It can search REAPER's roughly 6,000 actions and run one, so anything you'd do from a menu or shortcut is in reach. [What it can do](what-it-can-do.md).
+
 ### Can it wreck my project?
 
 Every edit is one undo step, and the mix skills snapshot first. [What is and isn't guarded](undo-and-safety.md).

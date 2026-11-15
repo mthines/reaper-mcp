@@ -19,6 +19,8 @@ Think of it as an assistant engineer who sits next to you, has read the manual, 
 - **Checking its own work.** It reads the meters before it touches anything and again afterwards, so "it sounds better" comes with a number next to it.
 - **Explaining.** Ask why it made a move and you get an answer, not a shrug. Ask it to go the other way and it will.
 
+See [what it can do](what-it-can-do.md) for the full range, including running almost any REAPER action.
+
 ## What it isn't
 
 - **It isn't a composer.** It won't write your chorus. If you ask for one it will try, but that isn't what it's for.
