@@ -41,8 +41,9 @@ export const GuidesAReaPackInstallThroughReaPack: Story = {
   args: { status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: false, reapack: true } } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('Extensions → ReaPack → Synchronize packages')).toBeInTheDocument();
-    await expect(canvas.getByText('npm install -g @mthines/reaper-mcp@latest')).toBeInTheDocument();
+    await userEvent.click(canvas.getByText('How to update'));
+    await expect(canvas.getByText('Extensions → ReaPack → Synchronize packages')).toBeVisible();
+    await expect(canvas.getByText('npm install -g @mthines/reaper-mcp@latest')).toBeVisible();
     await expect(canvas.queryByText(/git pull/)).not.toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: 'Update' })).not.toBeInTheDocument();
   },
@@ -54,7 +55,21 @@ export const KeepsTheUpdateButtonForAReaPackInstallThatCanUpdate: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('button', { name: 'Update' })).toBeInTheDocument();
-    await expect(canvas.getByText('Extensions → ReaPack → Synchronize packages')).toBeInTheDocument();
+    await userEvent.click(canvas.getByText('How to update'));
+    await expect(canvas.getByText('Extensions → ReaPack → Synchronize packages')).toBeVisible();
     await expect(canvas.queryByText('npm install -g @mthines/reaper-mcp@latest')).not.toBeInTheDocument();
+  },
+};
+
+/** The by-hand notice stays one short line until someone asks how: the commands unfold from "How to update" */
+export const KeepsTheCommandsFoldedUntilAskedFor: Story = {
+  args: { status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: false } } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('How to update')).toBeInTheDocument();
+    await expect(canvas.getByText('git pull && ./scripts/install.sh')).not.toBeVisible();
+    await userEvent.click(canvas.getByText('How to update'));
+    await expect(canvas.getByText('git pull && ./scripts/install.sh')).toBeVisible();
+    await expect(canvas.getByText('npm install -g @mthines/reaper-mcp@latest && reaper-mcp setup')).toBeVisible();
   },
 };

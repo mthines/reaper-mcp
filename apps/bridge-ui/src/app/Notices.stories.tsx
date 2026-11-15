@@ -32,7 +32,7 @@ const newer = { version: '99.0.0', url: 'https://github.com/mthines/reaper-mcp/r
 /** A newer release, and this install can update itself: Update, What's new (opens the drawer) and skip */
 export const UpdateAvailable: Story = { args: { release: newer, status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: true } } } };
 
-/** A newer release on an install the bridge can't update (npm, or no update config): the command instead */
+/** A newer release on an install the bridge can't update: one line, the commands folded under "How to update" */
 export const UpdateAvailableByHand: Story = { args: { release: newer, status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: false } } } };
 
 /** An npm install: the Update button runs `reaper-mcp update` for them */

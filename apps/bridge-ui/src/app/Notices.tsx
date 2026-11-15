@@ -113,22 +113,34 @@ export function Notices({
         <b>reaper-mcp v{release.version} is available</b> (you have v{__VERSION__}).{' '}
         <button className={styles.whatsNew} onClick={onWhatsNew}>What’s new</button>
         {control?.reapack ? (
-          <>
-            {' '}· In REAPER, choose <b>Extensions → ReaPack → Synchronize packages</b> to update the REAPER side
-            {control.canUpdate ? (
-              '.'
-            ) : (
-              <>
-                , then run <code>npm install -g @mthines/reaper-mcp@latest</code> in a terminal and restart Claude Code.
-              </>
-            )}
-          </>
+          <details className={styles.noticeDetails}>
+            <summary>How to update</summary>
+            <dl className={styles.noticeCommands}>
+              <dt>REAPER side</dt>
+              <dd>Extensions → ReaPack → Synchronize packages</dd>
+              {!control.canUpdate && (
+                <>
+                  <dt>Server</dt>
+                  <dd><code>npm install -g @mthines/reaper-mcp@latest</code></dd>
+                </>
+              )}
+            </dl>
+            <span className={styles.noticeHint}>
+              {control.canUpdate ? 'The Update button here updates the server.' : 'Then restart Claude Code.'}
+            </span>
+          </details>
         ) : (
           !control?.canUpdate && (
-          <>
-            {' '}· Update in a terminal: <code>npm install -g @mthines/reaper-mcp@latest &amp;&amp; reaper-mcp setup</code> (from a clone:{' '}
-            <code>git pull &amp;&amp; ./scripts/install.sh</code>). After that, the Update button here does it for you.
-          </>
+            <details className={styles.noticeDetails}>
+              <summary>How to update</summary>
+              <dl className={styles.noticeCommands}>
+                <dt>npm</dt>
+                <dd><code>npm install -g @mthines/reaper-mcp@latest &amp;&amp; reaper-mcp setup</code></dd>
+                <dt>git clone</dt>
+                <dd><code>git pull &amp;&amp; ./scripts/install.sh</code></dd>
+              </dl>
+              <span className={styles.noticeHint}>After that, the Update button here does it for you.</span>
+            </details>
           )
         )}
       </Notice>,
