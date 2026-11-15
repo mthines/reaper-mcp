@@ -76,3 +76,24 @@ export const HidesStartWithReaperOnBridgesThatDoNotReportIt: Story = {
     await expect(within(canvasElement).queryByRole('switch', { name: /Start with REAPER/ })).toBeNull();
   },
 };
+
+export const OffersDeveloperToolsOnlyInDeveloperMode: Story = {
+  args: {
+    settings: { paused: false, readonly: false, openOnStart: true, dev: false, autostart: true },
+    onOpenDeveloper: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).queryByRole('button', { name: 'Open developer tools' })).toBeNull();
+  },
+};
+
+export const OpensTheDeveloperDrawerInDeveloperMode: Story = {
+  args: {
+    settings: { paused: false, readonly: false, openOnStart: true, dev: true, autostart: true },
+    onOpenDeveloper: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Open developer tools' }));
+    await expect(args.onOpenDeveloper).toHaveBeenCalled();
+  },
+};

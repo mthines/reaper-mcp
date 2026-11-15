@@ -42,6 +42,10 @@ events:
     setting: [paused, readonly, open_on_start, dev, autostart, error_notifications, usage_stats]
     enabled: boolean
     source: [settings, notice]
+  feature_flag_exposed:      # a flag was read by the page, once per flag per page load (lib/flag-store.ts); arms of an experiment compare on variant
+    flag: string             # the flag's registry key (a developer-declared identifier, never user data)
+    variant: string          # the variant key it resolved to
+    reason: [static, split, override]
   app_install_clicked:
     state: string            # install state shown at the click (available, window, installed, …)
   lorekit_token_changed:

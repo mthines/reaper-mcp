@@ -25,6 +25,7 @@ export function SettingsPanel({
   canUpdate,
   onRestart,
   autostartInstalled,
+  onOpenDeveloper,
 }: {
   settings: BridgeSettings;
   onSet: (key: SettingKey, on: boolean) => void;
@@ -44,6 +45,8 @@ export function SettingsPanel({
   onRestart?: () => void;
   /** REAPER's startup script holds the block that starts the bridge (`reaper-mcp setup` writes it). Absent on older bridges. */
   autostartInstalled?: boolean;
+  /** Opens the Developer drawer (feature flags); offered only in developer mode */
+  onOpenDeveloper?: () => void;
 }) {
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => ev.key === 'Escape' && onClose();
@@ -148,6 +151,15 @@ export function SettingsPanel({
               on={settings.dev === true}
               onChange={(on) => onSet('cfg_dev', on)}
             />
+          </div>
+        )}
+        {settings.dev === true && onOpenDeveloper && (
+          <div className={styles.settingGroup}>
+            <h3>Developer</h3>
+            <p className={styles.settingHint}>Feature flags: how each one resolves, and a way to force a variant everywhere (page, MCP server, CLI).</p>
+            <button className="btn btn-sm" onClick={onOpenDeveloper}>
+              Open developer tools
+            </button>
           </div>
         )}
         <LoreKitSetting token={loreToken} onChange={onLoreToken} shared={tokensShared} />

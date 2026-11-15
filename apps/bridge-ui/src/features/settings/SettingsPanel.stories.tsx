@@ -36,3 +36,11 @@ export const ReadOnlyAndPaused: Story = { args: { settings: { paused: true, read
 export const StartWithReaperNotSetUp: Story = { args: { autostartInstalled: false } };
 
 export const ConnectedToLoreKit: Story = { args: { loreToken: 'lk_ro_example', publishToken: 'lk_rw_example' } };
+
+/** Developer mode offers the Developer drawer (feature flags) */
+export const DeveloperModeWithDeveloperTools: Story = {
+  args: {
+    settings: { paused: false, readonly: false, openOnStart: true, dev: true, autostart: true },
+    onOpenDeveloper: fn(),
+  },
+};

@@ -43,11 +43,12 @@ This is an **Nx monorepo** with **pnpm workspaces**.
 reaper-mcp/
   apps/reaper-mcp-server/     # Main MCP server application (TypeScript, esbuild)
     src/
-      main.ts                 # CLI entry point: serve | setup | setup-sidecar | install-skills | init | doctor | status
+      main.ts                 # CLI entry point: serve | setup | setup-sidecar | install-skills | init | doctor | status | flags
       terminal-ui.ts          # The look of every CLI message (init, setup, telemetry, doctor, status, install-skills): `createUi()` gives the palette helpers (bold, dim, cmd, link, ok/warn/fail, mark, heading, gradient) and `banner(subtitle, version)` (gradient REAPER MCP logo + waveform on a terminal ≥ 80 columns, one plain line elsewhere). Colour is only rendering: strip the codes and you get the plain text, which is what a pipe, NO_COLOR and the CI snapshots see. New CLI output reuses it, never hand-written `\x1b[`
       harnesses.ts            # init: the supported harnesses (Claude Code, Codex CLI, Gemini CLI, Cursor): detect what is installed, register the server through each one's own `mcp add` (Cursor: mcp.json), read/stale-check what is registered, `--harness`/`--all` parsing; skills go to ~/.claude (Claude Code) or the shared ~/.agents (the others)
       claude-assets.ts        # install-skills: copies the skills, agents and knowledge shipped in the npm package into ~/.claude (hash manifest, never overwrites edits)
       server.ts               # McpServer creation, tool registration
+      flags.ts                # Feature flags on the server: the install id as targeting key, overrides from ~/.config/reaper-mcp/flags.json + REAPER_MCP_FLAGS, `createServerFlags()`, `evaluateServerFlag()`, and the `reaper-mcp flags list|set|reset` command (docs/FEATURE-FLAGS.md)
       bridge.ts               # File-based IPC: sendCommand(), isBridgeRunning(), etc.
       bridge-repair.ts        # serve: bring REAPER's files (bridge, JSFX, page, autostart block) up to this release once per release (npm installs)
       notices.ts              # One-time notices for the user, appended to the first tool result (updated bridge, newer release)
@@ -102,6 +103,7 @@ reaper-mcp/
       tests/test_server.py    # pytest unit tests for the sidecar
 
   libs/extension-api/         # The API extensions are written against (types, manifest check, VST3 state helpers); see docs/EXTENSIONS.md
+  libs/feature-flags/         # Feature flags (LoreKit parity): hand-authored registry (src/registry.ts, empty until a flag gates something), zod schema, FNV-1a bucketing for percentage rollouts and A/B tests, pure resolver, OpenFeature provider + OTel hook (src/server.ts, server only); `src/index.ts` is browser-safe and what the page imports. Generated: src/generated/ + generated/, by scripts/gen-feature-flags.mjs (--check fails on drift). See docs/FEATURE-FLAGS.md
   extensions/vital/           # Opt-in extension: read/edit Vital patches (settings, mod matrix, LFOs, wavetables); built to dist/index.mjs
   extensions/helix/           # Opt-in extension: build/edit/validate Helix .hlx presets (donor + real blocks, snapshots), checked import into Helix Native; knowledge/ holds the Helix docs
   libs/protocol/              # Shared TypeScript types (compiled with tsc)
@@ -114,11 +116,11 @@ reaper-mcp/
     src/main.tsx              # Entry: renders app/App.tsx, registers the service worker; mcp_bridge.html is translate="no" (a translator breaks React's DOM swaps), lifted here for the docs and changelog pages
     src/app/                  # The page shell: App, Header, Notices, Offline, BridgeBoundary (keeps a render error in the bridge view or offline screen from blanking the page; reports it as page_error) + the hooks that poll the bridge
     src/components/           # Shared UI with no bridge knowledge: Combobox (+ .Grouped), Toggle, Notice, Mark, ResizeHandle, Markdown, Icon.*
-    src/features/<feature>/   # One folder per area: log, stats, timeline, settings, measurements, edit-views, plugins, snapshots
+    src/features/<feature>/   # One folder per area: log, stats, timeline, settings, developer, measurements, edit-views, plugins, snapshots
                               # Each folder's index.ts exports a composite, namespaced component (Log.Rows, Log.Details,
                               # Measurement.Loudness, EditView.Section, Snapshots.SaveForm, Plugins.Details, Settings.LoreKit,
                               # Stats.Sparkline) plus its public functions; code outside a folder imports only its index
-    src/lib/                  # Pure logic + small hooks: status (feed parsing), commands, log, timeline, sessions, search, format, url-state, analytics
+    src/lib/                  # Pure logic + small hooks (flags.ts / flag-store.ts: feature flags, with `app/useFlag.ts`; the Developer drawer (`?developer=true`, developer mode) lists them and shares forced variants with the server through the bridge): status (feed parsing), commands, log, timeline, sessions, search, format, url-state, analytics
     src/demo/                 # ?demo's fake bridge and the fixed examples the stories draw (examples.ts, feed.ts);
                               # demo-calls.ts: one demo call per logged command (DEMO_CALLS, typed by LoggedCommand)
     src/styles.css            # Root stylesheet: CSS variables (tokens), base element styles and global utility classes only
@@ -157,6 +159,7 @@ reaper-mcp/
     reapack-index.mjs         # Generate the ReaPack index.xml (bridge scripts, JSFX, status page) from reaper/; the release job attaches it to the GitHub release (releases/latest/download/index.xml). ReaPack puts JSFX in Effects/reaper-mcp/Meters/ and scripts in Scripts/reaper-mcp/MCP Bridge/, so the bridge resolves JSFX in both folders (Meters/ first) and the autostart block prefers that script path over Scripts/mcp_bridge.lua; `reaper-mcp setup` from an npm install leaves the files to ReaPack once it installed the bridge (from a clone it still copies them and warns that ReaPack's copy wins; see DEVELOPMENT.md)
     prepare-npm-package.mjs   # Assemble the npm package in dist/apps/reaper-mcp-server (the root README with its install section swapped for `apps/reaper-mcp-server/NPM_INSTALL.md` and absolute image/link URLs via `src/npm-readme.mjs`, LICENSE, status page, version); run by the release job
     sync-symlinks.sh          # Symlink .claude/skills/*/ (skill dirs), .claude/agents/*.md + knowledge/ into ~/.claude, and skills + agents also into ~/.agents for Codex/Gemini/Cursor (`--no-agents` skips that; clone install; an npm install copies them with `install-skills`)
+    gen-feature-flags.mjs     # Generate libs/feature-flags' typed keys + manifest from its registry (`--check` fails on drift; `pnpm nx run feature-flags:generate`)
     ext-call.mjs              # Call any tool on a fresh `reaper-mcp serve` (so a new extension can be tried without restarting Claude Code): --list [prefix] | <tool> [json]
     plugin-list.mjs           # Rebuild docs/PLUGINS.md's built-in plugin table from LoreKit (logic: apps/bridge-ui/src/features/plugins/plugin-list.mjs)
 
@@ -178,7 +181,7 @@ reaper-mcp/
     mcp_extensions_lib.lua    # extension_call: runs a Lua command from an installed extension's handlers.lua (internal)
     mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
     mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
-    mcp_prefs_lib.lua         # the read-only LoreKit token shared through ~/.config/reaper-mcp/lorekit.json (never the lk_rw_ one) (ExtState lorekit_tokens / tokens_req; prefs-lib.test.ts)
+    mcp_prefs_lib.lua         # the read-only LoreKit token shared through ~/.config/reaper-mcp/lorekit.json (never the lk_rw_ one) (ExtState lorekit_tokens / tokens_req) and the feature-flag overrides in flags.json (flag_overrides / flags_req; the page's Developer drawer, the CLI and the server share them); prefs-lib.test.ts
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
     mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
     mcp_snapshot_quick_save.lua # Action: quick save, named by the date and time
@@ -205,6 +208,7 @@ reaper-mcp/
 | `@mthines/reaper-mcp-server` | `apps/reaper-mcp-server` | `@nx/esbuild` (ESM bundle) | MCP server application |
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | Vite + React Compiler → single HTML | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
+| `@reaper-mcp/feature-flags` | `libs/feature-flags` | none (bundled into its consumers) | Flag registry, bucketing, OpenFeature provider; server and page both import it |
 
 ## MCP Tools (190 total)
 
@@ -950,7 +954,7 @@ open http://localhost:8099/mcp_bridge.html; curl http://127.0.0.1:8099/_/GET/EXT
   changes in one tick become one history entry), so Back/Forward step through it and a link or reload reopens it.
   Params: `view`, `range`, `span` (dragged timeline span), `filter` (all/errors), `q` (search; replaces, never pushes, written to the URL 300 ms after typing pauses via
   `debounceMs` while the page updates at once; each view keeps its own search, so switching views never carries one over),
-  `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, `changelog` (What's new open) and `release` (the release a version click links to: scrolled to and highlighted), on the docs page `gallery` + `card` (a guide gallery's full screen view, by title and card name; opening and closing push, moving between cards replaces), and on Plugins `coverage`, `inProject`, `plugin`
+  `agent`, `entry` (open command by `n`), `sort` (Tools), `settings`, `developer` (Developer drawer open), `changelog` (What's new open) and `release` (the release a version click links to: scrolled to and highlighted), on the docs page `gallery` + `card` (a guide gallery's full screen view, by title and card name; opening and closing push, moving between cards replaces), and on Plugins `coverage`, `inProject`, `plugin`
   (open plugin by FX name). Opening, closing or switching a drawer by click (a row, "Previous call") pushes; ↑/↓ between rows replaces. `view` and `range` default
   to the last pick in localStorage, so the bridge's bare `mcp_bridge.html` opens where you left off. Use it for any new
   state a viewer would want to go back to or share (tabs, filters, an open drawer); keep transient UI (hover, drag,
@@ -1224,6 +1228,7 @@ npx @modelcontextprotocol/inspector node dist/apps/reaper-mcp-server/main.js
 | `install-skills` | Copy the mix skills, agents and knowledge shipped in the npm package into `~/.claude` (never overwrites files the user edited or owns, skips symlinked folders; a clone uses `scripts/sync-symlinks.sh`). `--dry-run` previews. Skills and agents also go into the shared `~/.agents` when a non-Claude harness is installed (never the knowledge, which the skills read from `~/.claude/knowledge`); `--harness claude,codex` picks. `init` runs it for an npm install |
 | `init` | Connect the AI harnesses: detects Claude Code, Codex CLI, Gemini CLI and Cursor, registers the server in each one found by absolute path (`claude mcp add --scope user`, `codex mcp add`, `gemini mcp add --scope user`, Cursor's `~/.cursor/mcp.json`; an entry whose node or `main.js` no longer exists is replaced) and prints the install hint for the ones missing. `--harness claude,codex` or `--all` picks by hand. Claude Code also gets the REAPER tool allow-list in `~/.claude/settings.json`, and in a clone a `.mcp.json` (copy-free). From an npm install it then runs `install-skills`. `doctor` shows which harnesses are connected |
 | `update` | Update to the latest release (`--bridge`, which the bridge page uses, exits 3 when nothing newer exists; 1 = download failed, 2 = setup failed). An npm install runs `npm install -g @mthines/reaper-mcp@<latest>`, then `setup --yes` in a fresh process (`update.ts`; nothing when npm names nothing newer, `--force` reinstalls). It cross-checks GitHub's latest release: when npm has nothing newer than this install but GitHub does (a proxy or security tool such as Aikido hiding versions, or a publish still landing) it fails with the reason and the clone-install hint (exit 1), never "nothing newer"; when npm offers something newer it installs that and then says GitHub's newer one is not reachable yet; after the download it reads the installed version and stops when it is not the target; a clone runs `scripts/update.sh`. `setup` writes `mcp_update.conf` (`mode=npm`, node, cli) so the bridge page's **Update** button runs it detached; the page then shows a toast (Sonner, `app/UpdateToasts.tsx`): downloading, then ready with a **Reload** button, never an automatic reload. The page's "update available" check offers an npm install the newer of npm's and GitHub's release, so a version npm hides still shows up and the failed update says why (a failure reads as an error toast with the reason and, for npm, a link to the clone install in `docs/guides/install.md`). When the bridge runs from ReaPack's folder (`control.reapack`), the notice and What's new card name ReaPack's Synchronize packages for the REAPER side instead of npm/clone commands |
+| `flags` | Feature flags on this install: `list` (every flag, how it resolves, why), `set <key> <variant>` (force one, written to `~/.config/reaper-mcp/flags.json`: visible to you only), `reset [key]`. `REAPER_MCP_FLAGS` (JSON) overrides for one run. See `docs/FEATURE-FLAGS.md` |
 | `doctor` | Verify all components are configured correctly (includes 4 sidecar sub-checks) |
 | `status` | Check if Lua bridge is running in REAPER |
 

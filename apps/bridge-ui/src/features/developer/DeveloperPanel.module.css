@@ -1,0 +1,20 @@
+.drawer { z-index: 11; }
+.section { display: grid; gap: 10px; }
+.sectionHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sectionHead h3 { margin: 0; font-size: 13px; }
+.hint { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--faint); }
+.flags { list-style: none; margin: 0; padding: 0; }
+.flag { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line-2); }
+.flag:first-child { border-top: 0; }
+.flagInfo { display: grid; gap: 4px; min-width: 0; }
+.flagHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.flagKey { font-size: 12.5px; color: var(--text); overflow-wrap: anywhere; }
+.flagState { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font-size: 11.5px; color: var(--muted); }
+.flagState:where([data-reason='override']) { color: var(--accent); }
+.flagDesc { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+
+/* With room (the drawer is resizable): the controls sit beside the flag instead of under it */
+@container (min-width: 460px) {
+  .flag { grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 16px; }
+  .flagHead { justify-content: flex-start; flex-wrap: wrap; }
+}

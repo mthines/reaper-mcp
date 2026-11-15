@@ -16,6 +16,8 @@ import { useBridgeRequest } from './useBridgeRequest.js';
 import { useErrorNotifications } from './useErrorNotifications.js';
 import { useHistory } from './useHistory.js';
 import { useSettings } from './useSettings.js';
+import { useFlagRows } from './useFlag.js';
+import { useSharedFlags } from './useSharedFlags.js';
 import { DISCORD_URL, REPO_URL, guideUrl, hereUrl } from '../lib/links.js';
 import { load, save } from '../lib/storage.js';
 import { useNow } from '../lib/useNow.js';
@@ -26,6 +28,7 @@ import { labelSessions } from '../lib/sessions.js';
 import { Log, VIEW_KEY, isSpanOrNull, isView, loadView, type View } from '../features/log/index.js';
 import { useKnowledge, useLoreKitTokens } from '../features/plugins/index.js';
 import { SETTING_NAME, Settings } from '../features/settings/index.js';
+import { Developer } from '../features/developer/index.js';
 import { InstallBanner } from '../components/index.js';
 import { Changelog, availableUpdate, parseReleases, useHighlights, useReleases } from '../features/changelog/index.js';
 import { exampleReleaseJson } from '../demo/examples.js';
@@ -87,6 +90,9 @@ export function App() {
     save(VIEW_KEY, v);
   };
   const [settings, setSetting] = useSettings(status);
+  const flagState = useFlagRows();
+  // With a bridge the overrides are the bridge's flags.json too, so the MCP server follows the Developer drawer
+  const flagsShared = useSharedFlags(!DEMO && Boolean(status), status?.control?.token);
   const changeSetting = (source: 'settings' | 'notice') => (key: SettingKey, on: boolean) => {
     track({ name: 'setting_changed', setting: SETTING_NAME[key], enabled: on, source });
     setSetting(key, on);
@@ -101,6 +107,8 @@ export function App() {
   // `?install`: opened from the bridge window's Install button, so show the install setting straight away
   const request = useBridgeRequest(status);
   const [settingsOpen, setSettingsOpen] = useUrlState('settings', false, { validate: isBoolean });
+  // Developer tools (feature flags): developer mode only, so the param does nothing once that is off
+  const [developerOpen, setDeveloperOpen] = useUrlState('developer', false, { validate: isBoolean });
   // What's new: the drawer, and the releases it reads once it opens
   const [changelogOpen, setChangelogOpen] = useUrlState('changelog', false, { validate: isBoolean });
   const liveRelease = useLatestRelease(!DEMO && settings?.dev !== true, status?.control?.updateSource ?? 'clone');
@@ -119,6 +127,7 @@ export function App() {
   const openChangelog = (source: ChangelogSource) => () => {
     if (!changelogOpen) track({ name: 'changelog_opened', source, update_available: updateAvailable !== null });
     setSettingsOpen(false);
+    setDeveloperOpen(false);
     setChangelogOpen(true);
   };
   useEffect(() => {
@@ -167,8 +176,15 @@ export function App() {
     if (next) {
       if (changelogOpen) changelogClosedVia('settings');
       setChangelogOpen(false);
+      setDeveloperOpen(false);
     }
     setSettingsOpen(next);
+  };
+  const openDeveloper = () => {
+    if (changelogOpen) changelogClosedVia('settings');
+    setChangelogOpen(false);
+    setSettingsOpen(false);
+    setDeveloperOpen(true);
   };
 
   return (
@@ -195,6 +211,8 @@ export function App() {
         onNotify={setNotify}
         usageStats={usageStats}
         onUsageStats={chooseUsageStats}
+        onResetFlags={settings?.dev && flagState.hasOverrides ? flagState.resetAll : undefined}
+        onOpenDeveloper={settings?.dev ? openDeveloper : undefined}
       />
       <Header
         status={status}
@@ -274,7 +292,11 @@ export function App() {
                 canUpdate={status.control?.canUpdate === true}
                 onRestart={status.control?.canRestart ? () => request('restart') : undefined}
                 autostartInstalled={status.health?.autostart}
+                onOpenDeveloper={openDeveloper}
               />
+            )}
+            {developerOpen && settings?.dev === true && (
+              <Developer shared={flagsShared} rows={flagState.rows} onSet={flagState.setOverride} onResetAll={flagState.resetAll} onClose={() => setDeveloperOpen(false)} />
             )}
             <footer className={styles.footer}>
               <span className="mono" title="Bridge IPC directory">{status.bridgeDir}</span>
