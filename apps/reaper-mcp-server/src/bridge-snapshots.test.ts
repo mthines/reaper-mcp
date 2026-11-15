@@ -14,7 +14,7 @@ const SCRIPTS = '/reaper/Scripts/';
 const SNAP_DIR = '/reaper/projects/.reaper-mcp/snapshots/';
 const LIBS = [
   'mcp_plan_lib.lua', 'mcp_actions_lib.lua', 'mcp_tracks_lib.lua', 'mcp_project_lib.lua',
-  'mcp_items_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_snapshots_ui_lib.lua',
+  'mcp_items_lib.lua', 'mcp_mixing_lib.lua', 'mcp_envelopes_lib.lua', 'mcp_edit_views_lib.lua', 'mcp_snapshots_ui_lib.lua',
 ];
 
 interface Listed { name: string; description: string; timestamp: number; trackCount?: number; scoped: boolean; fullChunk: boolean }
@@ -130,6 +130,24 @@ async function startBridge(files: Record<string, string> = {}, before = '') {
         f = assert(io.open("${SCRIPTS}mcp_bridge_data/_notify", "w")); f:write("${id}\\n"); f:close()
       `);
       await tick();
+      return id;
+    },
+    /** What the bridge answered an agent's command (the file the MCP server reads) */
+    async response(id: string) {
+      const raw = await lua.doString(`local f = io.open("${SCRIPTS}mcp_bridge_data/response_${id}.json", "r"); if not f then return nil end; local b = f:read("a"); f:close(); return b`);
+      return raw ? (JSON.parse(raw) as { success: boolean; error?: string; data?: Record<string, unknown> }) : null;
+    },
+    /** The first item's stretch markers as "pos/source" text, from the fake project */
+    async markers(): Promise<string> {
+      return (await lua.doString(`
+        local tk = reaper.GetActiveTake(reaper.GetTrackMediaItem(reaper.GetTrack(0, 0), 0))
+        local out = {}
+        for i = 0, reaper.GetTakeNumStretchMarkers(tk) - 1 do
+          local _, pos, src = reaper.GetTakeStretchMarker(tk, i)
+          out[#out + 1] = pos .. "/" .. src
+        end
+        return table.concat(out, " ")
+      `)) as string;
     },
     /** The page has the Snapshots view open: it pings on every poll */
     async ping(seconds = 0.5) {
@@ -376,5 +394,64 @@ describe('snapshot actions to bind to keys', () => {
   it('leaves scripts that are already actions alone', async () => {
     await startBridge({}, before('SCR 4 0 RSab "Custom: mcp_snapshot_next.lua" mcp_snapshot_next.lua\n'));
     expect(await registered()).toEqual([`${SCRIPTS}mcp_snapshot_quick_save.lua`, `${SCRIPTS}mcp_snapshot_prev.lua`]);
+  });
+});
+
+describe('stretch markers kept by an agent snapshot', () => {
+  const ALIGNED = `
+    local tr = api.GetTrack(0, 0)
+    tr.chunk = "<TRACK\\nNAME Kick\\n>\\n"
+    local it = api.AddMediaItemToTrack(tr)
+    it.vals = { D_POSITION = 10, D_LENGTH = 6 }
+    local tk = api.AddTakeToMediaItem(it)
+    api.SetTakeStretchMarker(tk, -1, 0, 0)
+    api.SetTakeStretchMarker(tk, -1, 1.25, 1)
+    api.SetTakeStretchMarker(tk, -1, 6, 6)
+  `;
+  const REALIGN = `
+    local tk = reaper.GetActiveTake(reaper.GetTrackMediaItem(reaper.GetTrack(0, 0), 0))
+    reaper.DeleteTakeStretchMarkers(tk, 1)
+    reaper.SetTakeStretchMarker(tk, -1, 1.9, 1)
+  `;
+
+  it('puts an alignment back when the snapshot is restored', async () => {
+    const bridge = await startBridge({}, ALIGNED);
+    const aligned = await bridge.markers();
+    const saved = await bridge.response(await bridge.send('snapshot_save', { name: 'aligned', trackIndices: [0], fullChunk: false, stretchMarkers: true }));
+    expect(saved?.data).toMatchObject({ success: true, stretchMarkerItems: 1 });
+
+    await engine?.doString(REALIGN);
+    expect(await bridge.markers()).not.toBe(aligned);
+
+    const restored = await bridge.response(await bridge.send('snapshot_restore', { name: 'aligned' }));
+    expect(await bridge.markers()).toBe(aligned);
+    expect(restored?.data).toMatchObject({ success: true, stretchMarkers: { restored: 1, missing: 0 } });
+  });
+
+  it('still restores them when REAPER refuses a track chunk, and says what happened', async () => {
+    const bridge = await startBridge({}, `${ALIGNED}\nreaper.SetTrackStateChunk = function() return false end`);
+    const aligned = await bridge.markers();
+    await bridge.send('snapshot_save', { name: 'aligned', trackIndices: [0], stretchMarkers: true }); // scoped: exact chunks
+
+    await engine?.doString(REALIGN);
+    const restored = await bridge.response(await bridge.send('snapshot_restore', { name: 'aligned' }));
+
+    expect(await bridge.markers()).toBe(aligned);
+    expect(restored?.success).toBe(true);
+    expect(restored?.data).toMatchObject({ tracksRestored: 0, stretchMarkers: { restored: 1 } });
+    expect((restored?.data?.warnings as string[]).join(' ')).toMatch(/Kick.*refused.*stretch markers are restored separately/);
+  });
+
+  it('leaves the markers alone when the snapshot holds none, or when asked not to restore them', async () => {
+    const bridge = await startBridge({}, ALIGNED);
+    await bridge.send('snapshot_save', { name: 'plain', trackIndices: [0], fullChunk: false });
+    await bridge.send('snapshot_save', { name: 'aligned', trackIndices: [0], fullChunk: false, stretchMarkers: true });
+    await engine?.doString(REALIGN);
+    const realigned = await bridge.markers();
+
+    await bridge.send('snapshot_restore', { name: 'plain' });
+    expect(await bridge.markers()).toBe(realigned);
+    await bridge.send('snapshot_restore', { name: 'aligned', restoreStretchMarkers: false });
+    expect(await bridge.markers()).toBe(realigned);
   });
 });

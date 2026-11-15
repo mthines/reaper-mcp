@@ -141,6 +141,7 @@ export type CommandType =
   | 'get_action'
   | 'run_action'
   | 'set_selected_tracks'
+  | 'get_selected_items'
   | 'set_selected_items'
   // Recording setup, fixed lanes and comping
   | 'get_record_setup'
@@ -336,12 +337,16 @@ export interface SnapshotSaveParams {
   description?: string;
   includeFxParams?: boolean;   // default true — capture all FX parameter values
   maxParamsPerFx?: number;     // default 500 — safety cap per plugin
+  trackIndices?: number[];     // scope the snapshot to these tracks
+  fullChunk?: boolean;         // exact track chunks (default true when scoped)
+  stretchMarkers?: boolean;    // also keep the stretch markers of every audio item on the captured tracks
 }
 
 export interface SnapshotRestoreParams {
   name: string;
   restoreTrackMeta?: boolean;  // default false — do not rename/recolor tracks
   restoreSendLevels?: boolean; // default true — update existing send volumes
+  restoreStretchMarkers?: boolean; // default true — put back saved stretch markers
 }
 
 export type SnapshotListParams = Record<string, never>;

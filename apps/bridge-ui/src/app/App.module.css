@@ -19,6 +19,7 @@
 .footerMeta { flex: none; display: inline-flex; align-items: center; }
 .footer a, .footerLink { color: var(--muted); text-decoration: none; }
 .footerLink { padding: 0; border: 0; background: none; font: inherit; cursor: pointer; }
+.devBadge { color: var(--warn); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; font-size: .85em; }
 .footerLink:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 .footer a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 

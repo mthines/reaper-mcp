@@ -84,6 +84,7 @@ export const DEMO_CALLS: Record<LoggedCommand, Record<string, unknown> | 'exampl
   // Selection
   get_selected_tracks: {},
   set_selected_tracks: { tracks: '["Kick In","Snare Top"]', mode: 'replace' },
+  get_selected_items: {},
   set_selected_items: 'example',
   get_time_selection: 'example',
   set_time_selection: 'example',

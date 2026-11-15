@@ -52,8 +52,12 @@ decide what to do. Explain mode is never on otherwise.
    an EQ on the wrong tracks). `list_tracks` (filtered by `parent`) or
    `get_track_lanes` right before each batch, and target by name where it is
    unique. Item indexes also change after every move, import or delete.
-2. **Snapshots do not store items.** `snapshot_save` keeps faders and FX
-   parameters, so it cannot undo a MIDI or arrangement edit. Before changing
+2. **Do not count on a snapshot to undo item edits.** A plain snapshot keeps faders and FX
+   parameters only. A scoped one (`trackIndices`) also stores each track's whole chunk, items
+   included, but REAPER refuses some chunks (tracks whose items carry Melodyne), and a restore
+   then reverts every item edit since. For stretch markers alone use `snapshot_save` with
+   `stretchMarkers: true` (and `fullChunk: false` to bring back only those). It cannot undo
+   a MIDI or arrangement edit. Before changing
    items, keep the original as a **take** of the item it replaces (see "Keeping
    the original" below), or as the A lane of a lane pair. **Never mute an
    original and leave it under or beside the new item**: overlapping muted items
@@ -277,13 +281,25 @@ use `knowledge/workflows/vocal-alignment.md`; load it first. In short:
    untouched) and delete them when the user is done.
 2. `align_audio_to_guide` with `dryRun` first, then apply; it reads the items'
    source files, so take FX such as Melodyne are not heard.
-3. Check the result with `verify_edit` (`timeScale` = the playback rate,
-   `expect: "changed"` for a stretch), then **tell the user which edits to
-   listen to**. A plain speed change (rates outside about 0.97x-1.03x) is reported as info (pitch follows speed);
+3. **Verify and iterate before you say it is done; the user should never have to
+   ask.** Run the loop in the workflow's "Verify and iterate": `verify_edit`
+   against the kept copy (`timeScale` = the playback rate, `expect: "changed"`
+   for a stretch), then pair the hits of the rendered guide and double
+   (`detect_transients` on both tracks) and list every pair beyond about 20 ms.
+   Fix confirmed outliers one hit at a time with `edit_stretch_markers`,
+   re-measure, at most 3 rounds. Do not judge a lead against a backing with
+   `measure_track_alignment` (too little correlation). Then **tell the user
+   which edits to listen to**. A plain speed change (rates outside about 0.97x-1.03x) is reported as info (pitch follows speed);
    a pitch-kept slow-down below 0.9x gets stretch artifacts that only the
    dropout check and the user's ear catch. A pass is evidence, not a verdict.
 4. Put each copied item straight at its final position; batch-moving items on a
    track re-sorts their indexes.
+5. A dry run that reports `replacedMarkers` above 1 means the double already has
+   stretch markers: say so before applying. Before applying, `snapshot_save` with
+   `stretchMarkers: true` and `trackIndices` of the guide and double tracks: it keeps
+   their stretch markers, which `snapshot_restore` puts back (a track-chunk restore
+   fails on tracks with Melodyne take FX; the markers still come back). `undo_project`
+   works only while nothing was written after.
 
 ## Workflow
 

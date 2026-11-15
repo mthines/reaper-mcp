@@ -206,7 +206,7 @@ reaper-mcp/
 | `@mthines/reaper-bridge-ui` | `apps/bridge-ui` | Vite + React Compiler → single HTML | Bridge status page served by REAPER's web interface |
 | `@reaper-mcp/protocol` | `libs/protocol` | `@nx/js:tsc` | Shared command/response types |
 
-## MCP Tools (189 total)
+## MCP Tools (190 total)
 
 Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-template, `measure_track_alignment` and `verify_edit` tools) accepts `-1` for the **master track**; track references (`track`, `from`, `to`) also accept an exact name, a `"{GUID}"`, or `"master"`.
 
@@ -319,12 +319,13 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `copy_section` | `tools/arrange.ts` | Copy a region (or start/end) to a position: items trimmed to it plus automation (points, and pooled copies of automation items inside it), optional `insert` and `tracks` |
 | `process_items` | `tools/arrange.ts` | `normalize` (item gain to a peak/true-peak/LUFS/RMS target), `reverse` (toggles), `glue` (whole items); selection kept |
 
-### Selection & Navigation Tools (5)
+### Selection & Navigation Tools (6)
 
 | Tool | File | Description |
 |------|------|-------------|
 | `get_selected_tracks` | `tools/selection.ts` | Get currently selected tracks with indices and names (master as -1) |
 | `set_selected_tracks` | `tools/selection.ts` | Select tracks by index, name or GUID (`replace` or `add`); all resolved first, an unknown one changes nothing |
+| `get_selected_items` | `tools/selection.ts` | The items selected now: `{trackIndex, itemIndex}`, track name, position, length, mute; paged (`offset`/`limit`, `{total, hasMore, items}`) |
 | `set_selected_items` | `tools/selection.ts` | Select media items by `{trackIndex, itemIndex}` (`replace` or `add`) |
 | `get_time_selection` | `tools/selection.ts` | Get time/loop selection start, end, length in seconds |
 | `set_time_selection` | `tools/selection.ts` | Set the time selection range (start/end in seconds) |
@@ -386,8 +387,8 @@ Every point tool takes an optional `automationItemIndex` to work on one automati
 
 | Tool | File | Description |
 |------|------|-------------|
-| `snapshot_save` | `tools/snapshots.ts` | Save mixer state to `.reaper-mcp/snapshots/` (v2: volumes, pans, FX params, sends); `trackIndices` scopes it, `fullChunk` stores exact track chunks |
-| `snapshot_restore` | `tools/snapshots.ts` | Restore a saved snapshot (FX params only if plugin name matches) |
+| `snapshot_save` | `tools/snapshots.ts` | Save mixer state to `.reaper-mcp/snapshots/` (v2: volumes, pans, FX params, sends); `trackIndices` scopes it, `fullChunk` stores exact track chunks, `stretchMarkers` keeps the stretch markers of the audio items on the captured tracks (flat strings, logic in `mcp_mixing_lib.lua`: `capture_stretch_markers` / `restore_stretch_markers`; REAPER refused `SetTrackStateChunk` on tracks whose items carry Melodyne take FX, so markers do not ride on the chunk) |
+| `snapshot_restore` | `tools/snapshots.ts` | Restore a saved snapshot (FX params only if plugin name matches); saved stretch markers are put back after the tracks, items found by GUID, else by track, position and length |
 | `snapshot_list` | `tools/snapshots.ts` | List project-scoped snapshots (falls back to global for unsaved projects) |
 | `snapshot_delete` | `tools/snapshots.ts` | Delete a saved snapshot by name |
 | `snapshot_edit` | `tools/snapshots.ts` | Rename a snapshot and/or change its description; the mixer state is copied unchanged, a name another snapshot's file uses is refused |
@@ -560,7 +561,7 @@ its source or a control label. Generated plugins themselves contain no telemetry
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 189 schemas) |
+| `list_tool_categories` | `tools/categories.ts` | List all tool categories with descriptions and tool names (compact — avoids loading all 190 schemas) |
 | `enable_tool_category` | `tools/categories.ts` | Get full tool list for a category; signals intent to use that category |
 | `disable_tool_category` | `tools/categories.ts` | Semantic context-budget hint that a category is no longer needed |
 

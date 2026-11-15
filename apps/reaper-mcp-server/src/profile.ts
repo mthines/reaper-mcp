@@ -13,8 +13,8 @@ export const PROFILES: Record<string, string[]> = {
   minimal: ['project', 'tracks', 'fx', 'transport', 'discovery', 'selection'],
   /** Mixing and mastering: measure, set levels and FX, route, automate, snapshot, render. */
   mixing: ['project', 'tracks', 'fx', 'fx_files', 'transport', 'discovery', 'selection', 'routing', 'plan', 'analysis', 'snapshots', 'envelopes', 'actions', 'knowledge', 'recording'],
-  /** Writing and editing music and arrangements (no takes or actions). Adding categories or an extension, e.g. `mixing,composition`, can push a profile past 128. */
-  music: ['project', 'tracks', 'fx', 'transport', 'discovery', 'selection', 'midi', 'media', 'arrange', 'markers', 'tempo', 'envelopes', 'plan'],
+  /** Writing and editing music and arrangements (no takes, actions or envelopes). Adding categories or an extension, e.g. `mixing,composition`, can push a profile past 128. */
+  music: ['project', 'tracks', 'fx', 'transport', 'discovery', 'selection', 'midi', 'media', 'arrange', 'markers', 'tempo', 'plan'],
   /** Inspect and measure; the tracks and project categories still hold a few writers, so this is not read-only. */
   analysis: ['project', 'tracks', 'transport', 'discovery', 'selection', 'routing', 'markers', 'tempo', 'analysis', 'knowledge'],
 };

@@ -391,6 +391,7 @@ export const MCP_TOOL_NAMES = [
   'process_items',
   // selection & navigation
   'get_selected_tracks',
+  'get_selected_items',
   'get_time_selection',
   'set_time_selection',
   // markers & regions
