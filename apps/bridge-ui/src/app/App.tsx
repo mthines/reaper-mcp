@@ -282,6 +282,12 @@ export function App() {
                 <button className={styles.footerLink} onClick={openChangelog('footer')} title="What’s new">Updated {formatAgo(now - lastChangeAt)}</button>
                 <span className="dot-sep" />
                 <button className={styles.footerLink} onClick={openChangelog('footer')} title="What’s new">reaper-mcp v{__VERSION__}</button>
+                {import.meta.env.DEV && !__HOSTED__ && (
+                  <>
+                    <span className="dot-sep" />
+                    <span className={styles.devBadge} title="Served by the dev server (pnpm dev:bridge), not the installed page">dev</span>
+                  </>
+                )}
                 <span className="dot-sep" />
                 <a href={guideUrl(undefined, hereUrl())} target="_blank" rel="noreferrer">Docs</a>
                 <span className="dot-sep" />
