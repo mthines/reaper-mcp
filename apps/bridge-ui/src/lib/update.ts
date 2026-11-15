@@ -8,6 +8,8 @@ export const RELEASES_API = 'https://api.github.com/repos/mthines/reaper-mcp/rel
  * `/latest` shortcut, which once named a release `npm install` could not find. */
 export const NPM_PACKAGE_API = 'https://registry.npmjs.org/@mthines%2Freaper-mcp';
 export const RELEASE_KEY = 'mcp-bridge-latest-release';
+/** A release version this page can compare: x.y.z, no prerelease suffix */
+const PLAIN_VERSION = /^\d+\.\d+\.\d+$/;
 const RELEASE_TTL_MS = 6 * 3600_000; // unauthenticated GitHub API allows 60 requests an hour
 
 /** Where this install gets its releases: npm for an npm install (a GitHub release npm hasn't published can't be installed), GitHub for a clone */
@@ -118,7 +120,7 @@ export function useLatestRelease(enabled: boolean, source: ReleaseSource = 'clon
       .then(([gh, npmDoc]) => {
         const ghVersion = gh?.tag_name?.replace(/^v/, '');
         const version = source === 'npm' ? newerVersion(installableNpmVersion(npmDoc), ghVersion) : ghVersion;
-        if (cancelled || !version || !/^\d+\.\d+\.\d+$/.test(version)) return;
+        if (cancelled || !version || !PLAIN_VERSION.test(version)) return;
         const url = source === 'npm' || !gh?.html_url ? `https://github.com/mthines/reaper-mcp/releases/tag/v${version}` : gh.html_url;
         const next = { version, url };
         try {
@@ -137,15 +139,15 @@ export function useLatestRelease(enabled: boolean, source: ReleaseSource = 'clon
 
 /** The newer of two versions either of which may be unknown. */
 export function newerVersion(a: string | undefined, b: string | undefined): string | undefined {
-  if (!a || !/^\d+\.\d+\.\d+$/.test(a)) return b;
-  if (!b || !/^\d+\.\d+\.\d+$/.test(b)) return a;
+  if (!a || !PLAIN_VERSION.test(a)) return b;
+  if (!b || !PLAIN_VERSION.test(b)) return a;
   return compareVersions(a, b) >= 0 ? a : b;
 }
 
 /** npm's `latest`, only when the version list holds it too: the registry's own shortcuts have named releases `npm install` could not find. */
 export function installableNpmVersion(doc: { 'dist-tags'?: { latest?: string }; versions?: Record<string, unknown> } | null | undefined): string | undefined {
   const latest = doc?.['dist-tags']?.latest;
-  return latest && /^\d+\.\d+\.\d+$/.test(latest) && doc?.versions && latest in doc.versions ? latest : undefined;
+  return latest && PLAIN_VERSION.test(latest) && doc?.versions && latest in doc.versions ? latest : undefined;
 }
 
 function cacheKey(source: ReleaseSource): string {

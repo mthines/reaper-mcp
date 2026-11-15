@@ -96,8 +96,8 @@ export async function fetchLatestRelease(fetchImpl: typeof fetch = fetch, timeou
     });
     if (!res.ok) return undefined;
     const tag = ((await res.json()) as { tag_name?: unknown }).tag_name;
-    const v = typeof tag === 'string' ? tag.replace(/^v/, '') : '';
-    return /^\d+\.\d+\.\d+$/.test(v) ? v : undefined;
+    const version = typeof tag === 'string' ? tag.replace(/^v/, '') : '';
+    return /^\d+\.\d+\.\d+$/.test(version) ? version : undefined;
   } catch {
     return undefined;
   }
@@ -126,8 +126,8 @@ export function realUpdateDeps(current: string, cli: string, force = false, brid
     released: () => fetchLatestRelease(fetch, 10_000),
     installed: () => {
       try {
-        const v = (JSON.parse(readFileSync(join(dirname(cli), 'package.json'), 'utf-8')) as { version?: unknown }).version;
-        return typeof v === 'string' ? v : undefined;
+        const version = (JSON.parse(readFileSync(join(dirname(cli), 'package.json'), 'utf-8')) as { version?: unknown }).version;
+        return typeof version === 'string' ? version : undefined;
       } catch {
         return undefined;
       }
