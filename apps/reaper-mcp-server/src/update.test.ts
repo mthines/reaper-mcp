@@ -53,6 +53,14 @@ describe('reaper-mcp update', () => {
     expect(t.text()).toContain('internet connection');
   });
 
+  it('blames the connection, not a security tool, when npm is unreachable and GitHub is ahead', async () => {
+    const t = setup({ latest: async () => undefined, released: async () => '0.91.1' });
+    expect(await runUpdate(t.deps)).toBe(1);
+    expect(t.ran).toEqual([]);
+    expect(t.text()).toContain('internet connection');
+    expect(t.text()).not.toContain('security tool');
+  });
+
   it('stops and names the command to run by hand when the download fails', async () => {
     const t = setup({ exit: { install: 1 } });
     expect(await runUpdate(t.deps)).toBe(1);
@@ -64,5 +72,44 @@ describe('reaper-mcp update', () => {
     const t = setup({ exit: { '/pkg/main.js': 1 } });
     expect(await runUpdate(t.deps)).toBe(2);
     expect(t.text()).toContain('reaper-mcp setup');
+  });
+
+  it('fails and says why when GitHub has a release npm cannot offer, instead of reporting nothing newer', async () => {
+    const t = setup({ latest: async () => '0.83.0', released: async () => '0.91.1', bridge: true });
+    expect(await runUpdate(t.deps)).toBe(1);
+    expect(t.ran).toEqual([]);
+    expect(t.text()).toContain('v0.91.1 is released');
+    expect(t.text()).toContain('Aikido');
+  });
+
+  it('stays quiet about GitHub when it cannot be reached', async () => {
+    const t = setup({ latest: async () => '0.83.0', released: async () => undefined, bridge: true });
+    expect(await runUpdate(t.deps)).toBe(3);
+  });
+
+  it('fails when npm reports success but the old version is still installed', async () => {
+    const t = setup({ installed: () => '0.83.0' });
+    expect(await runUpdate(t.deps)).toBe(1);
+    expect(t.ran).toEqual(['npm install -g @mthines/reaper-mcp@0.84.0']);
+    expect(t.text()).toContain('v0.83.0 is still the installed version');
+  });
+
+  it('goes on to setup when the installed version is the new one', async () => {
+    const t = setup({ installed: () => '0.84.0' });
+    expect(await runUpdate(t.deps)).toBe(0);
+  });
+
+  it('installs what npm offers and says so when GitHub has an even newer release npm hides', async () => {
+    const t = setup({ latest: async () => '0.90.0', released: async () => '0.91.1', bridge: true });
+    expect(await runUpdate(t.deps)).toBe(0);
+    expect(t.ran).toEqual(['npm install -g @mthines/reaper-mcp@0.90.0', 'node /pkg/main.js setup --yes']);
+    expect(t.text()).toContain('Updated to v0.90.0');
+    expect(t.text()).toContain('v0.91.1 is released too');
+  });
+
+  it('still reinstalls with force when GitHub is ahead of what npm offers', async () => {
+    const t = setup({ latest: async () => '0.83.0', released: async () => '0.91.1', force: true });
+    expect(await runUpdate(t.deps)).toBe(0);
+    expect(t.ran).toHaveLength(2);
   });
 });

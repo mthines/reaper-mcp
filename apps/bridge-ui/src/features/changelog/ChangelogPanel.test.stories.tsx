@@ -221,3 +221,13 @@ export const OpensALinkToABetaAndDropsItOnClose: Story = {
     await expect(args.onClose).toHaveBeenCalled();
   },
 };
+
+export const NamesReaPackForTheReaperSideOfAReaPackInstall: Story = {
+  args: { canUpdate: false, reapack: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Extensions → ReaPack → Synchronize packages')).toBeInTheDocument();
+    await expect(canvas.getByText('npm install -g @mthines/reaper-mcp@latest')).toBeInTheDocument();
+    await expect(canvas.queryByText('git pull && ./scripts/install.sh')).not.toBeInTheDocument();
+  },
+};

@@ -48,3 +48,5 @@ export const GitHubUnreachable: Story = { args: { releases: { status: 'error' } 
 
 /** No hand-made highlights: the plain release notes alone */
 export const NotesOnly: Story = { args: { highlights: [] } };
+
+export const UpdateThroughReaPack: Story = { args: { canUpdate: false, reapack: true } };

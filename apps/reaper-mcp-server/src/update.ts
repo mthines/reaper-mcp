@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { compareVersions } from './version.js';
 import { NPM_PACKAGE, fetchLatestVersion } from './update-check.js';
 import { quoteForCmd } from './harnesses.js';
@@ -21,6 +21,10 @@ export interface UpdateDeps {
   latest: () => Promise<string | undefined>;
   /** Run a command, streaming its output to ours; resolves to its exit code */
   run: (command: string, args: string[]) => Promise<number>;
+  /** The latest GitHub release, the cross-check on npm's list; undefined when GitHub could not be reached */
+  released?: () => Promise<string | undefined>;
+  /** The version now on disk where `cli` lives, read after the download; undefined when it can't be read */
+  installed?: () => string | undefined;
   /** npm, next to the node that runs this (a bare PATH must not matter) */
   npm: string;
   /** This node binary and the CLI entry the new install replaces in place */
@@ -38,6 +42,17 @@ export async function runUpdate(deps: UpdateDeps): Promise<number> {
   const { current, log } = deps;
   log('==> Checking for a new version');
   const latest = await deps.latest();
+  const released = await deps.released?.();
+  // npm only lists what this computer's route to it lets through. A security tool or proxy that hides new versions
+  // looks exactly like "nothing newer", so the release GitHub names is the check on npm's list.
+  // Only when npm has nothing to install: if it offers something newer than this install, install that first and report the gap after
+  const npmHasNewer = latest !== undefined && compareVersions(latest, current) > 0;
+  if (latest !== undefined && released && compareVersions(released, current) > 0 && !npmHasNewer && !deps.force) {
+    log(`✗ v${released} is released, but npm only offers v${latest} from this computer, so it cannot be installed.`);
+    log('    The release may still be reaching npm (try again in a few minutes), or a security tool or proxy between this computer and npm is hiding new versions (Aikido Device Protection does).');
+    log(`    To check: npm install -g ${NPM_PACKAGE}@${released}`);
+    return 1;
+  }
   if (!latest) {
     log('✗ Could not find a version npm can install. Either npm is unreachable (check your internet connection), or the newest release is not published there yet. Try again later.');
     return 1;
@@ -53,6 +68,12 @@ export async function runUpdate(deps: UpdateDeps): Promise<number> {
     log(`    npm install -g ${NPM_PACKAGE}@latest`);
     return 1;
   }
+  const onDisk = deps.installed?.();
+  if (onDisk !== undefined && compareVersions(onDisk, latest) !== 0) {
+    log(`✗ npm finished, but v${onDisk} is still the installed version, not v${latest}. Nothing was changed in REAPER.`);
+    log(`    Run this in a terminal to see what npm says: npm install -g ${NPM_PACKAGE}@${latest}`);
+    return 1;
+  }
   log('==> Installing into REAPER');
   if ((await deps.run(deps.node, [deps.cli, 'setup', '--yes'])) !== 0) {
     log('✗ The new version downloaded, but installing it into REAPER failed. Run this in a terminal to see why:');
@@ -60,7 +81,26 @@ export async function runUpdate(deps: UpdateDeps): Promise<number> {
     return 2;
   }
   log(`✓ Updated to v${latest}`);
+  if (released && compareVersions(released, latest) > 0) {
+    log(`    v${released} is released too, but npm does not offer it from this computer yet (it may still be reaching npm, or a security tool is hiding it). Run the update again later.`);
+  }
   return 0;
+}
+
+/** The latest GitHub release's version, undefined when GitHub can't be reached in time (rate limit, offline). */
+export async function fetchLatestRelease(fetchImpl: typeof fetch = fetch, timeoutMs = 3000): Promise<string | undefined> {
+  try {
+    const res = await fetchImpl('https://api.github.com/repos/mthines/reaper-mcp/releases/latest', {
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { accept: 'application/vnd.github+json' },
+    });
+    if (!res.ok) return undefined;
+    const tag = ((await res.json()) as { tag_name?: unknown }).tag_name;
+    const version = typeof tag === 'string' ? tag.replace(/^v/, '') : '';
+    return /^\d+\.\d+\.\d+$/.test(version) ? version : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** The real dependencies: npm beside this node, output passed through line by line. */
@@ -83,6 +123,15 @@ export function realUpdateDeps(current: string, cli: string, force = false, brid
         child.on('error', () => resolve(1));
         child.on('close', (code) => resolve(code ?? 1));
       }),
+    released: () => fetchLatestRelease(fetch, 10_000),
+    installed: () => {
+      try {
+        const version = (JSON.parse(readFileSync(join(dirname(cli), 'package.json'), 'utf-8')) as { version?: unknown }).version;
+        return typeof version === 'string' ? version : undefined;
+      } catch {
+        return undefined;
+      }
+    },
     npm: existsSync(npmBeside) ? npmBeside : 'npm',
     node: process.execPath,
     cli,

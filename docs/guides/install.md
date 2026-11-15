@@ -66,6 +66,18 @@ You still run `npm install -g @mthines/reaper-mcp` and `reaper-mcp init` for the
 
 Run `reaper-mcp update`, or press **Update** in the status window inside REAPER. It does the same thing and then offers a **Reload** button. It won't restart anything on its own.
 
+Installed the REAPER side with ReaPack? ReaPack updates that part: in REAPER choose **Extensions → ReaPack → Synchronize packages**. The server Claude Code runs updates with `npm install -g @mthines/reaper-mcp@latest`. The status window tells you the same when it sees a ReaPack install.
+
+## When the update can't finish
+
+If the update fails with a message that npm can't offer the newest version, something between your computer and npm is hiding it. A security tool or a company proxy can do that. Waiting a day often fixes it. Or install from a clone, which doesn't use npm:
+
+```bash
+git clone https://github.com/mthines/reaper-mcp.git && cd reaper-mcp && ./scripts/install.sh
+```
+
+Later, `./scripts/update.sh` in that folder brings it up to date.
+
 ## Something's off?
 
 Run `reaper-mcp doctor`. It checks each piece and says how to fix what's wrong.

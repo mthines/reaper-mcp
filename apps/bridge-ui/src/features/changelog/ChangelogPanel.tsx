@@ -5,7 +5,7 @@ import { REPO_URL } from '../../lib/links.js';
 import { load, save } from '../../lib/storage.js';
 import { isStringOrNull, useUrlState } from '../../lib/url-state.js';
 import { track } from '../../lib/analytics.js';
-import { compareVersions, updateLog } from '../../lib/update.js';
+import { compareVersions, failureReason, updateLog } from '../../lib/update.js';
 import type { BridgeUpdate } from '../../lib/status.js';
 import { cx } from '../../lib/cx.js';
 import drawerStyles from '../../styles/drawer.module.css';
@@ -35,6 +35,7 @@ export function ChangelogPanel({
   highlights = [],
   current,
   canUpdate,
+  reapack = false,
   update,
   onUpdate,
   installableUpTo,
@@ -47,6 +48,8 @@ export function ChangelogPanel({
   current: string;
   /** The bridge can update this install itself (a git clone with `mcp_update.conf`) */
   canUpdate: boolean;
+  /** The bridge runs from ReaPack's folder: the REAPER side updates through ReaPack */
+  reapack?: boolean;
   /** An update the bridge is running or just ran */
   update?: BridgeUpdate;
   onUpdate: () => void;
@@ -115,7 +118,7 @@ export function ChangelogPanel({
       <div className={drawerStyles.drawerBody}>
         {/* Never "up to date" before the releases are in: the list says it is loading or couldn't reach GitHub */}
         {(ready || (update?.state === 'running' && update.kind !== 'rebuild')) && (
-          <UpdateCard current={current} waiting={waiting} canUpdate={canUpdate} update={update} onUpdate={onUpdate} />
+          <UpdateCard current={current} waiting={waiting} canUpdate={canUpdate} reapack={reapack} update={update} onUpdate={onUpdate} />
         )}
         <div className={styles.toolbar}>
           <Toggle label="Show betas" hint="One per pull request, before it ships in a release" on={betas} onChange={chooseBetas} />
@@ -158,12 +161,14 @@ function UpdateCard({
   current,
   waiting,
   canUpdate,
+  reapack,
   update,
   onUpdate,
 }: {
   current: string;
   waiting: ChangelogRelease | null;
   canUpdate: boolean;
+  reapack: boolean;
   update?: BridgeUpdate;
   onUpdate: () => void;
 }) {
@@ -205,8 +210,20 @@ function UpdateCard({
           </button>
         )}
       </div>
-      {failed && <span className={cx(styles.cardLog, 'mono')}>{updateLog(update).at(-1) ?? 'The update didn’t finish.'}</span>}
-      {!canUpdate && (
+      {failed && <span className={cx(styles.cardLog, 'mono')}>{failureReason(updateLog(update)) ?? 'The update didn’t finish.'}</span>}
+      {reapack && (
+        <dl className={styles.commands}>
+          <dt>REAPER side</dt>
+          <dd>Extensions → ReaPack → Synchronize packages</dd>
+          {!canUpdate && (
+            <>
+              <dt>Server</dt>
+              <dd className="mono">npm install -g @mthines/reaper-mcp@latest</dd>
+            </>
+          )}
+        </dl>
+      )}
+      {!canUpdate && !reapack && (
         <dl className={styles.commands}>
           <dt>From a clone</dt>
           <dd className="mono">git pull &amp;&amp; ./scripts/install.sh</dd>

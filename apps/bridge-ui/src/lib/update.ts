@@ -8,6 +8,8 @@ export const RELEASES_API = 'https://api.github.com/repos/mthines/reaper-mcp/rel
  * `/latest` shortcut, which once named a release `npm install` could not find. */
 export const NPM_PACKAGE_API = 'https://registry.npmjs.org/@mthines%2Freaper-mcp';
 export const RELEASE_KEY = 'mcp-bridge-latest-release';
+/** A release version this page can compare: x.y.z, no prerelease suffix */
+const PLAIN_VERSION = /^\d+\.\d+\.\d+$/;
 const RELEASE_TTL_MS = 6 * 3600_000; // unauthenticated GitHub API allows 60 requests an hour
 
 /** Where this install gets its releases: npm for an npm install (a GitHub release npm hasn't published can't be installed), GitHub for a clone */
@@ -74,6 +76,15 @@ export function updateLog(update: BridgeUpdate | undefined): string[] {
   return Array.isArray(update?.log) ? update.log : [];
 }
 
+/** Where the clone install is shown, for when npm can't deliver the update */
+export const CLONE_INSTALL_DOC = 'https://reaper-mcp.vercel.app/docs/install#when-the-update-cant-finish';
+
+/** Why an update failed, for a person: the last ✗ line (the updater's own verdict comes after any ✗ lines setup printed on the way), else the last line. */
+export function failureReason(log: string[]): string | undefined {
+  const line = log.filter((l) => l.trimStart().startsWith('✗')).at(-1) ?? log.at(-1);
+  return line?.replace(/^\s*✗\s*/, '').trim() || undefined;
+}
+
 export interface Release {
   version: string;
   url: string;
@@ -94,15 +105,23 @@ export function useLatestRelease(enabled: boolean, source: ReleaseSource = 'clon
     const cached = readCache(key);
     if (cached && Date.now() - cached.at < RELEASE_TTL_MS) return;
     let cancelled = false;
-    fetch(source === 'npm' ? NPM_PACKAGE_API : RELEASES_API, {
-      headers: { Accept: source === 'npm' ? 'application/vnd.npm.install-v1+json' : 'application/vnd.github+json' },
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((body: { tag_name?: string; html_url?: string; 'dist-tags'?: { latest?: string }; versions?: Record<string, unknown> } | null) => {
-        const version = source === 'npm' ? installableNpmVersion(body) : body?.tag_name?.replace(/^v/, '');
-        if (cancelled || !version || !/^\d+\.\d+\.\d+$/.test(version)) return;
-        const url = source === 'npm' ? `https://github.com/mthines/reaper-mcp/releases/tag/v${version}` : body?.html_url;
-        if (!url) return;
+    const getJson = (url: string, accept: string) =>
+      fetch(url, { headers: { Accept: accept } })
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null);
+    const github = getJson(RELEASES_API, 'application/vnd.github+json') as Promise<{ tag_name?: string; html_url?: string } | null>;
+    // An npm install is offered the newer of npm's and GitHub's release: when GitHub is ahead, npm is behind or hiding it
+    // (a proxy or security tool), and the update then fails with that reason instead of the page saying "up to date".
+    const npm =
+      source === 'npm'
+        ? (getJson(NPM_PACKAGE_API, 'application/vnd.npm.install-v1+json') as Promise<Parameters<typeof installableNpmVersion>[0]>)
+        : Promise.resolve(null);
+    Promise.all([github, npm])
+      .then(([gh, npmDoc]) => {
+        const ghVersion = gh?.tag_name?.replace(/^v/, '');
+        const version = source === 'npm' ? newerVersion(installableNpmVersion(npmDoc), ghVersion) : ghVersion;
+        if (cancelled || !version || !PLAIN_VERSION.test(version)) return;
+        const url = source === 'npm' || !gh?.html_url ? `https://github.com/mthines/reaper-mcp/releases/tag/v${version}` : gh.html_url;
         const next = { version, url };
         try {
           localStorage.setItem(key, JSON.stringify({ at: Date.now(), release: next }));
@@ -110,9 +129,6 @@ export function useLatestRelease(enabled: boolean, source: ReleaseSource = 'clon
           /* storage blocked: check again next load */
         }
         setRelease(next);
-      })
-      .catch(() => {
-        /* offline: no notice */
       });
     return () => {
       cancelled = true;
@@ -121,10 +137,17 @@ export function useLatestRelease(enabled: boolean, source: ReleaseSource = 'clon
   return release;
 }
 
+/** The newer of two versions either of which may be unknown. */
+export function newerVersion(a: string | undefined, b: string | undefined): string | undefined {
+  if (!a || !PLAIN_VERSION.test(a)) return b;
+  if (!b || !PLAIN_VERSION.test(b)) return a;
+  return compareVersions(a, b) >= 0 ? a : b;
+}
+
 /** npm's `latest`, only when the version list holds it too: the registry's own shortcuts have named releases `npm install` could not find. */
 export function installableNpmVersion(doc: { 'dist-tags'?: { latest?: string }; versions?: Record<string, unknown> } | null | undefined): string | undefined {
   const latest = doc?.['dist-tags']?.latest;
-  return latest && /^\d+\.\d+\.\d+$/.test(latest) && doc?.versions && latest in doc.versions ? latest : undefined;
+  return latest && PLAIN_VERSION.test(latest) && doc?.versions && latest in doc.versions ? latest : undefined;
 }
 
 function cacheKey(source: ReleaseSource): string {
