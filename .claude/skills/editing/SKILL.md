@@ -52,9 +52,12 @@ decide what to do. Explain mode is never on otherwise.
    an EQ on the wrong tracks). `list_tracks` (filtered by `parent`) or
    `get_track_lanes` right before each batch, and target by name where it is
    unique. Item indexes also change after every move, import or delete.
-2. **Snapshots do not store items** (except stretch markers: `snapshot_save` with
-   `stretchMarkers: true`). `snapshot_save` keeps faders and FX
-   parameters, so it cannot undo a MIDI or arrangement edit. Before changing
+2. **Do not count on a snapshot to undo item edits.** A plain snapshot keeps faders and FX
+   parameters only. A scoped one (`trackIndices`) also stores each track's whole chunk, items
+   included, but REAPER refuses some chunks (tracks whose items carry Melodyne), and a restore
+   then reverts every item edit since. For stretch markers alone use `snapshot_save` with
+   `stretchMarkers: true` (and `fullChunk: false` to bring back only those). It cannot undo
+   a MIDI or arrangement edit. Before changing
    items, keep the original as a **take** of the item it replaces (see "Keeping
    the original" below), or as the A lane of a lane pair. **Never mute an
    original and leave it under or beside the new item**: overlapping muted items

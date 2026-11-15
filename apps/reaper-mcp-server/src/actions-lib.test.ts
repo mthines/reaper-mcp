@@ -200,16 +200,20 @@ describe('mcp_actions_lib.lua (wasmoon)', () => {
       local api = new_fake{ tracks = {
         { name = "Kick", items = 2 }, { name = "Snare", items = 1 }, { name = "Bass" },
       } }
-      assert(actions.get_selected_items(api).count == 0, "nothing selected")
+      assert(actions.get_selected_items(api).total == 0, "nothing selected")
       api.tracks[1].items[2].selected = true
       api.tracks[2].items[1].selected = true
       local writes = api.writes
       local r = actions.get_selected_items(api)
-      assert(r.count == 2 and #r.items == 2, "two selected")
+      assert(r.total == 2 and #r.items == 2 and not r.hasMore, "two selected")
       assert(r.items[1].trackIndex == 0 and r.items[1].itemIndex == 1 and r.items[1].trackName == "Kick", "kick item 1")
       assert(r.items[2].trackIndex == 1 and r.items[2].itemIndex == 0 and r.items[2].trackName == "Snare", "snare item 0")
       assert(type(r.items[1].position) == "number" and type(r.items[1].length) == "number" and r.items[1].muted == false, "item details")
       assert(api.writes == writes, "read only")
+      local page = actions.get_selected_items(api, 1, 1)
+      assert(page.total == 2 and #page.items == 1 and page.items[1].trackName == "Snare" and not page.hasMore, "second page")
+      local first = actions.get_selected_items(api, 0, 1)
+      assert(#first.items == 1 and first.hasMore, "more after the first")
     `);
   });
 

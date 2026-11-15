@@ -74,10 +74,14 @@ export function registerSelectionTools(server: McpServer): void {
   server.tool(
     'get_selected_items',
     'Get the media items selected right now, as {trackIndex, itemIndex} (the indexes list_media_items and the item tools use) with the track name, position and length in seconds, and mute. ' +
-      'Use it when the user says "the selected items", instead of guessing which tracks they mean.',
-    {},
-    async () => {
-      const res = await sendCommand('get_selected_items');
+      'Use it when the user says "the selected items", instead of guessing which tracks they mean. ' +
+      'Paged: returns {total, hasMore, items}; pass offset to read on.',
+    {
+      offset: z.coerce.number().int().min(0).optional().default(0).describe('Selected items to skip'),
+      limit: z.coerce.number().int().min(1).max(1000).optional().default(200).describe('Most items to return'),
+    },
+    async ({ offset, limit }) => {
+      const res = await sendCommand('get_selected_items', { offset, limit });
       if (!res.success) {
         return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
       }

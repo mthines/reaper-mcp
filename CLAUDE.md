@@ -325,7 +325,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 |------|------|-------------|
 | `get_selected_tracks` | `tools/selection.ts` | Get currently selected tracks with indices and names (master as -1) |
 | `set_selected_tracks` | `tools/selection.ts` | Select tracks by index, name or GUID (`replace` or `add`); all resolved first, an unknown one changes nothing |
-| `get_selected_items` | `tools/selection.ts` | The items selected now: `{trackIndex, itemIndex}`, track name, position, length, mute |
+| `get_selected_items` | `tools/selection.ts` | The items selected now: `{trackIndex, itemIndex}`, track name, position, length, mute; paged (`offset`/`limit`, `{total, hasMore, items}`) |
 | `set_selected_items` | `tools/selection.ts` | Select media items by `{trackIndex, itemIndex}` (`replace` or `add`) |
 | `get_time_selection` | `tools/selection.ts` | Get time/loop selection start, end, length in seconds |
 | `set_time_selection` | `tools/selection.ts` | Set the time selection range (start/end in seconds) |

@@ -46,7 +46,7 @@ The align call plans from the items' source files. What the user hears is the re
 ## Undoing an alignment
 
 - **Before aligning, save the markers:** `snapshot_save { name: "before-align", trackIndices: [<guide track>, <double track>], stretchMarkers: true }`. It keeps the stretch markers of every audio item on those tracks, apart from the track chunk, and `snapshot_restore` puts them back on the same items (found by GUID, else by track, position and length). The reply says how many items it restored, left alone or could not find. Scope it with `trackIndices` in a big project.
-- Without `stretchMarkers` a snapshot holds no items, so it cannot undo an alignment. `undo_project` does, one undo point per `align_audio_to_guide` call, as long as nothing was written after it.
+- A scoped snapshot (`trackIndices`, which turns on `fullChunk`) stores each track's whole state chunk, items included, so restoring it also reverts every item edit made since, on tracks REAPER accepts the chunk for. Pass `fullChunk: false` with `stretchMarkers: true` to bring back only the markers. A snapshot without either holds no items, so it cannot undo an alignment. `undo_project` does, one undo point per `align_audio_to_guide` call, as long as nothing was written after it.
 - A `fullChunk` snapshot of the tracks was refused (`SetTrackStateChunk failed`) on tracks whose items carry Melodyne (ARA) take FX; the cause is not confirmed. The restore warns, leaves that track unchanged and still restores the saved stretch markers. For such tracks pass `fullChunk: false` when only the markers matter.
 
 ## Stretching a vocal: what the checks mean

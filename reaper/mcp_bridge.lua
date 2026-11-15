@@ -3566,7 +3566,7 @@ end
 
 function handlers.get_selected_items(params)
   return with_actions_lib(function()
-    return actions_lib.get_selected_items(reaper)
+    return actions_lib.get_selected_items(reaper, params.offset, params.limit)
   end)
 end
 
