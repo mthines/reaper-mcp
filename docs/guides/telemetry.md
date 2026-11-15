@@ -10,9 +10,9 @@ duration: 3 min
 
 Hey, I'm Mads, and I build reaper-mcp. I'm a programmer at [Dash0](https://www.dash0.com), I play in a band called [Kaiju](https://open.spotify.com/artist/2R3yJQTWO9bfSzWldmhR6x) in my spare time, and I'm a father of three. So this gets built in the gaps, and it's the tool I wanted for my own sessions.
 
-The usage numbers are how I find out which tools people use, which ones break, and where setup trips people up. I can't fix what I can't see. It's on by default, setup asks before sending anything, and you can switch it off in ten seconds.
+The usage numbers are how I find out which tools people use, which ones break, and where setup trips people up. I can't fix what I can't see. It's on by default, setup asks before sending anything, and you can always switch it off in ten seconds. But please don't, if you're OK with it. More on why [below](#why-please-leave-it-on).
 
-I'm a musician too, so I'm not after your music. Your audio never leaves your computer through reaper-mcp.
+I'm a musician too, so I'm not after your music. I can't hear your audio, see your MIDI or read your projects. All I see is the interactions: which tool ran, and whether it worked. Your audio never leaves your computer through reaper-mcp.
 
 ## Turn it off
 
@@ -63,10 +63,16 @@ It's off when your browser sends Do Not Track or Global Privacy Control, and the
 - **There's a separate once-a-day update check**, a plain request for the latest version number. It sends nothing about you and has its own off switch (`REAPER_MCP_UPDATE_CHECK=0`).
 - **Opening the docs from the bridge page** asks this docs site for its list of pages, the first time you open the ⌘K palette. It is a plain request for a file and sends nothing about you or your session.
 
-## Why leave it on
+## Why please leave it on
 
-Concrete example: usage numbers showed people getting stuck between "installed" and "first working conversation". That turned into the setup that now ends by offering `init` and a health check, press Enter twice. I couldn't have found that by guessing.
+It's one person building this in the gaps of a normal life, so I can't sit next to anyone while they try it. The numbers are my eyes.
+
+- **A failing tool call shows up.** When a tool times out or breaks on someone's setup, I see the tool and the kind of failure. That's usually enough to find the bug and fix it, often before anyone has to write to me.
+- **I learn what to build.** The tools people reach for decide what gets polished. The ones nobody touches get questioned.
+- **Setup gets better.** Usage numbers showed people getting stuck between "installed" and "first working conversation". That turned into the setup that now ends by offering `init` and a health check, press Enter twice. I couldn't have found that by guessing.
+
+None of it needs your music, your track names or what you typed, and it never gets them.
 
 The full list, written by the code that enforces it, is in [TELEMETRY.md](https://github.com/mthines/reaper-mcp/blob/main/TELEMETRY.md).
 
-> your-call: Off is a perfectly fine answer. Nothing about the assistant gets worse.
+> your-call: Off is always your call, and nothing about the assistant gets worse. If you're OK with it, though, leaving it on is the best help you can give me, because it's how a broken tool gets fixed. Thank you.
