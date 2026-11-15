@@ -279,7 +279,7 @@ export function App() {
             <footer className={styles.footer}>
               <span className="mono" title="Bridge IPC directory">{status.bridgeDir}</span>
               <span className={styles.footerMeta}>
-                <button className={styles.footerLink} onClick={openChangelog('footer')} title="What’s new">Updated {formatAgo(now - lastChangeAt)}</button>
+                Updated {formatAgo(now - lastChangeAt)}
                 <span className="dot-sep" />
                 <button className={styles.footerLink} onClick={openChangelog('footer')} title="What’s new">reaper-mcp v{__VERSION__}</button>
                 <span className="dot-sep" />
