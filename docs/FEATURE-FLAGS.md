@@ -81,6 +81,8 @@ An override that names an unknown flag or variant (a stale file after a rename) 
 
 On the bridge page, turn on developer mode (Settings), then use **Developer: feature flags** to see each flag's resolved variant and reason and to force or reset one. That override lives in this browser only. The palette has **Reset feature flag overrides**.
 
+Forcing a flag on is unsupported. A flag hides something unfinished, so it may break; that is the trade you accept by forcing it. `reaper-mcp flags set` says so, `flags list` shows what each flag does, and `reaper-mcp doctor` warns while any override is active, so a forgotten one is the first thing to rule out. Undo with `reaper-mcp flags reset`.
+
 An override is a convenience, not access control: anyone can run `reaper-mcp flags set` or turn on developer mode, and the flagged code ships in every install. Don't gate anything sensitive behind a flag.
 
 ## Ramp it to a percentage

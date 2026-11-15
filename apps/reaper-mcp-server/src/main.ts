@@ -7,7 +7,7 @@ import { createServer } from './server.js';
 import { resolveProfile } from './profile.js';
 import { checkExtensions, loadExtensions } from './extensions.js';
 import { extensionCommand } from './extension-cli.js';
-import { flagsCommand } from './flags.js';
+import { flagOverrideCheck, flagsCommand } from './flags.js';
 import { ensureBridgeDir, isBridgeRunning, getBridgeState, bridgeDownMessage, cleanupStaleFiles, readBridgeEvents, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
 import { initTelemetry, shutdownTelemetry, getTracer, recordClientConnected, registerBridgeGauges, emitLog, exceptionAttributes, readServiceVersion, reportConsentChange } from './telemetry.js';
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -485,6 +485,9 @@ async function doctor(): Promise<number> {
     readIfExists(join(getReaperResourcePath(), 'reaper-extstate.ini')),
     await isReaperRunning(),
   ));
+
+  const forcedFlags = flagOverrideCheck();
+  if (forcedFlags) core.push(forcedFlags);
 
   const globalClaudeDir = join(homedir(), '.claude');
   const localSkills = existsSync(join(process.cwd(), '.claude', 'skills', 'mixer', 'SKILL.md'));

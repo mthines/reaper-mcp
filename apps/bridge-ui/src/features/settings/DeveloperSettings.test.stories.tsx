@@ -57,3 +57,9 @@ export const SaysSoWhenNoFlagsAreDeclared: Story = {
     await expect(canvas.queryByRole('button', { name: 'Reset all overrides' })).toBeNull();
   },
 };
+
+export const WarnsThatForcingAFlagIsUnsupported: Story = {
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText(/Forcing one on is unsupported and may break things/)).toBeInTheDocument();
+  },
+};

@@ -26,6 +26,9 @@ export function DeveloperSettings({
       <p className={settingsPanelStyles.settingHint}>
         Forcing a variant changes this browser only. The bridge server has its own overrides: <code>reaper-mcp flags</code>.
       </p>
+      <p className={settingsPanelStyles.settingHint}>
+        Flags hide unfinished features. Forcing one on is unsupported and may break things; reset it to undo.
+      </p>
       {rows.length === 0 ? (
         <div className={settingsPanelStyles.rowHint}>No feature flags are declared.</div>
       ) : (

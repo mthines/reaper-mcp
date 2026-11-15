@@ -6,7 +6,7 @@ import { trace } from '@opentelemetry/api';
 import { node, tracing } from '@opentelemetry/sdk-node';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { parseRegistry } from '@reaper-mcp/feature-flags';
-import { createServerFlags, flagsCommand, readFlagOverrides, type FlagsCommandIO } from './flags.js';
+import { createServerFlags, flagOverrideCheck, flagsCommand, readFlagOverrides, type FlagsCommandIO } from './flags.js';
 import { instrumentToolHandlers } from './server.js';
 import { AnonymizingSpanExporter } from './telemetry-consent.js';
 
@@ -41,6 +41,37 @@ function capture(): { io: FlagsCommandIO; out: string[]; err: string[] } {
   const err: string[] = [];
   return { io: { log: (l) => out.push(l), error: (l) => err.push(l) }, out, err };
 }
+
+describe('forced flags are visible, not silent', () => {
+  const run = (...args: string[]) => {
+    const c = capture();
+    flagsCommand(args, { registry, dir, env: {}, installId: () => 'install-1', io: c.io, domain: 'warn-test' });
+    return c.out.join('\n');
+  };
+
+  it('list shows what each flag does', () => {
+    expect(run('list')).toMatch(/new-panel[^\n]*\n\s+fixture/);
+  });
+
+  it('set warns that a forced flag is unsupported and says how to undo it', () => {
+    const out = run('set', 'new-panel', 'on');
+    expect(out).toMatch(/unsupported/);
+    expect(out).toMatch(/reaper-mcp flags reset new-panel/);
+  });
+
+  it('doctor stays quiet without overrides and names every forced flag once one is set', () => {
+    const opts = { registry, dir, env: {}, installId: () => 'install-1', domain: 'warn-test' };
+    expect(flagOverrideCheck(opts)).toBeUndefined();
+    run('set', 'new-panel', 'on');
+    run('set', 'static-panel', 'b');
+    const check = flagOverrideCheck(opts);
+    expect(check?.status).toBe('warn');
+    expect(check?.detail).toMatch(/new-panel=on/);
+    expect(check?.detail).toMatch(/static-panel=b/);
+    run('reset');
+    expect(flagOverrideCheck(opts)).toBeUndefined();
+  });
+});
 
 describe('reaper-mcp flags', () => {
   it('set writes flags.json, list shows it with reason override, reset clears it', () => {

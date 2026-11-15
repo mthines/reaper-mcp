@@ -133,6 +133,25 @@ export function createServerFlags(options: ServerFlagsOptions = {}): ServerFlags
   };
 }
 
+/**
+ * What `reaper-mcp doctor` says about forced flags: nothing when none are set, otherwise one warning that
+ * names them, so a forgotten override is the first thing to rule out when something behaves oddly.
+ */
+export function flagOverrideCheck(
+  options: ServerFlagsOptions = {},
+): { label: string; status: 'warn'; detail: string; fix: string } | undefined {
+  const forced = createServerFlags(options)
+    .rows()
+    .filter((r) => r.override !== undefined);
+  if (forced.length === 0) return undefined;
+  return {
+    label: 'Feature flags',
+    status: 'warn',
+    detail: `${forced.length} forced on this install: ${forced.map((r) => `${r.key}=${r.override}`).join(', ')}`,
+    fix: 'reaper-mcp flags reset (forced flags can be unfinished and break things)',
+  };
+}
+
 const defaultFlags = createServerFlags();
 
 /** Evaluate a registered flag for this install. A tool handler calling this stamps its own span. */
@@ -177,6 +196,7 @@ export function flagsCommand(args: string[], options: FlagsCommandOptions = {}):
     for (const row of rows) {
       const note = row.override ? ' (override)' : row.experiment?.enabled ? ` (experiment: ${row.experiment.split})` : '';
       io.log(`${row.key}  ${row.variant}  reason=${row.reason}${note}`);
+      io.log(`    ${row.description}`);
     }
     return 0;
   }
@@ -199,6 +219,7 @@ export function flagsCommand(args: string[], options: FlagsCommandOptions = {}):
     const stored = readFlagOverrides(dir, {}, registry);
     writeFlagOverrides({ ...stored, [key]: variant }, dir);
     io.log(`${key} forced to "${variant}" on this install. It applies from the next evaluation, no restart needed.`);
+    io.log(`Forcing a flag is unsupported: it may be unfinished and break things. Undo it with: reaper-mcp flags reset ${key}`);
     return 0;
   }
 
