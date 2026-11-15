@@ -114,7 +114,7 @@ Give `db` on volume envelopes: REAPER stores 0 dB as 716.2 on its own Volume env
 
 | Tool | Description |
 |------|-------------|
-| `detect_transients` | The hits in a track (rendered post-FX) or an audio file: time, strength, band (kick/snare/hats), tempo guess, hits per section |
+| `detect_transients` | The hits in a track (its own audio before track FX and fader, rendered when that can't be read) or an audio file: time, strength, band (kick/snare/hats), tempo guess, hits per section |
 | `create_transient_automation` | Turn the hits into flash pulses on an envelope, e.g. a lighting plugin's brightness that follows the kick and snare |
 
 A file is read as-is; for a song warped onto the click with stretch markers, analyze its track.
@@ -151,7 +151,7 @@ Workflow: [knowledge/workflows/transient-lighting.md](../knowledge/workflows/tra
 | `transform_midi` | Transpose, velocity (set/scale/add/clamp), humanize (seeded), lengths (set/scale/legato) |
 | `import_midi_file` | Import a .mid file as MIDI items, one call, no dialog |
 | `transcribe_voice_sketch` | Humming/beatboxing → quantized melody, tentative percussion, tempo/key, and a generated band arrangement. Optional MIDI, sampled mix, and separate instrument stems |
-| `detect_key` | The key of a MIDI track, a rendered track, one media item or an audio file, with confidence and the chroma |
+| `detect_key` | The key of a MIDI track, a track's audio (read before track FX, rendered when that can't be read), one media item or an audio file, with confidence and the chroma |
 | `detect_chords` | The chords per bar or beat of a MIDI track, a rendered track, one media item or an audio file: progression, roman numerals, bass notes for a bass line. Audio uses the chord model when installed (`reaper-mcp setup-sidecar --with-chords`: sevenths and inversions from a full mix), else chroma templates |
 
 #### Voice recording to an arrangement

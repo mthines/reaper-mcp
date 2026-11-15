@@ -9,7 +9,7 @@ vi.mock('node:fs/promises', () => ({ unlink: vi.fn() }));
 
 import { sendCommand } from './bridge.js';
 import { unlink } from 'node:fs/promises';
-import { renderTrack, renderTracks, renderTracksComparable } from './render.js';
+import { renderTrack, renderTracks } from './render.js';
 
 const sendCommandMock = sendCommand as unknown as ReturnType<typeof vi.fn>;
 const unlinkMock = unlink as unknown as ReturnType<typeof vi.fn>;
@@ -73,43 +73,5 @@ describe('renderTracks', () => {
     expect(sendCommandMock.mock.calls[0][0]).toBe('render_tracks_to_wav');
     expect(asked(0)).toMatchObject({ trackIndices: [1, 2], dry: true });
     expect(res.map((r) => r.dry)).toEqual([true, true]);
-  });
-});
-
-describe('renderTracksComparable', () => {
-  it('keeps what the bridge read when every track was read', async () => {
-    sendCommandMock.mockResolvedValue(ok({ tracks: [wav(1, { dry: true }), wav(2, { dry: true })], rendered: 0, cached: 0 }));
-    const res = await renderTracksComparable([1, 2], 0, 10, { dry: true });
-    expect(sendCommandMock).toHaveBeenCalledTimes(1);
-    expect(res.every((r) => r.dry)).toBe(true);
-  });
-
-  it('keeps what the bridge rendered when none could be read', async () => {
-    sendCommandMock.mockResolvedValue(ok({ tracks: [wav(1), wav(2)], rendered: 2, cached: 0 }));
-    const res = await renderTracksComparable([1, 2], 0, 10, { dry: true });
-    expect(sendCommandMock).toHaveBeenCalledTimes(1);
-    expect(res.every((r) => !r.dry)).toBe(true);
-  });
-
-  it('renders all of them when only some could be read, so the two are never compared across kinds', async () => {
-    sendCommandMock
-      .mockResolvedValueOnce(ok({ tracks: [wav(1, { dry: true }), wav(2, { dry: false })], rendered: 1, cached: 0, dryRead: 1 }))
-      .mockResolvedValueOnce(ok({ tracks: [wav(1, { dry: false }), wav(2, { dry: false })], rendered: 2, cached: 0 }));
-    const res = await renderTracksComparable([1, 2], 0, 10, { dry: true });
-    expect(sendCommandMock).toHaveBeenCalledTimes(2);
-    expect(asked(0)).toHaveProperty('dry', true);
-    expect(asked(1)).not.toHaveProperty('dry');
-    expect(res.every((r) => !r.dry)).toBe(true);
-    // the first pass's files are not kept
-    expect(unlinkMock).toHaveBeenCalledWith('/tmp/w0.wav');
-    expect(unlinkMock).toHaveBeenCalledWith('/tmp/w1.wav');
-  });
-
-  it('leaves the bridge cache\'s own files to the bridge when it re-renders', async () => {
-    sendCommandMock
-      .mockResolvedValueOnce(ok({ tracks: [wav(1, { dry: true, cacheOwned: true }), wav(2, { cacheOwned: true })], rendered: 1, cached: 0 }))
-      .mockResolvedValueOnce(ok({ tracks: [wav(1, { cacheOwned: true }), wav(2, { cacheOwned: true })], rendered: 2, cached: 0 }));
-    await renderTracksComparable([1, 2], 0, 10, { dry: true });
-    expect(unlinkMock).not.toHaveBeenCalled();
   });
 });

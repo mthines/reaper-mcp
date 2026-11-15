@@ -21,7 +21,7 @@ import { z } from 'zod/v4';
 import { basename } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
-import { discardRender, renderTrack, renderTracks, renderTracksComparable } from '../render.js';
+import { discardRender, renderTrack, renderTracks } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
 import { alignmentSummary, logToolResult, offlineSummary, verifySummary } from '../tool-log.js';
 import { SETUP_SIDECAR_HINT } from '../sidecar-hint.js';
@@ -310,7 +310,7 @@ export function registerOfflineTools(server: McpServer): void {
         // Both sides are rendered: an edit made with track FX or the fader (an EQ, a compressor, a gain
         // change) only exists in a render, so a dry read of the two tracks would call it unchanged.
         if (referenceTrack != null) {
-          rendered.push(...(await renderTracksComparable([referenceTrack, trackIndex], startTime, end)));
+          rendered.push(...(await renderTracks([referenceTrack, trackIndex], startTime, end)));
         } else {
           rendered.push(await renderTrack(trackIndex, startTime, end));
         }

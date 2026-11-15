@@ -74,23 +74,6 @@ export async function renderTracks(
   throw new Error(`Render failed: ${res.error}`);
 }
 
-/**
- * Two or more tracks that are going to be compared with each other: all dry or all rendered. When a dry read
- * could serve some of them and not the others (a folder next to an audio track), comparing the track's own audio
- * with a processed render would measure the FX, so they are all rendered instead.
- */
-export async function renderTracksComparable(
-  trackIndices: number[],
-  startTime: number,
-  endTime: number,
-  options?: RenderOptions,
-): Promise<RenderTrackToWavResult[]> {
-  const first = await renderTracks(trackIndices, startTime, endTime, options);
-  if (first.every((r) => r.dry === true) || first.every((r) => r.dry !== true)) return first;
-  await Promise.all(first.map(discardRender));
-  return renderTracks(trackIndices, startTime, endTime);
-}
-
 /** Done with a render: delete it, unless the bridge's cache owns it (it may hand it out again). */
 export async function discardRender(wav: Pick<RenderTrackToWavResult, 'wavPath' | 'cacheOwned'>): Promise<void> {
   if (wav.cacheOwned) return;

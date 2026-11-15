@@ -64,7 +64,7 @@ reaper = {
   GetProjectStateChangeCount = function() return w.count end,
   GetTrackGUID = function(t) return t.guid or "{MASTER}" end,
   GetParentTrack = function(t) return t.parent end,
-  GetTrackNumSends = function(t) return #t.sends end,
+  GetTrackNumSends = function(t, cat) if cat == -1 then return t.receives or 0 end return #t.sends end,
   GetTrackSendInfo_Value = function(t, _, i, key) return t.sends[i + 1] end,
   GetSetMediaTrackInfo_String = function(t) return true, t.name end,
   GetMediaTrackInfo_Value = function(t, key)
@@ -531,6 +531,15 @@ describe('dry read', () => {
       w.tracks[1].items = { { pos = 11, len = 8, take = { midi = false, fx = { "VST: ReaEQ (Cockos)", "JS: Volume Adjustment" } } } }
       local native = assert(dry({ 0 }, { fresh = true }))
       assert(native.tracks[1].dry == true)
+    `);
+  });
+
+  it('renders a track that receives audio by send, which its own items do not hold', async () => {
+    await runWorld(`${DRY}
+      w.tracks[1].items = { { pos = 11, len = 8, take = { midi = false } } }
+      w.tracks[1].receives = 1
+      local res = assert(dry({ 0 }))
+      assert(res.tracks[1].dry == false and #w.renders == 1 and #w.reads == 0)
     `);
   });
 

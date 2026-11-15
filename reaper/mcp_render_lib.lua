@@ -385,6 +385,8 @@ local function dry_eligible(reaper, t, start, stop)
   if t.master or not has_accessor(reaper) then return false end
   if stop - start > M.MAX_DRY_SECONDS then return false end
   if reaper.GetMediaTrackInfo_Value(t.track, "I_FOLDERDEPTH") == 1 then return false end
+  -- audio arriving by send is not in the track's own items
+  if reaper.GetTrackNumSends and reaper.GetTrackNumSends(t.track, -1) > 0 then return false end
   local off = play_offset_s(reaper, t.track)
   if start - off < 0 then return false end -- the accessor has no audio before the project start
   local audio = false
