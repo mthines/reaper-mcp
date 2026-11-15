@@ -3,6 +3,7 @@ title: What it can do
 summary: The kinds of things the assistant can do in REAPER, what each looks like in the status window, and how it can run almost any REAPER action.
 section: know
 order: 5
+keywords: tools tool list features capabilities abilities commands actions macros scripts SWS what can it do supported menu reference
 ---
 
 There are close to 190 tools behind the assistant, but you never pick one. You say what you want and it chooses. This page shows what's on the menu, so you know what to ask for, and what the status window draws when it does.

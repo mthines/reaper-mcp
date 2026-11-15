@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { searchEntries } from '../command/search.js';
+import { guideCommands } from './GuideCommands.js';
 import { groupGuides, neighbours, pageHeadings, parseGuide, renderLlmsFull, renderLlmsTxt, sortGuides, type Guide } from './docs.js';
 
 const file = (extra = '', body = '## Hello\n\nText.') =>
@@ -120,6 +122,14 @@ describe('the guides in docs/guides', () => {
     for (const x of guides) {
       expect(x.body, `${x.slug} has an emoji`).not.toMatch(/\p{Extended_Pictographic}/u);
       expect(x.body.split(/\s+/).length, `${x.slug} is long`).toBeLessThan(900);
+    }
+  });
+
+  it('finds "What it can do" when someone searches for tools, features or actions', () => {
+    const entries = guideCommands(guides, () => undefined).map((command) => ({ command }));
+    for (const query of ['tools', 'features', 'actions', 'capabilities', 'macros', 'what can it do']) {
+      const found = searchEntries(entries, query).map((e) => e.command.id);
+      expect(found, `"${query}" should find the guide`).toContain('guide-what-it-can-do');
     }
   });
 });
