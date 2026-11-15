@@ -1,0 +1,14 @@
+/* A toast's words change in place (sonner keeps one toast per id), so each new line enters on a short rise + fade
+   instead of snapping. Keyed on the text, so only a line that actually changed replays it. */
+.swap { display: inline-block; animation: swap-in 0.28s cubic-bezier(0.23, 1, 0.32, 1) both; }
+
+@keyframes swap-in {
+  from { opacity: 0; transform: translateY(6px); filter: blur(2px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+/* Reduce, don't remove: a plain fade still says "this changed" */
+@media (prefers-reduced-motion: reduce) {
+  .swap { animation-name: swap-fade; }
+  @keyframes swap-fade { from { opacity: 0; } to { opacity: 1; } }
+}
