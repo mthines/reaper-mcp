@@ -27,6 +27,7 @@ import { labelSessions } from '../lib/sessions.js';
 import { Log, VIEW_KEY, isSpanOrNull, isView, loadView, type View } from '../features/log/index.js';
 import { useKnowledge, useLoreKitTokens } from '../features/plugins/index.js';
 import { SETTING_NAME, Settings } from '../features/settings/index.js';
+import { Developer } from '../features/developer/index.js';
 import { InstallBanner } from '../components/index.js';
 import { Changelog, availableUpdate, parseReleases, useHighlights, useReleases } from '../features/changelog/index.js';
 import { exampleReleaseJson } from '../demo/examples.js';
@@ -103,6 +104,8 @@ export function App() {
   // `?install`: opened from the bridge window's Install button, so show the install setting straight away
   const request = useBridgeRequest(status);
   const [settingsOpen, setSettingsOpen] = useUrlState('settings', false, { validate: isBoolean });
+  // Developer tools (feature flags): developer mode only, so the param does nothing once that is off
+  const [developerOpen, setDeveloperOpen] = useUrlState('developer', false, { validate: isBoolean });
   // What's new: the drawer, and the releases it reads once it opens
   const [changelogOpen, setChangelogOpen] = useUrlState('changelog', false, { validate: isBoolean });
   const liveRelease = useLatestRelease(!DEMO && settings?.dev !== true, status?.control?.updateSource ?? 'clone');
@@ -121,6 +124,7 @@ export function App() {
   const openChangelog = (source: ChangelogSource) => () => {
     if (!changelogOpen) track({ name: 'changelog_opened', source, update_available: updateAvailable !== null });
     setSettingsOpen(false);
+    setDeveloperOpen(false);
     setChangelogOpen(true);
   };
   useEffect(() => {
@@ -169,8 +173,15 @@ export function App() {
     if (next) {
       if (changelogOpen) changelogClosedVia('settings');
       setChangelogOpen(false);
+      setDeveloperOpen(false);
     }
     setSettingsOpen(next);
+  };
+  const openDeveloper = () => {
+    if (changelogOpen) changelogClosedVia('settings');
+    setChangelogOpen(false);
+    setSettingsOpen(false);
+    setDeveloperOpen(true);
   };
 
   return (
@@ -198,6 +209,7 @@ export function App() {
         usageStats={usageStats}
         onUsageStats={chooseUsageStats}
         onResetFlags={settings?.dev && flagState.hasOverrides ? flagState.resetAll : undefined}
+        onOpenDeveloper={settings?.dev ? openDeveloper : undefined}
       />
       <Header
         status={status}
@@ -277,8 +289,11 @@ export function App() {
                 canUpdate={status.control?.canUpdate === true}
                 onRestart={status.control?.canRestart ? () => request('restart') : undefined}
                 autostartInstalled={status.health?.autostart}
-                flags={{ rows: flagState.rows, onSet: flagState.setOverride, onResetAll: flagState.resetAll }}
+                onOpenDeveloper={openDeveloper}
               />
+            )}
+            {developerOpen && settings?.dev === true && (
+              <Developer rows={flagState.rows} onSet={flagState.setOverride} onResetAll={flagState.resetAll} onClose={() => setDeveloperOpen(false)} />
             )}
             <footer className={styles.footer}>
               <span className="mono" title="Bridge IPC directory">{status.bridgeDir}</span>

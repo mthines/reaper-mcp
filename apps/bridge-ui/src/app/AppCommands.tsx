@@ -30,6 +30,7 @@ export function AppCommands({
   usageStats,
   onUsageStats,
   onResetFlags,
+  onOpenDeveloper,
 }: {
   rangeKey: RangeKey;
   onRange: (k: RangeKey) => void;
@@ -50,6 +51,8 @@ export function AppCommands({
   onUsageStats: (on: boolean) => void;
   /** Present in developer mode while a feature flag is forced in this browser */
   onResetFlags?: () => void;
+  /** Opens the Developer drawer; present only in developer mode */
+  onOpenDeveloper?: () => void;
 }) {
   const palette = useCommandPalette();
   const toggle = (id: string, key: SettingKey, on: boolean | undefined, labels: [string, string]): Command => ({
@@ -82,6 +85,7 @@ export function AppCommands({
   useCommand({ id: 'page-overview', label: overview ? 'Hide stats & timeline' : 'Show stats & timeline', group: 'Page', onSelect: () => onToggleOverview?.() }, Boolean(onToggleOverview));
   useCommand({ id: 'page-notify', label: notify ? 'Turn off error notifications' : 'Turn on error notifications', group: 'Page', onSelect: () => onNotify(!notify) });
   useCommand({ id: 'page-usage-stats', label: usageStats.on ? 'Turn off usage statistics' : 'Turn on usage statistics', group: 'Page', description: 'privacy telemetry analytics', onSelect: () => onUsageStats(!usageStats.on) }, usageStats.on || usageStats.reason === 'user');
+  useCommand({ id: 'bridge-developer-open', label: 'Open developer tools', group: 'Bridge', description: 'developer mode feature flags experiment variant', onSelect: () => onOpenDeveloper?.() }, Boolean(onOpenDeveloper));
   useCommand({ id: 'bridge-flags-reset', label: 'Reset feature flag overrides', group: 'Bridge', description: 'developer mode feature flags experiment variant', onSelect: () => onResetFlags?.() }, Boolean(onResetFlags));
   useCommand({ id: 'help-shortcuts', label: 'Keyboard shortcuts', group: 'Help', shortcut: ['?'], onSelect: () => palette?.setHelpOpen(true) });
   // The guides live on the hosted site; their list is asked for the first time the palette opens, and each opens there with the way back to this page

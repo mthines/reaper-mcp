@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { Settings } from './index.js';
-import { EXAMPLE_FLAG_ROWS } from '../../demo/flag-examples.js';
 
 const meta = {
   title: 'Features/Settings/SettingsPanel/Tests',
@@ -78,26 +77,23 @@ export const HidesStartWithReaperOnBridgesThatDoNotReportIt: Story = {
   },
 };
 
-export const ShowsTheDeveloperFlagsOnlyInDeveloperMode: Story = {
+export const OffersDeveloperToolsOnlyInDeveloperMode: Story = {
   args: {
     settings: { paused: false, readonly: false, openOnStart: true, dev: false, autostart: true },
-    flags: { rows: EXAMPLE_FLAG_ROWS, onSet: fn(), onResetAll: fn() },
+    onOpenDeveloper: fn(),
   },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).queryByRole('combobox', { name: 'example-panel variant' })).toBeNull();
+    await expect(within(canvasElement).queryByRole('button', { name: 'Open developer tools' })).toBeNull();
   },
 };
 
-export const SetsAFlagOverrideInDeveloperMode: Story = {
+export const OpensTheDeveloperDrawerInDeveloperMode: Story = {
   args: {
     settings: { paused: false, readonly: false, openOnStart: true, dev: true, autostart: true },
-    flags: { rows: EXAMPLE_FLAG_ROWS, onSet: fn(), onResetAll: fn() },
+    onOpenDeveloper: fn(),
   },
   play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement);
-    await userEvent.selectOptions(canvas.getByRole('combobox', { name: 'example-panel variant' }), 'on');
-    await expect(args.flags?.onSet).toHaveBeenCalledWith('example-panel', 'on');
-    await userEvent.click(canvas.getByRole('button', { name: 'Reset example-forced' }));
-    await expect(args.flags?.onSet).toHaveBeenCalledWith('example-forced', null);
+    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Open developer tools' }));
+    await expect(args.onOpenDeveloper).toHaveBeenCalled();
   },
 };

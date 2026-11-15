@@ -3,9 +3,7 @@ import { manualInstallHint, openInBrowserToInstall, promptInstall, useInstallSta
 import { track, type TrackEvent, type UsageStatsState } from '../../lib/analytics.js';
 import type { BridgeSettings, SettingKey } from '../../lib/status.js';
 import { notificationPermission } from '../../app/useErrorNotifications.js';
-import { DeveloperSettings } from './DeveloperSettings.js';
 import { LoreKitSetting, PublishSetting } from './LoreKitSettings.js';
-import type { FlagRow } from '../../lib/flags.js';
 import { Icon, Toggle } from '../../components/index.js';
 import { cx } from '../../lib/cx.js';
 import drawerStyles from '../../styles/drawer.module.css';
@@ -27,7 +25,7 @@ export function SettingsPanel({
   canUpdate,
   onRestart,
   autostartInstalled,
-  flags,
+  onOpenDeveloper,
 }: {
   settings: BridgeSettings;
   onSet: (key: SettingKey, on: boolean) => void;
@@ -47,8 +45,8 @@ export function SettingsPanel({
   onRestart?: () => void;
   /** REAPER's startup script holds the block that starts the bridge (`reaper-mcp setup` writes it). Absent on older bridges. */
   autostartInstalled?: boolean;
-  /** The feature flags and what forcing one does; shown only in developer mode */
-  flags?: { rows: FlagRow[]; onSet: (key: string, variant: string | null) => void; onResetAll: () => void };
+  /** Opens the Developer drawer (feature flags); offered only in developer mode */
+  onOpenDeveloper?: () => void;
 }) {
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => ev.key === 'Escape' && onClose();
@@ -155,7 +153,15 @@ export function SettingsPanel({
             />
           </div>
         )}
-        {settings.dev === true && flags && <DeveloperSettings rows={flags.rows} onSet={flags.onSet} onResetAll={flags.onResetAll} />}
+        {settings.dev === true && onOpenDeveloper && (
+          <div className={styles.settingGroup}>
+            <h3>Developer</h3>
+            <p className={styles.settingHint}>Feature flags: how each one resolves in this browser, and a way to force a variant.</p>
+            <button className="btn btn-sm" onClick={onOpenDeveloper}>
+              Open developer tools
+            </button>
+          </div>
+        )}
         <LoreKitSetting token={loreToken} onChange={onLoreToken} shared={tokensShared} />
         <PublishSetting token={publishToken} readToken={loreToken} onChange={onPublishToken} />
         <div className={styles.settingGroup}>
