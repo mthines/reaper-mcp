@@ -34,6 +34,8 @@ export interface GuideMeta {
   image?: string;
   /** "4 min" */
   duration?: string;
+  /** Words a reader might search for that the title and summary don't use ("tools features capabilities"); searched, never shown */
+  keywords?: string;
 }
 
 export interface Guide extends GuideMeta {
@@ -93,6 +95,7 @@ export function parseGuide(slug: string, raw: string): Guide {
     poster: data.poster || undefined,
     image: data.image || undefined,
     duration: data.duration || undefined,
+    keywords: data.keywords || undefined,
     body,
   };
 }

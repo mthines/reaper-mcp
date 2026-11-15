@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { Gallery } from './Gallery.js';
 import { GALLERY_EXAMPLE } from './docs-examples.js';
 
@@ -9,6 +9,17 @@ const meta = {
   tags: ['test'],
   parameters: { chromatic: { disableSnapshot: true } },
   args: { title: 'Seven plugins already installed', items: GALLERY_EXAMPLE },
+  // jsdom has no modal <dialog>: give it the two methods the overlay calls, so the stories run in the unit tests too
+  beforeEach: () => {
+    // Each story starts from a plain address and leaves one behind
+    history.replaceState(null, '', location.pathname);
+    const proto = HTMLDialogElement.prototype;
+    if (!proto.showModal) {
+      proto.showModal = function showModal(this: HTMLDialogElement) { this.setAttribute('open', ''); };
+      proto.close = function close(this: HTMLDialogElement) { this.removeAttribute('open'); };
+    }
+    return () => history.replaceState(null, '', location.pathname);
+  },
 } satisfies Meta<typeof Gallery>;
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -31,5 +42,73 @@ export const StartsWithPreviousDisabled: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('button', { name: 'Previous' })).toBeDisabled();
     await expect(canvas.getByRole('button', { name: 'Next' })).toBeEnabled();
+  },
+};
+
+/** The full screen button opens a dialog with every card, on the first one */
+export const OpensFullScreenFromTheButton: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Full screen' }));
+    const dialog = await canvas.findByRole('dialog', { name: 'Seven plugins already installed, full screen' });
+    await expect(within(dialog).getAllByRole('listitem')).toHaveLength(GALLERY_EXAMPLE.length);
+    await expect(within(dialog).getByText('1 / 4')).toBeInTheDocument();
+    await expect(within(dialog).getByRole('button', { name: 'Previous' })).toBeDisabled();
+  },
+};
+
+/** A click on a card's picture opens the full screen view on that card; Esc plays the exit and removes it */
+export const OpensOnThePictureAndClosesWithEscape: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Tape Sat, full screen' }));
+    await canvas.findByRole('dialog', { name: /full screen/ });
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(canvas.queryByRole('dialog')).not.toBeInTheDocument());
+  },
+};
+
+/** The close button takes the overlay away and leaves the row as it was */
+export const ClosesWithTheCloseButton: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Full screen' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Close full screen' }));
+    await waitFor(() => expect(canvas.queryByRole('dialog')).not.toBeInTheDocument());
+    await expect(canvas.getByRole('region', { name: 'Seven plugins already installed' })).toBeInTheDocument();
+  },
+};
+
+/** Opening puts the gallery and the card in the address, so the link can be shared; closing takes them out */
+export const KeepsTheFullScreenViewInTheAddress: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Tape Sat, full screen' }));
+    await canvas.findByRole('dialog');
+    await waitFor(() => expect(new URLSearchParams(location.search).get('gallery')).toBe('seven-plugins-already-installed'));
+    await expect(new URLSearchParams(location.search).get('card')).toBe('tape-sat');
+    await userEvent.click(canvas.getByRole('button', { name: 'Close full screen' }));
+    await waitFor(() => expect(canvas.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(location.search).toBe(''));
+  },
+};
+
+/** A shared link opens the full screen view on its card; an unknown card falls back to the first */
+export const OpensFromAShareableLink: Story = {
+  beforeEach: () => {
+    history.replaceState(null, '', '?gallery=seven-plugins-already-installed&card=drum-pads');
+  },
+  play: async ({ canvasElement }) => {
+    const dialog = await within(canvasElement).findByRole('dialog');
+    await expect(within(dialog).getByText('3 / 4')).toBeInTheDocument();
+  },
+};
+
+export const IgnoresALinkToAGalleryThatIsNotHere: Story = {
+  beforeEach: () => {
+    history.replaceState(null, '', '?gallery=somewhere-else&card=drum-pads');
+  },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).queryByRole('dialog')).not.toBeInTheDocument();
   },
 };

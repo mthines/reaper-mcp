@@ -5,6 +5,7 @@ Guides for musicians new to AI, as a page on the hosted build (`BRIDGE_HOSTED=1`
 The REAPER page never bundles the guides: the hosted build copies them next to the page and writes `docs/pages.json`,
 `/llms.txt` and `/llms-full.txt` (`hostedDocs()` in `vite.config.ts`, rendering in `docs.ts`).
 
+- **`keywords:`** in a guide's frontmatter are words the palette's search reads but nobody sees (`tools features capabilities`), for guides whose title and summary don't use the word a reader types.
 - **`docs.ts`** is pure: frontmatter parsing, section order (`SECTIONS`), previous/next, headings, the `llms.txt` text. A bad
   guide throws `guide "slug": …`, so the hosted build fails instead of shipping it.
 - **`useDocs.ts`** fetches the index and a guide, reads the slug from the path, and holds the bridge link (`?bridge=`, only
@@ -15,7 +16,7 @@ The REAPER page never bundles the guides: the hosted build copies them next to t
   asks the hosted site for the list the first time the palette opens (`useRemoteGuideIndex`), never at load.
 - **Markdown** renders with `MarkdownDoc` (`components/Markdown.tsx`): `> say:` → `PromptBox`, `> your-call:` → `YourCall`,
   fenced code → `CodeBlock`, `::: gallery Title` (a list of `- ![alt](media/x) **Name**: text` items) → `Gallery`,
-  a scroll-snap carousel (a plain bullet list on GitHub). Relative images only. Add a new block type there and here together.
+  a scroll-snap carousel (a plain bullet list on GitHub) with a **Full screen** button (and a click on a picture) that opens `Overlay`: a modal `<dialog>` over the page, the blur on its `::backdrop` (faded with opacity, never animated), one big card centred with the neighbours scaled back by a scroll-driven `view()` animation, arrow keys / dots / Esc. The view is in the address (`?gallery=<title slug>&card=<card name slug>` through `useUrlState`: opening and closing push, moving between cards replaces), so a link reopens it; an unknown gallery or card is ignored. Entry and exit are `@starting-style` transitions plus a `data-state="closing"` that `CLOSE_MS` waits out; `prefers-reduced-motion` cuts them. Relative images only. Add a new block type there and here together.
 - **The video** is a click-to-load facade: nothing reaches Google until a viewer presses play (`youtube-nocookie.com`).
 - **Usage analytics and session replay** run here on the hosted build (`startSiteAnalytics()` in `src/lib/analytics.ts`,
   started from `main.tsx`; service `reaper-mcp-site`): page views, errors, fetch timings, rage clicks, a replay with every

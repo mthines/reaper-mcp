@@ -1,10 +1,10 @@
 import { useCommand, type Command } from '../command/index.js';
 import { groupGuides, type GuideMeta } from './docs.js';
 
-/** Each guide as a palette entry: found by its title or its summary, with its section beside it */
+/** Each guide as a palette entry: found by its title, summary or keywords, with its section beside it */
 export function guideCommands(guides: GuideMeta[], open: (slug: string) => void): Command[] {
   return groupGuides(guides).flatMap((section) =>
-    section.guides.map((g) => ({ id: `guide-${g.slug}`, label: g.title, description: `${g.summary} ${section.title}`, hint: section.title, onSelect: () => open(g.slug) })),
+    section.guides.map((g) => ({ id: `guide-${g.slug}`, label: g.title, description: `${g.summary} ${g.keywords ?? ''} ${section.title}`, hint: section.title, onSelect: () => open(g.slug) })),
   );
 }
 

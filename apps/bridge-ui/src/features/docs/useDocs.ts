@@ -22,6 +22,7 @@ export function parseIndex(json: unknown): GuideMeta[] {
       poster: typeof row.poster === 'string' ? row.poster : undefined,
       image: typeof row.image === 'string' ? row.image : undefined,
       duration: typeof row.duration === 'string' ? row.duration : undefined,
+      keywords: typeof row.keywords === 'string' ? row.keywords : undefined,
     });
   }
   return sortGuides(out);
