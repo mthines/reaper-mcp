@@ -2,8 +2,8 @@
 title: Line up vocal doubles
 nav: Line up vocal doubles
 summary: Tighten doubles and harmonies to the lead vocal by timing, and check the edit for clicks without relying on luck.
-section: edit
-order: 1
+section: create
+order: 3
 poster: media/vocal-align.webp
 duration: 4 min
 ---

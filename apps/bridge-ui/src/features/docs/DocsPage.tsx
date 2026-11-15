@@ -226,12 +226,12 @@ function Landing({ index }: { index: IndexState }) {
         <div className={styles.heroLogo}><Logo size={56} /></div>
         <h1 className={styles.heroTitle}>A music assistant inside REAPER</h1>
         <p className={styles.heroLead}>
-          Tell it what you need in plain words. It names and routes your tracks, measures the mix and builds the plugin you described. You make every call, and everything can be undone.
+          Tell it what you need in plain words. It mixes and measures, edits audio and MIDI, sketches a song from a hum and builds the plugin you described, right in your open session. You make every call, and everything can be undone.
         </p>
         <ul className={styles.promises}>
-          <li>Measures before it touches anything</li>
-          <li>Every change is one undo</li>
-          <li>Your ears decide</li>
+          <li>Measures before and after every change</li>
+          <li>Reaches all of REAPER, even your own scripts</li>
+          <li>Every change is one undo, and your ears decide</li>
         </ul>
         <div className={styles.actions}>
           <a className={styles.primary} href={`${DOCS_BASE}/what-this-is`}>Start here</a>

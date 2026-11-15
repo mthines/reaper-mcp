@@ -3,7 +3,7 @@ title: What you need
 nav: What you need
 summary: REAPER, an AI app to talk to, and Node.js. A short shopping list, with what each one is for.
 section: start
-order: 2
+order: 3
 ---
 
 Four things, and you probably have one of them already.
