@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { updateLog, type Release } from '../lib/update.js';
+import { failureReason, updateLog, type Release } from '../lib/update.js';
 import { track } from '../lib/analytics.js';
 import { type BridgeSettings, type BridgeStatus, type SettingKey, webSocketLevel } from '../lib/status.js';
 import type { BridgeRequest } from './useBridgeRequest.js';
@@ -68,7 +68,7 @@ export function Notices({
     const log = updateLog(update);
     notices.push(
       <Notice key="update" tone="bad" action={<button className="btn btn-sm" onClick={() => request(rebuild ? 'rebuild' : 'update')}>Try again</button>}>
-        <b>{rebuild ? 'The rebuild didn’t finish.' : 'The update didn’t finish.'}</b> {log[log.length - 1] ?? 'See tmp/install.log in your reaper-mcp folder.'}
+        <b>{rebuild ? 'The rebuild didn’t finish.' : 'The update didn’t finish.'}</b> {failureReason(log) ?? 'See tmp/install.log in your reaper-mcp folder.'}
         {log.length > 1 && (
           <details className={styles.noticeDetails}>
             <summary>Show log</summary>
@@ -112,11 +112,36 @@ export function Notices({
       >
         <b>reaper-mcp v{release.version} is available</b> (you have v{__VERSION__}).{' '}
         <button className={styles.whatsNew} onClick={onWhatsNew}>What’s new</button>
-        {!control?.canUpdate && (
-          <>
-            {' '}· Update in a terminal: <code>npm install -g @mthines/reaper-mcp@latest &amp;&amp; reaper-mcp setup</code> (from a clone:{' '}
-            <code>git pull &amp;&amp; ./scripts/install.sh</code>). After that, the Update button here does it for you.
-          </>
+        {control?.reapack ? (
+          <details className={styles.noticeDetails}>
+            <summary>How to update</summary>
+            <dl className={styles.noticeCommands}>
+              <dt>REAPER side</dt>
+              <dd>Extensions → ReaPack → Synchronize packages</dd>
+              {!control.canUpdate && (
+                <>
+                  <dt>Server</dt>
+                  <dd><code>npm install -g @mthines/reaper-mcp@latest</code></dd>
+                </>
+              )}
+            </dl>
+            <span className={styles.noticeHint}>
+              {control.canUpdate ? 'The Update button here updates the server.' : 'Then restart Claude Code.'}
+            </span>
+          </details>
+        ) : (
+          !control?.canUpdate && (
+            <details className={styles.noticeDetails}>
+              <summary>How to update</summary>
+              <dl className={styles.noticeCommands}>
+                <dt>npm</dt>
+                <dd><code>npm install -g @mthines/reaper-mcp@latest &amp;&amp; reaper-mcp setup</code></dd>
+                <dt>git clone</dt>
+                <dd><code>git pull &amp;&amp; ./scripts/install.sh</code></dd>
+              </dl>
+              <span className={styles.noticeHint}>After that, the Update button here does it for you.</span>
+            </details>
+          )
         )}
       </Notice>,
     );

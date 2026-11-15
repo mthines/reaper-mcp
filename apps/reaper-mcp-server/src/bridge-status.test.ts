@@ -27,7 +27,7 @@ interface Status {
   settings: { paused: boolean; readonly: boolean; openOnStart: boolean; dev: boolean; autostart: boolean };
   health: { sws: boolean; jsfx: boolean; outdated: boolean; autostart: boolean };
   web?: { stuck: number; limit: number };
-  control: { token: string; canRestart: boolean; canUpdate: boolean; changed?: boolean; update?: { kind: string; state: string } };
+  control: { token: string; canRestart: boolean; canUpdate: boolean; reapack?: boolean; changed?: boolean; update?: { kind: string; state: string } };
 }
 
 let engine: LuaEngine | undefined;
@@ -1242,6 +1242,12 @@ describe('restart and update requests from the page', () => {
     await new Promise((resolve) => setTimeout(resolve, 1100)); // the bridge reads the exit file once a second
     await bridge.status();
     expect((await bridge.status()).control.update).toMatchObject({ kind: 'update', state: 'current' });
+  });
+
+  it('says the bridge is ReaPack\'s when it runs from ReaPack\'s folder, so the page can point at ReaPack', async () => {
+    const reapack = "api.get_action_context = function() return false, \"" + SCRIPTS + "reaper-mcp/MCP Bridge/mcp_bridge.lua\", 0, 55555 end";
+    expect((await (await startBridge(reapack)).status()).control.reapack).toBe(true);
+    expect((await (await startBridge(SELF_RESTART)).status()).control.reapack).toBe(false);
   });
 
   it('offers no update when the CLI the config names is gone', async () => {

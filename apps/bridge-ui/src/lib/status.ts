@@ -59,6 +59,8 @@ export interface BridgeControl {
   canRestart: boolean;
   /** setup wrote mcp_update.conf for a git clone or an npm install (not on Windows) */
   canUpdate: boolean;
+  /** The bridge runs from ReaPack's folder: ReaPack updates the REAPER side, whatever updates the server */
+  reapack?: boolean;
   /** Where releases come from: an npm install updates itself, a clone pulls; absent on bridges before 0.84 (clone) */
   updateSource?: 'npm' | 'clone';
   /** Developer mode: the clone has source files newer than the last install */

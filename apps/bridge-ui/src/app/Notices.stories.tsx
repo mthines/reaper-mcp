@@ -29,11 +29,17 @@ export const NoSwsAndOutdated: Story = {
 
 const newer = { version: '99.0.0', url: 'https://github.com/mthines/reaper-mcp/releases/tag/v99.0.0' };
 
-/** A newer release, and this install can update itself: Update, What's new (opens the drawer) and skip */
+/** A newer release, and this install can update itself: Update, What's new (opens the drawer) and skip (the source is unset, so releases come from GitHub, as for a clone) */
 export const UpdateAvailable: Story = { args: { release: newer, status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: true } } } };
 
-/** A newer release on an install the bridge can't update (npm, or no update config): the command instead */
+/** A newer release on an install the bridge can't update: one line, the commands folded under "How to update" */
 export const UpdateAvailableByHand: Story = { args: { release: newer, status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: false } } } };
+
+/** A git clone: the Update button runs `scripts/update.sh` (git pull + install), and releases come from GitHub */
+export const UpdateAvailableFromClone: Story = { args: { release: newer, status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: true, updateSource: 'clone' } } } };
 
 /** An npm install: the Update button runs `reaper-mcp update` for them */
 export const UpdateAvailableFromNpm: Story = { args: { release: newer, status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: true, updateSource: 'npm' } } } };
+
+/** Installed through ReaPack: the notice names ReaPack's menu and the npm command for the server */
+export const UpdateAvailableFromReaPack: Story = { args: { release: newer, status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: false, reapack: true } } } };

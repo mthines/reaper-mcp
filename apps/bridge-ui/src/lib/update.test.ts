@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareVersions, controlUrl, installableNpmVersion, updateLog, updateOffer } from './update.js';
+import { compareVersions, controlUrl, installableNpmVersion, failureReason, newerVersion, updateLog, updateOffer } from './update.js';
 
 describe('compareVersions', () => {
   it('orders numerically, not as strings', () => {
@@ -65,5 +65,25 @@ describe('installableNpmVersion', () => {
     expect(installableNpmVersion({ 'dist-tags': { latest: '0.83.2' }, versions: { '0.83.0': {} } })).toBeUndefined();
     expect(installableNpmVersion({ 'dist-tags': { latest: '0.84.0-beta.1' }, versions: { '0.84.0-beta.1': {} } })).toBeUndefined();
     expect(installableNpmVersion(null)).toBeUndefined();
+  });
+});
+
+describe('newerVersion', () => {
+  it('takes GitHub when npm is behind or hiding releases, and npm when GitHub is unreachable', () => {
+    expect(newerVersion('0.85.0', '0.91.1')).toBe('0.91.1');
+    expect(newerVersion('0.91.1', '0.85.0')).toBe('0.91.1');
+    expect(newerVersion('0.85.0', undefined)).toBe('0.85.0');
+    expect(newerVersion(undefined, '0.91.1')).toBe('0.91.1');
+    expect(newerVersion(undefined, undefined)).toBeUndefined();
+  });
+});
+
+describe('failureReason', () => {
+  it('gives the reason the updater printed, not its last hint line', () => {
+    expect(failureReason(['==> Checking', '✗ v0.91.1 is released, but npm cannot offer it.', '    To check: npm install'])).toBe('v0.91.1 is released, but npm cannot offer it.');
+    expect(failureReason(['==> Checking', 'something broke'])).toBe('something broke');
+    // setup's own ✗ lines come first; the updater's verdict is last
+    expect(failureReason(['✗ Could not connect Gemini CLI', '✗ The new version downloaded, but installing it into REAPER failed.', '    reaper-mcp setup'])).toBe('The new version downloaded, but installing it into REAPER failed.');
+    expect(failureReason([])).toBeUndefined();
   });
 });

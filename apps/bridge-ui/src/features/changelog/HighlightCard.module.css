@@ -1,6 +1,8 @@
 /* The house frame every highlight shares: tint by group, stage 16:10, caption under it */
 .card {
   --tint: 124, 196, 255;
+  /* A wide drawer would otherwise stretch the 16:10 stage until the media is blown up and cropped */
+  width: 100%; max-width: 560px;
   margin: 0; overflow: hidden; border-radius: 12px;
   border: 1px solid rgba(var(--tint), 0.28);
   background: linear-gradient(160deg, rgba(var(--tint), 0.10), rgba(var(--tint), 0.02) 55%), var(--panel-2);

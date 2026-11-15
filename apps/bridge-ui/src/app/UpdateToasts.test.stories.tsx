@@ -72,10 +72,24 @@ export const ReportsAFailedUpdateOnceWithTheReason: Story = {
   play: async ({ canvasElement }) => {
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.click(within(canvasElement).getByRole('button', { name: 'Next' }));
-    await expect(await screen.findByText('The update didn’t finish')).toBeInTheDocument();
-    await expect(screen.getByText('✗ The download did not finish.')).toBeInTheDocument();
+    await expect(await screen.findByText('Update failed')).toBeInTheDocument();
+    await expect(screen.getByText('The download did not finish.')).toBeInTheDocument();
     // Try again lives in the failure notice, so the toast does not offer a second one
     await expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  },
+};
+
+const npmFailed: BridgeStatus = { ...failed, control: { ...failed.control as NonNullable<typeof failed.control>, updateSource: 'npm', update: { kind: 'update', state: 'failed', startedAt: 1, log: ['==> Checking for a new version', '✗ v0.91.1 is released, but npm only offers v0.85.0 from this computer.', '    To check: npm install -g @mthines/reaper-mcp@0.91.1'] } } };
+
+/** npm can't deliver: the toast says it failed, gives the reason, and points at the clone install */
+export const SuggestsACloneInstallWhenNpmCannotDeliver: Story = {
+  args: { steps: [running, npmFailed] },
+  play: async ({ canvasElement }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Next' }));
+    await expect(await screen.findByText('Update failed')).toBeInTheDocument();
+    await expect(screen.getByText(/v0\.91\.1 is released, but npm only offers v0\.85\.0/)).toBeInTheDocument();
+    await expect(screen.getByRole('link', { name: 'See how' })).toHaveAttribute('href', expect.stringContaining('/docs/install'));
   },
 };
 

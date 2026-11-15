@@ -1,15 +1,25 @@
 import { useEffect, useRef } from 'react';
 import { Toaster, toast } from 'sonner';
 import type { CSSProperties } from 'react';
-import { markUpdateReady, updateLog } from '../lib/update.js';
+import { CLONE_INSTALL_DOC, failureReason, markUpdateReady, updateLog } from '../lib/update.js';
 import type { BridgeStatus } from '../lib/status.js';
 import { track } from '../lib/analytics.js';
+import styles from './UpdateToasts.module.css';
 
 const TOAST_ID = 'reaper-mcp-update';
 
 /** The installer prints "==> Downloading the new version"; the toast shows it without the arrow. */
 function stepText(line: string | undefined): string {
   return (line ?? '').replace(/^=+>\s*/, '').trim();
+}
+
+/** Text that replays a short enter animation each time it changes (the keyed span remounts). */
+function Swap({ text }: { text: string }) {
+  return (
+    <span key={text} className={styles.swap}>
+      {text}
+    </span>
+  );
 }
 
 const THEME = {
@@ -45,15 +55,18 @@ export function UpdateToasts({
   const watched = useRef(false);
   const source = status?.control?.updateSource ?? 'clone';
   const state = update?.kind === 'rebuild' ? undefined : update?.state;
-  const step = stepText(updateLog(update).at(-1));
+  const log = updateLog(update);
+  const step = stepText(log.at(-1));
+  // A string, so the effect below re-runs when the reason changes, not on every poll's fresh log array
+  const failure = state === 'failed' ? (failureReason(log) ?? 'Nothing was changed. Use Try again in the notice above.') : undefined;
 
   useEffect(() => {
     if (runStartedAt === undefined) return;
     if (state === 'running') {
       watched.current = true;
-      toast.loading('Updating reaper-mcp…', {
+      toast.loading(<Swap text="Updating reaper-mcp…" />, {
         id: TOAST_ID,
-        description: step || 'Downloading the new version. You can keep working.',
+        description: <Swap text={step || 'Downloading the new version. You can keep working.'} />,
         duration: Infinity,
         action: undefined, // an update with the same id keeps the old toast's action unless it is cleared
       });
@@ -61,14 +74,25 @@ export function UpdateToasts({
       if (!watched.current) return;
       watched.current = false;
       track({ name: 'update_finished', result: 'current', source });
-      toast.info('Already up to date', { id: TOAST_ID, description: 'There is no newer version to install yet.', duration: 8000, action: undefined });
+      toast.info(<Swap text="Already up to date" />, { id: TOAST_ID, description: <Swap text="There is no newer version to install yet." />, duration: 8000, action: undefined });
     } else if (state === 'failed') {
       if (!watched.current) return;
       watched.current = false;
       track({ name: 'update_finished', result: 'failed', source });
-      toast.error('The update didn’t finish', {
+      toast.error(<Swap text="Update failed" />, {
         id: TOAST_ID,
-        description: step || 'Nothing was changed. Use Try again in the notice above.',
+        className: styles.failed,
+        description: (
+          <span className={styles.failure}>
+            <Swap text={failure ?? ''} />
+            {source === 'npm' && (
+              <span>
+                Installing from a clone avoids npm.{' '}
+                <a href={CLONE_INSTALL_DOC} target="_blank" rel="noreferrer">See how</a>
+              </span>
+            )}
+          </span>
+        ),
         duration: Infinity,
         action: undefined,
       });
@@ -77,9 +101,9 @@ export function UpdateToasts({
       watched.current = false;
       markUpdateReady();
       track({ name: 'update_finished', result: 'ready', source });
-      toast.success('reaper-mcp is up to date', {
+      toast.success(<Swap text="reaper-mcp is up to date" />, {
         id: TOAST_ID,
-        description: 'Reload this page to use the new version. Then restart Claude Code, or type /mcp there, to get the new tools.',
+        description: <Swap text="Reload this page to use the new version. Then restart Claude Code, or type /mcp there, to get the new tools." />,
         duration: Infinity,
         action: {
           label: 'Reload',
@@ -90,7 +114,7 @@ export function UpdateToasts({
         },
       });
     }
-  }, [state, step, runStartedAt, onReload, source]);
+  }, [state, step, failure, runStartedAt, onReload, source]);
 
   return <Toaster position="bottom-right" theme="dark" style={THEME} closeButton />;
 }

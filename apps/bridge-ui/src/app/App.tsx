@@ -283,7 +283,7 @@ export function App() {
             <footer className={styles.footer}>
               <span className="mono" title="Bridge IPC directory">{status.bridgeDir}</span>
               <span className={styles.footerMeta}>
-                Updated {formatAgo(now - lastChangeAt)}
+                <button className={styles.footerLink} onClick={openChangelog('footer')} title="What’s new">Updated {formatAgo(now - lastChangeAt)}</button>
                 <span className="dot-sep" />
                 <button className={styles.footerLink} onClick={openChangelog('footer')} title="What’s new">reaper-mcp v{__VERSION__}</button>
                 <span className="dot-sep" />
@@ -306,6 +306,7 @@ export function App() {
           highlights={highlights}
           current={__VERSION__}
           canUpdate={status?.control?.canUpdate === true && settings?.dev !== true}
+          reapack={status?.control?.reapack === true}
           update={status?.control?.update}
           onUpdate={() => request('update')}
           installableUpTo={updateReady ? __VERSION__ : status?.control?.updateSource === 'npm' ? (release?.version ?? __VERSION__) : undefined}
