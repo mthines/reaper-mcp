@@ -9,9 +9,13 @@ import { headingId } from '../../lib/heading-id.js';
 export const SECTIONS = [
   { key: 'start', title: 'Getting started', blurb: 'From nothing to your first conversation with it, in order.' },
   { key: 'safe', title: 'Safety and privacy', blurb: 'Undo, privacy and what it can’t do. Read these before you trust it with a session.' },
-  { key: 'try', title: 'Things to try', blurb: 'Pick one. Each has a short video, the steps written down, and a line to copy.' },
+  { key: 'mix', title: 'Mixing and editing', blurb: 'Pick one. Each has a short video, the steps written down, and a line to copy.', recipe: true },
+  { key: 'plugins', title: 'Plugins', blurb: 'Make one from a description, or have it learn one you already own.', recipe: true },
   { key: 'know', title: 'Reference', blurb: 'For when you need a word explained or something stops working.' },
 ] as const;
+
+/** The sections whose guides are recipes: a prompt to copy and a line on what stays the user's call. */
+export const isRecipe = (key: SectionKey): boolean => SECTIONS.some((s) => s.key === key && 'recipe' in s);
 
 export type SectionKey = (typeof SECTIONS)[number]['key'];
 

@@ -2,7 +2,7 @@
 title: Balance a mix with real measurements
 nav: Balance a mix
 summary: Ask for a change in plain words, and watch it measure, adjust with your own plugins, and measure again.
-section: try
+section: mix
 order: 3
 poster: media/masking.png
 duration: 6 min

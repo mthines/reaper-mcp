@@ -2,8 +2,8 @@
 title: Finish a master for streaming
 nav: Master for streaming
 summary: Give it a loudness target for Spotify or Apple, and it finishes the master bus and checks the result.
-section: try
-order: 7
+section: mix
+order: 5
 image: media/loudness.png
 ---
 

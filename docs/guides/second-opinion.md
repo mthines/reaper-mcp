@@ -2,7 +2,7 @@
 title: Get a second opinion on your mix
 nav: Second opinion
 summary: Ask it to roast your mix. It listens by measuring, tells you what to fix, and changes nothing.
-section: try
+section: mix
 order: 2
 poster: media/loudness-curve.png
 duration: 5 min

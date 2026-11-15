@@ -4,7 +4,7 @@ import { Gallery } from './Gallery.js';
 import { CommandPaletteButton, useCommand } from '../command/index.js';
 import { GuideCommands } from './GuideCommands.js';
 import { DISCORD_URL, REPO_URL } from '../../lib/links.js';
-import { groupGuides, neighbours, pageHeadings, SECTIONS, type Guide, type GuideMeta } from './docs.js';
+import { groupGuides, isRecipe, neighbours, pageHeadings, SECTIONS, type Guide, type GuideMeta } from './docs.js';
 import { DOCS_BASE, useBridgeLink, useDocsPath, useGuide, useGuideIndex, type GuideState, type IndexState } from './useDocs.js';
 import { CodeBlock } from './CodeBlock.js';
 import { Logo } from './Logo.js';
@@ -216,7 +216,8 @@ function Landing({ index }: { index: IndexState }) {
   const sections = index.status === 'ready' ? groupGuides(index.guides) : [];
   const of = (key: string) => sections.find((s) => s.key === key);
   const path = of('start');
-  const things = of('try');
+  const recipes = sections.filter((s) => isRecipe(s.key));
+  const things = recipes.length > 0 ? { title: 'Things to try', blurb: 'Pick one. Each has a short video, the steps written down, and a line to copy.', guides: recipes.flatMap((s) => s.guides) } : undefined;
   const safe = of('safe');
   const know = of('know');
   return (

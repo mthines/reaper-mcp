@@ -2,8 +2,8 @@
 title: Make your own plugin
 nav: Make your own plugin
 summary: Describe an effect and get a real REAPER plugin, with knobs, that keeps working without the assistant.
-section: try
-order: 4
+section: plugins
+order: 1
 poster: media/make-plugin.webp
 duration: 4 min
 ---
