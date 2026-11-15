@@ -5,6 +5,7 @@ summary: Hum or beatbox an idea and get the notes, the tempo and a band arrangem
 section: create
 order: 1
 keywords: compose composition write music melody hum humming beatbox midi chords key ideas ideation arrangement songwriting
+poster: media/tools/insert_midi_notes.webp
 duration: 4 min
 ---
 

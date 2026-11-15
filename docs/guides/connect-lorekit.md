@@ -4,6 +4,7 @@ nav: Connect LoreKit
 summary: A free account, one key, one command. Then it keeps what it learns about your plugins and your taste.
 section: yours
 order: 1
+poster: media/teach.webp
 ---
 
 Out of the box, the assistant starts every conversation from scratch. [LoreKit](https://lorekit.io) is a free memory it reads before it works and writes to when it learns something. It's optional, but [`/learn-plugin`](teach-it-a-plugin.md) needs it, and it's how your corrections and favourite plugins carry over to the next song. [More on what it stores](it-remembers.md).

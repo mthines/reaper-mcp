@@ -5,6 +5,7 @@ summary: It measures how a track sits against the mix in each part of the song, 
 section: mix
 order: 4
 keywords: automation envelope volume verse chorus sections vocal ride levels automation items pools
+poster: media/tools/insert_automation_item.webp
 duration: 4 min
 ---
 

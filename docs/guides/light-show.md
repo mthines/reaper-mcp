@@ -5,6 +5,7 @@ summary: It finds the kicks, snares and accents in a song and writes them as aut
 section: create
 order: 2
 keywords: lighting lights dmx show transients hits drums kick snare automation envelope sync visuals video
+poster: media/tools/insert_envelope_points.webp
 duration: 4 min
 ---
 
