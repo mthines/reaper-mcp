@@ -21,7 +21,7 @@ import { z } from 'zod/v4';
 import { basename } from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
-import { discardRender, renderTrack, renderTracks } from '../render.js';
+import { discardRender, renderTrack, renderTracks, renderTracksComparable } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
 import { alignmentSummary, logToolResult, offlineSummary, verifySummary } from '../tool-log.js';
 import { SETUP_SIDECAR_HINT } from '../sidecar-hint.js';
@@ -262,7 +262,7 @@ export function registerOfflineTools(server: McpServer): void {
   server.tool(
     'verify_edit',
     'Check the result of an edit you just made, since you cannot hear it: compare the edited track with the audio from ' +
-    'before the edit and get a verdict per check. Compensated null: the delay (ms, + = later), gain (dB) and polarity ' +
+    'before the edit and get a verdict per check. Against another track, both are read as their own items play (stretch markers and edits applied, before track FX, pan and fader; no render, no focus change) when that is possible, else rendered; against a file, the edited track is rendered like the bounce. Compensated null: the delay (ms, + = later), gain (dB) and polarity ' +
     'between the two are estimated and removed, and the residual left (dB below the reference) says whether anything else ' +
     'changed (noise, a splice, a different waveform, a swapped stereo channel; it is relative to referenceRmsDb, so with a quiet reference the rounding noise of a 16-bit bounce can set it). Discontinuity: the largest sample-to-sample jump on any channel against the ' +
     "reference's own, with where it happens and which channel (a click or hard splice). Use expect 'identical' (default) for edits that " +
@@ -307,8 +307,11 @@ export function registerOfflineTools(server: McpServer): void {
       const end = startTime + (durationSeconds ?? DEFAULT_VERIFY_SECONDS);
       const rendered: RenderTrackToWavResult[] = [];
       try {
+        // Two tracks are compared as the audio each carries itself (no render window, FX and pan left out of
+        // both). A reference file is usually a bounce, which has the FX and pan in it, so the edited track
+        // is rendered the same way to be comparable with it.
         if (referenceTrack != null) {
-          rendered.push(...(await renderTracks([referenceTrack, trackIndex], startTime, end)));
+          rendered.push(...(await renderTracksComparable([referenceTrack, trackIndex], startTime, end, { dry: true })));
         } else {
           rendered.push(await renderTrack(trackIndex, startTime, end));
         }
