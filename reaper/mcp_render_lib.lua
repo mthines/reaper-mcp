@@ -22,6 +22,10 @@ M.MAX_BYTES = 1500 * 1024 * 1024
 M.TTL = 600 -- seconds
 M.MAX_TRACKS = 16
 M.REAPER_BUNDLE = "com.cockos.reaper"
+M.MAX_DRY_SECONDS = 120 -- a dry read blocks REAPER while it reads: longer ranges go to a real render
+M.DRY_CHUNK = 220500    -- samples per channel read at a time (5 s at 44100), so memory stays small
+M.JUNCTION_MARGIN = 0.5 -- s: an item end this close before the range still counts as inside it
+M.JUNCTION_REACH = 5.5  -- s: how far after an item's end another item makes it a junction (a read is 5 s)
 
 local epoch = 0   -- bumped by every command that writes: a parameter set through the API may not move REAPER's counter
 local cache = {}  -- oldest first: { key, path, bytes, at, stamp }
@@ -336,6 +340,181 @@ local function render_group(reaper, env, ctx, group)
   return true
 end
 
+-- ---------------------------------------------------------------------------
+-- Dry read
+-- ---------------------------------------------------------------------------
+-- A render opens REAPER's progress window, which takes focus and blocks the UI. For tools that only
+-- need the track's own audio, the audio accessor reads it in-process instead: the items as they
+-- play (stretch markers, rate and item edits applied) BEFORE track FX, pan and the fader, with no
+-- window and no focus change. It cannot hear what the track does not carry itself (a folder's
+-- children, audio arriving by send, a MIDI instrument), so those tracks still get a real render.
+
+local function has_accessor(reaper)
+  return reaper.CreateTrackAudioAccessor and reaper.GetAudioAccessorSamples
+    and reaper.DestroyAudioAccessor and reaper.new_array and true or false
+end
+
+-- The track's playback offset in seconds (0 when it is off); what a render hears
+local function play_offset_s(reaper, track)
+  local flag = reaper.GetMediaTrackInfo_Value(track, "I_PLAY_OFFSET_FLAG")
+  if flag & 1 ~= 0 then return 0 end
+  local v = reaper.GetMediaTrackInfo_Value(track, "D_PLAY_OFFSET")
+  if flag & 2 ~= 0 then
+    local srate = reaper.GetSetProjectInfo(0, "PROJECT_SRATE", 0, false)
+    if not srate or srate <= 0 then srate = M.SAMPLE_RATE end
+    return v / srate
+  end
+  return v
+end
+
+-- Take FX the accessor hears: REAPER's own (JS:, Cockos). A third-party take FX (Melodyne seen live,
+-- REAPER 7.40) can make it return silence, so such an item is left to a real render.
+local function take_fx_readable(reaper, take)
+  if not reaper.TakeFX_GetCount then return true end
+  for k = 0, reaper.TakeFX_GetCount(take) - 1 do
+    local _, name = reaper.TakeFX_GetFXName(take, k, "")
+    name = tostring(name or "")
+    if not (name:match("^JS:") or name:find("(Cockos)", 1, true)) then return false end
+  end
+  return true
+end
+
+-- Whether a dry read of this track over the range says what the track plays: audio items only,
+-- not a folder parent, not the master, and a range short enough to read in one go
+local function dry_eligible(reaper, t, start, stop)
+  if t.master or not has_accessor(reaper) then return false end
+  if stop - start > M.MAX_DRY_SECONDS then return false end
+  if reaper.GetMediaTrackInfo_Value(t.track, "I_FOLDERDEPTH") == 1 then return false end
+  -- audio arriving by send is not in the track's own items
+  if reaper.GetTrackNumSends and reaper.GetTrackNumSends(t.track, -1) > 0 then return false end
+  local off = play_offset_s(reaper, t.track)
+  if start - off < 0 then return false end -- the accessor has no audio before the project start
+  local audio = false
+  local spans = {}
+  for j = 0, reaper.CountTrackMediaItems(t.track) - 1 do
+    local item = reaper.GetTrackMediaItem(t.track, j)
+    local p = reaper.GetMediaItemInfo_Value(item, "D_POSITION") + off
+    local l = reaper.GetMediaItemInfo_Value(item, "D_LENGTH")
+    spans[#spans + 1] = { p, p + l }
+    if p < stop and p + l > start then
+      local take = reaper.GetActiveTake(item)
+      if take and not reaper.TakeIsMIDI(take) then audio = true else return false end
+      if not take_fx_readable(reaper, take) then return false end
+    end
+  end
+  if not audio then return false end
+  -- Where one item ends and another plays on right after it (a split, a crossfade, an overlap), the
+  -- accessor can run the first item's source on into a read that crosses its end, with different
+  -- audio each time (seen live in REAPER 7.40). Reads that start after the junction, or end before
+  -- it, are exact: only a range with such a junction in it is left to a real render.
+  for _, a in ipairs(spans) do
+    if a[2] > start - M.JUNCTION_MARGIN and a[2] < stop then
+      for _, b in ipairs(spans) do
+        if b ~= a and b[1] < a[2] + M.JUNCTION_REACH and b[2] > a[2] then return false end
+      end
+    end
+  end
+  return true
+end
+
+local function pcm24(x)
+  if x ~= x then return 0 end
+  local v = math.floor(x * 8388607 + 0.5)
+  if v > 8388607 then return 8388607 elseif v < -8388608 then return -8388608 end
+  return v
+end
+
+-- Interleaved float samples -> little-endian 24-bit PCM
+local function pack24(samples, count)
+  local parts, i = {}, 1
+  while i <= count do
+    local m = math.min(1536, count - i + 1)
+    local ints = {}
+    for k = 1, m do ints[k] = pcm24(samples[i + k - 1]) end
+    parts[#parts + 1] = string.pack("<" .. string.rep("i3", m), table.unpack(ints))
+    i = i + m
+  end
+  return table.concat(parts)
+end
+
+-- The spans of project time the track's items cover (sorted, merged), moved by the playback offset
+local function item_spans(reaper, track, off)
+  local spans = {}
+  for j = 0, reaper.CountTrackMediaItems(track) - 1 do
+    local item = reaper.GetTrackMediaItem(track, j)
+    local p = reaper.GetMediaItemInfo_Value(item, "D_POSITION") + off
+    local e = p + reaper.GetMediaItemInfo_Value(item, "D_LENGTH")
+    spans[#spans + 1] = { p, e }
+  end
+  table.sort(spans, function(a, b) return a[1] < b[1] end)
+  local merged = {}
+  for _, sp in ipairs(spans) do
+    local last = merged[#merged]
+    if last and sp[1] <= last[2] then
+      if sp[2] > last[2] then last[2] = sp[2] end
+    else
+      merged[#merged + 1] = { sp[1], sp[2] }
+    end
+  end
+  return merged
+end
+
+-- Silence the frames of an interleaved stereo chunk that no item covers (the accessor plays on
+-- past the end of an item whose source goes on). t0 = project time of the first frame.
+local function silence_outside(samples, frames, t0, sr, spans)
+  local function frame_at(t) return math.max(0, math.min(frames, math.floor((t - t0) * sr + 0.5))) end
+  local function zero(a, b) for k = a, b - 1 do samples[k * 2 + 1] = 0; samples[k * 2 + 2] = 0 end end
+  local pos = 0
+  for _, sp in ipairs(spans) do
+    local a, b = frame_at(sp[1]), frame_at(sp[2])
+    if a > pos then zero(pos, a) end
+    if b > pos then pos = b end
+    if pos >= frames then return end
+  end
+  zero(pos, frames)
+end
+
+-- Read [start, stop) of a track's own audio into a 24-bit stereo WAV at SAMPLE_RATE. true, or false + reason
+-- (the half-written file is removed).
+local function dry_read(reaper, env, path, track, start, stop)
+  local sr = M.SAMPLE_RATE
+  local total = math.floor((stop - start) * sr + 0.5)
+  local f = env.io.open(path, "wb")
+  if not f then return false, "cannot write " .. path end
+  local bytes = total * 6
+  f:write("RIFF", string.pack("<I4", 36 + bytes), "WAVEfmt ", string.pack("<I4I2I2I4I4I2I2", 16, 1, 2, sr, sr * 6, 6, 24),
+    "data", string.pack("<I4", bytes))
+  local acc = reaper.CreateTrackAudioAccessor(track)
+  -- What a render also hears: the track's playback offset and polarity switch
+  local off = play_offset_s(reaper, track)
+  local sign = reaper.GetMediaTrackInfo_Value(track, "B_PHASE") ~= 0 and -1 or 1
+  local spans = item_spans(reaper, track, off)
+  local ok, err = pcall(function()
+    local done = 0
+    while done < total do
+      local n = math.min(M.DRY_CHUNK, total - done)
+      local t0 = start + done / sr
+      local buf = reaper.new_array(n * 2)
+      local ret = reaper.GetAudioAccessorSamples(acc, sr, 2, t0 - off, n, buf)
+      if ret < 0 then error("audio accessor read failed (" .. tostring(ret) .. ")") end
+      if ret == 0 then
+        -- the accessor has no audio here: silence
+        f:write(string.rep("\0", n * 6))
+      else
+        local samples = buf.table(1, n * 2)
+        silence_outside(samples, n, t0, sr, spans)
+        if sign < 0 then for k = 1, n * 2 do samples[k] = -samples[k] end end
+        f:write(pack24(samples, n * 2))
+      end
+      done = done + n
+    end
+  end)
+  pcall(reaper.DestroyAudioAccessor, acc)
+  f:close()
+  if not ok then remove_file(env, path); return false, tostring(err) end
+  return true
+end
+
 local function playback_info(reaper, t)
   local offset_ms, inverted = 0, false
   if not t.master then
@@ -374,6 +553,12 @@ function M.render_tracks(reaper, params, e)
     if not track then return nil, "Track " .. tostring(idx) .. " not found" end
     targets[i] = { index = idx, track = track, master = master, name = track_name(reaper, track, idx, master) }
     targets[i].key = string.format("%s|%.4f|%.4f", track_id(reaper, targets[i]), params.startTime, params.endTime)
+    -- dry: read the track's own audio instead of rendering it, where that says what the track plays.
+    -- A dry read is cached under its own key: it is not what a render of the track sounds like.
+    if params.dry == true and dry_eligible(reaper, targets[i], params.startTime, params.endTime) then
+      targets[i].planned_dry = true
+      targets[i].key = targets[i].key .. "|dry"
+    end
   end
 
   local stamp = stamp_of(reaper)
@@ -383,11 +568,37 @@ function M.render_tracks(reaper, params, e)
   for _, t in ipairs(targets) do
     local hit = stamp and params.fresh ~= true and lookup(env, t.key)
     if hit then
-      t.path, t.cached = hit.path, true
+      t.path, t.cached, t.dry = hit.path, true, t.planned_dry == true
       cached = cached + 1
     else
       missing[#missing + 1] = t
     end
+  end
+
+  -- Dry reads first: no window, no focus change. A track whose read fails is rendered after all.
+  local dry_count = 0
+  if #missing > 0 and params.dry == true then
+    local rest = {}
+    local id = tostring(params.commandId or env.now()):gsub("-", ""):sub(1, 16)
+    for _, t in ipairs(missing) do
+      local done = false
+      if t.planned_dry then
+        passes = passes + 1
+        local path = temp_dir(reaper, env) .. M.PREFIX .. "dry_" .. id .. "_" .. passes .. ".wav"
+        local ok, res = pcall(dry_read, reaper, env, path, t.track, params.startTime, params.endTime)
+        if ok and res then
+          local info = file_info(env, path)
+          t.path, t.dry, done = path, true, true
+          dry_count = dry_count + 1
+          if stamp and info then store(env, { key = t.key, path = path, bytes = info.bytes, at = env.now(), stamp = stamp }) end
+        else
+          t.planned_dry = false
+          t.key = t.key:gsub("|dry$", "")
+        end
+      end
+      if not done then rest[#rest + 1] = t end
+    end
+    missing = rest
   end
 
   if #missing > 0 then
@@ -471,11 +682,13 @@ function M.render_tracks(reaper, params, e)
       playOffsetMs = offset_ms,
       phaseInverted = inverted,
       cached = t.cached == true,
+      -- true: the track's own audio before its FX, pan and fader (read, not rendered)
+      dry = t.dry == true,
       -- The cache deletes its files itself: callers must leave them alone
       cacheOwned = true,
     }
   end
-  return { tracks = out, rendered = #missing, cached = cached }
+  return { tracks = out, rendered = #missing, cached = cached, dryRead = dry_count }
 end
 
 --- One track: the shape render_track_to_wav has always returned

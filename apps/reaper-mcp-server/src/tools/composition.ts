@@ -14,14 +14,13 @@
  */
 
 import { z } from 'zod/v4';
-import { randomUUID } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
 import { trace } from '@opentelemetry/api';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
 import { sendCommand } from '../bridge.js';
-import { discardRender } from '../render.js';
+import { discardRender, renderTrack } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
 import { getMidiNotesHistogram } from '../telemetry.js';
 import { logToolResult } from '../tool-log.js';
@@ -41,7 +40,6 @@ export const MAX_MIDI_FILE_BYTES = 5 * 1024 * 1024;
 export const MAX_IMPORT_NOTES = 20_000;
 /** Range of a track rendered for detect_key when no endTime is given (seconds). */
 const DEFAULT_KEY_SECONDS = 60;
-const renderTimeoutMs = (seconds: number) => 30_000 + seconds * 400;
 /** The chord model runs at 2-5x real time on a CPU */
 const chordModelTimeoutMs = (seconds: number) => 60_000 + seconds * 500;
 
@@ -268,7 +266,7 @@ export function registerCompositionTools(server: McpServer): void {
   server.tool(
     'detect_key',
     'Detect the musical key (e.g. "A minor") of a track or an audio file: from a track\'s MIDI notes (note time ' +
-    'weighted by velocity, drums on channel 10 ignored) or, for audio, from its rendered chroma (Python sidecar). ' +
+    'weighted by velocity, drums on channel 10 ignored) or, for audio, from its chroma (Python sidecar; a track is read from its own items, before FX and pan, without a render). ' +
     'Returns the key, confidence 0..1 (how far it stands out from the next candidate that is not its relative ' +
     'key, scaled down for a flat profile and by how well the key fits — its correlation), the relative key, the top 3 alternatives with their correlation, and the 12-bin chroma (C first). ' +
     'Use it before writing parts, choosing a pitch-correction scale or a harmonizer key.',
@@ -341,13 +339,12 @@ export function registerCompositionTools(server: McpServer): void {
           } else {
             const end = args.endTime ?? start + DEFAULT_KEY_SECONDS;
             if (end - start > MAX_OFFLINE_SECONDS) return fail(`Range too long: max ${MAX_OFFLINE_SECONDS} s per call`);
-            const res = await sendCommand(
-              'render_track_to_wav',
-              { trackIndex: trackIndex as number, startTime: start, endTime: end, commandId: randomUUID() },
-              renderTimeoutMs(end - start),
-            );
-            if (!res.success) return fail(`Render failed: ${res.error}`);
-            const wav = res.data as RenderTrackToWavResult;
+            let wav: RenderTrackToWavResult;
+            try {
+              wav = await renderTrack(trackIndex as number, start, end, { dry: true });
+            } catch (err) {
+              return fail(err instanceof Error ? err.message : String(err));
+            }
             try {
               const c = await sidecar.chroma({ path: wav.wavPath });
               profile = c.chroma;
@@ -383,8 +380,8 @@ export function registerCompositionTools(server: McpServer): void {
   server.tool(
     'detect_chords',
     'Detect the chords of a track, one media item or an audio file, one per bar (default) or beat: from MIDI notes ' +
-    '(drums on channel 10 ignored; the lowest held note gives slash chords like C/E) or from rendered audio (Python ' +
-    'sidecar chroma). Track bars and beats follow the project tempo map; a file uses `bpm` (bar 1 at startTime) or ' +
+    '(drums on channel 10 ignored; the lowest held note gives slash chords like C/E) or from audio (Python ' +
+    'sidecar chroma; a track is read from its own items, before FX and pan). Track bars and beats follow the project tempo map; a file uses `bpm` (bar 1 at startTime) or ' +
     'fixed windows. Returns the key, the progression ("Am F C G"), and chord spans (equal neighbours merged): ' +
     'start/end seconds, bar.beat, chord, root, quality (maj, min, 7, maj7, m7, sus2, sus4, dim, aug; the model also dim7, m7b5, 6, m6, 9, maj9, m9, mMaj7, 5, 11, 13), ' +
     'roman numeral in the key, bassMidi (a MIDI note for a bass line, E1-D#2) and a 0..1 fit; "N" = no chord. Paginated (offset/limit). ' +
@@ -522,13 +519,12 @@ export function registerCompositionTools(server: McpServer): void {
             if (end - start > MAX_OFFLINE_SECONDS) return fail(`Range too long: max ${MAX_OFFLINE_SECONDS} s per call (give startTime/endTime)`);
             const model = await useModel();
             if (typeof model === 'string') return fail(model);
-            const r = await sendCommand(
-              'render_track_to_wav',
-              { trackIndex: trackIndex as number, startTime: start, endTime: end, commandId: randomUUID() },
-              renderTimeoutMs(end - start),
-            );
-            if (!r.success) return fail(`Render failed: ${r.error}`);
-            const wav = r.data as RenderTrackToWavResult;
+            let wav: RenderTrackToWavResult;
+            try {
+              wav = await renderTrack(trackIndex as number, start, end, { dry: true });
+            } catch (err) {
+              return fail(err instanceof Error ? err.message : String(err));
+            }
             try {
               const relative = g.segments.map((s) => ({ start: s.start - start, end: s.end - start }));
               if (model) {

@@ -122,6 +122,19 @@ describe('detect_key', () => {
     expect(chroma).toHaveBeenCalledOnce();
   });
 
+  it('reads the track\'s own audio for the key instead of opening a render window', async () => {
+    const chroma = vi.fn().mockResolvedValue({ chroma: [0.3, 0.1, 0.5, 0.1, 0.2, 0.4, 0.1, 0.6, 0.1, 1, 0.2, 0.1], durationSeconds: 30, frames: 300 });
+    vi.mocked(getSidecarClient).mockReturnValue({ isAvailable: () => true, chroma } as never);
+    sendCommandMock.mockImplementation(async (type) => {
+      if ((type as string) === '_midi_pitch_profile') return ok({ chroma: new Array(12).fill(0), notes: 0, midiItems: 0, audioItems: 3 });
+      if (type === 'render_track_to_wav') return ok({ wavPath: join(dir, 'missing-render.wav'), trackName: 'Gtr', durationSeconds: 30 });
+      return ok({});
+    });
+    await tool('detect_key')({ trackIndex: 1, endTime: 30 });
+    const asked = sendCommandMock.mock.calls.find(([type]) => type === 'render_track_to_wav');
+    expect(asked?.[1]).toMatchObject({ trackIndex: 1, dry: true });
+  });
+
   it('says what is missing: a source, the sidecar for audio, or pitched content', async () => {
     expect((await tool('detect_key')({})).content[0].text).toMatch(/exactly one of trackIndex or path/);
     expect((await tool('detect_key')({ trackIndex: -1, source: 'midi' })).content[0].text).toMatch(/master track holds no MIDI/);

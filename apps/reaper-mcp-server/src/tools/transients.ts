@@ -14,11 +14,10 @@
  */
 
 import { z } from 'zod/v4';
-import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
 import { sendCommand } from '../bridge.js';
-import { discardRender } from '../render.js';
+import { discardRender, renderTrack } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
 import { logToolResult } from '../tool-log.js';
 import { MAX_OFFLINE_SECONDS } from './offline.js';
@@ -34,7 +33,6 @@ const DEFAULT_LIMIT = 200;
 export const MAX_AUTOMATION_POINTS = 20_000;
 /** Gap left between a cut-short pulse and the next hit (seconds). */
 const CUT_GAP = 0.0005;
-const renderTimeoutMs = (seconds: number) => 30_000 + seconds * 400;
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
 const text = (data: unknown): ToolResult => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
@@ -210,13 +208,13 @@ async function detect(args: SourceArgs): Promise<Detection | string> {
     end = args.endTime ?? start + DEFAULT_TRACK_SECONDS;
     if (end <= start) return 'endTime must be greater than startTime';
     if (end - start > MAX_OFFLINE_SECONDS) return `Range too long: max ${MAX_OFFLINE_SECONDS} s per call`;
-    const res = await sendCommand(
-      'render_track_to_wav',
-      { trackIndex: trackIndex as number, startTime: start, endTime: end, commandId: randomUUID() },
-      renderTimeoutMs(end - start),
-    );
-    if (!res.success) return `Render failed: ${res.error}`;
-    const wav = res.data as RenderTrackToWavResult;
+    // The track's own audio is enough to find its hits: read it, so no render window opens
+    let wav: RenderTrackToWavResult;
+    try {
+      wav = await renderTrack(trackIndex as number, start, end, { dry: true });
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
     try {
       result = await sidecar.transients({ path: wav.wavPath, ...options });
     } finally {
@@ -246,7 +244,7 @@ async function detect(args: SourceArgs): Promise<Detection | string> {
 export function registerTransientTools(server: McpServer): void {
   server.tool(
     'detect_transients',
-    'Find the transients (hits/onsets) in a track (rendered post-FX, -1 = master) or an audio file on disk: each hit\'s ' +
+    'Find the transients (hits/onsets) in a track (read from its own items, before track FX and pan, without a render; the master is rendered) or an audio file on disk: each hit\'s ' +
     'time in project seconds, strength (0..1, relative to the loudest hits), dominant band (low = kick/bass, ' +
     'mid = snare/vocals/keys, high = hats/cymbals) and peakDb, plus a tempo estimate, hit counts per band and, ' +
     'with sectionSeconds, how busy each part is. Hits are paginated (offset/limit). Use it to sync lighting, video ' +
@@ -297,7 +295,7 @@ export function registerTransientTools(server: McpServer): void {
 
   server.tool(
     'create_transient_automation',
-    'Detect the transients of a track or audio file (same options as detect_transients) and write one pulse per hit ' +
+    'Detect the transients of a track (its own audio, before FX and pan) or audio file (same options as detect_transients) and write one pulse per hit ' +
     'onto an existing envelope of a target track — e.g. a lighting/DMX plugin parameter that should flash on every ' +
     'kick. Each pulse rises from baseValue to the hit level (peakValue, scaled by strength unless ' +
     'scaleByStrength is false) over attackMs, holds holdMs, and falls back over decayMs; a hit before the previous ' +

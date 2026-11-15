@@ -23,7 +23,7 @@ w = {
   settings = { RENDER_FILE = "/out/", RENDER_PATTERN = "mix", RENDER_FORMAT = "l3pm", RENDER_FORMAT2 = "FMW ", RENDER_SETTINGS = 1,
     RENDER_BOUNDSFLAG = 2, RENDER_STARTPOS = 1, RENDER_ENDPOS = 2, RENDER_SRATE = 48000, RENDER_CHANNELS = 6,
     RENDER_NORMALIZE = 73, RENDER_DITHER = 3 },
-  os_name = "OSX64", targets_listed = true, not_wav = false, writes = 0,
+  os_name = "OSX64", targets_listed = true, not_wav = false, writes = 0, reads = {},
 }
 local master = { name = "MASTER", master = true, solo = 0, selected = false }
 for i, name in ipairs({ "Kick", "Snare", "Bass", "Keys" }) do
@@ -64,7 +64,7 @@ reaper = {
   GetProjectStateChangeCount = function() return w.count end,
   GetTrackGUID = function(t) return t.guid or "{MASTER}" end,
   GetParentTrack = function(t) return t.parent end,
-  GetTrackNumSends = function(t) return #t.sends end,
+  GetTrackNumSends = function(t, cat) if cat == -1 then return t.receives or 0 end return #t.sends end,
   GetTrackSendInfo_Value = function(t, _, i, key) return t.sends[i + 1] end,
   GetSetMediaTrackInfo_String = function(t) return true, t.name end,
   GetMediaTrackInfo_Value = function(t, key)
@@ -72,7 +72,47 @@ reaper = {
     if key == "I_PLAY_OFFSET_FLAG" then return t.offset and 0 or 1 end
     if key == "D_PLAY_OFFSET" then return t.offset or 0 end
     if key == "B_PHASE" then return t.phase and 1 or 0 end
+    if key == "I_FOLDERDEPTH" then return t.folder or 0 end
     return 0
+  end,
+  -- Items and the audio accessor: a track's items as the accessor hears them (dry: no FX, no pan).
+  -- The fake plays a constant +0.5 on the left and -0.5 on the right, and records what was read.
+  CountTrackMediaItems = function(t) return #(t.items or {}) end,
+  GetTrackMediaItem = function(t, j) return t.items[j + 1] end,
+  GetMediaItemInfo_Value = function(item, key) if key == "D_POSITION" then return item.pos end return item.len end,
+  GetActiveTake = function(item) return item.take end,
+  TakeIsMIDI = function(take) return take.midi == true end,
+  TakeFX_GetCount = function(take) return #(take.fx or {}) end,
+  TakeFX_GetFXName = function(take, k) return true, take.fx[k + 1] end,
+  CreateTrackAudioAccessor = function(t) return { track = t, alive = true } end,
+  DestroyAudioAccessor = function(acc) acc.alive = false end,
+  new_array = function(n)
+    local data = {}
+    return { n = n, data = data, table = function(off, size)
+      local out = {}
+      for i = 1, size do out[i] = data[off + i - 1] or 0 end
+      return out
+    end }
+  end,
+  GetAudioAccessorSamples = function(acc, sr, ch, start, n, buf)
+    assert(acc.alive and sr == 44100 and ch == 2, "an open accessor, 44100 Hz stereo")
+    w.reads[#w.reads + 1] = { start = start, n = n }
+    if w.accessor_fail then return -1 end
+    if w.accessor_silent then return 0 end
+    -- A track with items plays only inside them. An item marked leak is the one REAPER 7.40 gets
+    -- wrong: a read that starts inside it and runs past its end gets its source played on to the read's end
+    local items = acc.track.items or {}
+    for i = 1, n do
+      local t = start + (i - 1) / sr
+      local on = #items == 0
+      for _, it in ipairs(items) do
+        if t >= it.pos and t < it.pos + it.len then on = true end
+        if it.leak and t >= it.pos + it.len and start < it.pos + it.len and start + n / sr > it.pos + it.len then on = true end
+      end
+      buf.data[2 * i - 1] = on and 0.5 or 0
+      buf.data[2 * i] = on and -0.5 or 0
+    end
+    return 1
   end,
   SetMediaTrackInfo_Value = function(t, key, v) if key == "I_SOLO" then t.solo = v end; bump() end,
   IsTrackSelected = function(t) return t.selected end,
@@ -127,7 +167,11 @@ reaper = {
 
 -- The lib's file system: in memory
 ENV = {
-  io = { open = function(path)
+  io = { open = function(path, mode)
+    if mode == "wb" then
+      w.files[path] = ""
+      return { write = function(self, ...) for _, s in ipairs({ ... }) do w.files[path] = w.files[path] .. s end return self end, close = function() end }
+    end
     local content = w.files[path]
     if not content then return nil end
     return { read = function(_, n) return content:sub(1, n) end, seek = function() return #content end, close = function() end }
@@ -397,6 +441,285 @@ describe('focus', () => {
       w.front = "evil; rm -rf ~"
       assert(render({ 2 }))
       assert(#w.opened == 0)
+    `);
+  });
+});
+
+// A dry read hears the track's own audio through the audio accessor: no render, so no progress window
+// and no focus change. Everything that is not a plain audio track still gets a real render.
+const DRY = `
+function audio_on(i, pos, len)
+  w.tracks[i + 1].items = { { pos = pos or 0, len = len or 100, take = { midi = false } } }
+end
+function dry(indices, extra)
+  local p = { dry = true }
+  for k, v in pairs(extra or {}) do p[k] = v end
+  return render(indices, p)
+end
+`;
+
+describe('dry read', () => {
+  it('reads a track without rendering and hands over a 24-bit stereo WAV of the range', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 5, 30)
+      local res = assert(dry({ 0 }))
+      local t = res.tracks[1]
+      assert(t.dry == true and t.cached == false and t.cacheOwned == true, "a dry read, owned by the cache")
+      assert(#w.renders == 0 and res.rendered == 0 and res.dryRead == 1, "nothing was rendered")
+      assert(t.durationSeconds == 10 and t.sampleRate == 44100 and t.channelCount == 2)
+      local wav = w.files[t.wavPath]
+      local riff, size, wave, fmt, fmtlen, tag, ch, rate, _, align, bits, data, dlen = string.unpack("<c4I4c4c4I4I2I2I4I4I2I2c4I4", wav)
+      assert(riff == "RIFF" and wave == "WAVE" and fmt == "fmt " and data == "data")
+      assert(tag == 1 and ch == 2 and rate == 44100 and bits == 24 and align == 6, "24-bit stereo PCM")
+      assert(dlen == 10 * 44100 * 6 and #wav == 44 + dlen and size == 36 + dlen, "ten seconds, header sized to match")
+      -- first frame: left +0.5, right -0.5 (within one 24-bit step)
+      local left, right = string.unpack("<i3i3", wav, 45)
+      assert(math.abs(left - 0.5 * 8388607) <= 1, "left is +0.5")
+      assert(math.abs(right + 0.5 * 8388607) <= 1, "right is -0.5")
+    `);
+  });
+
+  it('reads the range from its start, in pieces', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 0, 100)
+      assert(dry({ 0 }))
+      assert(#w.reads == 2 and w.reads[1].start == 10 and w.reads[2].start == 15, "two 5 s reads from the range start")
+      local n = 0
+      for _, r in ipairs(w.reads) do n = n + r.n end
+      assert(n == 10 * 44100, "every sample of the range")
+    `);
+  });
+
+  it('plays silence where no item is, even when the accessor plays a source on past an item\'s end', async () => {
+    await runWorld(`${DRY}
+      w.tracks[1].items = { { pos = 12, len = 2, leak = true, take = { midi = false } } }
+      local res = assert(dry({ 0 }))
+      local wav = w.files[res.tracks[1].wavPath]
+      local function left(t) return (string.unpack("<i3", wav, 45 + math.floor((t - 10) * 44100) * 6)) end
+      assert(left(11) == 0, "silent before the item")
+      assert(left(13) > 4000000, "audible inside it")
+      assert(left(13.99) > 4000000, "audible up to its last moment")
+      assert(left(14.01) == 0, "silent from its end")
+      assert(left(14.9) == 0, "silent where the source played on")
+    `);
+  });
+
+  it('renders a range that holds a junction, where one item ends and another plays on after it', async () => {
+    await runWorld(`${DRY}
+      w.tracks[1].items = {
+        { pos = 11, len = 4.5, take = { midi = false } },
+        { pos = 15.5, len = 6, take = { midi = false } },
+      }
+      -- the first item ends at 15.5 inside 10..20, and the second plays on from it
+      local res = assert(dry({ 0 }))
+      assert(res.tracks[1].dry == false and #w.renders == 1 and #w.reads == 0)
+      -- overlapping items are a junction too
+      w.tracks[1].items = {
+        { pos = 11, len = 6, take = { midi = false } },
+        { pos = 15, len = 6, take = { midi = false } },
+      }
+      local overlap = assert(dry({ 0 }, { fresh = true }))
+      assert(overlap.tracks[1].dry == false and #w.reads == 0)
+    `);
+  });
+
+  it('renders an item with a third-party take FX, which the accessor can return as silence, and reads REAPER-native ones', async () => {
+    await runWorld(`${DRY}
+      w.tracks[1].items = { { pos = 11, len = 8, take = { midi = false, fx = { "VST3: Melodyne (Celemony)" } } } }
+      local res = assert(dry({ 0 }))
+      assert(res.tracks[1].dry == false and #w.renders == 1 and #w.reads == 0)
+      w.tracks[1].items = { { pos = 11, len = 8, take = { midi = false, fx = { "VST: ReaEQ (Cockos)", "JS: Volume Adjustment" } } } }
+      local native = assert(dry({ 0 }, { fresh = true }))
+      assert(native.tracks[1].dry == true)
+    `);
+  });
+
+  it('renders a track that receives audio by send, which its own items do not hold', async () => {
+    await runWorld(`${DRY}
+      w.tracks[1].items = { { pos = 11, len = 8, take = { midi = false } } }
+      w.tracks[1].receives = 1
+      local res = assert(dry({ 0 }))
+      assert(res.tracks[1].dry == false and #w.renders == 1 and #w.reads == 0)
+    `);
+  });
+
+  it('reads a range that starts after the junction, or ends before it', async () => {
+    await runWorld(`${DRY}
+      w.tracks[1].items = {
+        { pos = 0, len = 15.5, take = { midi = false } },
+        { pos = 15.5, len = 40, take = { midi = false } },
+      }
+      local after = assert(dry({ 0 }, { startTime = 16, endTime = 24 }))
+      assert(after.tracks[1].dry == true, "starts half a second after the junction")
+      local before = assert(dry({ 0 }, { startTime = 8, endTime = 15 }))
+      assert(before.tracks[1].dry == true, "ends before the first item does")
+    `);
+  });
+
+  it('reads an item whose neighbour is further off than a read reaches, and silences what follows its end', async () => {
+    await runWorld(`${DRY}
+      w.tracks[1].items = {
+        { pos = 11, len = 2, leak = true, take = { midi = false } },
+        { pos = 30, len = 5, take = { midi = false } },
+      }
+      local res = assert(dry({ 0 }, { startTime = 10, endTime = 20 }))
+      assert(res.tracks[1].dry == true)
+      local wav = w.files[res.tracks[1].wavPath]
+      local function left(t) return (string.unpack("<i3", wav, 45 + math.floor((t - 10) * 44100) * 6)) end
+      assert(left(10.5) == 0 and left(12) > 4000000, "audible inside the item")
+      assert(left(13.5) == 0 and left(14.9) == 0, "silent after its end, where the accessor played the source on")
+    `);
+  });
+
+  it('plays a track whose polarity is switched inverted, as a render does', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 0, 100); w.tracks[1].phase = true
+      local res = assert(dry({ 0 }))
+      local left, right = string.unpack("<i3i3", w.files[res.tracks[1].wavPath], 45)
+      assert(math.abs(left + 0.5 * 8388607) <= 1 and math.abs(right - 0.5 * 8388607) <= 1, "both channels flipped")
+    `);
+  });
+
+  it('plays a track later by its playback offset, as a render does', async () => {
+    await runWorld(`${DRY}
+      w.tracks[1].items = { { pos = 12, len = 3, take = { midi = false } } }
+      w.tracks[1].offset = 2
+      local res = assert(dry({ 0 }))
+      local wav = w.files[res.tracks[1].wavPath]
+      local function left(t) return (string.unpack("<i3", wav, 45 + math.floor((t - 10) * 44100) * 6)) end
+      assert(left(13) == 0, "the item's own place is silent now")
+      assert(left(15) > 4000000 and left(16.9) > 4000000, "audible two seconds later")
+      assert(left(17.1) == 0)
+      assert(w.reads[1].start == 8, "the accessor is asked for the audio that lands here")
+    `);
+  });
+
+  it('renders when the offset would ask the accessor for audio before the project starts', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 0, 100); w.tracks[1].offset = 11
+      local res = assert(dry({ 0 }))
+      assert(res.tracks[1].dry == false and #w.renders == 1 and #w.reads == 0)
+    `);
+  });
+
+  it('leaves render settings, solo and selection exactly as they were', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 0, 100)
+      local before = {}
+      for k, v in pairs(w.settings) do before[k] = v end
+      local writes = w.writes
+      assert(dry({ 0 }))
+      for k, v in pairs(before) do assert(w.settings[k] == v, k .. " changed") end
+      assert(w.writes == writes, "the project was not written to")
+      assert(w.tracks[3].solo == 1 and w.tracks[2].selected == true and w.tracks[1].selected == false)
+      assert(w.front == "com.apple.Terminal" and #w.opened == 0, "focus never moved")
+    `);
+  });
+
+  it('serves the same read again from the cache until something changes', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 0, 100)
+      local a = assert(dry({ 0 }))
+      local b = assert(dry({ 0 }))
+      assert(#w.reads == 2 and b.tracks[1].cached == true and b.tracks[1].dry == true, "second call read nothing")
+      assert(a.tracks[1].wavPath == b.tracks[1].wavPath and b.dryRead == 0 and b.cached == 1)
+      lib.note_write()
+      local c = assert(dry({ 0 }))
+      assert(c.tracks[1].cached == false and #w.reads == 4, "a write retires it")
+    `);
+  });
+
+  it('does not hand a render out as a dry read, or the other way round', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 0, 100)
+      local rendered = assert(render({ 0 }))
+      local read = assert(dry({ 0 }))
+      assert(rendered.tracks[1].dry == false and read.tracks[1].dry == true)
+      assert(rendered.tracks[1].wavPath ~= read.tracks[1].wavPath and #w.renders == 1 and #w.reads == 2)
+      local again = assert(render({ 0 }))
+      assert(again.tracks[1].cached == true and again.tracks[1].dry == false, "the render is still its own")
+    `);
+  });
+
+  it('renders as before when a dry read is not asked for', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 0, 100)
+      local res = assert(render({ 0 }))
+      assert(res.tracks[1].dry == false and #w.renders == 1 and #w.reads == 0)
+    `);
+  });
+
+  it('renders the master, which has no items of its own', async () => {
+    await runWorld(`${DRY}
+      local res = assert(dry({ -1 }))
+      assert(res.tracks[1].dry == false and #w.renders == 1 and #w.reads == 0)
+    `);
+  });
+
+  it('renders a folder parent, whose sound is its children', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 0, 100); w.tracks[1].folder = 1
+      local res = assert(dry({ 0 }))
+      assert(res.tracks[1].dry == false and #w.renders == 1 and #w.reads == 0)
+    `);
+  });
+
+  it('renders a track that plays MIDI, whose sound is its instrument', async () => {
+    await runWorld(`${DRY}
+      w.tracks[1].items = { { pos = 0, len = 100, take = { midi = true } } }
+      local res = assert(dry({ 0 }))
+      assert(res.tracks[1].dry == false and #w.renders == 1 and #w.reads == 0)
+    `);
+  });
+
+  it('renders a track with no audio in the range, which a dry read would report as silence', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 100, 50) -- starts after the range ends
+      local res = assert(dry({ 0 }))
+      assert(res.tracks[1].dry == false and #w.renders == 1 and #w.reads == 0)
+    `);
+  });
+
+  it('renders a range too long to read in one go', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 0, 1000)
+      local res = assert(dry({ 0 }, { startTime = 0, endTime = 200 }))
+      assert(res.tracks[1].dry == false and #w.renders == 1 and #w.reads == 0)
+      local ok = assert(dry({ 0 }, { startTime = 0, endTime = 120 }))
+      assert(ok.tracks[1].dry == true, "120 s is the limit")
+    `);
+  });
+
+  it('renders the track after all when the accessor fails, and leaves no half-written file', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 0, 100)
+      w.accessor_fail = true
+      local res = assert(dry({ 0 }))
+      assert(res.tracks[1].dry == false and #w.renders == 1, "rendered instead")
+      assert(w.files[res.tracks[1].wavPath] == "RIFFKick", "the file is the render")
+      assert(count_files() == 1, "the failed read left nothing behind")
+    `);
+  });
+
+  it('treats a stretch the accessor has no audio for as silence', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 0, 100)
+      w.accessor_silent = true
+      local res = assert(dry({ 0 }))
+      local wav = w.files[res.tracks[1].wavPath]
+      assert(res.tracks[1].dry == true and #wav == 44 + 10 * 44100 * 6)
+      assert(wav:sub(45, 200) == string.rep("\\0", 156), "zeros")
+    `);
+  });
+
+  it('reads what it can and renders the rest in one call, answering in the order asked', async () => {
+    await runWorld(`${DRY}
+      audio_on(0, 0, 100)             -- Kick: audio
+      local res = assert(dry({ 1, 0 })) -- Snare has no items: rendered
+      assert(res.tracks[1].trackName == "Snare" and res.tracks[1].dry == false)
+      assert(res.tracks[2].trackName == "Kick" and res.tracks[2].dry == true)
+      assert(#w.renders == 1 and #w.renders[1].labels == 1 and w.renders[1].labels[1] == "Snare", "only Snare was rendered")
+      assert(res.rendered == 1 and res.dryRead == 1)
     `);
   });
 });
