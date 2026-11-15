@@ -148,7 +148,7 @@ export function embedUrl(youtube: string): string {
 }
 
 const BLURB =
-  'reaper-mcp lets an AI assistant (Claude Code, Codex CLI, Gemini CLI or Cursor) work inside a live REAPER session: it measures, mixes, edits and builds plugins while you stay in charge. It is an assistant, not a composer. These guides are written for musicians who are new to AI.';
+  'reaper-mcp lets an AI assistant (Claude Code, Codex CLI, Gemini CLI or Cursor) work inside a live REAPER session: it measures, mixes, edits, sketches songs and builds plugins while you stay in charge. It does the legwork; the taste stays yours. These guides are written for musicians who are new to AI.';
 
 /** `llms.txt`: what this is, then every guide with its one-line summary and a link to the raw Markdown. */
 export function renderLlmsTxt(guides: GuideMeta[], origin = ''): string {
