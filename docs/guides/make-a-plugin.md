@@ -22,10 +22,10 @@ Setup already put seven of these in REAPER, each with a few presets. They're the
 
 - ![Tape Sat: Drive, Tone, Mix and Output knobs on an orange panel](media/tape-sat.webp) **Tape Sat**: warm tape saturation with a tone tilt. Try the "Warm bus" or "Old cassette" preset.
 - ![A multiband compressor: drag each band on the spectrum to set threshold and gain](media/multiband-compressor.png) **Multiband Compressor**: three bands you drag on a live spectrum, each with its own threshold, ratio and gain.
-- **Width / Bass Mono**: widens the stereo picture but keeps everything below the crossover in mono, so the low end stays tight.
-- **Mutate Verb**: every hit gets an echo with a twist, a little pitch shift, sometimes reversed, sent into a reverb.
-- **Drum Pads**: eight drum sounds you play with the mouse, the keyboard or a MIDI controller. No samples needed.
-- **Pad MIDI**: eight pads that send MIDI notes. Put a sampler or drum plugin after it.
+- ![Width / Bass Mono: Width and Mono below knobs with an output fader](media/width-bass-mono.webp) **Width / Bass Mono**: widens the stereo picture but keeps everything below the crossover in mono, so the low end stays tight.
+- ![Mutate Verb: Mutate and Size knobs on a purple panel](media/mutate-verb.webp) **Mutate Verb**: every hit gets an echo with a twist, a little pitch shift, sometimes reversed, sent into a reverb.
+- ![Drum Pads: Level, Tune and Decay knobs above eight pads](media/drum-pads.webp) **Drum Pads**: eight drum sounds you play with the mouse, the keyboard or a MIDI controller. No samples needed.
+- ![Pad MIDI: Timing, Velocity, Length and Channel knobs above eight pads](media/pad-midi.webp) **Pad MIDI**: eight pads that send MIDI notes. Put a sampler or drum plugin after it.
 - ![A step sequencer plugin: drum lanes, a 16th-note pattern, length and feel buttons](media/step-sequencer.webp) **Step Sequencer**: draw a drum loop on a grid and it plays in time with your project. Also needs a sampler after it.
 
 :::
