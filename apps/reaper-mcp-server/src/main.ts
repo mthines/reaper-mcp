@@ -7,6 +7,7 @@ import { createServer } from './server.js';
 import { resolveProfile } from './profile.js';
 import { checkExtensions, loadExtensions } from './extensions.js';
 import { extensionCommand } from './extension-cli.js';
+import { flagOverrideCheck, flagsCommand } from './flags.js';
 import { ensureBridgeDir, isBridgeRunning, getBridgeState, bridgeDownMessage, cleanupStaleFiles, readBridgeEvents, getReaperScriptsPath, getReaperEffectsPath, getReaperWwwPath, getReaperResourcePath, startDiagnosticsPoller, startEventsPoller, stopPollers } from './bridge.js';
 import { initTelemetry, shutdownTelemetry, getTracer, recordClientConnected, registerBridgeGauges, emitLog, exceptionAttributes, readServiceVersion, reportConsentChange } from './telemetry.js';
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -485,6 +486,9 @@ async function doctor(): Promise<number> {
     await isReaperRunning(),
   ));
 
+  const forcedFlags = flagOverrideCheck();
+  if (forcedFlags) core.push(forcedFlags);
+
   const globalClaudeDir = join(homedir(), '.claude');
   const localSkills = existsSync(join(process.cwd(), '.claude', 'skills', 'mixer', 'SKILL.md'));
   const globalSkills = existsSync(join(globalClaudeDir, 'skills', 'mixer', 'SKILL.md'));
@@ -858,6 +862,10 @@ switch (command) {
     });
     break;
 
+  case 'flags':
+    process.exit(flagsCommand(process.argv.slice(3)));
+    break;
+
   case 'extension':
   case 'extensions':
     extensionCommand(process.argv.slice(3)).then(
@@ -916,6 +924,7 @@ Usage:
   reaper-mcp update           Update to the latest release (npm install: downloads it and installs it into REAPER; --force reinstalls)
   reaper-mcp doctor           Check that everything is configured correctly
   reaper-mcp status           Check if Lua bridge is running in REAPER
+  reaper-mcp flags            List feature flags and how they resolve here; set <key> <variant> forces one on this install only; reset [key]
   reaper-mcp telemetry off    Opt out of pseudonymous usage telemetry (also: on, status)
 
 Quick Start (from npm):

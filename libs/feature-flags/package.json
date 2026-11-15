@@ -1,0 +1,8 @@
+{
+  "name": "@reaper-mcp/feature-flags",
+  "version": "0.89.2",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts"
+}

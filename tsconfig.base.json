@@ -20,7 +20,9 @@
     "forceConsistentCasingInFileNames": true,
     "paths": {
       "@reaper-mcp/protocol": ["libs/protocol/src/index.ts"],
-      "@reaper-mcp/extension-api": ["libs/extension-api/src/index.ts"]
+      "@reaper-mcp/extension-api": ["libs/extension-api/src/index.ts"],
+      "@reaper-mcp/feature-flags": ["libs/feature-flags/src/index.ts"],
+      "@reaper-mcp/feature-flags/server": ["libs/feature-flags/src/server.ts"]
     }
   },
   "exclude": ["node_modules", "dist"]

@@ -295,6 +295,13 @@ const ALLOWED_SPAN_ATTRIBUTES = new Set([
   'reaper.chords.source',
   'reaper.chords.count',
   'reaper.chords.engine',
+  // Which variant of a feature flag a call ran under (libs/feature-flags otel-hook.ts), so an experiment's
+  // arms can be compared: the flag key, the provider's name, the variant key and the reason it resolved
+  // that way (static, split, override, error). Never the targeting key (the install id).
+  'feature_flag.key',
+  'feature_flag.provider.name',
+  'feature_flag.result.variant',
+  'feature_flag.result.reason',
   // opt-in/opt-out counts: on or off, and where the choice was made
   'reaper.telemetry.consent.state',
   'reaper.telemetry.consent.source',

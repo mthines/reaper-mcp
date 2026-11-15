@@ -111,6 +111,8 @@ const hostedShare = (): Plugin => ({
 export default defineConfig(async ({ command }) => ({
   root: here,
   define: buildConstants(),
+  // The workspace lib the page shares with the server: only its browser-safe entry (never /server)
+  resolve: { alias: { '@reaper-mcp/feature-flags': join(here, '../../libs/feature-flags/src/index.ts') } },
   plugins: [react({ babel: reactCompilerBabel }), viteSingleFile(), reaperDev(), hostedChangelogMedia(), hostedDocs(), hostedShare(), referrerMeta()],
   server: { host: '127.0.0.1', port: command === 'serve' ? await devPort() : 8098, strictPort: true },
   build: {
