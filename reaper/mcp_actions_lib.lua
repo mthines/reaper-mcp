@@ -371,5 +371,29 @@ function M.set_selected_items(api, items, mode)
   return { selected = selected }
 end
 
+-- The items selected right now: where each sits (track and item index as list_media_items reports them),
+-- its track's name, start, length and mute. Read-only.
+function M.get_selected_items(api)
+  local items = {}
+  for i = 0, api.CountTracks(0) - 1 do
+    local tr = api.GetTrack(0, i)
+    local _, track_name = api.GetTrackName(tr)
+    for j = 0, api.CountTrackMediaItems(tr) - 1 do
+      local it = api.GetTrackMediaItem(tr, j)
+      if api.IsMediaItemSelected(it) then
+        items[#items + 1] = {
+          trackIndex = i,
+          trackName = track_name,
+          itemIndex = j,
+          position = api.GetMediaItemInfo_Value(it, "D_POSITION"),
+          length = api.GetMediaItemInfo_Value(it, "D_LENGTH"),
+          muted = api.GetMediaItemInfo_Value(it, "B_MUTE") == 1,
+        }
+      end
+    end
+  end
+  return { items = items, count = #items }
+end
+
 M.section_id = section_id
 return M

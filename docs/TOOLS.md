@@ -46,6 +46,7 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 | `get_time_selection` | Time/loop selection start, end, length |
 | `set_time_selection` | Set the time selection range |
 | `set_selected_tracks` / `set_selected_items` | Select tracks (index, name, GUID, master) or items, replacing or adding to the selection |
+| `get_selected_items` | The items selected now: track and item index, track name, position, length, mute |
 
 ### Markers & Regions
 
@@ -247,12 +248,12 @@ Each is one bridge call and one undo point; a refused request changes nothing. T
 
 Snapshots capture your full mixer state: track volumes, pans, mute/solo, FX chains (all parameter values, enabled/offline states, presets), and send levels. Use them to A/B compare mix decisions or revert to a known-good state.
 
-Pass `trackIndices` to `snapshot_save` to capture only some tracks; restoring that snapshot touches only those tracks. Pass `fullChunk` (on by default for a scoped snapshot) to store each track's exact state chunk. A chunk restore reproduces a plugin's complete internal state, including plugins whose sound lives in their own internal snapshots (such as Helix Native) that parameter values can't capture. Snapshots don't include the master track yet.
+Pass `trackIndices` to `snapshot_save` to capture only some tracks; restoring that snapshot touches only those tracks. Pass `fullChunk` (on by default for a scoped snapshot) to store each track's exact state chunk. A chunk restore reproduces a plugin's complete internal state, including plugins whose sound lives in their own internal snapshots (such as Helix Native) that parameter values can't capture. Pass `stretchMarkers` to also keep the stretch markers of every audio item on the captured tracks (an alignment or a stretch edit). They are stored on their own and put back on restore, by item GUID, else by track, position and length, so they come back even where REAPER refuses to apply a track chunk (seen on tracks whose items carry Melodyne take FX). Snapshots otherwise hold no items. Snapshots don't include the master track yet.
 
 | Tool | Description |
 |------|-------------|
-| `snapshot_save` | Save current mixer state (volumes, pans, FX params, sends, mutes); `trackIndices` scopes it, `fullChunk` stores exact track chunks |
-| `snapshot_restore` | Restore a saved snapshot (chunk snapshots restore their tracks exactly; parameter snapshots only restore params if plugin names match) |
+| `snapshot_save` | Save current mixer state (volumes, pans, FX params, sends, mutes); `trackIndices` scopes it, `fullChunk` stores exact track chunks, `stretchMarkers` keeps the items' stretch markers |
+| `snapshot_restore` | Restore a saved snapshot (chunk snapshots restore their tracks exactly; parameter snapshots only restore params if plugin names match; saved stretch markers are put back) |
 | `snapshot_list` | List all saved snapshots with metadata |
 | `snapshot_delete` | Delete a saved snapshot by name |
 

@@ -23,6 +23,7 @@ function new_fake(spec)
     for _, f in ipairs(t.fx or {}) do tr.fx[#tr.fx + 1] = new_fx(f) end
     for _, it in ipairs(t.items or {}) do
       tr.items[#tr.items + 1] = { pos = it.pos or 0, len = it.len or 4, selected = it.selected or false,
+        guid = it.guid or ("{FAKE-ITEM-" .. i .. "-" .. (#tr.items + 1) .. "}"),
         takes = { { name = it.name or "take", midi = it.midi or false, offs = it.offs or 0, rate = it.rate or 1, sm = {} } }, active = 1 }
     end
     api.tracks[i] = tr
@@ -175,6 +176,7 @@ function new_fake(spec)
     if k == "D_POSITION" then return it.pos elseif k == "D_LENGTH" then return it.len end
     return 0
   end
+  function api.GetSetMediaItemInfo_String(it, k) if k == "GUID" then return true, it.guid end return false, "" end
   function api.GetMediaItemTakeInfo_Value(take, k)
     if k == "D_STARTOFFS" then return take.offs elseif k == "D_PLAYRATE" then return take.rate end
     return 0

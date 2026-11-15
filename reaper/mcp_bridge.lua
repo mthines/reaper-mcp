@@ -1520,6 +1520,17 @@ function handlers.snapshot_save(params)
     trackIndices = params.trackIndices,
     fullChunk = params.fullChunk,
   })
+  -- Stretch markers of the audio items on the captured tracks, kept apart from the track chunk (REAPER
+  -- refuses to apply a chunk on tracks whose items carry Melodyne take FX)
+  local marker_items = 0
+  if params.stretchMarkers == true then
+    local captured = {}
+    for _, t in ipairs(mixer_state.tracks) do captured[#captured + 1] = t.index end
+    local entries, err = ext.mix.run("capture_stretch_markers", captured)
+    if not entries then return nil, err end
+    mixer_state.stretchMarkers = entries
+    marker_items = #entries
+  end
   -- Metadata first, mixerState last: a lister can read name/description/trackCount from the
   -- head of the file (mcp_snapshot_lib.lua's read_snapshot_meta reads only that prefix)
   local content = "{" .. table.concat({
@@ -1547,6 +1558,7 @@ function handlers.snapshot_save(params)
     scoped = mixer_state.scoped == true,
     fullChunk = mixer_state.fullChunk == true,
     tracksCaptured = #mixer_state.tracks,
+    stretchMarkerItems = params.stretchMarkers == true and marker_items or nil,
   }
 end
 
@@ -1607,7 +1619,10 @@ function handlers.snapshot_restore(params)
           if reaper.SetTrackStateChunk(track, base64_decode(track_state.chunkB64), false) then
             restored = restored + 1
           else
-            warnings[#warnings + 1] = "Track " .. track_state.index .. ": SetTrackStateChunk failed"
+            warnings[#warnings + 1] = "Track " .. track_state.index .. " '" .. tostring(track_state.name)
+              .. "': REAPER refused the saved track state (SetTrackStateChunk failed), the track is unchanged"
+              .. (state.stretchMarkers and "; its stretch markers are restored separately" or
+                  "; tracks with Melodyne (ARA) take FX can do this: save with stretchMarkers for their item edits")
           end
         else
         -- Basic mixer state (all versions)
@@ -1685,6 +1700,25 @@ function handlers.snapshot_restore(params)
     end
   end
 
+  -- Stretch markers saved with the snapshot (snapshot_save stretchMarkers): put back after the tracks,
+  -- also on tracks whose chunk could not be applied
+  local marker_result
+  if params.restoreStretchMarkers ~= false and state.stretchMarkers then
+    local entries = state.stretchMarkers
+    if type(entries) == "string" then entries = json_decode_array(entries) end
+    if type(entries) == "table" then
+      local res, err = ext.mix.run("restore_stretch_markers", entries)
+      if res then
+        marker_result = res
+        if res.missing > 0 then
+          warnings[#warnings + 1] = res.missing .. " saved item(s) no longer exist, their stretch markers were not restored"
+        end
+      else
+        warnings[#warnings + 1] = "Stretch markers not restored: " .. tostring(err)
+      end
+    end
+  end
+
   reaper.Undo_EndBlock("MCP: Restore snapshot '" .. name .. "'", -1)
 
   reaper.TrackList_AdjustWindows(false)
@@ -1696,6 +1730,7 @@ function handlers.snapshot_restore(params)
     timestamp = snapshot.timestamp,
     tracksRestored = restored,
     version = version,
+    stretchMarkers = marker_result,
   }
   if #warnings > 0 then result.warnings = warnings end
   return result
@@ -3526,6 +3561,12 @@ function handlers.set_selected_tracks(params)
     local refs, err = decode_list(params.tracks, "tracks")
     if not refs then return nil, err end
     return actions_lib.set_selected_tracks(reaper, refs, params.mode, plan_lib.resolve_track)
+  end)
+end
+
+function handlers.get_selected_items(params)
+  return with_actions_lib(function()
+    return actions_lib.get_selected_items(reaper)
   end)
 end
 

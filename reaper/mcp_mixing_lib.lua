@@ -787,6 +787,135 @@ local function write_markers(api, t, list)
   end
 end
 
+-- Snapshot support: the stretch markers of every audio item on some tracks, and putting them back.
+-- A track chunk can hold them too, but REAPER refused to apply a chunk (SetTrackStateChunk) on tracks
+-- whose items carry Melodyne (ARA) take FX, so a snapshot keeps the markers on their own.
+M.MAX_SNAPSHOT_ITEMS = 5000
+
+local function num_text(n) return string.format("%.10g", n) end
+
+local function item_guid(api, it)
+  if not api.GetSetMediaItemInfo_String then return "" end
+  local ok, guid = api.GetSetMediaItemInfo_String(it, "GUID", "", false)
+  if ok and type(guid) == "string" then return guid end
+  return ""
+end
+
+-- One entry per audio item (the active take): {trackIndex, guid, position, length, markers}, with the
+-- markers as one flat string "pos,src,slope;pos,src,slope" in raw take time (what get_stretch_markers
+-- lists). A flat string, because the bridge's JSON fallback cannot read nested arrays back. An item
+-- with no markers is kept too (markers = ""), so a restore clears markers added since.
+-- `trackIndices`: 0-based list, nil = every track.
+function M.capture_stretch_markers(api, trackIndices)
+  local list = trackIndices
+  if not list then
+    list = {}
+    for i = 0, api.CountTracks(0) - 1 do list[#list + 1] = i end
+  end
+  local entries = {}
+  for _, ti in ipairs(list) do
+    local tr = api.GetTrack(0, ti)
+    if tr then
+      for ii = 0, api.CountTrackMediaItems(tr) - 1 do
+        local it = api.GetTrackMediaItem(tr, ii)
+        local take = it and api.GetActiveTake(it)
+        if take and not api.TakeIsMIDI(take) then
+          if #entries >= M.MAX_SNAPSHOT_ITEMS then
+            return nil, "more than " .. M.MAX_SNAPSHOT_ITEMS .. " audio items: pass trackIndices to scope the snapshot"
+          end
+          local parts = {}
+          for m = 0, api.GetTakeNumStretchMarkers(take) - 1 do
+            local _, pos, src = api.GetTakeStretchMarker(take, m)
+            local slope = api.GetTakeStretchMarkerSlope and api.GetTakeStretchMarkerSlope(take, m) or 0
+            parts[#parts + 1] = num_text(pos) .. "," .. num_text(src) .. "," .. num_text(slope)
+          end
+          entries[#entries + 1] = {
+            trackIndex = ti, guid = item_guid(api, it),
+            position = api.GetMediaItemInfo_Value(it, "D_POSITION"),
+            length = api.GetMediaItemInfo_Value(it, "D_LENGTH"),
+            markers = table.concat(parts, ";"),
+          }
+        end
+      end
+    end
+  end
+  return entries
+end
+
+local function parse_marker_text(text)
+  local list = {}
+  for pos, src, slope in tostring(text or ""):gmatch("([^,;]+),([^,;]+),([^,;]+)") do
+    local p, s, sl = tonumber(pos), tonumber(src), tonumber(slope)
+    if p and s then list[#list + 1] = { pos = p, src = s, slope = sl or 0 } end
+  end
+  return list
+end
+
+local function same_markers(api, take, list)
+  if api.GetTakeNumStretchMarkers(take) ~= #list then return false end
+  for i, m in ipairs(list) do
+    local _, pos, src = api.GetTakeStretchMarker(take, i - 1)
+    local slope = api.GetTakeStretchMarkerSlope and api.GetTakeStretchMarkerSlope(take, i - 1) or 0
+    if math.abs(pos - m.pos) > 1e-6 or math.abs(src - m.src) > 1e-6 or math.abs(slope - m.slope) > 1e-6 then
+      return false
+    end
+  end
+  return true
+end
+
+-- Puts the saved markers back on the items they were saved from: found by GUID, else by track, position
+-- and length (an item split or re-created since has a new GUID). Items already as saved are left alone;
+-- an item that is gone is counted in `missing`. No undo block of its own: the caller opens one.
+function M.restore_stretch_markers(api, entries)
+  local by_guid, on_track = {}, {}
+  for ti = 0, api.CountTracks(0) - 1 do
+    local tr = api.GetTrack(0, ti)
+    local items = {}
+    for ii = 0, api.CountTrackMediaItems(tr) - 1 do
+      local it = api.GetTrackMediaItem(tr, ii)
+      local take = it and api.GetActiveTake(it)
+      if take and not api.TakeIsMIDI(take) then
+        local rec = { it = it, take = take }
+        items[#items + 1] = rec
+        local guid = item_guid(api, it)
+        if guid ~= "" then by_guid[guid] = rec end
+      end
+    end
+    on_track[ti] = items
+  end
+
+  local used = {}
+  local function find(e)
+    local rec = e.guid and e.guid ~= "" and by_guid[e.guid]
+    if rec and not used[rec] then return rec end
+    for _, r in ipairs(on_track[tonumber(e.trackIndex)] or {}) do
+      if not used[r] and math.abs(api.GetMediaItemInfo_Value(r.it, "D_POSITION") - tonumber(e.position)) < 0.001
+         and math.abs(api.GetMediaItemInfo_Value(r.it, "D_LENGTH") - tonumber(e.length)) < 0.001 then
+        return r
+      end
+    end
+  end
+
+  local restored, unchanged, missing = 0, 0, 0
+  for _, e in ipairs(entries or {}) do
+    local rec = find(e)
+    if not rec then
+      missing = missing + 1
+    else
+      used[rec] = true
+      local list = parse_marker_text(e.markers)
+      if same_markers(api, rec.take, list) then
+        unchanged = unchanged + 1
+      else
+        write_markers(api, { take = rec.take }, list)
+        api.UpdateItemInProject(rec.it)
+        restored = restored + 1
+      end
+    end
+  end
+  return { restored = restored, unchanged = unchanged, missing = missing }
+end
+
 -- Edits existing markers by index: {index, position?, sourcePosition?, slope?}. Positions are item
 -- seconds. Every edit is checked against the whole list first (an edit that folds time, i.e. puts a
 -- marker out of order in position or source, refuses the call); markers are then rewritten in one undo point.

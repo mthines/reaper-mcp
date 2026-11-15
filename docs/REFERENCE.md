@@ -324,7 +324,7 @@ What differs from Claude Code:
   files in `.claude/skills/`. A client that does not load skills still has every
   tool, without the mixing workflow; pasting a skill's `SKILL.md` into the chat
   gets you most of it.
-- **Context budget:** the server lists all 189 tools (about 51k tokens of schemas)
+- **Context budget:** the server lists all 190 tools (about 51k tokens of schemas)
   at once. `list_tool_categories` gives a compact overview, but clients still load
   every schema. Local models need a context window of 64k or more.
 
@@ -381,7 +381,7 @@ out of version control.
 ```
 reaper-mcp/
 ├── apps/
-│   ├── reaper-mcp-server/        # MCP server (189 tools, esbuild bundle)
+│   ├── reaper-mcp-server/        # MCP server (190 tools, esbuild bundle)
 │   └── bridge-ui/                # Bridge status page (React → one self-contained HTML file)
 ├── libs/protocol/                # Shared TypeScript types
 ├── libs/extension-api/           # The contract extensions are written against (docs/EXTENSIONS.md)

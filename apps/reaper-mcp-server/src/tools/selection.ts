@@ -72,6 +72,20 @@ export function registerSelectionTools(server: McpServer): void {
   );
 
   server.tool(
+    'get_selected_items',
+    'Get the media items selected right now, as {trackIndex, itemIndex} (the indexes list_media_items and the item tools use) with the track name, position and length in seconds, and mute. ' +
+      'Use it when the user says "the selected items", instead of guessing which tracks they mean.',
+    {},
+    async () => {
+      const res = await sendCommand('get_selected_items');
+      if (!res.success) {
+        return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(res.data, null, 2) }] };
+    }
+  );
+
+  server.tool(
     'set_selected_items',
     'Select media items by track and item index (as list_media_items reports them) — usually before run_action. ' +
       'Every item is resolved first: a missing one changes nothing. Returns the selection afterwards.',

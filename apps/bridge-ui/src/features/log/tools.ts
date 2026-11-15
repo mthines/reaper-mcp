@@ -469,6 +469,7 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
   // Selection
   get_selected_tracks: { title: 'Read the track selection', did: () => 'checked which tracks are selected' },
   set_selected_tracks: { title: 'Select tracks', did: (e) => `${paramsOf(e).mode === 'add' ? 'added' : 'selected'} ${names(paramsOf(e).tracks) ?? 'tracks'}${paramsOf(e).mode === 'add' ? ' to the selection' : ''}` },
+  get_selected_items: { title: 'Read the item selection', did: () => 'checked which items are selected' },
   set_selected_items: {
     title: 'Select items',
     did: (e) => {

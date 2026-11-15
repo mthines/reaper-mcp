@@ -195,6 +195,24 @@ describe('mcp_actions_lib.lua (wasmoon)', () => {
     `);
   });
 
+  it('actions: get_selected_items lists what is selected without changing it', async () => {
+    await runLua(`
+      local api = new_fake{ tracks = {
+        { name = "Kick", items = 2 }, { name = "Snare", items = 1 }, { name = "Bass" },
+      } }
+      assert(actions.get_selected_items(api).count == 0, "nothing selected")
+      api.tracks[1].items[2].selected = true
+      api.tracks[2].items[1].selected = true
+      local writes = api.writes
+      local r = actions.get_selected_items(api)
+      assert(r.count == 2 and #r.items == 2, "two selected")
+      assert(r.items[1].trackIndex == 0 and r.items[1].itemIndex == 1 and r.items[1].trackName == "Kick", "kick item 1")
+      assert(r.items[2].trackIndex == 1 and r.items[2].itemIndex == 0 and r.items[2].trackName == "Snare", "snare item 0")
+      assert(type(r.items[1].position) == "number" and type(r.items[1].length) == "number" and r.items[1].muted == false, "item details")
+      assert(api.writes == writes, "read only")
+    `);
+  });
+
   it('actions: kb.ini parser reads macros and scripts', async () => {
     await runLua(`
       local m, s = actions.parse_kb(KB .. '\\nACT 2 32060 "abc" "Custom: midi thing" 40003\\ngarbage line'

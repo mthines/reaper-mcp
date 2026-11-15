@@ -530,3 +530,74 @@ describe('mcp_mixing_lib.lua: aligning audio to a guide', () => {
     `);
   });
 });
+
+describe('mcp_mixing_lib.lua: stretch markers kept by a snapshot', () => {
+  const SESSION = `
+    local function new_session()
+      local api = new_fake{ tracks = {
+        { name = "Backing", items = { { pos = 10, len = 6, name = "a" }, { pos = 20, len = 4, name = "b" }, { pos = 30, len = 2, midi = true } } },
+        { name = "Lead", items = { { pos = 10, len = 6, name = "c" } } },
+      } }
+      api.tracks[1].items[1].takes[1].sm = { { 0, 0, 0 }, { 1.25, 1, 0 }, { 6, 6, 0.5 } }
+      return api
+    end
+    local function markers(api, t, i)
+      local out = {}
+      for k, m in ipairs(api.tracks[t].items[i].takes[1].sm) do out[k] = m[1] .. "/" .. m[2] .. "/" .. (m[3] or 0) end
+      return table.concat(out, " ")
+    end
+  `;
+
+  it('puts the markers of an edited item back and leaves untouched items alone', async () => {
+    await runLua(`${SESSION}
+      local api = new_session()
+      local before = markers(api, 1, 1)
+      local entries = assert(mix.capture_stretch_markers(api, { 0 }))
+      assert(#entries == 2, "the two audio items, not the MIDI one")
+      -- an alignment edit after the snapshot
+      assert(mix.edit_stretch_markers(api, { trackIndex = 0, itemIndex = 0 }, { { index = 1, position = 1.9 } }))
+      assert(markers(api, 1, 1) ~= before)
+      local r = mix.restore_stretch_markers(api, entries)
+      assert(markers(api, 1, 1) == before, "markers: " .. markers(api, 1, 1))
+      assert(r.restored == 1 and r.unchanged == 1 and r.missing == 0)
+    `);
+  });
+
+  it('removes markers added to an item that had none, and writes nothing when nothing changed', async () => {
+    await runLua(`${SESSION}
+      local api = new_session()
+      local entries = assert(mix.capture_stretch_markers(api, { 0 }))
+      local writes = api.writes
+      local same = mix.restore_stretch_markers(api, entries)
+      assert(api.writes == writes, "an unchanged project was written to")
+      assert(same.unchanged == 2 and same.restored == 0)
+      assert(mix.add_stretch_markers(api, { trackIndex = 0, itemIndex = 1 }, { { position = 1 } }))
+      assert(#api.tracks[1].items[2].takes[1].sm == 1)
+      local r = mix.restore_stretch_markers(api, entries)
+      assert(#api.tracks[1].items[2].takes[1].sm == 0 and r.restored == 1)
+    `);
+  });
+
+  it('finds an item by track, position and length when its GUID changed, and counts one that is gone', async () => {
+    await runLua(`${SESSION}
+      local api = new_session()
+      local before = markers(api, 1, 1)
+      local entries = assert(mix.capture_stretch_markers(api, { 0 }))
+      assert(mix.edit_stretch_markers(api, { trackIndex = 0, itemIndex = 0 }, { { index = 1, position = 1.9 } }))
+      api.tracks[1].items[1].guid = "{SPLIT-AND-GLUED}"
+      table.remove(api.tracks[1].items, 2) -- item "b" was deleted
+      local r = mix.restore_stretch_markers(api, entries)
+      assert(markers(api, 1, 1) == before)
+      assert(r.restored == 1 and r.missing == 1)
+    `);
+  });
+
+  it('refuses a snapshot of more audio items than it keeps, asking for a scope', async () => {
+    await runLua(`${SESSION}
+      local api = new_session()
+      mix.MAX_SNAPSHOT_ITEMS = 2
+      local entries, err = mix.capture_stretch_markers(api, nil)
+      assert(entries == nil and tostring(err):find("trackIndices"), tostring(err))
+    `);
+  });
+});

@@ -556,14 +556,14 @@ Speaking works if your client or your OS dictation turns it into text first.
 They work, if your client can run one and the model is good at tool calling.
 Nobody has tested a local model end to end yet, so treat it as an experiment. What to expect:
 
-- **Context:** the 189 tool schemas take about **51k tokens** before you type a word.
+- **Context:** the 190 tool schemas take about **51k tokens** before you type a word.
   You need a context window of at least 64k, and 128k is more realistic for a session.
 - **Tool calling:** the mix skills chain 10 to 30 tool calls per task with exact track and FX indexes.
   A model that invents parameters or drops JSON fields fails there.
   Pick an instruction-tuned model your client lists with native tool calling, the biggest your machine runs.
 - **Speed:** each turn sends those 51k tokens again, so on a laptop GPU expect slow turns.
 - **A smaller tool set:** set `REAPER_MCP_PROFILE` in your client's server `env` to load only what you need. `mixing` (122 tools),
-  `music` (127), `analysis` (79) or `minimal` (56), all under the 128 tools some clients allow; unset or `full` loads all 189.
+  `music` (114), `analysis` (79) or `minimal` (56), all under the 128 tools some clients allow; unset or `full` loads all 190.
   Combine them with category names or an extension (`mixing,midi`, `mixing,composition`); a combination can go over 128, so check the count the server logs at start.
   `list_tool_categories` then lists only what is loaded.
 

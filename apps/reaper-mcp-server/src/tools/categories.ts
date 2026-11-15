@@ -77,7 +77,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   selection: {
     name: 'selection',
     description: 'Selection and navigation: get/set selected tracks and items, get/set time selection range',
-    tools: ['get_selected_tracks', 'set_selected_tracks', 'set_selected_items', 'get_time_selection', 'set_time_selection'],
+    tools: ['get_selected_tracks', 'set_selected_tracks', 'get_selected_items', 'set_selected_items', 'get_time_selection', 'set_time_selection'],
   },
   recording: {
     name: 'recording',

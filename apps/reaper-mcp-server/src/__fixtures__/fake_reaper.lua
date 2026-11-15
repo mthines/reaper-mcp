@@ -342,7 +342,7 @@ function new_fake(spec)
   api.GetCursorPosition = function() return spec.cursor or 0 end
 
   local function new_take(item, name)
-    return { name = name or "", fx = {}, item = item }
+    return { name = name or "", fx = {}, item = item, sm = {} }
   end
   local function init_item(tr, it)
     it.track = tr
@@ -402,6 +402,25 @@ function new_fake(spec)
   end
   api.GetTakeName = function(tk) return tk.name end
   api.TakeIsMIDI = function(tk) return tk.item.midi ~= nil end
+
+  -- Item GUIDs and stretch markers ({pos in take time, source position, slope}, sorted by pos)
+  local guid_count = 0
+  api.GetSetMediaItemInfo_String = function(it, k)
+    if k ~= "GUID" then return false, "" end
+    if not it.guid then guid_count = guid_count + 1; it.guid = "{FAKE-ITEM-" .. guid_count .. "}" end
+    return true, it.guid
+  end
+  api.GetTakeNumStretchMarkers = function(tk) return #tk.sm end
+  api.GetTakeStretchMarker = function(tk, i) local m = tk.sm[i + 1]; return i, m[1], m[2] end
+  api.SetTakeStretchMarker = function(tk, i, pos, src)
+    write("stretch_marker")
+    tk.sm[#tk.sm + 1] = { pos, src or pos, 0 }
+    table.sort(tk.sm, function(a, b) return a[1] < b[1] end)
+    for k, m in ipairs(tk.sm) do if m[1] == pos then return k - 1 end end
+  end
+  api.GetTakeStretchMarkerSlope = function(tk, i) return tk.sm[i + 1][3] or 0 end
+  api.SetTakeStretchMarkerSlope = function(tk, i, slope) write("stretch_slope"); tk.sm[i + 1][3] = slope; return true end
+  api.DeleteTakeStretchMarkers = function(tk, i) write("stretch_marker"); table.remove(tk.sm, i + 1); return 1 end
 
   -- MIDI: `spec.midi[track][item] = { notes = n, events = { { chanmsg, chan, msg2, msg3 }, ... } }`
   -- holds every channel event MIDI_GetCC reads (CC, pitch bend, program change, ...).
