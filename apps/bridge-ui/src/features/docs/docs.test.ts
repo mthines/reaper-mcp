@@ -35,7 +35,7 @@ describe('reading order', () => {
     expect(sortGuides(guides).map((x) => x.slug)).toEqual(['a', 'b', 'c', 'd']);
     expect(groupGuides(guides).map((s) => [s.title, s.guides.map((x) => x.slug)])).toEqual([
       ['Getting started', ['a', 'b']],
-      ['Mixing and editing', ['c']],
+      ['Mixing', ['c']],
       ['Reference', ['d']],
     ]);
   });
@@ -66,7 +66,7 @@ describe('llms.txt', () => {
     expect(out).toContain('## Getting started');
     expect(out).toContain('- [install](https://example.test/docs/install.md): About install.');
     expect(out).toContain('- [critique](https://example.test/docs/critique.md): About critique.');
-    expect(out.indexOf('Getting started')).toBeLessThan(out.indexOf('Mixing and editing'));
+    expect(out.indexOf('Getting started')).toBeLessThan(out.indexOf('Mixing'));
   });
 
   it('puts every guide in the full file, in reading order', () => {

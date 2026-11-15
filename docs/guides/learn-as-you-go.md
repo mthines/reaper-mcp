@@ -3,7 +3,7 @@ title: Learn REAPER while it works
 nav: Learn REAPER as you go
 summary: Beginner mode. One change at a time, with what it did, why, and how to do the same by hand.
 section: mix
-order: 6
+order: 5
 poster: media/teach.webp
 duration: 3 min
 ---
