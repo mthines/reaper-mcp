@@ -156,7 +156,7 @@ export function SettingsPanel({
         {settings.dev === true && onOpenDeveloper && (
           <div className={styles.settingGroup}>
             <h3>Developer</h3>
-            <p className={styles.settingHint}>Feature flags: how each one resolves in this browser, and a way to force a variant.</p>
+            <p className={styles.settingHint}>Feature flags: how each one resolves, and a way to force a variant everywhere (page, MCP server, CLI).</p>
             <button className="btn btn-sm" onClick={onOpenDeveloper}>
               Open developer tools
             </button>

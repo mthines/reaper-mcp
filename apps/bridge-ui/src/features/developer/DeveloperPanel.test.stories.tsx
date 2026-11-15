@@ -81,3 +81,17 @@ export const ClosesOnEscape: Story = {
     await expect(args.onClose).toHaveBeenCalled();
   },
 };
+
+export const SaysAForcedVariantAppliesEverywhereWithABridge: Story = {
+  args: { shared: true },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText(/applies everywhere: this page, the MCP server/)).toBeInTheDocument();
+  },
+};
+
+export const SaysAForcedVariantStaysInTheBrowserWithoutABridge: Story = {
+  args: { shared: false },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText(/changes this browser only/)).toBeInTheDocument();
+  },
+};

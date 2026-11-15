@@ -14,16 +14,19 @@ const label = (variant: string) => variant.charAt(0).toUpperCase() + variant.sli
 
 /**
  * Developer tools: how each feature flag resolves for this browser, and a way to force a variant (an override
- * that lives in this browser only, so a dark feature can be tried before anyone else sees it). Open from
+ * shared with the MCP server and CLI through the bridge, or in this browser only without one, so a dark feature can be tried before anyone else sees it). Open from
  * Settings or the palette in developer mode; its open state is the `developer` URL param.
  * Flags are declared in libs/feature-flags/src/registry.ts; docs/FEATURE-FLAGS.md.
  */
 export function DeveloperPanel({
+  shared = false,
   rows,
   onSet,
   onResetAll,
   onClose,
 }: {
+  /** The overrides are the bridge's flags.json too, so the MCP server and `reaper-mcp flags` see them */
+  shared?: boolean;
   rows: FlagRow[];
   /** A variant to force, or null to follow the registry again */
   onSet: (key: string, variant: string | null) => void;
@@ -59,8 +62,15 @@ export function DeveloperPanel({
             )}
           </div>
           <p className={styles.hint}>
-            Flags hide unfinished features. Forcing one on is unsupported and may break things; reset it to undo. A forced variant
-            changes this browser only. The bridge server has its own overrides: <code>reaper-mcp flags</code>.
+            Flags hide unfinished features. Forcing one on is unsupported and may break things; follow the registry again to undo.{' '}
+            {shared ? (
+              <>A forced variant applies everywhere: this page, the MCP server and <code>reaper-mcp flags</code> share it.</>
+            ) : (
+              <>
+                Not connected to a bridge, so a forced variant changes this browser only. With a bridge it applies to the MCP
+                server too (<code>reaper-mcp flags</code>).
+              </>
+            )}
           </p>
           {rows.length === 0 ? (
             <div className={styles.hint}>No feature flags are declared.</div>

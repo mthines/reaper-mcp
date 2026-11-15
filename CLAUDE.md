@@ -181,7 +181,7 @@ reaper-mcp/
     mcp_extensions_lib.lua    # extension_call: runs a Lua command from an installed extension's handlers.lua (internal)
     mcp_edit_views_lib.lua    # Status-page results: measurements, waveforms and before/after edit views (tested through the bridge)
     mcp_snapshots_ui_lib.lua  # Status-page Snapshots view: list, restore and save requests (tested through the bridge)
-    mcp_prefs_lib.lua         # the read-only LoreKit token shared through ~/.config/reaper-mcp/lorekit.json (never the lk_rw_ one) (ExtState lorekit_tokens / tokens_req; prefs-lib.test.ts)
+    mcp_prefs_lib.lua         # the read-only LoreKit token shared through ~/.config/reaper-mcp/lorekit.json (never the lk_rw_ one) (ExtState lorekit_tokens / tokens_req) and the feature-flag overrides in flags.json (flag_overrides / flags_req; the page's Developer drawer, the CLI and the server share them); prefs-lib.test.ts
     mcp_snapshot_next.lua     # Action: restore next snapshot (keybind for A/B testing)
     mcp_snapshot_prev.lua     # Action: restore previous snapshot (keybind for A/B testing)
     mcp_snapshot_quick_save.lua # Action: quick save, named by the date and time

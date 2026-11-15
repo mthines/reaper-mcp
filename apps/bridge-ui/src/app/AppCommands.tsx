@@ -49,7 +49,7 @@ export function AppCommands({
   onNotify: (on: boolean) => void;
   usageStats: UsageStatsState;
   onUsageStats: (on: boolean) => void;
-  /** Present in developer mode while a feature flag is forced in this browser */
+  /** Present in developer mode while a feature flag is forced */
   onResetFlags?: () => void;
   /** Opens the Developer drawer; present only in developer mode */
   onOpenDeveloper?: () => void;

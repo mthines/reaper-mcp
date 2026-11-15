@@ -6,7 +6,7 @@ import { trace } from '@opentelemetry/api';
 import { node, tracing } from '@opentelemetry/sdk-node';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { parseRegistry } from '@reaper-mcp/feature-flags';
-import { createServerFlags, flagOverrideCheck, flagsCommand, readFlagOverrides, type FlagsCommandIO } from './flags.js';
+import { createServerFlags, defaultFlagsDir, flagOverrideCheck, flagsCommand, readFlagOverrides, type FlagsCommandIO } from './flags.js';
 import { instrumentToolHandlers } from './server.js';
 import { AnonymizingSpanExporter } from './telemetry-consent.js';
 
@@ -70,6 +70,20 @@ describe('forced flags are visible, not silent', () => {
     expect(check?.detail).toMatch(/static-panel=b/);
     run('reset');
     expect(flagOverrideCheck(opts)).toBeUndefined();
+  });
+});
+
+describe('where the shared flags.json lives', () => {
+  it('follows XDG_CONFIG_HOME, as the bridge does', () => {
+    expect(defaultFlagsDir({ XDG_CONFIG_HOME: '/xdg' }, 'darwin')).toBe('/xdg/reaper-mcp');
+  });
+
+  it('uses APPDATA on Windows when XDG_CONFIG_HOME is not set', () => {
+    expect(defaultFlagsDir({ APPDATA: '/appdata' }, 'win32')).toBe('/appdata/reaper-mcp');
+  });
+
+  it('falls back to ~/.config/reaper-mcp', () => {
+    expect(defaultFlagsDir({}, 'linux')).toMatch(/\.config[\\/]reaper-mcp$/);
   });
 });
 

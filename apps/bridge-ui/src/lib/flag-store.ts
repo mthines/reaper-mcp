@@ -1,7 +1,8 @@
 // The live flag state of this browser: the viewer's overrides in localStorage, shared by every
-// component through useSyncExternalStore (see app/useFlag.ts), so forcing a variant in Settings changes
-// the flag everywhere at once.
-import { FLAG_REGISTRY, type FlagDefinition, type FlagOverrides } from '@reaper-mcp/feature-flags';
+// component through useSyncExternalStore (see app/useFlag.ts), so forcing a variant in the Developer drawer
+// changes the flag everywhere on the page at once. With a bridge connected the overrides are also the bridge's
+// flags.json (app/useSharedFlags.ts), so they apply to the MCP server too; localStorage is then the offline copy.
+import { FLAG_REGISTRY, sanitizeFlagOverrides, type FlagDefinition, type FlagOverrides } from '@reaper-mcp/feature-flags';
 import { track } from './analytics.js';
 import { flagRows, readOverrides, readTargetingKey, writeOverrides, type FlagRow, type KeyValueStorage } from './flags.js';
 
@@ -11,6 +12,11 @@ function browserStorage(): KeyValueStorage | undefined {
   } catch {
     return undefined; // storage blocked
   }
+}
+
+function sameOverrides(a: FlagOverrides, b: FlagOverrides): boolean {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
 }
 
 export interface FlagStore {
@@ -23,6 +29,10 @@ export interface FlagStore {
   /** The flags with how they resolve under `overrides` (pass the useSyncExternalStore snapshot) */
   rows(overrides: FlagOverrides): FlagRow[];
   subscribe(listener: () => void): () => void;
+  /** Take the overrides from the bridge's flags.json: they win over this browser's; nothing is sent back */
+  adopt(next: FlagOverrides): void;
+  /** Where a change the viewer makes is sent too (the bridge), or null for this browser only */
+  setSink(sink: ((overrides: FlagOverrides) => void) | null): void;
   /** Report that a flag was read, once per flag per store */
   exposed(def: FlagDefinition, variant: string, reason: FlagRow['reason']): void;
 }
@@ -38,10 +48,15 @@ export function createFlagStore(
   let keyRead = false;
   const listeners = new Set<() => void>();
   const reported = new Set<string>();
-  const commit = (next: FlagOverrides) => {
+  let sink: ((overrides: FlagOverrides) => void) | null = null;
+  const apply = (next: FlagOverrides) => {
     overrides = next;
     writeOverrides(storage, next);
     listeners.forEach((l) => l());
+  };
+  const commit = (next: FlagOverrides) => {
+    apply(next);
+    sink?.(next);
   };
   const targetingKey = () => {
     if (!keyRead) {
@@ -61,6 +76,15 @@ export function createFlagStore(
       commit(next);
     },
     resetAll: () => commit({}),
+    adopt(next) {
+      // A flag or variant this build doesn't have (the file is shared with other versions) is dropped here too
+      const valid = sanitizeFlagOverrides(next, registry);
+      if (sameOverrides(overrides, valid)) return;
+      apply(valid);
+    },
+    setSink(next) {
+      sink = next;
+    },
     rows: (current) => flagRows(registry, { targetingKey, overrides: current }),
     subscribe(listener) {
       listeners.add(listener);

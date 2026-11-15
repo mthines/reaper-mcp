@@ -5,7 +5,7 @@
  *
  * "Visible only to me": ship a flag dark (default variant off), then force it on here
  * (`reaper-mcp flags set <key> <variant>`, or `REAPER_MCP_FLAGS='{"<key>":"<variant>"}'`). Nobody else's
- * install has that override. Ramping and experiments are `experiment` entries in the registry, bucketed
+ * install has that override. The bridge page's Developer drawer reads and writes the same `flags.json`. Ramping and experiments are `experiment` entries in the registry, bucketed
  * by the install id.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -26,7 +26,13 @@ import { readInstallId } from './telemetry.js';
 export const FLAGS_FILE = 'flags.json';
 export const FLAGS_ENV = 'REAPER_MCP_FLAGS';
 
-export function defaultFlagsDir(): string {
+/**
+ * The folder of `flags.json`: the same one the bridge keeps it in (reaper/mcp_prefs_lib.lua `default_dir`), so
+ * the page's Developer drawer, the CLI and this server all read and write one file.
+ */
+export function defaultFlagsDir(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string {
+  if (env.XDG_CONFIG_HOME) return join(env.XDG_CONFIG_HOME, 'reaper-mcp');
+  if (platform === 'win32' && env.APPDATA) return join(env.APPDATA, 'reaper-mcp');
   return join(homedir(), '.config', 'reaper-mcp');
 }
 

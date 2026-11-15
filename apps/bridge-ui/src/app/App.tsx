@@ -17,6 +17,7 @@ import { useErrorNotifications } from './useErrorNotifications.js';
 import { useHistory } from './useHistory.js';
 import { useSettings } from './useSettings.js';
 import { useFlagRows } from './useFlag.js';
+import { useSharedFlags } from './useSharedFlags.js';
 import { DISCORD_URL, REPO_URL, guideUrl, hereUrl } from '../lib/links.js';
 import { load, save } from '../lib/storage.js';
 import { useNow } from '../lib/useNow.js';
@@ -90,6 +91,8 @@ export function App() {
   };
   const [settings, setSetting] = useSettings(status);
   const flagState = useFlagRows();
+  // With a bridge the overrides are the bridge's flags.json too, so the MCP server follows the Developer drawer
+  const flagsShared = useSharedFlags(!DEMO && Boolean(status), status?.control?.token);
   const changeSetting = (source: 'settings' | 'notice') => (key: SettingKey, on: boolean) => {
     track({ name: 'setting_changed', setting: SETTING_NAME[key], enabled: on, source });
     setSetting(key, on);
@@ -293,7 +296,7 @@ export function App() {
               />
             )}
             {developerOpen && settings?.dev === true && (
-              <Developer rows={flagState.rows} onSet={flagState.setOverride} onResetAll={flagState.resetAll} onClose={() => setDeveloperOpen(false)} />
+              <Developer shared={flagsShared} rows={flagState.rows} onSet={flagState.setOverride} onResetAll={flagState.resetAll} onClose={() => setDeveloperOpen(false)} />
             )}
             <footer className={styles.footer}>
               <span className="mono" title="Bridge IPC directory">{status.bridgeDir}</span>
