@@ -136,7 +136,11 @@ function Overlay({ title, items, start, closing, onClose, onClosed, onCard }: { 
   }, [first]);
 
   // The exit plays for CLOSE_MS (not at all with reduced motion), then the overlay is removed
-  const finish = useEffectEvent(onClosed);
+  // Close the dialog before React removes it, so the browser hands focus back to the button that opened it
+  const finish = useEffectEvent(() => {
+    dialog.current?.close();
+    onClosed();
+  });
   useEffect(() => {
     if (!closing) return;
     const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -146,7 +150,7 @@ function Overlay({ title, items, start, closing, onClose, onClosed, onCard }: { 
 
   const go = (i: number) => {
     const next = Math.min(items.length - 1, Math.max(0, i));
-    track.current?.children[next]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    track.current?.children[next]?.scrollIntoView({ inline: 'center', block: 'nearest' }); // the row's CSS decides smooth or not (reduced motion: not)
   };
   // The slide whose centre is nearest the middle of the row is the one you are on
   const measure = () => {
