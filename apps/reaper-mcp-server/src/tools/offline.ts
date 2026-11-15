@@ -262,7 +262,7 @@ export function registerOfflineTools(server: McpServer): void {
   server.tool(
     'verify_edit',
     'Check the result of an edit you just made, since you cannot hear it: compare the edited track with the audio from ' +
-    'before the edit and get a verdict per check. Against another track, both are read as their own items play (stretch markers and edits applied, before track FX, pan and fader; no render, no focus change) when that is possible, else rendered; against a file, the edited track is rendered like the bounce. Compensated null: the delay (ms, + = later), gain (dB) and polarity ' +
+    'before the edit and get a verdict per check. Both sides are rendered (after track FX, pan and fader), so FX and fader edits show. Compensated null: the delay (ms, + = later), gain (dB) and polarity ' +
     'between the two are estimated and removed, and the residual left (dB below the reference) says whether anything else ' +
     'changed (noise, a splice, a different waveform, a swapped stereo channel; it is relative to referenceRmsDb, so with a quiet reference the rounding noise of a 16-bit bounce can set it). Discontinuity: the largest sample-to-sample jump on any channel against the ' +
     "reference's own, with where it happens and which channel (a click or hard splice). Use expect 'identical' (default) for edits that " +
@@ -307,11 +307,10 @@ export function registerOfflineTools(server: McpServer): void {
       const end = startTime + (durationSeconds ?? DEFAULT_VERIFY_SECONDS);
       const rendered: RenderTrackToWavResult[] = [];
       try {
-        // Two tracks are compared as the audio each carries itself (no render window, FX and pan left out of
-        // both). A reference file is usually a bounce, which has the FX and pan in it, so the edited track
-        // is rendered the same way to be comparable with it.
+        // Both sides are rendered: an edit made with track FX or the fader (an EQ, a compressor, a gain
+        // change) only exists in a render, so a dry read of the two tracks would call it unchanged.
         if (referenceTrack != null) {
-          rendered.push(...(await renderTracksComparable([referenceTrack, trackIndex], startTime, end, { dry: true })));
+          rendered.push(...(await renderTracksComparable([referenceTrack, trackIndex], startTime, end)));
         } else {
           rendered.push(await renderTrack(trackIndex, startTime, end));
         }

@@ -232,39 +232,19 @@ describe('measure_track_alignment', () => {
 });
 
 describe('which audio the tools hear', () => {
-  it('verify_edit reads the tracks\' own audio instead of rendering them', async () => {
-    sidecar();
-    renderOk({ dry: true });
-    await tool('verify_edit')({ trackIndex: 31, referenceTrack: 30, startTime: 12, durationSeconds: 5 });
-    expect(sendCommandMock).toHaveBeenCalledWith('render_tracks_to_wav', expect.objectContaining({ dry: true }), expect.any(Number));
-  });
-
-  it('verify_edit against a bounce renders the edited track, since the bounce has its FX and pan in it', async () => {
-    sidecar();
-    renderOk();
-    await tool('verify_edit')({ trackIndex: 5, referencePath: '/bounces/before.wav', startTime: 0 });
-    const call = sendCommandMock.mock.calls.find(([type]) => type === 'render_track_to_wav');
-    expect(call?.[1]).not.toHaveProperty('dry');
-  });
-
-  it('verify_edit compares two renders, not a read against a render, when the bridge could only read one track', async () => {
+  it('verify_edit hears track FX and the fader: it hands the sidecar renders, never dry reads of the two tracks', async () => {
     const client = sidecar();
-    let pass = 0;
-    sendCommandMock.mockImplementation(async (type: string, params: { trackIndices?: number[] }) => {
+    sendCommandMock.mockImplementation(async (type: string, params: { dry?: boolean; trackIndices?: number[] }) => {
       if (type !== 'render_tracks_to_wav') return { id: 'x', success: true, timestamp: 0, data: {} };
-      pass++;
-      const tracks = (params.trackIndices ?? []).map((t, i) => wavFor(t, pass === 1 ? { dry: i === 0 } : {}));
+      // a bridge that would read dry if asked marks those files; a render has no such mark
+      const tracks = (params.trackIndices ?? []).map((t) => wavFor(t, params.dry ? { dry: true } : {}));
       return { id: 'x', success: true, timestamp: 0, data: { tracks, rendered: tracks.length, cached: 0 } };
     });
     const result = await tool('verify_edit')({ trackIndex: 31, referenceTrack: 30, startTime: 12, durationSeconds: 5 });
     expect(result.isError).toBeUndefined();
-    expect(pass).toBe(2);
-    const secondPass = sendCommandMock.mock.calls.filter(([type]) => type === 'render_tracks_to_wav')[1][1];
-    expect(secondPass).not.toHaveProperty('dry');
-    // the sidecar got the second pass's files
-    const used = client.verifyEdit.mock.calls[0][0] as { referencePath: string; path: string };
-    expect(used.referencePath).toBe('/tmp/r2.wav');
-    expect(used.path).toBe('/tmp/r3.wav');
+    expect(client.verifyEdit).toHaveBeenCalledTimes(1);
+    const sent = JSON.stringify(sendCommandMock.mock.calls);
+    expect(sent).not.toContain('"dry":true');
   });
 
   it('measure_track_alignment still renders: the render carries the track\'s playback offset it reports', async () => {
