@@ -1,13 +1,13 @@
 <div align="center">
 
+<a href="https://reaper-mcp.vercel.app/docs">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
   <img src="docs/assets/logo.svg" alt="reaper-mcp" width="360">
 </picture>
 
-<br><br>
-
 <img src="docs/assets/hero.svg" alt="reaper-mcp — Mix by asking. Type what you hear and an AI mix engineer inside your REAPER session does it." width="100%">
+</a>
 
 <br>
 
