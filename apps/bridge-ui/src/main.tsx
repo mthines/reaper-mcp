@@ -7,7 +7,7 @@ import './styles/drawer.module.css';
 import './styles/list.module.css';
 import { App } from './app/App.js';
 import { Changelog } from './features/changelog/index.js';
-import { Docs } from './features/docs/index.js';
+import { Docs, parseBridgeUrl } from './features/docs/index.js';
 import { CommandProvider } from './features/command/index.js';
 import { startSiteAnalytics } from './lib/analytics.js';
 
@@ -19,8 +19,11 @@ const changelogPage = new URLSearchParams(location.search).get('page') === 'chan
 // `?page=docs` (and /docs on the hosted site) is the guides, also with no bridge behind it
 const docsPage = new URLSearchParams(location.search).get('page') === 'docs' || /^\/docs(\/|$)/.test(location.pathname);
 
+// Opened from the bridge's Guides links (`?bridge=` to this machine's bridge page), read before useBridgeLink drops it
+const via = parseBridgeUrl(new URLSearchParams(location.search).get('bridge')) ? 'bridge' : 'web';
+
 // The hosted site's guides and changelog report page views, web events and a session replay (a no-op elsewhere)
-if (docsPage || changelogPage) startSiteAnalytics(docsPage ? 'docs' : 'changelog');
+if (docsPage || changelogPage) startSiteAnalytics(docsPage ? 'docs' : 'changelog', via);
 
 // mcp_bridge.html opts out of browser translation: a translator rewrites the text nodes React swaps as the bridge goes
 // offline and back, and React's next update then fails (NotFoundError). The guides and changelog are mostly static

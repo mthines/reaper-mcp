@@ -137,6 +137,7 @@ site:
   consent: on for every visitor; off when the browser sends Global Privacy Control or Do Not Track
   signal_attributes:
     site.page: [docs, changelog]
+    site.via: [bridge, web]           # bridge = this page load came from the bridge's Guides links (?bridge=)
     deployment.environment.name: [production, preview, development, local]   # from VERCEL_ENV at build time
   automatic:
     - browser.page_view       # the page load, and a virtual page view for each guide opened without a reload
