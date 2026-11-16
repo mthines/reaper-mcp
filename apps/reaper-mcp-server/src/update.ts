@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { compareVersions } from './version.js';
-import { NPM_PACKAGE, fetchLatestVersion } from './update-check.js';
+import { NPM_PACKAGE, defaultUpdateMarkerPath, fetchLatestVersion, writeUpdateMarker } from './update-check.js';
 import { quoteForCmd } from './harnesses.js';
 
 /**
@@ -35,6 +35,8 @@ export interface UpdateDeps {
   force?: boolean;
   /** Run by the bridge: "nothing newer" exits 3, so the page can tell it from an install */
   bridge?: boolean;
+  /** Note that this command installed `version`, so the first server start of it can say how it got there (usage telemetry) */
+  recordUpdate?: (version: string) => void;
 }
 
 /** Exit code: 0 updated (or already current), 1 the download failed or npm was unreachable, 2 it downloaded but setup failed, 3 already current under `bridge`. */
@@ -74,6 +76,8 @@ export async function runUpdate(deps: UpdateDeps): Promise<number> {
     log(`    Run this in a terminal to see what npm says: npm install -g ${NPM_PACKAGE}@${latest}`);
     return 1;
   }
+  // The new release is on disk now, whatever setup does next: its first start reports how it was installed
+  deps.recordUpdate?.(latest);
   log('==> Installing into REAPER');
   if ((await deps.run(deps.node, [deps.cli, 'setup', '--yes'])) !== 0) {
     log('✗ The new version downloaded, but installing it into REAPER failed. Run this in a terminal to see why:');
@@ -138,5 +142,6 @@ export function realUpdateDeps(current: string, cli: string, force = false, brid
     log: (line) => console.log(line),
     force,
     bridge,
+    recordUpdate: (version) => writeUpdateMarker(defaultUpdateMarkerPath(), { via: bridge ? 'bridge_page' : 'cli', to: version }),
   };
 }

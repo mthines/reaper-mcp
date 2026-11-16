@@ -286,6 +286,14 @@ const ALLOWED_SPAN_ATTRIBUTES = new Set([
   'reaper.bridge.heartbeat_age',
   'reaper.bridge.autostart',
   'reaper.sidecar.installed',
+  // How this copy was installed and whether it keeps up with releases, on the startup span (install-info.ts):
+  // npx, npm_global, clone or other; what an npx config asked for (exact, range, latest, unversioned, tag, none);
+  // whether npm's latest release is newer (as last asked, update-check.json); and on the first start after
+  // `reaper-mcp update`, whether the bridge page or the command installed it. Closed values, never a path or a spec.
+  'reaper.install.method',
+  'reaper.install.pin',
+  'reaper.update.available',
+  'reaper.update.via',
   // A failed tool call's missing setup step, a fixed set (toolErrorCause in server.ts):
   // sidecar_not_installed, bridge_not_running, bridge_outdated
   'reaper.tool.error.cause',

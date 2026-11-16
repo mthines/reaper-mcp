@@ -28,6 +28,21 @@ describe('reaper-mcp update', () => {
     expect(t.text()).toContain('Updated to v0.84.0');
   });
 
+  it('notes the release it installed, once npm put it on disk, so its first start can say how it got there', async () => {
+    const recorded: string[] = [];
+    const t = setup({ recordUpdate: (v) => recorded.push(v), exit: { '/pkg/main.js': 1 } });
+    expect(await runUpdate(t.deps)).toBe(2);
+    expect(recorded).toEqual(['0.84.0']);
+  });
+
+  it('notes nothing when it installed nothing', async () => {
+    const recorded: string[] = [];
+    expect(await runUpdate(setup({ latest: async () => '0.83.0', recordUpdate: (v) => recorded.push(v) }).deps)).toBe(0);
+    expect(await runUpdate(setup({ recordUpdate: (v) => recorded.push(v), exit: { install: 1 } }).deps)).toBe(1);
+    expect(await runUpdate(setup({ recordUpdate: (v) => recorded.push(v), installed: () => '0.83.0' }).deps)).toBe(1);
+    expect(recorded).toEqual([]);
+  });
+
   it('does nothing when npm has nothing newer', async () => {
     const t = setup({ latest: async () => '0.83.0' });
     expect(await runUpdate(t.deps)).toBe(0);

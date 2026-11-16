@@ -34,6 +34,7 @@ import { addNotice } from './notices.js';
 import { checkForUpdate, updateCheckDisabled } from './update-check.js';
 import { offerSidecarSetup } from './sidecar-offer.js';
 import { autostartInstalled, isReaperProcessRunning, setupHealthAttributes } from './setup-health.js';
+import { installAttributes, readInstallInfo } from './install-info.js';
 
 const execAsync = promisifyUtil(execCb);
 
@@ -717,6 +718,9 @@ async function serve(): Promise<void> {
 
       // An npm update replaces this server but never REAPER's files: bring them up to this release, once
       const repair = repairReaperSide(log);
+      // How this copy was installed (npx, global npm, clone), what an npx config pinned, whether a newer release is
+      // known and, on the first start after `reaper-mcp update`, which way it came (install-info.ts; usage telemetry)
+      startupSpan.setAttributes(installAttributes(readInstallInfo(__dirname, readServiceVersion())));
 
       // Check bridge connectivity in a child span. `reaper.bridge.state` says which setup step
       // is missing when it is not connected (both attributes are in the usage telemetry).
