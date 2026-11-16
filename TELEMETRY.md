@@ -73,7 +73,9 @@ The address's query is dropped from the page address the events carry, so a link
 
 ## Update check
 
-Separately from telemetry, and whether telemetry is on or off, an npm install asks the npm registry at most once a day which version of `@mthines/reaper-mcp` is the latest, so your agent can tell you when a newer release is out (at most once a day). It is a plain request for the package's public version number and sends nothing about you; the answer is kept in `~/.reaper-mcp/update-check.json`. When `reaper-mcp update` installs a release, it leaves `~/.reaper-mcp/last-update.json` (which way it was run and the release it installed) for the first start of that release to read and delete. Turn it off with `REAPER_MCP_UPDATE_CHECK=0` or `NO_UPDATE_NOTIFIER=1`. A git clone never asks.
+Separately from telemetry, and whether telemetry is on or off, an npm install asks the npm registry at most once a day which version of `@mthines/reaper-mcp` is the latest, so your agent can tell you when a newer release is out (at most once a day). It is a plain request for the package's public version number and sends nothing about you; the answer is kept in `~/.reaper-mcp/update-check.json`. Turn it off with `REAPER_MCP_UPDATE_CHECK=0` or `NO_UPDATE_NOTIFIER=1`. A git clone never asks.
+
+Those two settings don't cover one other local file: when `reaper-mcp update` installs a release, it leaves `~/.reaper-mcp/last-update.json` (which way it was run and the release it installed) for the first start of that release to read and delete. It makes no request; with telemetry on, that start reports only whether the bridge page or the command installed it.
 
 ## Where it goes
 
