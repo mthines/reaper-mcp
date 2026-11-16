@@ -75,10 +75,9 @@ export function classifySpec(spec: string): Exclude<InstallPin, 'none'> | undefi
 }
 
 /**
- * What an npx install asked for. npx writes the specs as typed into `_npx.packages` of its cache folder's
- * package.json (npm 7+); the environment carries the spec only for `npx --package=…` (`npm_config_package`),
- * never for the plain `npx @mthines/reaper-mcp@0.85.0 serve` an MCP config uses. Undefined when npx's
- * folder can't be read, so a guess is never sent.
+ * What an npx install asked for, from `_npx.packages` in npx's cache package.json (npm 7+): the environment has
+ * the spec only for `npx --package=…`, never for the `npx <pkg>@<version> serve` an MCP config uses. Undefined when
+ * neither says, so a guess is never sent.
  */
 export function installPin(ctx: InstallContext, method: InstallMethod, readFile: (path: string) => string = (path) => readFileSync(path, 'utf-8')): InstallPin | undefined {
   if (method !== 'npx') return 'none';
@@ -138,12 +137,7 @@ export function readInstallInfo(
   }
   const ctx: InstallContext = { dir, isClone: findCloneRoot(dir) !== null, env, execPath: process.execPath, platform: process.platform };
   const method = installMethod(ctx);
-  let pin: InstallPin | undefined;
-  try {
-    pin = installPin(ctx, method);
-  } catch {
-    pin = undefined;
-  }
+  const pin = installPin(ctx, method);
   const checks = !ctx.isClone && !updateCheckDisabled(env);
   return {
     method,
