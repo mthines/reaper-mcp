@@ -124,7 +124,12 @@ export function installAttributes(info: InstallInfo): Record<string, string | bo
  * it), so only the first start of the new release reports how it got there. The update check never runs in a
  * clone or when it is turned off, so `updateAvailable` is left out there.
  */
-export function readInstallInfo(codeDir: string, current: string, env: NodeJS.ProcessEnv = process.env): InstallInfo {
+export function readInstallInfo(
+  codeDir: string,
+  current: string,
+  env: NodeJS.ProcessEnv = process.env,
+  paths: { statePath: string; markerPath: string } = { statePath: defaultUpdateStatePath(), markerPath: defaultUpdateMarkerPath() },
+): InstallInfo {
   let dir = codeDir;
   try {
     dir = realpathSync(codeDir);
@@ -143,7 +148,7 @@ export function readInstallInfo(codeDir: string, current: string, env: NodeJS.Pr
   return {
     method,
     pin,
-    updateAvailable: checks ? cachedUpdateAvailable(current, defaultUpdateStatePath()) : undefined,
-    via: takeUpdateMarker(defaultUpdateMarkerPath(), current),
+    updateAvailable: checks ? cachedUpdateAvailable(current, paths.statePath) : undefined,
+    via: takeUpdateMarker(paths.markerPath, current),
   };
 }

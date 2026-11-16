@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { classifySpec, installAttributes, installMethod, installPin, npxRoot, type InstallContext } from './install-info.js';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { classifySpec, installAttributes, installMethod, installPin, npxRoot, readInstallInfo, type InstallContext } from './install-info.js';
+import { writeUpdateMarker } from './update-check.js';
 
 const mac = (dir: string, over: Partial<InstallContext> = {}): InstallContext => ({
   dir,
@@ -130,5 +134,44 @@ describe('installAttributes', () => {
   it('never carries a path or the spec', () => {
     const values = Object.values(installAttributes({ method: 'npx', pin: 'exact', updateAvailable: false }));
     expect(values.some((v) => typeof v === 'string' && /[/\\@]/.test(v))).toBe(false);
+  });
+});
+
+describe('readInstallInfo', () => {
+  let home: string;
+  let paths: { statePath: string; markerPath: string };
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'install-info-'));
+    paths = { statePath: join(home, 'update-check.json'), markerPath: join(home, 'last-update.json') };
+    writeFileSync(paths.statePath, JSON.stringify({ checkedAt: 0, latest: '0.96.1' }));
+  });
+  afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+  it('reports a newer release from the update check, and the update that installed this one, once', () => {
+    writeUpdateMarker(paths.markerPath, { via: 'cli', to: '0.91.1' });
+    const dir = join(home, 'pkg');
+    mkdirSync(dir);
+
+    expect(readInstallInfo(dir, '0.91.1', {}, paths)).toMatchObject({ method: 'other', pin: 'none', updateAvailable: true, via: 'cli' });
+    expect(readInstallInfo(dir, '0.91.1', {}, paths).via).toBeUndefined();
+  });
+
+  it('leaves out a newer release in a clone, where the update check never runs', () => {
+    const clone = join(home, 'clone');
+    mkdirSync(join(clone, 'scripts'), { recursive: true });
+    mkdirSync(join(clone, '.git'));
+    writeFileSync(join(clone, 'scripts', 'update.sh'), '');
+
+    const info = readInstallInfo(clone, '0.91.1', {}, paths);
+    expect(info.method).toBe('clone');
+    expect(info.updateAvailable).toBeUndefined();
+  });
+
+  it('leaves out a newer release when the update check is turned off', () => {
+    const dir = join(home, 'pkg');
+    mkdirSync(dir);
+    expect(readInstallInfo(dir, '0.91.1', { REAPER_MCP_UPDATE_CHECK: '0' }, paths).updateAvailable).toBeUndefined();
+    expect(readInstallInfo(dir, '0.91.1', { NO_UPDATE_NOTIFIER: '1' }, paths).updateAvailable).toBeUndefined();
   });
 });
