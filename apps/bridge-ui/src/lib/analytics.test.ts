@@ -302,13 +302,19 @@ describe('the hosted site', () => {
         endpoint: { url: 'https://ingress.test', authToken: 'auth_test', dataset: 'reaper-mcp' },
         sessionRecording: { maskAllInputs: true, maskTextSelector: '[role="listbox"]' },
         // handed to init, so the first page view carries them too
-        additionalSignalAttributes: { 'user.id': store.get('reaper_site.visitor_id'), 'site.page': 'docs' },
+        additionalSignalAttributes: { 'user.id': store.get('reaper_site.visitor_id'), 'site.page': 'docs', 'site.via': 'web' },
       });
       expect(opts.enabledInstrumentations).toEqual(expect.arrayContaining(['@dash0/navigation', '@dash0/error', '@dash0/session-recording']));
       await vi.waitFor(() => expect(sdk.startSessionRecording).toHaveBeenCalledWith(rrweb.recorder));
 
       a.trackSite({ name: 'prompt_copied' });
       expect(sdk.sendEvent).toHaveBeenCalledWith('site.prompt_copied', { attributes: {} });
+    });
+
+    it('marks a page load reached from the bridge', async () => {
+      const a = await import('./analytics.js');
+      a.startSiteAnalytics('docs', 'bridge');
+      expect(sdk.init.mock.calls[0][0].additionalSignalAttributes).toMatchObject({ 'site.page': 'docs', 'site.via': 'bridge' });
     });
 
     it('counts a click on a call to action, wherever it is on the page', async () => {

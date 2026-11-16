@@ -262,6 +262,9 @@ const SITE_VISITOR_ID_KEY = 'reaper_site.visitor_id';
 /** Which hosted page is open. */
 export type SitePage = 'docs' | 'changelog';
 
+/** How this page load was reached: from the bridge's Guides links (`?bridge=`), or anywhere else on the web. */
+export type SiteVia = 'bridge' | 'web';
+
 /** Where a tracked link goes; anything else is not a call to action and is not sent. */
 export type SiteCta = 'demo' | 'install' | 'changelog' | 'github' | 'releases' | 'issues' | 'discord' | 'bridge';
 
@@ -351,7 +354,7 @@ let siteStarted = false;
 let siteEnabled = false;
 
 /** Start the Web SDK, session replay included, on a hosted page. A no-op off the hosted build or when tracking is off. */
-export function startSiteAnalytics(page: SitePage): UsageStatsState {
+export function startSiteAnalytics(page: SitePage, via: SiteVia = 'web'): UsageStatsState {
   const nav = typeof navigator === 'undefined' ? {} : (navigator as PrivacyNavigator);
   const state = siteAnalyticsState({ hosted: __HOSTED__, configured: Boolean(__DASH0_TOKEN__), nav });
   if (!state.on || siteStarted) return state;
@@ -374,7 +377,7 @@ export function startSiteAnalytics(page: SitePage): UsageStatsState {
     sessionRecording: { samplingRate: SITE_REPLAY_SAMPLING, maskAllInputs: true, maskTextSelector: '[role="listbox"]' },
     // init() sends the first page view before it returns, copying the signal attributes then: set them here,
     // not with identify()/addSignalAttribute() afterwards, or that view goes out without a user.id and site.page
-    additionalSignalAttributes: { 'user.id': siteVisitorId(), 'site.page': page },
+    additionalSignalAttributes: { 'user.id': siteVisitorId(), 'site.page': page, 'site.via': via },
   });
   void loadRecorder().then((recorder) => recorder && startSessionRecording(recorder));
   watchScrollDepth();
