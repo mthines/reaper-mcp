@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { compareVersions } from './version.js';
@@ -112,4 +112,59 @@ export async function checkForUpdate(opts: {
     text: updateNotice(opts.current, latest),
     markNotified: () => writeState(statePath, { ...readState(statePath), notifiedAt: Date.now() }),
   };
+}
+
+/**
+ * Whether npm's latest release, as last asked (`statePath`), is newer than `current`, for the startup span. Reads the
+ * file only: no request, so the answer can be up to a day old. Undefined before npm ever answered.
+ */
+export function cachedUpdateAvailable(current: string, statePath: string = defaultUpdateStatePath()): boolean | undefined {
+  const latest = readState(statePath).latest;
+  if (typeof latest !== 'string' || !/^\d+\.\d+\.\d+/.test(latest)) return undefined;
+  return compareVersions(latest, current) > 0;
+}
+
+/** How a release got installed by `reaper-mcp update`: the bridge page's Update button (`--bridge`) or the command in a terminal. */
+export type UpdateVia = 'bridge_page' | 'cli';
+
+interface UpdateMarker {
+  via: UpdateVia;
+  /** The release it installed */
+  to: string;
+}
+
+/** Left by `reaper-mcp update` after an install, taken by the next server start of that release. */
+export function defaultUpdateMarkerPath(): string {
+  return join(homedir(), '.reaper-mcp', 'last-update.json');
+}
+
+export function writeUpdateMarker(path: string, marker: UpdateMarker): void {
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify(marker) + '\n', 'utf-8');
+  } catch {
+    // A read-only home only means this update is not attributed
+  }
+}
+
+/**
+ * How `current` was installed, when `reaper-mcp update` installed it: once, on the first start of that release,
+ * which removes the marker. A marker for another release (a copy of the old release still starting, or a downgrade
+ * after the update) says nothing about this one and is left alone; the next update replaces it.
+ */
+export function takeUpdateMarker(path: string, current: string): UpdateVia | undefined {
+  let marker: Partial<UpdateMarker>;
+  try {
+    marker = JSON.parse(readFileSync(path, 'utf-8')) as Partial<UpdateMarker>;
+  } catch {
+    return undefined;
+  }
+  // Only the first start of the release it names takes it: an older copy still running leaves it for the new one
+  if (marker?.to !== current) return undefined;
+  try {
+    rmSync(path, { force: true });
+  } catch {
+    // Not removable: the next start of this release reports it again, which only counts this update twice
+  }
+  return marker.via === 'bridge_page' || marker.via === 'cli' ? marker.via : undefined;
 }

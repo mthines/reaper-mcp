@@ -305,6 +305,25 @@ describe('AnonymizingSpanExporter', () => {
     });
   });
 
+  it('keeps how a copy was installed and whether it keeps up with releases', async () => {
+    const sink = new tracing.InMemorySpanExporter();
+    const provider = new tracing.BasicTracerProvider({
+      spanProcessors: [new tracing.SimpleSpanProcessor(new AnonymizingSpanExporter(sink))],
+    });
+    const install = {
+      'reaper.install.method': 'npx',
+      'reaper.install.pin': 'exact',
+      'reaper.update.available': true,
+      'reaper.update.via': 'cli',
+    };
+    provider.getTracer('test').startSpan('reaper-mcp startup', {
+      attributes: { ...install, 'reaper.install.path': '/Users/me/.npm/_npx/abc/node_modules/@mthines/reaper-mcp' },
+    }).end();
+    await provider.forceFlush();
+
+    expect(sink.getFinishedSpans()[0].attributes).toEqual(install);
+  });
+
   it('keeps how a plugin research run went, never which plugin it was', async () => {
     const sink = new tracing.InMemorySpanExporter();
     const provider = new tracing.BasicTracerProvider({

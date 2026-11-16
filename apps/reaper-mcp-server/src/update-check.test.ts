@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkForUpdate, fetchLatestVersion, updateCheckDisabled } from './update-check.js';
+import { cachedUpdateAvailable, checkForUpdate, fetchLatestVersion, takeUpdateMarker, updateCheckDisabled, writeUpdateMarker } from './update-check.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 let dir: string;
@@ -79,5 +79,46 @@ describe('updateCheckDisabled', () => {
     expect(updateCheckDisabled({ NO_UPDATE_NOTIFIER: '1' })).toBe(true);
     expect(updateCheckDisabled({ CI: 'true' })).toBe(true);
     expect(updateCheckDisabled({})).toBe(false);
+  });
+});
+
+describe('cachedUpdateAvailable', () => {
+  it('compares the last answer npm gave with this release, without asking npm', () => {
+    writeFileSync(statePath, JSON.stringify({ checkedAt: 0, latest: '0.96.1' }));
+    expect(cachedUpdateAvailable('0.91.1', statePath)).toBe(true);
+    expect(cachedUpdateAvailable('0.96.1', statePath)).toBe(false);
+  });
+
+  it('does not know before npm ever answered', () => {
+    expect(cachedUpdateAvailable('0.91.1', statePath)).toBeUndefined();
+    writeFileSync(statePath, JSON.stringify({ checkedAt: 0 }));
+    expect(cachedUpdateAvailable('0.91.1', statePath)).toBeUndefined();
+  });
+});
+
+describe('update marker', () => {
+  it('tells the first start of the installed release how it got there, then only that once', () => {
+    const marker = join(dir, 'last-update.json');
+    writeUpdateMarker(marker, { via: 'bridge_page', to: '0.96.1' });
+
+    expect(takeUpdateMarker(marker, '0.96.1')).toBe('bridge_page');
+    expect(existsSync(marker)).toBe(false);
+    expect(takeUpdateMarker(marker, '0.96.1')).toBeUndefined();
+  });
+
+  it('leaves the marker for the new release when the old one starts', () => {
+    const marker = join(dir, 'last-update.json');
+    writeUpdateMarker(marker, { via: 'cli', to: '0.96.1' });
+
+    expect(takeUpdateMarker(marker, '0.91.1')).toBeUndefined();
+    expect(takeUpdateMarker(marker, '0.96.1')).toBe('cli');
+  });
+
+  it('sends nothing for a marker it does not understand', () => {
+    const marker = join(dir, 'last-update.json');
+    writeFileSync(marker, JSON.stringify({ via: '/Users/me', to: '0.96.1' }));
+    expect(takeUpdateMarker(marker, '0.96.1')).toBeUndefined();
+    writeFileSync(marker, 'not json');
+    expect(takeUpdateMarker(marker, '0.96.1')).toBeUndefined();
   });
 });
