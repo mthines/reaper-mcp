@@ -35,6 +35,7 @@ export function ChangelogPanel({
   highlights = [],
   current,
   canUpdate,
+  busy = false,
   reapack = false,
   update,
   onUpdate,
@@ -48,6 +49,8 @@ export function ChangelogPanel({
   current: string;
   /** The bridge can update this install itself (a git clone with `mcp_update.conf`) */
   canUpdate: boolean;
+  /** Another background job (a sidecar install) is running: the bridge drops an update request until it finishes */
+  busy?: boolean;
   /** The bridge runs from ReaPack's folder: the REAPER side updates through ReaPack */
   reapack?: boolean;
   /** An update the bridge is running or just ran */
@@ -118,7 +121,7 @@ export function ChangelogPanel({
       <div className={drawerStyles.drawerBody}>
         {/* Never "up to date" before the releases are in: the list says it is loading or couldn't reach GitHub */}
         {(ready || (update?.state === 'running' && update.kind !== 'rebuild')) && (
-          <UpdateCard current={current} waiting={waiting} canUpdate={canUpdate} reapack={reapack} update={update} onUpdate={onUpdate} />
+          <UpdateCard current={current} waiting={waiting} canUpdate={canUpdate} busy={busy} reapack={reapack} update={update} onUpdate={onUpdate} />
         )}
         <div className={styles.toolbar}>
           <Toggle label="Show betas" hint="One per pull request, before it ships in a release" on={betas} onChange={chooseBetas} />
@@ -161,6 +164,7 @@ function UpdateCard({
   current,
   waiting,
   canUpdate,
+  busy,
   reapack,
   update,
   onUpdate,
@@ -168,6 +172,7 @@ function UpdateCard({
   current: string;
   waiting: ChangelogRelease | null;
   canUpdate: boolean;
+  busy: boolean;
   reapack: boolean;
   update?: BridgeUpdate;
   onUpdate: () => void;
@@ -201,6 +206,8 @@ function UpdateCard({
         {canUpdate && (
           <button
             className="btn btn-sm"
+            disabled={busy}
+            title={busy ? 'An install is running. Update when it finishes.' : undefined}
             onClick={() => {
               track({ name: 'update_clicked', source: 'changelog' });
               onUpdate();

@@ -200,7 +200,7 @@ export function App() {
         onSet={changeSetting('settings')}
         onOpenSettings={settings ? openSettings(true) : undefined}
         onOpenChangelog={openChangelog('palette')}
-        onUpdate={updateAvailable && status?.control?.canUpdate ? () => { track({ name: 'update_clicked', source: 'palette' }); request('update'); } : undefined}
+        onUpdate={updateAvailable && status?.control?.canUpdate && status.control.sidecar?.state !== 'running' ? () => { track({ name: 'update_clicked', source: 'palette' }); request('update'); } : undefined}
         updateVersion={updateAvailable?.version}
         overview={overview}
         onToggleOverview={status ? toggleOverview : undefined}
@@ -337,6 +337,7 @@ export function App() {
           highlights={highlights}
           current={__VERSION__}
           canUpdate={status?.control?.canUpdate === true && settings?.dev !== true}
+          busy={status?.control?.sidecar?.state === 'running'}
           reapack={status?.control?.reapack === true}
           update={status?.control?.update}
           onUpdate={() => request('update')}

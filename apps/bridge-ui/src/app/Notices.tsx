@@ -89,7 +89,7 @@ export function Notices({
             {control?.canUpdate && (
               <button
                 className="btn btn-sm"
-                disabled={updateRequested}
+                disabled={updateRequested || control.sidecar?.state === 'running'}
                 onClick={() => {
                   track({ name: 'update_clicked', source: 'notice' });
                   request('update');
