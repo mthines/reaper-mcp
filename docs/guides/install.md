@@ -64,7 +64,7 @@ You still run `npm install -g @mthines/reaper-mcp` and `reaper-mcp init` for the
 
 ## Updating later
 
-Run `reaper-mcp update`, or press **Update** in the status window inside REAPER. It does the same thing and then offers a **Reload** button. It won't restart anything on its own.
+Run `reaper-mcp update`, or press **Update** in the status window inside REAPER. It does the same thing and then offers a **Reload** button. After you reload, a short note offers **See what's new**. It won't restart anything on its own.
 
 Installed the REAPER side with ReaPack? ReaPack updates that part: in REAPER choose **Extensions → ReaPack → Synchronize packages**. The server Claude Code runs updates with `npm install -g @mthines/reaper-mcp@latest`. The status window tells you the same when it sees a ReaPack install.
 

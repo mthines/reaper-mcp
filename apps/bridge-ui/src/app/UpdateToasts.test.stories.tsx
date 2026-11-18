@@ -36,6 +36,7 @@ const meta = {
   args: { steps: [status], onReload: fn(), onOpenChangelog: fn() },
   beforeEach: () => {
     resetUpdateReady();
+    sessionStorage.removeItem('mcp-bridge-updated-from');
     toast.dismiss(); // toasts live on document.body, so one story's would leak into the next
   },
 } satisfies Meta<typeof Feed>;

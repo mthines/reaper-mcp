@@ -73,11 +73,12 @@ export function UpdateToasts({
   useEffect(() => {
     openChangelog.current = onOpenChangelog;
   });
-  const source0 = source;
+  // The first status says which install this is; taking the note earlier would report an npm install as a clone
+  const loaded = status !== null;
   // After the update's reload: this page is the new version, so point at what changed (once, for 30 s)
   useEffect(() => {
-    if (takeUpdatedFrom(version) === null) return;
-    track({ name: 'update_whats_new_shown', source: source0 });
+    if (!loaded || takeUpdatedFrom(version) === null) return;
+    track({ name: 'update_whats_new_shown', source });
     toast.success(<Swap text={`reaper-mcp v${version} is ready`} />, {
       id: WHATS_NEW_TOAST_ID,
       description: <Swap text="Check out what's new since this update." />,
@@ -87,7 +88,7 @@ export function UpdateToasts({
         onClick: () => openChangelog.current(),
       },
     });
-  }, [version, source0]);
+  }, [loaded, version, source]);
 
   useEffect(() => {
     if (runStartedAt === undefined) return;
