@@ -10,3 +10,4 @@ body { background: var(--bg); }
 /* The drawer is fixed to the window on the page; in a story it sits in its card */
 .story-drawer { height: 640px; display: flex; }
 .story-drawer > aside { position: relative; inset: auto; z-index: auto; width: 100% !important; animation: none; box-shadow: none; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
+.story-drawer-wide { width: min(760px, 100%); }

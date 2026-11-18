@@ -4860,6 +4860,66 @@ local function update_log_tail(max)
   return tail
 end
 
+-- Installing the Python sidecar from the page: the same detached-job pattern as the update above, one job at a
+-- time, run as `node <cli> setup-sidecar --yes [part flag]` (the CLI an npm install or a built clone has).
+-- Actions: sidecar (core + aesthetics), sidecarsep (adds stem separation), sidecarchords (adds the chord model).
+-- One table, not locals: this chunk is close to Lua's 200-locals limit.
+local sidecar_job = {
+  log = bridge_dir .. "sidecar.log",
+  exit = bridge_dir .. "sidecar.exit",
+  flags = { sidecar = "", sidecarsep = " --with-separation", sidecarchords = " --with-chords" },
+  state = nil, -- { kind, state = "running" | "done" | "failed", startedAt, log = { lines } }
+  last_poll = 0,
+}
+
+function sidecar_job.cli(conf)
+  if conf.cli and conf.cli ~= "" then return file_exists(conf.cli) and conf.cli or nil end
+  local built = conf.repo and (conf.repo .. "/dist/apps/reaper-mcp-server/main.js")
+  return built and file_exists(built) and built or nil
+end
+
+function sidecar_job.start(kind)
+  local st = sidecar_job.state
+  local flags = sidecar_job.flags[kind]
+  if is_windows or flags == nil or (st and st.state == "running") then return end
+  local conf = update_config()
+  local cli = conf and sidecar_job.cli(conf)
+  if not cli then return end
+  os.remove(sidecar_job.log)
+  os.remove(sidecar_job.exit)
+  local node_dir = conf.node and conf.node:match("^(.*)/[^/]+$")
+  local path = (node_dir and (shell_quote(node_dir) .. ":") or "") .. "/opt/homebrew/bin:/usr/local/bin:$PATH"
+  local job = "PATH=" .. path .. " " .. shell_quote(conf.node or "node") .. " " .. shell_quote(cli) .. " setup-sidecar --yes" .. flags
+  os.execute("( " .. job .. " < /dev/null > " .. shell_quote(sidecar_job.log)
+    .. " 2>&1; echo $? > " .. shell_quote(sidecar_job.exit) .. " ) >/dev/null 2>&1 &")
+  sidecar_job.state = { kind = kind, state = "running", startedAt = now_ms(), log = {} }
+  log_event("bridge_sidecar_install_start", { kind = kind })
+  status_dirty = true
+end
+
+function sidecar_job.poll(now)
+  local st = sidecar_job.state
+  if not st or st.state ~= "running" or now - sidecar_job.last_poll < 1 then return end
+  sidecar_job.last_poll = now
+  local text = read_file(sidecar_job.log) or ""
+  local lines = {}
+  for line in text:gmatch("[^\n]+") do
+    line = line:gsub("\27%[[%d;]*%a", ""):match("([^\r]*)\r*$") or ""
+    if line:match("%S") then lines[#lines + 1] = line end
+  end
+  local tail = {}
+  for i = math.max(1, #lines - 7), #lines do tail[#tail + 1] = lines[i] end
+  if #tail ~= #st.log or tail[#tail] ~= st.log[#st.log] then
+    st.log = tail
+    status_dirty = true
+  end
+  local code = read_file(sidecar_job.exit)
+  if not code then return end
+  st.state = tonumber(code:match("%d+")) == 0 and "done" or "failed"
+  log_event("bridge_sidecar_install_end", { state = st.state })
+  status_dirty = true
+end
+
 local function check_control(now)
   local request = reaper.GetExtState(STATUS_SECTION, "request")
   if request and request ~= "" then
@@ -4867,9 +4927,11 @@ local function check_control(now)
     local action, token = request:match("^(%a+)%-(%x+)$")
     if token == control_token then
       if action == "update" or action == "rebuild" then start_update(action)
+      elseif sidecar_job.flags[action] then sidecar_job.start(action)
       elseif action == "restart" and can_restart then restart_bridge() return end
     end
   end
+  sidecar_job.poll(now)
   if not update or update.state ~= "running" or now - last_update_poll < 1 then return end
   last_update_poll = now
   local log = update_log_tail(12)
@@ -4894,6 +4956,7 @@ end
 
 -- What the status page may offer: published in the status feed together with the token
 local can_update, conf_dev, update_source, last_can_update_check = false, false, "clone", -10
+local can_install_sidecar = false
 local function refresh_update_config()
   local now = reaper.time_precise()
   if now - last_can_update_check < 10 then return end
@@ -4901,6 +4964,7 @@ local function refresh_update_config()
   local conf = not is_windows and update_config() or nil
   can_update, conf_dev = conf ~= nil, conf ~= nil and conf.dev == "1"
   update_source = conf ~= nil and conf.mode == "npm" and "npm" or "clone"
+  can_install_sidecar = conf ~= nil and sidecar_job.cli(conf) ~= nil
 end
 
 -- Developer mode: the page's toggle (cfg_dev "1"/"0") once chosen, else what setup detected (dev=1 in mcp_update.conf)
@@ -4947,6 +5011,9 @@ local function control_status()
     -- Developer mode: source changed since the last install, so Rebuild & reload has something to do
     changed = source_changed,
     update = update,
+    -- The page may install the Python sidecar (setup-sidecar run detached), and how that run is going
+    canInstallSidecar = can_install_sidecar,
+    sidecar = sidecar_job.state,
     -- The page may list, restore and save snapshots (mcp_snapshots_ui_lib.lua)
     snapshots = snaps_lib_ok,
     -- The page keeps its LoreKit tokens in ~/.config/reaper-mcp (mcp_prefs_lib.lua)

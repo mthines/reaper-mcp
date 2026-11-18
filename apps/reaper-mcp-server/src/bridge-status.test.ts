@@ -27,7 +27,7 @@ interface Status {
   settings: { paused: boolean; readonly: boolean; openOnStart: boolean; dev: boolean; autostart: boolean };
   health: { sws: boolean; jsfx: boolean; outdated: boolean; autostart: boolean };
   web?: { stuck: number; limit: number };
-  control: { token: string; canRestart: boolean; canUpdate: boolean; reapack?: boolean; changed?: boolean; update?: { kind: string; state: string } };
+  control: { token: string; canRestart: boolean; canUpdate: boolean; canInstallSidecar?: boolean; sidecar?: { kind: string; state: string; log?: string[] }; reapack?: boolean; changed?: boolean; update?: { kind: string; state: string } };
 }
 
 let engine: LuaEngine | undefined;
@@ -1242,6 +1242,49 @@ describe('restart and update requests from the page', () => {
     await new Promise((resolve) => setTimeout(resolve, 1100)); // the bridge reads the exit file once a second
     await bridge.status();
     expect((await bridge.status()).control.update).toMatchObject({ kind: 'update', state: 'current' });
+  });
+
+  it('installs the Python sidecar from the page, with the part the failed tool asked for, and reports how it ended', async () => {
+    const bridge = await startBridge('os.execute = function(cmd) executed = cmd return true end', NPM_INSTALL);
+    let status = await bridge.status();
+    expect(status.control.canInstallSidecar).toBe(true);
+
+    await bridge.set('request', `sidecarsep-${status.control.token}`);
+    await bridge.status();
+    expect(await bridge.eval('executed')).toContain("'/pkg/main.js' setup-sidecar --yes --with-separation");
+    expect((await bridge.status()).control.sidecar).toMatchObject({ kind: 'sidecarsep', state: 'running' });
+
+    // a second click while it runs starts nothing new
+    await bridge.eval('(function() executed = nil return true end)()');
+    await bridge.set('request', `sidecar-${status.control.token}`);
+    await bridge.status();
+    expect(await bridge.eval('executed')).toBeNull();
+
+    await bridge.eval(`(function() local f = io.open("${BRIDGE_DIR}sidecar.exit", "w") f:write("0\\n") f:close() return true end)()`);
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    await bridge.status();
+    status = await bridge.status();
+    expect(status.control.sidecar).toMatchObject({ kind: 'sidecarsep', state: 'done' });
+  });
+
+  it('reports a failed sidecar install, and ignores a request with the wrong token', async () => {
+    const bridge = await startBridge('os.execute = function(cmd) executed = cmd return true end', NPM_INSTALL);
+    const { control } = await bridge.status();
+    await bridge.set('request', 'sidecar-deadbeef');
+    await bridge.status();
+    expect((await bridge.status()).control.sidecar).toBeUndefined();
+
+    await bridge.set('request', `sidecar-${control.token}`);
+    await bridge.status();
+    await bridge.eval(`(function() local f = io.open("${BRIDGE_DIR}sidecar.exit", "w") f:write("1\\n") f:close() return true end)()`);
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    await bridge.status();
+    expect((await bridge.status()).control.sidecar).toMatchObject({ kind: 'sidecar', state: 'failed' });
+  });
+
+  it('does not offer a sidecar install when no CLI is known', async () => {
+    const bridge = await startBridge('', { [`${SCRIPTS}mcp_update.conf`]: 'repo=/clone\ndev=0\n', '/clone/scripts/update.sh': '' });
+    expect((await bridge.status()).control.canInstallSidecar).toBe(false);
   });
 
   it('says the bridge is ReaPack\'s when it runs from ReaPack\'s folder, so the page can point at ReaPack', async () => {

@@ -123,8 +123,11 @@ describe('analyze_track_offline', () => {
     sidecar(false);
     const result = await tool('analyze_track_offline')({ trackIndex: 0 });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('Run in a terminal: reaper-mcp setup-sidecar');
-    expect(result.content[0].text).not.toContain('dist/');
+    const text = result.content[0].text;
+    expect(text).toContain('run this in a terminal, then retry: reaper-mcp setup-sidecar');
+    expect(text).toMatch(/Tell the user/);
+    expect(text).toMatch(/Do not retry/);
+    expect(text).not.toContain('dist/');
   });
 
   it('deletes the render even when the analysis fails', async () => {

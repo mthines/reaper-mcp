@@ -34,6 +34,7 @@ import { Changelog, availableUpdate, parseReleases, useHighlights, useReleases }
 import { exampleReleaseJson } from '../demo/examples.js';
 import { updateOffer, useLatestRelease, useUpdateReady, type Release } from '../lib/update.js';
 import { UpdateToasts } from './UpdateToasts.js';
+import { Sidecar } from '../features/sidecar/index.js';
 import type { TrackEvent } from '../lib/analytics.js';
 import { blockedBy, useSnapshots } from '../features/snapshots/index.js';
 import { Stats } from '../features/stats/index.js';
@@ -234,7 +235,9 @@ export function App() {
         }
       />
       <UpdateToasts status={status} />
+      <Sidecar.Toasts status={status} />
       {closing.secondsLeft !== null && <CloseNotice secondsLeft={closing.secondsLeft} onCancel={closing.cancel} />}
+      <Sidecar.Provider value={{ control: status?.control, request }}>
       <BridgeBoundary resetKey={`${state}-${reachable}`}>
         {status ? (
           <>
@@ -323,6 +326,7 @@ export function App() {
           <Offline reachable={reachable} />
         )}
       </BridgeBoundary>
+      </Sidecar.Provider>
       {/* Outside the bridge's branch: the pill (from the cached release) and the palette open it offline too */}
       {changelogOpen && (
         <Changelog

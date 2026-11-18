@@ -28,7 +28,7 @@ import { estimateKey, type KeyEstimate } from '../key.js';
 import { chordProfile, chordSpans, mergeSpans, modelPicks, progression, type ChordPick, type ChordSpan, type ModelSegment, type Segment } from '../chords.js';
 import { parseSmf } from '../smf.js';
 import { MAX_OFFLINE_SECONDS } from './offline.js';
-import { SETUP_SIDECAR_HINT } from '../sidecar-hint.js';
+import { SIDECAR_NOT_INSTALLED_MSG } from '../sidecar-hint.js';
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
 const text = (data: unknown): ToolResult => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
@@ -328,7 +328,7 @@ export function registerCompositionTools(server: McpServer): void {
         } else {
           const sidecar = getSidecarClient();
           if (!sidecar.isAvailable()) {
-            return fail(`Audio key detection needs the Python sidecar. ${SETUP_SIDECAR_HINT}`);
+            return fail(SIDECAR_NOT_INSTALLED_MSG);
           }
           if (path != null) {
             const c = await sidecar.chroma({ path, ...(start > 0 ? { startTime: start } : {}), ...(args.endTime != null ? { endTime: args.endTime } : {}) });
@@ -439,7 +439,7 @@ export function registerCompositionTools(server: McpServer): void {
         let engine: 'model' | 'template' = 'template';
         let modelMissing = false;
         const sidecar = getSidecarClient();
-        const needSidecar = () => fail(`Audio chord detection needs the Python sidecar. ${SETUP_SIDECAR_HINT}`);
+        const needSidecar = () => fail(SIDECAR_NOT_INSTALLED_MSG);
         /** Whether audio goes to the chord model; a string is the error for engine "model" without it. */
         const useModel = async (): Promise<boolean | string> => {
           if (engineArg === 'template') return false;

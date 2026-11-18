@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { BridgeUpdate } from './status.js';
 
-export type BridgeAction = 'update' | 'rebuild' | 'restart';
+export type BridgeAction = 'update' | 'rebuild' | 'restart' | 'sidecar' | 'sidecarsep' | 'sidecarchords';
 
 export const RELEASES_API = 'https://api.github.com/repos/mthines/reaper-mcp/releases/latest';
 /** What `npm install -g` resolves against: the abbreviated package document (the registry allows browser origins). Not its
