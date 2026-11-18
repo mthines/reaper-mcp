@@ -31,6 +31,15 @@ export const SIDECAR_NOT_INSTALLED_MSG = sidecarNotInstalledMessage();
  */
 export const SIDECAR_MISSING_LOG = `Python sidecar not installed. Run in a terminal: ${SETUP_SIDECAR_COMMAND}`;
 
+/**
+ * The one-line log for a tool's own "not installed" answer, keeping the install line it names (a part's flag:
+ * `--with-separation`, `--with-chords`), so the page installs what that tool needs and not the default.
+ */
+export function sidecarMissingLog(text: string): string {
+  const command = text.match(/reaper-mcp setup-sidecar(?: --[\w-]+)*/)?.[0] ?? SETUP_SIDECAR_COMMAND;
+  return `Python sidecar not installed. Run in a terminal: ${command}`;
+}
+
 /** Whether a tool's error text says the sidecar (or one of its parts) is not installed. */
 export function isSidecarMissing(text: string): boolean {
   return /sidecar not installed|needs the Python sidecar|(?:audiobox-aesthetics|Stem separation|chord model|FluidSynth native library)[^.]*(?:is )?not installed/i.test(text);

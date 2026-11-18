@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { BridgeSidecarInstall, BridgeStatus } from '../../lib/status.js';
 import { JobFailure, jobToast, lastStep } from '../../components/index.js';
-import { SETUP_SIDECAR_COMMAND } from '../../lib/sidecar.js';
+import { sidecarCommandFor } from '../../lib/sidecar.js';
 
 const TOAST_ID = 'reaper-mcp-sidecar';
 
@@ -37,7 +37,7 @@ export function SidecarToasts({ status }: { status: BridgeStatus | null }) {
         'The install failed',
         <JobFailure>
           {step && <span>{step}</span>}
-          <span>Run {SETUP_SIDECAR_COMMAND} in a terminal to see why.</span>
+          <span>Run {sidecarCommandFor(job?.kind ?? 'sidecar')} in a terminal to see why.</span>
         </JobFailure>,
       );
     }

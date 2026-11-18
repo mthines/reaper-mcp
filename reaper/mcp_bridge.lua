@@ -4868,6 +4868,7 @@ local sidecar_job = {
   log = bridge_dir .. "sidecar.log",
   exit = bridge_dir .. "sidecar.exit",
   flags = { sidecar = "", sidecarsep = " --with-separation", sidecarchords = " --with-chords" },
+  can = false, -- the CLI is known (set by refresh_update_config)
   state = nil, -- { kind, state = "running" | "done" | "failed", startedAt, log = { lines } }
   last_poll = 0,
 }
@@ -4915,7 +4916,9 @@ function sidecar_job.poll(now)
   end
   local code = read_file(sidecar_job.exit)
   if not code then return end
-  st.state = tonumber(code:match("%d+")) == 0 and "done" or "failed"
+  local n = tonumber(code:match("%d+")) -- the shell creates the file before `echo` fills it
+  if not n then return end
+  st.state = n == 0 and "done" or "failed"
   log_event("bridge_sidecar_install_end", { state = st.state })
   status_dirty = true
 end
@@ -4956,7 +4959,6 @@ end
 
 -- What the status page may offer: published in the status feed together with the token
 local can_update, conf_dev, update_source, last_can_update_check = false, false, "clone", -10
-local can_install_sidecar = false
 local function refresh_update_config()
   local now = reaper.time_precise()
   if now - last_can_update_check < 10 then return end
@@ -4964,7 +4966,7 @@ local function refresh_update_config()
   local conf = not is_windows and update_config() or nil
   can_update, conf_dev = conf ~= nil, conf ~= nil and conf.dev == "1"
   update_source = conf ~= nil and conf.mode == "npm" and "npm" or "clone"
-  can_install_sidecar = conf ~= nil and sidecar_job.cli(conf) ~= nil
+  sidecar_job.can = conf ~= nil and sidecar_job.cli(conf) ~= nil
 end
 
 -- Developer mode: the page's toggle (cfg_dev "1"/"0") once chosen, else what setup detected (dev=1 in mcp_update.conf)
@@ -5012,7 +5014,7 @@ local function control_status()
     changed = source_changed,
     update = update,
     -- The page may install the Python sidecar (setup-sidecar run detached), and how that run is going
-    canInstallSidecar = can_install_sidecar,
+    canInstallSidecar = sidecar_job.can,
     sidecar = sidecar_job.state,
     -- The page may list, restore and save snapshots (mcp_snapshots_ui_lib.lua)
     snapshots = snaps_lib_ok,

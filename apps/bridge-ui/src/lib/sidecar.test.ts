@@ -14,8 +14,13 @@ describe('missingSidecar', () => {
     expect(missingSidecar([entry(1, 'detect_key', false, 'Python sidecar not installed. Run in a terminal: reaper-mcp setup-sidecar')])?.command).toBe('reaper-mcp setup-sidecar');
   });
 
-  it('goes away once a sidecar tool has worked since', () => {
-    expect(missingSidecar([entry(3, 'measure_masking', true), entry(2, 'detect_key', false, 'Audio understanding sidecar not installed.')])).toBeNull();
+  it('goes away once the tool that failed has worked since', () => {
+    expect(missingSidecar([entry(3, 'detect_key', true), entry(2, 'detect_key', false, 'Audio understanding sidecar not installed.')])).toBeNull();
+  });
+
+  it('stays when only another tool has worked (it may not need the missing part)', () => {
+    const got = missingSidecar([entry(3, 'measure_masking', true), entry(2, 'separate_stems', false, 'Stem separation is not installed. Run: reaper-mcp setup-sidecar --with-separation')]);
+    expect(got?.command).toBe('reaper-mcp setup-sidecar --with-separation');
   });
 
   it('ignores ordinary failures', () => {

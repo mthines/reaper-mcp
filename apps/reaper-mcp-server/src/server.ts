@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { LoggedTool } from '@reaper-mcp/protocol';
 import { logToolResult } from './tool-log.js';
-import { SIDECAR_MISSING_LOG, isSidecarMissing } from './sidecar-hint.js';
+import { isSidecarMissing, sidecarMissingLog } from './sidecar-hint.js';
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { getTracer, emitLog, exceptionAttributes, getToolDurationHistogram, redactHome } from './telemetry.js';
 import { classifyBridgeError, isSystemError } from './bridge.js';
@@ -139,8 +139,8 @@ export function instrumentToolHandlers(server: McpServer): void {
               if (cause) span.setAttribute('reaper.tool.error.cause', cause);
               // A tool checks for the sidecar before calling it, so nothing logged this on the bridge page:
               // do it here, in one line the page turns into a notice with the fix
-              if (cause === 'sidecar_not_installed' && !outcome.logged) {
-                logToolResult(toolName as LoggedTool, {}, startMs, null, SIDECAR_MISSING_LOG);
+              if (cause === 'sidecar_not_installed' && !outcome.pageLogged) {
+                logToolResult(toolName as LoggedTool, {}, startMs, null, sidecarMissingLog(errorText));
               }
               if (regression) span.setStatus({ code: SpanStatusCode.ERROR, message });
               // The bridge or sidecar call below logged its own failure; log only one nothing logged
