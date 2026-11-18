@@ -233,7 +233,7 @@ export function App() {
             : undefined
         }
       />
-      <UpdateToasts status={status} />
+      <UpdateToasts status={status} onOpenChangelog={openChangelog('toast')} />
       {closing.secondsLeft !== null && <CloseNotice secondsLeft={closing.secondsLeft} onCancel={closing.cancel} />}
       <BridgeBoundary resetKey={`${state}-${reachable}`}>
         {status ? (

@@ -11,7 +11,7 @@ How an installed reaper-mcp updates itself, what each kind of install does, and 
 | ReaPack | ReaPack updates the REAPER files. The server and Claude Code side is still npm: `reaper-mcp update` |
 
 **Update** on the page downloads in the background and shows a toast: "Updating reaper-mcp…" while it runs, then
-"reaper-mcp is up to date" with a **Reload** button. The page never reloads by itself. After Reload, restart Claude Code
+"reaper-mcp is up to date" with a **Reload** button. The page never reloads by itself. The reloaded page shows a 30 s "See what's new" toast that opens the changelog. After Reload, restart Claude Code
 (or type `/mcp` there) to load the new tools. If nothing newer exists the toast says "Already up to date"; if something
 fails it says so and the notice above keeps a **Try again**.
 
@@ -45,7 +45,7 @@ page: Update ──► ExtState MCPBridge/request/update-<token> ──► Lua b
   **Rebuild & reload** instead (`update.sh --rebuild`). An npm install never rebuilds.
 - **Windows:** the bridge-started updater is off; `reaper-mcp update` works from a terminal (npm is run through a shell there).
   This path has not been run on Windows.
-- **Telemetry:** `update_finished {result: ready|current|failed, source}` and `update_reload_clicked {source}`
+- **Telemetry:** `update_finished {result: ready|current|failed, source}` `update_reload_clicked {source}` and `update_whats_new_shown {source}`
   (`apps/bridge-ui/tracking-plan.yaml`).
 
 ## Testing
@@ -78,7 +78,7 @@ ships it (0.83.2 and earlier have no button):
 1. On a clean profile (another macOS user, or a machine without the clone), `npm install -g @mthines/reaper-mcp@<first release with the updater>`,
    `reaper-mcp setup && reaper-mcp init`, then start REAPER.
 2. Publish the next release. Open the bridge page; an **Update available** pill and notice appear (checked against npm).
-3. Press **Update**: the loading toast, then "reaper-mcp is up to date" with **Reload**. Press Reload; the footer shows the new
+3. Press **Update**: the loading toast, then "reaper-mcp is up to date" with **Reload**. Press Reload; a "See what's new" toast appears for 30 s and the footer shows the new
    version. `update.log` and `update.exit` in `Scripts/mcp_bridge_data/` hold the run.
 4. `npm ls -g @mthines/reaper-mcp` shows the new version.
 
