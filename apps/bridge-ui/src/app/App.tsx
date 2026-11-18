@@ -35,6 +35,7 @@ import { exampleReleaseJson } from '../demo/examples.js';
 import { updateOffer, useLatestRelease, useUpdateReady, type Release } from '../lib/update.js';
 import { UpdateToasts } from './UpdateToasts.js';
 import { Sidecar } from '../features/sidecar/index.js';
+import { missingSidecar, sidecarAction } from '../lib/sidecar.js';
 import type { TrackEvent } from '../lib/analytics.js';
 import { blockedBy, useSnapshots } from '../features/snapshots/index.js';
 import { Stats } from '../features/stats/index.js';
@@ -121,6 +122,7 @@ export function App() {
     setSkipped(version);
   };
   const updateReady = useUpdateReady();
+  const missingPart = status ? missingSidecar(status.recent) : null;
   const updateAvailable = updateOffer(release, __VERSION__, { dev: settings?.dev === true, skipped, update: status?.control?.update, ready: updateReady });
   const changelogClosedVia = useChangelogReadTime(changelogOpen);
   const releases = useReleases(changelogOpen, DEMO_RELEASES);
@@ -208,6 +210,7 @@ export function App() {
             : undefined
         }
         onRestart={status?.control?.canRestart ? () => request('restart') : undefined}
+        onInstallSidecar={missingPart && status?.control?.canInstallSidecar && status.control.sidecar?.state !== 'running' ? () => request(sidecarAction(missingPart.command)) : undefined}
         notify={notify}
         onNotify={setNotify}
         usageStats={usageStats}

@@ -23,6 +23,12 @@ describe('missingSidecar', () => {
     expect(got?.command).toBe('reaper-mcp setup-sidecar --with-separation');
   });
 
+  it('asks for the core-only install when the tool names --without-aesthetics', async () => {
+    const { sidecarAction, sidecarCommandFor } = await import('./sidecar.js');
+    expect(sidecarAction('reaper-mcp setup-sidecar --without-aesthetics')).toBe('sidecarlite');
+    expect(sidecarCommandFor('sidecarlite')).toBe('reaper-mcp setup-sidecar --without-aesthetics');
+  });
+
   it('ignores ordinary failures', () => {
     expect(missingSidecar([entry(1, 'set_track_property', false, 'Track 9 not found')])).toBeNull();
   });

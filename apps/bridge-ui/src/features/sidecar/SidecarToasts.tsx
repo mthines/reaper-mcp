@@ -9,6 +9,7 @@ const PART: Record<BridgeSidecarInstall['kind'], string> = {
   sidecar: 'audio analysis',
   sidecarsep: 'stem separation',
   sidecarchords: 'the chord model',
+  sidecarlite: 'the audio add-on',
 };
 
 /**

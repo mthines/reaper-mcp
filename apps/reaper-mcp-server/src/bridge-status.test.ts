@@ -1267,6 +1267,30 @@ describe('restart and update requests from the page', () => {
     expect(status.control.sidecar).toMatchObject({ kind: 'sidecarsep', state: 'done' });
   });
 
+  it('runs one background job at a time: an update never starts under an install, nor an install under an update', async () => {
+    const bridge = await startBridge('os.execute = function(cmd) executed = cmd return true end', NPM_INSTALL);
+    const { control } = await bridge.status();
+
+    await bridge.set('request', `sidecarlite-${control.token}`);
+    await bridge.status();
+    expect(await bridge.eval('executed')).toContain('setup-sidecar --yes --without-aesthetics');
+    await bridge.eval('(function() executed = nil return true end)()');
+    await bridge.set('request', `update-${control.token}`);
+    await bridge.status();
+    expect(await bridge.eval('executed')).toBeNull();
+    expect((await bridge.status()).control.update).toBeUndefined();
+
+    const other = await startBridge('os.execute = function(cmd) executed = cmd return true end', NPM_INSTALL);
+    const again = (await other.status()).control;
+    await other.set('request', `update-${again.token}`);
+    await other.status();
+    await other.eval('(function() executed = nil return true end)()');
+    await other.set('request', `sidecar-${again.token}`);
+    await other.status();
+    expect(await other.eval('executed')).toBeNull();
+    expect((await other.status()).control.sidecar).toBeUndefined();
+  });
+
   it('reports a failed sidecar install, and ignores a request with the wrong token', async () => {
     const bridge = await startBridge('os.execute = function(cmd) executed = cmd return true end', NPM_INSTALL);
     const { control } = await bridge.status();

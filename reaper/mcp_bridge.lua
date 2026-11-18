@@ -4862,12 +4862,13 @@ end
 
 -- Installing the Python sidecar from the page: the same detached-job pattern as the update above, one job at a
 -- time, run as `node <cli> setup-sidecar --yes [part flag]` (the CLI an npm install or a built clone has).
--- Actions: sidecar (core + aesthetics), sidecarsep (adds stem separation), sidecarchords (adds the chord model).
+-- Actions: sidecar (core + aesthetics), sidecarsep (adds stem separation), sidecarchords (adds the chord model),
+-- sidecarlite (core only, without the 831 MB aesthetics model: what the voice preview needs).
 -- One table, not locals: this chunk is close to Lua's 200-locals limit.
 local sidecar_job = {
   log = bridge_dir .. "sidecar.log",
   exit = bridge_dir .. "sidecar.exit",
-  flags = { sidecar = "", sidecarsep = " --with-separation", sidecarchords = " --with-chords" },
+  flags = { sidecar = "", sidecarsep = " --with-separation", sidecarchords = " --with-chords", sidecarlite = " --without-aesthetics" },
   can = false, -- the CLI is known (set by refresh_update_config)
   state = nil, -- { kind, state = "running" | "done" | "failed", startedAt, log = { lines } }
   last_poll = 0,
@@ -4929,8 +4930,13 @@ local function check_control(now)
     reaper.DeleteExtState(STATUS_SECTION, "request", false)
     local action, token = request:match("^(%a+)%-(%x+)$")
     if token == control_token then
-      if action == "update" or action == "rebuild" then start_update(action)
-      elseif sidecar_job.flags[action] then sidecar_job.start(action)
+      -- One job at a time: an update replaces the CLI and scripts a sidecar install is running from
+      local sc, installing = sidecar_job.state, false
+      installing = sc ~= nil and sc.state == "running"
+      if action == "update" or action == "rebuild" then
+        if not installing then start_update(action) end
+      elseif sidecar_job.flags[action] then
+        if not (update and update.state == "running") then sidecar_job.start(action) end
       elseif action == "restart" and can_restart then restart_bridge() return end
     end
   end

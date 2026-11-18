@@ -13,9 +13,12 @@ export function sidecarFixCommand(text: string): string {
   return text.match(/reaper-mcp setup-sidecar(?: --[\w-]+)*/)?.[0] ?? SETUP_SIDECAR_COMMAND;
 }
 
+export type SidecarKind = 'sidecar' | 'sidecarsep' | 'sidecarchords' | 'sidecarlite';
+
 /** The bridge request that installs what a failed tool asked for */
-export function sidecarAction(command: string): 'sidecar' | 'sidecarsep' | 'sidecarchords' {
+export function sidecarAction(command: string): SidecarKind {
   if (command.includes('--with-separation')) return 'sidecarsep';
+  if (command.includes('--without-aesthetics')) return 'sidecarlite';
   if (command.includes('--with-chords')) return 'sidecarchords';
   return 'sidecar';
 }
@@ -35,6 +38,8 @@ export function missingSidecar(recent: CommandEntry[]): { command: string; tool:
 }
 
 /** The command that installs what an install `kind` installed */
-export function sidecarCommandFor(kind: 'sidecar' | 'sidecarsep' | 'sidecarchords'): string {
-  return kind === 'sidecarsep' ? `${SETUP_SIDECAR_COMMAND} --with-separation` : kind === 'sidecarchords' ? `${SETUP_SIDECAR_COMMAND} --with-chords` : SETUP_SIDECAR_COMMAND;
+const KIND_FLAG: Record<SidecarKind, string> = { sidecar: '', sidecarsep: ' --with-separation', sidecarchords: ' --with-chords', sidecarlite: ' --without-aesthetics' };
+
+export function sidecarCommandFor(kind: SidecarKind): string {
+  return `${SETUP_SIDECAR_COMMAND}${KIND_FLAG[kind]}`;
 }

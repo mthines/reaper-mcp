@@ -54,8 +54,8 @@ export interface BridgeUpdate {
 
 /** The Python sidecar install the bridge runs (`reaper-mcp setup-sidecar --yes`), one at a time. */
 export interface BridgeSidecarInstall {
-  /** sidecar: core + aesthetics; sidecarsep: adds stem separation; sidecarchords: adds the chord model */
-  kind: 'sidecar' | 'sidecarsep' | 'sidecarchords';
+  /** sidecar: core + aesthetics; sidecarsep: adds stem separation; sidecarchords: adds the chord model; sidecarlite: core only */
+  kind: 'sidecar' | 'sidecarsep' | 'sidecarchords' | 'sidecarlite';
   state: 'running' | 'failed' | 'done';
   startedAt: number;
   /** Last lines of the install log; an empty Lua table can arrive as `{}` */
