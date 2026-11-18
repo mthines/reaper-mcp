@@ -1,12 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { Toaster, toast } from 'sonner';
 import type { CSSProperties } from 'react';
-import { CLONE_INSTALL_DOC, failureReason, markUpdateReady, updateLog } from '../lib/update.js';
+import { CLONE_INSTALL_DOC, failureReason, markUpdateReady, rememberUpdatedFrom, takeUpdatedFrom, updateLog } from '../lib/update.js';
 import type { BridgeStatus } from '../lib/status.js';
 import { track } from '../lib/analytics.js';
 import styles from './UpdateToasts.module.css';
 
 const TOAST_ID = 'reaper-mcp-update';
+const WHATS_NEW_TOAST_ID = 'reaper-mcp-whats-new';
+const WHATS_NEW_MS = 30_000;
 
 /** The installer prints "==> Downloading the new version"; the toast shows it without the arrow. */
 function stepText(line: string | undefined): string {
@@ -46,9 +48,15 @@ const THEME = {
 export function UpdateToasts({
   status,
   onReload = () => location.reload(),
+  onOpenChangelog = () => undefined,
+  version = __VERSION__,
 }: {
   status: BridgeStatus | null;
   onReload?: () => void;
+  /** Opens What's new, from the toast shown after an update's reload */
+  onOpenChangelog?: () => void;
+  /** The version this page is, to tell a reload that picked up the update from one that did not */
+  version?: string;
 }) {
   const update = status?.control?.update;
   const runStartedAt = status?.startedAt;
@@ -59,6 +67,27 @@ export function UpdateToasts({
   const step = stepText(log.at(-1));
   // A string, so the effect below re-runs when the reason changes, not on every poll's fresh log array
   const failure = state === 'failed' ? (failureReason(log) ?? 'Nothing was changed. Use Try again in the notice above.') : undefined;
+
+  // The toast outlives renders, so its button calls the latest handler
+  const openChangelog = useRef(onOpenChangelog);
+  useEffect(() => {
+    openChangelog.current = onOpenChangelog;
+  });
+  const source0 = source;
+  // After the update's reload: this page is the new version, so point at what changed (once, for 30 s)
+  useEffect(() => {
+    if (takeUpdatedFrom(version) === null) return;
+    track({ name: 'update_whats_new_shown', source: source0 });
+    toast.success(<Swap text={`reaper-mcp v${version} is ready`} />, {
+      id: WHATS_NEW_TOAST_ID,
+      description: <Swap text="Check out what's new since this update." />,
+      duration: WHATS_NEW_MS,
+      action: {
+        label: "See what's new",
+        onClick: () => openChangelog.current(),
+      },
+    });
+  }, [version, source0]);
 
   useEffect(() => {
     if (runStartedAt === undefined) return;
@@ -100,6 +129,7 @@ export function UpdateToasts({
       // done, or the bridge restarted into the new version and no longer remembers the update
       watched.current = false;
       markUpdateReady();
+      rememberUpdatedFrom(version);
       track({ name: 'update_finished', result: 'ready', source });
       toast.success(<Swap text="reaper-mcp is up to date" />, {
         id: TOAST_ID,
@@ -114,7 +144,7 @@ export function UpdateToasts({
         },
       });
     }
-  }, [state, step, failure, runStartedAt, onReload, source]);
+  }, [state, step, failure, runStartedAt, onReload, source, version]);
 
   return <Toaster position="bottom-right" theme="dark" style={THEME} closeButton />;
 }

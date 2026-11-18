@@ -40,6 +40,30 @@ export function markUpdateReady(): void {
   readyListeners.forEach((listener) => listener());
 }
 
+const UPDATED_FROM_KEY = 'mcp-bridge-updated-from';
+
+/** Remember the version this page was running when its update finished, so the page that loads next can offer What's new. */
+export function rememberUpdatedFrom(version: string): void {
+  try {
+    sessionStorage.setItem(UPDATED_FROM_KEY, version);
+  } catch {
+    /* storage blocked: the reload just won't mention the update */
+  }
+}
+
+/** The version before the update, once: only when this page is a different version, so a reload that came too early stays quiet. */
+export function takeUpdatedFrom(current: string): string | null {
+  try {
+    const from = sessionStorage.getItem(UPDATED_FROM_KEY);
+    if (from === null) return null;
+    if (from === current) return null; // still the old version: keep it for the reload that picks up the new one
+    sessionStorage.removeItem(UPDATED_FROM_KEY);
+    return from;
+  } catch {
+    return null;
+  }
+}
+
 export function resetUpdateReady(): void {
   updateReady = false;
   readyListeners.forEach((listener) => listener());
