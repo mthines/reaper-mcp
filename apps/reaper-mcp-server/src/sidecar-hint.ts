@@ -29,7 +29,8 @@ export const SIDECAR_NOT_INSTALLED_MSG = sidecarNotInstalledMessage();
  * shows the command as a fix). The page matches `SIDECAR_MISSING_LOG` to offer it, so keep the two in step
  * (`isSidecarMissing` in apps/bridge-ui/src/lib/sidecar.ts).
  */
-export const SIDECAR_MISSING_LOG = `Python sidecar not installed. Run in a terminal: ${SETUP_SIDECAR_COMMAND}`;
+const MISSING_LOG_PREFIX = 'Python sidecar not installed. Run in a terminal:';
+export const SIDECAR_MISSING_LOG = `${MISSING_LOG_PREFIX} ${SETUP_SIDECAR_COMMAND}`;
 
 /**
  * The one-line log for a tool's own "not installed" answer, keeping the install line it names (a part's flag:
@@ -37,7 +38,7 @@ export const SIDECAR_MISSING_LOG = `Python sidecar not installed. Run in a termi
  */
 export function sidecarMissingLog(text: string): string {
   const command = text.match(/reaper-mcp setup-sidecar(?: --[\w-]+)*/)?.[0] ?? SETUP_SIDECAR_COMMAND;
-  return `Python sidecar not installed. Run in a terminal: ${command}`;
+  return `${MISSING_LOG_PREFIX} ${command}`;
 }
 
 /** Whether a tool's error text says the sidecar (or one of its parts) is not installed. */
