@@ -15,6 +15,9 @@ export function SidecarFix({ command, compact = false }: { command: string; comp
   const control = install?.control;
   const job = control?.sidecar?.kind === action ? control.sidecar : undefined;
   const lines = logOf(job?.log);
+  // The bridge runs one background job at a time and drops a request made during another.
+  const busy = control?.update?.state === 'running' || (control?.sidecar?.state === 'running' && control.sidecar.kind !== action);
+  const busyTitle = 'Another update or install is running. Try again when it finishes.';
   const byHand = (
     <>
       Or run <code>{command}</code> in a terminal.
@@ -26,7 +29,7 @@ export function SidecarFix({ command, compact = false }: { command: string; comp
     if (job?.state === 'done') return <span className={styles.compact} role="status">Installed. Ask the agent to try again.</span>;
     if (control?.canInstallSidecar && install) {
       return (
-        <button className="btn btn-sm" onClick={() => install.request(action)} title={job?.state === 'failed' ? lines.join('\n') : undefined}>
+        <button className="btn btn-sm" disabled={busy} onClick={() => install.request(action)} title={busy ? busyTitle : job?.state === 'failed' ? lines.join('\n') : undefined}>
           {job?.state === 'failed' ? 'Install failed. Try again' : 'Install'}
         </button>
       );
@@ -58,7 +61,7 @@ export function SidecarFix({ command, compact = false }: { command: string; comp
       )}
       {control?.canInstallSidecar && install ? (
         <span className={styles.row}>
-          <button className="btn btn-sm" onClick={() => install.request(action)}>
+          <button className="btn btn-sm" disabled={busy} title={busy ? busyTitle : undefined} onClick={() => install.request(action)}>
             {job?.state === 'failed' ? 'Try again' : 'Install'}
           </button>
           <span className={styles.hint}>{byHand}</span>

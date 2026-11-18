@@ -25,7 +25,7 @@ Wording: toasts say what is happening in the present (`Installing audio analysis
 
 ## Telling the agent
 
-A job exists because a tool failed for a missing setup step. That tool's answer (see `sidecarNotInstalledMessage()` in `sidecar-hint.ts`) says what is wrong, that REAPER and the bridge are fine, that the **user** fixes it (the exact command), not to retry before then and not to install it itself, and what still works. The page's one-line log entry (`SIDECAR_MISSING_LOG`) is what the notice and drawer are derived from; keep the server's and the page's matching (`isSidecarMissing`) in step.
+A job exists because a tool failed for a missing setup step. That tool's answer (see `sidecarNotInstalledMessage()` in `sidecar-hint.ts`) says what is wrong, that REAPER and the bridge are fine, that the **user** fixes it (the exact command), not to retry before then and not to install it itself, and what still works. The page's one-line log entry (`sidecarMissingLog()`) is what the notice and drawer are derived from; keep the server's and the page's matching (`isSidecarMissing`) in step.
 
 ## Checklist for a new job
 

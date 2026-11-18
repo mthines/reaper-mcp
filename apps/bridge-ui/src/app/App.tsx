@@ -210,7 +210,7 @@ export function App() {
             : undefined
         }
         onRestart={status?.control?.canRestart ? () => request('restart') : undefined}
-        onInstallSidecar={missingPart && status?.control?.canInstallSidecar && status.control.sidecar?.state !== 'running' ? () => request(sidecarAction(missingPart.command)) : undefined}
+        onInstallSidecar={missingPart && status?.control?.canInstallSidecar && status.control.sidecar?.state !== 'running' && status.control.update?.state !== 'running' ? () => request(sidecarAction(missingPart.command)) : undefined}
         notify={notify}
         onNotify={setNotify}
         usageStats={usageStats}
