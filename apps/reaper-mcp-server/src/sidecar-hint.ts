@@ -24,16 +24,11 @@ export function sidecarNotInstalledMessage(command: string = SETUP_SIDECAR_COMMA
 
 export const SIDECAR_NOT_INSTALLED_MSG = sidecarNotInstalledMessage();
 
-/**
- * The same news in one line, for the bridge page's log (its errors are cut at 300 characters, and the page
- * shows the command as a fix). The page matches `SIDECAR_MISSING_LOG` to offer it, so keep the two in step
- * (`isSidecarMissing` in apps/bridge-ui/src/lib/sidecar.ts).
- */
+/** The start of the one-line log the bridge page turns into a notice; the page matches it (`isSidecarMissing` in apps/bridge-ui/src/lib/sidecar.ts), so keep the two in step. */
 const MISSING_LOG_PREFIX = 'Python sidecar not installed. Run in a terminal:';
-export const SIDECAR_MISSING_LOG = `${MISSING_LOG_PREFIX} ${SETUP_SIDECAR_COMMAND}`;
 
 /**
- * The one-line log for a tool's own "not installed" answer, keeping the install line it names (a part's flag:
+ * The one-line log for a tool's own "not installed" answer (cut at 300 characters on the page, so short), keeping the install line it names (a part's flag:
  * `--with-separation`, `--with-chords`), so the page installs what that tool needs and not the default.
  */
 export function sidecarMissingLog(text: string): string {
