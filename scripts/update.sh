@@ -34,6 +34,16 @@ command -v git >/dev/null 2>&1 || fail "git is not installed."
 [ -z "$(git status --porcelain --untracked-files=no)" ] ||
   fail "Your clone has uncommitted changes, so it wasn't updated. Commit or discard them in $REPO_ROOT, then try again."
 
+# Releases are cut from main, so an update follows main. On another branch a pull would only
+# fast-forward that branch and report "up to date" while the release never arrives.
+branch="$(git rev-parse --abbrev-ref HEAD)"
+if [ "$branch" != "main" ]; then
+  printf '==> Switching from %s to main (your branch and its commits are left as they are)\n' "$branch"
+  git fetch origin main --tags --quiet || fail "Couldn't reach the remote. Update it by hand in $REPO_ROOT."
+  git switch main --quiet 2>/dev/null ||
+    fail "Couldn't switch to main (it may be checked out in another worktree). Switch to it in $REPO_ROOT, then try again."
+fi
+
 before="$(git rev-parse --short HEAD)"
 printf '==> Downloading the latest version\n'
 git pull --ff-only --quiet || fail "Couldn't fast-forward $(git rev-parse --abbrev-ref HEAD) (offline, or the branch has diverged). Update it by hand in $REPO_ROOT."
