@@ -22,6 +22,7 @@ export function AppCommands({
   onToggleOverview,
   onRebuild,
   onRestart,
+  onInstallSidecar,
   onOpenChangelog,
   onUpdate,
   updateVersion,
@@ -42,6 +43,8 @@ export function AppCommands({
   onRebuild?: () => void;
   onRestart?: () => void;
   onOpenChangelog: () => void;
+  /** Present when a tool failed for a missing sidecar and the bridge can install it, not while an install runs */
+  onInstallSidecar?: () => void;
   /** Present when a newer release is out and the bridge can install it */
   onUpdate?: () => void;
   updateVersion?: string;
@@ -81,6 +84,7 @@ export function AppCommands({
   useCommand({ id: 'bridge-rebuild', label: 'Rebuild & reload', group: 'Bridge', description: 'developer mode working tree changed', onSelect: () => onRebuild?.() }, Boolean(onRebuild));
   useCommand({ id: 'bridge-update', label: `Update reaper-mcp to v${updateVersion ?? ''}`, group: 'Bridge', description: 'upgrade new release', onSelect: () => onUpdate?.() }, Boolean(onUpdate && updateVersion));
   useCommand({ id: 'help-whats-new', label: 'What’s new', group: 'Help', description: 'changelog releases update version', onSelect: onOpenChangelog });
+  useCommand({ id: 'bridge-install-sidecar', label: 'Install the audio analysis add-on', group: 'Bridge', description: 'python sidecar setup-sidecar stems loudness masking chords', onSelect: () => onInstallSidecar?.() }, Boolean(onInstallSidecar));
   useCommand({ id: 'bridge-restart', label: 'Restart bridge', group: 'Bridge', onSelect: () => onRestart?.() }, Boolean(onRestart));
   useCommand({ id: 'page-overview', label: overview ? 'Hide stats & timeline' : 'Show stats & timeline', group: 'Page', onSelect: () => onToggleOverview?.() }, Boolean(onToggleOverview));
   useCommand({ id: 'page-notify', label: notify ? 'Turn off error notifications' : 'Turn on error notifications', group: 'Page', onSelect: () => onNotify(!notify) });

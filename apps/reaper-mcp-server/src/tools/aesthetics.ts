@@ -20,15 +20,12 @@ import { discardRender } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
 import { aestheticsSummary, logToolResult } from '../tool-log.js';
 import type { RenderTrackToWavResult } from '@reaper-mcp/protocol';
-import { SETUP_SIDECAR_HINT } from '../sidecar-hint.js';
+import { SIDECAR_NOT_INSTALLED_MSG } from '../sidecar-hint.js';
 
 /** Loudness every clip is scored at, so louder versions do not score higher for being louder. */
 export const DEFAULT_SCORING_LUFS = -18;
 /** Clip length: renders of a project vary slightly, and 30 s clips cut repeat noise ~10x vs 10 s (measured). */
 export const DEFAULT_CLIP_SECONDS = 30;
-
-const SIDECAR_NOT_INSTALLED_MSG =
-  `Audio understanding sidecar not installed. ${SETUP_SIDECAR_HINT}`;
 
 export function registerAestheticsTools(server: McpServer): void {
   server.tool(

@@ -6,6 +6,8 @@ import type { BridgeRequest } from './useBridgeRequest.js';
 import { load, save } from '../lib/storage.js';
 import { Icon, Notice } from '../components/index.js';
 import { cx } from '../lib/cx.js';
+import { missingSidecar } from '../lib/sidecar.js';
+import { Sidecar } from '../features/sidecar/index.js';
 import styles from './Notices.module.css';
 
 const SWS_DISMISS_KEY = 'mcp-bridge-sws-dismissed';
@@ -87,7 +89,7 @@ export function Notices({
             {control?.canUpdate && (
               <button
                 className="btn btn-sm"
-                disabled={updateRequested}
+                disabled={updateRequested || control.sidecar?.state === 'running'}
                 onClick={() => {
                   track({ name: 'update_clicked', source: 'notice' });
                   request('update');
@@ -186,6 +188,18 @@ export function Notices({
     notices.push(
       <Notice key="jsfx" tone="bad">
         <b>Meters are missing</b> ({health.missingJsfx?.join(', ') ?? 'JSFX'}). Run <code>reaper-mcp setup</code> to install them.
+      </Notice>,
+    );
+  }
+  const sidecar = missingSidecar(status.recent);
+  if (sidecar) {
+    notices.push(
+      <Notice key="sidecar" tone="warn" action={<Sidecar.Fix command={sidecar.command} compact />}>
+        <b>Audio analysis isn’t set up</b>
+        <span className={styles.noticeHint}>
+          <code>{sidecar.tool}</code> needs the Python sidecar. Nothing else is wrong.{' '}
+          {control?.canInstallSidecar ? 'Install it here, or run' : 'Run'} <code>{sidecar.command}</code> in a terminal.
+        </span>
       </Notice>,
     );
   }

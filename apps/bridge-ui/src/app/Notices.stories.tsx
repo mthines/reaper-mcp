@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { exampleFeed } from '../demo/feed.js';
 import { Notices } from './Notices.js';
+import { Sidecar } from '../features/sidecar/index.js';
 
 const { status } = exampleFeed();
 const settings = { paused: false, readonly: false, openOnStart: true, dev: false, ...status.settings };
@@ -43,3 +44,34 @@ export const UpdateAvailableFromNpm: Story = { args: { release: newer, status: {
 
 /** Installed through ReaPack: the notice names ReaPack's menu and the npm command for the server */
 export const UpdateAvailableFromReaPack: Story = { args: { release: newer, status: { ...status, control: { token: 'demo', canRestart: true, canUpdate: false, reapack: true } } } };
+
+const failed = (c: string, e: string) => ({ n: 9_000, t: Date.now(), c, ms: 3, ok: false, e }) as (typeof status.recent)[number];
+
+/** The bridge can't install it (no CLI known: Windows, ReaPack only, an old bridge): the notice gives the command to run by hand. See SidecarInstallable for the button */
+export const SidecarMissing: Story = {
+  args: { status: { ...status, recent: [failed('analyze_track_offline', 'Python sidecar not installed. Run in a terminal: reaper-mcp setup-sidecar'), ...status.recent] } },
+};
+
+
+
+const installable = (sidecar?: { kind: 'sidecar' | 'sidecarsep' | 'sidecarchords'; state: 'running' | 'done' | 'failed'; startedAt: number; log: string[] }) => ({
+  ...status,
+  recent: [failed('analyze_track_offline', 'Python sidecar not installed. Run in a terminal: reaper-mcp setup-sidecar'), ...status.recent],
+  control: { token: 'demo', canRestart: true, canUpdate: true, canInstallSidecar: true, ...(sidecar ? { sidecar } : {}) },
+});
+const withInstall = (s: ReturnType<typeof installable>): Story => ({
+  args: { status: s },
+  decorators: [(Story) => <Sidecar.Provider value={{ control: s.control, request: fn() }}><Story /></Sidecar.Provider>],
+});
+
+/** The bridge can install it: the notice carries an Install button */
+export const SidecarInstallable: Story = withInstall(installable());
+export const SidecarInstalling: Story = withInstall(installable({ kind: 'sidecar', state: 'running', startedAt: 0, log: ['Installing numpy…'] }));
+export const SidecarInstalled: Story = withInstall(installable({ kind: 'sidecar', state: 'done', startedAt: 0, log: [] }));
+export const SidecarInstallFailed: Story = withInstall(installable({ kind: 'sidecar', state: 'failed', startedAt: 0, log: ['ERROR: Python 3.10+ is required'] }));
+
+/** Only one part is missing (stem separation): the button installs that part */
+export const SidecarPartInstallable: Story = withInstall({
+  ...installable(),
+  recent: [failed('separate_stems', 'Stem separation is not installed. Run: reaper-mcp setup-sidecar --with-separation'), ...status.recent],
+});

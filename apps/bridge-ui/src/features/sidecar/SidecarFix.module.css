@@ -1,0 +1,6 @@
+.fix { display: grid; gap: 6px; font-size: 12.5px; }
+.row { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hint { color: var(--muted); }
+.log { display: block; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.failLog { margin: 0; padding: 8px; max-height: 160px; overflow: auto; font-size: 11px; background: rgba(0, 0, 0, 0.25); border-radius: 6px; white-space: pre-wrap; }
+.compact { font-size: 12.5px; color: var(--muted); white-space: nowrap; }

@@ -1,3 +1,5 @@
+import { Sidecar } from '../sidecar/index.js';
+import { isSidecarMissing, sidecarFixCommand } from '../../lib/sidecar.js';
 import { useEffect, useRef, useState } from 'react';
 import { track } from '../../lib/analytics.js';
 import { OUTCOME_LABEL } from './outcome.js';
@@ -107,6 +109,12 @@ export function Details({
               </button>
             </div>
             <pre>{e.e}</pre>
+            {isSidecarMissing(e.e) && (
+              <div className={styles.sidecarFix}>
+                <p>The Python sidecar (or the part this tool needs) isn’t installed, so this call can’t run.</p>
+                <Sidecar.Fix command={sidecarFixCommand(e.e)} />
+              </div>
+            )}
           </div>
         )}
 

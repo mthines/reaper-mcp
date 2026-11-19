@@ -52,6 +52,16 @@ export interface BridgeUpdate {
   log: string[] | Record<string, never>;
 }
 
+/** The Python sidecar install the bridge runs (`reaper-mcp setup-sidecar --yes`), one at a time. */
+export interface BridgeSidecarInstall {
+  /** sidecar: core + aesthetics; sidecarsep: adds stem separation; sidecarchords: adds the chord model; sidecarlite: core only */
+  kind: 'sidecar' | 'sidecarsep' | 'sidecarchords' | 'sidecarlite';
+  state: 'running' | 'failed' | 'done';
+  startedAt: number;
+  /** Last lines of the install log; an empty Lua table can arrive as `{}` */
+  log: string[] | Record<string, never>;
+}
+
 /** One-click actions the page may request; `token` must accompany every request (see controlUrl). */
 export interface BridgeControl {
   token: string;
@@ -66,6 +76,9 @@ export interface BridgeControl {
   /** Developer mode: the clone has source files newer than the last install */
   changed?: boolean;
   update?: BridgeUpdate;
+  /** The bridge can run `setup-sidecar` (an npm install or a built clone, not on Windows) */
+  canInstallSidecar?: boolean;
+  sidecar?: BridgeSidecarInstall;
   /** The bridge lists, restores and saves snapshots for the page (ExtState snap_seen / snap_req / snapshots) */
   snapshots?: boolean;
 }

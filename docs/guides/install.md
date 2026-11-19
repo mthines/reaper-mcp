@@ -86,6 +86,6 @@ Run `reaper-mcp doctor`. It checks each piece and says how to fix what's wrong.
 - **Your AI app can't see REAPER.** Install the AI app first, then run `reaper-mcp init` again, and restart the app. In Claude Code, `/mcp` should list `reaper`.
 - **`reaper-mcp: command not found`.** Close the terminal and open a new one. Still missing? Node.js isn't installed, or `npm install` failed; run it again and read the last lines it prints.
 - **Missing skills** (the `/mixer` and `/critique` commands). Run `reaper-mcp install-skills`. It never overwrites files you edited.
-- **Loudness, masking and stem tools don't work.** They need a small add-on: `reaper-mcp setup-sidecar` (needs Python 3.10 or newer).
+- **Loudness, masking and stem tools don't work.** They need a small add-on. When one of them fails for that reason, the status page says so and shows an **Install** button: press it and a notification follows the install, then ask your AI to try again. Or run `reaper-mcp setup-sidecar` yourself (needs Python 3.10 or newer).
 
 More in the [FAQ](faq.md).

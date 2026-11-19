@@ -13,10 +13,7 @@ import { sendCommand } from '../bridge.js';
 import { getSidecarClient } from '../sidecar.js';
 import { getQuantizeOffsetHistogram } from '../telemetry.js';
 import { trackRef } from './structure.js';
-import { SETUP_SIDECAR_HINT } from '../sidecar-hint.js';
-
-const SIDECAR_NOT_INSTALLED_MSG =
-  `Audio understanding sidecar not installed. ${SETUP_SIDECAR_HINT}`;
+import { SIDECAR_NOT_INSTALLED_MSG } from '../sidecar-hint.js';
 
 /** Longest item quantize_audio analyses (seconds of source audio). */
 export const MAX_QUANTIZE_SECONDS = 900;

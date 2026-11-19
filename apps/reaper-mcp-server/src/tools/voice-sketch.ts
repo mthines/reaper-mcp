@@ -6,6 +6,7 @@ import { getSidecarClient, type VoiceSketchNote, type VoiceRenderResult } from '
 import { estimateKey, type Mode } from '../key.js';
 import { writeSmf, type SmfTrack } from '../smf.js';
 import { logToolResult } from '../tool-log.js';
+import { SETUP_SIDECAR_COMMAND, sidecarNotInstalledMessage } from '../sidecar-hint.js';
 import { arrangeVoiceSketch, secondsAtBeat } from '../voice-arrangement.js';
 
 export function registerVoiceSketchTools(server: McpServer): void {
@@ -63,7 +64,7 @@ export function registerVoiceSketchTools(server: McpServer): void {
       if (args.endTime !== undefined && args.endTime - (args.startTime ?? 0) > 120) return fail('Select at most 120 seconds per call');
       if (args.pitchMin >= args.pitchMax) return fail('pitchMin must be below pitchMax');
       const sidecar = getSidecarClient();
-      if (!sidecar.isAvailable()) return fail('Audio sidecar not installed. Run reaper-mcp setup-sidecar --without-aesthetics');
+      if (!sidecar.isAvailable()) return fail(sidecarNotInstalledMessage(`${SETUP_SIDECAR_COMMAND} --without-aesthetics`));
       try {
         const { outputPath, soundfontPath, arrange, bars, key: keyOverride, offset, limit, ...params } = args;
         const result = await sidecar.transcribeVoiceSketch(params);

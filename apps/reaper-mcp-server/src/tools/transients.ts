@@ -21,10 +21,7 @@ import { discardRender, renderTrack } from '../render.js';
 import { getSidecarClient } from '../sidecar.js';
 import { logToolResult } from '../tool-log.js';
 import { MAX_OFFLINE_SECONDS } from './offline.js';
-import { SETUP_SIDECAR_HINT } from '../sidecar-hint.js';
-
-const SIDECAR_NOT_INSTALLED_MSG =
-  `Audio understanding sidecar not installed. ${SETUP_SIDECAR_HINT}`;
+import { SIDECAR_NOT_INSTALLED_MSG } from '../sidecar-hint.js';
 
 /** Default range rendered from a track when no endTime is given (seconds). */
 const DEFAULT_TRACK_SECONDS = 60;

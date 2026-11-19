@@ -40,7 +40,7 @@ export function useBridgeRequest(status: BridgeStatus | null): BridgeRequest {
   return (action) => {
     const token = status?.control?.token;
     if (!token || DEMO) return;
-    if (action !== 'update') expectRestart.current = true;
+    if (action === 'rebuild' || action === 'restart') expectRestart.current = true;
     fetch(controlUrl(action, token), { cache: 'no-store' }).catch(() => {
       /* the bridge's status shows whether it took */
     });

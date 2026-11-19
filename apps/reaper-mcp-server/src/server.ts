@@ -1,4 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { LoggedTool } from '@reaper-mcp/protocol';
+import { logToolResult } from './tool-log.js';
+import { isSidecarMissing, sidecarMissingLog } from './sidecar-hint.js';
 import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 import { getTracer, emitLog, exceptionAttributes, getToolDurationHistogram, redactHome } from './telemetry.js';
 import { classifyBridgeError, isSystemError } from './bridge.js';
@@ -67,7 +70,7 @@ export type ToolErrorCause = 'sidecar_not_installed' | 'bridge_not_running' | 'b
 
 export function toolErrorCause(text: string): ToolErrorCause | undefined {
   // Every tool's sidecar check says one of these (SIDECAR_NOT_INSTALLED_MSG, "needs the Python sidecar")
-  if (/sidecar not installed|needs the Python sidecar/i.test(text)) return 'sidecar_not_installed';
+  if (isSidecarMissing(text)) return 'sidecar_not_installed';
   const type = classifyBridgeError(text.replace(/^Error:\s*/, ''));
   return type === 'bridge_not_running' || type === 'bridge_outdated' ? type : undefined;
 }
@@ -134,6 +137,11 @@ export function instrumentToolHandlers(server: McpServer): void {
               span.setAttribute(TOOL_ERROR_MESSAGE, message);
               const cause = toolErrorCause(errorText);
               if (cause) span.setAttribute('reaper.tool.error.cause', cause);
+              // A tool checks for the sidecar before calling it, so nothing logged this on the bridge page:
+              // do it here, in one line the page turns into a notice with the fix
+              if (cause === 'sidecar_not_installed' && !outcome.pageLogged) {
+                logToolResult(toolName as LoggedTool, {}, startMs, null, sidecarMissingLog(errorText));
+              }
               if (regression) span.setStatus({ code: SpanStatusCode.ERROR, message });
               // The bridge or sidecar call below logged its own failure; log only one nothing logged
               // (the tool's own validation, a failure it composed from several answers).

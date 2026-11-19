@@ -73,3 +73,6 @@
 .more > summary { cursor: pointer; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); list-style-position: inside; }
 .more > summary:hover { color: var(--muted); }
 .more[open] > summary { margin-bottom: 10px; }
+
+.sidecarFix { display: grid; gap: 8px; padding: 10px 12px; border-top: 1px solid rgba(248, 113, 113, 0.28); font-size: 12.5px; }
+.sidecarFix p { margin: 0; }

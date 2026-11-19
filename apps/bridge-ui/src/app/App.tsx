@@ -34,6 +34,8 @@ import { Changelog, availableUpdate, parseReleases, useHighlights, useReleases }
 import { exampleReleaseJson } from '../demo/examples.js';
 import { updateOffer, useLatestRelease, useUpdateReady, type Release } from '../lib/update.js';
 import { UpdateToasts } from './UpdateToasts.js';
+import { Sidecar } from '../features/sidecar/index.js';
+import { missingSidecar, sidecarAction } from '../lib/sidecar.js';
 import type { TrackEvent } from '../lib/analytics.js';
 import { blockedBy, useSnapshots } from '../features/snapshots/index.js';
 import { Stats } from '../features/stats/index.js';
@@ -120,6 +122,7 @@ export function App() {
     setSkipped(version);
   };
   const updateReady = useUpdateReady();
+  const missingPart = status ? missingSidecar(status.recent) : null;
   const updateAvailable = updateOffer(release, __VERSION__, { dev: settings?.dev === true, skipped, update: status?.control?.update, ready: updateReady });
   const changelogClosedVia = useChangelogReadTime(changelogOpen);
   const releases = useReleases(changelogOpen, DEMO_RELEASES);
@@ -197,7 +200,7 @@ export function App() {
         onSet={changeSetting('settings')}
         onOpenSettings={settings ? openSettings(true) : undefined}
         onOpenChangelog={openChangelog('palette')}
-        onUpdate={updateAvailable && status?.control?.canUpdate ? () => { track({ name: 'update_clicked', source: 'palette' }); request('update'); } : undefined}
+        onUpdate={updateAvailable && status?.control?.canUpdate && status.control.sidecar?.state !== 'running' ? () => { track({ name: 'update_clicked', source: 'palette' }); request('update'); } : undefined}
         updateVersion={updateAvailable?.version}
         overview={overview}
         onToggleOverview={status ? toggleOverview : undefined}
@@ -207,6 +210,7 @@ export function App() {
             : undefined
         }
         onRestart={status?.control?.canRestart ? () => request('restart') : undefined}
+        onInstallSidecar={missingPart && status?.control?.canInstallSidecar && status.control.sidecar?.state !== 'running' && status.control.update?.state !== 'running' ? () => request(sidecarAction(missingPart.command)) : undefined}
         notify={notify}
         onNotify={setNotify}
         usageStats={usageStats}
@@ -234,7 +238,9 @@ export function App() {
         }
       />
       <UpdateToasts status={status} onOpenChangelog={openChangelog('toast')} />
+      <Sidecar.Toasts status={status} />
       {closing.secondsLeft !== null && <CloseNotice secondsLeft={closing.secondsLeft} onCancel={closing.cancel} />}
+      <Sidecar.Provider value={{ control: status?.control, request }}>
       <BridgeBoundary resetKey={`${state}-${reachable}`}>
         {status ? (
           <>
@@ -323,6 +329,7 @@ export function App() {
           <Offline reachable={reachable} />
         )}
       </BridgeBoundary>
+      </Sidecar.Provider>
       {/* Outside the bridge's branch: the pill (from the cached release) and the palette open it offline too */}
       {changelogOpen && (
         <Changelog
@@ -330,6 +337,7 @@ export function App() {
           highlights={highlights}
           current={__VERSION__}
           canUpdate={status?.control?.canUpdate === true && settings?.dev !== true}
+          busy={status?.control?.sidecar?.state === 'running'}
           reapack={status?.control?.reapack === true}
           update={status?.control?.update}
           onUpdate={() => request('update')}

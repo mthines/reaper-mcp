@@ -72,7 +72,7 @@ In Claude Code, type `/mcp`. If `lorekit` isn't there, follow [Connect LoreKit](
 
 ### Loudness, masking or stem tools fail.
 
-Install the audio add-on: `reaper-mcp setup-sidecar` (Python 3.10+).
+Install the audio add-on: press **Install** in the notice on the status page (it appears when a tool fails for that reason), or run `reaper-mcp setup-sidecar` (Python 3.10+).
 
 ### The window shows an old version.
 

@@ -1,0 +1,45 @@
+import type { CommandEntry } from './commands.js';
+
+/** The command that installs the Python sidecar's default parts */
+export const SETUP_SIDECAR_COMMAND = 'reaper-mcp setup-sidecar';
+
+/** Whether an error says the sidecar, or a part of it, is not installed (mirrors `isSidecarMissing` in the server's sidecar-hint.ts) */
+export function isSidecarMissing(text: string | undefined): boolean {
+  return !!text && /sidecar not installed|needs the Python sidecar|(?:audiobox-aesthetics|Stem separation|chord model|FluidSynth native library)[^.]*(?:is )?not installed/i.test(text);
+}
+
+/** The install line an error names (`reaper-mcp setup-sidecar --with-separation`), else the plain command */
+export function sidecarFixCommand(text: string): string {
+  return text.match(/reaper-mcp setup-sidecar(?: --[\w-]+)*/)?.[0] ?? SETUP_SIDECAR_COMMAND;
+}
+
+export type SidecarKind = 'sidecar' | 'sidecarsep' | 'sidecarchords' | 'sidecarlite';
+
+/** The bridge request that installs what a failed tool asked for */
+export function sidecarAction(command: string): SidecarKind {
+  if (command.includes('--with-separation')) return 'sidecarsep';
+  if (command.includes('--without-aesthetics')) return 'sidecarlite';
+  if (command.includes('--with-chords')) return 'sidecarchords';
+  return 'sidecar';
+}
+
+/**
+ * The sidecar's missing part to tell the user about: the newest failure that says so, unless a sidecar tool
+ * has worked since (`recent` is newest first).
+ */
+export function missingSidecar(recent: CommandEntry[]): { command: string; tool: string } | null {
+  // Only the tool that failed clearing itself counts: another tool working says nothing about this part
+  const worked = new Set<string>();
+  for (const e of recent) {
+    if (e.ok) worked.add(e.c);
+    else if (isSidecarMissing(e.e) && !worked.has(e.c)) return { command: sidecarFixCommand(e.e ?? ''), tool: e.c };
+  }
+  return null;
+}
+
+/** The command that installs what an install `kind` installed */
+const KIND_FLAG: Record<SidecarKind, string> = { sidecar: '', sidecarsep: ' --with-separation', sidecarchords: ' --with-chords', sidecarlite: ' --without-aesthetics' };
+
+export function sidecarCommandFor(kind: SidecarKind): string {
+  return `${SETUP_SIDECAR_COMMAND}${KIND_FLAG[kind]}`;
+}
