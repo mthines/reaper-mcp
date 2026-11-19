@@ -237,7 +237,7 @@ export function App() {
             : undefined
         }
       />
-      <UpdateToasts status={status} />
+      <UpdateToasts status={status} onOpenChangelog={openChangelog('toast')} />
       <Sidecar.Toasts status={status} />
       {closing.secondsLeft !== null && <CloseNotice secondsLeft={closing.secondsLeft} onCancel={closing.cancel} />}
       <Sidecar.Provider value={{ control: status?.control, request }}>

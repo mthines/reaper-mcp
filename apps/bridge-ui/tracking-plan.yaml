@@ -23,7 +23,7 @@ not_collected:
 events:
   settings_opened: {}
   changelog_opened:          # the What's new drawer
-    source: [header, notice, menu, palette, footer]
+    source: [header, notice, menu, palette, footer, toast]
     update_available: boolean
   changelog_closed:          # the What's new drawer closed, or the page went away with it open
     via: [close, settings, page_left, other]   # close button or Esc / opening Settings / page closed or reloaded / back-forward
@@ -37,6 +37,8 @@ events:
     result: [ready, current, failed]
     source: [npm, clone]
   update_reload_clicked:     # pressed Reload on the "up to date" toast
+    source: [npm, clone]
+  update_whats_new_shown:    # the "See what's new" toast after an update's reload
     source: [npm, clone]
   setting_changed:
     setting: [paused, readonly, open_on_start, dev, autostart, error_notifications, usage_stats]

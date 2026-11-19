@@ -18,12 +18,13 @@ export const SERVICE_NAME = 'reaper-mcp-bridge-ui';
 /** Every event the page sends; the name goes out as `bridge_ui.<name>`, the rest as `bridge_ui.*` attributes. */
 export type TrackEvent =
   | { name: 'settings_opened' }
-  | { name: 'changelog_opened'; source: 'header' | 'notice' | 'menu' | 'palette' | 'footer'; update_available: boolean }
+  | { name: 'changelog_opened'; source: 'header' | 'notice' | 'menu' | 'palette' | 'footer' | 'toast'; update_available: boolean }
   | { name: 'changelog_closed'; via: 'close' | 'settings' | 'page_left' | 'other'; seconds: number; read_time: '<5s' | '5-15s' | '15-30s' | '30-60s' | '1-3m' | '3m+' }
   | { name: 'changelog_betas_toggled'; shown: boolean }
   | { name: 'update_clicked'; source: 'changelog' | 'notice' | 'palette' }
   | { name: 'update_finished'; result: 'ready' | 'current' | 'failed'; source: 'npm' | 'clone' }
   | { name: 'update_reload_clicked'; source: 'npm' | 'clone' }
+  | { name: 'update_whats_new_shown'; source: 'npm' | 'clone' }
   | { name: 'setting_changed'; setting: 'paused' | 'readonly' | 'open_on_start' | 'dev' | 'autostart' | 'error_notifications' | 'usage_stats'; enabled: boolean; source: 'settings' | 'notice' }
   | { name: 'app_install_clicked'; state: string }
   | { name: 'feature_flag_exposed'; flag: string; variant: string; reason: 'static' | 'split' | 'override' }

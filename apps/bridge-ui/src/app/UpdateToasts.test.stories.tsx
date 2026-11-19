@@ -18,12 +18,12 @@ const current: BridgeStatus = { ...status, control: { ...control, update: { kind
 const idleDone: BridgeStatus = done;
 
 /** Steps a status feed forward on a click, so a play function can watch the toasts follow an update */
-const Feed = ({ steps, onReload }: { steps: BridgeStatus[]; onReload: () => void }) => {
+const Feed = ({ steps, onReload, onOpenChangelog, version = '1.0.0' }: { steps: BridgeStatus[]; onReload: () => void; onOpenChangelog?: () => void; version?: string }) => {
   const [i, setI] = useState(0);
   return (
     <>
       <button onClick={() => setI((n) => Math.min(n + 1, steps.length - 1))}>Next</button>
-      <UpdateToasts status={steps[i]} onReload={onReload} />
+      <UpdateToasts status={steps[i]} onReload={onReload} onOpenChangelog={onOpenChangelog} version={version} />
     </>
   );
 };
@@ -33,9 +33,10 @@ const meta = {
   component: Feed,
   tags: ['test'],
   parameters: { chromatic: { disableSnapshot: true } },
-  args: { steps: [status], onReload: fn() },
+  args: { steps: [status], onReload: fn(), onOpenChangelog: fn() },
   beforeEach: () => {
     resetUpdateReady();
+    sessionStorage.removeItem('mcp-bridge-updated-from');
     toast.dismiss(); // toasts live on document.body, so one story's would leak into the next
   },
 } satisfies Meta<typeof Feed>;
@@ -113,5 +114,36 @@ export const SaysAlreadyUpToDateWithoutOfferingReload: Story = {
     // judge this toast alone: an earlier story's toast may still be animating out on document.body
     const toastEl = (await screen.findByText('Already up to date')).closest('li') as HTMLElement;
     await expect(within(toastEl).queryByRole('button', { name: 'Reload' })).not.toBeInTheDocument();
+  },
+};
+
+/** After the update's reload the page is the new version: it points at What's new once */
+export const OffersWhatsNewAfterTheReloadThatFollowedAnUpdate: Story = {
+  args: { steps: [status], version: '2.0.0', onOpenChangelog: fn() },
+  beforeEach: () => {
+    resetUpdateReady();
+    toast.dismiss();
+    sessionStorage.setItem('mcp-bridge-updated-from', '1.0.0');
+  },
+  play: async ({ canvasElement, args }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await expect(await screen.findByText('reaper-mcp v2.0.0 is ready')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: "See what's new" }));
+    await expect(args.onOpenChangelog).toHaveBeenCalledOnce();
+  },
+};
+
+/** A reload that came before the new version was served is still the old page: stay quiet */
+export const StaysQuietWhenTheReloadStillServesTheOldVersion: Story = {
+  args: { steps: [status], version: '1.0.0' },
+  beforeEach: () => {
+    resetUpdateReady();
+    toast.dismiss();
+    sessionStorage.setItem('mcp-bridge-updated-from', '1.0.0');
+  },
+  play: async ({ canvasElement }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await expect(screen.queryByRole('button', { name: "See what's new" })).not.toBeInTheDocument();
   },
 };
