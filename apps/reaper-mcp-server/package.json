@@ -4,6 +4,7 @@
   "type": "module",
   "description": "MCP server for controlling REAPER DAW — real-time mixing, FX control, and frequency analysis for AI agents",
   "license": "MIT",
+  "mcpName": "io.github.mthines/reaper-mcp",
   "author": "mthines",
   "repository": {
     "type": "git",
@@ -21,6 +22,8 @@
     "mixing",
     "ai",
     "model-context-protocol",
+    "mcp-server",
+    "claude-code",
     "reascript"
   ],
   "bin": {
