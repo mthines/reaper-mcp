@@ -186,6 +186,37 @@ describe('firstRunTelemetryNotice', () => {
 });
 
 describe('AnonymizingSpanExporter', () => {
+  it('keeps why save_project was refused and how it was called, never the path', async () => {
+    const sink = new tracing.InMemorySpanExporter();
+    const provider = new tracing.BasicTracerProvider({
+      spanProcessors: [new tracing.SimpleSpanProcessor(new AnonymizingSpanExporter(sink))],
+    });
+    provider
+      .getTracer('test')
+      .startSpan('tools/call save_project', {
+        attributes: {
+          'gen_ai.tool.name': 'save_project',
+          'error.type': 'tool_error',
+          'reaper.tool.error.cause': 'project_never_saved',
+          'reaper.save.mode': 'in_place',
+          'reaper.save.overwrite': false,
+          'reaper.tool.error.message': 'directory /Users/someone/Songs does not exist',
+          'reaper.save.path': '/Users/someone/Songs/secret.rpp',
+        },
+      })
+      .end();
+    await provider.forceFlush();
+
+    const [exported] = sink.getFinishedSpans();
+    expect(exported.attributes).toEqual({
+      'gen_ai.tool.name': 'save_project',
+      'error.type': 'tool_error',
+      'reaper.tool.error.cause': 'project_never_saved',
+      'reaper.save.mode': 'in_place',
+      'reaper.save.overwrite': false,
+    });
+  });
+
   it('exports what ran and how it ended, never error text, events or other attributes', async () => {
     const sink = new tracing.InMemorySpanExporter();
     const provider = new tracing.BasicTracerProvider({

@@ -1,3 +1,4 @@
+import { trace } from '@opentelemetry/api';
 import { z } from 'zod/v4';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sendCommand } from '../bridge.js';
@@ -61,7 +62,14 @@ function registerProjectOpsTools(server: McpServer): void {
       path: z.string().optional().describe('Absolute .rpp path to write a copy to'),
       overwrite: z.boolean().optional().describe('Replace an existing file at path'),
     },
-    async ({ path, overwrite }) => reply(await sendCommand('save_project', { path, overwrite })),
+    async ({ path, overwrite }) => {
+      // Closed values only (allow-listed in telemetry-consent.ts): never the path itself
+      trace.getActiveSpan()?.setAttributes({
+        'reaper.save.mode': path ? 'copy' : 'in_place',
+        'reaper.save.overwrite': overwrite === true,
+      });
+      return reply(await sendCommand('save_project', { path, overwrite }));
+    },
   );
 
   server.tool(

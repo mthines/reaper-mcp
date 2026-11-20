@@ -66,9 +66,40 @@ const TOOL_ERROR_MESSAGE = 'reaper.tool.error.message';
  * sidecar has no span of its own (tools check for it before calling it), so without this it shows only
  * as a bare `tool_error`.
  */
-export type ToolErrorCause = 'sidecar_not_installed' | 'bridge_not_running' | 'bridge_outdated';
+export type ToolErrorCause =
+  | 'sidecar_not_installed'
+  | 'bridge_not_running'
+  | 'bridge_outdated'
+  | SaveProjectErrorCause;
 
-export function toolErrorCause(text: string): ToolErrorCause | undefined {
+/**
+ * Why save_project was refused, as a closed value (messages come from M.save in reaper/mcp_project_lib.lua).
+ * Safe to export: it names the rule that refused the save, never the path or the project.
+ */
+export type SaveProjectErrorCause =
+  | 'project_never_saved'
+  | 'path_not_rpp'
+  | 'path_not_absolute'
+  | 'directory_missing'
+  | 'target_exists'
+  | 'file_not_written';
+
+export function saveProjectErrorCause(text: string): SaveProjectErrorCause | undefined {
+  const t = text.replace(/^Error:\s*/, '');
+  if (t.startsWith('refused: the project was never saved')) return 'project_never_saved';
+  if (t.startsWith('path must end in .rpp')) return 'path_not_rpp';
+  if (t.startsWith('path must be absolute')) return 'path_not_absolute';
+  if (/^directory .* does not exist/.test(t)) return 'directory_missing';
+  if (/^refused: .* already exists/.test(t)) return 'target_exists';
+  if (t.startsWith('save failed:')) return 'file_not_written';
+  return undefined;
+}
+
+export function toolErrorCause(text: string, toolName?: string): ToolErrorCause | undefined {
+  if (toolName === 'save_project') {
+    const saveCause = saveProjectErrorCause(text);
+    if (saveCause) return saveCause;
+  }
   // Every tool's sidecar check says one of these (SIDECAR_NOT_INSTALLED_MSG, "needs the Python sidecar")
   if (isSidecarMissing(text)) return 'sidecar_not_installed';
   const type = classifyBridgeError(text.replace(/^Error:\s*/, ''));
@@ -135,7 +166,7 @@ export function instrumentToolHandlers(server: McpServer): void {
               metricAttrs['error.type'] = 'tool_error';
               span.setAttribute('error.type', 'tool_error');
               span.setAttribute(TOOL_ERROR_MESSAGE, message);
-              const cause = toolErrorCause(errorText);
+              const cause = toolErrorCause(errorText, toolName);
               if (cause) span.setAttribute('reaper.tool.error.cause', cause);
               // A tool checks for the sidecar before calling it, so nothing logged this on the bridge page:
               // do it here, in one line the page turns into a notice with the fix
@@ -149,7 +180,11 @@ export function instrumentToolHandlers(server: McpServer): void {
                 emitLog(
                   regression ? 'error' : 'warn',
                   `Tool ${toolName} failed: ${message}`,
-                  { 'gen_ai.tool.name': toolName, 'error.type': 'tool_error' },
+                  {
+                    'gen_ai.tool.name': toolName,
+                    'error.type': 'tool_error',
+                    ...(cause && { 'reaper.tool.error.cause': cause }),
+                  },
                   { eventName: 'reaper.tool.failed' },
                 );
               }

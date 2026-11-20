@@ -295,8 +295,12 @@ const ALLOWED_SPAN_ATTRIBUTES = new Set([
   'reaper.update.available',
   'reaper.update.via',
   // A failed tool call's missing setup step, a fixed set (toolErrorCause in server.ts):
-  // sidecar_not_installed, bridge_not_running, bridge_outdated
+  // sidecar_not_installed, bridge_not_running, bridge_outdated, and for save_project why it was refused
+  // (project_never_saved, path_not_rpp, path_not_absolute, directory_missing, target_exists, file_not_written)
   'reaper.tool.error.cause',
+  // save_project: in place or as a copy to a path, and whether overwrite was asked (never the path)
+  'reaper.save.mode',
+  'reaper.save.overwrite',
   // detect_key / detect_chords: where they read from and how sure they were, never the key or chords
   'reaper.key.source',
   'reaper.key.confidence',

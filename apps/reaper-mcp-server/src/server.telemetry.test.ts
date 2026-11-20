@@ -123,6 +123,44 @@ describe('instrumentToolHandlers', () => {
     expect(span.attributes['reaper.tool.error.cause']).toBe(cause);
   });
 
+  it.each([
+    ['refused: the project was never saved, so REAPER would open a Save As dialog — pass path (an absolute .rpp path) to save it', 'project_never_saved'],
+    ['Error: path must end in .rpp', 'path_not_rpp'],
+    ['path must be absolute', 'path_not_absolute'],
+    ['directory /nope does not exist', 'directory_missing'],
+    ['refused: /tmp/a.rpp already exists — pass overwrite: true to replace it', 'target_exists'],
+    ['save failed: /tmp/a.rpp does not exist after saving', 'file_not_written'],
+  ])('names why save_project was refused, as a closed value: %s', async (text, cause) => {
+    const cb = wrapTool('save_project', async () => ({ content: [{ type: 'text', text }], isError: true }));
+
+    await cb({}, { requestId: 1 });
+
+    const [span] = exporter.getFinishedSpans();
+    expect(span.attributes['error.type']).toBe('tool_error');
+    expect(span.attributes['reaper.tool.error.cause']).toBe(cause);
+    expect(span.status.code).toBe(SpanStatusCode.UNSET);
+    expect(toolFailedLogs()).toEqual([expect.objectContaining({ 'reaper.tool.error.cause': cause })]);
+  });
+
+  it('reads save_project refusal messages for save_project only', async () => {
+    const cb = wrapTool('add_fx', async () => ({
+      content: [{ type: 'text', text: 'directory /nope does not exist' }],
+      isError: true,
+    }));
+
+    await cb({}, { requestId: 1 });
+
+    expect(exporter.getFinishedSpans()[0].attributes['reaper.tool.error.cause']).toBeUndefined();
+  });
+
+  it('names no cause for a save_project failure it does not recognise', async () => {
+    const cb = wrapTool('save_project', async () => ({ content: [{ type: 'text', text: 'something else broke' }], isError: true }));
+
+    await cb({}, { requestId: 1 });
+
+    expect(exporter.getFinishedSpans()[0].attributes['reaper.tool.error.cause']).toBeUndefined();
+  });
+
   it('names no setup step for a refused request', async () => {
     const cb = wrapTool('add_fx', async () => ({ content: [{ type: 'text', text: 'Error: Track 9 not found' }], isError: true }));
 
