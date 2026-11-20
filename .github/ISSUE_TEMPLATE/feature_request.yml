@@ -1,0 +1,15 @@
+name: Idea or feature request
+description: Something you'd like the agent to do in your sessions
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: want
+    attributes:
+      label: What would you like to say to the agent?
+      description: Write it the way you'd type it, e.g. "tighten the low end on the bass and guitars"
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: What do you do by hand today?

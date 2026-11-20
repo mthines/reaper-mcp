@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.mthines/reaper-mcp",
+  "title": "REAPER MCP",
+  "description": "Control a live REAPER session with AI: tracks, FX, routing, metering, MIDI, mixing and mastering.",
+  "repository": {
+    "url": "https://github.com/mthines/reaper-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://reaper-mcp.vercel.app/docs",
+  "version": "0.99.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@mthines/reaper-mcp",
+      "version": "0.99.1",
+      "runtimeHint": "npx",
+      "packageArguments": [{ "type": "positional", "value": "serve" }],
+      "transport": { "type": "stdio" }
+    }
+  ]
+}

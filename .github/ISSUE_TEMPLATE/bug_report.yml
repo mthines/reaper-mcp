@@ -1,0 +1,31 @@
+name: Bug report
+description: Something didn't work in REAPER, the bridge or the MCP server
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you asked the agent, what you expected, what you got
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: reaper-mcp version
+      description: Shown in the footer of the bridge page
+  - type: input
+    id: env
+    attributes:
+      label: REAPER version, OS and AI app
+      placeholder: REAPER 7.40, macOS 15, Claude Code
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `reaper-mcp doctor`
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: Bridge page log entry
+      description: Open the failed call in the bridge page and paste its error. Remove anything private.
