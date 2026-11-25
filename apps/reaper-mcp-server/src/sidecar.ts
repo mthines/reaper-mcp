@@ -571,6 +571,9 @@ class SidecarClientImpl implements SidecarClient {
     }
     const child = spawn(VENV_PYTHON, [SIDECAR_SCRIPT_PATH], {
       stdio: ['pipe', 'pipe', 'pipe'],
+      // Requests and responses are UTF-8; on Windows Python would otherwise use cp1252 and garble
+      // non-ASCII paths. PYTHONUTF8 also covers any process the sidecar starts.
+      env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' },
     });
 
     if (child.stdout) {

@@ -150,6 +150,16 @@ describe('analyze()', () => {
     expect(spawnMock).toHaveBeenCalled();
   });
 
+  it('spawns the sidecar in UTF-8 mode so Windows does not decode paths as cp1252', async () => {
+    existsMock.mockReturnValue(true);
+    spawnMock.mockReturnValue(createMockProcess());
+    void getSidecarClient().analyze('/tmp/test.wav', 0, 5).catch(() => undefined);
+    await flushMicrotasks();
+    const options = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    expect(options.env['PYTHONUTF8']).toBe('1');
+    expect(options.env['PYTHONIOENCODING']).toBe('utf-8');
+  });
+
   it('sends correct JSON-RPC request to stdin', async () => {
     existsMock.mockReturnValue(true);
     const proc = createMockProcess();
