@@ -73,8 +73,16 @@ local function temp_dir(reaper, env)
     dir = reaper.GetTempPath()
   else
     local t = env.os.tmpname()
-    dir = t:match("^(.+)[/\\][^/\\]+$") or "/tmp"
+    dir = t:match("^(.+)[/\\][^/\\]+$")
     env.os.remove(t)
+    -- Windows' os.tmpname() is a bare name like "\\s3k4." with no folder in it
+    if not dir and env.os.getenv then
+      for _, var in ipairs({ "TEMP", "TMP" }) do
+        local v = env.os.getenv(var)
+        if v and v ~= "" then dir = v; break end
+      end
+    end
+    dir = dir or "/tmp"
   end
   if dir:sub(-1) ~= "/" and dir:sub(-1) ~= "\\" then dir = dir .. "/" end
   return dir
