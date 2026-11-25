@@ -615,9 +615,19 @@ def dispatch(raw: str) -> str:
 # Main loop
 # ---------------------------------------------------------------------------
 
+def configure_stdio() -> None:
+    """Speak UTF-8 on stdin/stdout whatever the locale says.
+
+    The Node side writes and reads UTF-8. On Windows Python defaults to the locale
+    encoding (cp1252), which turns a path like "å" into two wrong characters.
+    stdout is line-buffered so responses are delivered immediately.
+    """
+    sys.stdin.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
+
+
 def main() -> None:
-    # Disable output buffering so responses are delivered immediately
-    sys.stdout = os.fdopen(sys.stdout.fileno(), "w", buffering=1)
+    configure_stdio()
 
     # Log startup to stderr (visible in MCP server logs)
     print(f"[reaper-mcp-sidecar] Starting — Python {sys.version}", file=sys.stderr, flush=True)

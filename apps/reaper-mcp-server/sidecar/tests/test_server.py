@@ -475,3 +475,26 @@ def test_separate_method_says_how_to_install_when_demucs_is_missing(tmp_path, mo
     _write_sine(path, -12)
     resp = _call("separate", {"path": str(path), "outDir": str(tmp_path / "out")})
     assert "setup-sidecar --with-separation" in resp["error"]["message"]
+
+
+def test_configure_stdio_decodes_utf8_even_under_a_cp1252_locale():
+    """Windows defaults stdio to cp1252, which turns a UTF-8 "\u00e5" into two characters."""
+    import os
+    import subprocess
+    import sys
+
+    sidecar_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    code = (
+        "import sys; sys.path.insert(0, sys.argv[1]); import server; server.configure_stdio(); "
+        "line = sys.stdin.readline().strip(); "
+        "print(sys.stdin.encoding, sys.stdout.encoding, line == 'Bj\\u00e5rn')"
+    )
+    env = {**os.environ, "PYTHONIOENCODING": "cp1252", "PYTHONUTF8": "0"}
+    out = subprocess.run(
+        [sys.executable, "-c", code, sidecar_dir],
+        input="Bj\u00e5rn\n".encode("utf-8"),
+        capture_output=True,
+        env=env,
+        check=True,
+    )
+    assert out.stdout.decode("utf-8").split() == ["utf-8", "utf-8", "True"]
