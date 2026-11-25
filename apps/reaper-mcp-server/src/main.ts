@@ -22,7 +22,7 @@ import { HARNESSES, connectHarness, detectHarnesses, isStale, parseHarnessFlag, 
 import { installExamplePlugins } from './jsfx/examples.js';
 import { loadToolkit, generatedDir, presetsDir } from './tools/jsfx.js';
 import { resolveAssetDir, copyDirSync, installFile, createMcpJson, ensureClaudeSettings, REAPER_ASSETS, RETIRED_ASSETS, MCP_TOOL_NAMES, BRIDGE_UI_FILE, DEFAULT_WEB_PORT, ensureWebInterface, ensureSnapshotActions, ensureBridgeAutostart, autostartCheck, setupFilesPlan, findCloneRoot, isDevClone, updateConfigText, npmUpdateConfigText, type CloneState } from './cli.js';
-import { detectInstalled, setupSidecar } from './setup-sidecar.js';
+import { detectInstalled, setupSidecar, resolvePythonBin } from './setup-sidecar.js';
 import { confirmOptOutPrompt, firstRunTelemetryNotice, resolveTelemetry, saveTelemetryChoice, TELEMETRY_DOC_URL } from './telemetry-consent.js';
 import { endSession, setSessionClient, startSessionPing } from './session.js';
 import { getSidecarClient } from './sidecar.js';
@@ -547,7 +547,7 @@ async function doctor(): Promise<number> {
   let pythonOk = false;
   let pythonDetail = 'Not found';
   try {
-    const pythonBin = process.env['PYTHON_BIN'] ?? 'python3';
+    const pythonBin = await resolvePythonBin();
     const { stdout, stderr } = await execAsync(`"${pythonBin}" --version`);
     const versionStr = (stdout + stderr).trim();
     const match = versionStr.match(/Python\s+(\d+)\.(\d+)/i);
