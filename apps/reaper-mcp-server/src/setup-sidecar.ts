@@ -77,21 +77,26 @@ export const WINDOWS_PYTHON_CANDIDATES = ['python3', 'python', 'py'] as const;
 
 /**
  * Pick the Python interpreter for setup. PYTHON_BIN always wins. On Windows, falls back through
- * WINDOWS_PYTHON_CANDIDATES to the first that runs and reports a version; elsewhere (or when none
- * works) returns the default `python3` so checkPython reports the usual actionable error.
+ * WINDOWS_PYTHON_CANDIDATES to the first that runs and reports Python 3.10+. When none does, returns the
+ * first one that ran but was too old, else `python3`, so checkPython reports the real, actionable error.
  */
 export async function resolvePythonBin(isWindows: boolean = platform() === 'win32'): Promise<string> {
   const configured = getPythonBin();
   if (process.env['PYTHON_BIN'] || !isWindows) return configured;
+  let tooOld: string | null = null;
   for (const candidate of WINDOWS_PYTHON_CANDIDATES) {
     try {
       await checkPython(candidate);
       return candidate;
-    } catch {
-      // not installed, the Store stub, or too old: try the next one
+    } catch (err) {
+      // Not installed or the Store stub: try the next one. One that runs but is too old is remembered,
+      // so the error says "3.10+ required, found 3.9" rather than "Python not found".
+      if (!tooOld && err instanceof Error && err.message.startsWith(`Python ${MIN_PYTHON_MAJOR}.${MIN_PYTHON_MINOR}+ required`)) {
+        tooOld = candidate;
+      }
     }
   }
-  return configured;
+  return tooOld ?? configured;
 }
 
 /** Parse a Python version string like "Python 3.11.9" → [3, 11, 9] */

@@ -140,6 +140,13 @@ describe('resolvePythonBin', () => {
     expect(await resolvePythonBin(true)).toBe('py');
   });
 
+  it('returns the too-old candidate, so the error names the version instead of "not found"', async () => {
+    mockExecFailure('python3: exit 9009');
+    mockExecSuccess('Python 3.9.7');
+    mockExecFailure();
+    expect(await resolvePythonBin(true)).toBe('python');
+  });
+
   it('returns python3 when no Windows candidate works, so the usual error is shown', async () => {
     mockExecFailure();
     mockExecFailure();

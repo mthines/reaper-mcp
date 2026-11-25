@@ -816,7 +816,7 @@ Audiobox Aesthetics predictor (CC-BY 4.0)
 - **Auto-restart**: If the sidecar crashes, one restart is attempted automatically. If restart fails, the tool returns a clear error.
 - **Script refresh**: every sidecar spawn first copies the build's `server.py` and modules over the installed ones, so an update (which never re-runs `setup-sidecar`) cannot leave an old `server.py` without the new methods.
 - **Install location**: Venv at `~/.reaper-mcp/sidecar-venv/`, scripts at `~/.reaper-mcp/sidecar/` (`server.py` plus `SIDECAR_MODULES` in `setup-sidecar.ts`, e.g. `analysis.py` — add a new module there).
-- **PYTHON_BIN env var**: Override the Python interpreter used by `setup-sidecar`.
+- **PYTHON_BIN env var**: Override the Python interpreter used by `setup-sidecar`. Without it, `setup-sidecar` and `reaper-mcp doctor` use `python3`; on Windows they fall back through `python3`, `python`, `py` (`resolvePythonBin`) because `python3` is often the Microsoft Store stub.
 
 ### Source Files
 
