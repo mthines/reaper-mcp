@@ -289,6 +289,43 @@ describe('render cache', () => {
   });
 });
 
+describe('temp folder without reaper.GetTempPath', () => {
+  const NO_API = `
+    reaper.GetTempPath = nil
+    local function env_with(tmpname, vars)
+      return { io = ENV.io, now = ENV.now, os = {
+        remove = ENV.os.remove, time = ENV.os.time,
+        tmpname = function() return tmpname end,
+        getenv = function(k) return vars[k] end } }
+    end
+  `;
+
+  it('uses the folder of os.tmpname() when it has one', async () => {
+    await runWorld(`${NO_API}
+      w.files["/var/tmp/mcp_render_old_1.wav"] = "RIFF"
+      assert(lib.sweep(reaper, env_with("/var/tmp/lua_x", {})) == 1)
+    `);
+  });
+
+  it('falls back to %TEMP% when os.tmpname() is a bare Windows name', async () => {
+    await runWorld(`${NO_API}
+      w.files["C:/Users/x/Temp/mcp_render_old_1.wav"] = "RIFF"
+      w.files["/tmp/mcp_render_old_2.wav"] = "RIFF"
+      assert(lib.sweep(reaper, env_with("\\\\s3k4.", { TEMP = "C:/Users/x/Temp" })) == 1)
+      assert(w.files["/tmp/mcp_render_old_2.wav"], "must not have looked in /tmp")
+    `);
+  });
+
+  it('tries %TMP% when %TEMP% is unset or empty, then /tmp', async () => {
+    await runWorld(`${NO_API}
+      w.files["D:/scratch/mcp_render_old_1.wav"] = "RIFF"
+      assert(lib.sweep(reaper, env_with("\\\\s3k4.", { TEMP = "", TMP = "D:/scratch" })) == 1)
+      w.files["/tmp/mcp_render_old_2.wav"] = "RIFF"
+      assert(lib.sweep(reaper, env_with("\\\\s3k4.", {})) == 1)
+    `);
+  });
+});
+
 describe('rendering several tracks', () => {
   it('renders unrelated tracks in one pass and gives each its own file', async () => {
     await runWorld(`
