@@ -70,6 +70,35 @@ export function getPythonBin(): string {
   return process.env['PYTHON_BIN'] ?? 'python3';
 }
 
+/** Interpreter names tried on Windows when PYTHON_BIN is unset, in order. `python3` is often the
+ * Microsoft Store stub there (it exits non-zero without a version), so `python` and the `py`
+ * launcher are tried too. */
+export const WINDOWS_PYTHON_CANDIDATES = ['python3', 'python', 'py'] as const;
+
+/**
+ * Pick the Python interpreter for setup. PYTHON_BIN always wins. On Windows, falls back through
+ * WINDOWS_PYTHON_CANDIDATES to the first that runs and reports Python 3.10+. When none does, returns the
+ * first one that ran but was too old, else `python3`, so checkPython reports the real, actionable error.
+ */
+export async function resolvePythonBin(isWindows: boolean = platform() === 'win32'): Promise<string> {
+  const configured = getPythonBin();
+  if (process.env['PYTHON_BIN'] || !isWindows) return configured;
+  let tooOld: string | null = null;
+  for (const candidate of WINDOWS_PYTHON_CANDIDATES) {
+    try {
+      await checkPython(candidate);
+      return candidate;
+    } catch (err) {
+      // Not installed or the Store stub: try the next one. One that runs but is too old is remembered,
+      // so the error says "3.10+ required, found 3.9" rather than "Python not found".
+      if (!tooOld && err instanceof Error && err.message.startsWith(`Python ${MIN_PYTHON_MAJOR}.${MIN_PYTHON_MINOR}+ required`)) {
+        tooOld = candidate;
+      }
+    }
+  }
+  return tooOld ?? configured;
+}
+
 /** Parse a Python version string like "Python 3.11.9" → [3, 11, 9] */
 export function parsePythonVersion(output: string): [number, number, number] | null {
   const match = output.match(/Python\s+(\d+)\.(\d+)\.(\d+)/i);
@@ -137,11 +166,17 @@ export function resolveRequirementsTxt(baseDir: string): string {
   return join(sidecarDir, 'requirements.txt');
 }
 
+/** Command that upgrades pip inside the sidecar venv (`python -m pip`, never `pip.exe` on Windows). */
+export function pipUpgradeCommand(): string {
+  return `"${join(SIDECAR_VENV_PATH, VENV_BIN, VENV_PYTHON_NAME)}" -m pip install --upgrade pip`;
+}
+
 /** Install Python deps from requirements.txt into the venv. */
 export async function installDeps(requirementsPath: string): Promise<void> {
   const pip = join(SIDECAR_VENV_PATH, VENV_BIN, VENV_PIP_NAME);
-  // Upgrade pip first to avoid warnings on older pip versions
-  await exec(`"${pip}" install --upgrade pip`);
+  // Upgrade pip first to avoid warnings on older pip versions. Run it through the venv's Python:
+  // on Windows pip.exe cannot replace itself while it is running.
+  await exec(pipUpgradeCommand());
   const { stdout, stderr } = await exec(`"${pip}" install -r "${requirementsPath}"`);
   // Forward pip output to console so user sees progress
   if (stdout) process.stdout.write(stdout);
@@ -504,7 +539,7 @@ export async function setupSidecar(argv: string[] = []): Promise<void> {
 
 /** Python check, venv and the base dependencies. */
 async function installCore(): Promise<void> {
-  const pythonBin = getPythonBin();
+  const pythonBin = await resolvePythonBin();
   console.log(`\nChecking Python interpreter: ${pythonBin}`);
   let version = '';
   try {

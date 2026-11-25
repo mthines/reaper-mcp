@@ -30,6 +30,9 @@ import { existsSync, copyFileSync } from 'node:fs';
 import {
   parsePythonVersion,
   getPythonBin,
+  resolvePythonBin,
+  pipUpgradeCommand,
+  installDeps,
   checkPython,
   copySidecarScript,
   downloadModelWeights,
@@ -103,6 +106,72 @@ describe('getPythonBin', () => {
     process.env['PYTHON_BIN'] = '/usr/local/bin/python3.11';
     expect(getPythonBin()).toBe('/usr/local/bin/python3.11');
     delete process.env['PYTHON_BIN'];
+  });
+});
+
+describe('resolvePythonBin', () => {
+  beforeEach(() => {
+    execMock.mockReset();
+    delete process.env['PYTHON_BIN'];
+  });
+
+  it('keeps python3 off Windows without probing', async () => {
+    expect(await resolvePythonBin(false)).toBe('python3');
+    expect(execMock).not.toHaveBeenCalled();
+  });
+
+  it('lets PYTHON_BIN win on Windows without probing', async () => {
+    process.env['PYTHON_BIN'] = 'C:\\Python\\python.exe';
+    expect(await resolvePythonBin(true)).toBe('C:\\Python\\python.exe');
+    expect(execMock).not.toHaveBeenCalled();
+    delete process.env['PYTHON_BIN'];
+  });
+
+  it('falls back past the Microsoft Store python3 stub to python on Windows', async () => {
+    mockExecFailure('python3: exit 9009');
+    mockExecSuccess('Python 3.14.10');
+    expect(await resolvePythonBin(true)).toBe('python');
+  });
+
+  it('falls back to the py launcher when python3 and python are unusable', async () => {
+    mockExecFailure();
+    mockExecFailure();
+    mockExecSuccess('Python 3.12.1');
+    expect(await resolvePythonBin(true)).toBe('py');
+  });
+
+  it('returns the too-old candidate, so the error names the version instead of "not found"', async () => {
+    mockExecFailure('python3: exit 9009');
+    mockExecSuccess('Python 3.9.7');
+    mockExecFailure();
+    expect(await resolvePythonBin(true)).toBe('python');
+  });
+
+  it('returns python3 when no Windows candidate works, so the usual error is shown', async () => {
+    mockExecFailure();
+    mockExecFailure();
+    mockExecFailure();
+    expect(await resolvePythonBin(true)).toBe('python3');
+  });
+});
+
+describe('pipUpgradeCommand / installDeps', () => {
+  beforeEach(() => execMock.mockReset());
+
+  it('upgrades pip through the venv python (-m pip), not pip itself', () => {
+    const cmd = pipUpgradeCommand();
+    expect(cmd).toContain(SIDECAR_VENV_PATH);
+    expect(cmd).toMatch(/python(\.exe)?" -m pip install --upgrade pip$/);
+    expect(cmd).not.toMatch(/pip(\.exe)?" install --upgrade/);
+  });
+
+  it('runs the -m pip upgrade first, then installs requirements with pip', async () => {
+    mockExecSuccess('');
+    mockExecSuccess('');
+    await installDeps('/fake/requirements.txt');
+    const [upgrade, install] = execMock.mock.calls.map((c) => String(c[0]));
+    expect(upgrade).toBe(pipUpgradeCommand());
+    expect(install).toMatch(/install -r "\/fake\/requirements\.txt"/);
   });
 });
 
