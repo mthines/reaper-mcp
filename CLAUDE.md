@@ -302,10 +302,10 @@ Every tool that takes a `trackIndex` (except media item, MIDI, item/take, track-
 
 | Tool | File | Description |
 |------|------|-------------|
-| `list_media_items` | `tools/media.ts` | List all items on a track (position, length, name, volume, MIDI/audio type) |
-| `get_media_item_properties` | `tools/media.ts` | Detailed item properties (fades, play rate, pitch, source file, lock state) |
-| `set_media_item_properties` | `tools/media.ts` | Set item properties (position, length, volume dB, mute, fades, play rate) |
-| `set_media_items_properties` | `tools/media.ts` | Batch set properties on multiple items via JSON array string. |
+| `list_media_items` | `tools/media.ts` | List all items on a track (position, length, name, item `volume`, `takeVolume`, `totalGainDb`, MIDI/audio type) |
+| `get_media_item_properties` | `tools/media.ts` | Detailed item properties (fades, play rate, pitch, source file, lock state, item `volume` plus the active take's `takeVolume` / `takePolarityInverted` / `takePan` and `totalGainDb`, the level the item plays) |
+| `set_media_item_properties` | `tools/media.ts` | Set item properties (position, length, volume dB, `takeVolume` dB, `takePan`, `takePolarityInverted`, `pitch`, `preservePitch`, mute, fades, play rate, `locked`, `loopSource`; take/lock/loop fields checked first, logic in `reaper/mcp_items_lib.lua`) |
+| `set_media_items_properties` | `tools/media.ts` | Batch set properties on multiple items via JSON array string; same fields, an item with a bad value is skipped and reported in `errors`. |
 | `split_media_item` | `tools/media.ts` | Split an item at a position (seconds), returns left/right item info |
 | `delete_media_item` | `tools/media.ts` | Delete an item from a track |
 | `move_media_item` | `tools/media.ts` | Move an item to a new position and/or a different track |
@@ -589,7 +589,7 @@ Categories: `project`, `tracks`, `fx`, `transport`, `midi`, `media`, `arrange`, 
 ### Media Item Editing Concepts
 
 - **Positions and lengths** are in **seconds** (absolute project time)
-- **Volume** is in **dB** (0 = unity gain); internally converted to/from linear scale
+- **Volume** is in **dB** (0 = unity gain); internally converted to/from linear scale. An item plays its own gain **plus** its active take's gain (`takeVolume`): read `totalGainDb`, never `volume` alone
 - **Trim**: `trimStart` moves the left edge (adjusts start offset), `trimEnd` moves the right edge
 - **Move**: Validates destination track upfront; moves to new track first, then adjusts position
 - **Stretch markers**: Define time-stretch points mapping item position to source audio position

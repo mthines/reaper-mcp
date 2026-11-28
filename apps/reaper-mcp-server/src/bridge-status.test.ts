@@ -933,6 +933,69 @@ describe('edit views in the log', () => {
     });
   });
 
+  describe('item and take gain', () => {
+    // item gain +20 dB (10x) and take gain +20 dB: the item plays +40 dB
+    const GAINY = `
+      local it = { vals = { D_POSITION = 0, D_LENGTH = 5, D_VOL = 10 }, takes = {}, active = 1 }
+      it.takes[1] = { name = "talk.wav", item = it, vals = { D_VOL = 10 }, sm = {}, fx = {} }
+      api.tracks[1].items = { it }
+    `;
+    type Props = { volume: number; takeVolume: number; takePolarityInverted: boolean; totalGainDb: number; takeCount: number };
+
+    it('reports the take gain next to the item gain, and what the item plays in total', async () => {
+      const bridge = await startBridge(GAINY);
+      const res = await bridge.send('get_media_item_properties', { trackIndex: 0, itemIndex: 0 });
+      expect(res.success).toBe(true);
+      expect((res as unknown as { data: Props }).data).toMatchObject({
+        volume: 20, takeVolume: 20, takePolarityInverted: false, totalGainDb: 40, takeCount: 1,
+      });
+      const list = await bridge.send('list_media_items', { trackIndex: 0 });
+      expect((list as unknown as { data: { items: Props[] } }).data.items[0]).toMatchObject({ volume: 20, takeVolume: 20, totalGainDb: 40 });
+    });
+
+    it('sets the take gain without touching the item gain', async () => {
+      const bridge = await startBridge(GAINY);
+      expect((await bridge.send('set_media_item_properties', { trackIndex: 0, itemIndex: 0, takeVolume: 0 })).success).toBe(true);
+      const res = await bridge.send('get_media_item_properties', { trackIndex: 0, itemIndex: 0 });
+      expect((res as unknown as { data: Props }).data).toMatchObject({ volume: 20, takeVolume: 0, totalGainDb: 20 });
+    });
+
+    it('keeps a flipped polarity when only the level changes, and flips it on request', async () => {
+      const bridge = await startBridge(GAINY);
+      await bridge.send('set_media_item_properties', { trackIndex: 0, itemIndex: 0, takePolarityInverted: 1 });
+      await bridge.send('set_media_item_properties', { trackIndex: 0, itemIndex: 0, takeVolume: -6 });
+      let res = await bridge.send('get_media_item_properties', { trackIndex: 0, itemIndex: 0 });
+      expect((res as unknown as { data: Props }).data).toMatchObject({ takeVolume: -6, takePolarityInverted: true });
+      await bridge.send('set_media_item_properties', { trackIndex: 0, itemIndex: 0, takePolarityInverted: 0 });
+      res = await bridge.send('get_media_item_properties', { trackIndex: 0, itemIndex: 0 });
+      expect((res as unknown as { data: Props }).data).toMatchObject({ takeVolume: -6, takePolarityInverted: false });
+    });
+
+    it('refuses an out-of-range take gain and changes nothing, even next to a valid field', async () => {
+      const bridge = await startBridge(GAINY);
+      const res = await bridge.send('set_media_item_properties', { trackIndex: 0, itemIndex: 0, takeVolume: 200, volume: -3 });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/takeVolume must be between/);
+      const after = await bridge.send('get_media_item_properties', { trackIndex: 0, itemIndex: 0 });
+      expect((after as unknown as { data: Props }).data).toMatchObject({ volume: 20, takeVolume: 20 });
+    });
+
+    it('batch: applies take gain to good items and reports the bad one', async () => {
+      const bridge = await startBridge(GAINY);
+      const res = await bridge.send('set_media_items_properties', {
+        items: JSON.stringify([
+          { trackIndex: 0, itemIndex: 0, takeVolume: -10 },
+          { trackIndex: 0, itemIndex: 0, takePan: 5 },
+        ]),
+      });
+      expect(res.success).toBe(true);
+      expect((res as unknown as { data: { edited: number; errors: string[] } }).data).toMatchObject({ edited: 1 });
+      expect((res as unknown as { data: { errors: string[] } }).data.errors[0]).toMatch(/takePan must be between/);
+      const after = await bridge.send('get_media_item_properties', { trackIndex: 0, itemIndex: 0 });
+      expect((after as unknown as { data: Props }).data).toMatchObject({ takeVolume: -10, totalGainDb: 10 });
+    });
+  });
+
   it('lists a track’s sends before and after one is added', async () => {
     const bridge = await startBridge(`
       api.tracks[2] = { name = "Verb", guid = "{verb}", vals = {}, fx = {}, sends = {}, chunk = "" }

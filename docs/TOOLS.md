@@ -225,9 +225,9 @@ With that importer, set project tempo/tempo markers separately before importing,
 
 | Tool | Description |
 |------|-------------|
-| `list_media_items` | List items on a track (position, length, name, volume, type) |
-| `get_media_item_properties` | Detailed properties (fades, play rate, pitch, source) |
-| `set_media_item_properties` / `set_media_items_properties` | Set single or batch |
+| `list_media_items` | List items on a track (position, length, name, item volume, take volume, total gain, type) |
+| `get_media_item_properties` | Detailed properties (fades, play rate, pitch, source, item and take gain, take pan and polarity, total gain) |
+| `set_media_item_properties` / `set_media_items_properties` | Set single or batch (incl. take gain, take pan, polarity, pitch, lock, loop) |
 | `split_media_item` | Split at position, returns left/right info |
 | `delete_media_item` / `move_media_item` / `trim_media_item` | Edit operations |
 | `add_stretch_marker` / `get_stretch_markers` / `delete_stretch_marker` | Time-stretching |

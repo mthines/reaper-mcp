@@ -2915,7 +2915,7 @@ function handlers.list_media_items(params)
     end
 
     local vol_raw = reaper.GetMediaItemInfo_Value(item, "D_VOL")
-    items[#items + 1] = {
+    local entry = {
       itemIndex = i,
       position = reaper.GetMediaItemInfo_Value(item, "D_POSITION"),
       length = reaper.GetMediaItemInfo_Value(item, "D_LENGTH"),
@@ -2928,6 +2928,12 @@ function handlers.list_media_items(params)
       isMidi = is_midi,
       takeName = take_name,
     }
+    -- `volume` is the item's own gain; the take has one too, and the item plays both
+    if items_lib_ok then
+      local lv = items_lib.item_levels(reaper, item)
+      entry.takeVolume, entry.totalGainDb = lv.takeVolume, lv.totalGainDb
+    end
+    items[#items + 1] = entry
   end
 
   return { trackIndex = track_idx, items = items, total = #items }
@@ -2961,6 +2967,10 @@ function handlers.get_media_item_properties(params)
 
   local vol_raw = reaper.GetMediaItemInfo_Value(item, "D_VOL")
 
+  -- `volume` is the item's own gain; the active take has its own gain, pan and
+  -- polarity, and the item plays item gain + take gain (totalGainDb)
+  local lv = items_lib_ok and items_lib.item_levels(reaper, item) or {}
+
   return {
     trackIndex = params.trackIndex,
     itemIndex = params.itemIndex,
@@ -2969,6 +2979,13 @@ function handlers.get_media_item_properties(params)
     name = take_name,
     volume = to_db(vol_raw),
     volumeRaw = vol_raw,
+    takeVolume = lv.takeVolume,
+    takePolarityInverted = lv.takePolarityInverted,
+    takePan = lv.takePan,
+    preservePitch = lv.preservePitch,
+    totalGainDb = lv.totalGainDb,
+    takeCount = lv.takeCount,
+    activeTakeIndex = lv.activeTakeIndex,
     muted = reaper.GetMediaItemInfo_Value(item, "B_MUTE") ~= 0,
     fadeInLength = reaper.GetMediaItemInfo_Value(item, "D_FADEINLEN"),
     fadeOutLength = reaper.GetMediaItemInfo_Value(item, "D_FADEOUTLEN"),
@@ -2989,7 +3006,21 @@ function handlers.set_media_item_properties(params)
   local track, item, err = get_media_item(params)
   if err then return nil, err end
 
+  -- take gain/pan/polarity, pitch, lock, loop (mcp_items_lib.lua): checked before anything is written
+  local wants_lib = false
+  for _, k in ipairs({ "takeVolume", "takePan", "takePolarityInverted", "pitch", "preservePitch", "locked", "loopSource" }) do
+    if params[k] ~= nil then wants_lib = true end
+  end
+  if wants_lib then
+    if not items_lib_ok then
+      return nil, "mcp_items_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge"
+    end
+    local bad = items_lib.check_item_props(params, reaper.GetActiveTake(item) ~= nil)
+    if bad then return nil, bad end
+  end
+
   reaper.Undo_BeginBlock()
+  if wants_lib then items_lib.apply_item_props(reaper, item, params) end
 
   if params.position ~= nil then
     reaper.SetMediaItemInfo_Value(item, "D_POSITION", params.position)
@@ -3049,6 +3080,22 @@ function handlers.set_media_items_properties(params)
           errors[#errors + 1] = "Item " .. item_idx .. " not found on track " .. track_idx
         else
           local item = reaper.GetTrackMediaItem(track, item_idx)
+          -- take gain/pan/polarity, pitch, lock, loop (mcp_items_lib.lua): a bad value skips this item
+          local wants_lib, bad = false, nil
+          for _, k in ipairs({ "takeVolume", "takePan", "takePolarityInverted", "pitch", "preservePitch", "locked", "loopSource" }) do
+            if item_params[k] ~= nil then wants_lib = true end
+          end
+          if wants_lib then
+            if items_lib_ok then
+              bad = items_lib.check_item_props(item_params, reaper.GetActiveTake(item) ~= nil)
+            else
+              bad = "mcp_items_lib.lua is not installed next to mcp_bridge.lua — run `reaper-mcp setup` and restart the bridge"
+            end
+          end
+          if bad then
+            errors[#errors + 1] = "Item " .. item_idx .. " on track " .. track_idx .. ": " .. bad
+          else
+          if wants_lib then items_lib.apply_item_props(reaper, item, item_params) end
           if item_params.position ~= nil then
             reaper.SetMediaItemInfo_Value(item, "D_POSITION", item_params.position)
           end
@@ -3074,6 +3121,7 @@ function handlers.set_media_items_properties(params)
             end
           end
           edited = edited + 1
+          end
         end
       end
     end
