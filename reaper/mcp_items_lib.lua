@@ -874,4 +874,95 @@ end
 function M.list_fx_chains(api, _, ctx) return list_files(api, ctx, "FXChains", M.FX_CHAIN_EXT) end
 function M.list_track_templates(api, _, ctx) return list_files(api, ctx, "TrackTemplates", M.TEMPLATE_EXT) end
 
+-- -----------------------------------------------------------------------------
+-- Item and take gain, pan, pitch (read in get/list_media_items, written by
+-- set_media_item(s)_properties)
+--
+-- What an item plays is item gain (D_VOL on the item) times the active take's
+-- gain (D_VOL on the take), so a level read from the item alone can be 20 dB
+-- off. A negative take D_VOL is a polarity flip: its level is the magnitude.
+-- -----------------------------------------------------------------------------
+
+M.MIN_DB = -150.0
+local MAX_TAKE_DB = 60.0
+local MAX_PITCH = 48.0
+
+local function lin_to_db(v)
+  v = math.abs(v or 1)
+  if v <= 0 then return M.MIN_DB end
+  return math.floor(20 * math.log(v, 10) * 1000 + 0.5) / 1000
+end
+
+local function db_to_lin(db)
+  if db <= M.MIN_DB then return 0 end
+  return 10 ^ (db / 20)
+end
+
+-- Item and active-take levels for one item; also the take count and active take.
+-- Safe on an item without takes (empty take fields are left out).
+function M.item_levels(api, item)
+  local item_db = lin_to_db(api.GetMediaItemInfo_Value(item, "D_VOL"))
+  local out = { itemVolume = item_db, takeCount = api.CountTakes(item) }
+  local take = api.GetActiveTake(item)
+  if not take then
+    out.totalGainDb = item_db
+    return out
+  end
+  local tv = api.GetMediaItemTakeInfo_Value(take, "D_VOL")
+  out.takeVolume = lin_to_db(tv)
+  out.takePolarityInverted = tv < 0
+  out.takePan = api.GetMediaItemTakeInfo_Value(take, "D_PAN")
+  out.preservePitch = api.GetMediaItemTakeInfo_Value(take, "B_PPITCH") ~= 0
+  out.totalGainDb = math.floor((item_db + out.takeVolume) * 1000 + 0.5) / 1000
+  for i = 0, out.takeCount - 1 do
+    if api.GetTake(item, i) == take then out.activeTakeIndex = i end
+  end
+  return out
+end
+
+-- Check the item/take fields of one set request without writing anything.
+-- Returns nil when fine, else the reason. `has_take` says the item has an
+-- active take (take fields on an item without one are refused).
+function M.check_item_props(p, has_take)
+  local function num(name, lo, hi)
+    local v = p[name]
+    if v == nil then return nil end
+    local n = tonumber(v)
+    if not n then return name .. " must be a number" end
+    if n < lo or n > hi then return name .. " must be between " .. lo .. " and " .. hi end
+  end
+  local bad = num("takeVolume", M.MIN_DB, MAX_TAKE_DB) or num("takePan", -1, 1)
+    or num("pitch", -MAX_PITCH, MAX_PITCH)
+  if bad then return bad end
+  if not has_take and (p.takeVolume ~= nil or p.takePan ~= nil or p.takePolarityInverted ~= nil
+      or p.pitch ~= nil or p.preservePitch ~= nil) then
+    return "item has no active take: takeVolume, takePan, takePolarityInverted, pitch and preservePitch need one"
+  end
+end
+
+local function truthy(v) return v == true or v == 1 or v == "1" or v == "true" end
+
+-- Write the item/take fields (already checked by check_item_props). Changing
+-- takeVolume keeps the take's polarity unless takePolarityInverted is given.
+function M.apply_item_props(api, item, p)
+  local take = api.GetActiveTake(item)
+  if take then
+    if p.takeVolume ~= nil or p.takePolarityInverted ~= nil then
+      local cur = api.GetMediaItemTakeInfo_Value(take, "D_VOL")
+      local inverted = cur < 0
+      if p.takePolarityInverted ~= nil then inverted = truthy(p.takePolarityInverted) end
+      local mag = math.abs(cur)
+      if p.takeVolume ~= nil then mag = db_to_lin(tonumber(p.takeVolume)) end
+      api.SetMediaItemTakeInfo_Value(take, "D_VOL", inverted and -mag or mag)
+    end
+    if p.takePan ~= nil then api.SetMediaItemTakeInfo_Value(take, "D_PAN", tonumber(p.takePan)) end
+    if p.pitch ~= nil then api.SetMediaItemTakeInfo_Value(take, "D_PITCH", tonumber(p.pitch)) end
+    if p.preservePitch ~= nil then
+      api.SetMediaItemTakeInfo_Value(take, "B_PPITCH", truthy(p.preservePitch) and 1 or 0)
+    end
+  end
+  if p.locked ~= nil then api.SetMediaItemInfo_Value(item, "C_LOCK", truthy(p.locked) and 1 or 0) end
+  if p.loopSource ~= nil then api.SetMediaItemInfo_Value(item, "B_LOOPSRC", truthy(p.loopSource) and 1 or 0) end
+end
+
 return M

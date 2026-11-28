@@ -342,7 +342,7 @@ function new_fake(spec)
   api.GetCursorPosition = function() return spec.cursor or 0 end
 
   local function new_take(item, name)
-    return { name = name or "", fx = {}, item = item, sm = {} }
+    return { name = name or "", fx = {}, item = item, sm = {}, vals = {} }
   end
   local function init_item(tr, it)
     it.track = tr
@@ -393,6 +393,13 @@ function new_fake(spec)
   api.GetMediaItemInfo_Value = function(it, k) return it.vals[k] or 0 end
   api.SetMediaItemInfo_Value = function(it, k, v) it.vals[k] = v; write("item " .. k); return true end
   api.UpdateItemInProject = function() end
+  -- take values: gain and rate start at 1, everything else (pan, pitch, ...) at 0; B_PPITCH off
+  api.GetMediaItemTakeInfo_Value = function(tk, k)
+    local v = tk.vals[k]
+    if v == nil then v = ({ D_VOL = 1, D_PLAYRATE = 1 })[k] or 0 end
+    return v
+  end
+  api.SetMediaItemTakeInfo_Value = function(tk, k, v) tk.vals[k] = v; write("take " .. k); return true end
   api.CountTakes = function(it) return #it.takes end
   api.GetTake = function(it, i) return it.takes[i + 1] end
   api.GetActiveTake = function(it) return it.takes[it.active] end

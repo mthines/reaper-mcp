@@ -49,6 +49,15 @@ describe('what the drawer says the agent did', () => {
     expect(summaryOf(call('set_track_property', { trackIndex: 2, property: 'pan', value: -0.3 }), 'A', ctx)).toBe('A set track 3: the pan to 30% left.');
   });
 
+  it('says a take’s gain, pan and polarity apart from the item’s own gain', () => {
+    const e = call('set_media_item_properties', { trackIndex: 1, itemIndex: 0, volume: 0, takeVolume: -6, takePan: -0.3, takePolarityInverted: 1 });
+    const said = summaryOf(e, 'A', ctx) ?? '';
+    expect(said).toContain('set its gain to 0.0 dB');
+    expect(said).toContain("set the take's gain to −6.0 dB");
+    expect(said).toContain("set the take's pan to 30% left");
+    expect(said).toContain('flipped the take’s polarity');
+  });
+
   it('names notes, grids and plugins as a musician would', () => {
     expect(summaryOf(call('insert_midi_note', { trackIndex: 1, itemIndex: 0, pitch: 60, velocity: 100 }), 'A', ctx)).toBe('A added C4 (velocity 100) to MIDI item 1 on track 2.');
     expect(summaryOf(call('quantize_midi', { trackIndex: 1, itemIndex: 0, grid: 0.25, strength: 0.5 }), 'A', ctx)).toBe(

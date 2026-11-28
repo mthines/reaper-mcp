@@ -579,6 +579,13 @@ export interface SetMediaItemPropertiesParams {
   fadeInLength?: number;  // seconds
   fadeOutLength?: number; // seconds
   playRate?: number;      // 1.0 = normal
+  takeVolume?: number;    // dB, the active take's own gain (item plays item volume + take volume)
+  takePan?: number;       // -1..1, active take pan
+  takePolarityInverted?: number; // 0 or 1, flip the active take's polarity
+  pitch?: number;         // semitones (-48..48), active take
+  preservePitch?: number; // 0 or 1, keep pitch when the play rate changes
+  locked?: number;        // 0 or 1, lock the item against edits
+  loopSource?: number;    // 0 or 1, loop the source to fill the item
 }
 
 export interface SetMediaItemsBatchItem {
@@ -591,6 +598,13 @@ export interface SetMediaItemsBatchItem {
   fadeInLength?: number;  // seconds
   fadeOutLength?: number; // seconds
   playRate?: number;      // 1.0 = normal
+  takeVolume?: number;    // dB, the active take's own gain (item plays item volume + take volume)
+  takePan?: number;       // -1..1, active take pan
+  takePolarityInverted?: number; // 0 or 1, flip the active take's polarity
+  pitch?: number;         // semitones (-48..48), active take
+  preservePitch?: number; // 0 or 1, keep pitch when the play rate changes
+  locked?: number;        // 0 or 1, lock the item against edits
+  loopSource?: number;    // 0 or 1, loop the source to fill the item
 }
 
 export interface SetMediaItemsPropertiesParams {

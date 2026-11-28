@@ -388,7 +388,7 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
   },
   // Media items
   list_media_items: { title: 'List items', did: (e) => `listed the items on ${on(e)}` },
-  get_media_item_properties: { title: 'Read an item', did: (e) => `read the position, fades, rate and source of ${item(paramsOf(e))} on ${on(e)}` },
+  get_media_item_properties: { title: 'Read an item', did: (e) => `read the position, gain (item and take), fades, rate and source of ${item(paramsOf(e))} on ${on(e)}` },
   set_media_item_properties: {
     title: 'Change an item',
     did: (e) => {
@@ -397,9 +397,16 @@ export const TOOLS: Record<LoggedCommand, ToolInfo> = {
         num(p.position) !== undefined && `moved it to ${time(num(p.position) as number)}`,
         num(p.length) !== undefined && `made it ${num(p.length)} s long`,
         num(p.volume) !== undefined && `set its gain to ${db(p.volume)}`,
+        num(p.takeVolume) !== undefined && `set the take's gain to ${db(p.takeVolume)}`,
+        num(p.takePan) !== undefined && `set the take's pan to ${panWords(num(p.takePan) as number)}`,
+        p.takePolarityInverted !== undefined && (num(p.takePolarityInverted) ? 'flipped the take’s polarity' : 'put the take’s polarity back'),
+        num(p.pitch) !== undefined && `set the take's pitch to ${signed(num(p.pitch) as number)} semitones`,
+        p.preservePitch !== undefined && (num(p.preservePitch) ? 'kept the pitch when the rate changes' : 'let the pitch follow the rate'),
         p.mute !== undefined && (p.mute ? 'muted it' : 'unmuted it'),
         (num(p.fadeInLength) !== undefined || num(p.fadeOutLength) !== undefined) && 'changed its fades',
         num(p.playRate) !== undefined && `set its play rate to ${p.playRate}×`,
+        p.locked !== undefined && (num(p.locked) ? 'locked it' : 'unlocked it'),
+        p.loopSource !== undefined && (num(p.loopSource) ? 'looped its source' : 'stopped looping its source'),
       ].filter(Boolean) as string[];
       return `changed ${item(p)} on ${on(e)}${parts.length ? `: ${list(parts)}` : ''}`;
     },

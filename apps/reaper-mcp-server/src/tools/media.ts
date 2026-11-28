@@ -5,7 +5,7 @@ import { sendCommand } from '../bridge.js';
 export function registerMediaTools(server: McpServer): void {
   server.tool(
     'list_media_items',
-    'List all media items on a track with position, length, name, volume, mute state, and whether it is MIDI or audio',
+    'List all media items on a track with position, length, name, volume (the item gain), takeVolume (the active take gain), totalGainDb (what the item plays: item + take), mute state, and whether it is MIDI or audio',
     {
       trackIndex: z.coerce.number().min(0).describe('0-based track index'),
     },
@@ -20,7 +20,7 @@ export function registerMediaTools(server: McpServer): void {
 
   server.tool(
     'get_media_item_properties',
-    'Get detailed properties of a media item: position, length, volume, fades, play rate, take info, source file',
+    'Get detailed properties of a media item: position, length, volume (item gain, dB), takeVolume / takePolarityInverted / takePan (the active take), totalGainDb (item + take, what the item plays), fades, play rate, pitch, take count, source file, lock',
     {
       trackIndex: z.coerce.number().min(0).describe('0-based track index'),
       itemIndex: z.coerce.number().min(0).describe('0-based item index on the track'),
@@ -36,7 +36,7 @@ export function registerMediaTools(server: McpServer): void {
 
   server.tool(
     'set_media_item_properties',
-    'Set media item properties: position (seconds), length (seconds), volume (dB), mute, fade in/out lengths, play rate',
+    'Set media item properties: position (seconds), length (seconds), volume (item gain, dB), takeVolume (active take gain, dB), takePan, takePolarityInverted, pitch (semitones), preservePitch, mute, fade in/out lengths, play rate, locked, loopSource. The item plays item volume + take volume (see totalGainDb in get_media_item_properties). Take fields are checked before anything is written.',
     {
       trackIndex: z.coerce.number().min(0).describe('0-based track index'),
       itemIndex: z.coerce.number().min(0).describe('0-based item index on the track'),
@@ -47,11 +47,16 @@ export function registerMediaTools(server: McpServer): void {
       fadeInLength: z.coerce.number().min(0).optional().describe('Fade-in length in seconds'),
       fadeOutLength: z.coerce.number().min(0).optional().describe('Fade-out length in seconds'),
       playRate: z.coerce.number().min(0.1).max(10).optional().describe('Playback rate (1.0=normal, 0.5=half, 2.0=double)'),
+      takeVolume: z.coerce.number().min(-150).max(60).optional().describe('Active take gain in dB (0 = unity); separate from item volume, the item plays both. -150 = silence. Keeps the take polarity unless takePolarityInverted is given'),
+      takePan: z.coerce.number().min(-1).max(1).optional().describe('Active take pan (-1 left, 0 centre, 1 right)'),
+      takePolarityInverted: z.coerce.number().min(0).max(1).optional().describe('Flip the active take polarity (1 = inverted, 0 = normal)'),
+      pitch: z.coerce.number().min(-48).max(48).optional().describe('Active take pitch in semitones'),
+      preservePitch: z.coerce.number().min(0).max(1).optional().describe('Keep the pitch when the play rate changes (1 = on, 0 = off)'),
+      locked: z.coerce.number().min(0).max(1).optional().describe('Lock the item against edits (1 = locked, 0 = unlocked)'),
+      loopSource: z.coerce.number().min(0).max(1).optional().describe('Loop the source to fill the item (1 = on, 0 = off)'),
     },
-    async ({ trackIndex, itemIndex, position, length, volume, mute, fadeInLength, fadeOutLength, playRate }) => {
-      const res = await sendCommand('set_media_item_properties', {
-        trackIndex, itemIndex, position, length, volume, mute, fadeInLength, fadeOutLength, playRate,
-      });
+    async (args) => {
+      const res = await sendCommand('set_media_item_properties', args);
       if (!res.success) {
         return { content: [{ type: 'text', text: `Error: ${res.error}` }], isError: true };
       }
@@ -73,6 +78,13 @@ export function registerMediaTools(server: McpServer): void {
         fadeInLength: z.coerce.number().min(0).optional().describe('Fade-in length in seconds'),
         fadeOutLength: z.coerce.number().min(0).optional().describe('Fade-out length in seconds'),
         playRate: z.coerce.number().min(0.1).max(10).optional().describe('Playback rate (1.0=normal)'),
+        takeVolume: z.coerce.number().min(-150).max(60).optional().describe('Active take gain in dB (0 = unity); separate from item volume, the item plays both. -150 = silence. Keeps the take polarity unless takePolarityInverted is given'),
+        takePan: z.coerce.number().min(-1).max(1).optional().describe('Active take pan (-1 left, 0 centre, 1 right)'),
+        takePolarityInverted: z.coerce.number().min(0).max(1).optional().describe('Flip the active take polarity (1 = inverted, 0 = normal)'),
+        pitch: z.coerce.number().min(-48).max(48).optional().describe('Active take pitch in semitones'),
+        preservePitch: z.coerce.number().min(0).max(1).optional().describe('Keep the pitch when the play rate changes (1 = on, 0 = off)'),
+        locked: z.coerce.number().min(0).max(1).optional().describe('Lock the item against edits (1 = locked, 0 = unlocked)'),
+        loopSource: z.coerce.number().min(0).max(1).optional().describe('Loop the source to fill the item (1 = on, 0 = off)'),
       })).describe('Array of item property updates to apply'),
     },
     async ({ items }) => {
